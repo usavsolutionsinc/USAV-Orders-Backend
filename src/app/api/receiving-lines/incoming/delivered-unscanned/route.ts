@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
 import {
   deliveredUnscannedBaseSql,
   DELIVERED_UNSCANNED_WINDOW_DAYS as WINDOW_DAYS,
@@ -32,6 +33,24 @@ export const dynamic = 'force-dynamic';
 
 export const GET = withAuth(async (_req: NextRequest) => {
   try {
+    // Phase 3: when the unified inbound model is on, a delivered shipment
+    // resolves its PO + line-level SKU/order# DIRECTLY through
+    // receiving_lines.shipment_id, instead of only via a linked receiving row
+    // or a tracking#→reference# guess. This is what makes the "delivered ·
+    // needs scan" rows show SKU/order# for shipments that never got their own
+    // receiving row. Column-gated: only referenced when the flag is on (so an
+    // unapplied migration can't error).
+    const unified = isReceivingUnifiedInbound();
+    const unifiedPoIdBranch = unified
+      ? `(SELECT rl.zoho_purchaseorder_id
+            FROM receiving_lines rl
+           WHERE rl.shipment_id = base.shipment_id
+             AND rl.zoho_purchaseorder_id IS NOT NULL
+           ORDER BY rl.id LIMIT 1),`
+      : '';
+    const unifiedAggMatch = unified
+      ? `OR rl.shipment_id = enriched.shipment_id`
+      : '';
     // Every inbound tracking# IS a Zoho PO's reference_number (the PO sync
     // registers it that way), so each box has full PO context even before a
     // dock scan. We resolve the PO id two ways and coalesce:
@@ -67,6 +86,7 @@ export const GET = withAuth(async (_req: NextRequest) => {
        enriched AS (
          SELECT base.*,
                 COALESCE(
+                  ${unifiedPoIdBranch}
                   (SELECT r.zoho_purchaseorder_id
                      FROM receiving r
                     WHERE r.shipment_id = base.shipment_id
@@ -103,7 +123,8 @@ export const GET = withAuth(async (_req: NextRequest) => {
                   (array_agg(rl.sku       ORDER BY rl.id))[1] AS first_sku,
                   COUNT(*)::int                                AS item_count
              FROM receiving_lines rl
-            WHERE rl.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
+            WHERE (rl.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
+                   ${unifiedAggMatch})
               AND COALESCE(rl.item_name, '') <> ''
          ) agg ON TRUE`,
       [String(WINDOW_DAYS)],

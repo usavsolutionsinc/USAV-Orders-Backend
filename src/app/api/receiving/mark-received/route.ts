@@ -48,6 +48,37 @@ async function resolveDefaultPutawayBinId(): Promise<number | null> {
 }
 
 /**
+ * Directed-putaway suggestion (receiving-triage streamline Phase 4b). SKU
+ * affinity: send the unit to the active bin where this SKU was last put away,
+ * so like stock consolidates instead of scattering into UNSORTED. Returns null
+ * when the SKU has no prior putaway (caller falls back to the UNSORTED default).
+ * Only consulted when the operator didn't scan an explicit destination bin.
+ */
+async function suggestPutawayBinIdForSku(sku: string | null): Promise<number | null> {
+  if (!sku) return null;
+  try {
+    const r = await pool.query<{ bin_id: number }>(
+      `SELECT ie.bin_id
+         FROM inventory_events ie
+        WHERE ie.sku = $1
+          AND ie.event_type = 'PUTAWAY'
+          AND ie.bin_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM locations l
+             WHERE l.id = ie.bin_id AND l.is_active = true
+          )
+        ORDER BY ie.id DESC
+        LIMIT 1`,
+      [sku],
+    );
+    return r.rows[0]?.bin_id ?? null;
+  } catch (err) {
+    console.warn(`[mark-received] putaway SKU-affinity lookup failed for sku=${sku}:`, err);
+    return null;
+  }
+}
+
+/**
  * Phase 2 helper: emit inventory_events + sku_stock_ledger for the receive
  * event. Replaces the standalone serial_units upsert in the flagged path
  * so that a single transaction holds the full set of writes.
@@ -264,12 +295,19 @@ export const POST = withAuth(async (request, ctx) => {
       Number.isFinite(Number(destinationBinIdRaw)) && Number(destinationBinIdRaw) > 0
         ? Math.floor(Number(destinationBinIdRaw))
         : null;
+    // True only when the operator scanned an explicit bin. When false we may
+    // upgrade the default to a directed SKU-affinity suggestion below (Phase 4b).
+    const binExplicit = destinationBinId != null;
+    let putawayBinSource: 'operator' | 'sku_affinity' | 'default' | null = binExplicit
+      ? 'operator'
+      : null;
     if (
       destinationBinId == null &&
       String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT' &&
       isInventoryV2ReceivingPutaway()
     ) {
       destinationBinId = await resolveDefaultPutawayBinId();
+      putawayBinSource = 'default';
     }
     // Idempotency token from the client (mobile scanner generates a UUID
     // per scan). Optional; unique within inventory_events.
@@ -366,6 +404,22 @@ export const POST = withAuth(async (request, ctx) => {
     const qtyReceived = Number(line.quantity_received) || 1;
     let zohoReceiveOk = !hasZohoReceive;
     let zohoReceiveError: string | null = null;
+
+    // Phase 4b: directed putaway. When the operator didn't scan an explicit bin
+    // and we'd otherwise dump the unit in UNSORTED, send it to the bin this SKU
+    // was last put away in (consolidates like stock). Only on ACCEPT + flag on.
+    if (
+      isInventoryV2ReceivingPutaway() &&
+      !binExplicit &&
+      dispositionCode === 'ACCEPT' &&
+      (line.sku ?? null)
+    ) {
+      const affinityBin = await suggestPutawayBinIdForSku(line.sku ?? null);
+      if (affinityBin != null) {
+        destinationBinId = affinityBin;
+        putawayBinSource = 'sku_affinity';
+      }
+    }
 
     // 2. Serial/stock/event writes.
     //
@@ -660,6 +714,9 @@ export const POST = withAuth(async (request, ctx) => {
               stock_ledger_id: v2Effects.ledgerId,
               serial_unit_id: v2Effects.serialUnitId,
             },
+            // Phase 4b: where the unit was directed and why (operator scan,
+            // SKU affinity, or the UNSORTED default), so the UI can confirm it.
+            putaway: { bin_id: destinationBinId, source: putawayBinSource },
           }
         : {}),
     });

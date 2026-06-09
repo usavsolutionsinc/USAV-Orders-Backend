@@ -164,6 +164,9 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             <span className="text-sm font-black uppercase tracking-[0.18em]">
               Take Photos
             </span>
+            <span className="tabular-nums lowercase text-white/90">
+              x{row.photo_count ?? 0}
+            </span>
           </Link>
         ) : null}
       </div>

@@ -122,6 +122,42 @@ export interface WarrantyRepairAttemptRow {
   createdAt: string;
 }
 
+/**
+ * Read-only warranty-coverage lookup result — the "on the phone with a customer"
+ * check. Resolves an order #, serial, or SKU to its shipped order and computes
+ * the warranty clock WITHOUT logging a claim. `found: false` means no shipped
+ * order matched the query.
+ */
+export interface WarrantyCoverageResult {
+  query: string;
+  found: boolean;
+  /** Which identifier resolved the order. */
+  matchedBy: 'order' | 'serial' | 'sku' | null;
+  /** Internal orders.id (for prefilling Log Claim). */
+  orderId: number | null;
+  /** Human/source order number (orders.order_id). */
+  sourceOrderId: string | null;
+  serialNumber: string | null;
+  sku: string | null;
+  productTitle: string | null;
+  customerId: number | null;
+  customerName: string | null;
+  sourceSystem: string | null;
+  trackingNumber: string | null;
+  deliveredAt: string | null;
+  packedScannedAt: string | null;
+  warrantyStartsAt: string | null;
+  warrantyExpiresAt: string | null;
+  warrantyDays: number | null;
+  clockBasis: WarrantyClockBasis | null;
+  /** Whole days until expiry; negative once expired; null when undeterminable. */
+  daysRemaining: number | null;
+  /** true = covered, false = expired, null = unknown (no delivery/packed date yet). */
+  inWarranty: boolean | null;
+  /** An already-logged claim for this order/serial, if any. */
+  existingClaim: { id: number; claimNumber: string; status: WarrantyClaimStatus } | null;
+}
+
 /** Full claim detail (right-pane detail panel). */
 export interface WarrantyClaimDetail extends WarrantyClaimListRow {
   purchaseProofUrl: string | null;

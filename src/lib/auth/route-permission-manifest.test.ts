@@ -68,3 +68,24 @@ test('regression: sourcing.manage gates the compatibility mutation route', () =>
     'sourcing.manage should gate compatibility edit/delete',
   );
 });
+
+test('regression: handling_unit.view gates the handling-units read routes', () => {
+  // Handling units (LPN) — docs/handling-unit-lpn-plan.md. The manifest records
+  // the first-declared method's permission per file, so the read-first
+  // collection + detail routes land on view.
+  const paths = routesGatedBy('handling_unit.view').map((r) => r.path);
+  assert.ok(paths.includes('/api/handling-units/route.ts'), 'handling_unit.view should gate the box list');
+  assert.ok(paths.includes('/api/handling-units/[id]/route.ts'), 'handling_unit.view should gate the box detail');
+});
+
+test('regression: handling_unit.manage gates the assign/unassign mutations', () => {
+  const paths = routesGatedBy('handling_unit.manage').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/handling-units/[id]/assign/route.ts'),
+    'handling_unit.manage should gate unit assignment',
+  );
+  assert.ok(
+    paths.includes('/api/handling-units/[id]/unassign/route.ts'),
+    'handling_unit.manage should gate unit removal',
+  );
+});

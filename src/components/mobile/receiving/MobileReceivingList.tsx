@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
@@ -36,7 +37,7 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   const staffId = user?.staffId ?? 0;
   useRealtimeToasts('receiving');
 
-  const { data, isLoading } = useMobileFeedQuery<ReceivingLineRow>({
+  const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
       // Mirror ReceivingRecentRail: the UNBOXING pipeline (view=activity), with
@@ -64,9 +65,26 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
     },
   });
 
+  // A finished photo upload (camera or background queue) publishes here for the
+  // same staff — refetch so each row's `photo_count` (the Take Photos button's
+  // `x{n}` badge) ticks up. Ably echoes to the publisher, so this fires on the
+  // capturing phone too, not just a paired one.
+  useAblyChannel(
+    staffId > 0 ? `phone:${staffId}` : 'phone:__idle__',
+    'receiving_photo_uploaded',
+    refetch,
+    staffId > 0,
+  );
+
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });
 
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
+  // Re-derive the open sheet's row from the live feed so its CTA photo count
+  // updates after an upload — the stored `sheetRow` snapshot would stay stale.
+  const liveSheetRow = useMemo(
+    () => (sheetRow ? data.find((r) => r.id === sheetRow.id) ?? sheetRow : null),
+    [sheetRow, data],
+  );
   const openSheet = useCallback((row: ReceivingLineRow) => setSheetRow(row), []);
   const closeSheet = useCallback(() => setSheetRow(null), []);
   const buildPhotosHref = useCallback(
@@ -100,7 +118,7 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
         )}
       />
 
-      <MobileCartonSheet row={sheetRow} staffId={staffId} open={sheetRow != null} onClose={closeSheet} />
+      <MobileCartonSheet row={liveSheetRow} staffId={staffId} open={sheetRow != null} onClose={closeSheet} />
     </div>
   );
 }

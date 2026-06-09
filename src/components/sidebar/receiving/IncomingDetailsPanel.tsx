@@ -226,9 +226,17 @@ function prettyStatus(value: string | null | undefined): string {
 
 // ── Panel ──────────────────────────────────────────────────────────────────
 export interface IncomingDetailsPanelProps {
-  zohoPurchaseOrderId: string;
+  /**
+   * Zoho PO id to key the panel on. Null for a shipment-anchored "Delivered ·
+   * not scanned" box that never resolved to a PO — pass {@link shipmentId}
+   * instead and the panel opens in shipment-only mode (Shipment tab + a hard
+   * "Remove from Incoming" delete; PO/Email/Notes show empty states).
+   */
+  zohoPurchaseOrderId: string | null;
   /** Display label for the close button — typically the PO number. */
   poNumberHint?: string | null;
+  /** Shipment id (shipping_tracking_numbers.id) for the PO-less fallback. */
+  shipmentId?: number | null;
   onClose: () => void;
 }
 
@@ -238,20 +246,27 @@ export interface IncomingDetailsPanelProps {
  * endpoint (`/api/receiving-lines/incoming/details`) — single round-trip,
  * react-query cache key by PO id so tab switches don't re-fetch.
  */
-export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClose }: IncomingDetailsPanelProps) {
-  const [tab, setTab] = useState<TabId>('po');
+export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, shipmentId, onClose }: IncomingDetailsPanelProps) {
+  // Shipment-only mode: a delivered box with no resolved PO. The panel keys on
+  // the shipment id instead, defaults to the Shipment tab, hides PO-only actions
+  // (Sync), and its delete hard-removes the shipment from Incoming.
+  const isShipmentOnly = !zohoPurchaseOrderId && shipmentId != null;
+  // Stable react-query key for the details fetch in either mode.
+  const detailsKey = zohoPurchaseOrderId ?? (shipmentId != null ? `shipment:${shipmentId}` : '');
+
+  const [tab, setTab] = useState<TabId>(isShipmentOnly ? 'shipment' : 'po');
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
 
-  // Reset to default tab when the PO changes (different row).
-  useEffect(() => setTab('po'), [zohoPurchaseOrderId]);
+  // Reset to the default tab when the row changes (PO id or shipment id).
+  useEffect(() => setTab(isShipmentOnly ? 'shipment' : 'po'), [zohoPurchaseOrderId, shipmentId, isShipmentOnly]);
 
   const invalidateIncoming = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['incoming-details', zohoPurchaseOrderId] });
+    queryClient.invalidateQueries({ queryKey: ['incoming-details', detailsKey] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
     queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] });
-  }, [queryClient, zohoPurchaseOrderId]);
+  }, [queryClient, detailsKey]);
 
   // Per-order Sync — re-pull this one PO's Zoho header/status + re-poll its
   // shipment, without running the whole Incoming sweep.
@@ -282,34 +297,41 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
     }
   }, [syncing, zohoPurchaseOrderId, invalidateIncoming]);
 
-  // Delete — removes EVERY receiving_line for this PO, i.e. the Incoming row.
-  // Zoho is untouched; a future sync may re-add it if the PO is still issued.
+  // Delete — clears the Incoming row. For a PO it removes EVERY receiving_line
+  // for that PO (Zoho untouched; a future sync may re-add it). For a PO-less
+  // delivered box it hard-deletes the shipment row (there's no receiving_line to
+  // delete) so the "Delivered · not scanned" entry stops surfacing.
   // Throws on failure so the shared DeleteButton skips its onDeleted (close).
-  const deletePo = useCallback(async () => {
-    const res = await fetch(
-      `/api/receiving-lines?po_id=${encodeURIComponent(zohoPurchaseOrderId)}`,
-      { method: 'DELETE' },
-    );
+  const handleDelete = useCallback(async () => {
+    const url = isShipmentOnly
+      ? `/api/receiving-lines?shipment_id=${encodeURIComponent(String(shipmentId))}`
+      : `/api/receiving-lines?po_id=${encodeURIComponent(zohoPurchaseOrderId ?? '')}`;
+    const res = await fetch(url, { method: 'DELETE' });
     const body = await res.json().catch(() => null);
     if (!res.ok || !body?.success) {
       const msg = body?.error || `Delete failed (${res.status})`;
       toast.error(msg);
       throw new Error(msg);
     }
-    toast.success(`Removed from Incoming (${body?.deleted ?? 0} line${body?.deleted === 1 ? '' : 's'})`);
+    toast.success(
+      isShipmentOnly
+        ? 'Removed from Incoming'
+        : `Removed from Incoming (${body?.deleted ?? 0} line${body?.deleted === 1 ? '' : 's'})`,
+    );
     invalidateIncoming();
-  }, [zohoPurchaseOrderId, invalidateIncoming]);
+  }, [isShipmentOnly, shipmentId, zohoPurchaseOrderId, invalidateIncoming]);
 
   const { data, isLoading, isError } = useQuery<DetailsResponse>({
-    queryKey: ['incoming-details', zohoPurchaseOrderId],
+    queryKey: ['incoming-details', detailsKey],
     queryFn: async () => {
-      const res = await fetch(
-        `/api/receiving-lines/incoming/details?po_id=${encodeURIComponent(zohoPurchaseOrderId)}`,
-        { cache: 'no-store' },
-      );
+      const qs = isShipmentOnly
+        ? `shipment_id=${encodeURIComponent(String(shipmentId))}`
+        : `po_id=${encodeURIComponent(zohoPurchaseOrderId ?? '')}`;
+      const res = await fetch(`/api/receiving-lines/incoming/details?${qs}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`details ${res.status}`);
       return res.json();
     },
+    enabled: Boolean(detailsKey),
     staleTime: 15_000,
     // Polling fallback so the carrier status stays live (like the carrier's
     // own site) even when realtime/Ably is unavailable. Only this open panel
@@ -324,12 +346,17 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
   // `shipment.changed`; refresh the panel + the incoming list/summary instantly
   // so the displayed status matches the carrier's live state without a reload.
   useAblyChannel(STATION_CHANNEL, 'shipment.changed', () => {
-    queryClient.invalidateQueries({ queryKey: ['incoming-details', zohoPurchaseOrderId] });
+    queryClient.invalidateQueries({ queryKey: ['incoming-details', detailsKey] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
   });
 
   const headerPo = poNumberHint || data?.po?.zoho_purchaseorder_number || '';
+  // Shipment-only rows have no PO chip — fall back to the tracking# so the
+  // header still identifies the box.
+  const headerTracking = isShipmentOnly
+    ? (data?.shipment?.tracking_number || '').trim()
+    : '';
 
   return (
     <>
@@ -347,6 +374,8 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {headerPo ? (
               <PoChip value={headerPo} display={getLast4(headerPo)} />
+            ) : headerTracking ? (
+              <TrackingChip value={headerTracking} display={getLast4(headerTracking)} />
             ) : (
               <span className="font-mono text-sm font-bold text-gray-400">—</span>
             )}
@@ -356,17 +385,22 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
               </span>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => void syncOne()}
-            disabled={syncing}
-            aria-label="Sync this PO"
-            title="Re-pull this PO from Zoho + re-poll its shipment"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing' : 'Sync'}
-          </button>
+          {/* Sync re-pulls the PO header from Zoho — only meaningful when there
+              IS a PO. A shipment-only box uses the Shipment tab's "Re-poll"
+              (carrier) instead. */}
+          {isShipmentOnly ? null : (
+            <button
+              type="button"
+              onClick={() => void syncOne()}
+              disabled={syncing}
+              aria-label="Sync this PO"
+              title="Re-pull this PO from Zoho + re-poll its shipment"
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing' : 'Sync'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -419,7 +453,7 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, onClos
           Incoming row); Zoho is untouched. */}
       <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-2.5">
         <DeleteButton
-          onConfirm={deletePo}
+          onConfirm={handleDelete}
           onDeleted={onClose}
           icon={<Trash2 className="w-3.5 h-3.5" />}
           label="Delete"
@@ -576,6 +610,17 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
               const location = e.event_city
                 ? `${e.event_city}${e.event_state ? ', ' + e.event_state : ''}`
                 : null;
+              // Lead with the human-readable phrase. `external_status_label` is
+              // often a cryptic raw carrier code (UPS sends single letters —
+              // D=delivered, I=in-transit, X=exception, M=manifest), so prefer
+              // the carrier's description, fall back to a readable label (>2
+              // chars), and finally the prettified normalized category. The
+              // single-letter codes are never shown.
+              const rawLabel = (e.external_status_label || '').trim();
+              const eventTitle =
+                e.external_status_description?.trim() ||
+                (rawLabel.length > 2 ? rawLabel : '') ||
+                prettyStatus(e.normalized_status_category);
               const isLatest = i === 0;
               const dayKey = eventDayKey(e.event_occurred_at);
               const showDay = i === 0 || dayKey !== eventDayKey(s.events[i - 1]?.event_occurred_at);
@@ -593,16 +638,13 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
                       )} ${isLatest ? 'shadow-[0_0_0_3px_rgba(59,130,246,0.15)]' : ''}`}
                     />
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className={`text-caption font-bold ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
-                        {e.external_status_label || e.normalized_status_category}
+                      <span className={`text-caption font-black ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
+                        {eventTitle}
                       </span>
                       <span className="shrink-0 whitespace-nowrap text-eyebrow font-semibold tabular-nums text-gray-400">
                         {time}
                       </span>
                     </div>
-                    {e.external_status_description ? (
-                      <div className="mt-0.5 text-caption text-gray-600">{e.external_status_description}</div>
-                    ) : null}
                     {location ? (
                       <div className="mt-0.5 text-eyebrow font-semibold uppercase tracking-wide text-gray-400">
                         {location}

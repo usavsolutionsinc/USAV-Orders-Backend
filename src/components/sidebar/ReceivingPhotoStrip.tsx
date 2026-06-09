@@ -7,6 +7,7 @@ import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
 import { useNasConfig } from '@/hooks/useNasConfig';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
 
 interface PhotoRow {
@@ -108,7 +109,13 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     );
   }
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey });
+  // Refetch the strip AND every receiving feed so the Take Photos button's
+  // `x{n}` count stays in sync after an attach or a delete (the feeds carry
+  // `photo_count`, which the strip's own query key doesn't touch).
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey });
+    invalidateReceivingFeeds(queryClient);
+  };
   const poCreatedAt = data?.receivingCreatedAt ?? null;
   const initialFolder = data?.initialNasFolder ?? '';
 

@@ -81,6 +81,20 @@ interface PersistedEntry {
 // Falls back to the nas-photos module base URL (env seed) if never configured.
 let nasUploadConfig: { baseUrl: string; folder: string } | null = null;
 
+// Fired once per photo the moment it's committed (NAS PUT + DB attach both
+// succeeded). The capture surface wires this to an Ably publish on
+// `phone:{staffId}` so open photo strips and feed counts refresh — on this
+// device AND the paired desktop — without the requestId camera flow. Set via
+// configureNotifier(); persists across capture-surface unmounts so a photo that
+// finishes uploading in the background still notifies.
+export interface UploadNotice {
+  receivingId: number;
+  receivingLineId: number | null;
+  photoId: number;
+  photoUrl: string;
+}
+let uploadNotifier: ((notice: UploadNotice) => void) | null = null;
+
 const state: QueueState = { entries: [] };
 const listeners = new Set<() => void>();
 // Original (post-downscale) blob ref so Retry doesn't re-prompt the user.
@@ -225,6 +239,19 @@ async function processEntry(id: string, blob: Blob): Promise<void> {
     if (!entry) return;
     const { id: photoId, url } = await postPhoto(entry, blob);
     patch(id, { state: 'done', photoId, photoUrl: url });
+    // Announce the commit so strips + feed counts refresh (notifier publishes
+    // `receiving_photo_uploaded` over Ably). Wrapped so a notifier error can
+    // never fail an otherwise-successful upload.
+    try {
+      uploadNotifier?.({
+        receivingId: entry.scope.receivingId,
+        receivingLineId: entry.scope.receivingLineId ?? null,
+        photoId,
+        photoUrl: url,
+      });
+    } catch {
+      /* notifier must never break the upload */
+    }
     // done — clear localStorage row + drop blob cache (preview still rendered
     // from the existing object URL until the parent revokes it).
     persistedDataUrls.delete(id);
@@ -269,6 +296,14 @@ export const photoUploadQueue = {
    */
   configureNas(cfg: { baseUrl: string; folder: string } | null) {
     nasUploadConfig = cfg;
+  },
+  /**
+   * Register the post-upload notifier (e.g. an Ably publisher). Set by the
+   * capture surface; intentionally NOT cleared on unmount so background
+   * uploads that finish after navigation still fire it. Pass null to clear.
+   */
+  configureNotifier(fn: ((notice: UploadNotice) => void) | null) {
+    uploadNotifier = fn;
   },
   enqueue(scope: PhotoScope, blob: Blob, previewUrl: string): string {
     rehydrate();

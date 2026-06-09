@@ -18,7 +18,8 @@ export type ScanType =
   | 'bin'
   | 'receiving'        // R-class — carton handle
   | 'receiving-line'   // L-class — single line within a carton
-  | 'serial-unit';     // U-class — one physical unit
+  | 'serial-unit'      // U-class — one physical unit
+  | 'handling-unit';   // H-class — a license-plated box/tray (LPN)
 
 export interface ScanRoute {
   type: ScanType;
@@ -171,6 +172,12 @@ export function routeScan(raw: string): ScanRoute | null {
   if (lineShort) return { type: 'receiving-line', value, redirect: `/m/l/${lineShort[1]}` };
   const unitShort = /^U-(\d+)$/i.exec(value);
   if (unitShort) return { type: 'serial-unit',   value, redirect: `/m/u/${unitShort[1]}` };
+  // H-class — a license-plated box/tray (handling unit / LPN). One scan opens
+  // the box page (/m/h/{id}), which on the testing side fans out to every unit
+  // in the box. Anchored here with the other bare handles so "H-12" isn't
+  // misread as a bin (section 6 keys on a leading letter).
+  const huShort = /^H-(\d+)$/i.exec(value);
+  if (huShort) return { type: 'handling-unit',   value, redirect: `/m/h/${huShort[1]}` };
   const repairShort = /^REP-(\d+)$/i.exec(value);
   if (repairShort) {
     return { type: 'receiving', value, redirect: `/repair/${repairShort[1]}` };
@@ -516,6 +523,9 @@ export function receivingLineHandle(id: string | number): string {
 }
 export function serialUnitHandle(id: string | number): string {
   return `U-${id}`;
+}
+export function handlingUnitHandle(id: string | number): string {
+  return `H-${id}`;
 }
 export function repairHandle(id: string | number): string {
   return `REP-${id}`;

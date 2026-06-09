@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
@@ -17,13 +18,22 @@ interface WarrantyLogClaimDialogProps {
  */
 export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLogClaimDialogProps) {
   const { create } = useWarrantyMutations();
+  // Portal target. The dialog launches from the warranty sidebar, which sits
+  // inside framer-motion transformed ancestors — and a `transform` makes
+  // `position: fixed` resolve against that box, not the viewport, clipping the
+  // dialog into the sidebar column. Portalling to document.body escapes it.
+  const [portalNode, setPortalNode] = useState<HTMLElement | null>(null);
   const [serialNumber, setSerialNumber] = useState('');
   const [orderId, setOrderId] = useState('');
   const [sku, setSku] = useState('');
   const [productTitle, setProductTitle] = useState('');
   const [notes, setNotes] = useState('');
 
-  if (!open) return null;
+  useEffect(() => {
+    setPortalNode(document.body);
+  }, []);
+
+  if (!open || !portalNode) return null;
 
   const orderIdNum = Number(orderId.trim());
   const hasIdentifier = Boolean(serialNumber.trim() || sku.trim() || (orderId.trim() && orderIdNum > 0));
@@ -54,8 +64,8 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLog
 
   const input = 'w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -126,6 +136,7 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLog
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    portalNode,
   );
 }

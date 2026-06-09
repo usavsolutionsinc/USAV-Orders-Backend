@@ -14,6 +14,8 @@ import {
   type IntakeClassification,
 } from '@/lib/receiving/intake-classification';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
+import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
 import {
   upsertOpenTrackingException,
   resolveReceivingExceptionsByReceivingId,
@@ -303,7 +305,39 @@ async function linkLocalPoLinesToReceiving(poId: string, receivingId: number): P
         AND receiving_id IS NULL`,
     [receivingId, poId],
   );
+  await stampInboundHandlingUnit(receivingId);
   return res.rowCount ?? 0;
+}
+
+/**
+ * Phase 3 (unified inbound) — assign the carton an LPN and propagate the
+ * receiving row's shipment_id down to its lines, so a delivered shipment
+ * resolves its line-level SKU/order# directly (delivered-unscanned surface) and
+ * the carton has a stable plate. Column-gated by RECEIVING_UNIFIED_INBOUND:
+ * a no-op (and never touches the new columns) until the migration is applied
+ * and the flag is flipped, so an unapplied migration can't error here.
+ */
+async function stampInboundHandlingUnit(receivingId: number): Promise<void> {
+  if (!isReceivingUnifiedInbound()) return;
+  try {
+    await pool.query(
+      `UPDATE receiving SET lpn = 'RC-' || id::text WHERE id = $1 AND lpn IS NULL`,
+      [receivingId],
+    );
+    await pool.query(
+      `UPDATE receiving_lines rl
+          SET shipment_id = r.shipment_id
+         FROM receiving r
+        WHERE rl.receiving_id = $1
+          AND r.id = $1
+          AND r.shipment_id IS NOT NULL
+          AND rl.shipment_id IS DISTINCT FROM r.shipment_id`,
+      [receivingId],
+    );
+  } catch (err) {
+    // Never fail a scan over the handling-unit stamp — it's an enrichment.
+    console.warn(`[lookup-po] stampInboundHandlingUnit failed for receiving=${receivingId}:`, err);
+  }
 }
 
 async function upsertMatchedReceiving(
@@ -346,10 +380,32 @@ async function createUnmatchedReceiving(
      RETURNING id`,
     [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId],
   );
+  const receivingId = Number(result.rows[0].id);
+  // Phase 5: tag the OS&D reason. No carrier resolved → CARRIER_MISMATCH;
+  // otherwise it's a scanned box with no matching PO → NO_PO.
+  const exceptionCode: ReceivingExceptionCode =
+    !carrier || carrier.trim().toUpperCase() === 'UNKNOWN' ? 'CARRIER_MISMATCH' : 'NO_PO';
+  await stampReceivingException(receivingId, exceptionCode);
   return {
-    receivingId: Number(result.rows[0].id),
+    receivingId,
     shipmentId: shipment?.id ?? null,
   };
+}
+
+/**
+ * Best-effort OS&D reason stamp (Phase 5). Tolerant of the column not existing
+ * yet (pre-migration) — a failure here must never break a scan, so it warns and
+ * returns. Once 2026-06-08_receiving_exception_code is applied it persists.
+ */
+async function stampReceivingException(
+  receivingId: number,
+  code: ReceivingExceptionCode,
+): Promise<void> {
+  try {
+    await pool.query(`UPDATE receiving SET exception_code = $2 WHERE id = $1`, [receivingId, code]);
+  } catch (err) {
+    console.warn(`[lookup-po] exception_code stamp skipped for receiving=${receivingId}:`, err);
+  }
 }
 
 // ── Test / demo shortcut ─────────────────────────────────────────────────────
@@ -434,7 +490,53 @@ async function recordScan(
      RETURNING id`,
     [receivingId, trackingNumber, carrier || null, staffId, source],
   );
-  return Number(result.rows[0].id);
+  const scanId = Number(result.rows[0].id);
+  await linkScanToStn(scanId, receivingId, trackingNumber, source);
+  return scanId;
+}
+
+/**
+ * Phase 6 (STN consolidation) — guarantee every real carrier scan resolves to a
+ * canonical shipping_tracking_numbers row and link the dock-scan event to it by
+ * id. The flow the receiving_scans table follows:
+ *   1. get-or-create the STN row for this tracking (registerShipmentPermissive
+ *      is an idempotent upsert by normalized tracking#),
+ *   2. set receiving_scans.shipment_id to that STN id,
+ *   3. adopt the link onto the carton (receiving.shipment_id) when it has none,
+ *      so the carton, its lines (Phase 3), and the scan all point at one STN row.
+ *
+ * registerShipmentPermissive returns null for non-carrier inputs (SKU-format,
+ * sub-8-char, blank) — those record the dock event with shipment_id NULL by
+ * design. Column-gated by RECEIVING_UNIFIED_INBOUND + best-effort so an
+ * unapplied migration (or a transient STN write) can never fail a scan.
+ */
+async function linkScanToStn(
+  scanId: number,
+  receivingId: number,
+  trackingNumber: string,
+  source: 'zoho_po' | 'unmatched',
+): Promise<void> {
+  if (!isReceivingUnifiedInbound()) return;
+  try {
+    const stn = await registerShipmentPermissive({
+      trackingNumber,
+      sourceSystem: `receiving_scan:${source}`,
+    });
+    const shipmentId = stn?.id ?? null;
+    if (shipmentId == null) return; // non-carrier / SKU-format → no STN row, leave NULL
+    await pool.query(
+      `UPDATE receiving_scans SET shipment_id = $2 WHERE id = $1 AND shipment_id IS DISTINCT FROM $2`,
+      [scanId, shipmentId],
+    );
+    // Keep the carton authoritative too — adopt the STN onto receiving when it
+    // lacks one (so receiving_lines.shipment_id stamping, Phase 3, can follow).
+    await pool.query(
+      `UPDATE receiving SET shipment_id = $2 WHERE id = $1 AND shipment_id IS NULL`,
+      [receivingId, shipmentId],
+    );
+  } catch (err) {
+    console.warn(`[lookup-po] linkScanToStn skipped for scan=${scanId}:`, err);
+  }
 }
 
 /**

@@ -148,7 +148,11 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
     if (scanned == null) setLocationOpen(false);
   }, [scanned]);
 
-  const tracked = data && data.source === 'tracked' ? data : null;
+  // Discriminant casts: pin the union member after checking `source`. Avoids
+  // relying on control-flow narrowing through the query result, which varies by
+  // @tanstack/react-query typing version.
+  const tracked = data?.source === 'tracked' ? (data as Extract<PrepackResult, { source: 'tracked' }>) : null;
+  const untracked = data?.source === 'untracked' ? (data as Extract<PrepackResult, { source: 'untracked' }>) : null;
   // Put-away needs a real serial_units row (numeric id). The print fallback can
   // resolve a serial for display while returning id 0 (no live row) — guard it.
   const liveUnitId = tracked && tracked.unit.id > 0 ? tracked.unit.id : null;
@@ -156,10 +160,10 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
 
   const title =
     tracked?.unit.product_title ??
-    (data?.source === 'untracked' ? data.product.productTitle : null) ??
+    (untracked ? untracked.product.productTitle : null) ??
     'Prepacked Product';
-  const sku = tracked?.unit.sku ?? (data?.source === 'untracked' ? data.product.sku : null);
-  const gtin = data?.source === 'untracked' ? data.product.gtin : null;
+  const sku = tracked?.unit.sku ?? (untracked ? untracked.product.sku : null);
+  const gtin = untracked ? untracked.product.gtin : null;
   const serialText = tracked?.unit.serial_number ?? data?.serial ?? shown ?? '';
 
   async function handleLocationDecode(value: string) {

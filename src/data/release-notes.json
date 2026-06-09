@@ -1,7 +1,17 @@
 {
-  "generatedAt": "2026-06-08T20:14:39.180Z",
+  "generatedAt": "2026-06-09T18:23:33.940Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "359fc99a238af7c61f51982f1c8aeeb8a819adc8",
+      "shortSha": "359fc99a",
+      "date": "2026-06-09T11:22:04-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "on click update for the master nav",
+      "body": "",
+      "type": "other",
+      "title": "on click update for the master nav"
+    },
     {
       "sha": "a1665101153ded71dcb122324b826a9332de9b51",
       "shortSha": "a1665101",
@@ -1981,16 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "websocket support and dynamic goals and history reports"
-    },
-    {
-      "sha": "3d57366e0e849c4095baf94f815f1ca234c3ef85",
-      "shortSha": "3d57366e",
-      "date": "2026-03-29T23:59:30-07:00",
-      "author": "DENSENSE8",
-      "subject": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness",
-      "body": "",
-      "type": "other",
-      "title": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness"
     }
   ]
 }

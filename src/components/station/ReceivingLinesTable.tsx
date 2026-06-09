@@ -110,6 +110,13 @@ export interface ReceivingLineRow {
   expected_delivery_date?: string | null;
   /** Vendor name from zoho_po_mirror (Incoming view only). */
   vendor_name?: string | null;
+  /**
+   * Zoho PO mirror status (`zoho_po_mirror.status`) — incoming + scanned views.
+   * Phase 2: when terminal (received/closed/billed/cancelled) the row is badged
+   * "Zoho: received" instead of being hidden, so a physically-present box stays
+   * actionable while the financial-state mismatch is visible.
+   */
+  zoho_status?: string | null;
   created_at: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;
@@ -594,6 +601,26 @@ interface DeliveredUnscannedResponse {
 }
 
 /**
+ * Synthetic-row id base for shipment-anchored "delivered · not scanned" boxes.
+ * They have no receiving_line, so we mint a negative, collision-free id from the
+ * shipment id: `id = BASE - shipment_id`. Keep the encode ({@link deliveredUnscannedToRow})
+ * and decode ({@link shipmentIdFromDeliveredUnscannedRow}) in lockstep so the
+ * incoming details panel can recover the real shipment id for its delete path.
+ */
+export const DELIVERED_UNSCANNED_SYNTHETIC_ID_BASE = -2_000_000;
+
+/**
+ * Recover the `shipping_tracking_numbers.id` from a synthetic delivered-unscanned
+ * row, or null if `row` isn't one. A delivered-unscanned row is the only producer
+ * of `tracking_source === 'shipment'` with a negative id (see {@link deliveredUnscannedToRow}).
+ */
+export function shipmentIdFromDeliveredUnscannedRow(row: ReceivingLineRow): number | null {
+  if (row.tracking_source !== 'shipment' || row.id >= 0) return null;
+  const shipmentId = DELIVERED_UNSCANNED_SYNTHETIC_ID_BASE - row.id; // inverse of id = BASE - shipment_id
+  return Number.isFinite(shipmentId) && shipmentId > 0 ? shipmentId : null;
+}
+
+/**
  * Remap a shipment-anchored "delivered but not dock-scanned" box onto the
  * standard {@link ReceivingLineRow} shape so the "Delivered · not scanned"
  * facet renders through the very same date-grouping + {@link ReceivingLineOrderRow}
@@ -615,7 +642,7 @@ function deliveredUnscannedToRow(item: DeliveredUnscanned): ReceivingLineRow {
       : 'Delivered · needs receiving';
 
   return {
-    id: -2_000_000 - item.shipment_id,
+    id: DELIVERED_UNSCANNED_SYNTHETIC_ID_BASE - item.shipment_id,
     receiving_id: null,
     tracking_number: item.tracking_number_raw,
     tracking_source: 'shipment',

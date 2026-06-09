@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { useBodyScrollLock } from '@/design-system/hooks';
+import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
 import {
   X,
   Download,
@@ -256,6 +257,16 @@ export function PhotoGallery({
     setDeletingPhoto(true);
     setDeleteError(null);
     try {
+      // Remove the NAS-hosted original browser-direct over WebDAV first,
+      // mirroring the capture upload PUT (same host + Cloudflare Access cookie
+      // via credentials:'include'); the Vercel DELETE route only drops the DB
+      // row + Vercel-Blob files. Needs the NAS Caddy to route DELETE → webdav
+      // (deploy/nas-photo-server/Caddyfile). Best-effort: a NAS failure still
+      // proceeds to delete the row so the UI reflects the removal.
+      if (photo?.url && isNasPhotoUrl(photo.url)) {
+        const nasDel = await deleteNasPhoto(photo.url);
+        if (!nasDel.ok) console.warn('NAS file delete failed:', nasDel.error);
+      }
       const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

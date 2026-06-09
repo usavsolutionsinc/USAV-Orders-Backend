@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-08T06:15:27Z",
-  "totalRoutes": 546,
+  "generatedAt": "2026-06-09T08:00:26Z",
+  "totalRoutes": 550,
   "summary": {
-    "permissionGated": 461,
+    "permissionGated": 465,
     "authenticatedNoPermission": 18,
     "anonymousIntentional": 46,
     "serviceToService": 3,
@@ -1730,6 +1730,43 @@
       ],
       "gate": "withAuth",
       "permission": "orders.import",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/handling-units/[id]/assign/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "handling_unit.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/handling-units/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "handling_unit.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/handling-units/[id]/unassign/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "handling_unit.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/handling-units/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "handling_unit.view",
       "exemptReason": null
     },
     {

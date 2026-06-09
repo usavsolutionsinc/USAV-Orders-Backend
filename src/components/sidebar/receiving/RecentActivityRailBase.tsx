@@ -215,6 +215,14 @@ function ReceivingPopoverContent({
           {row.receiving_source === 'unmatched' ? (
             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-500 ring-1 ring-inset ring-slate-200" title="No matching Zoho PO — received locally only">No PO</span>
           ) : null}
+          {/* Phase 2: a physically-present box whose Zoho PO already reads
+              received/closed stays in the queue (not hidden) with this badge,
+              surfacing the physical-vs-financial mismatch instead of vanishing. */}
+          {['billed', 'closed', 'cancelled', 'received', 'rejected'].includes(
+            String(row.zoho_status || '').toLowerCase(),
+          ) ? (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200" title={`Zoho marks this PO "${row.zoho_status}" — already received/closed upstream, but the box is still here to unbox`}>Zoho: {String(row.zoho_status)}</span>
+          ) : null}
           {row.needs_test ? (
             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">Test</span>
           ) : null}

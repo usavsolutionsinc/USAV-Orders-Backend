@@ -335,13 +335,14 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
   if (handleRoute && handleRoute.redirect && (
     handleRoute.type === 'receiving' ||
     handleRoute.type === 'receiving-line' ||
-    handleRoute.type === 'serial-unit'
+    handleRoute.type === 'serial-unit' ||
+    handleRoute.type === 'handling-unit'
   )) {
-    const kind: ResolveKind = handleRoute.type === 'receiving'
-      ? 'package'
-      : handleRoute.type === 'receiving-line'
-        ? 'package'
-        : 'gs1_unit';
+    // A handling unit (box/LPN) is a physical container, so it shares the
+    // `package` kind; only a unit handle resolves to a single unit.
+    const kind: ResolveKind = handleRoute.type === 'serial-unit'
+      ? 'gs1_unit'
+      : 'package';
     const result: ResolveResponse = {
       ...base,
       kind,

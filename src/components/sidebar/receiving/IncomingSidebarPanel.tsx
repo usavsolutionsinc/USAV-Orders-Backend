@@ -9,6 +9,7 @@ import { DateRangePickerField } from '@/design-system/components/DateRangePicker
 import { Package, Truck, AlertTriangle, Clock, ChevronDown, RefreshCw, Mail, Unlink } from '@/components/Icons';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { toast } from '@/lib/toast';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { RECEIVING_HISTORY_URL_PARAMS } from '@/lib/receiving-history-search';
 import {
   INCOMING_SORT_LABELS,
@@ -321,14 +322,11 @@ export function IncomingSidebarPanel() {
     syncAbortRef.current?.abort();
   }, []);
 
-  // The three query keys this view (tiles + row list + delivered-unscanned
-  // facet) reads from. Both refresh actions invalidate exactly these.
+  // Refresh every receiving feed (tiles + row list + delivered-unscanned facet
+  // + the triage rails) through the shared helper, so this view and the scan
+  // path can never drift on which keys count as "a receiving feed".
   const invalidateIncoming = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] }),
-      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] }),
-      queryClient.invalidateQueries({ queryKey: ['incoming-delivered-unscanned'] }),
-    ]);
+    invalidateReceivingFeeds(queryClient);
   }, [queryClient]);
 
   // "Refresh Zoho" — re-pull issued POs AND refresh mirror status, so newly

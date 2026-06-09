@@ -29,6 +29,7 @@ import {
 } from '@/utils/events';
 import {
   dispatchSelectLine,
+  shipmentIdFromDeliveredUnscannedRow,
   type ReceivingLineRow,
 } from './station/ReceivingLinesTable';
 
@@ -85,7 +86,7 @@ export default function ReceivingDashboard() {
   // mode=incoming. Stored as {po_id, po_number} so the panel can render its
   // header label immediately, then re-key its details query on po_id change.
   const [incomingDetails, setIncomingDetails] = useState<
-    { poId: string; poNumber: string | null } | null
+    { poId: string | null; poNumber: string | null; shipmentId: number | null } | null
   >(null);
   // Scan-in-flight loader state. Populated by 'receiving-scan-in-flight' and
   // cleared 500ms after 'receiving-scan-resolved' to give the workspace open
@@ -243,6 +244,15 @@ export default function ReceivingDashboard() {
     // resolved when the response lands. We hold the loader briefly after
     // resolve so the workspace open animation (~180ms) covers the swap.
     let clearTimer: ReturnType<typeof setTimeout> | null = null;
+    // Grace delay before the full "Opening your PO" takeover mounts. A scan
+    // that resolves locally — the item is already in the incoming/mirror
+    // state, a deduped re-scan, or an adopted PO with no Zoho round-trip —
+    // comes back well under this threshold, so the row flips inline and the
+    // loader never flashes. Only a genuine cold Zoho lookup outlives the delay
+    // and shows the skeleton. (Standard skeleton-delay pattern: never flash a
+    // loader for sub-threshold latencies.)
+    const SCAN_LOADER_GRACE_MS = 300;
+    let showTimer: ReturnType<typeof setTimeout> | null = null;
     const handleInFlight = (e: Event) => {
       const detail = (e as CustomEvent<{ tracking: string; startedAt: number }>).detail;
       if (!detail?.tracking) return;
@@ -250,9 +260,21 @@ export default function ReceivingDashboard() {
         clearTimeout(clearTimer);
         clearTimer = null;
       }
-      setScanInFlight({ tracking: detail.tracking, startedAt: detail.startedAt });
+      if (showTimer) clearTimeout(showTimer);
+      showTimer = setTimeout(() => {
+        setScanInFlight({ tracking: detail.tracking, startedAt: detail.startedAt });
+        showTimer = null;
+      }, SCAN_LOADER_GRACE_MS);
     };
     const handleResolved = () => {
+      // Resolved before the grace delay elapsed → fast/local/deduped lookup;
+      // cancel the pending show so the takeover never appears. If it already
+      // showed (slow Zoho path), let it linger briefly so the workspace-open
+      // animation covers the swap.
+      if (showTimer) {
+        clearTimeout(showTimer);
+        showTimer = null;
+      }
       if (clearTimer) clearTimeout(clearTimer);
       clearTimer = setTimeout(() => {
         setScanInFlight(null);
@@ -272,6 +294,7 @@ export default function ReceivingDashboard() {
       window.removeEventListener('receiving-scan-in-flight', handleInFlight);
       window.removeEventListener('receiving-scan-resolved', handleResolved);
       if (clearTimer) clearTimeout(clearTimer);
+      if (showTimer) clearTimeout(showTimer);
     };
   }, []);
 
@@ -300,15 +323,23 @@ export default function ReceivingDashboard() {
         return;
       }
       const poId = (row.zoho_purchaseorder_id || '').trim();
-      if (!poId) {
-        // Unmatched rows live in their own pill; skip rather than open a
-        // broken panel.
-        setIncomingDetails(null);
+      // A "Delivered · not scanned" box that never resolved to a PO is shipment-
+      // anchored (synthetic row, receiving_id null). Recover its shipment id so
+      // the panel can still open (shipment-only mode) and offer a hard delete.
+      const shipmentId = shipmentIdFromDeliveredUnscannedRow(row);
+      if (!poId && shipmentId == null) {
+        // Neither a PO nor a shipment-anchored delivered box → nothing the panel
+        // can render. Give deterministic feedback instead of a silent dead click.
+        const tracking = (row.tracking_number || '').trim();
+        toast.info(tracking ? 'Delivered box not linked to a PO yet' : 'No linked PO for this row yet');
         return;
       }
       setIncomingDetails({
-        poId,
+        poId: poId || null,
         poNumber: row.zoho_purchaseorder_number ?? null,
+        // Prefer the richer PO view when a PO exists; only fall back to the
+        // shipment-only view when there's no PO.
+        shipmentId: poId ? null : shipmentId,
       });
     };
     window.addEventListener('receiving-select-line', handler);
@@ -641,6 +672,7 @@ export default function ReceivingDashboard() {
               key="incoming-details-panel"
               zohoPurchaseOrderId={incomingDetails.poId}
               poNumberHint={incomingDetails.poNumber}
+              shipmentId={incomingDetails.shipmentId}
               onClose={() => {
                 setIncomingDetails(null);
                 window.dispatchEvent(new CustomEvent('receiving-clear-line'));

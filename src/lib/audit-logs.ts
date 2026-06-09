@@ -76,6 +76,7 @@ export const AUDIT_ENTITY = {
   RECEIVING: 'receiving',
   RECEIVING_LINE: 'receiving_line',
   SERIAL_UNIT: 'serial_unit',
+  HANDLING_UNIT: 'handling_unit',
   TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
   SKU_RELATIONSHIP: 'sku_relationship',
@@ -120,6 +121,10 @@ export const AUDIT_ACTION = {
   SERIAL_SCAN:   'serial.scan',
   SERIAL_CREATE: 'serial.create',
   SERIAL_DELETE: 'serial.delete',
+  // Handling units (LPN) — license-plated boxes/trays
+  HANDLING_UNIT_CREATE:   'handling_unit.create',
+  HANDLING_UNIT_ASSIGN:   'handling_unit.assign',
+  HANDLING_UNIT_UNASSIGN: 'handling_unit.unassign',
   // Tech / QC verdicts (per-unit testing outcomes)
   TECH_QC_PASS:   'tech.qc.pass',
   TECH_QC_RETEST: 'tech.qc.retest',
