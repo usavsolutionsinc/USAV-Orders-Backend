@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocalStorage } from '@/hooks';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
@@ -118,6 +120,7 @@ function buildUnmatchedStubRow(
 export function ReceivingSidebarPanel() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const { isMobile } = useUIModeOptional();
   const masterNavEnabled = useMasterNavEnabled();
   const rawMode = searchParams.get('mode');
@@ -413,8 +416,18 @@ export function ReceivingSidebarPanel() {
       const liveMode = typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('mode')
         : modeRef.current;
-      if (liveMode === 'history' && row?.receiving_id != null) {
-        dispatchReceivingDetailsOverlay(row.receiving_id);
+      if (liveMode === 'history') {
+        // History is read-only: the only thing a row click does is open the
+        // carton details overlay, which is keyed on receiving_id. A row with no
+        // receiving_id (e.g. a synthetic / shipment-anchored placeholder that
+        // surfaces under a filter) has no carton to open — falling through would
+        // open nothing AND mutate sidebar state. Stop here with feedback so the
+        // click is deterministic instead of a silent dead click.
+        if (row?.receiving_id != null) {
+          dispatchReceivingDetailsOverlay(row.receiving_id);
+        } else if (row != null) {
+          toast.info('No receiving record for this row yet');
+        }
         return;
       }
       const expand = Boolean(row != null && expandFlowSections);
@@ -563,6 +576,11 @@ export function ReceivingSidebarPanel() {
               window.dispatchEvent(
                 new CustomEvent('receiving-lines-prepended', { detail: rows }),
               );
+              // Refresh every receiving feed atomically. The Prioritize rail
+              // does NOT listen to `receiving-lines-prepended`, so without an
+              // explicit invalidation a freshly scanned-in carton never
+              // surfaced there until a global refresh.
+              invalidateReceivingFeeds(queryClient);
             }
             const openRows = rows.filter(
               (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
@@ -663,6 +681,12 @@ export function ReceivingSidebarPanel() {
                 window.dispatchEvent(
                   new CustomEvent('receiving-lines-prepended', { detail: rows }),
                 );
+                // Refresh every receiving feed atomically (Prioritize + Recent
+                // rails, main table, Unfound list, Incoming tiles). The matched
+                // path only fired `receiving-lines-prepended` (table-only), so
+                // a found scan never appeared in Prioritize until a global
+                // refresh — the reported bug.
+                invalidateReceivingFeeds(queryClient);
               }
               const openRows = rows.filter(
                 (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
@@ -715,6 +739,9 @@ export function ReceivingSidebarPanel() {
           const unmatchedReceivingId =
             typeof data.receiving_id === 'number' ? data.receiving_id : null;
           if (unmatchedReceivingId != null) {
+            // Open the same staff's phone camera for this unmatched carton too
+            // — a tracking scan still needs unboxing photos even with no PO.
+            void publishPhotoRequestFor(unmatchedReceivingId, trackingNumber);
             void (async () => {
               let openRow: ReceivingLineRow | null = null;
               try {
@@ -753,7 +780,7 @@ export function ReceivingSidebarPanel() {
         setTrackingLookupInFlight((n) => Math.max(0, n - 1));
       }
     })();
-  }, [bulkTracking, staffId]);
+  }, [bulkTracking, staffId, queryClient]);
 
   // Phone-paired scans: incoming `phone_scan` messages route straight through
   // the same submitTrackingScan flow as if the desktop scanner had fired it.

@@ -33,6 +33,7 @@ import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { workspaceCapabilities, type ReceivingWorkspaceVariant } from './workspace-capabilities';
+import { TriagePriorityPanel } from './triage/TriagePriorityPanel';
 import { LineNotesCard } from './line-edit/LineNotesCard';
 import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
 import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
@@ -670,6 +671,11 @@ export function LineEditPanel({
           clears the bottom sticky save bar so the last card never hides under it. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
+          {/* Triage "Prioritize" queue display — the open carton's tier / aging
+              / position plus the per-tier backlog. Visualizes ?sort=priority;
+              triage-only (unbox has no queue to rank). */}
+          {caps.priorityHeader ? <TriagePriorityPanel row={row} /> : null}
+
           {/* Photos + Claim + shipment context (listing, PO#, tracking,
               platform + type pills) share one WorkspaceCard so the operator
               sees a single bordered surface. */}

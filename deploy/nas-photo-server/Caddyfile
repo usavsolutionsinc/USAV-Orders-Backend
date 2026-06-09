@@ -3,7 +3,7 @@
 #
 # This serves ONE sandboxed photos folder with BOTH:
 #   • read  — JSON/HTML directory browse + file serving (the picker), and
-#   • write — WebDAV PUT so the mobile capture flow writes photos straight here.
+#   • write — WebDAV PUT (capture writes a photo) + DELETE (gallery removes one).
 #
 # Requires a Caddy build that INCLUDES the webdav module (the stock binary does
 # not). Download one in a single step from Caddy's build server:
@@ -15,6 +15,8 @@
 #   curl -H "Accept: application/json" http://<nas-ip>:8088/             # JSON listing
 #   curl -X PUT --data-binary @some.jpg http://<nas-ip>:8088/test.jpg    # 201 Created
 #   curl -I http://<nas-ip>:8088/test.jpg                                # 200, image/*
+#   curl -X DELETE http://<nas-ip>:8088/test.jpg                         # 204 No Content
+#   curl -I http://<nas-ip>:8088/test.jpg                                # 404 (gone)
 
 {
 	# We listen on a plain HTTP port only; TLS for the live site is terminated
@@ -28,15 +30,16 @@
 	# there). Path quoted because it contains a space.
 	root * "/volume1/@home/Michael Garisek/Photos"
 
-	# CORS. The app reads the listing AND PUTs captured photos cross-origin from
-	# its own domain, with credentials:'include' (so a Cloudflare Access cookie
-	# can ride along). The CORS spec forbids "*" when credentials are allowed, so
+	# CORS. The app reads the listing, PUTs captured photos, and DELETEs a photo
+	# the operator removes from the receiving gallery — all cross-origin from its
+	# own domain, with credentials:'include' (so a Cloudflare Access cookie can
+	# ride along). The CORS spec forbids "*" when credentials are allowed, so
 	# reflect the caller's Origin and allow credentials. `defer` writes these on
-	# every response (preflight, browse, file serve, and webdav PUT alike).
+	# every response (preflight, browse, file serve, webdav PUT + DELETE alike).
 	header {
 		Access-Control-Allow-Origin "{http.request.header.Origin}"
 		Access-Control-Allow-Credentials "true"
-		Access-Control-Allow-Methods "GET, HEAD, PUT, OPTIONS"
+		Access-Control-Allow-Methods "GET, HEAD, PUT, DELETE, OPTIONS"
 		Access-Control-Allow-Headers "Content-Type"
 		Vary Origin
 		defer
@@ -44,19 +47,22 @@
 
 	# Named matchers (defined at site level, referenced inside the route below).
 	@preflight method OPTIONS
-	@put method PUT
+	# PUT (create/overwrite a capture) and DELETE (remove a single photo the
+	# operator deleted from the receiving gallery) both go to webdav. MOVE /
+	# MKCOL / COPY stay excluded, so the share can't be re-structured or
+	# bulk-wiped over HTTP — only individual files are added or removed.
+	@write method PUT DELETE
 
 	# One ordered route so method dispatch is deterministic:
-	#   OPTIONS → 204 preflight (MUST be first, or file_server 404s the preflight),
-	#   PUT     → WebDAV create/overwrite a single file,
-	#   else    → read-only file server with JSON/HTML browse.
-	# DELETE/MOVE/MKCOL never reach webdav, so the share is writable (new photos)
-	# but can't be wiped over HTTP. Capture writes flat filenames into existing
-	# folders (no per-PO subdir), because plain WebDAV PUT 409s when a parent
-	# collection is missing.
+	#   OPTIONS    → 204 preflight (MUST be first, or file_server 404s the preflight),
+	#   PUT/DELETE → WebDAV create/overwrite or remove a single file,
+	#   else       → read-only file server with JSON/HTML browse.
+	# Capture writes flat filenames into existing folders (no per-PO subdir),
+	# because plain WebDAV PUT 409s when a parent collection is missing; a gallery
+	# delete targets that same flat path, so it unlinks exactly that one file.
 	route {
 		respond @preflight 204
-		webdav @put {
+		webdav @write {
 			root "/volume1/@home/Michael Garisek/Photos"
 		}
 		file_server browse

@@ -25,9 +25,87 @@ export const GET = withAuth(async (req: NextRequest) => {
   try {
     const url = new URL(req.url);
     const poId = (url.searchParams.get('po_id') || '').trim();
+    const shipmentIdParam = (url.searchParams.get('shipment_id') || '').trim();
+
+    // ── Shipment-anchored fallback (no resolved PO) ─────────────────────────
+    // A "Delivered · not scanned" box whose tracking# never resolved to a Zoho
+    // PO has no zoho_po_mirror / receiving_lines rows, so the PO-keyed read below
+    // returns nothing. When the panel opens such a row it passes `shipment_id`
+    // instead: return the same response shape with `po: null` + empty line_items,
+    // populated only with the shipment header + carrier event trail (and notes
+    // from a linked receiving row, if any) so the Shipment tab still renders.
+    if (!poId && shipmentIdParam) {
+      const sid = Number(shipmentIdParam);
+      if (!Number.isFinite(sid) || sid <= 0) {
+        return NextResponse.json({ success: false, error: 'valid shipment_id required' }, { status: 400 });
+      }
+      const stnRes = await pool.query<{
+        id: number;
+        tracking_number_raw: string | null;
+        carrier: string | null;
+        latest_status_category: string | null;
+        is_delivered: boolean | null;
+        delivered_at: string | null;
+        last_checked_at: string | null;
+        out_for_delivery_at: string | null;
+      }>(
+        `SELECT id, tracking_number_raw, carrier, latest_status_category, is_delivered,
+                delivered_at::text, last_checked_at::text, out_for_delivery_at::text
+           FROM shipping_tracking_numbers
+          WHERE id = $1
+          LIMIT 1`,
+        [sid],
+      );
+      const stn = stnRes.rows[0] ?? null;
+      if (!stn) {
+        return NextResponse.json({ success: false, error: 'shipment not found' }, { status: 404 });
+      }
+      const recvRes = await pool.query<{ id: number; support_notes: string | null; received_at: string | null }>(
+        `SELECT id, support_notes, received_at::text
+           FROM receiving
+          WHERE shipment_id = $1
+          ORDER BY id
+          LIMIT 1`,
+        [sid],
+      );
+      const recv = recvRes.rows[0] ?? null;
+      const ev = await pool.query(
+        `SELECT id, event_occurred_at::text, normalized_status_category,
+                external_status_label, external_status_description,
+                event_city, event_state, exception_description, signed_by
+           FROM shipment_tracking_events
+          WHERE shipment_id = $1
+          ORDER BY event_occurred_at DESC NULLS LAST, id DESC
+          LIMIT 25`,
+        [sid],
+      );
+      return NextResponse.json({
+        success: true,
+        po: null,
+        receiving: recv ? { id: recv.id, shipment_id: sid, received_at: recv.received_at } : null,
+        line_items: [],
+        shipment: {
+          shipment_id: sid,
+          tracking_number: stn.tracking_number_raw,
+          carrier: stn.carrier,
+          latest_status_category: stn.latest_status_category,
+          is_delivered: stn.is_delivered,
+          delivered_at: stn.delivered_at,
+          last_checked_at: stn.last_checked_at,
+          out_for_delivery_at: stn.out_for_delivery_at,
+          events: ev.rows,
+        },
+        receive_events: [],
+        gmail: [],
+        delivered_emails: [],
+        zoho_activity: [],
+        notes: recv?.support_notes ?? null,
+      });
+    }
+
     if (!poId) {
       return NextResponse.json(
-        { success: false, error: 'po_id is required' },
+        { success: false, error: 'po_id or shipment_id is required' },
         { status: 400 },
       );
     }

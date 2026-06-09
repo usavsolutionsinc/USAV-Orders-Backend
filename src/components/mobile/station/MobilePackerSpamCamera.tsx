@@ -7,7 +7,7 @@ import {
   framerPresenceMobile,
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
-import { Camera, X, Check, Trash2, ChevronLeft, ChevronRight } from '@/components/Icons';
+import { Camera, X, Check, Trash2 } from '@/components/Icons';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 
@@ -360,11 +360,11 @@ export function MobilePackerSpamCamera({
         </div>
       )}
 
-      {/* ── Bottom bar: solid control bar housing gallery · shutter · done ──
-          Shares the exact height (`min-h-[72px]` + identical padding) with the
-          preview's Dismiss bar so the two never jump as you open/close it. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/90 backdrop-blur-sm">
-        <div className="grid grid-cols-3 items-center min-h-[72px] px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      {/* ── Floating controls: gallery · shutter · done hovering over the
+          viewfinder (no bar). The wrapper itself ignores pointer events so the
+          gaps between controls stay tappable as live viewfinder. ── */}
+      <div className="absolute inset-x-0 bottom-0 z-10 pointer-events-none">
+        <div className="grid grid-cols-3 items-center px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] [&_button]:pointer-events-auto">
           {/* Gallery — small circular last-shot bubble. Filled with the photo
               (no white ring) and smaller than the shutter, so it reads as a
               thumbnail rather than a second shutter. Hidden until the first shot. */}
@@ -384,9 +384,6 @@ export function MobilePackerSpamCamera({
                   className="w-full h-full object-cover"
                 />
               )}
-              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[11px] font-black ring-2 ring-black">
-                {shots.length}
-              </span>
             </button>
           </div>
 
@@ -420,15 +417,17 @@ export function MobilePackerSpamCamera({
 
       {/* ── Swipeable gallery overlay — full-bleed so the preview frames the shot
           at the EXACT dimensions the viewfinder did (object-cover, same crop).
-          The 1/1 counter + delete float over the photo; there's no X — the
-          Dismiss button in the bottom bar (identical height to the capture bar)
-          is the single close affordance. ── */}
+          The 1/1 counter + delete float over the photo; there's no X — a
+          floating Dismiss pill (no bottom bar) is the single close affordance. ── */}
       <AnimatePresence>
         {activeShot && previewIndex !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            // Exit instantly (no fade): the overlay sits at z-30 over the
+            // shutter, so a lingering fade-out would swallow the first shutter
+            // tap after Dismiss. Unmounting at once keeps the camera live.
+            exit={{ opacity: 0, transition: { duration: 0 } }}
             transition={{ duration: 0.18 }}
             className="absolute inset-0 z-30 bg-black"
           >
@@ -451,27 +450,8 @@ export function MobilePackerSpamCamera({
               />
             </motion.div>
 
-            {/* Prev / next affordances */}
-            {previewIndex > 0 && (
-              <button
-                type="button"
-                onClick={() => paginate(-1)}
-                aria-label="Previous photo"
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm active:bg-black/60 transition-colors"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-            )}
-            {previewIndex < shots.length - 1 && (
-              <button
-                type="button"
-                onClick={() => paginate(1)}
-                aria-label="Next photo"
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm active:bg-black/60 transition-colors"
-              >
-                <ChevronRight className="w-6 h-6" />
-              </button>
-            )}
+            {/* No prev/next arrows — swipe pages between shots, and the N / M
+                counter (top-left) shows position. */}
 
             {/* Top scrim: 1/1 counter (left) + delete (right), over the photo. */}
             <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
@@ -490,17 +470,15 @@ export function MobilePackerSpamCamera({
               </div>
             </div>
 
-            {/* Bottom bar — identical height to the capture bar; houses Dismiss. */}
-            <div className="absolute inset-x-0 bottom-0 z-10 border-t border-white/10 bg-black/90 backdrop-blur-sm">
-              <div className="flex items-center min-h-[72px] px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-                <button
-                  type="button"
-                  onClick={() => setPreviewIndex(null)}
-                  className="h-14 w-full rounded-2xl bg-white/15 text-white text-caption font-black uppercase tracking-[0.18em] active:bg-white/25 transition-colors"
-                >
-                  Dismiss
-                </button>
-              </div>
+            {/* Floating Dismiss — no bottom bar; the pill floats over the photo. */}
+            <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pointer-events-none">
+              <button
+                type="button"
+                onClick={() => setPreviewIndex(null)}
+                className="pointer-events-auto h-12 px-8 rounded-full bg-black/55 text-white text-caption font-black uppercase tracking-[0.18em] backdrop-blur-md shadow-lg active:bg-black/70 transition-colors"
+              >
+                Dismiss
+              </button>
             </div>
           </motion.div>
         )}

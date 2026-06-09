@@ -16,8 +16,11 @@ const UNIT_ID_RE = /^[A-Z0-9](?:[A-Z0-9-]{0,19})-\d{4}-\d{6}$/i;
 /** Zoho PO number, format `PO-1234` (case-insensitive). */
 const PO_NUMBER_RE = /^PO-?\d+$/i;
 
+/** Handling-unit (LPN) handle, format `H-123` (case-insensitive). */
+const HANDLING_UNIT_RE = /^H-\d+$/i;
+
 /** How a scan was matched — lets the UI tell the operator what it recognised. */
-export type ResolvedVia = 'handle' | 'unit_id' | 'serial' | 'receiving_id' | 'po' | 'tracking';
+export type ResolvedVia = 'handle' | 'unit_id' | 'serial' | 'receiving_id' | 'po' | 'tracking' | 'lpn';
 
 /**
  * Explicit search type the operator armed via the scan-bar mode buttons. When
@@ -45,6 +48,14 @@ export function looksLikeReceivingRef(value: string): boolean {
 
 export function looksLikePoNumber(value: string): boolean {
   return PO_NUMBER_RE.test(value.trim());
+}
+
+/**
+ * Canonical handling-unit (LPN) handle — `H-{id}` (current, from
+ * handlingUnitHandle in lib/barcode-routing). Mirrors {@link looksLikeReceivingRef}.
+ */
+export function looksLikeHandlingUnit(value: string): boolean {
+  return HANDLING_UNIT_RE.test(value.trim());
 }
 
 async function fetchLinesByReceivingId(receivingId: number) {
@@ -172,6 +183,28 @@ async function fetchLineByUnitId(unitId: string): Promise<ReceivingLineRow | nul
   return fetchLineById(receivingLineId);
 }
 
+/**
+ * Resolve a handling-unit (LPN) handle to the receiving lines its member units
+ * belong to. One box scan → every line in the box. The detail endpoint returns
+ * `receiving_line_ids` (distinct origin_receiving_line_id of the box's units);
+ * we hydrate each to a full ReceivingLineRow via the existing single-line fetch
+ * so the multi-picker gets exactly the shape it already renders. A box of N
+ * units typically spans only a few lines, so the fan-out is small.
+ */
+async function fetchLinesByHandlingUnit(handlingUnitId: number): Promise<ReceivingLineRow[]> {
+  const res = await fetch(`/api/handling-units/${handlingUnitId}`);
+  if (!res.ok) {
+    if (res.status === 404) return [];
+    throw new Error(`handling-units fetch failed (${res.status})`);
+  }
+  const data = await res.json();
+  const lineIds = (data?.handling_unit?.receiving_line_ids ?? data?.receiving_line_ids ?? []) as number[];
+  const ids = lineIds.filter((id): id is number => Number.isFinite(id));
+  if (ids.length === 0) return [];
+  const rows = await Promise.all(ids.map((id) => fetchLineById(id)));
+  return rows.filter((r): r is ReceivingLineRow => r != null);
+}
+
 async function fetchLineById(lineId: number): Promise<ReceivingLineRow | null> {
   const res = await fetch(`/api/receiving-lines?id=${lineId}&include=serials`);
   if (!res.ok) return null;
@@ -213,6 +246,7 @@ async function fetchLinesBySerial(serial: string): Promise<ReceivingLineRow[]> {
  *   • GS1 Digital Link URL (`/01/{gtin}/21/{serial}`) — printed unit QR
  *   • Unit ID string ({SHORTSKU}-{YYWW}-{SEQ6})
  *   • `RCV-{receiving_id}` internal carton ref (unmatched cartons)
+ *   • `H-{id}` handling-unit (LPN) handle — fans out to every unit in the box
  *   • PO number (PO-1234)
  *
  * Returns `multi` when a carton has >1 receiving_line so the workspace can
@@ -363,6 +397,18 @@ export async function resolveReceivingCodeToLine(
         if (ref) {
           const row = await fetchLineByUnitId(decodeURIComponent(ref));
           return row ? { kind: 'line', row, via: 'unit_id' } : { kind: 'not_found', query: value };
+        }
+      }
+      // H-class — a license-plated box/tray. One scan resolves to every unit in
+      // the box, mapped to their receiving lines → the existing multi-picker.
+      if (routed.type === 'handling-unit') {
+        const id = Number(routed.redirect?.match(/\/m\/h\/(\d+)$/)?.[1]);
+        if (Number.isFinite(id)) {
+          const rows = await fetchLinesByHandlingUnit(id);
+          if (rows.length === 0) return { kind: 'not_found', query: value };
+          if (rows.length === 1) return { kind: 'line', row: rows[0], via: 'lpn' };
+          const receivingId = rows.find((r) => r.receiving_id != null)?.receiving_id ?? 0;
+          return { kind: 'multi', rows, receivingId, via: 'lpn' };
         }
       }
     }

@@ -42,6 +42,20 @@ export function nasConfigured(): boolean {
   return getNasBaseUrl().length > 0;
 }
 
+/**
+ * True when `url` points at the NAS file server (so a delete must go
+ * browser-direct over WebDAV — the Vercel API route can't reach the LAN).
+ * Excludes Vercel Blob URLs (those are deleted server-side) and matches both
+ * the configured absolute base and the local dev proxy path.
+ */
+export function isNasPhotoUrl(url: string): boolean {
+  if (!url) return false;
+  if (/vercel-storage\.com|blob\.vercel-storage/.test(url)) return false;
+  const base = getNasBaseUrl();
+  if (base && url.startsWith(base)) return true;
+  return url.startsWith('/api/nas-dev');
+}
+
 export interface NasEntry {
   name: string;
   type: 'file' | 'directory';
@@ -148,8 +162,9 @@ export interface AttachResult {
  * Zendesk claim, delete). A 409 means it was already attached — treated as a
  * benign no-op so re-selecting the same shot doesn't error.
  *
- * Note: deleting such a photo later removes only the DB row — the original file
- * stays on the NAS.
+ * Deleting such a photo removes BOTH the DB row (DELETE /api/photos/[id]) and
+ * the original NAS file (browser-direct {@link deleteNasPhoto}, mirroring the
+ * capture PUT so the operator's Cloudflare Access cookie rides along).
  */
 export async function attachNasPhoto(scope: PhotoScope, photoUrl: string): Promise<AttachResult> {
   let res: Response;
@@ -256,4 +271,33 @@ export async function putNasPhoto(url: string, blob: Blob): Promise<PutResult> {
   // 200/201 (created) and 204 (overwritten) are all success for WebDAV PUT.
   if (res.ok || res.status === 201 || res.status === 204) return { ok: true, url };
   return { ok: false, url, error: `NAS write failed (HTTP ${res.status}).` };
+}
+
+/**
+ * Delete one photo file from the NAS over WebDAV (HTTP DELETE), browser-direct
+ * — mirroring the capture upload PUT. Going through the browser (not the Vercel
+ * route) lets the operator's Cloudflare Access cookie ride along via
+ * credentials:'include', exactly like the PUT. Call this alongside
+ * DELETE /api/photos/[id] (which only removes the DB row + Vercel-Blob
+ * originals) so the NAS file isn't orphaned.
+ *
+ * Requires the NAS Caddy to route the DELETE verb to its webdav module — see
+ * deploy/nas-photo-server/Caddyfile (PUT + DELETE → webdav). A 404 is treated as
+ * success — the file's already gone, which is the goal.
+ */
+export async function deleteNasPhoto(url: string): Promise<{ ok: boolean; error?: string }> {
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'DELETE', credentials: 'include', cache: 'no-store' });
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Can't reach the NAS to delete the photo. Check you're on the office " +
+        'network and the NAS is reachable.',
+    };
+  }
+  // 200/202/204 = deleted; 404 = already gone — both mean the file is no longer there.
+  if (res.ok || res.status === 204 || res.status === 404) return { ok: true };
+  return { ok: false, error: `NAS delete failed (HTTP ${res.status}).` };
 }

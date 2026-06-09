@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { Camera, Smartphone } from '@/components/Icons';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 
 interface PhotoRow {
   id: number;
@@ -129,7 +130,10 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
           photos={galleryPhotos}
           orderId={`RCV-${receivingId}`}
           launcherLayout="toolbar"
-          onPhotoDeleted={() => queryClient.invalidateQueries({ queryKey })}
+          onPhotoDeleted={() => {
+            queryClient.invalidateQueries({ queryKey });
+            invalidateReceivingFeeds(queryClient);
+          }}
         />
       )}
 

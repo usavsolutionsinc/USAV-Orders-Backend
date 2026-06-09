@@ -24,9 +24,9 @@
 import pool from '@/lib/db';
 import type { OrgId } from './tenancy/constants';
 
-function readBoolEnv(name: string): boolean {
+function readBoolEnv(name: string, defaultValue = false): boolean {
   const raw = process.env[name];
-  if (!raw) return false;
+  if (raw == null || raw.trim() === '') return defaultValue;
   const normalized = raw.trim().toLowerCase();
   return normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes';
 }
@@ -170,11 +170,50 @@ export function isMobileReceivingPipelineV2(): boolean {
 
 /**
  * Warranty Claim Logger + Repair Outcome Tracker — 4th mode on the Orders /
- * Shipping page. When OFF, the read/write routes return 503 and the mode is
- * hidden. See docs/warranty-claim-logger-plan.md.
+ * Shipping page. Now GA: always on, so the support tool is never disabled and
+ * the read/write routes + clock sweep always serve data. The env var is honored
+ * as a kill-switch only — set WARRANTY_LOGGER=false to force it off.
+ * See docs/warranty-claim-logger-plan.md.
  */
 export function isWarrantyLogger(): boolean {
-  return readBoolEnv('WARRANTY_LOGGER');
+  return readBoolEnv('WARRANTY_LOGGER', true);
+}
+
+/**
+ * Physical-state-first receiving queues (receiving-triage streamline Phase 2).
+ * When ON, the triage SCANNED/Prioritize queue no longer hard-excludes POs Zoho
+ * marks received/closed — a box physically on the dock stays visible (with a
+ * "Zoho: received" badge), and the "Hide Zoho-received" toggle (?zohoStatus=open)
+ * re-applies the old filter. Scoped to view=scanned only; Incoming still clears
+ * Zoho-received POs by design. Default ON; set
+ * RECEIVING_PHYSICAL_STATE_FIRST=false to revert.
+ */
+export function isReceivingPhysicalStateFirst(): boolean {
+  return readBoolEnv('RECEIVING_PHYSICAL_STATE_FIRST', true);
+}
+
+/**
+ * Unified inbound model (receiving-triage streamline Phase 3). When ON,
+ * incoming-po-sync registers a shipment per incoming PO and stamps
+ * receiving_lines.shipment_id, the delivered-unscanned surface joins line-level
+ * SKU/order#, and lookup-po matches by LPN / shipment_id first (last-8 tracking
+ * fallback). Requires the 2026-06-08_inbound_handling_unit migration applied +
+ * backfill. Default OFF until the migration lands and backfill runs.
+ */
+export function isReceivingUnifiedInbound(): boolean {
+  return readBoolEnv('RECEIVING_UNIFIED_INBOUND');
+}
+
+/**
+ * Handling units (LPN) — license-plated boxes/trays that decouple from the
+ * receipt and group serial_units across receipts/POs (docs/handling-unit-lpn-plan.md).
+ * When ON, the `H-` scan-routing class + testing `lpn` resolver branch + the
+ * receiving "Add to box" / testing box-picker UI go live. H1–H3 (migration,
+ * scan routing, CRUD) can land dark with this OFF. Default OFF until the
+ * 2026-06-08_handling_units_lpn migration is applied.
+ */
+export function isHandlingUnits(): boolean {
+  return readBoolEnv('HANDLING_UNITS');
 }
 
 /** Snapshot of all inventory v2 flags. Useful for debug / admin pages. */

@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 type ReceiveIntent = 'zoho_receive' | 'scan_only';
@@ -82,6 +84,7 @@ export function useReceiveAction(
     staffId: string;
   },
 ) {
+  const queryClient = useQueryClient();
   const receiveInFlightRef = useRef(false);
   const [lastReceiveResponse, setLastReceiveResponse] = useState<ReceiveResponseRecord | null>(null);
   const [responseExpanded, setResponseExpanded] = useState(false);
@@ -297,7 +300,10 @@ export function useReceiveAction(
             }
           }
 
-          window.dispatchEvent(new CustomEvent('receiving-entry-added'));
+          // Refresh every receiving feed atomically via the shared helper.
+          // `usav-refresh-data` stays for non-receiving listeners that also
+          // key off the global signal.
+          invalidateReceivingFeeds(queryClient);
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));
 
           // Fire-and-forget refresh AFTER the toast has settled. The
@@ -340,7 +346,7 @@ export function useReceiveAction(
         }
       })();
     },
-    [row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId],
+    [row.receiving_id, row.id, qa, disp, cond, notes, zendesk, listingLink, serialInput, staffId, queryClient],
   );
 
   return {

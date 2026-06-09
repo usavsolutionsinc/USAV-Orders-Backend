@@ -15,6 +15,7 @@ import {
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 
 type LineSerial = {
   id: number;
@@ -150,6 +151,16 @@ export const GET = withAuth(async (request: NextRequest) => {
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
     const view = parseReceivingView(viewRaw);
+    // Phase 2 — physical-vs-financial decoupling. The triage SCANNED queue keys
+    // on PHYSICAL lifecycle (received_at set, not unboxed), so a box on the dock
+    // stays visible even when Zoho already marks the PO received/closed; it just
+    // carries a `zoho_status` badge. `?zohoStatus=open` (the "Hide Zoho-received"
+    // toggle) re-applies the old hide-terminal filter. When the flag is off the
+    // old behaviour (always hide Zoho-received) is preserved. Scoped to scanned —
+    // Incoming still clears received POs by design.
+    const hideZohoReceived =
+      String(searchParams.get('zohoStatus') || '').trim().toLowerCase() === 'open';
+    const applyScannedZohoExclusion = !isReceivingPhysicalStateFirst() || hideZohoReceived;
     // view=testing only: scope the recently-tested feed to one staff member.
     const testerId = Number(searchParams.get('tester'));
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
@@ -461,12 +472,15 @@ export const GET = withAuth(async (request: NextRequest) => {
          AND r.unboxed_at IS NULL
          AND COALESCE(rl.quantity_received, 0) = 0
          AND (rl.workflow_status IS NULL
-              OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))
-         -- Drop POs Zoho now reports received/closed/billed/cancelled (mirror
-         -- status); the eyebrow "Sync Zoho" refreshes the mirror so this guard
-         -- takes effect on the next read. NULL mirror (no PO / no row) stays.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
+              OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))`,
       );
+      // Phase 2: only hide Zoho-received POs when the physical-state-first flag
+      // is off OR the operator opted in via the "Hide Zoho-received" toggle
+      // (?zohoStatus=open). By default a physically-present box stays in the
+      // queue with a `zoho_status` badge rather than silently vanishing.
+      if (applyScannedZohoExclusion) {
+        conditions.push(NOT_ZOHO_RECEIVED_PREDICATE);
+      }
     } else if (view === 'testing') {
       // "Testing" = the recently-tested feed, backed by the testing_results
       // log. A line qualifies once it has at least one recorded verdict; when
@@ -737,6 +751,12 @@ export const GET = withAuth(async (request: NextRequest) => {
                 mirror.expected_delivery_date::text  AS expected_delivery_date,
                 mirror.vendor_name::text             AS vendor_name`
         : '';
+    // Phase 2: surface the Zoho PO mirror status so the UI can badge a
+    // physically-present box whose PO Zoho already marks received/closed
+    // (instead of the row silently disappearing). Available wherever the
+    // zoho_po_mirror JOIN runs (incoming + scanned).
+    const zohoStatusSelect =
+      view === 'incoming' || view === 'scanned' ? `, mirror.status AS zoho_status` : '';
     const incomingExtrasJoin =
       view === 'incoming' || view === 'scanned'
         ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
@@ -775,6 +795,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 ${lastScanSelect}
                 ${testedAggSelect}
                 ${incomingExtrasSelect}
+                ${zohoStatusSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
@@ -1299,6 +1320,61 @@ export const DELETE = withAuth(async (request: NextRequest) => {
     // — that's one Incoming-table row, which dedupes lines to 1 per PO. The
     // single-`id` path stays for callers that target one specific line.
     const poId = (searchParams.get('po_id') || '').trim();
+    // `shipment_id` hard-deletes a shipment-anchored "Delivered · not scanned"
+    // box that has no PO and no receiving_lines row — the only way to clear that
+    // synthetic Incoming row, since there's nothing in receiving_lines to delete.
+    const shipmentIdParam = (searchParams.get('shipment_id') || '').trim();
+
+    if (shipmentIdParam) {
+      const sid = Number(shipmentIdParam);
+      if (!Number.isFinite(sid) || sid <= 0) {
+        return NextResponse.json({ success: false, error: 'Valid shipment_id is required' }, { status: 400 });
+      }
+      // Guard: this path only clears the delivered-unscanned surface. Refuse a
+      // shipment that has dock-scan activity (real receiving) or isn't delivered
+      // — those aren't Incoming clutter and must not be hard-deleted here.
+      const guard = await pool.query(
+        `SELECT 1
+           FROM shipping_tracking_numbers stn
+          WHERE stn.id = $1
+            AND stn.is_delivered = true
+            AND NOT EXISTS (
+              SELECT 1 FROM receiving r2
+              JOIN receiving_scans rs ON rs.receiving_id = r2.id
+              WHERE r2.shipment_id = stn.id
+            )
+          LIMIT 1`,
+        [sid],
+      );
+      if (guard.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Shipment is not a delivered-unscanned box (already scanned, or not delivered)' },
+          { status: 409 },
+        );
+      }
+      // Hard delete. shipment_tracking_events + fba_tracking_item_allocations
+      // cascade; every other reference is ON DELETE SET NULL EXCEPT
+      // station_scan_sessions (no ON DELETE clause → RESTRICT), so clear those
+      // first inside a transaction. A never-scanned box typically has none.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM station_scan_sessions WHERE shipment_id = $1', [sid]);
+        const del = await client.query('DELETE FROM shipping_tracking_numbers WHERE id = $1 RETURNING id', [sid]);
+        await client.query('COMMIT');
+        if (del.rows.length === 0) {
+          return NextResponse.json({ success: false, error: 'shipment not found' }, { status: 404 });
+        }
+      } catch (txErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw txErr;
+      } finally {
+        client.release();
+      }
+      await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+      await publishReceivingLogChanged({ action: 'delete', rowId: `shipment:${sid}`, source: 'receiving-lines.delete-shipment' });
+      return NextResponse.json({ success: true, shipment_id: sid });
+    }
 
     if (poId) {
       const result = await pool.query(

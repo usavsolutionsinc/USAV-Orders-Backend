@@ -34,16 +34,22 @@ export interface WorkspaceCapabilities {
   editLines: boolean;
   /** Sticky "Save for unbox" bar (triage's terminal action — there is no receive). */
   saveBar: boolean;
+  /**
+   * Priority display at the top of the pane — the carton's queue tier / aging /
+   * position plus the per-tier backlog overview. Triage-only: it visualizes the
+   * `?sort=priority` "Prioritize" queue; unbox mode has no queue to rank.
+   */
+  priorityHeader: boolean;
 }
 
 export const WORKSPACE_CAPABILITIES: Record<ReceivingWorkspaceVariant, WorkspaceCapabilities> = {
   unbox: {
     photos: true, claim: true, labelPreview: true, receiveBar: true,
-    serialScan: true, editLines: true, saveBar: false,
+    serialScan: true, editLines: true, saveBar: false, priorityHeader: false,
   },
   triage: {
     photos: false, claim: false, labelPreview: false, receiveBar: false,
-    serialScan: false, editLines: false, saveBar: true,
+    serialScan: false, editLines: false, saveBar: true, priorityHeader: true,
   },
 };
 

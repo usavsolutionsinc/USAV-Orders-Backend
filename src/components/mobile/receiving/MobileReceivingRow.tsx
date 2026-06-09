@@ -115,7 +115,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         >
           <Camera className="h-4 w-4" />
           <span>Take Photos</span>
-          <span className="ml-1 tabular-nums text-white">x{photoCount}</span>
+          <span className="ml-1 tabular-nums lowercase text-white">x{photoCount}</span>
         </Link>
       )}
     </MobileRowCard>
