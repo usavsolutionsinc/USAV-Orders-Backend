@@ -4,7 +4,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier, normalizeTrackingNumber } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
-import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from '@/lib/zoho';
+import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, findPurchaseOrderByNumber } from '@/lib/zoho';
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { ensureSkuCatalogEntry } from '@/lib/neon/sku-catalog-queries';
 import { findPendingOrderSkuMatches } from '@/lib/receiving/pending-order-match';
@@ -258,6 +258,36 @@ async function resolvePoIdLocally(orderNumber: string): Promise<string | null> {
 }
 
 /**
+ * Verify a resolved PO id actually carries the scanned PO#/reference. Guards the
+ * order-mode local resolution against a normalized-number collision or a
+ * mis-synced receiving_line that points at the WRONG purchaseorder_id — without
+ * this, scanning one PO# could open a different PO. Checks the authoritative
+ * zoho_po_mirror header for that id.
+ *   'match'    → the mirror confirms this id carries the scanned number/reference
+ *   'mismatch' → the mirror knows this id and it carries a DIFFERENT number
+ *   'unknown'  → the mirror has no header for this id (can't disprove; trust it)
+ */
+async function verifyPoNumberMatches(
+  poId: string,
+  orderNumber: string,
+): Promise<'match' | 'mismatch' | 'unknown'> {
+  const norm = orderNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!norm) return 'unknown';
+  const { rows } = await pool.query<{ matches: boolean }>(
+    `SELECT (
+              zoho_purchaseorder_number_norm = $2
+              OR NULLIF(upper(regexp_replace(COALESCE(reference_number, ''), '[^A-Za-z0-9]', '', 'g')), '') = $2
+            ) AS matches
+       FROM zoho_po_mirror
+      WHERE zoho_purchaseorder_id = $1
+      LIMIT 1`,
+    [poId, norm],
+  );
+  if (rows.length === 0) return 'unknown';
+  return rows[0].matches ? 'match' : 'mismatch';
+}
+
+/**
  * Adopt the pre-existing local receiving_lines for a PO onto the carton being
  * unboxed — the local equivalent of importZohoPurchaseOrderToReceiving, WITHOUT
  * a Zoho round-trip (the lines already exist from the incoming sync). Only takes
@@ -465,12 +495,33 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     if (mode === 'order') {
       let poId = await resolvePoIdLocally(trackingNumber);
       let resolvedVia: 'local' | 'zoho' = 'local';
-      if (!poId) {
-        const pos = await searchPurchaseOrdersByTracking(trackingNumber).catch((err) => {
-          console.warn('[lookup-po.order] zoho search failed', errMessage(err));
-          return [];
+      // Guard the local hit: a normalized-number collision or a mis-synced
+      // receiving_line can point at the WRONG purchaseorder_id and open a
+      // different PO than the one scanned. Drop the local id when the mirror
+      // says it carries a different number, then fall through to the exact
+      // Zoho lookup below.
+      if (poId) {
+        const verdict = await verifyPoNumberMatches(poId, trackingNumber).catch((err) => {
+          console.warn('[lookup-po.order] local verify failed', errMessage(err));
+          return 'unknown' as const;
         });
-        poId = pos[0]?.purchaseorder_id ? String(pos[0].purchaseorder_id) : null;
+        if (verdict === 'mismatch') {
+          console.warn(
+            `[lookup-po.order] local resolve for "${trackingNumber}" pointed at PO ${poId} with a different number — re-resolving via Zoho`,
+          );
+          poId = null;
+        }
+      }
+      if (!poId) {
+        // An order-mode scan IS the PO# (or reference number), so require an
+        // EXACT match against Zoho — never adopt a fuzzily-similar PO. Using the
+        // tolerant tracking search here was returning the wrong PO (it took the
+        // first fuzzy `search_text` hit without verifying the number).
+        const po = await findPurchaseOrderByNumber(trackingNumber).catch((err) => {
+          console.warn('[lookup-po.order] zoho lookup failed', errMessage(err));
+          return null;
+        });
+        poId = po?.purchaseorder_id ? String(po.purchaseorder_id) : null;
         resolvedVia = 'zoho';
       }
 

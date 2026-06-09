@@ -148,7 +148,7 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
     if (scanned == null) setLocationOpen(false);
   }, [scanned]);
 
-  const tracked = data?.source === 'tracked' ? data : null;
+  const tracked = data && data.source === 'tracked' ? data : null;
   // Put-away needs a real serial_units row (numeric id). The print fallback can
   // resolve a serial for display while returning id 0 (no live row) — guard it.
   const liveUnitId = tracked && tracked.unit.id > 0 ? tracked.unit.id : null;

@@ -9,25 +9,29 @@ const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
 
 /**
  * Closed master-nav trigger (plan §3.4). The icon carries the active mode; the
- * label is the active mode name (or page name when modeless). Opens on hover via
- * the parent {@link MasterNavView} hover zone — no click handler here.
+ * label is the active mode name (or page name when modeless). Toggles the menu
+ * on click via the parent {@link MasterNavView}.
  */
 export function MasterNavHeader({
   icon: Icon,
   label,
   open,
+  onClick,
   className,
 }: {
   icon: SidebarIconComponent;
   /** Active mode name, or the page name for single-surface pages. */
   label: string;
   open: boolean;
+  onClick?: () => void;
   className?: string;
 }) {
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
       aria-expanded={open}
-      title="Hover to switch page or mode"
+      title="Click to switch page or mode"
       className={cn(
         // Exactly 40px — same grid as every other sidebar band (no bulky chip,
         // so the header reads as a lean 40px bar, not a taller block).
@@ -42,6 +46,6 @@ export function MasterNavHeader({
       <motion.span animate={{ rotate: open ? 180 : 0 }} transition={spring} className="shrink-0 text-text-muted">
         <ChevronDown className="h-4 w-4" />
       </motion.span>
-    </div>
+    </button>
   );
 }

@@ -325,6 +325,62 @@ export async function searchPurchaseOrdersByTracking(
   return results;
 }
 
+/**
+ * Resolve a scanned PO# (or reference number) to its EXACT Zoho purchase
+ * order. Unlike {@link searchPurchaseOrdersByTracking} — which is deliberately
+ * tolerant so a tracking suffix can fuzzily match — this requires an exact
+ * (case/punctuation-insensitive) match on `purchaseorder_number` or
+ * `reference_number`. A scanned PO must never resolve to a different,
+ * fuzzily-similar PO (e.g. "12-14721-26664" silently adopting "12-14721-26000").
+ *
+ * Returns the matching PO, or `null` when no exact match exists.
+ */
+export async function findPurchaseOrderByNumber(
+  value: string
+): Promise<ZohoPurchaseOrder | null> {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  // Normalize the same way the local resolver does: case-fold + strip
+  // non-alphanumerics so "12-14721-26664" == "12 14721 26664" == "1214721266 64".
+  const norm = (s: string | undefined | null) =>
+    String(s ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const key = norm(trimmed);
+  if (!key) return null;
+
+  const [byNumber, byRef, bySearch] = await Promise.allSettled([
+    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+      '/api/v1/purchaseorders',
+      { purchaseorder_number: trimmed, per_page: 25 }
+    ),
+    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+      '/api/v1/purchaseorders',
+      { reference_number: trimmed, per_page: 25 }
+    ),
+    zohoGet<ZohoPagedResponse<ZohoPurchaseOrder> & { purchaseorders?: ZohoPurchaseOrder[] }>(
+      '/api/v1/purchaseorders',
+      { search_text: trimmed, per_page: 25 }
+    ),
+  ]);
+
+  const seen = new Set<string>();
+  const candidates: ZohoPurchaseOrder[] = [];
+  for (const settled of [byNumber, byRef, bySearch]) {
+    if (settled.status !== 'fulfilled') continue;
+    for (const po of settled.value.purchaseorders || []) {
+      if (!po?.purchaseorder_id || seen.has(po.purchaseorder_id)) continue;
+      seen.add(po.purchaseorder_id);
+      candidates.push(po);
+    }
+  }
+
+  // Accept ONLY an exact match — prefer the PO number over the reference number.
+  return (
+    candidates.find((po) => norm(po.purchaseorder_number) === key) ??
+    candidates.find((po) => norm(po.reference_number) === key) ??
+    null
+  );
+}
+
 export async function listPurchaseOrders(params: {
   page?: number;
   per_page?: number;

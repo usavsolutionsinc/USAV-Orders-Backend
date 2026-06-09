@@ -9,20 +9,17 @@ import { MasterNavHeader } from './MasterNavHeader';
 import { MasterNavDropdown } from './MasterNavDropdown';
 import { ModeRail } from './ModeRail';
 
-/** Delay before closing so the pointer can cross the gap to the dropdown. */
-const HOVER_CLOSE_MS = 120;
-
 /**
  * Presentational composite of the master nav — header trigger + a floating
  * dropdown + the L2 mode rail. Fully state-driven so it wires to either local
  * state (the /design-demo showroom) or the live router (the {@link MasterNav}
  * container).
  *
- * The dropdown opens on hover (header or menu) and closes on mouse leave or
- * Escape. It floats over the workspace body below (it never takes the whole
- * panel over). The body is supplied via `renderContext` (the sidebar) or
- * omitted (the showroom card). Because the menu stays within the panel's
- * width/height, an `overflow-hidden` host doesn't clip it.
+ * The dropdown opens on click (the header toggles it) and closes on a click
+ * outside the header/menu or Escape. It floats over the workspace body below
+ * (it never takes the whole panel over). The body is supplied via
+ * `renderContext` (the sidebar) or omitted (the showroom card). Because the menu
+ * stays within the panel's width/height, an `overflow-hidden` host doesn't clip it.
  */
 export function MasterNavView({
   activePage,
@@ -58,39 +55,32 @@ export function MasterNavView({
   const activeMode = activePage.modes?.find((m) => m.id === activeModeId);
   const headerLabel = activeMode?.label ?? activePage.label;
 
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  }, []);
-
-  const handleHoverOpen = useCallback(() => {
-    clearCloseTimer();
-    onOpen();
-  }, [clearCloseTimer, onOpen]);
-
-  const handleHoverLeave = useCallback(() => {
-    if (!onRequestClose) return;
-    clearCloseTimer();
-    closeTimer.current = setTimeout(() => {
-      closeTimer.current = null;
-      onRequestClose();
-    }, HOVER_CLOSE_MS);
-  }, [clearCloseTimer, onRequestClose]);
-
-  useEffect(() => () => clearCloseTimer(), [clearCloseTimer]);
+  const handleToggle = useCallback(() => {
+    if (open) onRequestClose?.();
+    else onOpen();
+  }, [open, onOpen, onRequestClose]);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape or a click outside the header trigger and the open menu.
   useEffect(() => {
     if (!open || !onRequestClose) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onRequestClose();
     };
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (headerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      onRequestClose();
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
   }, [open, onRequestClose]);
 
   const rail =
@@ -103,11 +93,7 @@ export function MasterNavView({
     ) : null;
 
   const dropdown = (
-    <div
-      onMouseEnter={handleHoverOpen}
-      onMouseLeave={handleHoverLeave}
-      className="absolute inset-x-1 top-[40px] bottom-1 z-50"
-    >
+    <div className="absolute inset-x-1 top-[40px] bottom-1 z-50">
       <MasterNavDropdown
         ref={menuRef}
         activePage={activePage}
@@ -133,14 +119,14 @@ export function MasterNavView({
             same one the workspace/global header uses, so it lines up. Hidden
             while open so it doesn't double with the dropdown's own border. */}
         <div
-          onMouseEnter={handleHoverOpen}
-          onMouseLeave={handleHoverLeave}
+          ref={headerRef}
           className={cn('relative z-20 shrink-0', !open && receivingHeaderHairlineClass)}
         >
           <MasterNavHeader
             icon={activeMode?.icon ?? activePage.icon}
             label={headerLabel}
             open={open}
+            onClick={handleToggle}
           />
         </div>
         {rail}
@@ -156,20 +142,17 @@ export function MasterNavView({
   return (
     <div className={cn('relative flex min-h-0 flex-col', className)}>
       <div className={cn('relative z-30 shrink-0', !open && receivingHeaderHairlineClass)}>
-        <div onMouseEnter={handleHoverOpen} onMouseLeave={handleHoverLeave}>
+        <div ref={headerRef}>
           <MasterNavHeader
             icon={activeMode?.icon ?? activePage.icon}
             label={headerLabel}
             open={open}
+            onClick={handleToggle}
           />
         </div>
         <AnimatePresence>
           {open && (
-            <div
-              onMouseEnter={handleHoverOpen}
-              onMouseLeave={handleHoverLeave}
-              className="absolute inset-x-1 top-[calc(100%-1px)]"
-            >
+            <div className="absolute inset-x-1 top-[calc(100%-1px)]">
               <MasterNavDropdown
                 ref={menuRef}
                 activePage={activePage}

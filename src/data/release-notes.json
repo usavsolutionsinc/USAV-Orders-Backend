@@ -1,7 +1,37 @@
 {
-  "generatedAt": "2026-06-08T04:16:08.112Z",
+  "generatedAt": "2026-06-08T20:14:39.180Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "a1665101153ded71dcb122324b826a9332de9b51",
+      "shortSha": "a1665101",
+      "date": "2026-06-08T09:49:44-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): FK delete rules so receiving/line/exception deletes don't 500",
+      "body": "DELETE FROM receiving (and receiving_lines, orders_exceptions) failed with FK\nand CHECK violations whenever child rows existed — surfacing in the UI as\n'Failed to delete receiving log.'\n\n- local_pickup_orders/local_pickup_order_items.receiving_id: NO ACTION -> SET NULL\n- tech_serial_numbers.receiving_line_id: SET NULL -> CASCADE (SET NULL collided\n  with chk_tech_serial_numbers_receiving_line_required for RECEIVING serials)\n- station_scan_sessions.orders_exception_id: NO ACTION -> SET NULL (unfound-queue)\n\nOnly affects delete paths; normal receiving/unboxing (insert/update) is untouched.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "FK delete rules so receiving/line/exception deletes don't 500"
+    },
+    {
+      "sha": "5fb90f3b79a0727cb9aff571bb01c5eb0a54c94a",
+      "shortSha": "5fb90f3b",
+      "date": "2026-06-08T09:30:03-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "chore(cron): keep USPS out of sync-due pending OAuth credentials",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "keep USPS out of sync-due pending OAuth credentials"
+    },
+    {
+      "sha": "2cbeeaf4be2f7bce548c6ecf7dbdf2430e5092d1",
+      "shortSha": "2cbeeaf4",
+      "date": "2026-06-07T23:20:02-07:00",
+      "author": "DENSENSE8",
+      "subject": "updated the app to have a cron job display for readability",
+      "body": "",
+      "type": "other",
+      "title": "updated the app to have a cron job display for readability"
+    },
     {
       "sha": "f9d176f17bbba18a38d44378e0df2123e78af0ec",
       "shortSha": "f9d176f1",
@@ -131,6 +161,16 @@
       "body": "",
       "type": "other",
       "title": "updating the receiving flow and the making it more priority based"
+    },
+    {
+      "sha": "40a41f76a0a2b466fff65bb11461804e876a1cfa",
+      "shortSha": "40a41f76",
+      "date": "2026-06-05T15:58:32-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(shipping): disable USPS sync pending OAuth credentials",
+      "body": "USPS OAuth creds aren't provisioned yet, so every USPS Track poll 401s.\nAdd a single source of truth (enabled-carriers.ts) listing the carriers we\nactively poll (UPS, FEDEX) and gate both sync chokepoints on it:\n\n- getDueShipments() selects only enabled carriers, so the */15 and daily\n  cron sweeps never pick USPS rows.\n- syncShipment() short-circuits disabled carriers with ok:true (no provider\n  call, no recorded error), so manual 'Refresh tracking' on a USPS package\n  skips gracefully instead of failing and burning the consecutive-error cap.\n\nAlso drop USPS from the daily cron's explicit carriers list in vercel.json.\nRe-enable by adding 'USPS' back to ENABLED_SYNC_CARRIERS.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "disable USPS sync pending OAuth credentials"
     },
     {
       "sha": "cacdbddc8a6a9a8f2d7eb361a218c32e78c9312f",
@@ -1951,46 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "added mobile mode support PWA and components, design system desktop and mobile, upgraded context files for better overall flow for updating website in the future + hard rules for agentic awareness"
-    },
-    {
-      "sha": "87070a102e4a14aeca156d700bb761f90f4cd007",
-      "shortSha": "87070a10",
-      "date": "2026-03-27T16:59:30-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the FBA logic and other items as well",
-      "body": "",
-      "type": "other",
-      "title": "updated the FBA logic and other items as well"
-    },
-    {
-      "sha": "c282cfe26f1079d31d2dd00ce30fc911cf445634",
-      "shortSha": "c282cfe2",
-      "date": "2026-03-27T01:54:31-07:00",
-      "author": "DENSENSE8",
-      "subject": "updated the fba logic",
-      "body": "",
-      "type": "other",
-      "title": "updated the fba logic"
-    },
-    {
-      "sha": "cf23b41842592036ae76a143986ae78fddc9dd97",
-      "shortSha": "cf23b418",
-      "date": "2026-03-26T17:04:09-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the FBA page and side logic",
-      "body": "",
-      "type": "other",
-      "title": "updated the FBA page and side logic"
-    },
-    {
-      "sha": "1d015c949f4dcc833b3d129c20beb3cdf71eb0b1",
-      "shortSha": "1d015c94",
-      "date": "2026-03-26T16:50:55-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned",
-      "body": "",
-      "type": "other",
-      "title": "cleaned up most of the code base via NEON and added more to the FBA page made it cleaner and user friendly, cleaned"
     }
   ]
 }
