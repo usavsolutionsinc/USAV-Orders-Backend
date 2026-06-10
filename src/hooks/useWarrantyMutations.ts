@@ -108,7 +108,49 @@ export function useWarrantyMutations() {
     mutationFn: ({ id }: { id: number }) => sendRaw(`/api/warranty/claims/${id}/ebay-draft`, 'POST', {}),
   });
 
-  return { create, lifecycle, deny, logRepair, update, issueRma, repairHandoff, createQuote, quoteStatus, ebayDraft };
+  const remove = useMutation({
+    mutationFn: async ({ id }: { id: number }) => {
+      const res = await fetch(`/api/warranty/claims/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `request failed (${res.status})`);
+      return json as { deleted: { id: number; claimNumber: string } };
+    },
+    onSuccess: (_data, vars) => invalidate(vars.id),
+  });
+
+  /** Bulk create — per-item results; the call succeeds even when some items fail. */
+  const bulkCreate = useMutation({
+    mutationFn: (items: Record<string, unknown>[]) =>
+      sendRaw('/api/warranty/claims/bulk', 'POST', {
+        items,
+        idempotencyKey: crypto.randomUUID(),
+      }),
+    onSuccess: () => invalidate(),
+  });
+
+  /** Bulk soft-delete — unknown ids come back as per-item failures. */
+  const bulkRemove = useMutation({
+    mutationFn: async (ids: number[]) => {
+      const res = await fetch('/api/warranty/claims/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, idempotencyKey: crypto.randomUUID() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `request failed (${res.status})`);
+      return json as {
+        deleted: number;
+        notFound: number;
+        results: Array<{ id: number; ok: boolean; claimNumber?: string; error?: string }>;
+      };
+    },
+    onSuccess: () => invalidate(),
+  });
+
+  return {
+    create, lifecycle, deny, logRepair, update, issueRma, repairHandoff, createQuote,
+    quoteStatus, ebayDraft, remove, bulkCreate, bulkRemove,
+  };
 }
 
 export interface DenialReason {

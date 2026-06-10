@@ -79,7 +79,6 @@ function isMobileDevice(): boolean {
 function humanError(code: string | undefined): string {
   switch (code) {
     case 'WRONG':              return 'PIN incorrect. Try again.';
-    case 'LOCKED':             return 'Too many tries. Locked for 5 minutes.';
     case 'NO_PIN':             return 'This account has no PIN. Ask an admin for an enrollment QR.';
     case 'NOT_FOUND':          return 'Account not found.';
     case 'TOO_SHORT':          return 'PIN is too short.';
@@ -348,7 +347,7 @@ function PhoneSigninQrPopover({ onClose }: { onClose: () => void }) {
       role="dialog"
       aria-modal="true"
       aria-label="Sign in with your phone"
-      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      className="fixed inset-0 z-modal flex items-center justify-center px-4"
     >
       <button
         type="button"

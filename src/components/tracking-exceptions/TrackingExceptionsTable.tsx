@@ -370,7 +370,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
           <h2 className="text-label font-black uppercase tracking-widest text-gray-900">

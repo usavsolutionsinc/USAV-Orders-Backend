@@ -1,0 +1,57 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Unbox" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e12]: Unbox
+          - img [ref=e14]
+        - tablist "Mode" [ref=e18]:
+          - generic [ref=e19]:
+            - tab "Incoming" [ref=e20] [cursor=pointer]:
+              - img [ref=e21]
+            - tab "Receiving" [ref=e24] [cursor=pointer]:
+              - img [ref=e25]
+            - tab "Unbox" [selected] [ref=e27] [cursor=pointer]:
+              - img [ref=e29]
+            - tab "Local Pickup" [ref=e33] [cursor=pointer]:
+              - img [ref=e34]
+            - tab "History" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+        - generic [ref=e40]:
+          - generic [ref=e43]:
+            - 'status "Auto-detect (Tracking #)" [ref=e45]':
+              - img [ref=e46]
+            - 'textbox "Tracking, PO #" [active] [ref=e49]'
+            - generic [ref=e51]:
+              - 'button "Arm Tracking #: force the next scan to search Tracking #." [ref=e52] [cursor=pointer]':
+                - img [ref=e53]
+              - 'button "Arm PO #: force the next scan to search PO #." [ref=e56] [cursor=pointer]':
+                - img [ref=e57]
+          - generic [ref=e59]:
+            - tablist "Unbox queue view" [ref=e62]:
+              - generic [ref=e63]:
+                - tab "Queue" [ref=e64] [cursor=pointer]:
+                  - img [ref=e65]
+                  - generic [ref=e69]: Queue
+                - tab "Recent" [selected] [ref=e70] [cursor=pointer]:
+                  - img [ref=e71]
+                  - generic [ref=e73]: Recent
+            - generic [ref=e75]:
+              - paragraph [ref=e76]: Recent · 0
+              - paragraph [ref=e77]: Unboxing
+    - generic [ref=e83]:
+      - banner [ref=e84]:
+        - button "Hide sidebar" [pressed] [ref=e85] [cursor=pointer]:
+          - img [ref=e86]
+        - generic [ref=e89]:
+          - button "Open command bar" [ref=e90] [cursor=pointer]:
+            - img [ref=e91]
+          - button "Notifications" [ref=e94] [cursor=pointer]:
+            - img [ref=e95]
+          - button "Account & quick access" [ref=e99] [cursor=pointer]: ·
+      - main [ref=e100]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e111] [cursor=pointer]:
+    - img [ref=e112]
+  - alert [ref=e115]

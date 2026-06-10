@@ -152,7 +152,7 @@ export const MasterNavDropdown = forwardRef<HTMLDivElement, MasterNavDropdownPro
       exit={{ opacity: 0, y: -6, scale: 0.98 }}
       transition={softSpring}
       className={cn(
-        'z-50 max-h-[340px] overflow-y-auto rounded-2xl border border-border-soft bg-surface-card p-1 shadow-xl shadow-slate-900/10',
+        'z-dropdown max-h-[340px] overflow-y-auto rounded-2xl border border-border-soft bg-surface-card p-1 shadow-xl shadow-slate-900/10',
         className,
       )}
     >

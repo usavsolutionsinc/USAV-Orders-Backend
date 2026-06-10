@@ -119,7 +119,6 @@ export async function POST(req: NextRequest) {
         detail: { code: err.code },
       });
       const status = err.code === 'NOT_FOUND' ? 404
-        : err.code === 'LOCKED' ? 423
         : err.code === 'NO_PIN' ? 409
         : 401;
       return NextResponse.json({ error: err.code }, { status });

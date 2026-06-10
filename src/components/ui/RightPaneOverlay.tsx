@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/_cn';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
+import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 
 // ─── Host ─────────────────────────────────────────────────────────────────────
 // Marks the right-pane content column as the anchor for every `RightPaneOverlay`
@@ -147,9 +148,10 @@ export function RightPaneOverlay({
   // host). It's pointer-events-none so backdrop clicks still reach the dim
   // layer; the panel re-enables pointer events. The frame is non-transformed so
   // the panel's framer-motion transform (scale/slide) stays conflict-free.
+  // Frame sits one above the backdrop within the panelPopover band.
   const frameStyle: CSSProperties = rect
-    ? { position: 'fixed', left: rect.left, top: rect.top, width: rect.width, height: rect.height }
-    : { position: 'fixed', inset: 0 };
+    ? { position: 'fixed', left: rect.left, top: rect.top, width: rect.width, height: rect.height, zIndex: zLayer.panelPopover + 1 }
+    : { position: 'fixed', inset: 0, zIndex: zLayer.panelPopover + 1 };
 
   const frameClass =
     align === 'right' ? 'flex items-stretch justify-end' : 'flex items-center justify-center p-3';
@@ -180,7 +182,7 @@ export function RightPaneOverlay({
           exit={{ opacity: 0 }}
           transition={FADE}
           onClick={onClose}
-          className="fixed inset-0 z-[120] bg-gray-950/35 backdrop-blur-[1px]"
+          className="fixed inset-0 z-panelPopover bg-gray-950/35 backdrop-blur-[1px]"
         />
       ) : null}
       {open ? (
@@ -188,7 +190,7 @@ export function RightPaneOverlay({
           key="rp-overlay-frame"
           initial={false}
           style={frameStyle}
-          className={cn('pointer-events-none z-[121]', frameClass)}
+          className={cn('pointer-events-none', frameClass)}
         >
           <motion.div
             role="dialog"

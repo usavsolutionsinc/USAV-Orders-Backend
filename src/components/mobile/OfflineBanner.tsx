@@ -11,7 +11,7 @@
  * via `subscribe`) so both surfaces stay in sync without duplicate listeners.
  *
  * Drop this near the top of any mobile shell — it positions itself absolutely
- * (z-50) and shouldn't push layout when hidden.
+ * (z-banner) and shouldn't push layout when hidden.
  */
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
@@ -73,7 +73,7 @@ export function OfflineBanner({ reconnectToastMs = 2400 }: OfflineBannerProps) {
         transition={{ type: 'spring', damping: 24, stiffness: 320, mass: 0.5 }}
         role="status"
         aria-live="polite"
-        className={`fixed inset-x-0 top-0 z-50 ${
+        className={`fixed inset-x-0 top-0 z-banner ${
           online ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
         }`}
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}

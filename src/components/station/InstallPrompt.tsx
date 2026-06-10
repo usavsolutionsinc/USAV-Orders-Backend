@@ -76,7 +76,7 @@ export function InstallPrompt() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="fixed bottom-4 inset-x-4 z-50 rounded-[12px] bg-navy-800 text-white shadow-xl overflow-hidden"
+          className="fixed bottom-4 inset-x-4 z-banner rounded-[12px] bg-navy-800 text-white shadow-xl overflow-hidden"
           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         >
           <div className="p-4">

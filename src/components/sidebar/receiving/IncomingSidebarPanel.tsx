@@ -27,6 +27,7 @@ import {
 } from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { streamNdjson } from '@/lib/orders-sync/client';
 import type { CarrierSyncResult, CarrierSyncStreamEvent } from '@/lib/carrier-sync/types';
+import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
 
 /** Facet bucket — mirrors the SQL CASE in /api/receiving-lines view=incoming. */
 export type IncomingDeliveryState =
@@ -897,6 +898,13 @@ export function IncomingSidebarPanel() {
               {rescanning ? 'Email…' : 'Email'}
             </button>
           </div>
+        </div>
+
+        {/* Search a PO and attach carrier tracking number(s) before the boxes
+            arrive — the multi-tracking → PO entry point on the Incoming side.
+            docs/multi-tracking-po-plan.md Phase 4b. */}
+        <div className="flex flex-col">
+          <IncomingAttachTrackingPopover />
         </div>
 
         </div>

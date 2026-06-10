@@ -311,10 +311,26 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
-     WHERE COALESCE(r.needs_test, false) = true
+     WHERE (
+            -- Carton is flagged for test AND it still has at least one line that
+            -- needs testing. Per-line needs_test (cables toggled off) drops a
+            -- carton out only once EVERY line is no-test; cartons not yet lined
+            -- (no receiving_lines rows) still show so they aren't hidden pre-unbox.
+            COALESCE(r.needs_test, false) = true
+            AND (
+              NOT EXISTS (SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id)
+              OR EXISTS (
+                SELECT 1 FROM receiving_lines rl
+                 WHERE rl.receiving_id = r.id AND COALESCE(rl.needs_test, true) = true
+              )
+            )
+          )
         OR COALESCE(r.is_return, false) = true
         OR UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
-     ORDER BY COALESCE(wa.deadline_at, r.received_at, r.created_at) ASC, r.id ASC
+     -- is_priority (pending-order match or manual toggle) floats urgent cartons
+     -- to the top of the tester's queue, matching the unbox Prioritize rail.
+     ORDER BY COALESCE(r.is_priority, false) DESC,
+              COALESCE(wa.deadline_at, r.received_at, r.created_at) ASC, r.id ASC
      LIMIT 500`
   );
 

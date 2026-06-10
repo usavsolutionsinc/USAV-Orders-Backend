@@ -131,7 +131,7 @@ export function IntegrationCard({ providerKey, providerLabel, description, row }
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
           <button
             type="button"
             aria-label="Close"

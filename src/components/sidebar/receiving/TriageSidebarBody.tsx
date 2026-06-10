@@ -63,7 +63,10 @@ export function TriageSidebarBody({
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-0 z-10 bg-white/90 px-3 pb-2 pt-1 backdrop-blur">
+      {/* pb-1.5 — must mirror the unbox Queue/Recent toggle band exactly
+          (ReceivingSidebarPanel) so the rail eyebrow below sits at the same
+          height in triage and unbox. */}
+      <div className="sticky top-0 z-10 bg-white/90 px-3 pb-1.5 pt-1 backdrop-blur">
         <HorizontalButtonSlider
           items={TABS}
           value={view}
@@ -74,9 +77,11 @@ export function TriageSidebarBody({
         />
       </div>
       {view === 'unfound' ? (
-        <TriageUnfoundList selectedLineId={selectedLineId} filterText={filterText} />
+        <TriageUnfoundList key="rail-triage-unfound" selectedLineId={selectedLineId} filterText={filterText} />
       ) : (
         <ReceivingScannedRail
+          key="rail-triage-prioritize"
+          scope="triage"
           selectedLineId={selectedLineId}
           selectedRow={selectedRow}
           filterText={filterText}

@@ -9,7 +9,9 @@ import {
   Copy as CopyIcon,
   RefreshCw,
   Trash2,
+  Link2,
 } from '@/components/Icons';
+import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
 import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { OrderIdChip } from '@/components/ui/CopyChip';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
@@ -367,7 +369,7 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, shipme
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-        className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
       {/* Header — PO chip (last-4 copy) + vendor + close. */}
       <div className="shrink-0 border-b border-gray-200 bg-white px-4 py-2.5">
@@ -544,10 +546,35 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
     }
   }, [s, queryClient]);
 
-  if (!s)
+  if (!s) {
+    const poId = (data.po?.zoho_purchaseorder_id || '').trim();
     return (
-      <Empty msg="No shipment linked yet — Zoho PO reference# is empty or hasn't resolved to a tracking number. The next sync run will retry." />
+      <div className="space-y-3">
+        <Empty msg="No shipment linked yet — the Zoho PO reference# is empty or hasn't resolved to a tracking number. Attach a tracking number below, or wait for the next sync run." />
+        {poId ? (
+          <div className="flex justify-center">
+            <IncomingAttachTrackingPopover
+              presetPo={{ poId, poNumber: data.po?.zoho_purchaseorder_number ?? null }}
+              onAttached={() => {
+                queryClient.invalidateQueries({ queryKey: ['incoming-details'] });
+                queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+                queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
+              }}
+              trigger={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-caption font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                  Add tracking
+                </button>
+              }
+            />
+          </div>
+        ) : null}
+      </div>
     );
+  }
 
   const tone = heroTone(s.latest_status_category, s.is_delivered);
   const headline = prettyStatus(s.latest_status_category);

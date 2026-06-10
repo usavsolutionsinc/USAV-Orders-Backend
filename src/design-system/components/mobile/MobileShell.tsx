@@ -111,7 +111,7 @@ export function MobileShell({
       {/* ── Bottom dock (scan bar, action bar) ── */}
       {bottomDock && (
         dockOverlay ? (
-          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30">
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-sticky">
             <div className="pointer-events-auto">{bottomDock}</div>
           </div>
         ) : (

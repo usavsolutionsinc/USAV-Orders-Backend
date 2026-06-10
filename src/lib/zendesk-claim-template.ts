@@ -130,9 +130,8 @@ export async function buildReceivingClaimTemplate(
     descriptionLines.push('What happened:', trimmedReason, '');
   }
   // Photos ride along as real Zendesk attachments (uploaded at submit from the
-  // operator's selection) rather than inlined URLs. A link back to the carton's
-  // receiving record gives the agent full context.
-  descriptionLines.push('Photos are attached as files (the ones selected during receiving).');
+  // operator's selection) — no boilerplate line about them in the body. A link
+  // back to the carton's receiving workspace gives the agent full context.
   if (poReceivingLink) {
     descriptionLines.push(`View the receiving record: ${poReceivingLink}`);
   }

@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import {
   printReceivingLabel,
@@ -33,7 +34,6 @@ import { takeSerialEditHandoff } from './serialEditHandoff';
 import { UnmatchedItemsSection } from './UnmatchedItemsSection';
 import { ReceivingClaimModal } from './ReceivingClaimModal';
 import { workspaceCapabilities, type ReceivingWorkspaceVariant } from './workspace-capabilities';
-import { TriagePriorityPanel } from './triage/TriagePriorityPanel';
 import { LineNotesCard } from './line-edit/LineNotesCard';
 import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
 import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
@@ -49,11 +49,14 @@ import { useZohoLinePrefill } from './line-edit/hooks/useZohoLinePrefill';
 import { useReceivingPackageSync } from './line-edit/hooks/useReceivingPackageSync';
 import { useResourceMutation } from '@/hooks';
 import { useAblyClient } from '@/contexts/AblyContext';
+import { PackageCheck } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
+import { FloatingButton } from '@/design-system/primitives';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { copyToClipboard } from '@/utils/_dom';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
+import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -63,7 +66,6 @@ import {
   readReceivingLineDetailsScratch,
   writeReceivingLineDetailsScratch,
   listingUrlForOpen,
-  listingLinkPreview,
   receivingShareUrl,
   randomId,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
@@ -95,13 +97,14 @@ export function LineEditPanel({
   itemIndex?: number;
   /** Total number of items in the PO */
   itemTotal?: number;
-  /** `triage` hides unbox-only sections (photos, claim, label, receive, serial). */
+  /** `triage` hides unbox-only sections (label, receive, serial) + notes. */
   variant?: ReceivingWorkspaceVariant;
   onClose: () => void;
 }) {
   // Mode capabilities — gate unbox-only sections without sprinkling
   // `variant === 'triage'` through the JSX. See workspace-capabilities.ts.
   const caps = workspaceCapabilities(variant);
+  const router = useRouter();
   const [receivingType, setReceivingType] = useState(row.receiving_type || 'PO');
   const [qa, setQa] = useState(
     !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
@@ -166,6 +169,13 @@ export function LineEditPanel({
     row,
     { listingLink },
   );
+  // Carton-level manual priority tier (receiving.priority_tier): null = Auto,
+  // 0..3 = Priority/High/Medium/Low. Optimistic local mirror so the urgency
+  // pill updates instantly; the PATCH targets the carton. Seeds from the tier,
+  // falling back to the legacy is_priority boolean (true ⇔ tier 0).
+  const [priorityTier, setPriorityTier] = useState<number | null>(
+    row.priority_tier ?? (row.is_priority ? 0 : null),
+  );
   const [auditOpen, setAuditOpen] = useState(false);
   const [copyingAll, setCopyingAll] = useState(false);
   const [phoneSharing, setPhoneSharing] = useState(false);
@@ -197,7 +207,8 @@ export function LineEditPanel({
     // ReceivingUnitRows (if multi-qty) re-reports its selection on mount.
     setUnitLabelCondition(null);
     setTrackingEdit(row.tracking_number || '');
-  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.receiving_source]);
+    setPriorityTier(row.priority_tier ?? (row.is_priority ? 0 : null));
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.tracking_number, row.receiving_type, row.receiving_source, row.is_priority, row.priority_tier]);
 
   // When the carton changes, flush scratch for the previous receiving_id
   // so localStorage is not lost before loading the next carton’s scratch.
@@ -329,6 +340,42 @@ export function LineEditPanel({
       /* silent */
     }
   }, [row.id, row.zendesk_ticket, row.notes, zendesk]);
+
+  // Set/clear the carton's manual priority tier (receiving.priority_tier) from
+  // the urgency pill. null = Auto. Optimistic; reverts on failure. The tier
+  // lives on the carton, so this PATCHes /api/receiving-logs by receiving_id;
+  // the route keeps is_priority in lockstep (tier 0 ⇔ true).
+  const handlePrioritySelect = useCallback(async (next: number | null) => {
+    if (row.receiving_id == null) {
+      toast.error('Link a PO first to set priority');
+      return;
+    }
+    const prev = priorityTier;
+    if (next === prev) return;
+    setPriorityTier(next);
+    try {
+      const res = await fetch('/api/receiving-logs', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: row.receiving_id, priority_tier: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        setPriorityTier(prev);
+        toast.error(data?.error || 'Could not update priority');
+        return;
+      }
+      dispatchLineUpdated({
+        id: row.id,
+        is_priority: next === 0,
+        priority_tier: next,
+        notes: row.notes,
+      });
+    } catch {
+      setPriorityTier(prev);
+      toast.error('Could not update priority');
+    }
+  }, [row.receiving_id, row.id, row.notes, priorityTier]);
 
   // Persist listing_url to the carton (debounced) + mirror listing/platform
   // changed on other surfaces for this carton.
@@ -493,6 +540,15 @@ export function LineEditPanel({
         : 'Print label (if available), then receive every open line on this PO';
 
   const listingOpenHref = listingUrlForOpen(listingLink);
+  // External link targets for the condensed carton chips. PO# opens the Zoho
+  // purchase order (by id, else a number search); tracking opens the carrier
+  // page (carrier-known builder, else auto-detect).
+  const poOpenHref = (() => {
+    const id = (row.zoho_purchaseorder_id || '').trim();
+    if (id) return `https://inventory.zoho.com/app#/purchaseorders/${encodeURIComponent(id)}`;
+    if (poNumber) return `https://inventory.zoho.com/app#/purchaseorders?search_text=${encodeURIComponent(poNumber)}`;
+    return null;
+  })();
   // Zendesk ticket chip — surfaced inline in the chip row (between the listing
   // link and the PO#) whenever a ticket is on file. Display strips a leading
   // '#' and pulls the numeric id out of a pasted ticket URL.
@@ -506,7 +562,11 @@ export function LineEditPanel({
   })();
   const primaryTrackingTrimmed = trackingEdit.trim();
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
-  const listingPreviewLabel = listingLinkPreview(listingLink);
+  const trackingOpenHref = primaryTrackingTrimmed
+    ? row.carrier
+      ? getTrackingUrlByCarrier(primaryTrackingTrimmed, row.carrier)
+      : getTrackingUrl(primaryTrackingTrimmed)
+    : null;
 
   // RETURN flow: pair the carton with the shipped order a scanned serial
   // matched. We write the matched sales-order # into the carton's PO# (when it
@@ -551,6 +611,47 @@ export function LineEditPanel({
       setClaimModalOpen(true);
     },
     [serialLookup.serial, poNumber, persistPoNumber],
+  );
+
+  // Attach an EXTRA tracking number as another box on this carton's PO. The box
+  // links to the PO through the receiving carton (which carries the PO#), via
+  // the receiving_shipments junction. The primary tracking stays the Zoho
+  // reference# anchor — see onCommitTracking above. docs/multi-tracking-po-plan.md.
+  const attachExtraBox = useCallback(
+    async (rawTracking: string, index: number) => {
+      const tracking = rawTracking.trim();
+      if (!tracking) return;
+      if (row.receiving_id == null) {
+        toast.error('Link a PO first, then add boxes');
+        return;
+      }
+      try {
+        const res = await fetch(`/api/receiving/${row.receiving_id}/attach-box`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trackingNumber: tracking }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!data?.success) {
+          toast.error(data?.error || 'Could not link tracking number');
+          return;
+        }
+        if (data.already_attached) {
+          toast.success('Tracking already linked to this PO');
+        } else {
+          const poLabel = poNumber || 'this PO';
+          toast.success(`Box ${data.box_count} linked to ${poLabel}`);
+        }
+        // Clear the editor row so the operator can rapid-scan the next box of a
+        // multi-carton PO through the same input.
+        setExtraTrackings((xs) => xs.map((x, j) => (j === index ? '' : x)));
+        // Mirror to other surfaces holding this carton's row.
+        dispatchLineUpdated({ id: row.id, notes: row.notes });
+      } catch {
+        toast.error('Could not link tracking number');
+      }
+    },
+    [row.receiving_id, row.id, row.notes, poNumber],
   );
 
   const { zohoSyncing, syncWithZoho } = useZohoSync(row, {
@@ -671,11 +772,6 @@ export function LineEditPanel({
           clears the bottom sticky save bar so the last card never hides under it. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
-          {/* Triage "Prioritize" queue display — the open carton's tier / aging
-              / position plus the per-tier backlog. Visualizes ?sort=priority;
-              triage-only (unbox has no queue to rank). */}
-          {caps.priorityHeader ? <TriagePriorityPanel row={row} /> : null}
-
           {/* Photos + Claim + shipment context (listing, PO#, tracking,
               platform + type pills) share one WorkspaceCard so the operator
               sees a single bordered surface. */}
@@ -683,7 +779,6 @@ export function LineEditPanel({
             receivingId={row.receiving_id ?? null}
             staffId={staffId}
             isUnmatched={row.receiving_source === 'unmatched'}
-            // Photos + Claim are unbox-only — hidden in triage (identify step).
             showStaffPhotoRow={caps.photos}
             onMakeClaim={caps.claim ? () => setClaimModalOpen(true) : undefined}
             listingLink={listingLink}
@@ -691,7 +786,8 @@ export function LineEditPanel({
             listingEditorOpen={listingEditorOpen}
             setListingEditorOpen={setListingEditorOpen}
             listingOpenHref={listingOpenHref}
-            listingPreviewLabel={listingPreviewLabel}
+            poOpenHref={poOpenHref}
+            trackingOpenHref={trackingOpenHref}
             poDisplay={poNumber}
             poEditorOpen={poEditorOpen}
             setPoEditorOpen={setPoEditorOpen}
@@ -702,9 +798,17 @@ export function LineEditPanel({
               const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
               if (trimmed !== current) void persistPoNumber(trimmed);
             }}
+            lineId={row.id ?? null}
             zendeskTrimmed={zendeskTrimmed}
             zendeskHref={zendeskHref}
             zendeskChipDisplay={zendeskChipDisplay}
+            onTicketUnlinked={() => {
+              // Clear the in-memory ticket so the chip flips back to "Claim →"
+              // (the DELETE already nulled receiving_lines.zendesk_ticket), and
+              // mirror to other surfaces holding this row.
+              setZendesk('');
+              dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
+            }}
             primaryTrackingTrimmed={primaryTrackingTrimmed}
             filledExtraTrackingsCount={filledExtraTrackingsCount}
             trackingEditorsOpen={trackingEditorsOpen}
@@ -719,6 +823,7 @@ export function LineEditPanel({
             }}
             extraTrackings={extraTrackings}
             setExtraTrackings={setExtraTrackings}
+            onCommitExtraTracking={(v, i) => void attachExtraBox(v, i)}
             platformValue={sourcePlatform}
             onPlatformSelect={(next) => {
               setSourcePlatform(next);
@@ -729,6 +834,8 @@ export function LineEditPanel({
               setReceivingType(next);
               patch({ receiving_type: next });
             }}
+            priorityTier={priorityTier}
+            onPrioritySelect={(tier) => void handlePrioritySelect(tier)}
           />
 
           {/* PO Items card — title + qty + sku + serial chips per row, with
@@ -747,6 +854,20 @@ export function LineEditPanel({
                 receivingId={row.receiving_id}
                 staffId={staffId}
                 showSerialScan={caps.serialScan}
+                // Triage identifies; unboxing (serials, photos, receive)
+                // happens in unbox mode — this jumps there with the carton
+                // pre-opened via the recvId deep link.
+                onOpenInUnbox={
+                  variant === 'triage'
+                    ? () => {
+                        const params = new URLSearchParams({
+                          recvId: String(row.receiving_id),
+                        });
+                        if (row.id > 0) params.set('lineId', String(row.id));
+                        router.push(`/receiving?${params.toString()}`);
+                      }
+                    : undefined
+                }
                 sourcePlatformHint={sourcePlatform || undefined}
                 receivingTypeHint={receivingType}
                 listingUrlHint={listingLink || undefined}
@@ -811,14 +932,17 @@ export function LineEditPanel({
 
           {/* Notes card — standalone so the operator can leave context next
               to the photos + chips without it nesting inside the active PO
-              row. Saves on blur (same contract SerialCard used). */}
-          <LineNotesCard
-            value={notes}
-            onChange={setNotes}
-            onBlur={() => {
-              if (notes !== (row.notes || '')) void patch({ notes });
-            }}
-          />
+              row. Saves on blur (same contract SerialCard used). Hidden in
+              triage — that mode is a fast classify pass, no prose. */}
+          {caps.notes ? (
+            <LineNotesCard
+              value={notes}
+              onChange={setNotes}
+              onBlur={() => {
+                if (notes !== (row.notes || '')) void patch({ notes });
+              }}
+            />
+          ) : null}
 
           {/* Photos + Make a Claim are co-located inside the Staff card
               above — no standalone PhotosCard is needed in the column. */}
@@ -877,20 +1001,21 @@ export function LineEditPanel({
 
       {/* Triage's terminal action. Classification / PO# / items already persist
           on change, so this confirms the carton is identified and hands it to
-          the unbox queue (clears selection → the rail auto-selects the next). */}
+          the unbox queue (clears selection → the rail auto-selects the next).
+          Same FloatingButton primitive (and 720px card width) as the unbox
+          mode's Print·receive pill so the two modes' terminal CTAs match. */}
       {caps.saveBar ? (
-        <div className="border-t border-gray-200 bg-white px-4 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              toast.success('Saved for unbox');
-              onClose();
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 active:scale-[0.99]"
-          >
-            Save for unbox
-          </button>
-        </div>
+        <FloatingButton
+          label="Save for unbox"
+          onClick={() => {
+            toast.success('Saved for unbox');
+            onClose();
+          }}
+          icon={<PackageCheck className="h-4 w-4 shrink-0" />}
+          tone="blue"
+          maxWidth="max-w-[45rem]"
+          fullWidth
+        />
       ) : null}
     </div>
     {row.receiving_id != null ? (

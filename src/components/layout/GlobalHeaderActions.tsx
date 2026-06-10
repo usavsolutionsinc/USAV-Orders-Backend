@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { AnchoredLayer } from '@/design-system';
 import { Search, Inbox, Pencil } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,7 +49,10 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
 
   const [popover, setPopover] = useState<OpenPopover>('none');
   const [staffName, setStaffName] = useState('');
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  // Each control owns its own anchor so its popover portals out of the header
+  // (escaping any transformed/blurred ancestor) yet still pins to the trigger.
+  const inboxAnchorRef = useRef<HTMLDivElement>(null);
+  const accountAnchorRef = useRef<HTMLDivElement>(null);
 
   // Staff name for the account avatar's initials (same source as the popover).
   useEffect(() => {
@@ -75,29 +79,16 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
     setPopover('none');
   }, [pathname]);
 
-  // Click-outside closes any open popover.
-  useEffect(() => {
-    if (popover === 'none') return;
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setPopover('none');
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [popover]);
-
   if (!user) return null;
 
   const inboxOpen = popover === 'inbox';
   const accountOpen = popover === 'account';
   const isAdmin = !!user.permissions?.includes('admin.view');
-  const popoverPos = 'absolute right-0 top-full mt-1 z-50';
 
   const sc = stationThemeColors[getStaffThemeById(user.staffId)];
 
   return (
-    <div ref={wrapperRef} className="flex items-center gap-2">
+    <div className="flex items-center gap-2">
       {/* Selection toggle — registered per page via usePageSelection(). A
           pencil that flips the active surface into select mode. */}
       {!isMobile && selection && (
@@ -131,7 +122,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
       )}
 
       {/* Notifications */}
-      <div className="relative">
+      <div ref={inboxAnchorRef} className="relative">
         <button
           type="button"
           onClick={() => setPopover((p) => (p === 'inbox' ? 'none' : 'inbox'))}
@@ -150,18 +141,22 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             </span>
           )}
         </button>
-        {inboxOpen && (
-          <div className={popoverPos}>
-            <ActivityInboxPopover onClose={() => setPopover('none')} />
-          </div>
-        )}
+        <AnchoredLayer
+          open={inboxOpen}
+          onClose={() => setPopover('none')}
+          anchorRef={inboxAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <ActivityInboxPopover onClose={() => setPopover('none')} />
+        </AnchoredLayer>
       </div>
 
       {/* Account avatar — staff initial. Condenses the old staff switcher +
           account menu into one control that opens the quick-access surface
           (which already holds the staff card, switch-staff, settings + sign
           out). */}
-      <div className="relative">
+      <div ref={accountAnchorRef} className="relative">
         <button
           type="button"
           onClick={() => setPopover((p) => (p === 'account' ? 'none' : 'account'))}
@@ -176,27 +171,39 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
         >
           {staffName ? initials(staffName) : '·'}
         </button>
-        {accountOpen && (
-          <div className={popoverPos}>
-            <QuickAccessPopover
-              onClose={() => setPopover('none')}
-              onOpenHistoryPopover={() => setPopover('history')}
-              onOpenInboxPopover={() => setPopover('inbox')}
-              onOpenSyncPopover={isAdmin && !isMobile ? () => setPopover('sync') : undefined}
-              compact={isMobile}
-            />
-          </div>
-        )}
-        {popover === 'history' && (
-          <div className={popoverPos}>
-            <PhoneHistoryPopover onClose={() => setPopover('none')} />
-          </div>
-        )}
-        {popover === 'sync' && (
-          <div className={popoverPos}>
-            <SyncStatusPopover onClose={() => setPopover('none')} />
-          </div>
-        )}
+        <AnchoredLayer
+          open={accountOpen}
+          onClose={() => setPopover('none')}
+          anchorRef={accountAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <QuickAccessPopover
+            onClose={() => setPopover('none')}
+            onOpenHistoryPopover={() => setPopover('history')}
+            onOpenInboxPopover={() => setPopover('inbox')}
+            onOpenSyncPopover={isAdmin && !isMobile ? () => setPopover('sync') : undefined}
+            compact={isMobile}
+          />
+        </AnchoredLayer>
+        <AnchoredLayer
+          open={popover === 'history'}
+          onClose={() => setPopover('none')}
+          anchorRef={accountAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <PhoneHistoryPopover onClose={() => setPopover('none')} />
+        </AnchoredLayer>
+        <AnchoredLayer
+          open={popover === 'sync'}
+          onClose={() => setPopover('none')}
+          anchorRef={accountAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <SyncStatusPopover onClose={() => setPopover('none')} />
+        </AnchoredLayer>
       </div>
     </div>
   );

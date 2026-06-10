@@ -956,7 +956,7 @@ export function FbaShipmentEditorForm({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-[200] flex items-stretch justify-center p-4 sm:p-6 md:p-10"
+              className="fixed inset-0 z-modal flex items-stretch justify-center p-4 sm:p-6 md:p-10"
           >
             <button
               type="button"
@@ -969,7 +969,7 @@ export function FbaShipmentEditorForm({
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -12, scale: 0.98 }}
               transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              className="relative z-[111] flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20"
+              className="relative z-modal flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20"
             >
               {/* Header: search input */}
               <div className="border-b border-zinc-200 px-4 py-3">

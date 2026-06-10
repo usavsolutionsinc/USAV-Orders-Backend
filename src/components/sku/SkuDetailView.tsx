@@ -260,7 +260,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-          className="fixed right-0 top-0 z-[100] flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
+          className="fixed right-0 top-0 z-panel flex h-screen w-[420px] max-w-full flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
         >
           {content}
         </motion.div>
@@ -776,7 +776,7 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
       {/* ── Photo Lightbox ── */}
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-modal flex items-center justify-center bg-black/80 p-4"
           onClick={() => setLightboxUrl(null)}
         >
           <button

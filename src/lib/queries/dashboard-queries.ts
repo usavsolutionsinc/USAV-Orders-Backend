@@ -26,7 +26,7 @@ import {
   fetchUnshippedOrdersData,
   fetchDashboardPackedRecords,
 } from '@/lib/dashboard-table-data';
-import { fetchWarrantyClaims, type FetchWarrantyClaimsParams } from '@/lib/warranty/client';
+import { fetchWarrantyClaims, fetchWarrantyCoverage, type FetchWarrantyClaimsParams } from '@/lib/warranty/client';
 
 export interface OrderQueryParams {
   searchQuery?: string;
@@ -157,6 +157,20 @@ export function warrantyClaimsQuery(params: FetchWarrantyClaimsParams = {}) {
   return queryOptions({
     queryKey: ['warranty-claims', { status, search, expiringWithinDays, provisionalOnly }],
     queryFn: () => fetchWarrantyClaims({ status, search, expiringWithinDays, provisionalOnly }),
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Read-only warranty-coverage lookup ("is this order still under warranty?").
+ * Keyed on the trimmed query so the same order #/serial/SKU shares one cache entry.
+ */
+export function warrantyCoverageQuery(q: string) {
+  const query = q.trim();
+  return queryOptions({
+    queryKey: ['warranty-coverage', query],
+    queryFn: () => fetchWarrantyCoverage(query),
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
   });

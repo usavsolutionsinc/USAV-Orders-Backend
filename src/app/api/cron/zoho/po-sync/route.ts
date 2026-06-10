@@ -2,10 +2,12 @@
  * GET /api/cron/zoho/po-sync?mode=delta|full
  *
  * Vercel-cron-triggered sync of Zoho purchase orders into the
- * zoho_po_mirror table. This mirror exists purely so the PO email
- * reconciler can answer "does Zoho know about this PO?". It does NOT
- * write to receiving_lines or any operator-facing table — the receiving
- * workflow is owned by webhooks + manual scans, not by this cron.
+ * zoho_po_mirror table. The mirror feeds the PO email reconciler and the
+ * Incoming/triage zoho_status reads. The sync also runs one follow-up
+ * workflow write (inside syncZohoPoMirror): door-scanned receiving_lines
+ * whose PO Zoho now reports received/billed/closed are marked received
+ * locally, so they drop off the triage Prioritize queue without an
+ * operator manually receiving each one.
  *
  * Modes:
  *   - delta: passes last_modified_time so Zoho returns only changed POs
@@ -103,6 +105,7 @@ export async function GET(req: NextRequest) {
       pages: report.pages,
       fetched: report.fetched,
       upserted: report.upserted,
+      lines_marked_received: report.reconciled,
     },
     autoResolved: resolved.rowCount ?? 0,
     errors: report.errors.slice(0, 25),

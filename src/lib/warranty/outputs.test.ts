@@ -60,7 +60,7 @@ function makeClaim(overrides: Partial<WarrantyClaimDetail> = {}): WarrantyClaimD
     id: 1, claimNumber: 'WC-2026-00001', serialNumber: 'SN1', sku: 'BOSE-X', productTitle: 'Bose Speaker',
     orderId: null, customerId: null, customerName: null, status: 'REPAIRED', clockBasis: 'DELIVERED',
     warrantyStartsAt: null, warrantyExpiresAt: null, warrantyDays: 30, daysRemaining: null,
-    denialReasonCode: null, rmaId: null, repairServiceId: null, createdAt: '', updatedAt: '',
+    denialReasonCode: null, rmaId: null, repairServiceId: null, zendeskTicketId: null, createdAt: '', updatedAt: '',
     purchaseProofUrl: null, purchasedAt: null, deliveredAt: null, packedScannedAt: null,
     sourceSystem: null, sourceOrderId: null, sourceTrackingNumber: null, denialNotes: null, notes: null,
     createdByStaffId: null, rmaNumber: null, repairTicket: null, events: [], quotes: [],

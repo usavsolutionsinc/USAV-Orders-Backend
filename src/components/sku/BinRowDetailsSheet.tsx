@@ -301,7 +301,7 @@ export function BinRowDetailsSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Edit row details"
-      className="fixed inset-0 z-[140] flex flex-col bg-slate-50"
+      className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
     >
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
         <button

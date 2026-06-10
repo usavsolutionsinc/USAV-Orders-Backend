@@ -110,7 +110,7 @@ export default function MobileReceivingPipelinePage() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
-      <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
         <button
           type="button"
           onClick={openDrawer}
@@ -129,7 +129,7 @@ export default function MobileReceivingPipelinePage() {
 
       <main className="relative min-h-0 flex-1 overflow-y-auto">
         {/* Floating overlay — sticky, transparent, list scrolls behind. */}
-        <div className="sticky top-0 z-30 flex flex-col gap-2 px-3 pt-2 pb-3 pointer-events-none">
+        <div className="sticky top-0 z-sticky flex flex-col gap-2 px-3 pt-2 pb-3 pointer-events-none">
           <div className="pointer-events-auto">
             <MobileReceivingViewPills active="pos" />
           </div>

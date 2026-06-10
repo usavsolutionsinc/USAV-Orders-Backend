@@ -5,8 +5,7 @@
  * in Next.js API routes (Node runtime) and node:crypto.scrypt is always there.
  * scrypt with the params below takes ~80–120ms on a modern laptop — fast
  * enough for an interactive sign-in, slow enough to slow down a leaked-DB
- * offline attack to "many lifetimes" for any 6-digit PIN combined with the
- * lockout below.
+ * offline attack to "many lifetimes" for any 6-digit PIN.
  *
  * Storage format (single text column `staff.pin_hash`):
  *   scrypt$N$r$p$saltHex$keyHex
@@ -33,11 +32,9 @@ const MAXMEM = 128 * 1024 * 1024;
 
 const MIN_PIN_LEN = 4;
 const MAX_PIN_LEN = 12;
-const LOCKOUT_FAIL_THRESHOLD = 5;
-const LOCKOUT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 export class PinError extends Error {
-  constructor(public readonly code: 'TOO_SHORT' | 'TOO_LONG' | 'NOT_NUMERIC' | 'LOCKED' | 'NO_PIN' | 'WRONG' | 'NOT_FOUND' | 'WEAK_PIN' | 'PIN_ALREADY_SET') {
+  constructor(public readonly code: 'TOO_SHORT' | 'TOO_LONG' | 'NOT_NUMERIC' | 'NO_PIN' | 'WRONG' | 'NOT_FOUND' | 'WEAK_PIN' | 'PIN_ALREADY_SET') {
     super(code);
     this.name = 'PinError';
   }
@@ -51,7 +48,7 @@ function assertPinShape(pin: string): void {
 
 /**
  * Reject the most fat-finger-easy PINs (all same digit, straight ascending or
- * descending sequence). Not a substitute for the scrypt+lockout combo — just a
+ * descending sequence). Not a substitute for scrypt hashing — just a
  * UX nudge during PIN creation. Returns true if the PIN is too obvious.
  */
 export function isObviousPin(pin: string): boolean {
@@ -111,8 +108,6 @@ interface StaffPinRow {
   role: string;
   status: string;
   pin_hash: string | null;
-  pin_failed_count: number;
-  pin_locked_until: Date | null;
   default_home_path: string | null;
   default_home_path_mobile: string | null;
 }
@@ -124,7 +119,7 @@ interface StaffPinRow {
 export async function verifyStaffPin(staffId: number, pin: string): Promise<StaffPinRow> {
   assertPinShape(pin);
   const result = await pool.query(
-    `SELECT id, name, role, status, pin_hash, pin_failed_count, pin_locked_until,
+    `SELECT id, name, role, status, pin_hash,
             default_home_path, default_home_path_mobile
        FROM staff
       WHERE id = $1
@@ -135,38 +130,12 @@ export async function verifyStaffPin(staffId: number, pin: string): Promise<Staf
   if (!row) throw new PinError('NOT_FOUND');
   if (!row.pin_hash) throw new PinError('NO_PIN');
 
-  if (row.pin_locked_until && row.pin_locked_until.getTime() > Date.now()) {
-    throw new PinError('LOCKED');
-  }
-
   const ok = await verifyHash(pin, row.pin_hash);
-  if (!ok) {
-    const nextCount = (row.pin_failed_count || 0) + 1;
-    if (nextCount >= LOCKOUT_FAIL_THRESHOLD) {
-      await pool.query(
-        `UPDATE staff
-            SET pin_failed_count = $2,
-                pin_locked_until = NOW() + ($3 || ' milliseconds')::INTERVAL
-          WHERE id = $1`,
-        [staffId, nextCount, String(LOCKOUT_WINDOW_MS)],
-      );
-      throw new PinError('LOCKED');
-    } else {
-      await pool.query(
-        `UPDATE staff SET pin_failed_count = $2 WHERE id = $1`,
-        [staffId, nextCount],
-      );
-      throw new PinError('WRONG');
-    }
-  }
+  if (!ok) throw new PinError('WRONG');
 
-  // Success → clear counter, bump last_login_at
+  // Success → bump last_login_at
   await pool.query(
-    `UPDATE staff
-        SET pin_failed_count = 0,
-            pin_locked_until = NULL,
-            last_login_at    = NOW()
-      WHERE id = $1`,
+    `UPDATE staff SET last_login_at = NOW() WHERE id = $1`,
     [staffId],
   );
   return row;

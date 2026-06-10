@@ -42,6 +42,26 @@ export async function getStaffStations(staffId: number): Promise<StaffStationRow
   return r.rows.map((row) => ({ station: row.station as StationKey, is_primary: Boolean(row.is_primary) }));
 }
 
+/**
+ * Staff ids whose PRIMARY station is TECH — the recipients for tech-station
+ * inbox notifications (unboxed returns awaiting test, orders ready to ship).
+ * Fan-out target for the publishers in src/lib/realtime/publish.ts.
+ */
+export async function getPrimaryTechStaffIds(): Promise<number[]> {
+  const r = await pool.query(
+    `SELECT staff_id FROM staff_stations WHERE station = 'TECH' AND is_primary = true`,
+  );
+  return r.rows
+    .map((row) => Number(row.staff_id))
+    .filter((n) => Number.isFinite(n) && n > 0);
+}
+
+/** True when this staffer's primary station is TECH (gates the tech-queue inbox feed). */
+export async function isPrimaryTechStaff(staffId: number): Promise<boolean> {
+  const stations = await getStaffStations(staffId);
+  return stations.some((s) => s.station === 'TECH' && s.is_primary);
+}
+
 /** Derive the fallback station from the employee_id prefix (same rule as /api/staff-goals). */
 async function deriveDefaultStation(staffId: number): Promise<StationKey> {
   const r = await pool.query(

@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-06-09T18:23:33.940Z",
+  "generatedAt": "2026-06-10T15:20:55.958Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "4da45509b55976274f42369ecbf8b88dda1bc51a",
+      "shortSha": "4da45509",
+      "date": "2026-06-09T18:10:45-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(handling-units): drop HANDLING_UNITS flag — always-on",
+      "body": "The LPN feature (H1-H5) is additive and inert until a box is minted, so\nthere is nothing to gate. Remove isHandlingUnits()/HANDLING_UNITS; the\nonly activation step is applying the 2026-06-08_handling_units_lpn\nmigration. Updates the migration comment and the plan doc to match. No\nremaining callers of the flag.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "drop HANDLING_UNITS flag — always-on"
+    },
+    {
+      "sha": "57f8a94b6d73c66dd170f7299d236f3e8b127a35",
+      "shortSha": "57f8a94b",
+      "date": "2026-06-09T18:10:38-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(warranty): read-only coverage lookup card + /api/warranty/lookup",
+      "body": "Adds the 'on the phone with a customer' warranty-coverage check: a rep\ntypes/scans an order #, serial, or SKU into the warranty search and the\nWarrantyCoverageCard (above the claims table) answers in/out-of-warranty\nwith a days-left clock, surfaces any existing claim, and offers a\nprefilled Log Claim.\n\n- GET /api/warranty/lookup (auth, warranty.view, Zod, WARRANTY_LOGGER-gated)\n- lib/warranty/coverage.lookupCoverage(): read-only order->warranty clock\n- WarrantyCoverageQuery schema, fetchWarrantyCoverage client, query factory,\n  useWarrantyCoverage hook, and Log Claim 'initial' prefill\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "read-only coverage lookup card + /api/warranty/lookup"
+    },
     {
       "sha": "359fc99a238af7c61f51982f1c8aeeb8a819adc8",
       "shortSha": "359fc99a",
@@ -11,6 +31,26 @@
       "body": "",
       "type": "other",
       "title": "on click update for the master nav"
+    },
+    {
+      "sha": "923fd2710ecadc6a60f88f499587f2db3f568abc",
+      "shortSha": "923fd271",
+      "date": "2026-06-09T08:44:15-07:00",
+      "author": "DENSENSE8",
+      "subject": "updates to the receiving routes",
+      "body": "",
+      "type": "other",
+      "title": "updates to the receiving routes"
+    },
+    {
+      "sha": "69d454e84271f93a1f6b9b6d70943d055fa1eeea",
+      "shortSha": "69d454e8",
+      "date": "2026-06-09T00:01:04-07:00",
+      "author": "DENSENSE8",
+      "subject": "adding more the warranty logger and the receiving pages flow",
+      "body": "",
+      "type": "other",
+      "title": "adding more the warranty logger and the receiving pages flow"
     },
     {
       "sha": "a1665101153ded71dcb122324b826a9332de9b51",
@@ -31,6 +71,16 @@
       "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
       "type": "chore",
       "title": "keep USPS out of sync-due pending OAuth credentials"
+    },
+    {
+      "sha": "e60ddb130b0c3bf6698dfb6c6bddb1df1c69bd95",
+      "shortSha": "e60ddb13",
+      "date": "2026-06-07T23:32:46-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(prepack): pin discriminated-union narrowing so Vercel typecheck passes",
+      "body": "The PrepackedProductSheet relied on control-flow narrowing through the\nuseQuery result to access source-specific fields (tracked.unit,\ndata.product). Under the lockfile-pinned @tanstack/react-query types\n(what Vercel installs), that narrowing did not apply, so the production\nbuild failed: Property 'unit' does not exist on type 'PrepackResult'.\nPin the union member with Extract<> casts guarded by the source check.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "pin discriminated-union narrowing so Vercel typecheck passes"
     },
     {
       "sha": "2cbeeaf4be2f7bce548c6ecf7dbdf2430e5092d1",
@@ -1941,56 +1991,6 @@
       "body": "The verifySignatureAppRouter wrapper was causing SignatureError on every\nQStash delivery, resulting in persistent 500s. Switched to a lightweight\norigin check (upstash-signature header presence) and added detailed\nlogging to surface any downstream job errors.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
       "type": "fix",
       "title": "replace broken QStash signature verification with origin check"
-    },
-    {
-      "sha": "4d4618f3186a193cd331e050de70c1252ddf7684",
-      "shortSha": "4d4618f3",
-      "date": "2026-04-03T17:01:36-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated tons for the mobile mode of the app",
-      "body": "",
-      "type": "other",
-      "title": "updated tons for the mobile mode of the app"
-    },
-    {
-      "sha": "95c78e9e297079485babfe9509243176a7319070",
-      "shortSha": "95c78e9e",
-      "date": "2026-04-03T09:46:48-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "USPS tracking number improvement and FBA additions including FBA SHIPMENT ID to UPS tracking number",
-      "body": "",
-      "type": "other",
-      "title": "USPS tracking number improvement and FBA additions including FBA SHIPMENT ID to UPS tracking number"
-    },
-    {
-      "sha": "662998cebc1faf6e793726a805d0c8d88e81faaa",
-      "shortSha": "662998ce",
-      "date": "2026-04-02T09:12:31-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the TS error",
-      "body": "",
-      "type": "other",
-      "title": "updated the TS error"
-    },
-    {
-      "sha": "63a0a8abb1f29f6b03e72652c99886ed65c762cf",
-      "shortSha": "63a0a8ab",
-      "date": "2026-04-01T16:51:49-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "FBA Updates, Mobile PWA updates, added operation page update with work order dashboard, improved overall DB integrity",
-      "body": "",
-      "type": "other",
-      "title": "FBA Updates, Mobile PWA updates, added operation page update with work order dashboard, improved overall DB integrity"
-    },
-    {
-      "sha": "5e9a2faa187beeb0347d35bd7c0dd5788ab70435",
-      "shortSha": "5e9a2faa",
-      "date": "2026-03-30T12:18:15-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "websocket support and dynamic goals and history reports",
-      "body": "",
-      "type": "other",
-      "title": "websocket support and dynamic goals and history reports"
     }
   ]
 }

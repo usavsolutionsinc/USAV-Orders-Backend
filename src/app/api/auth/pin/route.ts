@@ -7,8 +7,6 @@
  *     - Self-change: omit staffId; currentPin required if a PIN already
  *       exists (re-verify before swap).
  *     - Admin set/reset: pass staffId; requires admin.manage_staff permission.
- *
- * Rate-limiting on the verify path is handled by pin.ts (lockout after 5).
  */
 
 import { NextRequest, NextResponse } from 'next/server';

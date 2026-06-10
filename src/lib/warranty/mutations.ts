@@ -327,6 +327,61 @@ export async function updateClaimMeta(
   return { ok: true, claim };
 }
 
+// ─── Soft delete ─────────────────────────────────────────────────────────────
+
+export interface SoftDeleteClaimsResult {
+  deleted: { id: number; claimNumber: string }[];
+  /** Ids that didn't match a live claim (unknown or already deleted). */
+  notFound: number[];
+}
+
+/**
+ * Soft-delete claims (deleted_at tombstone). Claims carry an event/audit trail
+ * and FK out to RMA / repair, so rows are never hard-dropped — every read
+ * filters `deleted_at IS NULL` instead. Set-based so the bulk endpoint is one
+ * UPDATE regardless of batch size; the single DELETE route passes one id.
+ */
+export async function softDeleteClaims(
+  ids: number[],
+  actorStaffId: number | null,
+): Promise<SoftDeleteClaimsResult> {
+  const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
+  if (unique.length === 0) return { deleted: [], notFound: [] };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ id: number; claim_number: string }>(
+      `UPDATE warranty_claims
+          SET deleted_at = NOW(), updated_at = NOW()
+        WHERE id = ANY($1::bigint[])
+          AND deleted_at IS NULL
+        RETURNING id, claim_number`,
+      [unique],
+    );
+    if (rows.length > 0) {
+      await client.query(
+        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
+         SELECT t.id, 'DELETED', '{}'::jsonb, $2
+           FROM unnest($1::bigint[]) AS t(id)`,
+        [rows.map((r) => Number(r.id)), actorStaffId],
+      );
+    }
+    await client.query('COMMIT');
+
+    const deletedIds = new Set(rows.map((r) => Number(r.id)));
+    return {
+      deleted: rows.map((r) => ({ id: Number(r.id), claimNumber: r.claim_number })),
+      notFound: unique.filter((id) => !deletedIds.has(id)),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // ─── Lifecycle transitions ───────────────────────────────────────────────────
 
 export type TransitionResult =

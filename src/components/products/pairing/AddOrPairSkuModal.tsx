@@ -174,8 +174,8 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[198] bg-black/30" onClick={onClose} />
-      <div className="pointer-events-none fixed inset-0 z-[200] flex items-start justify-center p-3 sm:p-6">
+      <div className="fixed inset-0 z-modal bg-black/30" onClick={onClose} />
+      <div className="pointer-events-none fixed inset-0 z-modal flex items-start justify-center p-3 sm:p-6">
         <div
           role="dialog"
           aria-modal="true"

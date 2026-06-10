@@ -5,6 +5,7 @@ import { Loader2 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useWarrantyClaims, useWarrantyUrlState } from '@/hooks/useWarrantyClaims';
 import { WarrantyClockChip, WarrantyStatusBadge } from '@/components/warranty/chips';
+import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopover';
 import { formatDateTimePST } from '@/utils/date';
 
 /**
@@ -47,12 +48,13 @@ export function WarrantyClaimsTable() {
               <th className="bg-gray-50 px-3 py-2">Status</th>
               <th className="bg-gray-50 px-3 py-2">Warranty</th>
               <th className="bg-gray-50 px-3 py-2">Logged</th>
+              <th className="bg-gray-50 px-3 py-2" aria-label="Support ticket" />
             </tr>
           </thead>
           <tbody>
             {claims.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-16 text-center text-sm text-gray-400">
+                <td colSpan={7} className="px-3 py-16 text-center text-sm text-gray-400">
                   No warranty claims match the current filters.
                 </td>
               </tr>
@@ -92,6 +94,12 @@ export function WarrantyClaimsTable() {
                     </td>
                     <td className="border-b border-gray-100 px-3 py-2 align-top text-[11px] text-gray-400">
                       {formatDateTimePST(claim.createdAt)}
+                    </td>
+                    <td
+                      className="border-b border-gray-100 px-2 py-1.5 align-top"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />
                     </td>
                   </tr>
                 );

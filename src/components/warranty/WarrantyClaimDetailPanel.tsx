@@ -1,13 +1,16 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Loader2, X } from '@/components/Icons';
+import { Loader2, Trash2, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useWarrantyClaim } from '@/hooks/useWarrantyClaims';
+import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 import { WarrantyClockChip, WarrantyStatusBadge } from '@/components/warranty/chips';
 import { WarrantyClaimActions } from '@/components/warranty/WarrantyClaimActions';
+import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopover';
 import { WarrantyQuotesSection } from '@/components/warranty/WarrantyQuotesSection';
 import { formatDateTimePST } from '@/utils/date';
+import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import type { WarrantyClaimDetail } from '@/lib/warranty/types';
 
 interface WarrantyClaimDetailPanelProps {
@@ -35,6 +38,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDetailPanelProps) {
   const { data: claim, isLoading, error } = useWarrantyClaim(claimId);
+  const { remove } = useWarrantyMutations();
+
+  const deleteClaim = () => {
+    if (!claim) return;
+    const ok = window.confirm(
+      `Delete claim ${claim.claimNumber}? It will disappear from all warranty views (the audit trail is kept).`,
+    );
+    if (!ok) return;
+    remove.mutate({ id: claim.id }, { onSuccess: onClose });
+  };
 
   return (
     <motion.div
@@ -51,15 +64,36 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
           </div>
           <div className="font-mono text-[11px] text-gray-400">{claim?.claimNumber}</div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-          aria-label="Close"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {claim && <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />}
+          {claim && (
+            <button
+              type="button"
+              onClick={deleteClaim}
+              disabled={remove.isPending}
+              className="rounded-md p-1.5 text-gray-300 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+              aria-label="Delete claim"
+              title="Delete claim"
+            >
+              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </header>
+
+      {remove.isError && (
+        <p className="border-b border-rose-100 bg-rose-50 px-5 py-2 text-xs text-rose-600">
+          {remove.error instanceof Error ? remove.error.message : 'Delete failed.'}
+        </p>
+      )}
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
@@ -111,11 +145,26 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
         </dl>
       </Section>
 
-      {(claim.rmaNumber || claim.repairTicket) && (
+      {(claim.rmaNumber || claim.repairTicket || claim.zendeskTicketId) && (
         <Section title="Linked">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
             <Field label="RMA" value={claim.rmaNumber} />
             <Field label="Repair ticket" value={claim.repairTicket} />
+            <Field
+              label="Zendesk"
+              value={
+                claim.zendeskTicketId != null && zendeskTicketUrl(claim.zendeskTicketId) ? (
+                  <a
+                    className="text-blue-600 underline"
+                    href={zendeskTicketUrl(claim.zendeskTicketId) ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    #{claim.zendeskTicketId}
+                  </a>
+                ) : null
+              }
+            />
           </dl>
         </Section>
       )}

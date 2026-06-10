@@ -1,21 +1,38 @@
 'use client';
 
-import { useRef, type Dispatch, type SetStateAction } from 'react';
-import { Barcode, ExternalLink, Pencil, Plus } from '@/components/Icons';
-import { ListingUrlChip, TrackingChip, OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
+import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Barcode, ExternalLink, Plus } from '@/components/Icons';
+import { getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { WorkspaceCard } from '@/design-system/components';
-import { ReceivingCartonStaffDropdown } from '@/components/sidebar/receiving/ReceivingCartonStaffDropdown';
+import { sourcePlatformMeta, sourcePlatformLabel } from '@/lib/source-platform';
 import {
+  SOURCE_PLATFORM_OPTS,
+  RECEIVING_TYPE_OPTS,
   FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   RECEIVING_TRAIL_SLOT_CLASS,
   TRACKING_ADD_BTN_CLASS,
-  RECEIVING_CHIP_EDIT_BTN_CLASS,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { SourcePlatformPills } from './SourcePlatformPills';
-import { ReceivingTypePills } from './ReceivingTypePills';
-import { receivingPriorityRank } from './receiving-priority';
+import { ReceivingPhotoButton } from './ReceivingPhotoButton';
+import { IdentityLinkChip } from './IdentityLinkChip';
+import { ReceivingTicketChip } from './ReceivingTicketChip';
+import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
+import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
+import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
+
+/** Display order for the source-platform pills (left → right). */
+const PLATFORM_ORDER = [
+  'ebay',
+  'goodwill',
+  'amazon',
+  'fba',
+  'aliexpress',
+  'walmart',
+  'ecwid',
+  'other',
+] as const;
 
 /**
  * Carton-level context card: staff dropdown + photo strip, the listing /
@@ -42,16 +59,19 @@ export function CartonContextCard({
   listingEditorOpen,
   setListingEditorOpen,
   listingOpenHref,
-  listingPreviewLabel,
+  poOpenHref,
+  trackingOpenHref,
   poDisplay,
   poEditorOpen,
   setPoEditorOpen,
   poNumberEdit,
   setPoNumberEdit,
   onCommitPoNumber,
+  lineId,
   zendeskTrimmed,
   zendeskHref,
   zendeskChipDisplay,
+  onTicketUnlinked,
   primaryTrackingTrimmed,
   filledExtraTrackingsCount,
   trackingEditorsOpen,
@@ -61,10 +81,13 @@ export function CartonContextCard({
   onCommitTracking,
   extraTrackings,
   setExtraTrackings,
+  onCommitExtraTracking,
   platformValue,
   onPlatformSelect,
   receivingType,
   onTypeSelect,
+  priorityTier = null,
+  onPrioritySelect,
 }: {
   receivingId: number | null;
   staffId: string;
@@ -78,7 +101,10 @@ export function CartonContextCard({
   listingEditorOpen: boolean;
   setListingEditorOpen: Dispatch<SetStateAction<boolean>>;
   listingOpenHref: string | null | undefined;
-  listingPreviewLabel: string;
+  /** External link target for the PO# chip (Zoho purchase order). */
+  poOpenHref: string | null | undefined;
+  /** External link target for the tracking# chip (carrier tracking page). */
+  trackingOpenHref: string | null | undefined;
   /** Already-trimmed PO# (number ?? id) for the chip + editor seed. */
   poDisplay: string;
   poEditorOpen: boolean;
@@ -87,9 +113,13 @@ export function CartonContextCard({
   setPoNumberEdit: (v: string) => void;
   /** Commit a typed/scanned PO# (parent decides whether it changed). */
   onCommitPoNumber: (raw: string) => void;
+  /** Active line id — the entity a filed ticket is linked to (RECEIVING_LINE). */
+  lineId: number | null;
   zendeskTrimmed: string;
   zendeskHref: string | null | undefined;
   zendeskChipDisplay: string;
+  /** Called after the ticket chip's popover unlinks the ticket — clears it. */
+  onTicketUnlinked?: () => void;
   primaryTrackingTrimmed: string;
   filledExtraTrackingsCount: number;
   trackingEditorsOpen: boolean;
@@ -100,153 +130,315 @@ export function CartonContextCard({
   onCommitTracking: (raw: string) => void;
   extraTrackings: string[];
   setExtraTrackings: Dispatch<SetStateAction<string[]>>;
+  /**
+   * Commit a typed/scanned EXTRA tracking# — attaches it to the carton's PO as
+   * an additional box (POST /api/receiving/[id]/attach-box). Unlike the primary
+   * tracking (which is the Zoho reference# anchor), extras link via the
+   * receiving_shipments junction. docs/multi-tracking-po-plan.md Phase 1.
+   */
+  onCommitExtraTracking?: (raw: string, index: number) => void;
   platformValue: string;
   onPlatformSelect: (v: string) => void;
   receivingType: string;
   onTypeSelect: (v: string) => void;
+  /** Manual priority-tier override (receiving.priority_tier): null = Auto, 0..3. */
+  priorityTier?: number | null;
+  /** Set/clear the priority tier (null = Auto). Omit to render urgency display-only. */
+  onPrioritySelect?: (tier: number | null) => void;
 }) {
   const listingRef = useRef<HTMLInputElement>(null);
   const poInputRef = useRef<HTMLInputElement>(null);
 
-  const showListing = listingLink.trim().length > 0 || listingEditorOpen;
-  const inlinePoInput = poEditorOpen && !showListing;
-  const poBelow = poEditorOpen && (listingLink.trim().length > 0 || listingEditorOpen);
-  const anyBelow = trackingEditorsOpen || listingEditorOpen || poBelow;
+  // One picker open at a time. Opening any pill unrenders the trailing chip
+  // cluster (the options fill the freed row); selecting / dismissing collapses
+  // back to null and rerenders the chips. See the AnimatePresence swap below.
+  const [openPicker, setOpenPicker] = useState<'urgency' | 'platform' | 'type' | null>(null);
+
+  // Canonical platform tone/label for the listing chip — same SoT the platform
+  // pill and printed label read, so a platform never presents two ways.
+  const platformMeta = sourcePlatformMeta(platformValue);
+
+  // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
+  // shows the *effective* tier — the manual override when set, else the
+  // platform-derived rank (so a no-override carton still reads its auto urgency
+  // at rest). Open it offers Auto (clear → derived) + the four manual tiers.
+  const derivedRank = receivingPriorityRank(isUnmatched, platformValue, false);
+  const derivedTone = receivingPriorityTone(derivedRank);
+  const overrideMeta = priorityOverrideTier(priorityTier);
+  const urgencyValue = priorityTier != null ? String(priorityTier) : 'auto';
+  const effectiveUrgencyLabel = overrideMeta ? overrideMeta.label : derivedTone.label;
+  const effectiveUrgencyClass = overrideMeta
+    ? overrideMeta.activeClass
+    : `${derivedTone.className} border-transparent`;
+  // In Auto mode the option matching the platform-derived urgency renders in
+  // its active tone — the collapsed pill shows that derived label, so an open
+  // picker highlighting only "Auto" read as if the current urgency were
+  // unselected. Rank→tier mapping: Priority 0→0, unfound/untagged 1→High 1,
+  // Amazon 2→High 1, eBay 3→Medium 2, Goodwill 4→Low 3; Other (9) highlights
+  // nothing. Manual override set → normal value-match highlighting only.
+  const RANK_TO_TIER: Record<number, number> = { 0: 0, 1: 1, 2: 1, 3: 2, 4: 3 };
+  const derivedTierEquivalent = priorityTier == null ? RANK_TO_TIER[derivedRank] ?? null : null;
+  const urgencyOptions: InlinePillOption[] = [
+    {
+      value: 'auto',
+      label: 'Auto',
+      title: `Auto — follows platform (${derivedTone.label})`,
+      activeClass: 'border-slate-300 bg-white text-slate-600',
+      inactiveClass: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50',
+    },
+    ...PRIORITY_OVERRIDE_TIERS.map((t) => ({
+      value: String(t.value),
+      label: t.label,
+      title:
+        derivedTierEquivalent === t.value
+          ? `${t.title} — current (auto from platform); click to pin`
+          : t.title,
+      activeClass: t.activeClass,
+      inactiveClass: derivedTierEquivalent === t.value ? t.activeClass : t.inactiveClass,
+    })),
+  ];
+  const handleUrgencySelect = (v: string) =>
+    onPrioritySelect?.(v === 'auto' ? null : Number(v));
+
+  // All three identity editors now live in the below-row drawer — the condensed
+  // top row is chips + pencils only.
+  const anyBelow = trackingEditorsOpen || listingEditorOpen || poEditorOpen;
+
+  // Platform/Type pill options feed the inline collapse-to-active pickers. The
+  // synthesized amber "Unfound" pill leads the platform set for unmatched cartons
+  // (front-end only — never written to source_platform).
+  const platformOptions: InlinePillOption[] = [
+    ...(isUnmatched
+      ? [
+          {
+            value: '',
+            label: 'Unfound',
+            title: 'No Zoho PO matched this carton',
+            activeClass: 'border-amber-600 bg-amber-500 text-white',
+            inactiveClass:
+              'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100',
+          } as InlinePillOption,
+        ]
+      : []),
+    ...PLATFORM_ORDER.map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
+      .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
+      .map((o) => ({ value: o.value, label: o.label })),
+  ];
+  const typeOptions: InlinePillOption[] = RECEIVING_TYPE_OPTS.filter(
+    (o) => o.value !== 'PICKUP',
+  ).map((o) => ({ value: o.value, label: o.label }));
 
   return (
-    <WorkspaceCard bodyClassName="px-0 py-0">
-      {showStaffPhotoRow ? (
-        <ReceivingCartonStaffDropdown
-          receivingId={receivingId}
-          staffId={staffId}
-          priorityRank={receivingPriorityRank(isUnmatched, platformValue)}
-          onMakeClaim={onMakeClaim}
-        />
-      ) : null}
-      {/* Padding + top rule separate the photo strip from chips; keeps pill
-          focus rings from clipping vs a tight body. */}
-      <div className="space-y-2 border-t border-gray-100 px-4 pt-2 pb-3">
+    <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
+      <div className="space-y-2 px-4 pt-2 pb-3">
         <div className="flex min-w-0 flex-col gap-y-1">
-          {/* Chip row uses items-center so listing URL chip, PO chip, and
-              tracking chip share the same vertical baseline regardless of
-              their internal height differences. */}
-          <div className="flex min-w-0 items-center gap-2">
-            {showListing ? (
-              <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
-                <ListingUrlChip
-                  rawUrl={listingLink}
-                  openHref={listingOpenHref ?? null}
-                  previewDisplay={listingPreviewLabel}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setListingEditorOpen((v) => {
-                      const next = !v;
-                      if (next) queueMicrotask(() => listingRef.current?.focus());
-                      return next;
-                    });
-                  }}
-                  aria-expanded={listingEditorOpen}
-                  aria-label={listingEditorOpen ? 'Collapse listing URL editor' : 'Edit listing URL'}
-                  title={listingEditorOpen ? 'Done editing listing' : 'Edit listing URL'}
-                  className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+          {/* Condensed identity row — Priority · Platform · Type · listing ·
+              PO# · tracking# · Claim · Photos. Platform/Type collapse to the
+              active pill and expand inline on click; listing/PO#/tracking are
+              consistent [open · copy · edit] chips. Priority/Claim/Photos are
+              unbox-only (hidden in triage). */}
+          <div className="flex min-w-0 items-center">
+            <AnimatePresence mode="wait" initial={false}>
+              {openPicker === null ? (
+                <motion.div
+                  key="bar"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex min-w-0 flex-1 flex-wrap items-center gap-2"
                 >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </div>
+            {/* Urgency · Platform · Type — one shared pill primitive, all
+                collapse-to-active. Clicking any opens it full-width and
+                unrenders the trailing chip cluster (the options take the freed
+                row); selecting collapses back and rerenders them. */}
+            {showStaffPhotoRow ? (
+              <InlinePillPicker
+                ariaLabel="Urgency"
+                options={urgencyOptions}
+                value={urgencyValue}
+                onSelect={handleUrgencySelect}
+                collapsedLabel={effectiveUrgencyLabel}
+                collapsedClass={effectiveUrgencyClass}
+                open={false}
+                onOpenChange={(o) => { if (o) setOpenPicker('urgency'); }}
+                disabled={!onPrioritySelect}
+              />
             ) : null}
-            {zendeskTrimmed ? (
-              <div className="flex shrink-0 items-center justify-end gap-1">
-                {zendeskHref ? (
-                  <a
-                    href={zendeskHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Open Zendesk ticket"
-                    title="Open in Zendesk"
-                    className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  </a>
-                ) : null}
-                <TicketChip value={zendeskTrimmed} display={zendeskChipDisplay} />
-              </div>
-            ) : null}
-            {inlinePoInput ? (
-              <div className="flex min-w-0 flex-1 basis-0 items-center gap-1">
-                <div className="group min-w-0 flex-1">
-                  <SearchBar
-                    value={poNumberEdit}
-                    onChange={setPoNumberEdit}
-                    onSearch={onCommitPoNumber}
-                    inputRef={poInputRef}
-                    placeholder="Enter PO# to bind this carton (e.g. PO-1234)"
-                    variant="blue"
-                    size="compact"
-                    hideUnderline
-                    pasteOnlyTrailing
-                    className="w-full"
-                  />
-                  <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
-                </div>
-              </div>
-            ) : (
-              <div className="flex shrink-0 items-center gap-1">
-                <OrderIdChip value={poDisplay} display={poDisplay ? getLast4(poDisplay) : '----'} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPoEditorOpen((v) => {
-                      const next = !v;
-                      if (next) queueMicrotask(() => poInputRef.current?.focus());
-                      return next;
-                    });
-                  }}
-                  aria-expanded={poEditorOpen}
-                  aria-label={poEditorOpen ? 'Collapse PO# editor' : 'Edit PO#'}
-                  title={poEditorOpen ? 'Done editing PO#' : 'Edit PO#'}
-                  className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              </div>
-            )}
+            <InlinePillPicker
+              ariaLabel="Platform"
+              options={platformOptions}
+              value={platformValue}
+              onSelect={onPlatformSelect}
+              open={false}
+              onOpenChange={(o) => { if (o) setOpenPicker('platform'); }}
+              disabled={receivingId == null}
+              placeholder={isUnmatched ? 'Unfound' : 'Platform'}
+            />
+            <InlinePillPicker
+              ariaLabel="Type"
+              options={typeOptions}
+              value={receivingType}
+              onSelect={onTypeSelect}
+              open={false}
+              onOpenChange={(o) => { if (o) setOpenPicker('type'); }}
+              placeholder="Type"
+            />
+
+            {/* Listing — opens + copies the listing URL; labeled by its
+                canonical platform (SoT) with the matching tone so it reads
+                consistently with the Platform pill. The only wide chip. */}
+            <IdentityLinkChip
+              grow
+              openHref={listingOpenHref}
+              openTitle="Open listing in new tab"
+              value={listingLink}
+              display={
+                listingLink
+                  ? platformValue
+                    ? sourcePlatformLabel(platformValue)
+                    : isUnmatched
+                      ? 'Unfound'
+                      : 'Listing'
+                  : '----'
+              }
+              underlineClass={platformValue ? platformMeta.border : 'border-slate-300'}
+              iconClass={platformValue ? platformMeta.text : 'text-slate-400'}
+              disableCopy={!listingLink.trim()}
+              onEdit={() => {
+                setListingEditorOpen((v) => {
+                  const next = !v;
+                  if (next) queueMicrotask(() => listingRef.current?.focus());
+                  return next;
+                });
+              }}
+              editOpen={listingEditorOpen}
+              editLabel="Edit listing URL"
+            />
+
+            {/* PO# — opens the PO in Zoho; copies the PO#. */}
+            <IdentityLinkChip
+              openHref={poOpenHref}
+              openTitle="Open PO in Zoho"
+              value={poDisplay}
+              display={poDisplay ? getLast4(poDisplay) : '----'}
+              tone="id"
+              underlineClass="border-gray-500"
+              disableCopy={!poDisplay}
+              onEdit={() => {
+                setPoEditorOpen((v) => {
+                  const next = !v;
+                  if (next) queueMicrotask(() => poInputRef.current?.focus());
+                  return next;
+                });
+              }}
+              editOpen={poEditorOpen}
+              editLabel="Edit PO#"
+            />
+
+            {/* Tracking# — opens carrier tracking; copies the number. */}
             <div className="flex shrink-0 items-center gap-1">
-              <div className="flex items-center gap-1">
-                <div className="min-w-0 max-w-full [&_.relative]:max-w-full">
-                  <TrackingChip
-                    value={primaryTrackingTrimmed}
-                    display={getLast4(primaryTrackingTrimmed)}
-                    disableCopy={!primaryTrackingTrimmed}
-                    width="min-w-0 max-w-full"
-                  />
-                </div>
-                {filledExtraTrackingsCount > 0 ? (
-                  <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
-                    +{filledExtraTrackingsCount}
-                  </span>
-                ) : null}
+              <IdentityLinkChip
+                openHref={trackingOpenHref}
+                openTitle="Open carrier tracking"
+                value={primaryTrackingTrimmed}
+                display={primaryTrackingTrimmed ? getLast4(primaryTrackingTrimmed) : '----'}
+                tone="tracking"
+                underlineClass="border-blue-500"
+                disableCopy={!primaryTrackingTrimmed}
+                onEdit={onToggleTrackingEditors}
+                editOpen={trackingEditorsOpen}
+                editLabel="Edit tracking"
+              />
+              {filledExtraTrackingsCount > 0 ? (
+                <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
+                  +{filledExtraTrackingsCount}
+                </span>
+              ) : null}
+            </div>
+
+            {/* Claim → flips to the filed ticket# chip once a claim exists.
+                Same IdentityLinkChip primitive as PO#/tracking (flush spacing,
+                tone-driven `#` icon); its pencil opens a history popover with
+                an Unlink action rather than the full claim modal. */}
+            {showStaffPhotoRow ? (
+              zendeskTrimmed ? (
+                <ReceivingTicketChip
+                  value={zendeskTrimmed}
+                  display={zendeskChipDisplay}
+                  openHref={zendeskHref}
+                  receivingId={receivingId}
+                  lineId={lineId}
+                  onUnlinked={() => onTicketUnlinked?.()}
+                />
+              ) : onMakeClaim ? (
                 <button
                   type="button"
-                  onClick={onToggleTrackingEditors}
-                  aria-expanded={trackingEditorsOpen}
-                  aria-label={trackingEditorsOpen ? 'Collapse tracking editors' : 'Edit tracking numbers'}
-                  title={trackingEditorsOpen ? 'Done editing tracking' : 'Edit tracking'}
-                  className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+                  onClick={onMakeClaim}
+                  className="inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-full bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+                  title="File a damage / wrong-item / missing claim for this package"
                 >
-                  <Pencil className="h-3 w-3" />
+                  Claim →
                 </button>
-              </div>
-            </div>
+              ) : null
+            ) : null}
+
+            {/* Photos — camera + ×N. Unbox-only. */}
+            {showStaffPhotoRow && receivingId != null ? (
+              <ReceivingPhotoButton receivingId={receivingId} staffId={Number(staffId) || 0} />
+            ) : null}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="picker"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex min-w-0 flex-1 items-center"
+                >
+                  {/* Right side unrendered — the chosen picker owns the row.
+                      Selecting (or click-away / Escape) returns openPicker to
+                      null, swapping the chip cluster back in. */}
+                  {openPicker === 'urgency' ? (
+                    <InlinePillPicker
+                      ariaLabel="Urgency"
+                      options={urgencyOptions}
+                      value={urgencyValue}
+                      onSelect={handleUrgencySelect}
+                      open
+                      onOpenChange={(o) => { if (!o) setOpenPicker(null); }}
+                    />
+                  ) : openPicker === 'platform' ? (
+                    <InlinePillPicker
+                      ariaLabel="Platform"
+                      options={platformOptions}
+                      value={platformValue}
+                      onSelect={onPlatformSelect}
+                      open
+                      onOpenChange={(o) => { if (!o) setOpenPicker(null); }}
+                      placeholder={isUnmatched ? 'Unfound' : 'Platform'}
+                    />
+                  ) : (
+                    <InlinePillPicker
+                      ariaLabel="Type"
+                      options={typeOptions}
+                      value={receivingType}
+                      onSelect={onTypeSelect}
+                      open
+                      onOpenChange={(o) => { if (!o) setOpenPicker(null); }}
+                      placeholder="Type"
+                    />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Below-row inline editors. The PO# editor is rendered inline in the
-              chip row above when the listing slot is free — so we skip the PO#
-              block (and the whole wrapper, if nothing else is open) here. */}
+          {/* Below-row inline editors for PO# / tracking / listing URL. */}
           {anyBelow ? (
             <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
-              {poBelow ? (
+              {poEditorOpen ? (
                 <div>
                   <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
                   <div className="group">
@@ -303,6 +495,7 @@ export function CartonContextCard({
                       <SearchBar
                         value={t}
                         onChange={(v) => setExtraTrackings((xs) => xs.map((x, j) => (j === i ? v : x)))}
+                        onSearch={(v) => onCommitExtraTracking?.(v, i)}
                         placeholder="Tracking"
                         variant="blue"
                         size="compact"
@@ -358,18 +551,6 @@ export function CartonContextCard({
               ) : null}
             </div>
           ) : null}
-        </div>
-
-        {/* Platform (left, scrolls) + Type (right). */}
-        <div className="flex min-w-0 flex-nowrap items-center gap-3">
-          <SourcePlatformPills
-            disabled={receivingId == null}
-            isUnmatched={isUnmatched}
-            value={platformValue}
-            onSelect={onPlatformSelect}
-          />
-          <span className="h-6 w-px shrink-0 self-center bg-slate-200" aria-hidden />
-          <ReceivingTypePills value={receivingType} onSelect={onTypeSelect} />
         </div>
       </div>
     </WorkspaceCard>

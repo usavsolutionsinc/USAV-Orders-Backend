@@ -101,7 +101,7 @@ export function MasterNav({
 
   // Recents = fast switch-back only (never the page you're on). Grouped sections
   // mirror APP_SIDEBAR_NAV order so the active page sits in its real slot (e.g.
-  // Orders / Shipping between Operations and Walk-In) with the blue row highlight.
+  // Sourcing between Walk-In and Products) with the blue row highlight.
   const recentPages = useMemo(
     () =>
       recents

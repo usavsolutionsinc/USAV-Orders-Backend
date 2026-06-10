@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
-import { Check } from '@/components/Icons';
+import { Check, Link2 } from '@/components/Icons';
 import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/table-selection';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg, getWorkflowIconMeta, shouldShowWorkflowStatusIcon } from '@/components/station/receiving-constants';
@@ -21,6 +21,7 @@ import WeekHeader from '@/components/ui/WeekHeader';
 import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
 import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneHeader';
+import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
 import {
   getReceivingModeDescriptor,
   INCOMING_PAGE_SIZE,
@@ -118,6 +119,9 @@ export interface ReceivingLineRow {
    */
   zoho_status?: string | null;
   created_at: string | null;
+  /** Last write to the line row itself (qty bump, condition, notes, …).
+   *  Drives the unbox rail's sort + time label (sort=unbox_activity). */
+  updated_at?: string | null;
   /** Most-recent scan/receive time. Server sorts view=recent/all by this. */
   last_activity_at?: string | null;
   /** Door-scan ("scanned at") timestamp — receiving.received_at (view=recent/all/received). */
@@ -140,6 +144,10 @@ export interface ReceivingLineRow {
   tested_count?: number | null;
   image_url: string | null;
   source_platform: string | null;
+  /** Shared unbox/test urgency flag (receiving.is_priority) — rank-0 in the Prioritize sort. */
+  is_priority?: boolean | null;
+  /** Manual priority-tier override (receiving.priority_tier): null = Auto, 0..3 = Priority/High/Medium/Low. */
+  priority_tier?: number | null;
   /**
    * receiving.source — 'zoho_po' | 'unmatched' | 'local_pickup'.
    * Drives which workspace variant mounts (LineEditPanel vs UnfoundLineEditPanel).
@@ -237,6 +245,43 @@ function fmtShortTs(ts?: string | null): string | null {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+/**
+ * Row-anchored "Add tracking" — only rendered on Incoming AWAITING_TRACKING rows
+ * (PO exists, no shipment registered yet). Opens the attach popover pre-targeted
+ * to this PO, so the operator attaches tracking without re-searching for the PO
+ * they're already looking at. stopPropagation keeps the click off the row's
+ * select / group-toggle handlers.
+ */
+function IncomingAttachTrackingButton({
+  poId,
+  poNumber,
+}: {
+  poId: string;
+  poNumber: string | null;
+}) {
+  return (
+    <IncomingAttachTrackingPopover
+      presetPo={{ poId, poNumber }}
+      trigger={
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          title="Attach a tracking number to this PO before the box arrives"
+          // Sits in the empty tracking chip slot — echoes the blue carrier
+          // tracking chip (dashed underline = "nothing here yet, click to add").
+          // Label kept terse ("Add TRK#") to fit the tracking column width.
+          className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-mini font-bold leading-none tracking-tight text-blue-600 transition-colors hover:text-blue-700"
+        >
+          <Link2 className="h-3.5 w-3.5 shrink-0" />
+          <span className="border-b-2 border-dashed border-blue-400 pb-0.5">Add TRK#</span>
+        </button>
+      }
+    />
+  );
 }
 
 export function ReceivingLineOrderRow({
@@ -403,6 +448,18 @@ export function ReceivingLineOrderRow({
         includeSerial={!isIncoming}
         asColumns={!isMobile}
         className={dashboardOrderRowChipsClass(isMobile)}
+        // Incoming AWAITING_TRACKING: the empty tracking chip becomes the
+        // "Add tracking" trigger, pre-targeted to this PO.
+        trackingAction={
+          isIncoming && row.delivery_state === 'AWAITING_TRACKING' && (row.zoho_purchaseorder_id || '').trim()
+            ? (
+              <IncomingAttachTrackingButton
+                poId={(row.zoho_purchaseorder_id || '').trim()}
+                poNumber={row.zoho_purchaseorder_number}
+              />
+            )
+            : undefined
+        }
       />
     </div>
   );
@@ -510,7 +567,18 @@ function ReceivingPoSummary({
     {
       key: 'tracking',
       width: CHIP_COL.tracking,
-      node: trackingValue ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} /> : null,
+      // Incoming AWAITING_TRACKING with no carton-wide tracking → the empty
+      // tracking slot hosts the "Add tracking" trigger, pre-targeted to this PO.
+      node: trackingValue
+        ? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} />
+        : isIncoming && uniformDeliveryState === 'AWAITING_TRACKING' && (first?.zoho_purchaseorder_id || '').trim()
+          ? (
+            <IncomingAttachTrackingButton
+              poId={(first!.zoho_purchaseorder_id || '').trim()}
+              poNumber={first?.zoho_purchaseorder_number ?? null}
+            />
+          )
+          : null,
     },
   ];
   if (!isIncoming) {
@@ -679,6 +747,8 @@ function deliveredUnscannedToRow(item: DeliveredUnscanned): ReceivingLineRow {
     last_activity_at: item.delivered_at,
     image_url: null,
     source_platform: null,
+    is_priority: false,
+    priority_tier: null,
     receiving_source: 'unmatched',
     serials: [],
     photo_count: 0,
@@ -866,11 +936,21 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     }
   }, [isIncomingMode, data?.total, incomingPage, router, searchParams]);
 
+  // The selected row left the table's dataset — deleted, filtered out, or (an
+  // unfound placeholder's case) REPLACED by its real line after the carton
+  // graduated to a PO match. Clear only the table's own highlight. This used
+  // to also broadcast dispatchSelectLine(null), which tore down the right-pane
+  // workspace mid-flow: the table is mounted (hidden) in Unbox/Triage and
+  // refetches on usav-refresh-data, so a serial-match import that graduated
+  // the open unfound carton made its placeholder row vanish here → global
+  // deselect → workspace closed → the dashboard's never-blank effect opened an
+  // unrelated "most recent" line. True deletions broadcast
+  // receiving-line-deleted / receiving-entry-deleted, which the sidebar and
+  // dashboard already handle.
   useEffect(() => {
     if (!selectedId) return;
     if (!localRows.some((row) => row.id === selectedId)) {
       setSelectedId(null);
-      dispatchSelectLine(null);
     }
   }, [selectedId, localRows]);
 
@@ -973,7 +1053,10 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const selectedIdRef = useRef<number | null>(null);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
-  const deepLinkAppliedRef = useRef(false);
+  // Last-applied `recvId:lineId` — keyed (not boolean) so the SAME deep link
+  // doesn't re-fire on every row refresh, while a NEW one applied mid-session
+  // (e.g. triage's "Open in unbox" pushing a different recvId) still lands.
+  const deepLinkAppliedRef = useRef<string | null>(null);
   const initialAutoSelectRef = useRef(false);
 
   // Deep link from shared URL: /receiving?recvId=…&lineId=… (lineId optional).
@@ -981,10 +1064,11 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     const recvIdParam = searchParams.get('recvId');
     if (!recvIdParam || !/^\d+$/.test(recvIdParam)) return;
     if (isLoading || localRows.length === 0) return;
-    if (deepLinkAppliedRef.current) return;
+    const lineIdParam = searchParams.get('lineId');
+    const deepLinkKey = `${recvIdParam}:${lineIdParam ?? ''}`;
+    if (deepLinkAppliedRef.current === deepLinkKey) return;
 
     const recvId = Number(recvIdParam);
-    const lineIdParam = searchParams.get('lineId');
     const lineId =
       lineIdParam && /^\d+$/.test(lineIdParam) ? Number(lineIdParam) : null;
 
@@ -998,7 +1082,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     }
     if (!target) return;
 
-    deepLinkAppliedRef.current = true;
+    deepLinkAppliedRef.current = deepLinkKey;
     initialAutoSelectRef.current = true;
     setSelectedId(target.id);
     dispatchSelectLine(target);

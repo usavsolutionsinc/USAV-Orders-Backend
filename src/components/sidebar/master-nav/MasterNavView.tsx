@@ -93,7 +93,7 @@ export function MasterNavView({
     ) : null;
 
   const dropdown = (
-    <div className="absolute inset-x-1 top-[40px] bottom-1 z-50">
+    <div className="absolute inset-x-1 top-[40px] bottom-1 z-dropdown">
       <MasterNavDropdown
         ref={menuRef}
         activePage={activePage}

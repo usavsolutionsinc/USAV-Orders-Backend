@@ -91,19 +91,33 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                             <li key={it.id} className="px-3 py-2">
                                 <div className="flex items-start gap-2">
                                     <div className="min-w-0 flex-1">
-                                        {it.kind === 'warranty_claim' && it.claimId ? (
-                                            <Link
-                                                href={`/dashboard?warranty=&open=${it.claimId}`}
-                                                onClick={onClose}
-                                                className="block truncate text-caption font-black text-blue-700 hover:text-blue-900 hover:underline"
-                                            >
-                                                {it.title}
-                                            </Link>
-                                        ) : (
-                                            <p className="truncate text-caption font-black text-gray-900">
-                                                {it.title}
-                                            </p>
-                                        )}
+                                        {(() => {
+                                            const href =
+                                                it.kind === 'warranty_claim' && it.claimId
+                                                    ? `/dashboard?warranty=&open=${it.claimId}`
+                                                    : it.kind === 'return_pending_test'
+                                                      ? '/tech'
+                                                      : it.kind === 'order_ready_ship'
+                                                        ? '/dashboard'
+                                                        : null;
+                                            const tone =
+                                                it.kind === 'return_pending_test'
+                                                    ? 'text-red-700 hover:text-red-900'
+                                                    : 'text-blue-700 hover:text-blue-900';
+                                            return href ? (
+                                                <Link
+                                                    href={href}
+                                                    onClick={onClose}
+                                                    className={`block truncate text-caption font-black hover:underline ${tone}`}
+                                                >
+                                                    {it.title}
+                                                </Link>
+                                            ) : (
+                                                <p className="truncate text-caption font-black text-gray-900">
+                                                    {it.title}
+                                                </p>
+                                            );
+                                        })()}
                                         <p className="mt-0.5 whitespace-pre-wrap break-words text-mini font-medium leading-snug text-gray-600">
                                             {it.subtitle}
                                         </p>

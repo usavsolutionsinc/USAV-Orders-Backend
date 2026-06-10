@@ -1,0 +1,406 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Unbox" [ref=e181] [cursor=pointer]:
+          - img [ref=e182]
+          - generic [ref=e12]: Unbox
+          - img [ref=e14]
+        - tablist "Mode" [ref=e18]:
+          - generic [ref=e19]:
+            - tab "Incoming" [ref=e20] [cursor=pointer]:
+              - img [ref=e21]
+            - tab "Receiving" [ref=e24] [cursor=pointer]:
+              - img [ref=e25]
+            - tab "Unbox" [selected] [ref=e27] [cursor=pointer]:
+              - img [ref=e29]
+            - tab "Local Pickup" [ref=e33] [cursor=pointer]:
+              - img [ref=e34]
+            - tab "History" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+        - generic [ref=e40]:
+          - generic [ref=e188]:
+            - 'status "Auto-detect (Tracking #)" [ref=e190]':
+              - img [ref=e191]
+            - 'textbox "Tracking, PO #" [ref=e194]'
+            - generic [ref=e196]:
+              - 'button "Arm Tracking #: force the next scan to search Tracking #." [ref=e197] [cursor=pointer]':
+                - img [ref=e198]
+              - 'button "Arm PO #: force the next scan to search PO #." [ref=e201] [cursor=pointer]':
+                - img [ref=e202]
+          - generic [ref=e59]:
+            - tablist "Unbox queue view" [ref=e206]:
+              - generic [ref=e207]:
+                - tab "Queue" [ref=e208] [cursor=pointer]:
+                  - img [ref=e209]
+                  - generic [ref=e213]: Queue
+                - tab "Recent" [selected] [ref=e214] [cursor=pointer]:
+                  - img [ref=e215]
+                  - generic [ref=e217]: Recent
+            - generic [ref=e218]:
+              - generic [ref=e219]:
+                - paragraph [ref=e220]:
+                  - text: Recent · 25
+                  - generic [ref=e221]: / 500
+                - generic [ref=e222]:
+                  - paragraph [ref=e223]: Unboxing
+                  - button "Select rows for bulk actions" [ref=e224] [cursor=pointer]:
+                    - img [ref=e225]
+              - listbox "Recent activity" [ref=e227]:
+                - option "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 6m" [selected] [ref=e228]:
+                  - button "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 6m" [ref=e229] [cursor=pointer]:
+                    - generic [ref=e231]:
+                      - paragraph [ref=e233]: Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS*
+                      - paragraph [ref=e234]:
+                        - generic [ref=e235]: 1/1
+                    - generic [ref=e236]: 6m
+                - option "HiFind 18 Gauge 4 Conductor Low Voltage Wire 500 Ft, UV Resistant 18 AWG CL2 4 Colors Hook up DC Alarm Bell Wire, Flexible, Outdoor, Pull Box for LED, Security Systems, Speaker, Automotive, RGB Cable 1/1 2h" [ref=e237]:
+                  - button "HiFind 18 Gauge 4 Conductor Low Voltage Wire 500 Ft, UV Resistant 18 AWG CL2 4 Colors Hook up DC Alarm Bell Wire, Flexible, Outdoor, Pull Box for LED, Security Systems, Speaker, Automotive, RGB Cable 1/1 2h" [ref=e238] [cursor=pointer]:
+                    - generic [ref=e240]:
+                      - paragraph [ref=e242]: HiFind 18 Gauge 4 Conductor Low Voltage Wire 500 Ft, UV Resistant 18 AWG CL2 4 Colors Hook up DC Alarm Bell Wire, Flexible, Outdoor, Pull Box for LED, Security Systems, Speaker, Automotive, RGB Cable
+                      - paragraph [ref=e243]:
+                        - generic [ref=e244]: 1/1
+                    - generic [ref=e245]: 2h
+                - button "Collapse package" [expanded] [ref=e246] [cursor=pointer]:
+                  - img [ref=e248]
+                  - generic [ref=e250]: PKG · 2
+                  - generic [ref=e251]: 2 items
+                - option "Bose Wave Multi CD Changer - Graphite Grey 1/1 2h" [ref=e252]:
+                  - button "Bose Wave Multi CD Changer - Graphite Grey 1/1 2h" [ref=e253] [cursor=pointer]:
+                    - generic [ref=e255]:
+                      - paragraph [ref=e257]: Bose Wave Multi CD Changer - Graphite Grey
+                      - paragraph [ref=e258]:
+                        - generic [ref=e259]: 1/1
+                    - generic [ref=e260]: 2h
+                - option "Bose Wave Music System III CD AM/FM Radio With Multi-CD Changer (For Parts) 1/1 2h" [ref=e261]:
+                  - button "Bose Wave Music System III CD AM/FM Radio With Multi-CD Changer (For Parts) 1/1 2h" [ref=e262] [cursor=pointer]:
+                    - generic [ref=e264]:
+                      - paragraph [ref=e266]: Bose Wave Music System III CD AM/FM Radio With Multi-CD Changer (For Parts)
+                      - paragraph [ref=e267]:
+                        - generic [ref=e268]: 1/1
+                    - generic [ref=e269]: 2h
+                - button "Collapse package" [expanded] [ref=e270] [cursor=pointer]:
+                  - img [ref=e272]
+                  - generic [ref=e274]: PKG · 2
+                  - generic [ref=e275]: 2 items
+                - option "Bose Wave Multi CD Changer - Cream White 1/1 2h" [ref=e276]:
+                  - button "Bose Wave Multi CD Changer - Cream White 1/1 2h" [ref=e277] [cursor=pointer]:
+                    - generic [ref=e279]:
+                      - paragraph [ref=e281]: Bose Wave Multi CD Changer - Cream White
+                      - paragraph [ref=e282]:
+                        - generic [ref=e283]: 1/1
+                    - generic [ref=e284]: 2h
+                - option "Bose Wave Music System AWRCC2 3-Disc Multi-CD Changer **FOR PARTS** 1/1 2h" [ref=e285]:
+                  - button "Bose Wave Music System AWRCC2 3-Disc Multi-CD Changer **FOR PARTS** 1/1 2h" [ref=e286] [cursor=pointer]:
+                    - generic [ref=e288]:
+                      - paragraph [ref=e290]: Bose Wave Music System AWRCC2 3-Disc Multi-CD Changer **FOR PARTS**
+                      - paragraph [ref=e291]:
+                        - generic [ref=e292]: 1/1
+                    - generic [ref=e293]: 2h
+                - button "Collapse package" [expanded] [ref=e294] [cursor=pointer]:
+                  - img [ref=e296]
+                  - generic [ref=e298]: PKG · 2
+                  - generic [ref=e299]: 2 items
+                - option "Vintage Bose Wave Radio/CD AWRC-1G AM/FM Graphite Tabletop CD Player 1/1 2h" [ref=e300]:
+                  - button "Vintage Bose Wave Radio/CD AWRC-1G AM/FM Graphite Tabletop CD Player 1/1 2h" [ref=e301] [cursor=pointer]:
+                    - generic [ref=e303]:
+                      - paragraph [ref=e305]: Vintage Bose Wave Radio/CD AWRC-1G AM/FM Graphite Tabletop CD Player
+                      - paragraph [ref=e306]:
+                        - generic [ref=e307]: 1/1
+                    - generic [ref=e308]: 2h
+                - option "Vintage Bose Wave Radio/CD AWRC-1P AM/FM Stereo Player Cream With Remote 1/1 2h" [ref=e309]:
+                  - button "Vintage Bose Wave Radio/CD AWRC-1P AM/FM Stereo Player Cream With Remote 1/1 2h" [ref=e310] [cursor=pointer]:
+                    - generic [ref=e312]:
+                      - paragraph [ref=e314]: Vintage Bose Wave Radio/CD AWRC-1P AM/FM Stereo Player Cream With Remote
+                      - paragraph [ref=e315]:
+                        - generic [ref=e316]: 1/1
+                    - generic [ref=e317]: 2h
+                - option "Bose Acoustimass 6 Series V Home Theater Speaker System - Complete 1/1 2h" [ref=e318]:
+                  - button "Bose Acoustimass 6 Series V Home Theater Speaker System - Complete 1/1 2h" [ref=e319] [cursor=pointer]:
+                    - generic [ref=e321]:
+                      - paragraph [ref=e323]: Bose Acoustimass 6 Series V Home Theater Speaker System - Complete
+                      - paragraph [ref=e324]:
+                        - generic [ref=e325]: 1/1
+                    - generic [ref=e326]: 2h
+                - option "Bose 151 Environmental Speaker Pair - Wall Mount Brackets Black 400/400 2h" [ref=e327]:
+                  - button "Bose 151 Environmental Speaker Pair - Wall Mount Brackets Black 400/400 2h" [ref=e328] [cursor=pointer]:
+                    - generic [ref=e330]:
+                      - paragraph [ref=e332]: Bose 151 Environmental Speaker Pair - Wall Mount Brackets Black
+                      - paragraph [ref=e333]:
+                        - generic [ref=e334]: 400/400
+                    - generic [ref=e335]: 2h
+                - 'option "Bose Acoustimass 6 Series V Home Theater Speaker System W/Cables Working #3019 1/1 2h" [ref=e336]':
+                  - 'button "Bose Acoustimass 6 Series V Home Theater Speaker System W/Cables Working #3019 1/1 2h" [ref=e337] [cursor=pointer]':
+                    - generic [ref=e339]:
+                      - paragraph [ref=e341]: "Bose Acoustimass 6 Series V Home Theater Speaker System W/Cables Working #3019"
+                      - paragraph [ref=e342]:
+                        - generic [ref=e343]: 1/1
+                    - generic [ref=e344]: 2h
+                - option "GEARit 16 Gauge Speaker Wire 500 ft,16 Gauge Wire with Foot Markers & Polarity Markings,Flexible Speaker Cable for Car Audio & Home Theater Speakers,Audio Cable for DIY Installations,CCA(White) 20/20 2h" [ref=e345]:
+                  - button "GEARit 16 Gauge Speaker Wire 500 ft,16 Gauge Wire with Foot Markers & Polarity Markings,Flexible Speaker Cable for Car Audio & Home Theater Speakers,Audio Cable for DIY Installations,CCA(White) 20/20 2h" [ref=e346] [cursor=pointer]:
+                    - generic [ref=e348]:
+                      - paragraph [ref=e350]: GEARit 16 Gauge Speaker Wire 500 ft,16 Gauge Wire with Foot Markers & Polarity Markings,Flexible Speaker Cable for Car Audio & Home Theater Speakers,Audio Cable for DIY Installations,CCA(White)
+                      - paragraph [ref=e351]:
+                        - generic [ref=e352]: 20/20
+                    - generic [ref=e353]: 2h
+                - button "Collapse package" [expanded] [ref=e354] [cursor=pointer]:
+                  - img [ref=e356]
+                  - generic [ref=e358]: PKG · 2
+                  - generic [ref=e359]: 2 items
+                - option "Bose 251 Wired Outdoor Speakers White Original Bracket 2/2 2h" [ref=e360]:
+                  - button "Bose 251 Wired Outdoor Speakers White Original Bracket 2/2 2h" [ref=e361] [cursor=pointer]:
+                    - generic [ref=e363]:
+                      - paragraph [ref=e365]: Bose 251 Wired Outdoor Speakers White Original Bracket
+                      - paragraph [ref=e366]:
+                        - generic [ref=e367]: 2/2
+                    - generic [ref=e368]: 2h
+                - option "Bose 251 Wired Outdoor Speakers White 1/1 2h" [ref=e369]:
+                  - button "Bose 251 Wired Outdoor Speakers White 1/1 2h" [ref=e370] [cursor=pointer]:
+                    - generic [ref=e372]:
+                      - paragraph [ref=e374]: Bose 251 Wired Outdoor Speakers White
+                      - paragraph [ref=e375]:
+                        - generic [ref=e376]: 1/1
+                    - generic [ref=e377]: 2h
+                - button "Collapse package" [expanded] [ref=e378] [cursor=pointer]:
+                  - img [ref=e380]
+                  - generic [ref=e382]: PKG · 2
+                  - generic [ref=e383]: 2 items
+                - option "Bose 251 Environmental Outdoor Speakers White Original Bracket 2/2 2h" [ref=e384]:
+                  - button "Bose 251 Environmental Outdoor Speakers White Original Bracket 2/2 2h" [ref=e385] [cursor=pointer]:
+                    - generic [ref=e387]:
+                      - paragraph [ref=e389]: Bose 251 Environmental Outdoor Speakers White Original Bracket
+                      - paragraph [ref=e390]:
+                        - generic [ref=e391]: 2/2
+                    - generic [ref=e392]: 2h
+                - option "Bose 251 Environmental Speakers Outdoor All Weather White Pair TESTED AND WORKS! 1/1 2h" [ref=e393]:
+                  - button "Bose 251 Environmental Speakers Outdoor All Weather White Pair TESTED AND WORKS! 1/1 2h" [ref=e394] [cursor=pointer]:
+                    - generic [ref=e396]:
+                      - paragraph [ref=e398]: Bose 251 Environmental Speakers Outdoor All Weather White Pair TESTED AND WORKS!
+                      - paragraph [ref=e399]:
+                        - generic [ref=e400]: 1/1
+                    - generic [ref=e401]: 2h
+                - button "Collapse package" [expanded] [ref=e402] [cursor=pointer]:
+                  - img [ref=e404]
+                  - generic [ref=e406]: PKG · 2
+                  - generic [ref=e407]: 2 items
+                - option "BOSE 251 Environmental Outdoor Speakers Pair Black With Wall Brackets, EXC! 1/1 2h" [ref=e408]:
+                  - button "BOSE 251 Environmental Outdoor Speakers Pair Black With Wall Brackets, EXC! 1/1 2h" [ref=e409] [cursor=pointer]:
+                    - generic [ref=e411]:
+                      - paragraph [ref=e413]: BOSE 251 Environmental Outdoor Speakers Pair Black With Wall Brackets, EXC!
+                      - paragraph [ref=e414]:
+                        - generic [ref=e415]: 1/1
+                    - generic [ref=e416]: 2h
+                - option "Bose 251 Black Original Wall Mount Bracket 2/2 2h" [ref=e417]:
+                  - button "Bose 251 Black Original Wall Mount Bracket 2/2 2h" [ref=e418] [cursor=pointer]:
+                    - generic [ref=e420]:
+                      - paragraph [ref=e422]: Bose 251 Black Original Wall Mount Bracket
+                      - paragraph [ref=e423]:
+                        - generic [ref=e424]: 2/2
+                    - generic [ref=e425]: 2h
+                - option "Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver 1/1 2h" [ref=e426]:
+                  - button "Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver 1/1 2h" [ref=e427] [cursor=pointer]:
+                    - generic [ref=e429]:
+                      - paragraph [ref=e431]: Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver
+                      - paragraph [ref=e432]:
+                        - generic [ref=e433]: 1/1
+                    - generic [ref=e434]: 2h
+                - option "Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested 1/1 8h" [ref=e435]:
+                  - button "Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested 1/1 8h" [ref=e436] [cursor=pointer]:
+                    - generic [ref=e438]:
+                      - paragraph [ref=e440]: Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested
+                      - paragraph [ref=e441]:
+                        - generic [ref=e442]: 1/1
+                    - generic [ref=e443]: 8h
+                - option "Bose Model AWR1-1W Wave Radio 1/1 8h" [ref=e444]:
+                  - button "Bose Model AWR1-1W Wave Radio 1/1 8h" [ref=e445] [cursor=pointer]:
+                    - generic [ref=e447]:
+                      - paragraph [ref=e449]: Bose Model AWR1-1W Wave Radio
+                      - paragraph [ref=e450]:
+                        - generic [ref=e451]: 1/1
+                    - generic [ref=e452]: 8h
+                - option "Bose Solo 5 TV Sound System Model 418775 with Power Adapter 1/1 8h" [ref=e453]:
+                  - button "Bose Solo 5 TV Sound System Model 418775 with Power Adapter 1/1 8h" [ref=e454] [cursor=pointer]:
+                    - generic [ref=e456]:
+                      - paragraph [ref=e458]: Bose Solo 5 TV Sound System Model 418775 with Power Adapter
+                      - paragraph [ref=e459]:
+                        - generic [ref=e460]: 1/1
+                    - generic [ref=e461]: 8h
+                - button "Collapse package" [expanded] [ref=e462] [cursor=pointer]:
+                  - img [ref=e464]
+                  - generic [ref=e466]: PKG · 3
+                  - generic [ref=e467]: 3 items
+                - option "Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III 1/1 8h" [ref=e468]:
+                  - button "Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III 1/1 8h" [ref=e469] [cursor=pointer]:
+                    - generic [ref=e471]:
+                      - paragraph [ref=e473]: Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III
+                      - paragraph [ref=e474]:
+                        - generic [ref=e475]: 1/1
+                    - generic [ref=e476]: 8h
+                - option "Bose 321 Remote 1/1 8h" [ref=e477]:
+                  - button "Bose 321 Remote 1/1 8h" [ref=e478] [cursor=pointer]:
+                    - generic [ref=e480]:
+                      - paragraph [ref=e482]: Bose 321 Remote
+                      - paragraph [ref=e483]:
+                        - generic [ref=e484]: 1/1
+                    - generic [ref=e485]: 8h
+                - option "Bose Wave Music System Remote 1/1 8h" [ref=e486]:
+                  - button "Bose Wave Music System Remote 1/1 8h" [ref=e487] [cursor=pointer]:
+                    - generic [ref=e489]:
+                      - paragraph [ref=e491]: Bose Wave Music System Remote
+                      - paragraph [ref=e492]:
+                        - generic [ref=e493]: 1/1
+                    - generic [ref=e494]: 8h
+    - generic [ref=e87]:
+      - banner [ref=e88]:
+        - button "Hide sidebar" [pressed] [ref=e89] [cursor=pointer]:
+          - img [ref=e90]
+        - button "Daily goal" [ref=e94] [cursor=pointer]:
+          - generic [ref=e95]:
+            - img [ref=e96]
+            - generic [ref=e100]: "0"
+          - generic [ref=e101]:
+            - generic [ref=e102]: Tech
+            - generic [ref=e103]: 0/10 scans
+          - img [ref=e104]
+        - generic [ref=e106]:
+          - button "Open command bar" [ref=e107] [cursor=pointer]:
+            - img [ref=e108]
+          - button "Notifications" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+          - button "Account & quick access" [ref=e116] [cursor=pointer]: M
+      - main [ref=e117]:
+        - generic [ref=e496]:
+          - navigation "Receiving progress" [ref=e497]:
+            - list [ref=e498]:
+              - listitem [ref=e499]:
+                - img [ref=e501]
+                - generic [ref=e503]: Scan
+              - listitem [ref=e504]
+              - listitem [ref=e506]:
+                - generic [ref=e507]: "2"
+                - generic [ref=e508]: Photos
+              - listitem [ref=e509]
+              - listitem [ref=e511]:
+                - img [ref=e513]
+                - generic [ref=e515]: Condition
+              - listitem [ref=e516]
+              - listitem [ref=e518]:
+                - img [ref=e520]
+                - generic [ref=e522]: Serial
+              - listitem [ref=e523]
+              - listitem [ref=e525]:
+                - img [ref=e527]
+                - generic [ref=e529]: Print
+          - generic [ref=e531]:
+            - generic [ref=e533]:
+              - button "Refresh line from Zoho" [ref=e534] [cursor=pointer]:
+                - img [ref=e536]
+              - button "Share receiving link" [ref=e538] [cursor=pointer]:
+                - img [ref=e540]
+              - button "View audit log" [ref=e543] [cursor=pointer]:
+                - img [ref=e545]
+              - button "Copy all receiving details" [ref=e547] [cursor=pointer]:
+                - img [ref=e549]
+              - button "Share to phone" [ref=e551] [cursor=pointer]:
+                - img [ref=e553]
+              - button "Open receiving details" [ref=e555] [cursor=pointer]:
+                - img [ref=e556]
+              - button "Previous recent line" [ref=e558] [cursor=pointer]:
+                - img [ref=e559]
+              - button "Next recent line" [ref=e561] [cursor=pointer]:
+                - img [ref=e562]
+            - generic [ref=e565]:
+              - generic [ref=e571]:
+                - 'button "Urgency: Medium — click to change" [ref=e573] [cursor=pointer]': Medium
+                - 'button "Platform: eBay — click to change" [ref=e575] [cursor=pointer]': eBay
+                - 'button "Type: PO — click to change" [ref=e577] [cursor=pointer]': PO
+                - generic [ref=e578]:
+                  - button "Open listing in new tab" [ref=e579] [cursor=pointer]:
+                    - img [ref=e580]
+                  - button "eBay" [ref=e583] [cursor=pointer]:
+                    - generic [ref=e584]: eBay
+                  - button "Edit listing URL" [ref=e585] [cursor=pointer]:
+                    - img [ref=e586]
+                - generic [ref=e588]:
+                  - button "Open PO in Zoho" [ref=e589] [cursor=pointer]:
+                    - img [ref=e590]
+                  - button "0338" [ref=e593] [cursor=pointer]:
+                    - img [ref=e595]
+                    - generic [ref=e598]: "0338"
+                  - button "Edit PO#" [ref=e599] [cursor=pointer]:
+                    - img [ref=e600]
+                - generic [ref=e603]:
+                  - button "Open carrier tracking" [ref=e604] [cursor=pointer]:
+                    - img [ref=e605]
+                  - button "9698" [ref=e608] [cursor=pointer]:
+                    - img [ref=e610]
+                    - generic [ref=e613]: "9698"
+                  - button "Edit tracking" [ref=e614] [cursor=pointer]:
+                    - img [ref=e615]
+                - button "Claim →" [ref=e617] [cursor=pointer]
+                - button "Add photos" [ref=e618] [cursor=pointer]:
+                  - img [ref=e619]
+                  - img [ref=e622]
+              - generic [ref=e624]:
+                - generic [ref=e625]:
+                  - heading "PO items · 1" [level=3] [ref=e626]
+                  - button "Add to carton" [ref=e628] [cursor=pointer]:
+                    - img [ref=e629]
+                - list [ref=e631]:
+                  - listitem [ref=e632]:
+                    - generic [ref=e633]:
+                      - button "Collapse item details" [expanded] [ref=e634] [cursor=pointer]:
+                        - img [ref=e635]
+                      - generic [ref=e637]:
+                        - paragraph [ref=e638]: Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS*
+                        - generic [ref=e639]:
+                          - generic [ref=e640]: 1/1
+                          - generic [ref=e641]: ·
+                          - generic [ref=e642]: REF
+                          - generic [ref=e643]: ·
+                          - button "2-BK" [ref=e645] [cursor=pointer]:
+                            - img [ref=e647]
+                            - generic [ref=e649]: 2-BK
+                          - generic [ref=e650]: ·
+                          - button "31AE" [ref=e654] [cursor=pointer]:
+                            - img [ref=e656]
+                            - generic [ref=e658]: 31AE
+                    - generic [ref=e662]:
+                      - radiogroup "Condition grade" [ref=e664]:
+                        - radio "NEW" [ref=e665] [cursor=pointer]
+                        - radio "L-New" [ref=e666] [cursor=pointer]
+                        - radio "REFURB" [checked] [ref=e667] [cursor=pointer]
+                        - radio "A" [ref=e668] [cursor=pointer]
+                        - radio "B" [ref=e669] [cursor=pointer]
+                        - radio "C" [ref=e670] [cursor=pointer]
+                        - radio "PARTS" [ref=e671] [cursor=pointer]
+                      - generic [ref=e674]:
+                        - textbox "Serial" [active] [ref=e675]:
+                          - /placeholder: " "
+                        - generic: Serial
+                      - button [disabled] [ref=e676]:
+                        - img [ref=e677]
+              - generic [ref=e680]:
+                - textbox "Notes" [ref=e681]:
+                  - /placeholder: " "
+                - generic: Notes
+              - generic [ref=e685]:
+                - generic [ref=e686]:
+                  - generic [ref=e687]:
+                    - generic [ref=e688]: eBay - PO
+                    - generic [ref=e689]: 6/10/26
+                  - generic [ref=e691]:
+                    - generic [ref=e692]: Refurbished
+                    - generic [ref=e693]: "0338"
+                - img "DataMatrix barcode" [ref=e695]:
+                  - img [ref=e696]
+            - generic [ref=e700]:
+              - button "Print only, mark as scanned, or receive (no print)" [ref=e702] [cursor=pointer]:
+                - img [ref=e703]
+              - button "Print · receive" [ref=e705] [cursor=pointer]:
+                - img [ref=e706]
+                - generic [ref=e708]: Print · receive
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e136] [cursor=pointer]:
+    - img [ref=e137]
+  - alert [ref=e140]

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import type { DateRange } from 'react-day-picker';
@@ -12,6 +12,7 @@ import {
   X,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { AnchoredLayer } from '@/design-system';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 import {
@@ -363,29 +364,9 @@ export function ShippedCarrierFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  // Anchor for the portaled filter popover (AnchoredLayer pins to this wrapper
+  // and owns outside-click / Escape dismissal).
   const popoverRef = useRef<HTMLDivElement>(null);
-
-  // Dismiss the popover on outside click / Escape. Clicks inside a portaled
-  // Radix popper (the date calendar) are NOT "outside" — ignore them.
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (popoverRef.current && !popoverRef.current.contains(target)) {
-        if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
-        setOpen(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
 
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrier = readShippedCarrierFilter(searchParams);
@@ -544,11 +525,18 @@ export function ShippedCarrierFilters({
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
-        {open ? (
+        <AnchoredLayer
+          open={open}
+          onClose={() => setOpen(false)}
+          anchorRef={popoverRef}
+          placement="bottom-stretch"
+          gap={4}
+          ignoreClickSelector="[data-radix-popper-content-wrapper]"
+        >
           <div
             role="dialog"
             aria-label="Shipment filters"
-            className="absolute left-0 right-0 top-full z-[60] mt-1 space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
+            className="space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5"
           >
             <NeedsAttentionButton active={exceptionsOnly} onClick={toggleExceptions} />
 
@@ -628,7 +616,7 @@ export function ShippedCarrierFilters({
               </button>
             ) : null}
           </div>
-        ) : null}
+        </AnchoredLayer>
       </div>
 
       {/* Active filter chips */}

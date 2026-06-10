@@ -381,6 +381,10 @@ export function SerialChipWithMenu({
       </div>
       {hasActions ? (
         <div
+          // Intentional exception (memory: z-index-scale-sot): a purely in-flow
+          // CSS hover tooltip stacking within this card's local context — not
+          // part of the global portal/overlay system, so it stays a raw z-[100].
+          // eslint-disable-next-line no-restricted-syntax
           className="invisible pointer-events-none absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 opacity-0 transition-opacity duration-100 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         >
           <div

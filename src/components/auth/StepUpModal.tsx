@@ -91,7 +91,7 @@ export function StepUpModal({ scope, open, onResolved, onCancel, reason }: StepU
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4"
       onClick={onCancel}
     >
       <div
@@ -143,7 +143,6 @@ export function StepUpModal({ scope, open, onResolved, onCancel, reason }: StepU
 function humanError(code: string | undefined): string {
   switch (code) {
     case 'WRONG':        return 'PIN incorrect. Try again.';
-    case 'LOCKED':       return 'Too many tries. Locked for 5 minutes.';
     case 'NO_PIN':       return 'No PIN on this account.';
     case 'NOT_FOUND':    return 'Account not found.';
     case 'VERIFY_FAILED': return 'Passkey verification failed.';

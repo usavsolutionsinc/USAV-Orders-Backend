@@ -10,7 +10,7 @@
 //   pill    — picker pills (the UI CSS-uppercases them): NEW · L-New · REFURB · A · B · C · PARTS
 //   table   — compact list/table chips:                  NEW · L-NEW · REF · A · B · C · PARTS
 //   compact — short rail / label copy:                   New · Like New · Refurb · A · B · C · Parts
-//   label   — printed + previewed receiving label:       New · Like New · Refurbished · Used-A · … · Parts
+//   label   — printed + previewed receiving label:       New · Like New · Refurbished · Used - A · … · Parts
 //   full    — Zendesk / exports / pickup work orders:    Brand New · Like New · Refurbished · Used — A · … · For Parts
 //   option  — generic dropdown (raw, CSS may up-case):   BRAND NEW · LIKE NEW · REFURBISHED · USED A · … · PARTS
 
@@ -38,7 +38,7 @@ export const CONDITION_LABELS: Record<ConditionLabelVariant, Record<string, stri
   pill:    { BRAND_NEW: 'NEW',       LIKE_NEW: 'L-New',    REFURBISHED: 'REFURB',      USED_A: 'A',        USED_B: 'B',        USED_C: 'C',        PARTS: 'PARTS' },
   table:   { BRAND_NEW: 'NEW',       LIKE_NEW: 'L-NEW',    REFURBISHED: 'REF',         USED_A: 'A',        USED_B: 'B',        USED_C: 'C',        PARTS: 'PARTS' },
   compact: { BRAND_NEW: 'New',       LIKE_NEW: 'Like New', REFURBISHED: 'Refurb',      USED_A: 'A',        USED_B: 'B',        USED_C: 'C',        PARTS: 'Parts' },
-  label:   { BRAND_NEW: 'New',       LIKE_NEW: 'Like New', REFURBISHED: 'Refurbished', USED_A: 'Used-A',   USED_B: 'Used-B',   USED_C: 'Used-C',   PARTS: 'Parts' },
+  label:   { BRAND_NEW: 'New',       LIKE_NEW: 'Like New', REFURBISHED: 'Refurbished', USED_A: 'Used - A', USED_B: 'Used - B', USED_C: 'Used - C', PARTS: 'Parts' },
   full:    { BRAND_NEW: 'Brand New', LIKE_NEW: 'Like New', REFURBISHED: 'Refurbished', USED_A: 'Used — A', USED_B: 'Used — B', USED_C: 'Used — C', PARTS: 'For Parts' },
   option:  { BRAND_NEW: 'BRAND NEW', LIKE_NEW: 'LIKE NEW', REFURBISHED: 'REFURBISHED', USED_A: 'USED A',   USED_B: 'USED B',   USED_C: 'USED C',   PARTS: 'PARTS' },
 };

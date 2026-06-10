@@ -55,7 +55,7 @@ export function CreateRoleDialog({ open, onClose, onCreated }: CreateRoleDialogP
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onClose(); }}>
+    <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => { if (!busy) onClose(); }}>
       <div className="w-full max-w-md rounded-2xl bg-white p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold text-gray-900">Create role</h2>
         <p className="mt-0.5 text-xs text-gray-500">

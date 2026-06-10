@@ -213,7 +213,9 @@ export async function findShippedOrderForSerialUnit(
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       WHERE oua.serial_unit_id = $1
         AND ($2::uuid IS NULL OR o.organization_id = $2::uuid)
-      ORDER BY (oua.state = 'SHIPPED') DESC, oua.allocated_at DESC
+      -- o.id ASC tiebreak mirrors findShippedOrderByTsnSerial: equal-timestamp
+      -- allocations must resolve to the same (first) sales order on re-scan.
+      ORDER BY (oua.state = 'SHIPPED') DESC, oua.allocated_at DESC, o.id ASC
       LIMIT 1`,
     [serialUnitId, orgId],
   );
@@ -254,7 +256,12 @@ export async function findShippedOrderByTsnSerial(
       WHERE UPPER(t.serial_number) = $1
         AND t.shipment_id IS NOT NULL
         AND ($2::uuid IS NULL OR o.organization_id = $2::uuid)
-      ORDER BY t.created_at DESC
+      -- Most recent ship event first (a re-sold serial pairs with its latest
+      -- trip), then o.id ASC: one shipment can join MULTIPLE sales orders, and
+      -- without the tiebreak repeated scans of the same serial could import
+      -- DIFFERENT order numbers. o.id ASC pins the first sales order, so a
+      -- return always pairs with the same order.
+      ORDER BY t.created_at DESC, o.id ASC
       LIMIT 1`,
     [normalized, orgId],
   );

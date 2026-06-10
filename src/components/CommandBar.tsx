@@ -280,7 +280,7 @@ export function CommandBar() {
             animate={framerPresence.workOrderScrim.animate}
             exit={framerPresence.workOrderScrim.exit}
             transition={shouldReduceMotion ? { duration: 0 } : framerTransition.overlayScrim}
-            className="fixed inset-0 z-[1000] bg-gray-900/40 backdrop-blur-md"
+            className="fixed inset-0 z-command bg-gray-900/40 backdrop-blur-md"
             onClick={() => setOpen(false)}
             aria-hidden
           />
@@ -294,7 +294,7 @@ export function CommandBar() {
             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
             exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
             transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }}
-            className="fixed inset-x-0 top-0 z-[1001] flex justify-center px-4 pt-[12vh] md:pt-[16vh]"
+            className="fixed inset-x-0 top-0 z-command flex justify-center px-4 pt-[12vh] md:pt-[16vh]"
           >
             <Command
               label="Command menu"

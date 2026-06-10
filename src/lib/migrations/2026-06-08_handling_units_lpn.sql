@@ -1,8 +1,7 @@
 -- ============================================================================
 -- 2026-06-08: handling units (LPN) — boxes that decouple from the receipt
 -- ============================================================================
--- docs/handling-unit-lpn-plan.md — Phase H1 (additive, lands dark behind the
--- HANDLING_UNITS feature flag).
+-- docs/handling-unit-lpn-plan.md — Phase H1 (additive).
 --
 -- `R-{id}` already identifies an inbound CARTON (one `receiving` row). It is 1:1
 -- with the receipt and cannot decouple. After unboxing, items get re-sorted into
@@ -23,7 +22,8 @@
 -- `receiving.id`. This model replaces it; the alias is dropped in Phase H6 once
 -- nothing reads it.
 --
--- Additive + idempotent. No behavior change until HANDLING_UNITS is flipped.
+-- Additive + idempotent. Safe to run anytime; once applied the feature works
+-- with no further toggles (the H- scan class is a no-op until boxes exist).
 -- ============================================================================
 
 BEGIN;

@@ -1,11 +1,18 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup } from 'framer-motion';
-import { ChevronDown } from '@/components/Icons';
+import { ChevronDown, Plus } from '@/components/Icons';
+import { toast } from '@/lib/toast';
 import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
+import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
+import {
+  CartonAddPopover,
+  type AssignedBox,
+  type CartonAddSelection,
+} from '@/components/receiving/workspace/CartonAddPopover';
 import { setSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import {
@@ -80,6 +87,12 @@ interface Props {
    * unboxed, so the accordion is just a flat list of what's on the PO.
    */
   readOnly?: boolean;
+  /**
+   * Testing context only: hide lines marked needs_test=false (cables / no-test
+   * items) so they don't appear in the tester's per-PO list. The active line is
+   * always kept visible. Off in the unbox workspace, where every line matters.
+   */
+  hideNoTestLines?: boolean;
 }
 
 /**
@@ -98,6 +111,7 @@ export function PoLinesAccordion({
   activeConditionOverride,
   activeSerialActions,
   readOnly = false,
+  hideNoTestLines = false,
 }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
@@ -123,6 +137,14 @@ export function PoLinesAccordion({
     // override is load-bearing for the testing workspace.
     refetchOnWindowFocus: false,
   });
+
+  // Active row collapse — the chevron toggles the active line's body (slot)
+  // closed so a high-qty line (x100 unit rows) doesn't lock the workspace to
+  // a wall of rows. Re-expands whenever the active line changes.
+  const [activeCollapsed, setActiveCollapsed] = useState(false);
+  useEffect(() => {
+    setActiveCollapsed(false);
+  }, [activeLineId]);
 
   // Local optimistic mirror — receives line-updated patches so progress
   // badges stay live as the operator works.
@@ -154,7 +176,24 @@ export function PoLinesAccordion({
   // feels like a local expand/collapse, not a "row jumps to the bottom"
   // switch. The active row still highlights + shows its slot in place; the
   // collapsed siblings stay anchored where they were.
-  const rows = localRows;
+  // In the testing workspace, no-test lines (cables toggled off) are hidden so
+  // they don't clutter the tester's list — but the active line is always kept
+  // so a mid-flow toggle never blanks the workspace.
+  const rows = hideNoTestLines
+    ? localRows.filter((r) => r.id === activeLineId || r.needs_test !== false)
+    : localRows;
+  // Serial-unit ids across every line of this carton — the atoms an LPN box
+  // groups. Drives the "Add to box" control in the header (mint H-{id} +
+  // seed the whole carton). Empty until at least one serial is scanned.
+  const cartonUnitIds = useMemo(
+    () =>
+      localRows.flatMap((r) =>
+        (r.serials ?? [])
+          .map((s) => s.id)
+          .filter((id): id is number => typeof id === 'number'),
+      ),
+    [localRows],
+  );
   // Always render — even for single-line POs the row layout (title, qty,
   // condition, sku, serial chip) is the canonical context display the
   // workspace expects above the body.
@@ -166,10 +205,8 @@ export function PoLinesAccordion({
         <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           PO items · {rows.length}
         </h3>
-        {rows.length > 1 && !readOnly ? (
-          <span className="text-micro font-bold uppercase tracking-widest text-gray-400">
-            Click to switch
-          </span>
+        {!readOnly ? (
+          <CartonAddAction receivingId={receivingId} unitIds={cartonUnitIds} />
         ) : null}
       </div>
       <LayoutGroup id={`po-lines-${receivingId}`}>
@@ -209,12 +246,34 @@ export function PoLinesAccordion({
                 }`}
               >
                 {!readOnly ? (
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${
-                      isActive ? '' : '-rotate-90'
-                    }`}
-                    aria-hidden
-                  />
+                  isActive ? (
+                    // Active row: the chevron is a real toggle — click to
+                    // collapse/expand the row body (condition pills, unit
+                    // rows). Essential on multi-qty lines where the expanded
+                    // body is taller than the viewport.
+                    <button
+                      type="button"
+                      aria-expanded={!activeCollapsed}
+                      aria-label={activeCollapsed ? 'Expand item details' : 'Collapse item details'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveCollapsed((v) => !v);
+                      }}
+                      className="-m-1 flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                    >
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${
+                          activeCollapsed ? '-rotate-90' : ''
+                        }`}
+                        aria-hidden
+                      />
+                    </button>
+                  ) : (
+                    <ChevronDown
+                      className="h-3.5 w-3.5 shrink-0 -rotate-90 text-gray-400 transition-transform"
+                      aria-hidden
+                    />
+                  )
                 ) : null}
                 <div className="min-w-0 flex-1">
                   <p
@@ -312,8 +371,8 @@ export function PoLinesAccordion({
               {/* Active row only — slot for condition pills, serial adder,
                   etc. Passes the line's own serials (from this accordion's
                   query) so the inline adder shows the same chips the row
-                  header shows. */}
-              {isActive && activeRowSlot ? (
+                  header shows. Hidden while the chevron has collapsed the row. */}
+              {isActive && !activeCollapsed && activeRowSlot ? (
                 <div className="border-t border-blue-200/60 px-3 py-3">
                   {typeof activeRowSlot === 'function'
                     ? activeRowSlot({ serials: line.serials ?? [] })
@@ -329,7 +388,81 @@ export function PoLinesAccordion({
   );
 }
 
-function ProgressBadge({ received, expected }: { received: number; expected: number | null }) {
+/**
+ * Carton add action — a `+` button (same shape as the unfound "+ Add item"
+ * CTA) that opens the shared CartonAddPopover (Item · Web · Box). On a matched
+ * carton, Item/Web add an **off-PO** line (an extra item in the box the Zoho PO
+ * doesn't list — see add-unmatched-line `allow_off_po`); Box groups the
+ * carton's units into a handling unit + prints its LPN label.
+ */
+function CartonAddAction({ receivingId, unitIds }: { receivingId: number; unitIds: number[] }) {
+  const [open, setOpen] = useState(false);
+  const [box, setBox] = useState<AssignedBox | null>(null);
+
+  // Add an off-PO extra item to this matched carton, then refresh the accordion
+  // so the new line shows. The receive flow leaves it Zoho-unlinked (skipped
+  // from the Zoho POST); the operator reconciles it on the PO separately.
+  const addOffPoLine = useCallback(
+    async (sel: CartonAddSelection) => {
+      const clientEventId = `add-offpo-${receivingId}-${Date.now()}`;
+      const res = await fetch('/api/receiving/add-unmatched-line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': clientEventId },
+        body: JSON.stringify({
+          receiving_id: receivingId,
+          allow_off_po: true,
+          sku_catalog_id: sel.sku_catalog_id,
+          ...(sel.sku_platform_id_row != null ? { sku_platform_id_row: sel.sku_platform_id_row } : {}),
+          sku: sel.sku || undefined,
+          item_name: sel.item_name,
+          client_event_id: clientEventId,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !body.success) {
+        toast.error(body.error ?? `add failed (${res.status})`);
+        return;
+      }
+      toast.success(`Added off-PO · ${sel.item_name || sel.sku || 'item'}`);
+      // The accordion invalidates its siblings query on this event.
+      window.dispatchEvent(new Event('usav-refresh-data'));
+      setOpen(false);
+    },
+    [receivingId],
+  );
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {box ? (
+        <HandlingUnitChip handlingUnitId={box.id} code={box.code} unitCount={box.total} dense />
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Add to carton"
+        title="Add to carton — off-PO item, web result, or a handling-unit box"
+        className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+      {open ? (
+        <CartonAddPopover
+          tabs={['item', 'web', 'box']}
+          initialTab="item"
+          unitIds={unitIds}
+          onAddLine={addOffPoLine}
+          addLineHint="Adds as an off-PO item — not on the Zoho PO. Reconcile it in Zoho separately."
+          onAssignedBox={setBox}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Exported for UnmatchedItemsSection so unfound line rows render the exact
+ *  same qty/condition meta as matched PO items. */
+export function ProgressBadge({ received, expected }: { received: number; expected: number | null }) {
   if (expected == null || expected <= 0) {
     return <span className="text-gray-600">{received} received</span>;
   }
@@ -341,7 +474,7 @@ function ProgressBadge({ received, expected }: { received: number; expected: num
   );
 }
 
-function ConditionBadge({ grade }: { grade: string | null | undefined }) {
+export function ConditionBadge({ grade }: { grade: string | null | undefined }) {
   const g = String(grade || '').trim().toUpperCase();
   if (!g || g === 'PENDING') {
     return <span className="text-gray-400">pending</span>;

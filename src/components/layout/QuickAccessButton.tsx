@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { AnchoredLayer } from '@/design-system';
 import { Search, X } from '@/components/Icons';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
@@ -66,20 +67,6 @@ export function QuickAccessButton({
     setInboxOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!menuOpen && !historyOpen && !inboxOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (!wrapperRef.current) return;
-      if (!wrapperRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-        setHistoryOpen(false);
-        setInboxOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpen, historyOpen, inboxOpen]);
-
   const toggleMenu = useCallback(() => {
     setMenuOpen((prev) => {
       const next = !prev;
@@ -108,33 +95,45 @@ export function QuickAccessButton({
   if (!settings.enabled) return null;
   if (!authUser) return null;
 
-  const popoverPosition = placement === 'up'
-    ? 'absolute right-0 bottom-full mb-0.5 z-50'
-    : 'absolute right-0 top-full mt-0.5 z-50';
+  // Popovers portal via AnchoredLayer (escapes any transformed/blurred header
+  // ancestor) and own their own outside-click + Escape dismissal.
+  const popoverPlacement = placement === 'up' ? 'top-end' : 'bottom-end';
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
-      {menuOpen && (
-        <div className={popoverPosition}>
-          <QuickAccessPopover
-            onClose={() => setMenuOpen(false)}
-            onOpenHistoryPopover={handleOpenHistory}
-            onOpenInboxPopover={handleOpenInbox}
-          />
-        </div>
-      )}
+      <AnchoredLayer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        anchorRef={wrapperRef}
+        placement={popoverPlacement}
+        gap={2}
+      >
+        <QuickAccessPopover
+          onClose={() => setMenuOpen(false)}
+          onOpenHistoryPopover={handleOpenHistory}
+          onOpenInboxPopover={handleOpenInbox}
+        />
+      </AnchoredLayer>
 
-      {historyOpen && (
-        <div className={popoverPosition}>
-          <PhoneHistoryPopover onClose={() => setHistoryOpen(false)} />
-        </div>
-      )}
+      <AnchoredLayer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        anchorRef={wrapperRef}
+        placement={popoverPlacement}
+        gap={2}
+      >
+        <PhoneHistoryPopover onClose={() => setHistoryOpen(false)} />
+      </AnchoredLayer>
 
-      {inboxOpen && (
-        <div className={popoverPosition}>
-          <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
-        </div>
-      )}
+      <AnchoredLayer
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        anchorRef={wrapperRef}
+        placement={popoverPlacement}
+        gap={2}
+      >
+        <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
+      </AnchoredLayer>
 
       <button
         type="button"

@@ -11,9 +11,14 @@ import { useEffect, type RefObject } from 'react';
  * - Skips when there's nothing to scroll (no overflow).
  * - Uses passive: false so we can preventDefault and stop the parent page from
  *   scrolling vertically while the user is wheeling horizontally over the rail.
+ *
+ * `reattachKey`: pass any value that changes when the scroller element is
+ * conditionally re-mounted (e.g. a collapsible row's expanded state) so the
+ * listener re-binds to the new element; refs alone don't re-trigger effects.
  */
 export function useHorizontalWheelScroll<T extends HTMLElement>(
   ref: RefObject<T | null>,
+  reattachKey?: unknown,
 ): void {
   useEffect(() => {
     const el = ref.current;
@@ -30,5 +35,5 @@ export function useHorizontalWheelScroll<T extends HTMLElement>(
 
     el.addEventListener('wheel', handler, { passive: false });
     return () => el.removeEventListener('wheel', handler);
-  }, [ref]);
+  }, [ref, reattachKey]);
 }

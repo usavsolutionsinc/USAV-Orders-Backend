@@ -12,6 +12,7 @@ import {
   getStationChannelName,
 } from '@/lib/realtime/channels';
 import { createStationActivityLog } from '@/lib/station-activity';
+import { getPrimaryTechStaffIds } from '@/lib/neon/staff-stations-queries';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 
@@ -407,6 +408,45 @@ export async function publishWarrantyClaimNotification(payload: WarrantyClaimNot
       publishEvent(getInboxChannelName(staffId), 'warranty_claim', { ...data, staffId }),
     ),
   );
+}
+
+/**
+ * Tech-station inbox nudges — fan out a lightweight "refresh your queue" event
+ * to every staffer whose primary station is TECH. The bell derives its actual
+ * contents live from GET /api/inbox/tech-queue; these events just tell the
+ * client to refetch (derive-live model). Best-effort + no-op with no recipients.
+ */
+type TechInboxPayload = {
+  receivingId: number | null;
+  trackingNumber?: string | null;
+  source: string;
+};
+
+async function publishTechInbox(eventName: 'return_pending_test' | 'order_ready_ship', payload: TechInboxPayload) {
+  const recipients = await getPrimaryTechStaffIds();
+  if (recipients.length === 0) return;
+  const data = {
+    type: eventName,
+    receivingId: payload.receivingId,
+    trackingNumber: payload.trackingNumber ?? null,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  };
+  await Promise.all(
+    recipients.map((staffId) =>
+      publishEvent(getInboxChannelName(staffId), eventName, { ...data, staffId }),
+    ),
+  );
+}
+
+/** Unboxed return that still needs testing — nudge the tech station to refetch. */
+export async function publishReturnPendingTest(payload: TechInboxPayload) {
+  await publishTechInbox('return_pending_test', payload);
+}
+
+/** Unboxed priority carton whose order is ready to ship — nudge the tech station. */
+export async function publishOrderReadyShip(payload: TechInboxPayload) {
+  await publishTechInbox('order_ready_ship', payload);
 }
 
 export async function publishAiAssistantMessage(payload: AiAssistantPayload) {

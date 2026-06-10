@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMediaQuery } from '@/hooks/_ui';
+import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 
 /**
  * Responsive overlay primitive.
@@ -80,13 +81,16 @@ export function BottomSheet({
 
   if (!portalNode) return null;
 
-  const zIndex = 200 + (level * 10);
-  const scrimOpacity = Math.min(0.4 + (level * 0.1), 0.7);
+  // Base at zLayer.modal; each level adds 10. Clamp to <10 so a deeply-stacked
+  // sheet can never climb into the elevatedModal band (300).
+  const safeLevel = Math.min(Math.max(level, 0), 9);
+  const layerZ = zLayer.modal + (safeLevel * 10);
+  const scrimOpacity = Math.min(0.4 + (safeLevel * 0.1), 0.7);
 
   const overlay = (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0" style={{ zIndex }}>
+        <div className="fixed inset-0" style={{ zIndex: layerZ }}>
           {/* Scrim — darker on stacked levels so the parent sheet recedes. */}
           <motion.div
             initial={{ opacity: 0 }}

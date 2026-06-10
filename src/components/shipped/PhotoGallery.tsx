@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { useBodyScrollLock } from '@/design-system/hooks';
+import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
 import {
   X,
@@ -376,7 +377,7 @@ export function PhotoGallery({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center"
-        style={{ zIndex: 99999 }}
+        style={{ zIndex: zLayer.modal }}
       >
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent z-10">

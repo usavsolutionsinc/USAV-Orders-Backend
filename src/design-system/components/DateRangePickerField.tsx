@@ -143,7 +143,7 @@ export function DateRangePickerField({
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-50 rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           {presets.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 p-2">

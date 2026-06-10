@@ -1,0 +1,165 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Receiving" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e10]: Receiving
+          - img [ref=e12]
+        - tablist "Mode" [ref=e16]:
+          - generic [ref=e17]:
+            - tab "Incoming" [ref=e18] [cursor=pointer]:
+              - img [ref=e19]
+            - tab "Receiving" [selected] [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+            - tab "Unbox" [ref=e26] [cursor=pointer]:
+              - img [ref=e27]
+            - tab "Local Pickup" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+            - tab "History" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+        - generic [ref=e38]:
+          - generic [ref=e41]:
+            - img [ref=e43]
+            - 'textbox "Scan tracking #" [active] [ref=e45]'
+          - generic [ref=e47]:
+            - tablist "Triage view" [ref=e50]:
+              - generic [ref=e51]:
+                - tab "Unfound" [selected] [ref=e52] [cursor=pointer]:
+                  - img [ref=e53]
+                  - generic [ref=e55]: Unfound
+                - tab "Prioritize" [ref=e56] [cursor=pointer]:
+                  - img [ref=e57]
+                  - generic [ref=e59]: Prioritize
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - paragraph [ref=e62]: Unfound · 1
+                - generic [ref=e63]:
+                  - paragraph [ref=e64]: To identify
+                  - button "Select rows for bulk actions" [ref=e65] [cursor=pointer]:
+                    - img [ref=e66]
+              - listbox "Unfound activity" [ref=e114]:
+                - option "Unfound PO 0/? 1m" [selected] [ref=e115]:
+                  - button "Unfound PO 0/? 1m" [ref=e116] [cursor=pointer]:
+                    - generic [ref=e118]:
+                      - paragraph [ref=e120]: Unfound PO
+                      - paragraph [ref=e121]:
+                        - generic [ref=e122]: 0/?
+                    - generic [ref=e123]: 1m
+    - generic [ref=e73]:
+      - banner [ref=e74]:
+        - button "Hide sidebar" [pressed] [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+        - button "Daily goal" [ref=e125] [cursor=pointer]:
+          - generic [ref=e126]:
+            - img [ref=e127]
+            - generic [ref=e131]: "0"
+          - generic [ref=e132]:
+            - generic [ref=e133]: Tech
+            - generic [ref=e134]: 0/10 scans
+          - img [ref=e135]
+        - generic [ref=e79]:
+          - button "Open command bar" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+          - button "Notifications" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+          - button "Account & quick access" [ref=e89] [cursor=pointer]: M
+      - main [ref=e90]:
+        - generic [ref=e138]:
+          - navigation "Receiving progress" [ref=e139]:
+            - list [ref=e140]:
+              - listitem [ref=e141]:
+                - img [ref=e143]
+                - generic [ref=e145]: Scan
+              - listitem [ref=e146]
+              - listitem [ref=e148]:
+                - generic [ref=e149]: "2"
+                - generic [ref=e150]: Photos
+              - listitem [ref=e151]
+              - listitem [ref=e153]:
+                - generic [ref=e154]: "3"
+                - generic [ref=e155]: Condition
+              - listitem [ref=e156]
+              - listitem [ref=e158]:
+                - generic [ref=e159]: "4"
+                - generic [ref=e160]: Serial
+              - listitem [ref=e161]
+              - listitem [ref=e163]:
+                - generic [ref=e164]: "5"
+                - generic [ref=e165]: Print
+          - generic [ref=e167]:
+            - generic [ref=e169]:
+              - button "Refresh line from Zoho" [ref=e170] [cursor=pointer]:
+                - img [ref=e172]
+              - button "Share receiving link" [ref=e174] [cursor=pointer]:
+                - img [ref=e176]
+              - button "View audit log" [ref=e179] [cursor=pointer]:
+                - img [ref=e181]
+              - button "Copy all receiving details" [ref=e183] [cursor=pointer]:
+                - img [ref=e185]
+              - button "Share to phone" [ref=e187] [cursor=pointer]:
+                - img [ref=e189]
+              - button "Open receiving details" [ref=e191] [cursor=pointer]:
+                - img [ref=e192]
+              - button "Previous recent line" [ref=e194] [cursor=pointer]:
+                - img [ref=e195]
+              - button "Next recent line" [ref=e197] [cursor=pointer]:
+                - img [ref=e198]
+            - generic [ref=e201]:
+              - generic [ref=e205]:
+                - generic [ref=e207]:
+                  - 'button "Urgency: High — click to change" [ref=e209] [cursor=pointer]': High
+                  - 'button "Platform: Unfound — click to change" [ref=e211] [cursor=pointer]': Unfound
+                  - 'button "Type: PO — click to change" [ref=e213] [cursor=pointer]': PO
+                  - generic [ref=e214]:
+                    - button "Open listing in new tab" [disabled] [ref=e215]:
+                      - img [ref=e216]
+                    - button "----" [ref=e219] [cursor=pointer]:
+                      - generic [ref=e220]: "----"
+                    - button "Edit listing URL" [ref=e221] [cursor=pointer]:
+                      - img [ref=e222]
+                  - generic [ref=e224]:
+                    - button "Open PO in Zoho" [disabled] [ref=e225]:
+                      - img [ref=e226]
+                    - button "----" [ref=e229] [cursor=pointer]:
+                      - img [ref=e231]
+                      - generic [ref=e234]: "----"
+                    - button "Edit PO#" [expanded] [ref=e235] [cursor=pointer]:
+                      - img [ref=e236]
+                  - generic [ref=e239]:
+                    - button "Open carrier tracking" [ref=e240] [cursor=pointer]:
+                      - img [ref=e241]
+                    - button "0123" [ref=e244] [cursor=pointer]:
+                      - img [ref=e246]
+                      - generic [ref=e249]: "0123"
+                    - button "Edit tracking" [ref=e250] [cursor=pointer]:
+                      - img [ref=e251]
+                  - button "Claim →" [ref=e253] [cursor=pointer]
+                  - button "Add photos" [ref=e254] [cursor=pointer]:
+                    - img [ref=e255]
+                    - img [ref=e258]
+                - generic [ref=e261]:
+                  - generic [ref=e262]: PO number
+                  - generic [ref=e266]:
+                    - img [ref=e268]
+                    - textbox "PO-1234" [ref=e270]
+                    - button "Paste from clipboard" [ref=e272] [cursor=pointer]:
+                      - img [ref=e273]
+              - generic [ref=e277]:
+                - heading "PO items · 0" [level=3] [ref=e278]
+                - generic [ref=e280]:
+                  - button "Open in unbox" [ref=e281] [cursor=pointer]:
+                    - img [ref=e282]
+                    - text: Open in unbox
+                  - button "Link repair service" [ref=e286] [cursor=pointer]:
+                    - img [ref=e287]
+                    - text: Link repair service
+                  - button "Add to carton" [ref=e290] [cursor=pointer]:
+                    - img [ref=e291]
+            - button "Save for unbox" [ref=e295] [cursor=pointer]:
+              - img [ref=e296]
+              - generic [ref=e298]: Save for unbox
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e109] [cursor=pointer]:
+    - img [ref=e110]
+  - alert [ref=e113]

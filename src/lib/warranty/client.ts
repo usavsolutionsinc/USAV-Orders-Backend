@@ -6,7 +6,12 @@
  * dashboard-queries.ts and the warranty hooks.
  */
 
-import type { WarrantyClaimDetail, WarrantyClaimListRow, WarrantyClaimStatus } from './types';
+import type {
+  WarrantyClaimDetail,
+  WarrantyClaimListRow,
+  WarrantyClaimStatus,
+  WarrantyCoverageResult,
+} from './types';
 
 export interface FetchWarrantyClaimsParams {
   status?: WarrantyClaimStatus | null;
@@ -50,4 +55,18 @@ export async function fetchWarrantyClaim(id: number): Promise<WarrantyClaimDetai
     throw new Error(json?.error || `warranty claim request failed (${res.status})`);
   }
   return (json.claim ?? null) as WarrantyClaimDetail | null;
+}
+
+/** Read-only warranty-coverage lookup (order #, serial, or SKU). */
+export async function fetchWarrantyCoverage(q: string): Promise<WarrantyCoverageResult | null> {
+  const trimmed = q.trim();
+  if (!trimmed) return null;
+  const res = await fetch(`/api/warranty/lookup?q=${encodeURIComponent(trimmed)}`, {
+    headers: { Accept: 'application/json' },
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.error || `warranty coverage request failed (${res.status})`);
+  }
+  return (json.coverage ?? null) as WarrantyCoverageResult | null;
 }

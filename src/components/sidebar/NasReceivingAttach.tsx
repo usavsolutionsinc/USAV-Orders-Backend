@@ -37,7 +37,7 @@ function NasPickerShell({
     );
   }
   return createPortal(
-    <div className="fixed inset-0 z-[210] flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Select from NAS, pair to PO">
+    <div className="fixed inset-0 z-modal flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Select from NAS, pair to PO">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} aria-hidden />
       <motion.div
         initial={{ y: '100%' }}
@@ -229,8 +229,8 @@ export function NasPickerDialog({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // Anchor for shift-click range selection (the last row clicked without shift).
-  const [anchorUrl, setAnchorUrl] = useState<string | null>(null);
+  /** Index in `pagedFiles` for the last plain click — shift-click selects the inclusive range from here. */
+  const anchorIndexRef = useRef<number | null>(null);
   const [attaching, setAttaching] = useState(false);
   // Larger preview opened by clicking a row's thumbnail (null = closed).
   const [preview, setPreview] = useState<NasEntry | null>(null);
@@ -288,38 +288,35 @@ export function NasPickerDialog({
       return next;
     });
 
-  // Row click: plain click toggles + sets the anchor; shift-click applies the
-  // anchor's current state to the whole range (within the current page), like a
-  // file manager — so it selects OR deselects a range. To bulk-deselect: click a
-  // selected row (toggles it off → anchor), then shift-click the range end.
-  const handleRowSelect = (url: string, shiftKey: boolean) => {
-    if (shiftKey && anchorUrl) {
-      const a = pagedFiles.findIndex((f) => f.url === anchorUrl);
-      const b = pagedFiles.findIndex((f) => f.url === url);
-      if (a >= 0 && b >= 0) {
-        const [lo, hi] = a < b ? [a, b] : [b, a];
-        const range = pagedFiles.slice(lo, hi + 1).map((f) => f.url);
-        const fillSelected = selected.has(anchorUrl); // match the anchor's state
-        setSelected((prev) => {
-          const next = new Set(prev);
-          for (const u of range) {
-            if (fillSelected) next.add(u);
-            else next.delete(u);
-          }
-          return next;
-        });
-        return; // keep the existing anchor for further range extension
-      }
+  // Same selection model as FbaBoardTable: shift-click REPLACES the selection
+  // with the inclusive anchor→row range (so shift-clicking a shorter range
+  // deselects the rest); plain click toggles and moves the anchor.
+  const selectRangeInclusive = (fromIndex: number, toIndex: number) => {
+    const lo = Math.min(fromIndex, toIndex);
+    const hi = Math.max(fromIndex, toIndex);
+    const next = new Set<string>();
+    for (let i = lo; i <= hi; i++) {
+      const row = pagedFiles[i];
+      if (row) next.add(row.url);
+    }
+    setSelected(next);
+  };
+
+  const handleRowSelect = (event: React.MouseEvent, index: number, url: string) => {
+    if (event.shiftKey && anchorIndexRef.current !== null) {
+      event.preventDefault();
+      selectRangeInclusive(anchorIndexRef.current, index);
+      return;
     }
     toggle(url);
-    setAnchorUrl(url);
+    anchorIndexRef.current = index;
   };
 
   // Navigating folders drops the current selection (the chosen URLs belong to
   // the folder you're leaving) and resets to the first page.
   const navigate = useCallback((relDir: string) => {
     setSelected(new Set());
-    setAnchorUrl(null);
+    anchorIndexRef.current = null;
     setPage(0);
     setDir(relDir);
   }, []);
@@ -355,6 +352,17 @@ export function NasPickerDialog({
   const pageCount = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1); // clamp if the folder shrank
   const pagedFiles = files.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+
+  // The anchor is an index into the CURRENT page — paging or re-sorting makes
+  // it point at different rows, so drop it (same shape as FbaBoardTable's clamp).
+  useEffect(() => {
+    anchorIndexRef.current = null;
+  }, [safePage, sortKey]);
+  useEffect(() => {
+    if (anchorIndexRef.current !== null && anchorIndexRef.current >= pagedFiles.length) {
+      anchorIndexRef.current = null;
+    }
+  }, [pagedFiles.length]);
 
   return (
     <>
@@ -476,7 +484,7 @@ export function NasPickerDialog({
                     Photos · {files.length}
                   </NasSectionLabel>
                   <div className="space-y-1">
-                  {pagedFiles.map((f) => {
+                  {pagedFiles.map((f, idx) => {
                     const isSel = selected.has(f.url);
                     return (
                       <div
@@ -507,7 +515,7 @@ export function NasPickerDialog({
                         {/* Rest of the row → toggle selection (shift-click = range). */}
                         <button
                           type="button"
-                          onClick={(e) => handleRowSelect(f.url, e.shiftKey)}
+                          onClick={(e) => handleRowSelect(e, idx, f.url)}
                           className="flex min-w-0 flex-1 select-none items-center gap-3 text-left"
                           title={isSel ? 'Deselect' : 'Select · Shift-click for a range'}
                         >
@@ -556,7 +564,7 @@ export function NasPickerDialog({
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-[130] flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
+          className="fixed inset-0 z-panelOverlay flex flex-col items-center justify-center gap-3 bg-black/85 p-4"
           onClick={() => setPreview(null)}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}

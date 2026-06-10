@@ -95,7 +95,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
     actionType === 'replaced';
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-white">
+    <div className="fixed inset-0 z-modal flex flex-col bg-white">
       <header className="shrink-0 flex items-center justify-between border-b border-slate-200 px-4 py-3">
         {step === 'type' ? (
           <>

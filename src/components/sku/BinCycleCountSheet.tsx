@@ -148,7 +148,7 @@ export function BinCycleCountSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Cycle count"
-      className="fixed inset-0 z-[130] flex flex-col bg-slate-50"
+      className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
     >
       <header className="border-b border-slate-200 bg-white px-4 py-3 flex items-center gap-2">
         <button

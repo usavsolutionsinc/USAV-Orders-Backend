@@ -127,7 +127,8 @@ export async function buildWarrantyReportRows(filters: WarrantyReportFilters = {
        FROM warranty_repair_attempts wra
        WHERE wra.claim_id = wc.id
      ) ra ON true
-     WHERE ($1::text IS NULL OR wc.status = $1)
+     WHERE wc.deleted_at IS NULL
+       AND ($1::text IS NULL OR wc.status = $1)
        AND ($2::text IS NULL OR wc.sku ILIKE '%' || $2 || '%')
        AND ($3::timestamptz IS NULL OR wc.created_at >= $3)
        AND ($4::timestamptz IS NULL OR wc.created_at <= $4)

@@ -9,7 +9,7 @@ type SlideOverBackdropProps = {
 };
 
 /**
- * Full-screen dimmed layer behind right slide-over panels (`z-[100]`).
+ * Full-screen dimmed layer behind right slide-over panels (`z-panel`).
  * Pairs with `StationDrawer`; clicking dismisses the panel via `onClose`.
  */
 export function SlideOverBackdrop({ onClose }: SlideOverBackdropProps) {
@@ -21,7 +21,7 @@ export function SlideOverBackdrop({ onClose }: SlideOverBackdropProps) {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={TRANSITION}
-      className="fixed inset-0 z-[99] bg-gray-950/35"
+      className="fixed inset-0 z-panelBackdrop bg-gray-950/35"
       onClick={onClose}
     />
   );

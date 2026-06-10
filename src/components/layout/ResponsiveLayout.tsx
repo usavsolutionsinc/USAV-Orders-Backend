@@ -178,7 +178,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             animate="visible"
             exit="hidden"
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-panelBackdrop bg-black/40 backdrop-blur-[2px]"
             onClick={closeDrawer}
             aria-hidden
           />
@@ -190,7 +190,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             animate="visible"
             exit="hidden"
             transition={drawerTransition}
-            className="fixed inset-y-0 left-0 z-50 w-full max-w-xs shadow-2xl"
+            className="fixed inset-y-0 left-0 z-panel w-full max-w-xs shadow-2xl"
           >
             <button
               type="button"

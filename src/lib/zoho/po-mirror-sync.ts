@@ -1,13 +1,17 @@
 /**
  * zoho_po_mirror sync — pulls Zoho Inventory purchase orders and UPSERTs
- * them into the local mirror table. Used exclusively by the email
- * reconciler; does NOT touch receiving_lines or any other workflow table.
+ * them into the local mirror table (email reconciler + Incoming status
+ * source). After the upsert pass it runs ONE follow-up write against
+ * receiving_lines: reconcileZohoReceivedLines marks door-scanned lines
+ * received when Zoho now reports their PO received/billed/closed, so they
+ * drop off the triage SCANNED/Prioritize queue. That is the only workflow
+ * write this sync performs.
  *
  * Why separate from src/lib/zoho-receiving-sync.ts:
  *   The receiving sync materializes PO line items into the warehouse's
  *   inbound workflow (EXPECTED → ARRIVED → ...). Polling every PO indis-
  *   criminately would pollute operator queues with closed/cancelled/drop-
- *   shipped POs. This mirror exists purely so the reconciler can answer
+ *   shipped POs. This mirror exists so the reconciler can answer
  *   "does Zoho know about PO #X?" without surfacing anything to operators.
  *
  * Two modes:
@@ -21,12 +25,15 @@
 import pool from '@/lib/db';
 import { paginateZohoList, getPurchaseOrderById } from '@/lib/zoho';
 import type { ZohoPurchaseOrder } from '@/lib/zoho';
+import { reconcileZohoReceivedLines } from '@/lib/receiving/zoho-received-reconcile';
 
 export interface SyncReport {
   mode: 'delta' | 'full';
   pages: number;
   fetched: number;
   upserted: number;
+  /** receiving_lines marked received because Zoho now reports their PO received/billed/closed. */
+  reconciled: number;
   errors: string[];
   elapsedMs: number;
 }
@@ -136,6 +143,13 @@ export async function syncOnePoMirror(
   const po = res?.purchaseorder;
   if (!po) return { found: false, status: null };
   const ok = await upsertOne(po);
+  if (ok) {
+    try {
+      await reconcileZohoReceivedLines({ zohoPurchaseOrderId: id });
+    } catch (err) {
+      console.warn('syncOnePoMirror: received-reconcile failed (non-fatal)', err);
+    }
+  }
   return { found: ok, status: asString(po.status) };
 }
 
@@ -146,6 +160,7 @@ export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {
     pages: 0,
     fetched: 0,
     upserted: 0,
+    reconciled: 0,
     errors: [],
     elapsedMs: 0,
   };
@@ -180,6 +195,21 @@ export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {
     }
   } catch (err) {
     report.errors.push(`fetch: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Propagate fresh terminal statuses onto the local queue. Deliberately
+  // unconditional (not gated on upserted > 0): a box door-scanned AFTER its PO
+  // already went terminal in Zoho produces no new mirror upsert, yet its lines
+  // still need clearing — and the operator Sync Zoho button must clear them
+  // even on a no-change delta. With the partial indexes on zoho_po_mirror.status
+  // and receiving(received_at/unboxed_at) the zero-candidate run is ~free.
+  // Failure here must not fail the sync or stall the callers' cursor advance,
+  // so it logs instead of pushing to errors.
+  try {
+    const { updated } = await reconcileZohoReceivedLines();
+    report.reconciled = updated;
+  } catch (err) {
+    console.warn('syncZohoPoMirror: received-reconcile failed (non-fatal)', err);
   }
 
   report.elapsedMs = Date.now() - start;

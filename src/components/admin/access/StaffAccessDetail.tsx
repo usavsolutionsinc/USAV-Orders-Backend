@@ -173,7 +173,7 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
 
       {/* Reset PIN — enrollment QR modal */}
       {qrUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQrUrl(null)}>
+        <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => setQrUrl(null)}>
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-900">Reset PIN for {staff.name}</h2>
             <p className="mt-1 text-xs text-gray-500">

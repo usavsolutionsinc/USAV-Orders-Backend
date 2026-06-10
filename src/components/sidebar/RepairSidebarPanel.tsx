@@ -291,7 +291,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
   const intakeOverlay =
     isMounted && showIntakeForm
       ? createPortal(
-          <div className="fixed inset-0 z-[130] bg-white">
+          <div className="fixed inset-0 z-panelOverlay bg-white">
             <RepairIntakeForm
               onClose={handleCloseForm}
               onSubmit={handleSubmitForm}

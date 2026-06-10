@@ -67,20 +67,25 @@ const WORKFLOW_STATUSES = new Set([
 const CONDITIONS   = new Set(['BRAND_NEW', 'LIKE_NEW', 'REFURBISHED', 'USED_A', 'USED_B', 'USED_C', 'PARTS']);
 
 // Priority rank for the receiving "Prioritize" views (?sort=priority). Lower
-// rank sorts to the top. An unfound/untagged carton is the most urgent thing to
-// triage (you can't act until it's identified), so it leads; once a platform is
-// tagged the order is amazon → ebay → goodwill; everything else trails. Derived
-// at read time from receiving.source_platform — no stored priority column — so
-// re-tagging a carton's platform immediately re-prioritizes it. References the
-// `r` alias (the LATERAL receiving join in every list query below).
+// rank sorts to the top. An explicitly-flagged carton (receiving.is_priority —
+// pending-order match or manual toggle) is rank 0 and leads everything. Next, an
+// unfound/untagged carton is the most urgent thing to triage (you can't act
+// until it's identified); once a platform is tagged the order is amazon → ebay →
+// goodwill; everything else trails. The platform half is derived at read time
+// from receiving.source_platform, so re-tagging a carton immediately
+// re-prioritizes it. References the `r` alias (the LATERAL receiving join in
+// every list query below).
+// A manual priority_tier override (0..3) wins outright via COALESCE; falls back
+// to the legacy is_priority boolean (rank 0), then the platform-derived rank.
 const RECEIVING_PRIORITY_RANK_SQL = `
-  CASE
+  COALESCE(r.priority_tier, CASE
+    WHEN COALESCE(r.is_priority, false) THEN 0
     WHEN r.source = 'unmatched' OR r.source_platform IS NULL THEN 1
     WHEN lower(r.source_platform) = 'amazon'   THEN 2
     WHEN lower(r.source_platform) = 'ebay'     THEN 3
     WHEN lower(r.source_platform) = 'goodwill' THEN 4
     ELSE 9
-  END`;
+  END)`;
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);
@@ -138,12 +143,18 @@ export const GET = withAuth(async (request: NextRequest) => {
             : 'zoho_newest';
     // Sort axis for the receiving-history feed (view=recent/all/activity).
     // Lets the history UI sort by scanned-at (door) or unboxed-at.
-    const historySort: 'scanned_newest' | 'scanned_oldest' | 'unboxed_newest' =
+    // `unbox_activity` (the unbox Recent rail) = unboxed_at OR the line's own
+    // last write (updated_at) — door re-scans bump neither, so triage scans
+    // can't reorder the rail, while a return-paired/just-received line (no
+    // unbox stamp yet) still surfaces by its line activity.
+    const historySort: 'scanned_newest' | 'scanned_oldest' | 'unboxed_newest' | 'unbox_activity' =
       sortRaw === 'scanned_oldest'
         ? 'scanned_oldest'
         : sortRaw === 'unboxed_newest'
           ? 'unboxed_newest'
-          : 'scanned_newest';
+          : sortRaw === 'unbox_activity'
+            ? 'unbox_activity'
+            : 'scanned_newest';
     // Prioritize views (triage Prioritize tab + unbox Prioritize toggle) request
     // ?sort=priority — order by source-platform rank first, recency second.
     const wantsPrioritySort = sortRaw === 'priority';
@@ -174,6 +185,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                 r.carrier,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
+                COALESCE(r.is_priority, false) AS is_priority,
+                r.priority_tier                AS priority_tier,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
                 r.listing_url                AS receiving_listing_url,
@@ -250,6 +263,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.carrier,
                   r.source                     AS receiving_source,
                   r.source_platform            AS receiving_source_platform,
+                  COALESCE(r.is_priority, false) AS is_priority,
+                r.priority_tier                AS priority_tier,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                   r.support_notes              AS receiving_support_notes,
                   r.listing_url                AS receiving_listing_url,
@@ -439,11 +454,13 @@ export const GET = withAuth(async (request: NextRequest) => {
         `rl.workflow_status IN ('MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE')`,
       );
     } else if (view === 'all') {
-      // Union of recent + received. Includes NULL workflow_status so legacy
-      // rows without a status still appear. Terminal fails (SCRAP/RTV/FAILED)
-      // stay in per-status filters.
+      // Union of recent + received, INCLUDING terminal fails (FAILED/RTV/
+      // SCRAP) — "all" is the search/scan-resolution dataset, and excluding
+      // failed lines made a tested-failed PO unfindable from the unbox scan
+      // bar and History search. Includes NULL workflow_status so legacy rows
+      // without a status still appear.
       conditions.push(
-        `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','DONE'))`,
+        `(rl.workflow_status IS NULL OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED','UNBOXED','AWAITING_TEST','IN_TEST','PASSED','FAILED','RTV','SCRAP','DONE'))`,
       );
     } else if (view === 'activity') {
       // "Activity" = the recent-activity rail feed: items in the UNBOXING
@@ -636,6 +653,11 @@ export const GET = withAuth(async (request: NextRequest) => {
         : view === 'recent' || view === 'all' || view === 'activity'
           ? (historySort === 'unboxed_newest'
               ? `ORDER BY r.unboxed_at::text DESC NULLS LAST, rl.id DESC`
+              : historySort === 'unbox_activity'
+                // GREATEST skips NULLs in Postgres, so this is "unbox time or
+                // last line write, whichever is later"; created_at backstops
+                // rows with neither.
+                ? `ORDER BY COALESCE(GREATEST(r.unboxed_at, rl.updated_at)::text, rl.created_at::text) DESC NULLS LAST, rl.id DESC`
               : historySort === 'scanned_oldest'
                 ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
                 : `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
@@ -778,6 +800,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                 staff_sb.name                AS scanned_by_name,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
+                COALESCE(r.is_priority, false) AS is_priority,
+                r.priority_tier                AS priority_tier,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                 r.support_notes              AS receiving_support_notes,
                 r.listing_url                AS receiving_listing_url,
@@ -915,6 +939,8 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.listing_url                AS receiving_listing_url,
                   r.source_platform            AS receiving_source_platform,
                   r.source                     AS receiving_source,
+                  COALESCE(r.is_priority, false) AS is_priority,
+                r.priority_tier                AS priority_tier,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
                   stn.tracking_number_raw      AS shipment_tracking_number,
                   stn.carrier                  AS shipment_carrier,
@@ -961,8 +987,16 @@ export const GET = withAuth(async (request: NextRequest) => {
       for (const row of placeholderNorm) {
         if (includeSerials) (row as Record<string, unknown>).serials = [];
       }
+      // Respect the requested sort axis after the placeholder merge —
+      // re-sorting everything by scan-based last_activity_at here let a mere
+      // door re-scan (e.g. from triage) bump a carton to the top of the
+      // unbox rail.
       normalizedList = [...normalizedList, ...placeholderNorm].sort((a, b) =>
-        compareReceivingRowsByRecentActivity(a, b),
+        historySort === 'unboxed_newest'
+          ? compareReceivingRowsByUnboxedAt(a, b)
+          : historySort === 'unbox_activity'
+            ? compareReceivingRowsByUnboxActivity(a, b)
+            : compareReceivingRowsByRecentActivity(a, b),
       );
       normalizedList = normalizedList.slice(offset, offset + limit);
     }
@@ -1276,6 +1310,8 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
               r.carrier,
               r.source                     AS receiving_source,
               r.source_platform            AS receiving_source_platform,
+              COALESCE(r.is_priority, false) AS is_priority,
+                r.priority_tier                AS priority_tier,
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
               r.support_notes              AS receiving_support_notes,
               r.listing_url                AS receiving_listing_url,
@@ -1392,6 +1428,37 @@ export const DELETE = withAuth(async (request: NextRequest) => {
       return NextResponse.json({ success: true, po_id: poId, deleted: result.rows.length });
     }
 
+    // Bulk: `?ids=1,2,3` deletes the batch in ONE statement. The sidebar
+    // edit-mode bulk delete uses this — N parallel single-id requests proved
+    // flaky (pool contention dropped a couple of rows per batch). Idempotent:
+    // ids already gone are simply absent from `deleted`.
+    const idsParam = (searchParams.get('ids') || '').trim();
+    if (idsParam) {
+      const ids = Array.from(new Set(
+        idsParam.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0),
+      ));
+      if (ids.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'ids must be a comma-separated list of positive integers' },
+          { status: 400 },
+        );
+      }
+      const result = await pool.query(
+        `DELETE FROM receiving_lines WHERE id = ANY($1::int[]) RETURNING id`,
+        [ids],
+      );
+      const deleted = result.rows.map((r) => Number(r.id));
+      await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
+      // Count, not the id list — listeners only refetch on this event, and an
+      // unbounded id string risks the broker's message size cap.
+      await publishReceivingLogChanged({
+        action: 'delete',
+        rowId: `bulk:${deleted.length}`,
+        source: 'receiving-lines.delete-bulk',
+      });
+      return NextResponse.json({ success: true, deleted });
+    }
+
     const id = Number(idParam);
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ success: false, error: 'Valid id or po_id is required' }, { status: 400 });
@@ -1475,6 +1542,8 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     condition_grade: 'BRAND_NEW',
     disposition_audit: [],
     needs_test: true,
+    is_priority: !!pkg.is_priority,
+    priority_tier: pkg.priority_tier ?? null,
     assigned_tech_id: null,
     zoho_sync_source: null,
     zoho_last_modified_time: null,
@@ -1505,6 +1574,51 @@ function compareReceivingRowsByRecentActivity(
 ) {
   const d = receivingRowActivityTs(b) - receivingRowActivityTs(a);
   return d !== 0 ? d : b.id - a.id;
+}
+
+/**
+ * `?sort=unboxed_newest` comparator for the placeholder merge. Most recently
+ * unboxed first; never-unboxed rows (ts 0 — incl. unfound placeholders) sort
+ * last, tie-broken by recent activity so the un-unboxed tail stays stable.
+ */
+function receivingRowUnboxedTs(row: { unboxed_at?: string | null }) {
+  const raw = row.unboxed_at ?? null;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function compareReceivingRowsByUnboxedAt(
+  a: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+  b: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+) {
+  const d = receivingRowUnboxedTs(b) - receivingRowUnboxedTs(a);
+  return d !== 0 ? d : compareReceivingRowsByRecentActivity(a, b);
+}
+
+/**
+ * `?sort=unbox_activity` comparator — JS mirror of the SQL
+ * `GREATEST(r.unboxed_at, rl.updated_at)` axis, so the placeholder merge
+ * preserves the order. Unfound placeholders carry neither stamp and fall
+ * through to scan-based recent activity, which is correct for them (they
+ * only exist while physically present and untriaged).
+ */
+function receivingRowUnboxActivityTs(row: {
+  unboxed_at?: string | null;
+  updated_at?: string | null;
+}) {
+  const candidates = [row.unboxed_at, row.updated_at]
+    .map((raw) => (raw ? new Date(raw).getTime() : NaN))
+    .filter((t) => Number.isFinite(t));
+  return candidates.length > 0 ? Math.max(...candidates) : 0;
+}
+
+function compareReceivingRowsByUnboxActivity(
+  a: { unboxed_at?: string | null; updated_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+  b: { unboxed_at?: string | null; updated_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+) {
+  const d = receivingRowUnboxActivityTs(b) - receivingRowUnboxActivityTs(a);
+  return d !== 0 ? d : compareReceivingRowsByRecentActivity(a, b);
 }
 
 // ─── Normalize ────────────────────────────────────────────────────────────────
@@ -1569,6 +1683,8 @@ function normalizeRow(row: Record<string, unknown>) {
     condition_grade:          (row.condition_grade as string) ?? 'USED_A',
     disposition_audit:        (row.disposition_audit as unknown[]) ?? [],
     needs_test:               !!row.needs_test,
+    is_priority:              !!row.is_priority,
+    priority_tier:            row.priority_tier != null ? Number(row.priority_tier) : null,
     assigned_tech_id:         row.assigned_tech_id != null ? Number(row.assigned_tech_id) : null,
     zoho_sync_source:         (row.zoho_sync_source as string | null) ?? null,
     zoho_last_modified_time:  (row.zoho_last_modified_time as string | null) ?? null,
@@ -1596,6 +1712,9 @@ function normalizeRow(row: Record<string, unknown>) {
     scanned_at:               (row.first_scanned_at as string | null) ?? null,
     scanned_by_name:          (row.scanned_by_name as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
+    // Last write to the line itself (qty bump, condition, notes, …). Drives
+    // the unbox_activity sort's tiebreak in the placeholder merge.
+    updated_at:               (row.updated_at as string | null) ?? null,
     // Most-recent activity timestamp matching the server's sort order. For
     // view=testing this leads with tested_at (the verdict time the feed is
     // ordered by); for view=recent/all it's the last scan. Falls through to

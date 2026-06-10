@@ -542,23 +542,45 @@ export const POST = withAuth(async (request, ctx) => {
       if (poId) attemptedPoIds.add(poId);
     }
 
-    // Optimistic receive (SoT is local, not Zoho): promote every locally-
-    // complete line to DONE right now. The synchronous Zoho POST used to gate
-    // this — but Zoho can be slow / rate-limited / down, and we don't want the
-    // operator's UI to hang for ~30s+ waiting on it. Zoho sync moves to
-    // after() below; on failure the discrepancy is logged + visible via the
-    // existing receiving-logs realtime channel.
-    if (linesUpdatedViaReceiveUnits && updatedLines.length > 0) {
-      const promoteIds = updatedLines.map((l) => l.id);
-      if (promoteIds.length > 0) {
+    // Scanned vs unboxed separation. Workflow ladder: MATCHED ("scanned at
+    // the dock") → UNBOXED ("physically processed; Zoho receive pending") →
+    // DONE ("Zoho-confirmed received"). Receiving units here = the carton was
+    // unboxed, so:
+    //   - lines with a Zoho PO link go to UNBOXED now; after()'s background
+    //     receive promotes them to DONE on success (failures stay UNBOXED —
+    //     visibly Zoho-pending instead of re-queuing as merely scanned).
+    //   - lines with no Zoho link (unfound / off-PO extras) have nothing to
+    //     confirm and complete as DONE immediately.
+    //   - scan_only is excluded: "Mark as scanned" reverts lines to MATCHED
+    //     via receiveLineUnits, and the old unconditional DONE promotion here
+    //     was silently defeating that revert.
+    if (linesUpdatedViaReceiveUnits && updatedLines.length > 0 && !skipZohoReceive) {
+      const zohoPendingIds: number[] = [];
+      const localOnlyIds: number[] = [];
+      for (const l of updatedLines) {
+        if (String(l.zoho_purchaseorder_id || '').trim()) zohoPendingIds.push(l.id);
+        else localOnlyIds.push(l.id);
+      }
+      if (zohoPendingIds.length > 0) {
+        await pool.query(
+          `UPDATE receiving_lines
+             SET workflow_status = 'UNBOXED'::inbound_workflow_status_enum,
+                 updated_at = NOW()
+           WHERE id = ANY($1::int[])`,
+          [zohoPendingIds],
+        );
+      }
+      if (localOnlyIds.length > 0) {
         await pool.query(
           `UPDATE receiving_lines
              SET workflow_status = 'DONE'::inbound_workflow_status_enum,
                  updated_at = NOW()
            WHERE id = ANY($1::int[])`,
-          [promoteIds],
+          [localOnlyIds],
         );
-        for (const l of updatedLines) l.workflow_status = 'DONE';
+      }
+      for (const l of updatedLines) {
+        l.workflow_status = String(l.zoho_purchaseorder_id || '').trim() ? 'UNBOXED' : 'DONE';
       }
     }
 
@@ -752,6 +774,33 @@ export const POST = withAuth(async (request, ctx) => {
         }
       } catch (err) {
         console.warn('mark-received-po: Zoho receive background failed', err);
+      }
+
+      // UNBOXED → DONE on Zoho confirmation. DONE means "Zoho-confirmed
+      // received"; lines whose PO receive failed stay UNBOXED so the pending
+      // sync is visible (and replayable) instead of masquerading as complete.
+      // Status-guarded so we never clobber a state someone advanced meanwhile.
+      if (!skipZohoReceive) {
+        const confirmIds = updatedLines
+          .filter((l) => {
+            const poId = String(l.zoho_purchaseorder_id || '').trim();
+            return poId && poZohoReceiveSucceeded.get(poId) === true;
+          })
+          .map((l) => l.id);
+        if (confirmIds.length > 0) {
+          try {
+            await pool.query(
+              `UPDATE receiving_lines
+                 SET workflow_status = 'DONE'::inbound_workflow_status_enum,
+                     updated_at = NOW()
+               WHERE id = ANY($1::int[])
+                 AND workflow_status = 'UNBOXED'::inbound_workflow_status_enum`,
+              [confirmIds],
+            );
+          } catch (err) {
+            console.warn('mark-received-po: UNBOXED→DONE promotion failed', err);
+          }
+        }
       }
 
       try {

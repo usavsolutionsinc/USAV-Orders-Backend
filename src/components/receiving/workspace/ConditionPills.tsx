@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pencil } from '@/components/Icons';
 import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
+import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 interface Props {
   value: string | null | undefined;
@@ -85,6 +86,10 @@ export function ConditionPills({
 }: Props) {
   const selected = String(value || '').trim().toUpperCase();
   const selectedGrade = GRADES.find((g) => g.value === selected) ?? null;
+  // The scrollbar is hidden, so without this a mouse wheel scrolls the parent
+  // panel vertically and the overflowing grades (USED_C / PARTS) are
+  // unreachable in narrow hosts like the shipped details sidebar.
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
   // Collapsible variant starts EXPANDED on mount (the SerialCard remounts per
   // line, so opening a PO line always shows the full row for selection); it
   // collapses to the chosen pill once a grade is picked. The parent may take
@@ -96,6 +101,9 @@ export function ConditionPills({
     onExpandedChange?.(next);
     if (expandedProp === undefined) setInternalExpanded(next);
   };
+  // The row scroller remounts across collapse/expand, so `expanded` re-binds
+  // the wheel listener to the fresh element.
+  useHorizontalWheelScroll(scrollerRef, expanded);
 
   // Collapsed: only the selected pill + an edit pencil (mirrors the copy-chip).
   if (collapsible && !expanded && selectedGrade) {
@@ -123,6 +131,7 @@ export function ConditionPills({
 
   return (
     <div
+      ref={scrollerRef}
       role="radiogroup"
       aria-label="Condition grade"
       className="-mx-1 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"

@@ -204,18 +204,6 @@ export function isReceivingUnifiedInbound(): boolean {
   return readBoolEnv('RECEIVING_UNIFIED_INBOUND');
 }
 
-/**
- * Handling units (LPN) — license-plated boxes/trays that decouple from the
- * receipt and group serial_units across receipts/POs (docs/handling-unit-lpn-plan.md).
- * When ON, the `H-` scan-routing class + testing `lpn` resolver branch + the
- * receiving "Add to box" / testing box-picker UI go live. H1–H3 (migration,
- * scan routing, CRUD) can land dark with this OFF. Default OFF until the
- * 2026-06-08_handling_units_lpn migration is applied.
- */
-export function isHandlingUnits(): boolean {
-  return readBoolEnv('HANDLING_UNITS');
-}
-
 /** Snapshot of all inventory v2 flags. Useful for debug / admin pages. */
 export function inventoryV2FlagSnapshot(): Record<string, boolean> {
   return {

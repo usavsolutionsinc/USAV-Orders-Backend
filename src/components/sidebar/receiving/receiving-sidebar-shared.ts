@@ -17,6 +17,7 @@ import {
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { SOURCE_PLATFORMS } from '@/lib/source-platform';
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
 
@@ -158,32 +159,18 @@ export const RECEIVING_TYPE_OPTS = [
   { value: 'PICKUP', label: 'Pick Up' },
 ];
 
+// Pill options + printed-label map both derive from the platform SoT so a
+// platform never reads two ways across surfaces. Add a platform in
+// src/lib/source-platform.ts, not here. The leading '' (Unknown) entry is
+// front-end only (no stored value yet) so it stays explicit here.
 export const SOURCE_PLATFORM_OPTS: Array<{ value: string; label: string }> = [
-  { value: '',           label: 'Unknown' },
-  { value: 'ebay',       label: 'eBay' },
-  { value: 'amazon',     label: 'Amazon' },
-  { value: 'fba',        label: 'FBA' },
-  { value: 'aliexpress', label: 'AliExp' },
-  { value: 'walmart',    label: 'Walmart' },
-  { value: 'goodwill',   label: 'Goodwill' },
-  // Auto-selected by the Link Repair Service flow on an unmatched carton.
-  // Label reads ECWID-RS (not plain ECWID) because today this pill only
-  // appears when the carton was paired with an Ecwid order whose item
-  // SKU ends in -RS (repair service).
-  { value: 'ecwid',      label: 'ECWID-RS' },
-  { value: 'other',      label: 'Other' },
+  { value: '', label: 'Unknown' },
+  ...SOURCE_PLATFORMS.map((p) => ({ value: p.value, label: p.label })),
 ];
 
-export const SOURCE_PLATFORM_LABELS: Record<string, string> = {
-  ebay: 'eBay',
-  amazon: 'Amazon',
-  fba: 'FBA',
-  aliexpress: 'AliExpress',
-  walmart: 'Walmart',
-  goodwill: 'Goodwill',
-  ecwid: 'ECWID-RS',
-  other: 'Other',
-};
+export const SOURCE_PLATFORM_LABELS: Record<string, string> = Object.fromEntries(
+  SOURCE_PLATFORMS.map((p) => [p.value, p.label]),
+);
 
 /**
  * Detect a source_platform value from a listing URL's hostname.

@@ -86,6 +86,7 @@ export const AUDIT_ENTITY = {
   ORDER: 'order',
   PACKER_LOG: 'PACKER_LOG',
   STAFF: 'staff',
+  STAFF_TODO: 'staff_todo',
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
@@ -141,6 +142,10 @@ export const AUDIT_ACTION = {
   FAILURE_MODE_DELETE: 'failure_mode.delete',
   FAILURE_TAG_ADD:     'failure_tag.add',
   FAILURE_TAG_RESOLVE: 'failure_tag.resolve',
+  // Personal header to-do lists (general + recurring)
+  STAFF_TODO_CREATE:       'staff_todo.create',
+  STAFF_TODO_SET_INTERVAL: 'staff_todo.set_interval',
+  STAFF_TODO_ARCHIVE:      'staff_todo.archive',
   // Per-unit repair records
   REPAIR_OPEN:     'unit_repair.open',
   REPAIR_UPDATE:   'unit_repair.update',

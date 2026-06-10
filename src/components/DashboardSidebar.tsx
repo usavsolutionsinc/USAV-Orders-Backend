@@ -283,7 +283,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [stationDetailsOpen, setStationDetailsOpen] = useState(false);
-  // Details panel is a fixed overlay (z-[100]) — never collapse the sidebar for it.
+  // Details panel is a fixed overlay (z-panel) — never collapse the sidebar for it.
   const collapseDesktopSidebar = false;
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [canShowMobileSidebar, setCanShowMobileSidebar] = useState(false);
@@ -386,7 +386,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
         <button
           type="button"
           onClick={() => dispatchCloseShippedDetails()}
-          className="hidden md:flex fixed top-4 left-4 z-[90] h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 items-center justify-center"
+          className="hidden md:flex fixed top-4 left-4 z-fab h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 items-center justify-center"
           aria-label="Open station navigation"
         >
           <Menu className="h-5 w-5" />
@@ -396,7 +396,7 @@ export default function DashboardSidebar({ inDrawer = false, onNavigate }: { inD
       {/* Floating mobile menu button removed — now handled by header nav buttons */}
 
       {canShowMobileSidebar && isMobileOpen && (
-        <div className="md:hidden fixed inset-0 z-[100]">
+        <div className="md:hidden fixed inset-0 z-panel">
           <button type="button" className="absolute inset-0 bg-gray-900/35" onClick={() => setIsMobileOpen(false)} aria-label="Close sidebar overlay" />
           <div className="relative h-full max-w-[94vw]">{shell}</div>
           <button

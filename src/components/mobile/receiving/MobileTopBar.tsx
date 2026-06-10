@@ -28,7 +28,7 @@ export function MobileTopBar({ title, subtitle, backHref, right }: MobileTopBarP
   }, [backHref, router]);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+    <header className="sticky top-0 z-header flex h-14 items-center gap-2 border-b border-gray-100 bg-white/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <button
         type="button"
         onClick={handleBack}

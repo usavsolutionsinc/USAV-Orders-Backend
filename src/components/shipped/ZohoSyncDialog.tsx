@@ -276,7 +276,7 @@ export function ZohoSyncDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={framerTransition.overlayScrim}
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-gray-950/40 px-4 py-6"
+      className="fixed inset-0 z-panelPopover flex items-center justify-center bg-gray-950/40 px-4 py-6"
       onClick={() => {
         if (!busy) onClose();
       }}

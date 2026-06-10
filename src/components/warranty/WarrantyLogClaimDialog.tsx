@@ -10,13 +10,21 @@ interface WarrantyLogClaimDialogProps {
   open: boolean;
   onClose: () => void;
   onCreated: (claimId: number) => void;
+  /** Prefill the form (e.g. from a coverage lookup). `orderId` is the internal orders.id. */
+  initial?: {
+    orderId?: number | null;
+    serialNumber?: string | null;
+    sku?: string | null;
+    productTitle?: string | null;
+  };
 }
 
 /**
  * Minimal "Log Claim" form. Resolves the order's customer / SKU / warranty clock
- * server-side, so a serial OR order OR SKU is enough to start a claim.
+ * server-side, so a serial OR order OR SKU is enough to start a claim. Opening it
+ * with `initial` (from the coverage card) prefills the identifiers.
  */
-export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLogClaimDialogProps) {
+export function WarrantyLogClaimDialog({ open, onClose, onCreated, initial }: WarrantyLogClaimDialogProps) {
   const { create } = useWarrantyMutations();
   // Portal target. The dialog launches from the warranty sidebar, which sits
   // inside framer-motion transformed ancestors — and a `transform` makes
@@ -32,6 +40,17 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLog
   useEffect(() => {
     setPortalNode(document.body);
   }, []);
+
+  // Seed the form from `initial` each time the dialog opens (so a coverage-card
+  // "Log claim" arrives prefilled, and a fresh open starts clean otherwise).
+  useEffect(() => {
+    if (!open) return;
+    setSerialNumber(initial?.serialNumber ?? '');
+    setOrderId(initial?.orderId != null ? String(initial.orderId) : '');
+    setSku(initial?.sku ?? '');
+    setProductTitle(initial?.productTitle ?? '');
+    setNotes('');
+  }, [open, initial?.serialNumber, initial?.orderId, initial?.sku, initial?.productTitle]);
 
   if (!open || !portalNode) return null;
 
@@ -65,7 +84,7 @@ export function WarrantyLogClaimDialog({ open, onClose, onCreated }: WarrantyLog
   const input = 'w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm';
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-panelPopover flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
         className="w-full max-w-md rounded-xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}

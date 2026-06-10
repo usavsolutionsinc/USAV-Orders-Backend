@@ -270,7 +270,7 @@ export function MobilePackerSpamCamera({
       animate={framerPresenceMobile.camera.animate}
       exit={framerPresenceMobile.camera.exit}
       transition={framerTransitionMobile.cameraEnter}
-      className="fixed inset-0 z-[200] overflow-hidden bg-black select-none"
+      className="fixed inset-0 z-modal overflow-hidden bg-black select-none"
     >
       {/* ── Full-bleed viewfinder ── */}
       <div ref={viewfinderRef} className="absolute inset-0">

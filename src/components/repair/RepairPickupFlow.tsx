@@ -100,7 +100,7 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
   const receiptUrl = `/api/repair-service/print/${repair.id}`;
 
   return (
-    <div className="fixed inset-0 z-[140] flex flex-col overflow-hidden bg-white">
+    <div className="fixed inset-0 z-panelOverlay flex flex-col overflow-hidden bg-white">
       {step === 'sign' && (
         <>
           <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-6 py-4">

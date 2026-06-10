@@ -1,7 +1,8 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useHeader } from '@/contexts/HeaderContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, isClientPublicPath } from '@/contexts/AuthContext';
 import { GlobalHeaderActions } from './GlobalHeaderActions';
 import { HeaderGoalChip } from './HeaderGoalChip';
 
@@ -33,12 +34,16 @@ export function GlobalHeader({
 }: GlobalHeaderProps = {}) {
   const { panelContent } = useHeader();
   const { user } = useAuth();
+  const pathname = usePathname();
 
-  // Public / auth pages (signin, signup, offline) render no app chrome.
-  if (!user) return null;
+  // Public / auth pages (signin, enroll, offline) render no app chrome — even
+  // mid-sign-in, when refreshAuth() has already committed `user` but the hard
+  // navigation off /signin hasn't unloaded the page yet. Without the path check
+  // the bar flashes in over the sign-in splash during that window.
+  if (!user || isClientPublicPath(pathname)) return null;
 
   return (
-    <header className="sticky top-0 z-40 flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md sm:px-4">
+    <header className="sticky top-0 z-header flex h-[40px] w-full shrink-0 select-none items-center gap-3 border-b border-gray-300 bg-white/90 px-3 backdrop-blur-md sm:px-4">
       {/* Top-left sidebar toggle — collapses / restores the permanent sidebar. */}
       {canCollapseSidebar && onToggleSidebar && (
         <>

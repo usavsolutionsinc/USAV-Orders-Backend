@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast';
 import { listNasDir, nasConfigured, setNasBaseUrl, type NasEntry } from '@/lib/nas-photos';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
+import { Layer } from '@/design-system';
 
 /**
  * Admin → Receiving Photos.
@@ -332,10 +333,11 @@ function FolderPickerModal({
   const folders = entries.filter((e) => e.type === 'directory');
 
   return (
-    <div
+    <Layer
+      level="panelPopover"
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-[120] grid place-items-center bg-black/40 p-4"
+      className="fixed inset-0 grid place-items-center bg-black/40 p-4"
       onClick={onCancel}
     >
       <div
@@ -409,6 +411,6 @@ function FolderPickerModal({
           </button>
         </div>
       </div>
-    </div>
+    </Layer>
   );
 }
