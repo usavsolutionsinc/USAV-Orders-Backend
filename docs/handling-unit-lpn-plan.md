@@ -1,7 +1,31 @@
 # Handling-unit (LPN) plan — boxes that decouple from the receipt
 
-Status: plan / not started · Owner: receiving + testing
+Status: **H1–H3 + H5 built, always-on (no feature flag)** · Owner: receiving + testing
 Related: [receiving-triage-streamline-plan.md](./receiving-triage-streamline-plan.md) (supersedes the redundant `receiving.lpn` alias)
+
+> **Build status (2026-06-09)**
+> - **No toggle.** The feature is unconditional — there is no `HANDLING_UNITS`
+>   env var. The only activation step is applying the migration (below); until a
+>   box is minted the `H-` scan class is simply a no-op, so it's safe always-on.
+> - **H1 ✅** migration `src/lib/migrations/2026-06-08_handling_units_lpn.sql` —
+>   `handling_units` + `serial_units.handling_unit_id` + `H-{id}` auto-mint
+>   trigger + indexes. **Run this once** (the only step needed to go live).
+> - **H2 ✅** `H-` scan class + `handlingUnitHandle()` in `lib/barcode-routing.ts`;
+>   `scan/resolve` routes `H-` → `/m/h/{id}`; testing `lpn` branch +
+>   `looksLikeHandlingUnit()` in `lib/testing/resolve-testing-scan.ts`.
+> - **H3 ✅** CRUD under `/api/handling-units` (list/mint, `[id]` detail,
+>   `[id]/assign`, `[id]/unassign`) — perm-guarded (`handling_unit.view` /
+>   `handling_unit.manage`), Zod-validated, idempotent, audit-emitting. Queries
+>   in `lib/neon/handling-unit-queries.ts`; schemas in `lib/schemas/handling-unit.ts`.
+> - **H5 ✅ (core)** `/m/h/[id]` box page — one scan → every unit + `k/n tested`
+>   rollup, add/remove units, print label. Status rolls up
+>   OPEN→IN_TEST→CLOSED via `refreshHandlingUnitStatus()`.
+> - **H4 ◑ (partial)** reusable pieces shipped: `HandlingUnitChip` (LPN chip,
+>   teal/Package) + `printHandlingUnitLabel`. **Remaining:** wire the
+>   "Add to box" action + LPN chip + multi-select move into the desktop unbox /
+>   carton workspace (LineEditPanel / PhotosCard).
+> - **H6 ⬜** drop `receiving.lpn` — deferred to end of rollout (the column is
+>   still referenced by the flag-gated `RECEIVING_UNIFIED_INBOUND` Phase 3 work).
 
 ## 0. The decision & why
 
@@ -106,16 +130,21 @@ mutations, audit-log emission.
 ## 7. Migration / rollout (additive, phased)
 
 ```
-H1  migration: handling_units + serial_units.handling_unit_id        (additive)
-H2  scan routing H- class + resolveTestingScan 'lpn' branch          (no UI yet)
-H3  /api/handling-units CRUD                                          (+ tests)
-H4  receiving UI: assign-to-box + H- label print + LPN chip
-H5  testing UI: H- scan → box picker + rollup status
-H6  drop receiving.lpn (the redundant RC-{id} alias)                 (cleanup)
+H1  migration: handling_units + serial_units.handling_unit_id        (additive)   ✅ built (unapplied)
+H2  scan routing H- class + resolveTestingScan 'lpn' branch          (no UI yet)   ✅
+H3  /api/handling-units CRUD                                          (+ tests)     ✅
+H4  receiving UI: assign-to-box + H- label print + LPN chip                        ◑ chip+label built; workspace wiring TODO
+H5  testing UI: H- scan → box picker + rollup status                               ✅ (/m/h box page)
+H6  drop receiving.lpn (the redundant RC-{id} alias)                 (cleanup)      ⬜ deferred
 ```
 
-Feature-flag `HANDLING_UNITS` (default off) gates the scan-routing branch + UI so
-H1–H3 can land dark. No interaction with the STN/`shipment_id` work — orthogonal.
+**To activate:** apply `2026-06-08_handling_units_lpn.sql`. That's it — no env
+toggle. Before the table exists the `/api/handling-units` routes 500 and `/m/h`
+shows an error; after it's applied everything works.
+
+No feature flag — the feature is unconditional. It's additive and inert until a
+box is minted, so there's nothing to toggle: applying the migration is the only
+activation step. No interaction with the STN/`shipment_id` work — orthogonal.
 
 ## 8. Open questions / future
 
