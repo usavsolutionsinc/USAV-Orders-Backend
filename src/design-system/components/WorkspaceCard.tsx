@@ -15,6 +15,12 @@ interface WorkspaceCardProps {
   bodyClassName?: string;
   /** Extra class on the outer section. */
   className?: string;
+  /**
+   * Outer overflow. Defaults to `hidden` (clips the tone rail to the radius).
+   * Set `visible` when a child needs to escape the card — e.g. a dropdown or
+   * hover popover anchored to a row inside the card.
+   */
+  overflow?: 'hidden' | 'visible';
   children: ReactNode;
 }
 
@@ -41,11 +47,13 @@ export function WorkspaceCard({
   tone,
   bodyClassName,
   className,
+  overflow = 'hidden',
   children,
 }: WorkspaceCardProps) {
+  const overflowClass = overflow === 'visible' ? 'overflow-visible' : 'overflow-hidden';
   return (
     <section
-      className={`relative overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 ${
+      className={`relative ${overflowClass} rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 ${
         className ?? ''
       }`}
     >

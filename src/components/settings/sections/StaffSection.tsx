@@ -217,7 +217,7 @@ export function StaffSection() {
       </div>
 
       {qrFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQrFor(null)}>
+        <div className="fixed inset-0 z-modal flex items-center justify-center bg-black/60 p-4" onClick={() => setQrFor(null)}>
           <div className="bg-white rounded-2xl p-6 max-w-md w-full text-center" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Enroll {qrFor.name}</h2>
             <p className="text-xs text-gray-500 mb-4">

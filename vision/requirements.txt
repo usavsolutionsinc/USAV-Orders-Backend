@@ -1,0 +1,14 @@
+# Install torch/torchvision FIRST from the cu128 index (Blackwell / RTX 5070 Ti):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+# Then: pip install -r requirements.txt
+#
+# torch/torchvision are intentionally NOT pinned here so the cu128 wheels above win.
+
+transformers>=4.44          # DINOv2 image embeddings (facebook/dinov2-base)
+pillow>=10.0                # image decode
+numpy>=1.26                 # the embedding index
+fastapi>=0.110              # HTTP service
+uvicorn[standard]>=0.29     # ASGI server
+python-multipart>=0.0.9     # multipart file uploads
+pydantic-settings>=2.0      # .env config
+ultralytics>=8.3            # OPTIONAL detector crop (USE_DETECTOR=1)

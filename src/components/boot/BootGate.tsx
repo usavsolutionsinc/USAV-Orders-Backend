@@ -138,7 +138,7 @@ export function BootGate({
             {splashUp && (
               <motion.div
                 key="boot-gate-splash"
-                className="fixed inset-0 z-[2000]"
+                className="fixed inset-0 z-splash"
                 exit={{ opacity: 0 }}
                 transition={{ duration: fadeMs / 1000, ease: 'easeOut' }}
               >

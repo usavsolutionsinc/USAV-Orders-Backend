@@ -146,7 +146,14 @@ async function fetchLinesByPartial(
   return { serialRows, poRows };
 }
 
-async function fetchLinesByTracking(tracking: string) {
+/**
+ * Resolve a tracking number to the receiving lines already in the LOCAL
+ * system (door-scanned cartons, incoming-synced lines). Exported so the
+ * receiving sidebar can short-circuit an unbox scan of an in-system carton —
+ * open it immediately from this query instead of round-tripping lookup-po
+ * (and its Zoho fallback) behind the "Opening your PO" loader.
+ */
+export async function fetchLinesByTracking(tracking: string) {
   // `view=all` + `search` matches against tracking, PO#, serial, sku — the
   // same dataset the receiving History table uses. Limit small so a typoed
   // partial doesn't return hundreds of unrelated rows.

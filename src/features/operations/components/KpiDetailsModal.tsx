@@ -214,7 +214,7 @@ export function KpiDetailsModal({ kind, value, activityFeed, onClose }: KpiDetai
       {kind && meta ? (
         <motion.div
           key="kpi-modal"
-          className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+          className="fixed inset-0 z-elevatedModal flex items-center justify-center p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

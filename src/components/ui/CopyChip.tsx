@@ -1,48 +1,40 @@
 'use client';
 
 /**
- * Hover preview uses the site-wide tooltip from `SiteTooltipProvider`.
- * The app wires that in via `src/components/Providers.tsx` (root `layout.tsx`).
- * If the hook returns null (no provider), copy still works; there is no hover bubble.
+ * The id-chip family. Three layers:
+ *   - pure label helpers live in `@/lib/copy-chip-format` (re-exported below
+ *     for existing importers);
+ *   - copy/tooltip behavior lives in `useCopyChip` / `useChipTooltip`
+ *     (`@/hooks`) — hover preview uses the site-wide tooltip from
+ *     `SiteTooltipProvider`, wired via `src/components/Providers.tsx`; if the
+ *     provider is absent, copy still works and there is no hover bubble;
+ *   - this file owns the markup, the {@link CHIP_TONES} registry, and the
+ *     named variants that carry the design-system rules.
  */
-import React, { MouseEvent, useCallback, useEffect, useId, useRef } from 'react';
+import React, { MouseEvent } from 'react';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
-import { Check, Copy, MapPin, Barcode, Package, ExternalLink, Pencil } from '../Icons';
+import { Barcode, ExternalLink, MapPin, Package, Pencil } from '../Icons';
 import { monoValue } from '@/design-system/tokens/typography/presets';
-import { useSiteTooltipOptional, type SiteTooltipContextValue } from '@/components/providers/SiteTooltipProvider';
+import { useChipTooltip, useCopyChip } from '@/hooks';
 import { skuScanPrefixBeforeColon, getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import {
+  getLast4,
+  getLast4Serial,
+  isEmptyChipDisplay,
+  isSkuFormattedScanRef,
+  normalizeCopyText,
+  resolveChipDisplay,
+  resolveSerialDisplay,
+} from '@/lib/copy-chip-format';
 
-// --- Helpers ---
-
-function normalizeCopyText(value: string | null | undefined): string {
-  if (isEmptyDisplayValue(value)) return '';
-  return String(value || '').trim();
-}
-
-export function getLast4(value: string | null | undefined): string {
-  const raw = normalizeCopyText(value);
-  return raw.length > 4 ? raw.slice(-4) : raw || '---';
-}
-
-/**
- * serial_number may be a CSV string aggregated via STRING_AGG (e.g. "SN1, SN2").
- * Parses it, takes the last individual serial, then returns its last 4 chars.
- */
-export function getLast4Serial(value: string | null | undefined): string {
-  const raw = normalizeCopyText(value);
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean);
-  const last = parts.length > 0 ? parts[parts.length - 1] : '';
-  return last.length > 4 ? last.slice(-4) : last || '---';
-}
-
-/**
- * Pack/tech "tracking" fields sometimes hold a static SKU code (`PROD:qty`, `:tag`) rather than a carrier number.
- * Those must use the SKU chip, not {@link TrackingChip}.
- */
-export function isSkuFormattedScanRef(value: string | null | undefined): boolean {
-  const raw = normalizeCopyText(value);
-  return raw.includes(':');
-}
+export {
+  getLast4,
+  getLast4Serial,
+  isEmptyChipDisplay,
+  isSkuFormattedScanRef,
+  resolveChipDisplay,
+  resolveSerialDisplay,
+} from '@/lib/copy-chip-format';
 
 // --- Icons ---
 
@@ -63,13 +55,65 @@ export const HashIcon = () => (
   </svg>
 );
 
+// --- Tone registry ---
+
+/**
+ * The single source of truth for what each chip color MEANS. One entry per
+ * identifier concept — change a color here and every chip (including the ×N
+ * group-count variants) follows.
+ *
+ *   id        gray / hash       internal order ids, PO#s, source order #s
+ *   tracking  blue / map-pin    outbound carrier tracking numbers ONLY
+ *   serial    emerald / barcode device/unit serial numbers
+ *   sku       yellow / pencil   SKU-driven values (static scan refs, sku-table serials)
+ *   fnsku     purple / package  Amazon FNSKUs scanned at FBA intake ONLY
+ *   ticket    orange / hash     support ticket ids
+ */
+export const CHIP_TONES = {
+  id: {
+    icon: <HashIcon />,
+    underline: 'border-gray-500',
+    iconClass: 'text-gray-500',
+  },
+  tracking: {
+    icon: <MapPin className="h-4 w-4 shrink-0" />,
+    underline: 'border-blue-500',
+    iconClass: 'inline-flex items-center justify-center text-blue-500',
+  },
+  serial: {
+    icon: <Barcode className="h-4 w-4 shrink-0" />,
+    underline: 'border-emerald-500',
+    iconClass: 'inline-flex items-center justify-center text-emerald-500',
+  },
+  sku: {
+    icon: <Pencil className="h-4 w-4 shrink-0" />,
+    underline: 'border-yellow-500',
+    iconClass: 'inline-flex items-center justify-center text-yellow-600',
+  },
+  fnsku: {
+    icon: <Package className="h-4 w-4 shrink-0" />,
+    underline: 'border-purple-500',
+    iconClass: 'text-purple-500',
+  },
+  ticket: {
+    icon: <HashIcon />,
+    underline: 'border-orange-500',
+    iconClass: 'text-orange-500',
+  },
+} as const;
+
+export type ChipTone = keyof typeof CHIP_TONES;
+
 // --- Base CopyChip ---
 
 export interface CopyChipProps {
   value: string;
   display: string;
+  /** Pulls icon/underline/icon color from {@link CHIP_TONES}; individual props below override. */
+  tone?: ChipTone;
+  /** `undefined` falls back to the tone's icon; pass `null` for no icon (e.g. icon lives in another column). */
   icon?: React.ReactNode;
-  underlineClass: string;
+  underlineClass?: string;
   iconClass?: string;
   /** Width utility on the wrapper; default sizes to content (still respects `max-w-full` in tight layouts). */
   width?: string;
@@ -95,6 +139,7 @@ export interface CopyChipProps {
 export function CopyChip({
   value,
   display,
+  tone,
   icon,
   underlineClass,
   iconClass,
@@ -107,59 +152,25 @@ export function CopyChip({
   disableTooltip = false,
   dense = false,
 }: CopyChipProps) {
-  const anchorId = useId();
-  const chipRef = useRef<HTMLDivElement | null>(null);
-  const tooltipCtx = useSiteTooltipOptional();
-  const tooltipCtxRef = useRef(tooltipCtx);
-  tooltipCtxRef.current = tooltipCtx;
+  const {
+    chipRef,
+    hasTooltipProvider,
+    openTooltip,
+    closeTooltip,
+    closeTooltipImmediate,
+    normalizedValue,
+    canCopy,
+    isDisabled,
+    handleCopy,
+  } = useCopyChip({ value, disableCopy, disableTooltip, onCopy });
 
-  const getRect = useCallback(() => chipRef.current?.getBoundingClientRect() ?? null, []);
+  const toneDef = tone ? CHIP_TONES[tone] : undefined;
+  const resolvedIcon = icon === undefined ? toneDef?.icon : icon;
+  const resolvedUnderline = underlineClass ?? toneDef?.underline ?? 'border-gray-500';
+  const resolvedIconClass = iconClass ?? toneDef?.iconClass;
 
-  const normalizedValue = normalizeCopyText(value);
   const normalizedDisplay = normalizeCopyText(display);
   const displayOverflowClass = truncateDisplay ? 'truncate' : 'whitespace-nowrap';
-  const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
-  const isDisabled = !canCopy && !disableCopy;
-
-  useEffect(() => {
-    tooltipCtxRef.current?.syncValueIfActive(anchorId, normalizedValue);
-  }, [canCopy, anchorId, normalizedValue]);
-
-  useEffect(() => {
-    if (!canCopy) {
-      tooltipCtxRef.current?.closeNow(anchorId);
-    }
-  }, [canCopy, anchorId]);
-
-  useEffect(() => {
-    return () => {
-      tooltipCtxRef.current?.closeNow(anchorId);
-    };
-  }, [anchorId]);
-
-  const openTooltip = () => {
-    if (disableTooltip || !tooltipCtx || !canCopy) return;
-    tooltipCtx.activate({ anchorId, value: normalizedValue, getRect });
-  };
-
-  const closeTooltip = () => {
-    tooltipCtx?.scheduleClose(anchorId);
-  };
-
-  const closeTooltipImmediate = () => {
-    tooltipCtx?.closeNow(anchorId);
-  };
-
-  const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    if (!canCopy) return;
-    navigator.clipboard.writeText(normalizedValue);
-    onCopy?.(normalizedValue);
-    if (tooltipCtxRef.current?.isActiveAnchor(anchorId)) {
-      tooltipCtxRef.current.notifyCopied(anchorId);
-    }
-  };
-
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
 
   return (
@@ -172,21 +183,19 @@ export function CopyChip({
       <button
         type="button"
         onClick={handleCopy}
-        onFocus={() => {
-          if (!disableTooltip) openTooltip();
-        }}
+        onFocus={openTooltip}
         onBlur={closeTooltipImmediate}
         disabled={isDisabled}
-        title={!disableTooltip && !tooltipCtx && canCopy ? normalizedValue : undefined}
+        title={!disableTooltip && !hasTooltipProvider && canCopy ? normalizedValue : undefined}
         className={
           fitDisplayWidth
             ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
             : 'inline-flex w-full max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'
         }
       >
-        {icon ? <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${iconClass ?? ''}`}>{icon}</span> : null}
+        {resolvedIcon ? <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${resolvedIconClass ?? ''}`}>{resolvedIcon}</span> : null}
         <span
-          className={`${dense ? 'text-[11px] font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${underlineClass} ${
+          className={`${dense ? 'text-[11px] font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${resolvedUnderline} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -201,14 +210,7 @@ export function CopyChip({
 
 /** Internal order ID. Gray / Hash icon. Do NOT use for tracking numbers or FNSKUs. */
 export const OrderIdChip = ({ value, display, dense }: { value: string; display: string; dense?: boolean }) => (
-  <CopyChip
-    value={value}
-    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
-    icon={<HashIcon />}
-    underlineClass="border-gray-500"
-    iconClass="text-gray-500"
-    dense={dense}
-  />
+  <CopyChip value={value} display={resolveChipDisplay(display)} tone="id" dense={dense} />
 );
 
 /**
@@ -245,15 +247,8 @@ export const PoChip = ({
 }) => (
   <CopyChip
     value={value}
-    display={
-      isEmptyDisplayValue(display ?? value) ||
-      String(display ?? value).trim() === '---'
-        ? '----'
-        : (display ?? value)
-    }
-    icon={<HashIcon />}
-    underlineClass="border-gray-500"
-    iconClass="text-gray-500"
+    display={resolveChipDisplay(display ?? value)}
+    tone="id"
     width={width}
     disableCopy={disableCopy}
   />
@@ -289,12 +284,9 @@ export const TrackingChip = ({
 }) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
-    icon={
-      showIcon ? <MapPin className="h-4 w-4 shrink-0" /> : undefined
-    }
-    underlineClass="border-blue-500"
-    iconClass="inline-flex items-center justify-center text-blue-500"
+    display={resolveChipDisplay(display)}
+    tone="tracking"
+    icon={showIcon ? undefined : null}
     width={width}
     disableCopy={disableCopy}
     outerPad={showIcon ? 'chip' : 'flush'}
@@ -362,10 +354,8 @@ export const SkuScanRefChip = ({
 }) => (
   <CopyChip
     value={value}
-    display={isEmptyDisplayValue(display) || String(display || '').trim() === '---' ? '----' : display}
-    icon={<Pencil className="h-4 w-4 shrink-0" />}
-    underlineClass="border-yellow-500"
-    iconClass="inline-flex items-center justify-center text-yellow-600"
+    display={resolveChipDisplay(display)}
+    tone="sku"
     onCopy={onCopy}
     dense={dense}
   />
@@ -402,25 +392,6 @@ export function TrackingOrSkuScanChip({ value }: { value: string }) {
 }
 
 /**
- * The single source of truth for a serial chip's label. Derives the last-4
- * preview from the raw serial (or CSV of serials), and collapses every "no
- * serial" spelling callers used to pass — `''`/`null`, the literal sentinel
- * `'SERIAL'`, or `'---'` — to one `'----'` placeholder that matches the empty
- * state of the other id chips (OrderIdChip/TrackingChip), so an empty serial
- * column reads like a 4-char value and lines up with filled rows instead of
- * showing the wider `SERIAL` word. (Blindly running {@link getLast4Serial} on
- * the `'SERIAL'` sentinel used to yield `'RIAL'`, which is why every table
- * previously hand-rolled its own variant.)
- */
-export function resolveSerialDisplay(value: string | null | undefined): string {
-  const raw = (value || '').trim();
-  if (isEmptyDisplayValue(raw) || raw === '---' || raw.toUpperCase() === 'SERIAL') {
-    return '----';
-  }
-  return getLast4Serial(raw);
-}
-
-/**
  * Device / unit serial number. Emerald / Barcode icon.
  *
  * The label is derived internally from `value` via {@link resolveSerialDisplay},
@@ -448,9 +419,7 @@ export const SerialChip = ({
   <CopyChip
     value={value}
     display={resolveSerialDisplay(display ?? value)}
-    icon={<Barcode className="h-4 w-4 shrink-0" />}
-    underlineClass="border-emerald-500"
-    iconClass="inline-flex items-center justify-center text-emerald-500"
+    tone="serial"
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
@@ -475,9 +444,7 @@ export const SkuSerialChip = ({
   <CopyChip
     value={value}
     display={isEmptyDisplayValue(display) ? 'SKU' : getLast4Serial(display)}
-    icon={<Pencil className="h-4 w-4 shrink-0" />}
-    underlineClass="border-yellow-500"
-    iconClass="inline-flex items-center justify-center text-yellow-600"
+    tone="sku"
     width={width}
     truncateDisplay={false}
     fitDisplayWidth
@@ -491,31 +458,19 @@ export const SkuSerialChip = ({
  * lines up with the real chips beneath it, but shows "×N" in yellow so it reads
  * as a count, not a value. No copy/tooltip — there's no single value to copy.
  */
-function GroupCountChip({
-  count,
-  icon,
-  iconClass,
-  underlineClass,
-  dense,
-}: {
-  count: number;
-  icon: React.ReactNode;
-  iconClass: string;
-  /** Underline color — matches the column's real copy chip (yellow SKU / emerald serial). */
-  underlineClass: string;
-  dense?: boolean;
-}) {
+function GroupCountChip({ count, tone, dense }: { count: number; tone: ChipTone; dense?: boolean }) {
+  const toneDef = CHIP_TONES[tone];
   return (
     <div className="relative flex w-fit max-w-full items-center justify-start px-1.5">
       <span className="inline-flex w-auto max-w-full items-center gap-0.5">
-        <span className={`inline-flex shrink-0 items-center justify-center ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${iconClass}`}>
-          {icon}
+        <span className={`inline-flex shrink-0 items-center justify-center ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${toneDef.iconClass}`}>
+          {toneDef.icon}
         </span>
         {/* Reserve the same 4-char footprint the last-4 id chips occupy so the
             icon lands at the same x and the underline matches the sibling chips'
             width. Value sits right within that footprint; underline color matches
             the column's real chip. */}
-        <span className={`${dense ? 'text-[11px]' : 'text-sm'} w-[4ch] border-b-2 ${underlineClass} pb-0.5 text-right font-mono font-bold leading-none tracking-tight text-yellow-600`}>
+        <span className={`${dense ? 'text-[11px]' : 'text-sm'} w-[4ch] border-b-2 ${toneDef.underline} pb-0.5 text-right font-mono font-bold leading-none tracking-tight text-yellow-600`}>
           ×{count}
         </span>
       </span>
@@ -525,22 +480,16 @@ function GroupCountChip({
 
 /** SKU column count for a collapsed group — yellow pencil + "×N", yellow underline. */
 export const SkuCountChip = ({ count, dense }: { count: number; dense?: boolean }) => (
-  <GroupCountChip count={count} icon={<Pencil className="h-4 w-4 shrink-0" />} iconClass="text-yellow-600" underlineClass="border-yellow-500" dense={dense} />
+  <GroupCountChip count={count} tone="sku" dense={dense} />
 );
 
 /** Serial column count for a collapsed group — emerald barcode + "×N", emerald underline. */
 export const SerialCountChip = ({ count, dense }: { count: number; dense?: boolean }) => (
-  <GroupCountChip count={count} icon={<Barcode className="h-4 w-4 shrink-0" />} iconClass="text-emerald-500" underlineClass="border-emerald-500" dense={dense} />
+  <GroupCountChip count={count} tone="serial" dense={dense} />
 );
 
 export const TicketChip = ({ value, display }: { value: string; display: string }) => (
-  <CopyChip
-    value={value}
-    display={display}
-    icon={<HashIcon />}
-    underlineClass="border-orange-500"
-    iconClass="text-orange-500"
-  />
+  <CopyChip value={value} display={display} tone="ticket" />
 );
 
 /**
@@ -549,14 +498,7 @@ export const TicketChip = ({ value, display }: { value: string; display: string 
  * Do NOT use for carrier tracking numbers — use TrackingChip (blue/MapPin) for those.
  */
 export const FnskuChip = ({ value, width }: { value: string; width?: string }) => (
-  <CopyChip
-    value={value}
-    display={getLast4(value)}
-    icon={<Package className="h-4 w-4 shrink-0" />}
-    underlineClass="border-purple-500"
-    iconClass="text-purple-500"
-    width={width}
-  />
+  <CopyChip value={value} display={getLast4(value)} tone="fnsku" width={width} />
 );
 
 export const SourceOrderChip = ({
@@ -570,15 +512,7 @@ export const SourceOrderChip = ({
   width?: string;
   disableCopy?: boolean;
 }) => (
-  <CopyChip
-    value={value}
-    display={display}
-    icon={<HashIcon />}
-    underlineClass="border-gray-500"
-    iconClass="text-gray-500"
-    width={width}
-    disableCopy={disableCopy}
-  />
+  <CopyChip value={value} display={display} tone="id" width={width} disableCopy={disableCopy} />
 );
 
 /** Platform chip — opens product page via item number on click, does NOT copy. */
@@ -593,36 +527,21 @@ export const PlatformChip = ({
   iconClass: string;
   onClick: (e: MouseEvent<HTMLButtonElement>) => void;
 }) => {
-  const anchorId = useId();
-  const chipRef = useRef<HTMLDivElement | null>(null);
-  const tooltipCtx = useSiteTooltipOptional();
-  const tooltipCtxRef = useRef(tooltipCtx);
-  tooltipCtxRef.current = tooltipCtx;
+  const isEmpty = isEmptyChipDisplay(label);
+  const { chipRef, openTooltip, closeTooltip } = useChipTooltip({
+    enabled: !isEmpty,
+    tooltipValue: 'product page',
+  });
 
-  const getRect = useCallback(() => chipRef.current?.getBoundingClientRect() ?? null, []);
-
-  const isEmpty =
-    isEmptyDisplayValue(label) || String(label || '').trim() === '---';
   const resolvedUnderline = isEmpty ? 'border-gray-500' : underlineClass;
   const resolvedIconClass = isEmpty ? 'text-gray-500' : iconClass;
-
-  const openTooltip = () => {
-    if (isEmpty || !tooltipCtx) return;
-    tooltipCtx.activate({ anchorId, value: 'product page', getRect });
-  };
-
-  useEffect(() => {
-    return () => {
-      tooltipCtxRef.current?.closeNow(anchorId);
-    };
-  }, [anchorId]);
 
   return (
     <div
       ref={chipRef}
       className="relative flex w-fit max-w-full items-center justify-start px-1.5"
       onMouseEnter={openTooltip}
-      onMouseLeave={() => tooltipCtx?.scheduleClose(anchorId)}
+      onMouseLeave={closeTooltip}
     >
       <button
         type="button"

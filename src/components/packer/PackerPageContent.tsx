@@ -39,7 +39,7 @@ export function PackerPageContent({ packerId }: PackerPageContentProps) {
         transition={{ type: 'spring', damping: 25, stiffness: 120 }}
         className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden"
       >
-        <header className="sticky top-0 z-40 flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
+        <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
           <button
             type="button"
             onClick={openDrawer}

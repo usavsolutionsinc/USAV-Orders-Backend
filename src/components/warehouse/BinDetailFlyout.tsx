@@ -91,7 +91,7 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
       <aside
         role="dialog"
         aria-label={`Bin ${row.barcode ?? row.name}`}
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col overflow-hidden bg-white shadow-2xl"
+        className="fixed inset-y-0 right-0 z-panel flex w-full max-w-md flex-col overflow-hidden bg-white shadow-2xl"
       >
         <header className="flex items-start gap-3 border-b border-gray-200 px-4 py-3">
           <div className="min-w-0 flex-1">

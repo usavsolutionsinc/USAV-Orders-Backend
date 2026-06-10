@@ -146,7 +146,7 @@ export function FloatingButton({
                 <ChevronDown className="h-4 w-4 opacity-95" />
               </button>
               <div
-                className="invisible absolute bottom-full left-0 z-50 pb-0.5 opacity-0 transition-opacity duration-75 group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100 group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100"
+                className="invisible absolute bottom-full left-0 z-dropdown pb-0.5 opacity-0 transition-opacity duration-75 group-hover/split-menu:pointer-events-auto group-hover/split-menu:visible group-hover/split-menu:opacity-100 group-focus-within/split-menu:pointer-events-auto group-focus-within/split-menu:visible group-focus-within/split-menu:opacity-100"
                 role="presentation"
               >
                 <ul

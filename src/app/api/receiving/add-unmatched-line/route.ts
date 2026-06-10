@@ -15,7 +15,13 @@
  * Guardrails:
  *   • Rejects if the receiving row is source='zoho_po' — Zoho-sourced receivings
  *     are reconciled against Zoho line items; manual additions would create
- *     local lines that never match anything on the Zoho side.
+ *     local lines that never match anything on the Zoho side. EXCEPTION: pass
+ *     `allow_off_po: true` to add an "off-PO" extra item to a matched carton —
+ *     an item physically in the box that the Zoho PO doesn't list. The line is
+ *     stamped `manual_entry_at` and left with no Zoho linkage, so the receive
+ *     flow updates it locally but skips it from the Zoho POST (it has no
+ *     zoho_line_item_id to receive against). The operator then adds it to the
+ *     Zoho PO manually, or handles it as a standalone intake.
  *   • Idempotent via api_idempotency_responses on Idempotency-Key header or
  *     body.client_event_id. A duplicate POST returns the prior result, no
  *     duplicate row created.
@@ -81,11 +87,14 @@ function normalizeEnum<T extends string>(
   return match ?? fallback;
 }
 
-function normalizeConditionGrade(raw: unknown): ConditionGrade {
-  if (raw == null) return 'BRAND_NEW';
+function normalizeConditionGrade(
+  raw: unknown,
+  fallback: ConditionGrade = 'BRAND_NEW',
+): ConditionGrade {
+  if (raw == null) return fallback;
   const upper = String(raw).trim().toUpperCase().replace(/[\s-]/g, '_');
   const match = CONDITION_GRADES.find((g) => g === upper);
-  return match ?? 'BRAND_NEW';
+  return match ?? fallback;
 }
 
 export const POST = withAuth(async (request: NextRequest, ctx) => {
@@ -153,7 +162,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     INTAKE_TYPES,
     null,
   );
-  const conditionGrade = normalizeConditionGrade(body.condition_grade);
+  // A return is by definition not brand new — when the caller omits the grade
+  // (e.g. the unfound serial-match auto-import), default return lines to
+  // USED_A instead of the BRAND_NEW catch-all.
+  const conditionGrade = normalizeConditionGrade(
+    body.condition_grade,
+    intakeType === 'return' ? 'USED_A' : 'BRAND_NEW',
+  );
 
   const listingUrl =
     body.listing_url == null ? null : String(body.listing_url).trim() || null;
@@ -178,6 +193,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     body.client_event_id == null
       ? null
       : String(body.client_event_id).trim() || null;
+
+  // Off-PO escape hatch: allow adding an extra item to a Zoho-matched carton
+  // (an item in the box the PO doesn't list). The line stays Zoho-unlinked, so
+  // the receive flow naturally skips it from the Zoho POST.
+  const allowOffPo = body.allow_off_po === true;
 
   // ─── Idempotency ──────────────────────────────────────────────────────────
   const idempotencyKey = readIdempotencyKey(request, clientEventId);
@@ -226,11 +246,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
   }
 
-  if (receiving.source !== 'unmatched') {
+  if (receiving.source !== 'unmatched' && !allowOffPo) {
     return respond(
       {
         success: false,
-        error: 'add-unmatched-line is only valid on receiving rows with source=unmatched',
+        error:
+          'add-unmatched-line is only valid on source=unmatched cartons (pass allow_off_po:true to add an off-PO extra item to a matched carton)',
         actual_source: receiving.source,
       },
       { status: 409 },

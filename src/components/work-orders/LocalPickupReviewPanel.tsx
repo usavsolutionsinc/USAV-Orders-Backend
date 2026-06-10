@@ -392,7 +392,7 @@ function ReviewShell({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[118] bg-gray-900/50 backdrop-blur-sm"
+        className="fixed inset-0 z-panelPopover bg-gray-900/50 backdrop-blur-sm"
         onClick={onClose}
       />
       <motion.div
@@ -403,7 +403,7 @@ function ReviewShell({
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 4 }}
         transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-        className="pointer-events-none fixed inset-0 z-[120] flex items-start justify-center p-4 pt-[6vh] md:pl-[360px]"
+        className="pointer-events-none fixed inset-0 z-panelPopover flex items-start justify-center p-4 pt-[6vh] md:pl-[360px]"
       >
         <div
           onClick={(e) => e.stopPropagation()}

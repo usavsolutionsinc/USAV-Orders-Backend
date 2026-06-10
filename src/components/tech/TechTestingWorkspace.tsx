@@ -368,6 +368,47 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
     [row],
   );
 
+  // Carton-level priority (receiving.is_priority) — the shared unbox/test urgency
+  // flag. Goes to receiving-logs (not receiving-lines) since it lives on the
+  // carton; optimistic since that PATCH returns only {id}. Same column the
+  // pending-order match in lookup-po sets automatically.
+  const patchCartonPriority = useCallback(
+    async (nextPriority: boolean) => {
+      if (!row?.receiving_id) return;
+      const lineId = row.id;
+      setRow((cur) => (cur && cur.id === lineId ? { ...cur, is_priority: nextPriority } : cur));
+      try {
+        const res = await fetch('/api/receiving-logs', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: row.receiving_id, is_priority: nextPriority }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch (err) {
+        setRow((cur) => (cur && cur.id === lineId ? { ...cur, is_priority: !nextPriority } : cur));
+        toast.error('Priority save failed', {
+          description: err instanceof Error ? err.message : 'Unknown error',
+        });
+      }
+    },
+    [row],
+  );
+
+  // Per-line "needs test" (receiving_lines.needs_test) — cables/no-test items.
+  // Clearing true→false is guarded server-side by tech assignment, so pass the
+  // current tester as assigned_tech_id to satisfy it.
+  const setLineNeedsTest = useCallback(
+    (next: boolean) => {
+      const fields: Record<string, unknown> = { needs_test: next };
+      if (!next) {
+        const techId = Number(staffId);
+        if (Number.isFinite(techId) && techId > 0) fields.assigned_tech_id = techId;
+      }
+      void patchLine(fields);
+    },
+    [patchLine, staffId],
+  );
+
   // ── Per-unit verdict ──────────────────────────────────────────────────────
   /**
    * Record a verdict against a single `serial_units` row. The server flips
@@ -1161,6 +1202,7 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 <PoLinesAccordion
                   receivingId={row.receiving_id}
                   activeLineId={row.id}
+                  hideNoTestLines
                   activeSerialActions={{
                     editingSerialId: headerSerialEdit?.id ?? null,
                     // Only called for the active row — the accordion routes a
@@ -1224,6 +1266,35 @@ export function TechTestingWorkspace({ staffId, selectedLineId, onSelectedLineCh
                 title={productTitle}
                 serialUnitId={activeSerial?.id ?? null}
               />
+            ) : null}
+
+            {/* ── DIV 3.5 — Test triage toggles ───────────────────────────
+                Priority = carton-level urgency (rank-0 in the Prioritize sort,
+                shared with unbox). Needs test = per-line gate (uncheck cables so
+                they skip the tester's queue). Two orthogonal axes. */}
+            {row.receiving_id ? (
+              <section className={SECTION}>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <label className="flex cursor-pointer items-center gap-2 text-caption font-bold text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-red-600"
+                      checked={!!row.is_priority}
+                      onChange={(e) => void patchCartonPriority(e.target.checked)}
+                    />
+                    Priority <span className="font-medium text-gray-400">(whole carton)</span>
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-caption font-bold text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-blue-600"
+                      checked={row.needs_test !== false}
+                      onChange={(e) => setLineNeedsTest(e.target.checked)}
+                    />
+                    Needs test <span className="font-medium text-gray-400">(this item)</span>
+                  </label>
+                </div>
+              </section>
             ) : null}
 
             {/* ── DIV 4 — Notes (per-line) ────────────────────────────────── */}

@@ -1,4 +1,12 @@
 import type { Config } from "tailwindcss";
+import { zIndex } from "./src/design-system/tokens/z-index";
+
+// Expose the centralized z-index scale as semantic Tailwind utilities
+// (z-panel, z-modal, z-popover, z-toast, z-tooltip, …) so components stop
+// reaching for arbitrary z-[NNN] values. Maps numeric tokens → string scale.
+const zIndexScale = Object.fromEntries(
+    Object.entries(zIndex).map(([name, value]) => [name, String(value)]),
+);
 
 const config: Config = {
     content: [
@@ -52,6 +60,7 @@ const config: Config = {
             borderRadius: {
                 station: '8px',
             },
+            zIndex: zIndexScale,
         },
     },
     plugins: [],

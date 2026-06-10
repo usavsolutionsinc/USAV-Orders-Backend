@@ -2,6 +2,7 @@
 
 import { type ReactNode, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AnchoredLayer } from '@/design-system';
 import { Filter, Search, SlidersHorizontal, X } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { OverlaySearch } from './OverlaySearch';
@@ -110,7 +111,7 @@ export function FilterBar({
   };
 
   return (
-    <div className={`relative flex items-center gap-2 min-h-[40px] ${className}`}>
+    <div ref={advancedRef} className={`relative flex items-center gap-2 min-h-[40px] ${className}`}>
       {/* 1. Search (Collapsible/Expandable) */}
       {search && search.expandable ? (
         <div className="flex-1 min-w-0">
@@ -192,27 +193,27 @@ export function FilterBar({
         {rightSlot}
       </div>
 
-      {/* Advanced Filters Popover (simplistic implementation for now) */}
-      <AnimatePresence>
-        {isAdvancedOpen && advanced && (
-          <>
-            <div 
-              className="fixed inset-0 z-40" 
-              onClick={() => setIsAdvancedOpen(false)} 
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className={`absolute top-full z-50 mt-2 max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-black/5 ${
-                advanced.fullWidth ? 'left-0 right-0' : 'right-0 w-72'
-              }`}
-            >
-              {advanced.render(() => setIsAdvancedOpen(false))}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Advanced Filters Popover — portaled via AnchoredLayer so a high z can't
+          be trapped by a transformed/blurred ancestor of the filter bar. */}
+      <AnchoredLayer
+        open={isAdvancedOpen && !!advanced}
+        onClose={() => setIsAdvancedOpen(false)}
+        anchorRef={advancedRef}
+        placement={advanced?.fullWidth ? 'bottom-stretch' : 'bottom-end'}
+        gap={8}
+      >
+        {advanced ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className={`max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl ring-1 ring-black/5 ${
+              advanced.fullWidth ? '' : 'w-72'
+            }`}
+          >
+            {advanced.render(() => setIsAdvancedOpen(false))}
+          </motion.div>
+        ) : null}
+      </AnchoredLayer>
     </div>
   );
 }

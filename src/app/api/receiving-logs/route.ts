@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
+import { isValidPriorityTier } from '@/lib/receiving/priority-override';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -196,6 +197,38 @@ export const GET = withAuth(async (request: NextRequest) => {
 export const DELETE = withAuth(async (request: NextRequest) => {
     try {
         const { searchParams } = new URL(request.url);
+
+        // Bulk: `?ids=1,2,3` deletes the batch in ONE statement. The sidebar
+        // edit-mode bulk delete uses this — N parallel single-id requests
+        // proved flaky (pool contention dropped a couple of rows per batch).
+        // Idempotent: ids already gone are simply absent from `deleted`.
+        const idsParam = (searchParams.get('ids') || '').trim();
+        if (idsParam) {
+            const ids = Array.from(new Set(
+                idsParam.split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0),
+            ));
+            if (ids.length === 0) {
+                return NextResponse.json(
+                    { error: 'ids must be a comma-separated list of positive integers' },
+                    { status: 400 }
+                );
+            }
+            const result = await pool.query(
+                `DELETE FROM receiving WHERE id = ANY($1::int[]) RETURNING id`,
+                [ids]
+            );
+            const deleted = result.rows.map((r) => Number(r.id));
+            await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
+            // Count, not the id list — listeners only refetch on this event,
+            // and an unbounded id string risks the broker's message size cap.
+            await publishReceivingLogChanged({
+                action: 'delete',
+                rowId: `bulk:${deleted.length}`,
+                source: 'receiving-logs.delete-bulk',
+            });
+            return NextResponse.json({ success: true, deleted });
+        }
+
         const idRaw = searchParams.get('id');
         const id = Number(idRaw);
 
@@ -244,6 +277,15 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         const returnPlatformRaw = String(body?.return_platform ?? body?.returnPlatform ?? '').trim().toUpperCase();
         const returnReasonRaw = body?.return_reason ?? body?.returnReason;
         const needsTestRaw = body?.needs_test ?? body?.needsTest;
+        const isPriorityRaw = body?.is_priority ?? body?.isPriority;
+        // priority_tier may be sent as explicit null (clear → Auto), so detect
+        // presence rather than collapsing null via `??`.
+        const hasPriorityTier =
+            Object.prototype.hasOwnProperty.call(body ?? {}, 'priority_tier') ||
+            Object.prototype.hasOwnProperty.call(body ?? {}, 'priorityTier');
+        const priorityTierRaw = Object.prototype.hasOwnProperty.call(body ?? {}, 'priority_tier')
+            ? body.priority_tier
+            : body?.priorityTier;
         const assignedTechIdRaw = body?.assigned_tech_id ?? body?.assignedTechId;
         const targetChannelRaw = String(body?.target_channel ?? body?.targetChannel ?? '').trim().toUpperCase();
         const unboxedByRaw = body?.unboxed_by ?? body?.unboxedBy;
@@ -360,6 +402,31 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
             updates.push(`needs_test = $${idx++}`);
             values.push(nextNeedsTest);
         }
+        // Shared unbox/test urgency flag. Manual override of the same column the
+        // pending-order match sets (lookup-po). Plain boolean — no guard; clearing
+        // it just drops the carton back to its platform/unfound tier.
+        if (availableColumns.has('is_priority') && isPriorityRaw !== undefined) {
+            updates.push(`is_priority = $${idx++}`);
+            values.push(!!isPriorityRaw);
+        }
+        // Manual priority-tier override (receiving.priority_tier): null = Auto
+        // (platform-derived), 0..3 = Priority/High/Medium/Low. Kept in lockstep
+        // with is_priority (tier 0 ⇔ the shared "urgent" boolean) so queues that
+        // read only the boolean still surface a top-tier carton. Synced here only
+        // when the caller didn't also send is_priority (a column can't be assigned
+        // twice in one UPDATE).
+        if (availableColumns.has('priority_tier') && hasPriorityTier) {
+            const tier = priorityTierRaw == null ? null : Number(priorityTierRaw);
+            if (!isValidPriorityTier(tier)) {
+                return NextResponse.json({ error: 'Invalid priority_tier' }, { status: 400 });
+            }
+            updates.push(`priority_tier = $${idx++}`);
+            values.push(tier);
+            if (availableColumns.has('is_priority') && isPriorityRaw === undefined) {
+                updates.push(`is_priority = $${idx++}`);
+                values.push(tier === 0);
+            }
+        }
         if (availableColumns.has('assigned_tech_id') && assignedTechIdRaw !== undefined) {
             const parsed = Number(assignedTechIdRaw);
             updates.push(`assigned_tech_id = $${idx++}`);
@@ -433,7 +500,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
             }
         }
 
-        await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
+        await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'pending-unboxing']);
         await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-logs.patch' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {

@@ -51,6 +51,28 @@ export async function linkTicket(args: {
 }
 
 /**
+ * Remove a ticket → entity link. Only deletes the row when it still points at
+ * the given entity, so a stale unlink can't detach a ticket that was since
+ * re-linked elsewhere. Returns true when a row was removed.
+ */
+export async function unlinkTicket(args: {
+  orgId: string;
+  zendeskTicketId: number;
+  entityType: string;
+  entityId: number;
+}): Promise<boolean> {
+  const res = await pool.query(
+    `DELETE FROM ticket_links
+      WHERE organization_id = $1
+        AND zendesk_ticket_id = $2
+        AND entity_type = $3
+        AND entity_id = $4`,
+    [args.orgId, args.zendeskTicketId, args.entityType, args.entityId],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/**
  * Resolve which internal entity a Zendesk ticket belongs to, trying in order:
  *   1. ticket_links table  2. the ticket's external_id  3. unfound_overlay.
  * Returns null when no link is known (e.g. inbound/Zendesk-native tickets).

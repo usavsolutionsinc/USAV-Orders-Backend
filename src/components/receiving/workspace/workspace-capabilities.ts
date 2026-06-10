@@ -5,10 +5,11 @@
  * gate the mode-specific sections, instead of scattering `mode === 'triage'`
  * checks through the JSX.
  *
- * `triage` (the "Receiving" identify-before-unbox step) hides the unbox-only
- * actions — photos, claim, label preview, print·receive, and serial scan
- * (serials are captured only at unbox). Everything else (carton context,
- * classify pills, add-item, PO# link, notes) stays on in every mode.
+ * `triage` (the "Receiving" identify-before-unbox step) is a fast priority
+ * pass: just the carton top bar (classify pills, PO#/tracking/listing chips,
+ * photos + claim) and a read-only PO-items view. Unbox-only actions — label
+ * preview, print·receive, serial scan (serials are captured only at unbox) —
+ * and the notes card are hidden.
  *
  * Adding a new mode/use-case = one row here; the editor never changes.
  */
@@ -34,22 +35,18 @@ export interface WorkspaceCapabilities {
   editLines: boolean;
   /** Sticky "Save for unbox" bar (triage's terminal action — there is no receive). */
   saveBar: boolean;
-  /**
-   * Priority display at the top of the pane — the carton's queue tier / aging /
-   * position plus the per-tier backlog overview. Triage-only: it visualizes the
-   * `?sort=priority` "Prioritize" queue; unbox mode has no queue to rank.
-   */
-  priorityHeader: boolean;
+  /** Standalone notes card. Off in triage — fast classification only, no prose. */
+  notes: boolean;
 }
 
 export const WORKSPACE_CAPABILITIES: Record<ReceivingWorkspaceVariant, WorkspaceCapabilities> = {
   unbox: {
     photos: true, claim: true, labelPreview: true, receiveBar: true,
-    serialScan: true, editLines: true, saveBar: false, priorityHeader: false,
+    serialScan: true, editLines: true, saveBar: false, notes: true,
   },
   triage: {
-    photos: false, claim: false, labelPreview: false, receiveBar: false,
-    serialScan: false, editLines: false, saveBar: true, priorityHeader: true,
+    photos: true, claim: true, labelPreview: false, receiveBar: false,
+    serialScan: false, editLines: false, saveBar: true, notes: false,
   },
 };
 

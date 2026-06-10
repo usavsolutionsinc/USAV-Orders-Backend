@@ -151,7 +151,7 @@ export default function NasPhotosPreviewPage() {
           role="dialog"
           aria-modal="true"
           onClick={() => setZoom(null)}
-          className="fixed inset-0 z-50 grid place-items-center bg-black/95 p-4"
+          className="fixed inset-0 z-modal grid place-items-center bg-black/95 p-4"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={zoom.url} alt={zoom.name} className="max-h-full max-w-full object-contain" />

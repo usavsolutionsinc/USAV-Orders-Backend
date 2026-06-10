@@ -89,14 +89,14 @@ export function FbaCreatePlanModal({ stationTheme = 'blue' }: { stationTheme?: S
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-black/35"
         aria-label="Close create plan"
         onClick={() => { if (!submitting) setOpen(false); }}
       />
-      <div className="relative z-[81] flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
+      <div className="relative z-modal flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
           <div>
             <p className={`text-micro font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>

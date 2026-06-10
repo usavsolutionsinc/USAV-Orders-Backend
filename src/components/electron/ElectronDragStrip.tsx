@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { zIndex } from '@/design-system/tokens/z-index';
 
 const STRIP_HEIGHT = 36;
 const STRIP_BACKGROUND = '#2d2d2d'; // medium-dark neutral grey
@@ -61,7 +62,8 @@ export function ElectronDragStrip() {
         height: STRIP_HEIGHT,
         background: STRIP_BACKGROUND,
         paddingLeft: MAC_TRAFFIC_LIGHTS_INSET,
-        zIndex: 999999,
+        zIndex: zIndex.tooltip, // window chrome — must sit above all app UI
+
         // @ts-expect-error -- WebkitAppRegion is an Electron-only CSS prop
         WebkitAppRegion: 'drag',
       }}

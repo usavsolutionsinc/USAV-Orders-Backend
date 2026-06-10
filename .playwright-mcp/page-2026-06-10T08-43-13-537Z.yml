@@ -1,0 +1,172 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Receiving" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e10]: Receiving
+          - img [ref=e12]
+        - tablist "Mode" [ref=e16]:
+          - generic [ref=e17]:
+            - tab "Incoming" [ref=e18] [cursor=pointer]:
+              - img [ref=e19]
+            - tab "Receiving" [selected] [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+            - tab "Unbox" [ref=e26] [cursor=pointer]:
+              - img [ref=e27]
+            - tab "Local Pickup" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+            - tab "History" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+        - generic [ref=e38]:
+          - generic [ref=e41]:
+            - img [ref=e43]
+            - 'textbox "Scan tracking #" [active] [ref=e45]'
+          - generic [ref=e47]:
+            - tablist "Triage view" [ref=e50]:
+              - generic [ref=e51]:
+                - tab "Unfound" [selected] [ref=e52] [cursor=pointer]:
+                  - img [ref=e53]
+                  - generic [ref=e55]: Unfound
+                - tab "Prioritize" [ref=e56] [cursor=pointer]:
+                  - img [ref=e57]
+                  - generic [ref=e59]: Prioritize
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - paragraph [ref=e62]: Unfound · 1
+                - generic [ref=e63]:
+                  - paragraph [ref=e64]: To identify
+                  - button "Select rows for bulk actions" [ref=e65] [cursor=pointer]:
+                    - img [ref=e66]
+              - listbox "Unfound activity" [ref=e160]:
+                - option "Unfound PO 0/? 2s" [selected] [ref=e161]:
+                  - button "Unfound PO 0/? 2s" [ref=e162] [cursor=pointer]:
+                    - generic [ref=e164]:
+                      - paragraph [ref=e166]: Unfound PO
+                      - paragraph [ref=e167]:
+                        - generic [ref=e168]: 0/?
+                    - generic [ref=e169]: 2s
+    - generic [ref=e73]:
+      - banner [ref=e74]:
+        - button "Hide sidebar" [pressed] [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+        - button "Daily goal" [ref=e116] [cursor=pointer]:
+          - generic [ref=e117]:
+            - img [ref=e118]
+            - generic [ref=e122]: "0"
+          - generic [ref=e123]:
+            - generic [ref=e124]: Tech
+            - generic [ref=e125]: 0/10 scans
+          - img [ref=e126]
+        - generic [ref=e79]:
+          - button "Open command bar" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+          - button "Notifications" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+          - button "Account & quick access" [ref=e89] [cursor=pointer]: M
+      - main [ref=e90]:
+        - generic [ref=e95]:
+          - generic [ref=e135]:
+            - paragraph [ref=e136]: Finding your PO
+            - heading "Opening your PO" [level=2] [ref=e137]
+            - generic [ref=e138]:
+              - generic [ref=e139]: "9400100000000099880789"
+              - generic [ref=e140]: · 5s
+          - generic [ref=e171]:
+            - navigation "Receiving progress" [ref=e172]:
+              - list [ref=e173]:
+                - listitem [ref=e174]:
+                  - img [ref=e176]
+                  - generic [ref=e178]: Scan
+                - listitem [ref=e179]
+                - listitem [ref=e181]:
+                  - generic [ref=e182]: "2"
+                  - generic [ref=e183]: Photos
+                - listitem [ref=e184]
+                - listitem [ref=e186]:
+                  - generic [ref=e187]: "3"
+                  - generic [ref=e188]: Condition
+                - listitem [ref=e189]
+                - listitem [ref=e191]:
+                  - generic [ref=e192]: "4"
+                  - generic [ref=e193]: Serial
+                - listitem [ref=e194]
+                - listitem [ref=e196]:
+                  - generic [ref=e197]: "5"
+                  - generic [ref=e198]: Print
+            - generic [ref=e200]:
+              - generic [ref=e202]:
+                - button "Refresh line from Zoho" [ref=e203] [cursor=pointer]:
+                  - img [ref=e205]
+                - button "Share receiving link" [ref=e207] [cursor=pointer]:
+                  - img [ref=e209]
+                - button "View audit log" [ref=e212] [cursor=pointer]:
+                  - img [ref=e214]
+                - button "Copy all receiving details" [ref=e216] [cursor=pointer]:
+                  - img [ref=e218]
+                - button "Share to phone" [ref=e220] [cursor=pointer]:
+                  - img [ref=e222]
+                - button "Open receiving details" [ref=e224] [cursor=pointer]:
+                  - img [ref=e225]
+                - button "Previous recent line" [ref=e227] [cursor=pointer]:
+                  - img [ref=e228]
+                - button "Next recent line" [ref=e230] [cursor=pointer]:
+                  - img [ref=e231]
+              - generic [ref=e234]:
+                - generic [ref=e238]:
+                  - generic [ref=e240]:
+                    - 'button "Urgency: High — click to change" [ref=e242] [cursor=pointer]': High
+                    - 'button "Platform: Unfound — click to change" [ref=e244] [cursor=pointer]': Unfound
+                    - 'button "Type: PO — click to change" [ref=e246] [cursor=pointer]': PO
+                    - generic [ref=e247]:
+                      - button "Open listing in new tab" [disabled] [ref=e248]:
+                        - img [ref=e249]
+                      - button "----" [ref=e252] [cursor=pointer]:
+                        - generic [ref=e253]: "----"
+                      - button "Edit listing URL" [ref=e254] [cursor=pointer]:
+                        - img [ref=e255]
+                    - generic [ref=e257]:
+                      - button "Open PO in Zoho" [disabled] [ref=e258]:
+                        - img [ref=e259]
+                      - button "----" [ref=e262] [cursor=pointer]:
+                        - img [ref=e264]
+                        - generic [ref=e267]: "----"
+                      - button "Edit PO#" [expanded] [ref=e268] [cursor=pointer]:
+                        - img [ref=e269]
+                    - generic [ref=e272]:
+                      - button "Open carrier tracking" [ref=e273] [cursor=pointer]:
+                        - img [ref=e274]
+                      - button "0789" [ref=e277] [cursor=pointer]:
+                        - img [ref=e279]
+                        - generic [ref=e282]: "0789"
+                      - button "Edit tracking" [ref=e283] [cursor=pointer]:
+                        - img [ref=e284]
+                    - button "Claim →" [ref=e286] [cursor=pointer]
+                    - button "Add photos" [disabled] [ref=e287]:
+                      - img [ref=e288]
+                      - img [ref=e291]
+                  - generic [ref=e294]:
+                    - generic [ref=e295]: PO number
+                    - generic [ref=e299]:
+                      - img [ref=e301]
+                      - textbox "PO-1234" [ref=e303]
+                      - button "Paste from clipboard" [ref=e305] [cursor=pointer]:
+                        - img [ref=e306]
+                - generic [ref=e310]:
+                  - heading "PO items · 0" [level=3] [ref=e311]
+                  - generic [ref=e313]:
+                    - button "Open in unbox" [ref=e314] [cursor=pointer]:
+                      - img [ref=e315]
+                      - text: Open in unbox
+                    - button "Link repair service" [ref=e319] [cursor=pointer]:
+                      - img [ref=e320]
+                      - text: Link repair service
+                    - button "Add to carton" [ref=e323] [cursor=pointer]:
+                      - img [ref=e324]
+              - button "Save for unbox" [ref=e328] [cursor=pointer]:
+                - img [ref=e329]
+                - generic [ref=e331]: Save for unbox
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e109] [cursor=pointer]:
+    - img [ref=e110]
+  - alert [ref=e113]

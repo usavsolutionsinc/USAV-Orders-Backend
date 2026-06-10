@@ -14,7 +14,7 @@ import {
   SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { X, Clock, Layers, Loader2 } from '@/components/Icons';
+import { X, Clock, Layers, Loader2, Trash2 } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
@@ -43,6 +43,9 @@ import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
+import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
+import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
+import { onToggleAll } from '@/lib/selection/table-selection';
 import { printProductLabel } from '@/lib/print/printProductLabel';
 import { LocalPickupSidebarList } from '@/components/work-orders/LocalPickupSidebarList';
 import {
@@ -62,7 +65,7 @@ import {
 import { useReceivingLineNavigation } from '@/components/sidebar/receiving/useReceivingLineNavigation';
 import { useReceivingSourcePlatform } from '@/components/sidebar/receiving/useReceivingSourcePlatform';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
-import { resolveReceivingCodeToLine } from '@/lib/testing/resolve-testing-scan';
+import { fetchLinesByTracking, resolveReceivingCodeToLine } from '@/lib/testing/resolve-testing-scan';
 import { useStationTheme } from '@/hooks/useStationTheme';
 
 
@@ -116,6 +119,9 @@ function buildUnmatchedStubRow(
     receiving_source: 'unmatched',
   };
 }
+
+/** table-selection scope for the rail edit-mode bulk action bar. */
+const RAIL_EDIT_SCOPE = 'receiving-rail-edit';
 
 export function ReceivingSidebarPanel() {
   const router = useRouter();
@@ -215,6 +221,111 @@ export function ReceivingSidebarPanel() {
   // Armed unbox scan route (null = auto-detect: a value with "-" → Order#).
   // Tracking resolves a carrier #, Order# resolves a Zoho PO / reference #.
   const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
+
+  // ── Rail edit mode (pencil toggle) ──────────────────────────────────────
+  // Flips the triage/unbox rails from open-on-click to checkbox multi-select
+  // (see RailEditModeProvider / SidebarRailShell) so junk rows can be bulk
+  // deleted. Selection keys are the rails' row ids: positive = receiving line,
+  // negative = an unfound carton stub (TriageUnfoundList negates receiving_id).
+  const [railEditMode, setRailEditMode] = useState(false);
+  const [railSelectedIds, setRailSelectedIds] = useState<ReadonlySet<number>>(() => new Set());
+  const [railBulkDeleting, setRailBulkDeleting] = useState(false);
+  // Eyebrow pencil (rendered by SidebarRailShell via the provider) flips this.
+  const toggleRailEditMode = useCallback(() => setRailEditMode((v) => !v), []);
+  const toggleRailSelected = useCallback((id: number) => {
+    setRailSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  // Shift-click range select (see SidebarRailShell handleEditClick).
+  const setManyRailSelected = useCallback((ids: number[], checked: boolean) => {
+    setRailSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+  // Any list swap (mode / sub-view pills) or an edit-mode flip drops the
+  // selection — ids from the previous list must never leak into the next one.
+  const triageView = searchParams.get('triview') ?? '';
+  useEffect(() => {
+    setRailSelectedIds(new Set());
+  }, [mode, unboxView, triageView, railEditMode]);
+  useEffect(() => {
+    if (!isScanSurface) setRailEditMode(false);
+  }, [isScanSurface]);
+  // The action bar's "Clear" emits the shared toggle-all event for our scope.
+  useEffect(
+    () =>
+      onToggleAll(RAIL_EDIT_SCOPE, (m) => {
+        if (m === 'none') setRailSelectedIds(new Set());
+      }),
+    [],
+  );
+  const railSelectedIdList = useMemo(() => Array.from(railSelectedIds), [railSelectedIds]);
+
+  const handleRailBulkDelete = useCallback(
+    async (ids: number[]) => {
+      if (ids.length === 0 || railBulkDeleting) return;
+      const label = ids.length === 1 ? 'this row' : `these ${ids.length} rows`;
+      if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+      setRailBulkDeleting(true);
+      try {
+        // ONE batched request per entity kind (bulk `ids` endpoints) — firing N
+        // parallel single-id deletes proved flaky: a couple of requests per
+        // batch would 500 under pool contention, leaving survivors behind.
+        // Negative rail ids are unfound carton stubs (-receiving_id, whole
+        // carton); positive ids are receiving lines.
+        const cartonIds = ids.filter((id) => id < 0).map((id) => -id);
+        const lineIds = ids.filter((id) => id > 0);
+        const failures: string[] = [];
+        if (cartonIds.length > 0) {
+          const res = await fetch(`/api/receiving-logs?ids=${cartonIds.join(',')}`, {
+            method: 'DELETE',
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body?.success) failures.push(body?.error || `cartons (${res.status})`);
+          else {
+            // Already-gone ids are confirmed absent server-side — safe to drop
+            // every requested carton from the rails, not just `body.deleted`.
+            for (const recvId of cartonIds) {
+              window.dispatchEvent(new CustomEvent('receiving-entry-deleted', { detail: recvId }));
+            }
+          }
+        }
+        if (lineIds.length > 0) {
+          const res = await fetch(`/api/receiving-lines?ids=${lineIds.join(',')}`, {
+            method: 'DELETE',
+          });
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok || !body?.success) failures.push(body?.error || `lines (${res.status})`);
+          else {
+            for (const id of lineIds) {
+              window.dispatchEvent(new CustomEvent('receiving-line-deleted', { detail: { id } }));
+            }
+          }
+        }
+        if (failures.length > 0) toast.error(`Delete failed: ${failures.join('; ')}`);
+        else {
+          toast.success(ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`);
+          // Deletion is the edit-mode task — drop back to the normal
+          // open-on-click rail instead of leaving empty checkboxes armed.
+          setRailEditMode(false);
+        }
+        setRailSelectedIds(new Set());
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      } finally {
+        setRailBulkDeleting(false);
+      }
+    },
+    [railBulkDeleting],
+  );
   // Desktop triage scan/filter — doubles as the live filter for the Found/Unfound
   // to-do lists AND the scan entry: it now drives the same ReceivingUnboxScanBar +
   // submitTrackingScan → lookup-po flow the Unbox workspace uses, so a scan
@@ -607,6 +718,58 @@ export function ReceivingSidebarPanel() {
           /* fall through to carrier tracking intake */
         }
 
+        // Local-first tracking short-circuit: a carton already in the system
+        // (door-scanned, or otherwise carrying a receiving package) resolves
+        // straight from the local receiving feed — open it immediately and
+        // skip lookup-po entirely (no Zoho fallback, no "Opening your PO"
+        // takeover; the fast resolve lands inside the loader's grace delay).
+        // Rows without a receiving_id (incoming EXPECTED lines that were never
+        // scanned in) still fall through: lookup-po owns creating/adopting the
+        // receiving carton and stamping received_at on first scan.
+        if (lookupMode === 'tracking') {
+          try {
+            const localRows = (await fetchLinesByTracking(trackingNumber)).filter(
+              (r) => r.receiving_id != null,
+            );
+            if (localRows.length > 0) {
+              const receivingId = localRows[0].receiving_id as number;
+              const poIds = [
+                ...new Set(
+                  localRows
+                    .map((r) => (r.zoho_purchaseorder_id || '').trim())
+                    .filter((x) => x.length > 0),
+                ),
+              ];
+              opts?.onResult?.({
+                tracking: trackingNumber,
+                matched: true,
+                po_ids: poIds,
+                receiving_id: receivingId,
+              });
+              window.dispatchEvent(
+                new CustomEvent('receiving-lines-prepended', { detail: localRows }),
+              );
+              invalidateReceivingFeeds(queryClient);
+              const openRows = localRows.filter(
+                (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
+              );
+              const pick = openRows[0] ?? localRows[0];
+              setScanMatchedRows(localRows);
+              setLineAccordionBootstrap('default');
+              setSelectedLine(pick);
+              setScanDriven(true);
+              // Same unbox ritual as the lookup-po matched path: nudge the
+              // paired phone's camera open and arm the serial input.
+              void publishPhotoRequestFor(receivingId, trackingNumber);
+              setTimeout(() => serialInputRef.current?.focus(), 60);
+              window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+              return;
+            }
+          } catch {
+            /* local miss/error — fall through to lookup-po */
+          }
+        }
+
         const res = await fetch('/api/receiving/lookup-po', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -985,7 +1148,15 @@ export function ReceivingSidebarPanel() {
   const isMobileView = isMobile;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    // `relative` anchors the edit-mode SelectionActionBar pinned at the bottom.
+    <div className="relative h-full flex flex-col overflow-hidden">
+      <RailEditModeProvider
+        active={railEditMode && isScanSurface}
+        selectedIds={railSelectedIds}
+        toggle={toggleRailSelected}
+        setMany={setManyRailSelected}
+        toggleActive={toggleRailEditMode}
+      >
       {!masterNavEnabled && (
         <div className={sidebarHeaderPillRowClass}>
           <HorizontalButtonSlider
@@ -1073,7 +1244,13 @@ export function ReceivingSidebarPanel() {
         <ReceivingUnboxScanBar
           value={bulkTracking}
           onChange={setBulkTracking}
-          onSubmit={(mode) => submitTrackingScan(undefined, { mode })}
+          onSubmit={(mode) => {
+            // A scan's result lands in the Recent (unboxing) feed — flip the
+            // rail off Queue first so the scanned carton is visible the moment
+            // it selects (the selection pin surfaces it at the top).
+            if (unboxView === 'queue') updateUnboxView('recent');
+            submitTrackingScan(undefined, { mode });
+          }}
           inputRef={scanInputRef}
           isResolving={trackingLookupInFlight > 0}
           staffId={staffId}
@@ -1143,11 +1320,14 @@ export function ReceivingSidebarPanel() {
         // Prioritize tab uses (unfound/untagged first, then amazon → ebay →
         // goodwill), so the operator can work the queue top-down.
         <ReceivingScannedRail
+          key="rail-unbox-queue"
+          scope="unbox"
           selectedLineId={selectedLine?.id ?? null}
           selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
         />
       ) : (
         <ReceivingRecentRail
+          key="rail-unbox-recent"
           // Keep the (possibly negative) id so the rail's auto-select stays
           // suppressed while a line/carton is open — but never hand it the
           // synthetic unmatched-carton stub as a pinnable row. buildUnmatchedStubRow
@@ -1161,6 +1341,23 @@ export function ReceivingSidebarPanel() {
       </div>{/* /scrollable body */}
         </>
       )}
+
+      {/* Edit-mode bulk actions — auto-shows while rows are checked. "Clear"
+          empties the selection via the shared toggle-all event (scope above). */}
+      {isScanSurface && railEditMode ? (
+        <SelectionActionBar<number>
+          scope={RAIL_EDIT_SCOPE}
+          rows={railSelectedIdList}
+          primaryLabel="Delete"
+          primaryIcon={<Trash2 className="h-3.5 w-3.5" />}
+          primaryTone="red"
+          onPrimary={handleRailBulkDelete}
+          primaryDisabled={railBulkDeleting}
+          primaryLoading={railBulkDeleting}
+          primaryTitle="Delete the selected rows"
+        />
+      ) : null}
+      </RailEditModeProvider>
     </div>
   );
 }

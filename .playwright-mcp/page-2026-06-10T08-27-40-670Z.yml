@@ -1,0 +1,69 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Receiving" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e10]: Receiving
+          - img [ref=e12]
+        - tablist "Mode" [ref=e16]:
+          - generic [ref=e17]:
+            - tab "Incoming" [ref=e18] [cursor=pointer]:
+              - img [ref=e19]
+            - tab "Receiving" [selected] [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+            - tab "Unbox" [ref=e26] [cursor=pointer]:
+              - img [ref=e27]
+            - tab "Local Pickup" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+            - tab "History" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+        - generic [ref=e38]:
+          - generic [ref=e41]:
+            - img [ref=e43]
+            - 'textbox "Scan tracking #" [ref=e45]'
+          - generic [ref=e47]:
+            - tablist "Triage view" [ref=e50]:
+              - generic [ref=e51]:
+                - tab "Unfound" [selected] [ref=e52] [cursor=pointer]:
+                  - img [ref=e53]
+                  - generic [ref=e55]: Unfound
+                - tab "Prioritize" [ref=e56] [cursor=pointer]:
+                  - img [ref=e57]
+                  - generic [ref=e59]: Prioritize
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - paragraph [ref=e62]: Unfound · 0
+                - generic [ref=e63]:
+                  - paragraph [ref=e64]: To identify
+                  - button "Select rows for bulk actions" [ref=e319] [cursor=pointer]:
+                    - img [ref=e320]
+              - paragraph [ref=e322]: No recent activity yet.
+    - generic [ref=e73]:
+      - banner [ref=e74]:
+        - button "Hide sidebar" [pressed] [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+        - button "Daily goal" [ref=e125] [cursor=pointer]:
+          - generic [ref=e126]:
+            - img [ref=e127]
+            - generic [ref=e131]: "0"
+          - generic [ref=e132]:
+            - generic [ref=e133]: Tech
+            - generic [ref=e134]: 0/10 scans
+          - img [ref=e135]
+        - generic [ref=e79]:
+          - button "Open command bar" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+          - button "Notifications" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+          - button "Account & quick access" [ref=e89] [cursor=pointer]: M
+      - main [ref=e90]:
+        - generic [ref=e324]:
+          - img [ref=e326]
+          - generic [ref=e328]:
+            - heading "No carton selected" [level=3] [ref=e329]
+            - paragraph [ref=e330]: Pick a carton from the Unfound or Prioritize list, or scan a tracking number to triage it.
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e109] [cursor=pointer]:
+    - img [ref=e110]
+  - alert [ref=e113]

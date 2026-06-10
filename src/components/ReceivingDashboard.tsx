@@ -12,7 +12,8 @@ import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
-import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
+import { Barcode, Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
+import { EmptyState } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 import { LocalPickupEditPanel } from './work-orders/LocalPickupEditPanel';
 import { LocalPickupReviewPanel } from './work-orders/LocalPickupReviewPanel';
@@ -45,6 +46,25 @@ interface NavState {
   canPrev: boolean;
   canNext: boolean;
 }
+
+/**
+ * Right-pane empty state per sidebar mode. Keyed by the `?mode=` value so each
+ * mode's copy is structurally tied to that mode and can never display in
+ * another (triage's "pick from the Unfound/Prioritize list" prompt is
+ * meaningless in Unbox, and vice versa). Modes without an entry (history /
+ * incoming are table-only; pickup early-returns) render no empty state.
+ */
+const RECEIVING_EMPTY_STATE: Partial<Record<string, { title: string; description: string }>> = {
+  triage: {
+    title: 'No carton selected',
+    description:
+      'Pick a carton from the Unfound or Prioritize list, or scan a tracking number to triage it.',
+  },
+  receive: {
+    title: 'Scan to start',
+    description: 'Scan a tracking number or pick a carton from the rail to open its PO here.',
+  },
+};
 
 /**
  * Right-pane renderer for `/receiving`. Headerless — driven entirely by the
@@ -381,7 +401,12 @@ export default function ReceivingDashboard() {
     void (async () => {
       try {
         const res = await fetch(
-          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials`,
+          // sort MUST match ReceivingRecentRail's axis (unbox_activity) so
+          // this effect and the rail's auto-select resolve to the SAME "most
+          // recent" line — the default activity sort is door-scan based and
+          // picked a different row, so the workspace and the rail highlight
+          // disagreed on mode open.
+          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials&sort=unbox_activity`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
@@ -591,6 +616,19 @@ export default function ReceivingDashboard() {
         >
           <ReceivingLinesTable selectMode={selectMode} />
         </div>
+
+        {/* Empty right pane — per-mode copy from RECEIVING_EMPTY_STATE (keyed
+            by ?mode=). Sits under the workspace/loader overlays (no z), so it
+            only shows when neither is mounted. */}
+        {!isTableOnlyMode && !showWorkspace && !showScanLoader && RECEIVING_EMPTY_STATE[mode] ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <EmptyState
+              icon={<Barcode className="h-7 w-7 text-gray-400" />}
+              title={RECEIVING_EMPTY_STATE[mode]!.title}
+              description={RECEIVING_EMPTY_STATE[mode]!.description}
+            />
+          </div>
+        ) : null}
 
         {/* Scan-in-flight skeleton loader. Shown the moment the operator
             submits a tracking scan; cleared 500ms after the response lands. */}

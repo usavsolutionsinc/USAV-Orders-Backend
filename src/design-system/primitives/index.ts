@@ -1,4 +1,5 @@
 export * from './ActionButtonGroup';
+export * from './AnchoredLayer';
 export * from './AppTopBar';
 export * from './Button';
 export * from './CardShell';
@@ -12,6 +13,7 @@ export * from './ExpandableSection';
 export * from './ExternalLinkButton';
 export * from './FloatingButton';
 export * from './IconButton';
+export * from './Layer';
 export * from './PanelRow';
 export * from './PrimaryButton';
 export * from './SearchField';

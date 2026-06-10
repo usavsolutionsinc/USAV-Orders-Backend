@@ -197,7 +197,7 @@ export function MobileScanSheet({
           animate={framerPresenceMobile.camera.animate}
           exit={framerPresenceMobile.camera.exit}
           transition={framerTransitionMobile.cameraEnter}
-          className="fixed inset-0 z-[200] flex flex-col bg-black"
+          className="fixed inset-0 z-modal flex flex-col bg-black"
         >
           {/* ── Top bar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">

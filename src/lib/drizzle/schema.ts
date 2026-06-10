@@ -903,6 +903,8 @@ export const receiving = pgTable('receiving', {
   returnPlatform: returnPlatformEnum('return_platform'),
   returnReason: text('return_reason'),
   needsTest: boolean('needs_test').notNull().default(true),
+  /** Shared unbox/test urgency flag — pending-order match or manual toggle. Drives rank-0 in the Prioritize sort. */
+  isPriority: boolean('is_priority').notNull().default(false),
   assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
   targetChannel: targetChannelEnum('target_channel'),
   zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
@@ -912,9 +914,39 @@ export const receiving = pgTable('receiving', {
   supportNotes: text('support_notes'),
   /** Filed Zendesk ticket # for a package-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
+  /**
+   * Receiver-entered total carton count for a multi-box PO (denominator for the
+   * boxes-received rollup; NULL = open-ended). docs/multi-tracking-po-plan.md.
+   */
+  expectedBoxCount: integer('expected_box_count'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * receiving_shipments — PO ↔ shipment junction (multi-box per PO).
+ *
+ * One row per carton/tracking attached to a `receiving` carton. The `isPrimary`
+ * row mirrors `receiving.shipment_id` (the Zoho reference# anchor, box_seq 1);
+ * extra boxes get box_seq 2..N via /api/receiving/[id]/attach-box. Makes the
+ * PO↔shipment relationship many-to-many without touching the one-row-per-PO
+ * anchor. docs/multi-tracking-po-plan.md Phase 1.
+ */
+export const receivingShipments = pgTable('receiving_shipments', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
+  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
+  boxSeq: integer('box_seq').notNull().default(1),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  receivingShipmentUx: uniqueIndex('ux_receiving_shipments').on(table.receivingId, table.shipmentId),
+  receivingIdx: index('idx_receiving_shipments_receiving').on(table.receivingId),
+  shipmentIdx: index('idx_receiving_shipments_shipment').on(table.shipmentId),
+  primaryUx: uniqueIndex('ux_receiving_shipments_primary').on(table.receivingId).where(sql`is_primary`),
+}));
 
 export const localPickupItems = pgTable('local_pickup_items', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -2477,8 +2509,12 @@ export const warrantyClaims = pgTable('warranty_claims', {
   denialNotes: text('denial_notes'),
   rmaId: bigint('rma_id', { mode: 'number' }),
   repairServiceId: integer('repair_service_id').references(() => repairService.id, { onDelete: 'set null' }),
+  /** Linked Zendesk ticket (created from this claim). See 2026-06-09_warranty_zendesk_link.sql. */
+  zendeskTicketId: bigint('zendesk_ticket_id', { mode: 'number' }),
   notes: text('notes'),
   createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  /** Soft-delete tombstone — claims keep their event/audit trail, reads filter NULL. */
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

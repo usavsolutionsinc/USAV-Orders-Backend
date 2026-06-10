@@ -4,8 +4,7 @@
  * Body: { staffId: number, pin?: string, deviceKind?: 'station' | 'personal', deviceLabel?: string }
  *
  * Default: verifies the PIN, creates a session, sets the httpOnly `usav_sid`
- * cookie, audits the result. Rate-limited indirectly by the PIN lockout in
- * pin.ts.
+ * cookie, audits the result.
  *
  * Pinless mode: when `AUTH_PINLESS_SIGNIN=true`, an empty/missing `pin` skips
  * verification and signs the staff in by name alone (active status still
@@ -160,7 +159,6 @@ export async function POST(req: NextRequest) {
         detail: { code: err.code },
       });
       const status = err.code === 'NOT_FOUND' ? 404
-        : err.code === 'LOCKED' ? 423
         : err.code === 'NO_PIN' ? 409
         : 401;
       return NextResponse.json({ error: err.code }, { status });

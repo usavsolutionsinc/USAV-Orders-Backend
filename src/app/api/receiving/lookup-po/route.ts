@@ -61,6 +61,31 @@ async function computePendingOrderSkus(
     return [];
   }
 }
+
+/**
+ * Persist the shared unbox/test urgency flag when a door-scanned carton matches
+ * a SKU a pending order needs. This is the durable half of the priority_unbox
+ * signal: the Ably push nudges the unboxer live, while receiving.is_priority
+ * floats the carton to rank-0 in the Prioritize rail AND the tester's queue
+ * (RECEIVING_PRIORITY_RANK_SQL) so "urgent to unbox" carries through to test.
+ * Idempotent + best-effort — a failure here never blocks the scan response.
+ */
+async function markReceivingPriority(receivingId: number | null): Promise<void> {
+  if (!receivingId || !Number.isFinite(receivingId)) return;
+  try {
+    await pool.query(
+      // Pending-order match = top urgency: set the manual override to tier 0
+      // (Priority) and keep is_priority in lockstep. Idempotent — skip rows
+      // already at the top tier.
+      `UPDATE receiving SET is_priority = true, priority_tier = 0, updated_at = NOW()
+        WHERE id = $1 AND (priority_tier IS DISTINCT FROM 0 OR is_priority = false)`,
+      [receivingId],
+    );
+  } catch (err) {
+    console.warn('lookup-po: markReceivingPriority failed', errMessage(err));
+  }
+}
+
 function isZohoNoMatch(err: unknown): boolean {
   const status = zohoErrStatus(err);
   // 4xx (except 401/403/429) generally means Zoho parsed the request and
@@ -674,6 +699,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('[lookup-po.order] realtime publish failed', errMessage(err));
         }
         if (pendingOrderSkus.length > 0) {
+          await markReceivingPriority(receivingId);
           try {
             await publishPriorityUnbox({
               staffId,
@@ -734,6 +760,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
         const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
         if (pendingOrderSkus.length > 0) {
+          await markReceivingPriority(existingScan.receiving_id);
           after(async () => {
             try {
               await publishPriorityUnbox({
@@ -808,6 +835,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           console.warn('[lookup-po.test] realtime publish failed', errMessage(err));
         }
         if (pendingOrderSkus.length > 0) {
+          await markReceivingPriority(receivingId);
           try {
             await publishPriorityUnbox({
               staffId,
@@ -1111,6 +1139,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
       const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
       if (pendingOrderSkus.length > 0) {
+        await markReceivingPriority(primaryReceivingId);
         after(async () => {
           try {
             await publishPriorityUnbox({

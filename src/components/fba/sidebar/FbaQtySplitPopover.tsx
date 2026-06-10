@@ -39,7 +39,7 @@ export function FbaQtySplitPopover({
       animate={framerPresence.dropdownPanel.animate}
       exit={framerPresence.dropdownPanel.exit}
       transition={framerTransition.dropdownOpen}
-      className="absolute inset-x-0 top-0 z-30 mx-2 rounded-lg border border-blue-200 bg-white p-3 shadow-lg"
+      className="absolute inset-x-0 top-0 z-dropdown mx-2 rounded-lg border border-blue-200 bg-white p-3 shadow-lg"
     >
       <p className={`${microBadge} mb-2 tracking-wider text-gray-600`}>
         Move how many? <span className="font-mono text-gray-900">{fnsku}</span>

@@ -54,6 +54,7 @@ const LIST_COLUMNS = `
   wc.denial_reason_code,
   wc.rma_id,
   wc.repair_service_id,
+  wc.zendesk_ticket_id,
   wc.created_at::text AS created_at,
   wc.updated_at::text AS updated_at
 `;
@@ -75,6 +76,7 @@ interface RawListRow {
   denial_reason_code: string | null;
   rma_id: number | null;
   repair_service_id: number | null;
+  zendesk_ticket_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -98,6 +100,7 @@ function mapListRow(row: RawListRow): WarrantyClaimListRow {
     denialReasonCode: row.denial_reason_code,
     rmaId: row.rma_id == null ? null : Number(row.rma_id),
     repairServiceId: row.repair_service_id == null ? null : Number(row.repair_service_id),
+    zendeskTicketId: row.zendesk_ticket_id == null ? null : Number(row.zendesk_ticket_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -117,7 +120,8 @@ export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyC
     `SELECT ${LIST_COLUMNS}
        FROM warranty_claims wc
        LEFT JOIN customers c ON c.id = wc.customer_id
-      WHERE ($1::text IS NULL OR wc.status = $1)
+      WHERE wc.deleted_at IS NULL
+        AND ($1::text IS NULL OR wc.status = $1)
         AND ($2::text IS NULL OR (
               wc.claim_number ILIKE '%' || $2 || '%'
            OR wc.serial_number ILIKE '%' || $2 || '%'
@@ -133,6 +137,29 @@ export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyC
     [status, search, expiringWithinDays, Boolean(input.provisionalOnly), limit, offset],
   );
   return rows.map(mapListRow);
+}
+
+/**
+ * Narrow lookup for routes that only need the Zendesk linkage — avoids
+ * getClaim's 4-query fan-out (events + attempts + quotes) on the hot
+ * popover-open path.
+ */
+export async function getClaimTicketRef(
+  id: number,
+): Promise<{ id: number; zendeskTicketId: number | null } | null> {
+  const { rows } = await pool.query<{ id: number; zendesk_ticket_id: number | null }>(
+    `SELECT id, zendesk_ticket_id
+       FROM warranty_claims
+      WHERE id = $1
+        AND deleted_at IS NULL
+      LIMIT 1`,
+    [id],
+  );
+  if (!rows[0]) return null;
+  return {
+    id: Number(rows[0].id),
+    zendeskTicketId: rows[0].zendesk_ticket_id == null ? null : Number(rows[0].zendesk_ticket_id),
+  };
 }
 
 export async function getClaim(id: number): Promise<WarrantyClaimDetail | null> {
@@ -168,6 +195,7 @@ export async function getClaim(id: number): Promise<WarrantyClaimDetail | null> 
        LEFT JOIN rma_authorizations ra ON ra.id = wc.rma_id
        LEFT JOIN repair_service rs ON rs.id = wc.repair_service_id
       WHERE wc.id = $1
+        AND wc.deleted_at IS NULL
       LIMIT 1`,
     [id],
   );
@@ -253,7 +281,8 @@ async function listRepairAttempts(claimId: number): Promise<WarrantyRepairAttemp
             created_at::text AS created_at
        FROM warranty_repair_attempts
       WHERE claim_id = $1
-      ORDER BY attempt_no ASC, id ASC`,
+      ORDER BY attempt_no ASC, id ASC
+      LIMIT 100`,
     [claimId],
   );
   return rows.map((r) => ({

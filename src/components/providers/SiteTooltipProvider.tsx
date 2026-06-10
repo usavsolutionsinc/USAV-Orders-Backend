@@ -246,7 +246,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
                 opacity: placementReady ? 1 : 0,
                 transition: 'opacity 0.15s ease-out',
               }}
-              className="pointer-events-none fixed z-[2147483647]"
+              className="pointer-events-none fixed z-tooltip"
             >
               {/* Shell — layout-animated width via Framer Motion */}
               <motion.div

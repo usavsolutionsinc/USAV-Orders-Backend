@@ -1,0 +1,28 @@
+# Copy to vision/.env and adjust. All optional — defaults shown.
+
+# DINOv2 checkpoint. base = good accuracy/speed; small = faster; large = best quality.
+#   facebook/dinov2-small | facebook/dinov2-base | facebook/dinov2-large
+EMBED_MODEL=facebook/dinov2-base
+
+# "cuda" on the 5070 Ti box, "cpu" for a laptop without a GPU, "auto" to pick.
+DEVICE=auto
+
+# How many ranked SKU candidates /identify returns.
+TOP_K=5
+
+# Aggregate per-SKU score across its reference photos: "max" (default) or "mean".
+SCORE_AGG=max
+
+# Optional detector crop before embedding (helps on cluttered benches). 0 = full frame.
+USE_DETECTOR=0
+DETECTOR_MODEL=yolo11n.pt
+
+# Where reference photos and the index live (relative to vision/).
+REFERENCE_DIR=data/reference
+INDEX_PATH=data/index/index.npz
+
+# CORS — the origin(s) of the Next.js app that POSTs frames here. Comma-separated.
+ALLOWED_ORIGINS=http://localhost:3000
+
+# Optional shared secret. If set, callers must send  X-Vision-Token: <token>.
+VISION_TOKEN=

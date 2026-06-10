@@ -1,0 +1,19 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - button "Operations" [ref=e7] [cursor=pointer]:
+        - img [ref=e8]
+        - generic [ref=e11]: Operations
+        - img [ref=e13]
+    - main [ref=e17]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - heading "Sign in" [level=1] [ref=e22]
+          - paragraph [ref=e23]: Tap your name to continue.
+        - button "Use your phone to sign in" [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+          - text: Use your phone to sign in
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e86] [cursor=pointer]:
+    - img [ref=e87]
+  - alert [ref=e90]

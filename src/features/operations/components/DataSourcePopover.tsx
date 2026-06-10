@@ -84,7 +84,7 @@ export function DataSourcePopover({ info, anchorRef, open, onOpenChange }: DataS
       ref={panelRef}
       role="dialog"
       aria-label={`Data source: ${info.headline}`}
-      className="fixed z-[200] rounded-2xl border border-[#E8E4DD] bg-white p-3.5 text-left shadow-[0_8px_32px_rgba(45,42,38,0.12)]"
+      className="fixed z-modal rounded-2xl border border-[#E8E4DD] bg-white p-3.5 text-left shadow-[0_8px_32px_rgba(45,42,38,0.12)]"
       style={{ top: pos.top, left: pos.left, width: WIDTH, maxHeight: 'min(420px, 70vh)', overflowY: 'auto' }}
     >
       <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#A89F91]">Data source</p>

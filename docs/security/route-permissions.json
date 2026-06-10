@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-09T08:00:26Z",
-  "totalRoutes": 550,
+  "generatedAt": "2026-06-10T08:38:22Z",
+  "totalRoutes": 562,
   "summary": {
-    "permissionGated": 465,
-    "authenticatedNoPermission": 18,
+    "permissionGated": 475,
+    "authenticatedNoPermission": 20,
     "anonymousIntentional": 46,
     "serviceToService": 3,
     "ungatedRead": 17,
@@ -1788,6 +1788,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/inbox/tech-queue/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
       "path": "/api/integrations/nango/connected/route.ts",
       "methods": [
         "POST"
@@ -2965,6 +2974,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/[id]/attach-box/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/[id]/route.ts",
       "methods": [
         "GET",
@@ -3102,6 +3120,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/po/[poId]/attach-box/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/po/[poId]/route.ts",
       "methods": [
         "GET"
@@ -3178,6 +3206,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/visual-identify/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/zendesk-claim/classify/route.ts",
       "methods": [
         "POST"
@@ -3189,6 +3226,17 @@
     {
       "path": "/api/receiving/zendesk-claim/draft/route.ts",
       "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/link/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
         "POST"
       ],
       "gate": "withAuth",
@@ -3208,6 +3256,15 @@
       "path": "/api/receiving/zendesk-claim/route.ts",
       "methods": [
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/thread/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",
@@ -4242,6 +4299,18 @@
       "exemptReason": null
     },
     {
+      "path": "/api/staff-todos/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
       "path": "/api/staff/availability-rules/route.ts",
       "methods": [
         "DELETE",
@@ -4606,6 +4675,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/vision-config/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/walk-in/catalog/route.ts",
       "methods": [
         "GET"
@@ -4772,6 +4850,7 @@
     {
       "path": "/api/warranty/claims/[id]/route.ts",
       "methods": [
+        "DELETE",
         "GET",
         "PATCH"
       ],
@@ -4789,10 +4868,49 @@
       "exemptReason": null
     },
     {
+      "path": "/api/warranty/claims/[id]/zendesk/comments/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/zendesk/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/bulk/route.ts",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
       "path": "/api/warranty/claims/route.ts",
       "methods": [
         "GET",
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/lookup/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "warranty.view",

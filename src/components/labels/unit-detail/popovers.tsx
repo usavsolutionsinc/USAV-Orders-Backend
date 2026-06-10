@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
+import { AnchoredLayer } from '@/design-system';
 import { useSkuParents, useSkuChildren } from '@/components/inventory/graph/useSkuGraph';
 import type { SkuRelationshipEdgeView } from '@/components/inventory/graph/types';
 import { Package, MapPin, ShoppingCart, Link2, Sparkles, Box } from '@/components/Icons';
@@ -10,34 +11,54 @@ import type { Allocation, LocationDetail, StockSummary, UnitDetail } from './typ
 
 // ─── Shell ───────────────────────────────────────────────────────────────────
 
+interface PopoverChrome {
+  /** The header's `relative` trigger wrapper to pin the panel under. */
+  anchorRef: React.RefObject<HTMLElement | null>;
+  /** Routed to AnchoredLayer's click-away + Escape. */
+  onClose: () => void;
+}
+
 /**
- * Anchored popover panel. Rendered inside a `relative` trigger wrapper; the
- * parent header owns open/close + click-away (see useHeaderPopover).
+ * Anchored popover panel. Portaled to <body> via AnchoredLayer so a high
+ * z-index can never be trapped by an ancestor stacking context; pinned
+ * below-right of the header's trigger `relative` wrapper (`anchorRef`). Callers
+ * mount the shell only while their popover is open, so `open` is constant true;
+ * AnchoredLayer owns click-away + Escape and routes them through `onClose`.
  */
 export function PopoverShell({
   title,
   icon,
   width = 'w-80',
+  anchorRef,
+  onClose,
   children,
-}: {
+}: PopoverChrome & {
   title: string;
   icon: React.ReactNode;
   width?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div
-      role="dialog"
-      className={`absolute right-0 top-full z-30 mt-1.5 ${width} overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl`}
+    <AnchoredLayer
+      open
+      onClose={onClose}
+      anchorRef={anchorRef}
+      placement="bottom-end"
+      gap={6}
     >
-      <div className="flex h-9 items-center gap-2 border-b border-gray-100 bg-gray-50/70 px-3">
-        <span className="text-gray-400">{icon}</span>
-        <span className="text-eyebrow font-black uppercase tracking-[0.16em] text-gray-500">
-          {title}
-        </span>
+      <div
+        role="dialog"
+        className={`${width} overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl`}
+      >
+        <div className="flex h-9 items-center gap-2 border-b border-gray-100 bg-gray-50/70 px-3">
+          <span className="text-gray-400">{icon}</span>
+          <span className="text-eyebrow font-black uppercase tracking-[0.16em] text-gray-500">
+            {title}
+          </span>
+        </div>
+        <div className="max-h-[58vh] overflow-y-auto">{children}</div>
       </div>
-      <div className="max-h-[58vh] overflow-y-auto">{children}</div>
-    </div>
+    </AnchoredLayer>
   );
 }
 
@@ -65,7 +86,9 @@ export function InventoryLinkagePopover({
   stock,
   locationDetail,
   allocation,
-}: {
+  anchorRef,
+  onClose,
+}: PopoverChrome & {
   unit: UnitDetail;
   stock: StockSummary | null | undefined;
   locationDetail: LocationDetail | null | undefined;
@@ -73,7 +96,7 @@ export function InventoryLinkagePopover({
 }) {
   const stocked = !!(unit.current_location && unit.current_location.trim());
   return (
-    <PopoverShell title="Inventory linkage" icon={<Package className="h-3.5 w-3.5" />}>
+    <PopoverShell title="Inventory linkage" icon={<Package className="h-3.5 w-3.5" />} anchorRef={anchorRef} onClose={onClose}>
       <div className="divide-y divide-gray-100">
         {/* On-hand */}
         <div className="px-3 py-3">
@@ -165,7 +188,11 @@ function Row({
  * parents ("belongs to") and children ("contains"). Powered by the existing
  * sku_relationships graph via skuCatalogId.
  */
-export function CompatibilityPopover({ skuCatalogId }: { skuCatalogId: number | null }) {
+export function CompatibilityPopover({
+  skuCatalogId,
+  anchorRef,
+  onClose,
+}: PopoverChrome & { skuCatalogId: number | null }) {
   const parents = useSkuParents(skuCatalogId);
   const children = useSkuChildren(skuCatalogId);
   const loading = parents.isLoading || children.isLoading;
@@ -174,7 +201,7 @@ export function CompatibilityPopover({ skuCatalogId }: { skuCatalogId: number | 
   const empty = !loading && parentRows.length === 0 && childRows.length === 0;
 
   return (
-    <PopoverShell title="Compatibility linkage" icon={<Link2 className="h-3.5 w-3.5" />} width="w-[22rem]">
+    <PopoverShell title="Compatibility linkage" icon={<Link2 className="h-3.5 w-3.5" />} width="w-[22rem]" anchorRef={anchorRef} onClose={onClose}>
       {!skuCatalogId ? (
         <PopoverEmpty>This unit isn't linked to a catalog SKU, so it has no assembly graph.</PopoverEmpty>
       ) : loading ? (
@@ -227,12 +254,16 @@ function EdgeSection({
 
 // ─── Similar products (same category) ────────────────────────────────────────
 
-export function SimilarProductsPopover({ skuCatalogId }: { skuCatalogId: number | null }) {
+export function SimilarProductsPopover({
+  skuCatalogId,
+  anchorRef,
+  onClose,
+}: PopoverChrome & { skuCatalogId: number | null }) {
   const { data, isLoading } = useSimilarProducts(skuCatalogId);
   const items: SimilarProduct[] = data?.items ?? [];
 
   return (
-    <PopoverShell title="Similar products" icon={<Sparkles className="h-3.5 w-3.5" />} width="w-[22rem]">
+    <PopoverShell title="Similar products" icon={<Sparkles className="h-3.5 w-3.5" />} width="w-[22rem]" anchorRef={anchorRef} onClose={onClose}>
       {!skuCatalogId ? (
         <PopoverEmpty>This unit isn't linked to a catalog SKU.</PopoverEmpty>
       ) : isLoading ? (
@@ -314,30 +345,14 @@ function ProductMiniRow({
 
 export type HeaderPopoverKey = 'inventory' | 'compatibility' | 'similar';
 
-export function useHeaderPopover(
-  rootRef: React.RefObject<HTMLElement | null>,
-): {
+export function useHeaderPopover(): {
   open: HeaderPopoverKey | null;
   toggle: (key: HeaderPopoverKey) => void;
   close: () => void;
 } {
+  // Dismissal (click-away + Escape) is owned by AnchoredLayer inside
+  // PopoverShell — the header just passes `close` through as its onClose.
   const [open, setOpen] = React.useState<HeaderPopoverKey | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(null);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, rootRef]);
 
   return {
     open,

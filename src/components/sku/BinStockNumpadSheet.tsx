@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Layer } from '@/design-system';
 import { Check, Loader2, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
@@ -260,11 +261,12 @@ export function BinStockNumpadSheet({
     null;
 
   return (
-    <div
+    <Layer
+      level="panelPopover"
       role="dialog"
       aria-modal="true"
       aria-label="Edit stock"
-      className="fixed inset-0 z-[120] flex flex-col bg-slate-50"
+      className="fixed inset-0 flex flex-col bg-slate-50"
     >
       {/* ── Header ── */}
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
@@ -454,7 +456,7 @@ export function BinStockNumpadSheet({
 
       {/* ── Confirmation flash ── */}
       {flash && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[130] flex justify-center">
+        <div className="pointer-events-none fixed inset-x-0 bottom-24 z-panelOverlay flex justify-center">
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-lg">
             <Check className="h-4 w-4" />
             {flash}
@@ -501,6 +503,6 @@ export function BinStockNumpadSheet({
           onCancel={() => setCameraOpen(false)}
         />
       )}
-    </div>
+    </Layer>
   );
 }

@@ -57,7 +57,7 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 top-0 z-[300] px-3 py-1.5 text-center text-caption font-black uppercase tracking-widest ${tone}`}
+      className={`fixed inset-x-0 top-0 z-banner px-3 py-1.5 text-center text-caption font-black uppercase tracking-widest ${tone}`}
     >
       {message}
     </div>

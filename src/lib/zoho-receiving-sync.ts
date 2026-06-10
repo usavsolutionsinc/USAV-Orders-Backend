@@ -397,6 +397,32 @@ async function syncPurchaseOrderLines(
     synced++;
   }
 
+  // Late-line adoption (cron/no-scan path): a line created or re-synced AFTER
+  // the PO's box was already door-scanned would otherwise stay unattached
+  // (receiving_id NULL, workflow EXPECTED) — the scan-time adoption in
+  // lookup-po's linkLocalPoLinesToReceiving only catches lines that exist at
+  // scan time. The receiving-lines list still shows such a line under the
+  // scanned carton via its PO soft-join fallback, so the rail row reads
+  // "EXPECTED" inside the SCANNED queue. Adopt exactly like the scan path:
+  // attach to the PO's scanned zoho_po carton + advance EXPECTED → MATCHED.
+  // ux_receiving_zoho_po_matched guarantees ≤1 such carton per PO.
+  if (!options.receivingId) {
+    const adopted = await client.query(
+      `UPDATE receiving_lines rl
+          SET receiving_id = r.id,
+              workflow_status = CASE WHEN rl.workflow_status = 'EXPECTED'
+                                     THEN 'MATCHED' ELSE rl.workflow_status END
+         FROM receiving r
+        WHERE r.source = 'zoho_po'
+          AND r.zoho_purchaseorder_id = $1
+          AND r.received_at IS NOT NULL
+          AND rl.zoho_purchaseorder_id = $1
+          AND rl.receiving_id IS NULL`,
+      [normalizedPoId],
+    );
+    linked += adopted.rowCount ?? 0;
+  }
+
   // Attach the PO's canonical shipment to the physical receiving row (idempotent).
   // COALESCE preserves a shipment_id set earlier by a scan/lookup writer.
   if (options.receivingId && shipmentId != null) {

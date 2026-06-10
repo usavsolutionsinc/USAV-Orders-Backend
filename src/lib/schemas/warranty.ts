@@ -70,6 +70,44 @@ export const WarrantyClaimCreateBody = z
     { message: 'a serial, order, or SKU is required' },
   );
 
+// ─── POST /api/warranty/claims/bulk (create many) ───────────────────────────
+export const WarrantyClaimBulkCreateBody = z
+  .object({
+    /** Per-item validation reuses the single-create schema (item idempotencyKey is ignored). */
+    items: z.array(WarrantyClaimCreateBody).min(1).max(100),
+    idempotencyKey: optionalIdempotencyKey,
+  })
+  .strict();
+
+// ─── DELETE /api/warranty/claims/bulk (soft-delete many) ────────────────────
+export const WarrantyClaimBulkDeleteBody = z
+  .object({
+    ids: z.array(positiveInt).min(1).max(200),
+    idempotencyKey: optionalIdempotencyKey,
+  })
+  .strict();
+
+// ─── POST /api/warranty/claims/[id]/zendesk (create linked ticket) ──────────
+export const WarrantyZendeskTicketBody = z
+  .object({
+    /** Operator-edited subject; server template fills it when omitted. */
+    subject: trimmed.min(1).max(255).optional(),
+    /** Operator-edited body; server template fills it when omitted. */
+    description: trimmed.min(1).max(20000).optional(),
+    idempotencyKey: optionalIdempotencyKey,
+  })
+  .strict();
+
+// ─── POST /api/warranty/claims/[id]/zendesk/comments (reply / note) ─────────
+export const WarrantyZendeskCommentBody = z
+  .object({
+    body: trimmed.min(1).max(20000),
+    /** true = customer-visible reply, false/omitted = internal note. */
+    public: z.boolean().optional(),
+    idempotencyKey: optionalIdempotencyKey,
+  })
+  .strict();
+
 // ─── PATCH /api/warranty/claims/[id] (metadata only) ────────────────────────
 export const WarrantyClaimUpdateBody = z
   .object({
@@ -82,9 +120,12 @@ export const WarrantyClaimUpdateBody = z
     purchaseProofAttachmentId: trimmed.min(1).max(500).optional(),
     purchasedAt: isoDate.optional(),
     notes: trimmed.min(1).max(4000).optional(),
+    idempotencyKey: optionalIdempotencyKey,
   })
   .strict()
-  .refine((b) => Object.keys(b).length > 0, { message: 'at least one field is required' });
+  .refine((b) => Object.keys(b).some((k) => k !== 'idempotencyKey'), {
+    message: 'at least one field is required',
+  });
 
 // ─── POST /api/warranty/claims/[id]/deny ────────────────────────────────────
 export const WarrantyDenyBody = z

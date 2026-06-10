@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Package, X } from '@/components/Icons';
+import { Layer } from '@/design-system';
+import { Check, Package } from '@/components/Icons';
 import { DashboardDetailsStack } from './DashboardDetailsStack';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { getStaffThemeById, stationThemeClasses } from '@/utils/staff-colors';
@@ -69,12 +70,13 @@ export function AdminDetailsStack({
   };
 
   return (
+    <Layer level="panelPopover">
     <motion.div
       initial={{ x: '100%' }}
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
-      className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-[120] overflow-y-auto no-scrollbar"
+      className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)] z-panelPopover overflow-y-auto no-scrollbar"
     >
       <PaneHeader
         className="border-gray-100 bg-white/90 backdrop-blur-xl"
@@ -189,5 +191,6 @@ export function AdminDetailsStack({
         </div>
       ) : null}
     </motion.div>
+    </Layer>
   );
 }

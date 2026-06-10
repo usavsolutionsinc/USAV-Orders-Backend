@@ -1,0 +1,59 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "History" [ref=e7] [cursor=pointer]:
+          - img [ref=e8]
+          - generic [ref=e10]: History
+          - img [ref=e12]
+        - tablist "Mode" [ref=e16]:
+          - generic [ref=e17]:
+            - tab "Incoming" [ref=e18] [cursor=pointer]:
+              - img [ref=e19]
+            - tab "Receiving" [ref=e22] [cursor=pointer]:
+              - img [ref=e23]
+            - tab "Unbox" [ref=e25] [cursor=pointer]:
+              - img [ref=e26]
+            - tab "Local Pickup" [ref=e30] [cursor=pointer]:
+              - img [ref=e31]
+            - tab "History" [selected] [ref=e33] [cursor=pointer]:
+              - img [ref=e35]
+        - generic [ref=e39]:
+          - generic [ref=e42]:
+            - generic [ref=e43]:
+              - img [ref=e45]
+              - 'textbox "Search PO #, tracking, SKU, title, or serial #" [ref=e47]'
+              - img [ref=e49]
+            - button "Switch to receiving tab and focus scan field" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+          - button "Filters" [ref=e57] [cursor=pointer]:
+            - img [ref=e59]
+            - generic [ref=e61]: Filters
+            - img [ref=e62]
+    - generic [ref=e65]:
+      - banner [ref=e66]:
+        - button "Hide sidebar" [pressed] [ref=e67] [cursor=pointer]:
+          - img [ref=e68]
+        - generic [ref=e71]:
+          - button "Select" [ref=e72] [cursor=pointer]:
+            - img [ref=e73]
+          - button "Open command bar" [ref=e75] [cursor=pointer]:
+            - img [ref=e76]
+          - button "Notifications" [ref=e79] [cursor=pointer]:
+            - img [ref=e80]
+          - button "Account & quick access" [ref=e84] [cursor=pointer]: ·
+      - main [ref=e85]:
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - paragraph [ref=e97]: Today
+            - paragraph [ref=e98]: "0"
+          - generic [ref=e100]:
+            - generic [ref=e101]: JUN 7th - 13th
+            - button "Previous week" [ref=e102] [cursor=pointer]:
+              - img [ref=e103]
+            - button "Next week" [disabled] [ref=e105]:
+              - img [ref=e106]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e212] [cursor=pointer]:
+    - img [ref=e213]
+  - alert [ref=e216]

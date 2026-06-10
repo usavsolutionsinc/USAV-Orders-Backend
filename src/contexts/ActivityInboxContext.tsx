@@ -25,7 +25,12 @@ const MAX_ITEMS = 20;
 /** Time window during which Undo is offered for reversible items */
 export const ACTIVITY_INBOX_UNDO_MS = 60_000;
 
-export type ActivityInboxItemKind = 'repair_status' | 'priority_unbox' | 'warranty_claim';
+export type ActivityInboxItemKind =
+  | 'repair_status'
+  | 'priority_unbox'
+  | 'warranty_claim'
+  | 'return_pending_test'
+  | 'order_ready_ship';
 
 export interface ActivityInboxItem {
   id: string;
@@ -109,11 +114,65 @@ export function ActivityInboxProvider({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ActivityInboxItem[]>([]);
+  // Derive-live tech-station backlog (unboxed returns awaiting test + orders
+  // ready to ship). Kept separate from the ephemeral push items so a refetch
+  // replaces it wholesale without wiping repair/warranty/priority-unbox toasts.
+  const [techQueueItems, setTechQueueItems] = useState<ActivityInboxItem[]>([]);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) setItems([]);
+    if (!user) {
+      setItems([]);
+      setTechQueueItems([]);
+    }
   }, [user]);
+
+  // Tech-station inbox: seed the backlog from the DB on mount and refetch on
+  // each push (the publishers fan out to primary techs only; non-techs get an
+  // empty queue server-side). Survives reload, shows the true backlog.
+  const refreshTechQueue = useCallback(async () => {
+    if (!user?.staffId) {
+      setTechQueueItems([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/inbox/tech-queue');
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items?: Array<{
+          kind: ActivityInboxItemKind;
+          receivingId: number;
+          trackingNumber: string | null;
+          unboxedAt: string | null;
+        }>;
+      };
+      const mapped: ActivityInboxItem[] = (data.items ?? []).map((it) => {
+        const ms = it.unboxedAt ? new Date(it.unboxedAt).getTime() : Date.now();
+        const isReturn = it.kind === 'return_pending_test';
+        return {
+          id: `techq-${it.kind}-${it.receivingId}`,
+          kind: it.kind,
+          title: isReturn ? 'Return · needs testing' : 'Order · ready to ship',
+          subtitle: it.trackingNumber
+            ? `${isReturn ? 'Unboxed return' : 'Unboxed · pending order'} · ${truncateLabel(it.trackingNumber, 40)}`
+            : isReturn
+              ? 'Unboxed return awaiting test'
+              : 'Unboxed — pending order ready to ship',
+          createdAt: Number.isFinite(ms) ? ms : Date.now(),
+          undoUntil: 0, // backlog items are not reversible
+          receivingId: it.receivingId,
+          trackingNumber: it.trackingNumber ?? undefined,
+        };
+      });
+      setTechQueueItems(mapped);
+    } catch {
+      /* best-effort — next push or reload retries */
+    }
+  }, [user?.staffId]);
+
+  useEffect(() => {
+    void refreshTechQueue();
+  }, [refreshTechQueue]);
 
   const pushRepairStatusChange = useCallback(
     ({
@@ -238,6 +297,11 @@ export function ActivityInboxProvider({
     Boolean(user?.staffId),
   );
 
+  // Tech-station backlog nudges — fan-out reaches primary techs only. Either
+  // event just means "your queue changed", so refetch the authoritative list.
+  useAblyChannel(inboxChannel, 'return_pending_test', () => void refreshTechQueue(), Boolean(user?.staffId));
+  useAblyChannel(inboxChannel, 'order_ready_ship', () => void refreshTechQueue(), Boolean(user?.staffId));
+
   const undoItem = useCallback(
     async (id: string) => {
       const item = items.find((x) => x.id === id);
@@ -296,13 +360,23 @@ export function ActivityInboxProvider({
 
   const dismissItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((x) => x.id !== id));
+    setTechQueueItems((prev) => prev.filter((x) => x.id !== id));
   }, []);
 
-  const clear = useCallback(() => setItems([]), []);
+  const clear = useCallback(() => {
+    setItems([]);
+    setTechQueueItems([]);
+  }, []);
+
+  // Ephemeral push items + the derive-live tech backlog, newest first.
+  const mergedItems = useMemo(
+    () => [...items, ...techQueueItems].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_ITEMS),
+    [items, techQueueItems],
+  );
 
   const value = useMemo<ActivityInboxContextValue>(
     () => ({
-      items,
+      items: mergedItems,
       pendingUndoId,
       pushRepairStatusChange,
       pushPriorityUnbox,
@@ -312,7 +386,7 @@ export function ActivityInboxProvider({
       clear,
     }),
     [
-      items,
+      mergedItems,
       pendingUndoId,
       pushRepairStatusChange,
       pushPriorityUnbox,

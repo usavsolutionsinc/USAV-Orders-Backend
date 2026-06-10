@@ -180,7 +180,10 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
         </button>
       </header>
 
-      <div className="max-h-[min(70vh,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
+      {/* Fixed-height body: scans + packs load/refetch at different times, so
+          a max-height container resizes the whole popover as sections pop in.
+          Locking the height keeps the frame still — content scrolls inside. */}
+      <div className="h-[min(480px,calc(100vh-8rem))] overflow-y-auto overscroll-contain px-4 py-2">
         {scans && scans.length > 0 && (
           <section className="mb-3">
             <p className="mb-1 text-micro font-black uppercase tracking-widest text-gray-500">

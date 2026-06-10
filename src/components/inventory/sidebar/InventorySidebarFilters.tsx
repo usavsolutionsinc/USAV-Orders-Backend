@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { AnchoredLayer } from '@/design-system';
 import { SlidersHorizontal, ChevronDown } from '@/components/Icons';
 import {
     INVENTORY_BUCKETS,
@@ -146,23 +147,6 @@ export function InventorySidebarFilters({
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
 
-    // Close on outside click / Escape.
-    useEffect(() => {
-        if (!open) return;
-        const onPointerDown = (e: MouseEvent) => {
-            if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-        };
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setOpen(false);
-        };
-        document.addEventListener('mousedown', onPointerDown);
-        document.addEventListener('keydown', onKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', onPointerDown);
-            document.removeEventListener('keydown', onKeyDown);
-        };
-    }, [open]);
-
     const toggleBucket = (id: string) => {
         const next = selectedBuckets.has(id)
             ? buckets.filter((v) => v !== id)
@@ -196,11 +180,17 @@ export function InventorySidebarFilters({
                 <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
 
-            {open ? (
+            <AnchoredLayer
+                open={open}
+                onClose={() => setOpen(false)}
+                anchorRef={rootRef}
+                placement="bottom-stretch"
+                gap={4}
+            >
                 <div
                     role="dialog"
                     aria-label="Search filters"
-                    className="absolute left-0 right-0 z-30 mt-1 rounded-xl border border-gray-200 bg-white p-4 shadow-xl"
+                    className="rounded-xl border border-gray-200 bg-white p-4 shadow-xl"
                 >
                     <div className="space-y-4">
                         {/* Section: Search Field */}
@@ -276,7 +266,7 @@ export function InventorySidebarFilters({
                         )}
                     </div>
                 </div>
-            ) : null}
+            </AnchoredLayer>
         </div>
     );
 }

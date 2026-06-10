@@ -69,7 +69,7 @@ export function PickupReportButton({ className, defaultDateKey }: PickupReportBu
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-50 rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
+          className="z-dropdown rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
         >
           <div className="flex items-center gap-1.5 border-b border-gray-100 px-3 py-2 text-eyebrow font-black uppercase tracking-wider text-slate-500">
             <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />

@@ -89,7 +89,7 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
   const files = entries.filter((e) => e.type === 'file');
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-modal flex flex-col bg-black text-white">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="min-w-0">

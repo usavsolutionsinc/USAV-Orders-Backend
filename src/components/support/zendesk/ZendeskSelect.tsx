@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { AnchoredLayer } from '@/design-system';
 
 export interface SelectOption {
   value: string;
@@ -27,10 +28,11 @@ export function ZendeskSelect({
   align = 'left',
 }: Props) {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value) ?? null;
 
   return (
-    <div className="relative">
+    <div ref={wrapperRef} className="relative">
       <button
         type="button"
         disabled={disabled}
@@ -48,33 +50,32 @@ export function ZendeskSelect({
         </svg>
       </button>
 
-      {open ? (
-        <>
-          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
-          <div
-            className={`absolute z-[70] mt-1 max-h-64 w-max min-w-[150px] overflow-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl ${
-              align === 'right' ? 'right-0' : 'left-0'
-            }`}
-          >
-            {options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => {
-                  onChange(o.value);
-                  setOpen(false);
-                }}
-                className={`flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-gray-50 ${
-                  o.value === value ? 'bg-gray-50' : ''
-                }`}
-              >
-                <span className="text-caption font-bold text-gray-800">{o.label}</span>
-                {o.sublabel ? <span className="text-micro text-gray-500">{o.sublabel}</span> : null}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
+      <AnchoredLayer
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={wrapperRef}
+        placement={align === 'right' ? 'bottom-end' : 'bottom-start'}
+        gap={4}
+      >
+        <div className="max-h-64 w-max min-w-[150px] overflow-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+              className={`flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-gray-50 ${
+                o.value === value ? 'bg-gray-50' : ''
+              }`}
+            >
+              <span className="text-caption font-bold text-gray-800">{o.label}</span>
+              {o.sublabel ? <span className="text-micro text-gray-500">{o.sublabel}</span> : null}
+            </button>
+          ))}
+        </div>
+      </AnchoredLayer>
     </div>
   );
 }

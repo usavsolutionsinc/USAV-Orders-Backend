@@ -1077,14 +1077,14 @@ function BulkMoveSheet({
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-panelPopover flex items-center justify-center p-4">
       <button
         type="button"
         onClick={busy ? undefined : onCancel}
         className="absolute inset-0 bg-black/40"
         aria-label="Close"
       />
-      <div className="relative z-[111] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20">
+      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/20">
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
           <div>
             <p className="text-micro font-black uppercase tracking-[0.16em] text-zinc-500">Bulk Move</p>

@@ -287,7 +287,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
       </div>
 
       {/* Sticky Bottom Actions — sit ABOVE the fixed bottom nav (h-16 + safe area). */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-50 px-6 pb-3 pt-16 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pointer-events-none">
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-sticky px-6 pb-3 pt-16 bg-gradient-to-t from-slate-50 via-slate-50/95 to-transparent pointer-events-none">
         <div className="flex gap-3 pointer-events-auto">
           <GlassButton
             variant="secondary"

@@ -75,7 +75,7 @@ export function BinsBulkActionBar({ selected, rows, onClearSelection }: Props) {
     <div
       role="region"
       aria-label="Bulk actions"
-      className="sticky bottom-0 left-0 right-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-md"
+      className="sticky bottom-0 left-0 right-0 z-sticky border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur-md"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
     >
       <div className="mx-auto flex max-w-5xl items-center gap-3">

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AnchoredLayer, Layer } from '@/design-system';
 import { Filter, X, ChevronDown } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 
@@ -62,32 +63,6 @@ export function FilterRefinementBar({
   const hasActive = count > 0;
   const isSidebar = variant === 'sidebar';
 
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Portaled Radix poppers (e.g. the date-range calendar) sit outside the
-      // bar's DOM tree — don't treat clicks inside them as "outside".
-      if (target.closest?.('[data-radix-popper-content-wrapper]')) return;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isOpen]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [isOpen]);
-
   const triggerClasses = isSidebar
     ? `flex h-[40px] w-full items-center gap-2.5 bg-white px-3 transition-colors hover:bg-gray-50 ${
         isOpen || hasActive ? 'text-blue-600' : 'text-gray-500'
@@ -140,35 +115,40 @@ export function FilterRefinementBar({
         />
       </motion.button>
 
-      {/* ── Dropdown Popover (Glassmorphic) ─────────────────────────── */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              // Transparent click-catcher by default: it isolates the dismiss
-              // click (so an outside click closes the popover without also
-              // triggering whatever sits underneath) but does NOT gray out the
-              // page. Opt into the old dim/blur via `dimBackdrop`.
-              className={`fixed inset-0 z-40 ${dimBackdrop ? 'bg-black/5 backdrop-blur-[2px]' : ''}`}
-              onClick={() => setIsOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 12, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 8, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.8 }}
-              className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-3xl border border-white/40 bg-white/80 p-1 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
-            >
-              <div className="max-h-[70vh] overflow-y-auto px-5 py-6">
-                {renderDropdown(() => setIsOpen(false))}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* ── Dropdown Popover (Glassmorphic) ─────────────────────────────
+          Portaled via AnchoredLayer so the popover (and its high z) escapes any
+          transformed/blurred ancestor of the bar. AnchoredLayer owns dismissal
+          (outside-click + Escape); the optional dim layer is a separate Layer so
+          it can sit full-screen behind the popover. */}
+      {dimBackdrop && isOpen ? (
+        <Layer level="dropdown">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 bg-black/5 backdrop-blur-[2px]"
+            onClick={() => setIsOpen(false)}
+          />
+        </Layer>
+      ) : null}
+      <AnchoredLayer
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        anchorRef={containerRef}
+        placement="bottom-stretch"
+        gap={8}
+        ignoreClickSelector="[data-radix-popper-content-wrapper]"
+      >
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30, mass: 0.8 }}
+          className="overflow-hidden rounded-3xl border border-white/40 bg-white/80 p-1 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.18)] backdrop-blur-xl ring-1 ring-black/[0.08]"
+        >
+          <div className="max-h-[70vh] overflow-y-auto px-5 py-6">
+            {renderDropdown(() => setIsOpen(false))}
+          </div>
+        </motion.div>
+      </AnchoredLayer>
 
       {/* ── Active Refinement Pills (Clean) ────────────────────────── */}
       <AnimatePresence mode="popLayout">

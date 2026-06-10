@@ -64,7 +64,7 @@ export const RedesignedBottomNav = () => {
   if (!user) return null;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-[100] pointer-events-none">
+    <nav className="fixed inset-x-0 bottom-0 z-panel pointer-events-none">
       <div className={`
         w-full h-16 pb-[env(safe-area-inset-bottom)]
         ${TOKENS.colors.surface}

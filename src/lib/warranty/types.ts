@@ -68,6 +68,8 @@ export interface WarrantyClaimListRow {
   denialReasonCode: string | null;
   rmaId: number | null;
   repairServiceId: number | null;
+  /** Linked Zendesk ticket id (created from this claim), when one exists. */
+  zendeskTicketId: number | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -485,3 +485,57 @@ linkage → outputs. All behind `WARRANTY_LOGGER`. Customer email remains deferr
 Deferred niceties: RMA admin visibility needs `INVENTORY_V2_RMA` on; eBay is draft-only by design.
 </content>
 </invoke>
+
+---
+
+## 14b. Phase 7 — full CRUD (bulk + delete) and Zendesk round-trip — DONE (2026-06-09)
+
+Claims are now the house "support ticket" entity with complete round-trip CRUD and a
+linked Zendesk thread. Migration `2026-06-09_warranty_zendesk_link.sql` (applied) adds
+`warranty_claims.zendesk_ticket_id BIGINT` + `deleted_at TIMESTAMPTZ` and a partial index
+on linked rows.
+
+- **Soft delete**: `DELETE /api/warranty/claims/[id]` and `DELETE /api/warranty/claims/bulk`
+  ({ ids: [...] ≤200 }) tombstone via `deleted_at` (set-based `softDeleteClaims` in
+  mutations.ts + a `DELETED` event per claim). Every read path filters `deleted_at IS NULL`
+  (claims/reports/coverage/clock-sweep). Rows are never hard-dropped — events, audit rows,
+  and RMA/repair links stay intact.
+- **Bulk create**: `POST /api/warranty/claims/bulk` ({ items: [...] ≤100 }) — sequential
+  `createClaim` per item (WC-number generation is per-year sequential), per-item
+  `results[]` with ok/error so a partial batch is never all-or-nothing. Both bulk verbs are
+  idempotent via `Idempotency-Key`/body key and audit `warranty.bulk_create|bulk_delete`.
+- **Zendesk round-trip** (`warranty.view` read / `warranty.manage` write, all gated by
+  `WARRANTY_LOGGER`):
+  - `POST /claims/[id]/zendesk` — creates the ticket from a deterministic template
+    (`buildWarrantyTicketTemplate` in `zendesk-format.ts`, internal first comment,
+    `external_id = warranty_claim:<id>`, tags `warranty_claim` + claim number), then stamps
+    `zendesk_ticket_id`, upserts the universal `ticket_links` row and appends a
+    `ZENDESK_TICKET_CREATED` event (`zendesk-link.ts`). 409 when already linked;
+    503/502 return the draft subject/body for manual filing (receiving-claim precedent).
+  - `GET /claims/[id]/zendesk` — live ticket status + agent URL.
+  - `GET/POST /claims/[id]/zendesk/comments` — thread fetch + reply/internal note
+    (`ZENDESK_REPLY` event echo). **Sync model: read-time fetch, no webhook** — Zendesk owns
+    the conversation; the popover pulls live on open (same reasoning as tracking-live-sync:
+    polling over paid/managed webhooks, and here there is no background state to converge).
+  - Close round-trip: `POST /claims/[id]/close` now best-effort solves the linked ticket
+    (internal note + `ZENDESK_STATUS` event; failure surfaces as `zendeskWarning`).
+- **UI**: `WarrantyTicketButton` (MessageSquare icon, blue when linked) on every claims-table
+  row and in the detail-panel header → AnchoredLayer popover (`panelPopover` band) with the
+  merged chronological history (claim events + Zendesk comments via `mergeWarrantyTimeline`),
+  reply composer (internal note default, customer-visible toggle, ⌘/Ctrl+Enter), create-ticket
+  CTA with copyable draft fallback, live status chip, agent deep link, and a Resolve button
+  (closes the claim → solves the ticket). Detail header also gained a confirm-guarded
+  delete (trash) action. Hooks: `useWarrantyZendesk.ts`; `useWarrantyMutations` gained
+  `remove` / `bulkCreate` / `bulkRemove`.
+- **Verify**: tsc 0 · `npm run test:warranty` 41/41 (new `zendesk-format.test.ts`) ·
+  manifest re-emitted, all 4 new routes gated (the 1 ungated write in the summary is the
+  pre-existing `/api/orders-exceptions/sync`).
+
+Post-review hardening (api-route-reviewer + neon-cost-reviewer findings, same day):
+`getClaimTicketRef` narrow lookup replaces getClaim's 4-query fan-out on the zendesk
+GET/comments paths; `POST /zendesk` patches the claim in memory instead of re-fetching;
+PATCH `/claims/[id]` is now idempotent (idempotencyKey in `WarrantyClaimUpdateBody`);
+`listRepairAttempts` capped at LIMIT 100; `2026-06-09b_warranty_claims_live_idx.sql`
+(applied) adds the `(status, created_at DESC) WHERE deleted_at IS NULL` partial index for
+the live-rows read path. E2E: `tests/e2e/warranty-zendesk.spec.ts` (mocked Zendesk; skips
+when WARRANTY_LOGGER is off).

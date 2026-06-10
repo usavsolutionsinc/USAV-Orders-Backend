@@ -1,0 +1,210 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Unbox" [ref=e181] [cursor=pointer]:
+          - img [ref=e182]
+          - generic [ref=e12]: Unbox
+          - img [ref=e14]
+        - tablist "Mode" [ref=e18]:
+          - generic [ref=e19]:
+            - tab "Incoming" [ref=e20] [cursor=pointer]:
+              - img [ref=e21]
+            - tab "Receiving" [ref=e24] [cursor=pointer]:
+              - img [ref=e25]
+            - tab "Unbox" [selected] [ref=e27] [cursor=pointer]:
+              - img [ref=e29]
+            - tab "Local Pickup" [ref=e33] [cursor=pointer]:
+              - img [ref=e34]
+            - tab "History" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+        - generic [ref=e40]:
+          - generic [ref=e188]:
+            - 'status "Auto-detect (Tracking #)" [ref=e190]':
+              - img [ref=e191]
+            - 'textbox "Tracking, PO #" [ref=e194]'
+            - generic [ref=e196]:
+              - 'button "Arm Tracking #: force the next scan to search Tracking #." [ref=e197] [cursor=pointer]':
+                - img [ref=e198]
+              - 'button "Arm PO #: force the next scan to search PO #." [ref=e201] [cursor=pointer]':
+                - img [ref=e202]
+          - generic [ref=e59]:
+            - tablist "Unbox queue view" [ref=e206]:
+              - generic [ref=e207]:
+                - tab "Queue" [selected] [ref=e208] [cursor=pointer]:
+                  - img [ref=e209]
+                  - generic [ref=e213]: Queue
+                - tab "Recent" [ref=e214] [cursor=pointer]:
+                  - img [ref=e215]
+                  - generic [ref=e217]: Recent
+            - generic [ref=e793]:
+              - generic [ref=e794]:
+                - paragraph [ref=e795]: Scanned · 0
+                - generic [ref=e796]:
+                  - button "Sync Zoho" [ref=e797] [cursor=pointer]:
+                    - img [ref=e798]
+                    - text: Sync Zoho
+                  - button "Select rows for bulk actions" [ref=e800] [cursor=pointer]:
+                    - img [ref=e801]
+              - listbox "Scanned activity" [ref=e803]:
+                - option "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 8h" [selected] [ref=e804]:
+                  - button "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 8h" [ref=e805] [cursor=pointer]:
+                    - generic [ref=e807]:
+                      - paragraph [ref=e809]: Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS*
+                      - paragraph [ref=e810]:
+                        - generic [ref=e811]: 1/1
+                    - generic [ref=e812]: 8h
+    - generic [ref=e87]:
+      - banner [ref=e88]:
+        - button "Hide sidebar" [pressed] [ref=e89] [cursor=pointer]:
+          - img [ref=e90]
+        - button "Daily goal" [ref=e94] [cursor=pointer]:
+          - generic [ref=e95]:
+            - img [ref=e96]
+            - generic [ref=e100]: "0"
+          - generic [ref=e101]:
+            - generic [ref=e102]: Tech
+            - generic [ref=e103]: 0/10 scans
+          - img [ref=e104]
+        - generic [ref=e106]:
+          - button "Open command bar" [ref=e107] [cursor=pointer]:
+            - img [ref=e108]
+          - button "Notifications" [ref=e111] [cursor=pointer]:
+            - img [ref=e112]
+          - button "Account & quick access" [ref=e116] [cursor=pointer]: M
+      - main [ref=e117]:
+        - generic [ref=e814]:
+          - navigation "Receiving progress" [ref=e815]:
+            - list [ref=e816]:
+              - listitem [ref=e817]:
+                - img [ref=e819]
+                - generic [ref=e821]: Scan
+              - listitem [ref=e822]
+              - listitem [ref=e824]:
+                - generic [ref=e825]: "2"
+                - generic [ref=e826]: Photos
+              - listitem [ref=e827]
+              - listitem [ref=e829]:
+                - img [ref=e831]
+                - generic [ref=e833]: Condition
+              - listitem [ref=e834]
+              - listitem [ref=e836]:
+                - img [ref=e838]
+                - generic [ref=e840]: Serial
+              - listitem [ref=e841]
+              - listitem [ref=e843]:
+                - img [ref=e845]
+                - generic [ref=e847]: Print
+          - generic [ref=e849]:
+            - generic [ref=e851]:
+              - button "Refresh line from Zoho" [ref=e852] [cursor=pointer]:
+                - img [ref=e854]
+              - button "Share receiving link" [ref=e856] [cursor=pointer]:
+                - img [ref=e858]
+              - button "View audit log" [ref=e861] [cursor=pointer]:
+                - img [ref=e863]
+              - button "Copy all receiving details" [ref=e865] [cursor=pointer]:
+                - img [ref=e867]
+              - button "Share to phone" [ref=e869] [cursor=pointer]:
+                - img [ref=e871]
+              - button "Open receiving details" [ref=e873] [cursor=pointer]:
+                - img [ref=e874]
+              - button "Previous recent line" [ref=e876] [cursor=pointer]:
+                - img [ref=e877]
+              - button "Next recent line" [ref=e879] [cursor=pointer]:
+                - img [ref=e880]
+            - generic [ref=e883]:
+              - generic [ref=e889]:
+                - 'button "Urgency: Medium — click to change" [ref=e891] [cursor=pointer]': Medium
+                - 'button "Platform: eBay — click to change" [ref=e893] [cursor=pointer]': eBay
+                - 'button "Type: PO — click to change" [ref=e895] [cursor=pointer]': PO
+                - generic [ref=e896]:
+                  - button "Open listing in new tab" [ref=e897] [cursor=pointer]:
+                    - img [ref=e898]
+                  - button "eBay" [ref=e901] [cursor=pointer]:
+                    - generic [ref=e902]: eBay
+                  - button "Edit listing URL" [ref=e903] [cursor=pointer]:
+                    - img [ref=e904]
+                - generic [ref=e906]:
+                  - button "Open PO in Zoho" [ref=e907] [cursor=pointer]:
+                    - img [ref=e908]
+                  - button "0338" [ref=e911] [cursor=pointer]:
+                    - img [ref=e913]
+                    - generic [ref=e916]: "0338"
+                  - button "Edit PO#" [ref=e917] [cursor=pointer]:
+                    - img [ref=e918]
+                - generic [ref=e921]:
+                  - button "Open carrier tracking" [ref=e922] [cursor=pointer]:
+                    - img [ref=e923]
+                  - button "9698" [ref=e926] [cursor=pointer]:
+                    - img [ref=e928]
+                    - generic [ref=e931]: "9698"
+                  - button "Edit tracking" [ref=e932] [cursor=pointer]:
+                    - img [ref=e933]
+                - button "Claim →" [ref=e935] [cursor=pointer]
+                - button "Add photos" [ref=e936] [cursor=pointer]:
+                  - img [ref=e937]
+                  - img [ref=e940]
+              - generic [ref=e942]:
+                - generic [ref=e943]:
+                  - heading "PO items · 1" [level=3] [ref=e944]
+                  - button "Add to carton" [ref=e946] [cursor=pointer]:
+                    - img [ref=e947]
+                - list [ref=e949]:
+                  - listitem [ref=e950]:
+                    - generic [ref=e951]:
+                      - button "Collapse item details" [expanded] [ref=e952] [cursor=pointer]:
+                        - img [ref=e953]
+                      - generic [ref=e955]:
+                        - paragraph [ref=e956]: Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS*
+                        - generic [ref=e957]:
+                          - generic [ref=e958]: 1/1
+                          - generic [ref=e959]: ·
+                          - generic [ref=e960]: REF
+                          - generic [ref=e961]: ·
+                          - button "2-BK" [ref=e963] [cursor=pointer]:
+                            - img [ref=e965]
+                            - generic [ref=e967]: 2-BK
+                          - generic [ref=e968]: ·
+                          - button "31AE" [ref=e972] [cursor=pointer]:
+                            - img [ref=e974]
+                            - generic [ref=e976]: 31AE
+                    - generic [ref=e980]:
+                      - radiogroup "Condition grade" [ref=e982]:
+                        - radio "NEW" [ref=e983] [cursor=pointer]
+                        - radio "L-New" [ref=e984] [cursor=pointer]
+                        - radio "REFURB" [checked] [ref=e985] [cursor=pointer]
+                        - radio "A" [ref=e986] [cursor=pointer]
+                        - radio "B" [ref=e987] [cursor=pointer]
+                        - radio "C" [ref=e988] [cursor=pointer]
+                        - radio "PARTS" [ref=e989] [cursor=pointer]
+                      - generic [ref=e992]:
+                        - textbox "Serial" [active] [ref=e993]:
+                          - /placeholder: " "
+                        - generic: Serial
+                      - button [disabled] [ref=e994]:
+                        - img [ref=e995]
+              - generic [ref=e998]:
+                - textbox "Notes" [ref=e999]:
+                  - /placeholder: " "
+                - generic: Notes
+              - generic [ref=e1003]:
+                - generic [ref=e1004]:
+                  - generic [ref=e1005]:
+                    - generic [ref=e1006]: eBay - PO
+                    - generic [ref=e1007]: 6/10/26
+                  - generic [ref=e1009]:
+                    - generic [ref=e1010]: Refurbished
+                    - generic [ref=e1011]: "0338"
+                - img "DataMatrix barcode" [ref=e1013]:
+                  - img [ref=e1027]
+            - generic [ref=e1018]:
+              - button "Print only, mark as scanned, or receive (no print)" [ref=e1020] [cursor=pointer]:
+                - img [ref=e1021]
+              - button "Print · receive" [ref=e1023] [cursor=pointer]:
+                - img [ref=e1024]
+                - generic [ref=e1026]: Print · receive
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e136] [cursor=pointer]:
+    - img [ref=e137]
+  - alert [ref=e140]

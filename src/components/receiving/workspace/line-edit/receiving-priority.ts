@@ -2,13 +2,16 @@
  * Client mirror of RECEIVING_PRIORITY_RANK_SQL in
  * src/app/api/receiving-lines/route.ts. Lower rank = higher priority. Kept in
  * lockstep with the server CASE so the badge shows the same order the
- * "Prioritize" sort uses: unfound/untagged leads, then amazon → ebay →
- * goodwill, everything else trails. Derived at read time — no stored column.
+ * "Prioritize" sort uses: an explicit priority flag (pending-order match or
+ * manual toggle) leads at rank 0, then unfound/untagged, then amazon → ebay →
+ * goodwill, everything else trails. Platform half derived at read time.
  */
 export function receivingPriorityRank(
   isUnmatched: boolean,
   sourcePlatform: string | null | undefined,
+  isPriority?: boolean | null,
 ): number {
+  if (isPriority) return 0;
   const platform = (sourcePlatform ?? '').trim();
   if (isUnmatched || platform === '') return 1;
   switch (platform.toLowerCase()) {
@@ -35,12 +38,23 @@ interface PriorityTone {
 /**
  * Tone + label per rank. P1 is the most urgent (amber, like the unfound pill);
  * tagged platforms step down in heat; "other" is a quiet gray.
+ *
+ * Labels MUST stay within the manual-tier vocabulary in
+ * lib/receiving/priority-override.ts (Priority/High/Medium/Low) — the urgency
+ * pill shows this derived label collapsed and the manual tiers as options, so
+ * a word that isn't a selectable tier reads as a broken picker.
  */
 export function receivingPriorityTone(rank: number): PriorityTone {
   switch (rank) {
+    case 0:
+      return {
+        label: 'Priority',
+        title: 'Flagged priority — pending-order match or manual; test/unbox first',
+        className: 'bg-red-600 text-white',
+      };
     case 1:
       return {
-        label: 'Urgent',
+        label: 'High',
         title: 'Highest priority — unfound/untagged carton, triage first',
         className: 'bg-amber-500 text-white',
       };
@@ -54,7 +68,9 @@ export function receivingPriorityTone(rank: number): PriorityTone {
       return {
         label: 'Medium',
         title: 'Medium priority — eBay',
-        className: 'bg-blue-500 text-white',
+        // blue-600 (not -500) so the collapsed urgency pill matches the
+        // platform/type pills, which share DEFAULT_ACTIVE's blue-600.
+        className: 'bg-blue-600 text-white',
       };
     case 4:
       return {

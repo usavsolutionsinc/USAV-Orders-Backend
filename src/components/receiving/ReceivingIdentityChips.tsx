@@ -40,6 +40,12 @@ export interface ReceivingIdentityChipsProps {
   className?: string;
   /** Smaller chip font + narrower columns — keeps all chips on one line on mobile rows. */
   dense?: boolean;
+  /**
+   * Replaces the tracking chip when there's no tracking value — used by the
+   * Incoming view to host the "Add tracking" popover trigger in the otherwise
+   * empty tracking slot. Ignored when a tracking value is present.
+   */
+  trackingAction?: React.ReactNode;
 }
 
 export function ReceivingIdentityChips({
@@ -54,10 +60,15 @@ export function ReceivingIdentityChips({
   asColumns = false,
   className = 'flex flex-wrap items-center gap-1.5',
   dense = false,
+  trackingAction,
 }: ReceivingIdentityChipsProps) {
   const poValue = (po || '').trim();
   const skuValue = (sku || '').trim();
   const trackingValue = (tracking || '').trim();
+  // The empty tracking slot can host an action (Incoming "Add tracking") instead
+  // of the placeholder chip — only when there's genuinely no tracking value.
+  const trackingNode =
+    !trackingValue && trackingAction ? trackingAction : null;
   const serialsValue = (serialsCsv || '').trim();
   // Dense columns are ~12px narrower so the full PO·SKU·tracking·serial set
   // stays on one line in a phone row.
@@ -74,7 +85,11 @@ export function ReceivingIdentityChips({
       columns.push({ key: 'sku', width: idCol, node: <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} /> });
     }
     if (includeTracking) {
-      columns.push({ key: 'tracking', width: trackCol, node: <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} /> });
+      columns.push({
+        key: 'tracking',
+        width: trackCol,
+        node: trackingNode ?? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />,
+      });
     }
     if (includeSerial) {
       columns.push({ key: 'serial', width: serialCol, node: <SerialChip value={serialsValue} width="w-fit max-w-full" dense={dense} /> });
@@ -86,7 +101,7 @@ export function ReceivingIdentityChips({
     <div className={className}>
       {includePo && <OrderIdChip value={poValue} display={getLast4(poValue)} dense={dense} />}
       {includeSku && <SkuScanRefChip value={skuValue} display={getLast4(skuValue)} dense={dense} />}
-      {includeTracking && <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />}
+      {includeTracking && (trackingNode ?? <TrackingChip value={trackingValue} display={getLast4(trackingValue)} dense={dense} />)}
       {includeSerial && <SerialChip value={serialsValue} dense={dense} />}
     </div>
   );

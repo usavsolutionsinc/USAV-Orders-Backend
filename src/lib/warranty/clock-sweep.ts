@@ -82,7 +82,8 @@ export async function recomputeProvisionalClocks(limit = RECOMPUTE_LIMIT): Promi
          ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
          LIMIT 1
        ) pl ON true
-       WHERE wc.status NOT IN ('CLOSED', 'EXPIRED')
+       WHERE wc.deleted_at IS NULL
+         AND wc.status NOT IN ('CLOSED', 'EXPIRED')
          AND wc.clock_basis IS DISTINCT FROM 'DELIVERED'
          AND wc.order_id IS NOT NULL
        ORDER BY wc.updated_at ASC
@@ -201,7 +202,8 @@ export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireRe
     }>(
       `SELECT id, status, claim_number, created_by_staff_id, product_title, serial_number
          FROM warranty_claims
-        WHERE status IN ('LOGGED', 'SUBMITTED')
+        WHERE deleted_at IS NULL
+          AND status IN ('LOGGED', 'SUBMITTED')
           AND warranty_expires_at IS NOT NULL
           AND warranty_expires_at < NOW()
         ORDER BY warranty_expires_at ASC

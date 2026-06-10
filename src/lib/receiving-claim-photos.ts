@@ -193,8 +193,10 @@ export async function archiveClaimViaAgent(opts: {
 /**
  * Canonical "view the PO receiving" link, built from the request origin so it
  * points at whatever host the operator is actually on (LAN URL on the LAN, the
- * public URL otherwise). Routes to the single-carton view (/m/r/:id).
+ * public URL otherwise). Routes to the desktop receiving workspace with the
+ * carton focused (`?mode=receive&recvId=`) — NOT the phone view (/m/r/:id),
+ * which is the wrong surface for whoever opens the ticket later.
  */
 export function poReceivingLink(req: NextRequest, receivingId: number): string {
-  return `${req.nextUrl.origin}/m/r/${receivingId}`;
+  return `${req.nextUrl.origin}/receiving?mode=receive&recvId=${receivingId}`;
 }

@@ -36,7 +36,7 @@ const CLIENT_PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/414\/[0-9]+\/254\/[A-Za-z0-9]+(?:$|\/)/,
 ];
 
-function isClientPublicPath(pathname: string | null): boolean {
+export function isClientPublicPath(pathname: string | null): boolean {
   if (!pathname) return false;
   return CLIENT_PUBLIC_PATHS.some((re) => re.test(pathname));
 }
@@ -172,7 +172,7 @@ export function AuthProvider({ initial = null, children }: ProviderProps) {
  */
 function RedirectingSplash() {
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-white">
+    <div className="fixed inset-0 z-splash flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-3 text-gray-500">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700" />
         <p className="text-caption font-bold uppercase tracking-widest">Redirecting to sign-in…</p>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, X } from '@/components/Icons';
+import { Layer } from '@/design-system';
 import { SidebarIntakeFormField } from '@/design-system/components';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
@@ -79,7 +80,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+    <Layer level="panelPopover" className="fixed inset-0 flex items-center justify-center p-4">
       <button
         type="button"
         className="absolute inset-0 bg-black/35"
@@ -89,7 +90,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
           setOpen(false);
         }}
       />
-      <div className="relative z-[111] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
+      <div className="relative z-panelPopover w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl shadow-zinc-900/15">
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
           <div>
             <p className={`text-micro font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
@@ -242,6 +243,6 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
           </button>
         </div>
       </div>
-    </div>
+    </Layer>
   );
 }

@@ -14,7 +14,7 @@ import { motion } from 'framer-motion';
  */
 export function BootSplash({ label = 'Loading your workspace' }: { label?: string }) {
   return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-white">
+    <div className="fixed inset-0 z-splash flex items-center justify-center bg-white">
       {/* faint dotted field — same texture as the sign-in Shell */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.025]"

@@ -131,7 +131,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
       </section>
 
       {/* Tab strip */}
-      <div className="sticky top-14 z-30 flex border-b border-gray-100 bg-white">
+      <div className="sticky top-14 z-sticky flex border-b border-gray-100 bg-white">
         {(['items', 'photos'] as Tab[]).map((t) => {
           const active = tab === t;
           return (

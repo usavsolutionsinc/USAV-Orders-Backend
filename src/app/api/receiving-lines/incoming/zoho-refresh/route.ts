@@ -12,8 +12,10 @@
  *      `zoho_po_mirror.status`. This is what makes a *received* PO disappear:
  *      a PO that left 'issued' (now billed/closed/received) is no longer in the
  *      issued pull, so step 1 never re-touches it. Step 2 updates its mirror
- *      status, and the Incoming summary/list filter
- *      (NOT_ZOHO_RECEIVED_PREDICATE) then drops it from the display.
+ *      status; the Incoming summary/list filter (NOT_ZOHO_RECEIVED_PREDICATE)
+ *      then drops it from the display, and the sync's built-in
+ *      reconcileZohoReceivedLines pass marks door-scanned lines on those POs
+ *      as received locally so they clear the triage Prioritize queue too.
  *
  * After both, we invalidate the receiving-lines cache tags so the rail and
  * tiles reflect the fresh state on the operator's next refetch.
@@ -80,10 +82,13 @@ export const POST = withAuth(async (_req: NextRequest) => {
       },
       // `mirror_upserted` includes POs whose status changed to received/closed —
       // those are the rows that clear from Incoming on the next read.
+      // `lines_marked_received` counts scanned-queue lines the sync marked
+      // received because Zoho reports their PO received/billed/closed.
       mirror: {
         mode: mirror.mode,
         fetched: mirror.fetched,
         upserted: mirror.upserted,
+        lines_marked_received: mirror.reconciled,
         errors: mirror.errors.slice(0, 5),
       },
       elapsedMs: Date.now() - startedAt,

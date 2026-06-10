@@ -7,7 +7,7 @@
  * `StaffAccessDetail`. The card creates a stacking context that swallowed
  * the popover under the Page access card below it. Rendering through
  * `createPortal` to document.body escapes every parent stacking context
- * and a z-[120] keeps us above the FAB (z-40) and SwitchStaffSheet (z-80).
+ * and a z-panelPopover keeps us above the FAB (z-40) and SwitchStaffSheet (z-80).
  *
  * Re-anchors on resize and scroll. Closes on outside-click and Escape.
  */
@@ -103,7 +103,7 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
           ref={popoverRef}
           role="menu"
           aria-label="Add role"
-          className="fixed z-[120] max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl shadow-gray-900/15"
+          className="fixed z-panelPopover max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl shadow-gray-900/15"
           style={{ top: pos.top, left: pos.left, width: POPOVER_WIDTH }}
         >
           <ul className="divide-y divide-gray-100">

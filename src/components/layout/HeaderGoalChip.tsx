@@ -2,6 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AnchoredLayer } from '@/design-system';
+import {
+  staffTodosQuery,
+  isTodoDone,
+  createStaffTodoApi,
+  toggleStaffTodoApi,
+  setStaffTodoIntervalApi,
+  deleteStaffTodoApi,
+  type StaffTodoItem,
+  type StaffTodoKind,
+} from '@/lib/queries/staff-todos-queries';
 import { Bell, Check, ChevronDown, Clock, Plus, RotateCcw, Barcode, Trash2, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,17 +39,20 @@ import { useAuth } from '@/contexts/AuthContext';
  *   · to-do     — a general, persistent checklist the user ticks off (does not
  *                 reset on its own).
  *
- * There is no backend for the checklists yet, so the chosen mode, the to-dos,
- * and the recurring list (+ its interval + cycle anchor) are persisted to
- * localStorage, scoped per staff + station.
+ * The checklists are server-backed (staff_todos via /api/staff-todos, per
+ * staff + station) so they follow the user across devices. Recurring "done"
+ * is derived client-side from each task's cycle (anchor + interval) and its
+ * latest completion, recomputed on a 30s tick — rollover needs no refetch.
+ * Only the chosen mode and active station remain in localStorage (UI prefs),
+ * and any legacy v1 localStorage lists are imported once, then cleared.
  */
 
 type StationKey = 'TECH' | 'PACK' | 'UNBOX' | 'SALES' | 'FBA';
 type GoalMode = 'scans' | 'recurring' | 'todo';
+/** UI row shape consumed by {@link TaskList} (server rows map onto this). */
 type Todo = { id: string; text: string; done: boolean };
-/** Recurring checklist: one reset interval for the whole list, anchored to the
- *  start of the current cycle so it rolls over even while the popover is shut. */
-type RecurringState = { intervalMs: number; anchor: number; items: Todo[] };
+/** Legacy v1 localStorage shape — read only by the one-time import. */
+type LegacyRecurringState = { intervalMs: number; anchor: number; items: Todo[] };
 
 type StationGoal = {
   station: StationKey;
@@ -100,21 +115,19 @@ function writeLS<T>(key: string, value: T): void {
     /* quota / private mode — non-fatal */
   }
 }
-function newId(): string {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  }
-}
-
 const activeKey = (staffId: number) => `usav.hgoal.active.${staffId}`;
 const modeKey = (staffId: number, st: StationKey) => `usav.hgoal.mode.${staffId}.${st}`;
+// Legacy v1 list keys — only read (then removed) by the one-time server import.
 const todoKey = (staffId: number, st: StationKey) => `usav.hgoal.todo.${staffId}.${st}`;
 const recurKey = (staffId: number, st: StationKey) => `usav.hgoal.recurring.${staffId}.${st}`;
 
-function defaultRecurring(now: number): RecurringState {
-  return { intervalMs: DEFAULT_INTERVAL_MS, anchor: now, items: [] };
+function removeLS(key: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    /* non-fatal */
+  }
 }
 
 /** Accept whatever the mode key holds (incl. the legacy 'checklist' value). */
@@ -122,18 +135,6 @@ function asMode(v: string | null | undefined): GoalMode {
   if (v === 'recurring' || v === 'todo' || v === 'scans') return v;
   if (v === 'checklist') return 'todo'; // legacy v1 single-checklist → general to-do
   return 'scans';
-}
-
-/** Advance the recurring list across any elapsed interval cycles, un-checking
- *  every item when at least one full interval has passed since the anchor. */
-function rollRecurring(state: RecurringState, now: number): RecurringState {
-  if (state.intervalMs <= 0 || state.items.length === 0) return state;
-  const elapsed = now - state.anchor;
-  if (elapsed < state.intervalMs) return state;
-  const cycles = Math.floor(elapsed / state.intervalMs);
-  const anchor = state.anchor + cycles * state.intervalMs;
-  if (!state.items.some((i) => i.done)) return { ...state, anchor };
-  return { ...state, anchor, items: state.items.map((i) => ({ ...i, done: false })) };
 }
 
 /* ── progress ring ─────────────────────────────────────────────────────────── */
@@ -300,6 +301,7 @@ function TaskList({
 export function HeaderGoalChip() {
   const { user } = useAuth();
   const staffId = user?.staffId ?? null;
+  const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -309,12 +311,41 @@ export function HeaderGoalChip() {
 
   const [active, setActive] = useState<StationKey | null>(null);
   const [mode, setMode] = useState<GoalMode>('scans');
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [recurring, setRecurring] = useState<RecurringState>(() => defaultRecurring(Date.now()));
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
+  // Recurring done-ness is pure client math over (anchor, interval, latest
+  // completion); this tick re-evaluates it every 30s so the cycle visibly
+  // rolls over (and the red "due" dot lights up) without any refetch.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  // Interval selection shown while the recurring list is EMPTY — once rows
+  // exist, the list itself carries the interval and this is just a mirror.
+  const [draftIntervalMs, setDraftIntervalMs] = useState(DEFAULT_INTERVAL_MS);
 
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  /* server-backed checklists for the active station */
+  const todosQuery = useQuery({
+    ...staffTodosQuery(staffId ?? 0, active ?? ''),
+    enabled: !!staffId && !!active,
+  });
+  const serverItems = useMemo(() => todosQuery.data ?? [], [todosQuery.data]);
+
+  const todoItems = useMemo<Todo[]>(
+    () =>
+      serverItems
+        .filter((it) => it.kind === 'general')
+        .map((it) => ({ id: String(it.id), text: it.text, done: it.completed_at_ms != null })),
+    [serverItems],
+  );
+  const recurItems = useMemo<Todo[]>(
+    () =>
+      serverItems
+        .filter((it) => it.kind === 'recurring')
+        .map((it) => ({ id: String(it.id), text: it.text, done: isTodoDone(it, nowMs) })),
+    [serverItems, nowMs],
+  );
+  const intervalMs =
+    serverItems.find((it) => it.kind === 'recurring')?.recur_interval_ms ?? draftIntervalMs;
 
   /* fetch the logged-in user's own station goals (+ live scan counts) */
   const load = useCallback(() => {
@@ -362,61 +393,73 @@ export function HeaderGoalChip() {
     load();
   }, [load]);
 
-  /* when the active station changes, hydrate its mode + checklists from LS */
+  /* when the active station changes, hydrate its mode (a UI pref) from LS */
   useEffect(() => {
     if (!staffId || !active) return;
     setMode(asMode(readLS<string>(modeKey(staffId, active), 'scans')));
-    setTodos(readLS<Todo[]>(todoKey(staffId, active), []));
-    const storedRecur = readLS<RecurringState>(recurKey(staffId, active), defaultRecurring(Date.now()));
-    const rolled = rollRecurring(storedRecur, Date.now());
-    setRecurring(rolled);
-    if (rolled !== storedRecur) writeLS(recurKey(staffId, active), rolled);
+    setDraftIntervalMs(DEFAULT_INTERVAL_MS);
     setAdding(false);
     setDraft('');
   }, [staffId, active]);
 
-  /* tick the recurring list over even while the popover is closed, so the chip
-     can surface the red "due" reminder the moment an interval rolls over */
+  /* tick so recurring done-ness rolls over even while the popover is closed,
+     surfacing the red "due" reminder the moment an interval cycle turns */
   useEffect(() => {
-    if (!staffId || !active) return;
-    const tick = () => {
-      setRecurring((cur) => {
-        const next = rollRecurring(cur, Date.now());
-        if (next !== cur) writeLS(recurKey(staffId, active), next);
-        return next;
-      });
-    };
-    const id = window.setInterval(tick, 30_000);
+    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(id);
-  }, [staffId, active]);
+  }, []);
+
+  /* one-time import of the legacy localStorage v1 lists: when the server list
+     is empty but LS still holds items, push them up, then clear the LS keys */
+  const importedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!staffId || !active || !todosQuery.isSuccess) return;
+    if ((todosQuery.data?.length ?? 0) > 0) return;
+    const guard = `${staffId}.${active}`;
+    if (importedRef.current.has(guard)) return;
+    const legacyTodos = readLS<Todo[]>(todoKey(staffId, active), []);
+    const legacyRecur = readLS<LegacyRecurringState>(recurKey(staffId, active), {
+      intervalMs: DEFAULT_INTERVAL_MS,
+      anchor: 0,
+      items: [],
+    });
+    if (legacyTodos.length === 0 && legacyRecur.items.length === 0) return;
+    importedRef.current.add(guard);
+    const station = active;
+    (async () => {
+      try {
+        for (const t of legacyTodos) {
+          const item = await createStaffTodoApi({ station, kind: 'general', text: t.text });
+          if (t.done) await toggleStaffTodoApi(item.id, true);
+        }
+        for (const t of legacyRecur.items) {
+          const item = await createStaffTodoApi({
+            station,
+            kind: 'recurring',
+            text: t.text,
+            intervalMs: legacyRecur.intervalMs > 0 ? legacyRecur.intervalMs : undefined,
+          });
+          if (t.done) await toggleStaffTodoApi(item.id, true);
+        }
+        removeLS(todoKey(staffId, station));
+        removeLS(recurKey(staffId, station));
+      } catch {
+        /* partial import — server wins next load; keys stay for retry */
+      }
+      void queryClient.invalidateQueries({ queryKey: ['staff-todos', staffId, station] });
+    })();
+  }, [staffId, active, todosQuery.isSuccess, todosQuery.data, queryClient]);
 
   /* refresh live counts each time the popover opens */
   useEffect(() => {
     if (open) load();
   }, [open, load]);
 
-  /* click-outside + Escape close */
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSwitching(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-        setSwitching(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  /* click-outside + Escape close are owned by AnchoredLayer (see render). */
+  const closePopover = useCallback(() => {
+    setOpen(false);
+    setSwitching(false);
+  }, []);
 
   const selectStation = useCallback(
     (st: StationKey) => {
@@ -439,61 +482,134 @@ export function HeaderGoalChip() {
     [staffId, active],
   );
 
-  /* ── general to-do CRUD ──────────────────────────────────────────────────── */
-  const persistTodos = useCallback(
-    (next: Todo[]) => {
-      if (!staffId || !active) return;
-      setTodos(next);
-      writeLS(todoKey(staffId, active), next);
-    },
+  /* ── checklist CRUD (optimistic cache writes, server reconciles) ─────────── */
+  const listKey = useCallback(
+    () => staffTodosQuery(staffId ?? 0, active ?? '').queryKey,
     [staffId, active],
   );
-  const toggleTodo = (id: string) =>
-    persistTodos(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  const removeTodo = (id: string) => persistTodos(todos.filter((t) => t.id !== id));
-  const addTodo = () => {
-    const text = draft.trim();
-    if (!text) return;
-    persistTodos([...todos, { id: newId(), text, done: false }]);
-    setDraft('');
-  };
+  const refreshList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: listKey() });
+  }, [queryClient, listKey]);
 
-  /* ── recurring CRUD + interval ───────────────────────────────────────────── */
-  const persistRecurring = useCallback(
-    (next: RecurringState) => {
+  const toggleItem = useCallback(
+    (list: Todo[], id: string) => {
       if (!staffId || !active) return;
-      setRecurring(next);
-      writeLS(recurKey(staffId, active), next);
+      const cur = list.find((t) => t.id === id);
+      const serverId = Number(id);
+      if (!cur || serverId <= 0) return; // temp optimistic row — not on the server yet
+      const done = !cur.done;
+      const ts = Date.now();
+      queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) =>
+        (items ?? []).map((it) =>
+          it.id === serverId
+            ? it.kind === 'general'
+              ? { ...it, completed_at_ms: done ? ts : null }
+              : { ...it, last_completed_at_ms: done ? ts : null }
+            : it,
+        ),
+      );
+      toggleStaffTodoApi(serverId, done)
+        .then((item) =>
+          queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) =>
+            (items ?? []).map((it) => (it.id === item.id ? item : it)),
+          ),
+        )
+        .catch(refreshList);
     },
-    [staffId, active],
+    [staffId, active, queryClient, listKey, refreshList],
   );
-  const toggleRecur = (id: string) =>
-    persistRecurring({ ...recurring, items: recurring.items.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) });
-  const removeRecur = (id: string) =>
-    persistRecurring({ ...recurring, items: recurring.items.filter((t) => t.id !== id) });
-  const addRecur = () => {
-    const text = draft.trim();
-    if (!text) return;
-    persistRecurring({ ...recurring, items: [...recurring.items, { id: newId(), text, done: false }] });
-    setDraft('');
+
+  const removeItem = useCallback(
+    (id: string) => {
+      if (!staffId || !active) return;
+      const serverId = Number(id);
+      queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) =>
+        (items ?? []).filter((it) => String(it.id) !== id),
+      );
+      if (serverId > 0) deleteStaffTodoApi(serverId).catch(refreshList);
+    },
+    [staffId, active, queryClient, listKey, refreshList],
+  );
+
+  const addItem = useCallback(
+    (kind: StaffTodoKind) => {
+      const text = draft.trim();
+      if (!text || !staffId || !active) return;
+      setDraft('');
+      const ts = Date.now();
+      const temp: StaffTodoItem = {
+        id: -ts, // negative = not yet on the server (toggle/delete skip the API)
+        kind,
+        text,
+        sort_order: Number.MAX_SAFE_INTEGER,
+        recur_interval_ms: kind === 'recurring' ? intervalMs : null,
+        recur_anchor_ms: kind === 'recurring' ? ts : null,
+        completed_at_ms: null,
+        last_completed_at_ms: null,
+      };
+      queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) => [...(items ?? []), temp]);
+      createStaffTodoApi({
+        station: active,
+        kind,
+        text,
+        intervalMs: kind === 'recurring' ? intervalMs : undefined,
+      })
+        .then((item) =>
+          queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) =>
+            (items ?? []).map((it) => (it.id === temp.id ? item : it)),
+          ),
+        )
+        .catch(refreshList);
+    },
+    [draft, staffId, active, intervalMs, queryClient, listKey, refreshList],
+  );
+
+  const toggleTodo = (id: string) => toggleItem(todoItems, id);
+  const removeTodo = removeItem;
+  const addTodo = () => addItem('general');
+  const toggleRecur = (id: string) => toggleItem(recurItems, id);
+  const removeRecur = removeItem;
+  const addRecur = () => addItem('recurring');
+
+  // Changing the interval restarts the cycle from now so it doesn't fire
+  // instantly; the server re-logs completions for checked tasks so nothing
+  // un-checks. With an empty list it's just a local draft for the next add.
+  const changeInterval = (ms: number) => {
+    setDraftIntervalMs(ms);
+    if (!staffId || !active || recurItems.length === 0) return;
+    const station = active;
+    const ts = Date.now();
+    queryClient.setQueryData<StaffTodoItem[]>(listKey(), (items) =>
+      (items ?? []).map((it) =>
+        it.kind === 'recurring'
+          ? {
+              ...it,
+              recur_interval_ms: ms,
+              recur_anchor_ms: ts,
+              last_completed_at_ms: isTodoDone(it, ts) ? ts : null,
+            }
+          : it,
+      ),
+    );
+    setStaffTodoIntervalApi(station, ms)
+      .then((items) => queryClient.setQueryData<StaffTodoItem[]>(listKey(), items))
+      .catch(refreshList);
   };
-  // Changing the interval restarts the cycle from now so it doesn't fire instantly.
-  const changeInterval = (ms: number) => persistRecurring({ ...recurring, intervalMs: ms, anchor: Date.now() });
 
   const activeGoal = useMemo(
     () => goals?.find((g) => g.station === active) ?? null,
     [goals, active],
   );
 
-  // Recurring items are "due" whenever any is unchecked — after an interval roll
-  // they all un-check, so this lights up the moment the cycle turns over.
-  const recurDue = recurring.items.length > 0 && recurring.items.some((t) => !t.done);
+  // Recurring items are "due" whenever any is unchecked — after a cycle turns
+  // over their completions fall out of the current period, lighting this up.
+  const recurDue = recurItems.length > 0 && recurItems.some((t) => !t.done);
 
   const view = useMemo(() => {
     if (!activeGoal) return null;
     const { target, scanCount } = activeGoal;
     if (mode === 'todo' || mode === 'recurring') {
-      const list = mode === 'todo' ? todos : recurring.items;
+      const list = mode === 'todo' ? todoItems : recurItems;
       const done = list.filter((t) => t.done).length;
       const total = list.length;
       const percent = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -506,7 +622,7 @@ export function HeaderGoalChip() {
       total: 0,
       percent: target <= 0 ? 0 : Math.round((scanCount / target) * 100),
     };
-  }, [activeGoal, todos, recurring, mode]);
+  }, [activeGoal, todoItems, recurItems, mode]);
 
   if (!user || !goals || !active || !activeGoal || !view) return null;
 
@@ -549,14 +665,18 @@ export function HeaderGoalChip() {
         </span>
       )}
 
-      <AnimatePresence>
-        {open && (
+      <AnchoredLayer
+        open={open}
+        onClose={closePopover}
+        anchorRef={wrapRef}
+        placement="bottom-start"
+        gap={8}
+      >
           <motion.div
             initial={{ opacity: 0, y: -6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-            className="absolute left-0 top-[calc(100%+8px)] z-50 w-[290px] origin-top-left overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_12px_40px_rgba(20,30,55,0.16)]"
+            className="w-[290px] origin-top-left overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_12px_40px_rgba(20,30,55,0.16)]"
           >
             {/* header: title + Switch (only when there are secondary stations) */}
             <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3.5 py-3">
@@ -712,7 +832,7 @@ export function HeaderGoalChip() {
                               onClick={() => changeInterval(opt.ms)}
                               className={cn(
                                 'rounded-md px-1.5 py-0.5 text-[10px] font-bold transition-colors',
-                                recurring.intervalMs === opt.ms
+                                intervalMs === opt.ms
                                   ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
                                   : 'text-gray-500 hover:text-gray-900',
                               )}
@@ -731,7 +851,7 @@ export function HeaderGoalChip() {
 
                       <div className="mt-1 max-h-[200px] overflow-y-auto px-2 pb-2">
                         <TaskList
-                          items={recurring.items}
+                          items={recurItems}
                           onToggle={toggleRecur}
                           onRemove={removeRecur}
                           adding={adding}
@@ -752,7 +872,7 @@ export function HeaderGoalChip() {
                   ) : (
                     <div className="max-h-[230px] overflow-y-auto px-2 py-2">
                       <TaskList
-                        items={todos}
+                        items={todoItems}
                         onToggle={toggleTodo}
                         onRemove={removeTodo}
                         adding={adding}
@@ -774,8 +894,7 @@ export function HeaderGoalChip() {
               )}
             </AnimatePresence>
           </motion.div>
-        )}
-      </AnimatePresence>
+      </AnchoredLayer>
     </div>
   );
 }

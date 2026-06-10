@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { transaction } from '@/lib/neon-client';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { publishReceivingLogChanged, publishReturnPendingTest, publishOrderReadyShip } from '@/lib/realtime/publish';
 import {
   assertPurchaseOrderLineItemsEditable,
   assertPurchaseOrderReceivable,
@@ -375,8 +375,11 @@ export const POST = withAuth(async (request, ctx) => {
       condition_grade: string | null;
     }>)[0] ?? null;
 
-    // 1. Update the line locally. When Zoho receive is required, stay MATCHED
-    //    (UI: "SCANNED") until createPurchaseReceive succeeds; then we set DONE.
+    // 1. Update the line locally. When Zoho receive is required, sit at
+    //    UNBOXED (physically processed, Zoho receive pending) until
+    //    createPurchaseReceive succeeds; then we set DONE. UNBOXED — not
+    //    MATCHED — so a Zoho-pending line can't be mistaken for (or re-queued
+    //    as) a merely door-scanned carton.
     const lineUpdate = await pool.query(
       `UPDATE receiving_lines
        SET qa_status = $1,
@@ -384,7 +387,7 @@ export const POST = withAuth(async (request, ctx) => {
            condition_grade = $3,
            notes = $4,
            workflow_status = CASE
-             WHEN $6 THEN 'MATCHED'::inbound_workflow_status_enum
+             WHEN $6 THEN 'UNBOXED'::inbound_workflow_status_enum
              ELSE 'DONE'::inbound_workflow_status_enum
            END,
            quantity_received = GREATEST(
@@ -468,12 +471,42 @@ export const POST = withAuth(async (request, ctx) => {
       });
     }
 
-    // 3. Update receiving row unboxed_at if set
+    // 3. Update receiving row unboxed_at if set. Capture whether THIS call is the
+    // one that newly unboxed the carton (COALESCE keeps an existing timestamp),
+    // plus the carton flags, so the tech-station inbox is nudged exactly once.
     if (receivingId) {
-      await pool.query(
-        `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
-        [now, receivingId],
-      ).catch(() => {});
+      const cartonUpd = await pool
+        .query<{ is_return: boolean | null; is_priority: boolean | null; just_unboxed: boolean; tracking: string | null }>(
+          `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1
+            WHERE id = $2
+            RETURNING is_return, is_priority,
+                      (unboxed_at = $1) AS just_unboxed,
+                      receiving_tracking_number AS tracking`,
+          [now, receivingId],
+        )
+        .catch(() => null);
+      const carton = cartonUpd?.rows?.[0];
+      if (carton?.just_unboxed) {
+        after(async () => {
+          try {
+            if (carton.is_return) {
+              await publishReturnPendingTest({
+                receivingId,
+                trackingNumber: carton.tracking,
+                source: 'receiving.mark-received',
+              });
+            } else if (carton.is_priority) {
+              await publishOrderReadyShip({
+                receivingId,
+                trackingNumber: carton.tracking,
+                source: 'receiving.mark-received',
+              });
+            }
+          } catch (err) {
+            console.warn('mark-received: tech-inbox notify failed', err);
+          }
+        });
+      }
     }
 
     // Resolve tracking# for the reference_number push. Prefer the canonical
@@ -662,7 +695,7 @@ export const POST = withAuth(async (request, ctx) => {
     });
 
     const workflowStatus =
-      String(line.workflow_status ?? '').trim() || (hasZohoReceive ? 'MATCHED' : 'DONE');
+      String(line.workflow_status ?? '').trim() || (hasZohoReceive ? 'UNBOXED' : 'DONE');
 
     await recordAudit(pool, ctx, request, {
       source: 'receiving-station',

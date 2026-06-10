@@ -6,22 +6,29 @@
  * Mounted by {@link LineEditPanel} where {@link PoLinesAccordion} would
  * sit for a Zoho-matched carton. Owns:
  *   - fetching the carton's existing receiving_lines
- *   - the [+ Add item] CTA + EcwidProductSearchPopover (centered modal)
+ *   - the [+] CTA → CartonAddPopover (Item = zoho_catalog search · Web · Box)
+ *   - [Link repair service] → EcwidProductSearchPopover (repair_service / -RS
+ *     order picker ONLY; the Ecwid search is not used to add Zoho items here)
  *   - per-line condition pill updates
  *
  * Kept deliberately small so LineEditPanel can drop it in without
  * branching on receiving_source for every prop.
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, Wrench } from '@/components/Icons';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, PackageOpen, Plus, Trash2, Wrench } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { WorkspaceCard } from '@/design-system/components';
 import {
   EcwidProductSearchPopover,
   type EcwidProductPopoverMode,
 } from '@/components/receiving/unfound/EcwidProductSearchPopover';
-import { SerialCard } from '@/components/receiving/workspace/SerialCard';
+import {
+  CartonAddPopover,
+  type AssignedBox,
+} from '@/components/receiving/workspace/CartonAddPopover';
+import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
+import { SerialCard, SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import {
   SerialMatchResult,
   useSerialLookup,
@@ -31,6 +38,7 @@ import {
 import { markConditionSet } from '@/components/receiving/workspace/ReceivingProgressStepper';
 import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
 import { SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { ConditionBadge, ProgressBadge } from '@/components/receiving/workspace/PoLinesAccordion';
 
 export interface UnfoundLine {
   id: number;
@@ -85,12 +93,29 @@ export interface UnmatchedItemsSectionProps {
   renderLineActions?: (line: UnfoundLine, helpers: UnmatchedLineRenderHelpers) => React.ReactNode;
   /** "Scan a serial number" card. Hidden in triage — serials are an unbox step. */
   showSerialScan?: boolean;
+  /**
+   * Triage only: header CTA that re-opens this carton in unbox mode (deep
+   * link `/receiving?recvId=…`). Omitted in the unbox workspace itself.
+   */
+  onOpenInUnbox?: () => void;
 }
 
 interface CartonResponse {
   success: boolean;
   lines?: UnfoundLine[];
   error?: string;
+}
+
+/**
+ * Infer the sales platform from an order number's shape — Amazon order ids
+ * are 3-7-7 digit groups, eBay's are 2-5-5. Anything else returns null (the
+ * operator keeps whatever pill they set). Used to tag a return-matched carton
+ * without a server round-trip; the order # itself is the authoritative link.
+ */
+function inferPlatformFromOrderId(orderId: string): string | null {
+  if (/^\d{3}-\d{7}-\d{7}$/.test(orderId)) return 'amazon';
+  if (/^\d{2}-\d{5}-\d{5}$/.test(orderId)) return 'ebay';
+  return null;
 }
 
 export function UnmatchedItemsSection({
@@ -103,23 +128,24 @@ export function UnmatchedItemsSection({
   onActiveConditionChange,
   renderLineActions,
   showSerialScan = true,
+  onOpenInUnbox,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
-  /** null = closed; 'search' | 'repair_service' = which mode the popover is in. */
+  /** null = closed; 'repair_service' = the Link-repair-service Ecwid popover. */
   const [popoverMode, setPopoverMode] = useState<EcwidProductPopoverMode | null>(null);
+  /** Unified add popover (Item · Web · Box). */
+  const [addOpen, setAddOpen] = useState(false);
+  /** Box this carton's units last landed in — shows as a chip in the header. */
+  const [assignedBox, setAssignedBox] = useState<AssignedBox | null>(null);
 
   // Carton-level serial matcher. An unfound carton has no lines until something
   // is added, so this lets the operator scan a serial directly: on a
   // shipped-serial match we create a line populated from the matched sales order
   // (title + sku, classified intake_type='return') and attach the serial — no
-  // manual Add-item step.
+  // manual Add-item step. No match band is rendered — the import IS the result
+  // (the line row appears below, the carton binds the order #); while it runs
+  // the card shows an inline importing loader.
   const [returnScanBusy, setReturnScanBusy] = useState(false);
-  const [returnMatch, setReturnMatch] = useState<{
-    state: 'found' | 'not-found';
-    unit: SerialMatchUnit | null;
-    serial: string;
-    matchedOrder: SerialMatchedOrder | null;
-  } | null>(null);
   // Condition for the carton-level serial scan, shown via the same ConditionPills
   // a regular unbox serial card uses. Applied to the line the scan creates.
   const [cartonScanCondition, setCartonScanCondition] = useState('USED_A');
@@ -143,6 +169,12 @@ export function UnmatchedItemsSection({
     void refreshLines();
   }, [onActiveConditionChange, refreshLines]);
 
+  // Serial-unit ids across the carton's lines — the atoms the Box tab groups.
+  const cartonUnitIds = useMemo(
+    () => lines.flatMap((l) => (l.serials ?? []).map((s) => s.id)),
+    [lines],
+  );
+
   // Scan a returned serial against the whole carton. Looks the serial up; on a
   // shipped match it creates a return line populated from the matched order and
   // attaches the serial, so the receiving record shows the right product +
@@ -161,7 +193,6 @@ export function UnmatchedItemsSection({
         const found = !!data?.found;
         const matchedOrder: SerialMatchedOrder | null = data?.matched_order ?? null;
         const unit: SerialMatchUnit | null = data?.unit ?? null;
-        setReturnMatch({ state: found ? 'found' : 'not-found', unit, serial, matchedOrder });
 
         if (!found) {
           toast.error('No shipped match for this serial — use Add item to record it manually.');
@@ -179,6 +210,9 @@ export function UnmatchedItemsSection({
             item_name: itemName,
             sku: matchedOrder?.sku || unit?.sku || undefined,
             intake_type: 'return',
+            // The grade the operator picked on the scan card — without it the
+            // line lands on the server default instead of the selected pill.
+            condition_grade: cartonScanCondition || undefined,
             client_event_id: clientEventId,
           }),
         });
@@ -203,6 +237,52 @@ export function UnmatchedItemsSection({
         const scanBody = await scanRes.json().catch(() => ({}));
         if (!scanRes.ok || !scanBody?.success) {
           toast.error(scanBody?.error || 'Line created, but the serial scan failed');
+        }
+
+        // Graduate the carton off the Unfound queue: bind the matched order #
+        // as the PO# and tag the platform inferred from the order-number
+        // shape. Same two-PATCH mechanism the repair-service link uses (the
+        // PO# write must not roll back if the platform write fails), and the
+        // same auto-flip: /api/receiving/[id] turns source 'unmatched' →
+        // 'zoho_po' once a PO#/order# is bound.
+        const orderNo = (matchedOrder?.order_id || '').trim();
+        const platform = orderNo ? inferPlatformFromOrderId(orderNo) : null;
+        if (orderNo) {
+          let poApplied = false;
+          try {
+            const r1 = await fetch(`/api/receiving/${receivingId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ zoho_purchaseorder_number: orderNo }),
+            });
+            poApplied = r1.ok;
+          } catch {
+            /* non-fatal — carton stays unfound; operator can bind manually */
+          }
+          if (platform) {
+            try {
+              await fetch(`/api/receiving/${receivingId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_platform: platform }),
+              });
+            } catch {
+              /* non-fatal — platform pill stays as-is */
+            }
+          }
+          // Mirror onto every surface holding this carton (workspace header
+          // chips, rails, unfound queue) — same events the repair-service
+          // link fires.
+          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+          window.dispatchEvent(
+            new CustomEvent('receiving-package-updated', {
+              detail: {
+                receiving_id: receivingId,
+                ...(platform ? { source_platform: platform } : {}),
+                zoho_purchaseorder_number: poApplied ? orderNo : null,
+              },
+            }),
+          );
         }
 
         await refreshLines();
@@ -279,6 +359,7 @@ export function UnmatchedItemsSection({
         { ...body.line, image_url: selection.image_url },
       ]);
       setPopoverMode(null);
+      setAddOpen(false);
 
       // Repair-service linking side-effects on the carton itself. Done as
       // TWO sequential PATCHes so the critical PO# write isn't rolled
@@ -405,6 +486,25 @@ export function UnmatchedItemsSection({
       label={`PO items · ${lines.length}`}
       actions={
         <div className="flex items-center gap-1.5">
+          {assignedBox ? (
+            <HandlingUnitChip
+              handlingUnitId={assignedBox.id}
+              code={assignedBox.code}
+              unitCount={assignedBox.total}
+              dense
+            />
+          ) : null}
+          {onOpenInUnbox ? (
+            <button
+              type="button"
+              onClick={onOpenInUnbox}
+              title="Open this carton in unbox mode (serial scan, photos, receive)"
+              className="flex h-6 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-caption font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100"
+            >
+              <PackageOpen className="h-3 w-3" />
+              Open in unbox
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setPopoverMode('repair_service')}
@@ -416,9 +516,9 @@ export function UnmatchedItemsSection({
           </button>
           <button
             type="button"
-            onClick={() => setPopoverMode('search')}
-            aria-label="Add item"
-            title="Add item — search the Zoho catalog and pick a product"
+            onClick={() => setAddOpen(true)}
+            aria-label="Add to carton"
+            title="Add to carton — internal catalog item, web search, or a handling-unit box"
             className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
@@ -444,18 +544,14 @@ export function UnmatchedItemsSection({
             }}
             onAdd={(sn) => handleReturnSerialScan(sn)}
             resultSlot={
-              returnMatch ? (
-                <SerialMatchResult
-                  state={returnMatch.state}
-                  unit={returnMatch.unit}
-                  serial={returnMatch.serial}
-                  matchedOrder={returnMatch.matchedOrder}
-                  onFileClaim={
-                    onFileReturnClaim
-                      ? (mo) => onFileReturnClaim(mo, returnMatch.serial)
-                      : undefined
-                  }
-                />
+              // Importing loader — the only feedback surface for the scan.
+              // On success the imported line row below (and the bound PO# /
+              // platform chips above) ARE the result; no match band.
+              returnScanBusy ? (
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-caption font-bold uppercase tracking-wider text-gray-600">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                  Matching serial — importing the sales order…
+                </div>
               ) : undefined
             }
           />
@@ -480,14 +576,26 @@ export function UnmatchedItemsSection({
         ))}
       </div>
 
-      {popoverMode != null ? (
+      {/* Unified add popover: Item (internal catalog) · Web (eBay Browse) · Box
+          (handling-unit LPN). Replaces the old standalone "+ Add item". */}
+      {addOpen ? (
+        <CartonAddPopover
+          tabs={['item', 'web', 'box']}
+          unitIds={cartonUnitIds}
+          onAddLine={handleAddLine}
+          onAssignedBox={setAssignedBox}
+          onClose={() => setAddOpen(false)}
+        />
+      ) : null}
+
+      {/* Ecwid search is ONLY for Link-repair-service now (the -RS order
+          picker). Adding a Zoho item to the PO goes through CartonAddPopover's
+          Item tab (zoho_catalog search), NOT this popover. repair_service mode
+          loads recent -RS orders and ignores searchFieldOverride entirely. */}
+      {popoverMode === 'repair_service' ? (
         <EcwidProductSearchPopover
           receivingId={receivingId}
           popoverMode={popoverMode}
-          // "Add item" searches the Zoho catalog (items source of truth), not
-          // Ecwid titles/SKUs. Only affects 'search' mode; 'repair_service'
-          // still loads recent Ecwid -RS orders.
-          searchFieldOverride="zoho_catalog"
           onSelect={handleAddLine}
           onClose={() => setPopoverMode(null)}
         />
@@ -622,18 +730,42 @@ function UnmatchedLineRow({
           <div className="truncate text-label font-bold text-gray-900">
             {line.item_name ?? line.sku ?? `Line ${line.id}`}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-micro font-semibold uppercase tracking-widest text-gray-500">
-            <span className="tabular-nums normal-case tracking-normal font-semibold">
-              {line.quantity_received ?? 0}/{line.quantity_expected ?? 1}
-            </span>
+          {/* Meta row — EXACTLY PoLinesAccordion's second row (qty ·
+              condition · sku chip · serial chips, shared badge components)
+              so an unfound / auto-generated-from-serial line reads the same
+              as a matched PO item. */}
+          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
+            <ProgressBadge
+              received={line.quantity_received ?? 0}
+              expected={line.quantity_expected ?? 1}
+            />
+            <span aria-hidden>·</span>
+            <ConditionBadge grade={line.condition_grade} />
             {line.sku ? (
-              // Same SkuScanRefChip used by PoLinesAccordion so matched
-              // and unmatched cartons render the SKU chip identically
-              // (yellow / pencil / last-4 display, click to copy).
-              <SkuScanRefChip
-                value={line.sku}
-                display={getLast4(line.sku)}
-              />
+              <>
+                <span aria-hidden>·</span>
+                <SkuScanRefChip value={line.sku} display={getLast4(line.sku)} />
+              </>
+            ) : null}
+            {saved.length > 0 ? (
+              <>
+                <span aria-hidden>·</span>
+                {saved.map((s, i) => {
+                  const sn = (s.serial_number || '').trim();
+                  if (!sn) return null;
+                  // Menu chip (delete on hover) — the ONLY serial display on
+                  // the row now; the SerialCard below has its saved chips off
+                  // so the serial isn't shown twice.
+                  return (
+                    <SerialChipWithMenu
+                      key={`${sn}-${i}`}
+                      serial={s}
+                      isEditing={false}
+                      onDelete={(target) => void deleteSerial(target)}
+                    />
+                  );
+                })}
+              </>
             ) : null}
           </div>
         </div>
@@ -671,6 +803,10 @@ function UnmatchedLineRow({
               saved={saved}
               expected={line.quantity_expected ?? null}
               isSubmitting={serialSubmitting}
+              // Saved chips render in the row's meta line (with the delete
+              // menu) — suppress the card's own bottom chip list so the
+              // serial doesn't display twice.
+              showSavedChips={false}
               condition={line.condition_grade}
               onConditionChange={(next) => {
                 markConditionSet(line.id);

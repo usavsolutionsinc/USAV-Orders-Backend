@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, User, X } from '@/components/Icons';
+import { AnchoredLayer } from '@/design-system';
 
 type Preset = 'today' | 'yesterday' | 'last7' | 'custom' | 'all';
 
@@ -389,7 +390,7 @@ function StaffCombobox({
   const [options, setOptions] = useState<StaffOption[]>([]);
   const [selected, setSelected] = useState<StaffOption | null>(null);
   const [loading, setLoading] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const inputWrapRef = useRef<HTMLDivElement | null>(null);
 
   // Debounce typeahead.
   useEffect(() => {
@@ -439,21 +440,11 @@ function StaffCombobox({
       .catch(() => {});
   }, [value, options]);
 
-  // Close on outside click.
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [open]);
-
   const label = selected ? selected.name : value != null ? `#${value}` : '';
 
   return (
-    <div ref={rootRef} className="relative">
-      <div className="relative">
+    <div className="relative">
+      <div ref={inputWrapRef} className="relative">
         <User className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
@@ -481,8 +472,14 @@ function StaffCombobox({
         )}
       </div>
 
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-30 max-h-60 overflow-y-auto rounded-b-lg rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg -mt-px">
+      <AnchoredLayer
+        open={open}
+        onClose={() => setOpen(false)}
+        anchorRef={inputWrapRef}
+        placement="bottom-stretch"
+        gap={-1}
+      >
+        <div className="max-h-60 overflow-y-auto rounded-b-lg rounded-t-none border border-gray-200 border-t-0 bg-white shadow-lg">
           <button
             type="button"
             onClick={() => {
@@ -528,7 +525,7 @@ function StaffCombobox({
             </button>
           ))}
         </div>
-      )}
+      </AnchoredLayer>
     </div>
   );
 }

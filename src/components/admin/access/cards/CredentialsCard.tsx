@@ -41,11 +41,6 @@ export function CredentialsCard({
             <div className="text-sm font-semibold text-gray-900">PIN</div>
             <div className="mt-0.5 text-caption text-gray-500">
               {staff.has_pin ? `Set ${staff.pin_set_at ? fmtRelative(staff.pin_set_at) : ''}` : 'Not set'}
-              {staff.pin_locked_until && new Date(staff.pin_locked_until).getTime() > Date.now() && (
-                <span className="ml-2 rounded-full bg-amber-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-amber-900">
-                  Locked until {new Date(staff.pin_locked_until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })}
-                </span>
-              )}
             </div>
           </div>
           <div className="flex gap-2">

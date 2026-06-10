@@ -226,7 +226,7 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
   }, [form]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
       <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
         <h2 className="text-[16px] font-semibold text-gray-900">Invite a teammate</h2>

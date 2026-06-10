@@ -209,7 +209,7 @@ export function BinAddSkuSheet({
       role="dialog"
       aria-modal="true"
       aria-label="Add product to bin"
-      className="fixed inset-0 z-[100] flex flex-col bg-white"
+      className="fixed inset-0 z-panel flex flex-col bg-white"
     >
       <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
         <button

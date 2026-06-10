@@ -9,7 +9,6 @@ import {
   CompatibilityPopover,
   SimilarProductsPopover,
   useHeaderPopover,
-  type HeaderPopoverKey,
 } from './popovers';
 import type { Allocation, LocationDetail, StockSummary, UnitDetail } from './types';
 
@@ -35,7 +34,7 @@ export function UnitDetailHeader({
   activeAllocation,
 }: UnitDetailHeaderProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const popover = useHeaderPopover(rootRef);
+  const popover = useHeaderPopover();
   const skuCatalogId = unit.sku_catalog_id ?? null;
 
   return (
@@ -83,12 +82,16 @@ export function UnitDetailHeader({
               stock={stock}
               locationDetail={locationDetail}
               allocation={activeAllocation}
+              anchorRef={rootRef}
+              onClose={popover.close}
             />
           )}
           {popover.open === 'compatibility' && (
-            <CompatibilityPopover skuCatalogId={skuCatalogId} />
+            <CompatibilityPopover skuCatalogId={skuCatalogId} anchorRef={rootRef} onClose={popover.close} />
           )}
-          {popover.open === 'similar' && <SimilarProductsPopover skuCatalogId={skuCatalogId} />}
+          {popover.open === 'similar' && (
+            <SimilarProductsPopover skuCatalogId={skuCatalogId} anchorRef={rootRef} onClose={popover.close} />
+          )}
         </div>
       }
     />

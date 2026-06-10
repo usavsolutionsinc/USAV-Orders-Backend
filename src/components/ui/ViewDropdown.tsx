@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { AnchoredLayer } from '@/design-system';
 import { dmSans } from '@/lib/fonts';
 import { Check } from '@/components/Icons';
 
@@ -43,8 +44,8 @@ export function ViewDropdown<T extends string>({
   fontSize,
 }: ViewDropdownProps<T>) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const rootRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
   const isBoxy = variant === 'boxy';
   const isSm = size === 'sm';
   const caseClass =
@@ -62,17 +63,6 @@ export function ViewDropdown<T extends string>({
   const selectedOption = options[selectedIndex] ?? options[0];
   const SelectedIcon = selectedOption?.icon;
   const otherOptions = options.filter((option) => option.value !== value);
-
-  React.useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
 
   const handleSelect = (nextValue: T) => {
     onChange(nextValue);
@@ -107,13 +97,13 @@ export function ViewDropdown<T extends string>({
     }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      const nextEl = rootRef.current?.querySelector<HTMLButtonElement>(`[data-dropdown-option-index="${(index + 1) % otherOptions.length}"]`);
+      const nextEl = listRef.current?.querySelector<HTMLButtonElement>(`[data-dropdown-option-index="${(index + 1) % otherOptions.length}"]`);
       nextEl?.focus();
       return;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
-      const prevEl = rootRef.current?.querySelector<HTMLButtonElement>(
+      const prevEl = listRef.current?.querySelector<HTMLButtonElement>(
         `[data-dropdown-option-index="${(index - 1 + otherOptions.length) % otherOptions.length}"]`,
       );
       prevEl?.focus();
@@ -121,7 +111,7 @@ export function ViewDropdown<T extends string>({
   };
 
   return (
-    <section className={`relative w-full ${className}`} ref={rootRef}>
+    <section className={`relative w-full ${className}`}>
       <label className="sr-only" htmlFor="view-dropdown-button">
         Select view
       </label>
@@ -159,14 +149,21 @@ export function ViewDropdown<T extends string>({
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
         </svg>
 
-        {isOpen && (
+        <AnchoredLayer
+          open={isOpen}
+          onClose={() => setIsOpen(false)}
+          anchorRef={buttonRef}
+          placement="bottom-stretch"
+          gap={isBoxy ? 0 : -1}
+        >
           <div
+            ref={listRef}
             style={{
               ...(backgroundColor ? { backgroundColor } : {}),
               ...(borderRadius ? { borderBottomLeftRadius: borderRadius, borderBottomRightRadius: borderRadius } : {}),
             }}
-            className={`absolute left-0 top-full z-50 w-full border border-gray-400 bg-white shadow-lg ${
-              isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl -mt-[1px]'
+            className={`w-full border border-gray-400 bg-white shadow-lg ${
+              isBoxy ? 'rounded-none border-t-0' : 'rounded-b-xl'
             }`}
           >
             <ul role="listbox" aria-label="Select view" className="w-full pb-1 pt-0">
@@ -199,7 +196,7 @@ export function ViewDropdown<T extends string>({
               })}
             </ul>
           </div>
-        )}
+        </AnchoredLayer>
       </div>
     </section>
   );

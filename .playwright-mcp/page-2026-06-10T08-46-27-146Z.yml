@@ -1,0 +1,386 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]:
+        - button "Unbox" [ref=e329] [cursor=pointer]:
+          - img [ref=e330]
+          - generic [ref=e10]: Unbox
+          - img [ref=e12]
+        - tablist "Mode" [ref=e16]:
+          - generic [ref=e17]:
+            - tab "Incoming" [ref=e18] [cursor=pointer]:
+              - img [ref=e19]
+            - tab "Receiving" [ref=e22] [cursor=pointer]:
+              - img [ref=e24]
+            - tab "Unbox" [selected] [ref=e26] [cursor=pointer]:
+              - img [ref=e27]
+            - tab "Local Pickup" [ref=e31] [cursor=pointer]:
+              - img [ref=e32]
+            - tab "History" [ref=e34] [cursor=pointer]:
+              - img [ref=e35]
+        - generic [ref=e38]:
+          - generic [ref=e336]:
+            - 'status "Auto-detect (Tracking #)" [ref=e338]':
+              - img [ref=e339]
+            - 'textbox "Tracking, PO #" [ref=e342]'
+            - generic [ref=e344]:
+              - 'button "Arm Tracking #: force the next scan to search Tracking #." [ref=e345] [cursor=pointer]':
+                - img [ref=e346]
+              - 'button "Arm PO #: force the next scan to search PO #." [ref=e349] [cursor=pointer]':
+                - img [ref=e350]
+          - generic [ref=e46]:
+            - tablist "Unbox queue view" [ref=e354]:
+              - generic [ref=e355]:
+                - tab "Queue" [ref=e356] [cursor=pointer]:
+                  - img [ref=e357]
+                  - generic [ref=e361]: Queue
+                - tab "Recent" [selected] [ref=e362] [cursor=pointer]:
+                  - img [ref=e363]
+                  - generic [ref=e365]: Recent
+            - generic [ref=e366]:
+              - generic [ref=e367]:
+                - paragraph [ref=e368]:
+                  - text: Recent · 25
+                  - generic [ref=e369]: / 500
+                - generic [ref=e370]:
+                  - paragraph [ref=e371]: Unboxing
+                  - button "Select rows for bulk actions" [ref=e372] [cursor=pointer]:
+                    - img [ref=e373]
+              - listbox "Recent activity" [ref=e375]:
+                - option "Unfound PO 0/? 12s" [selected] [ref=e376]:
+                  - button "Unfound PO 0/? 12s" [ref=e377] [cursor=pointer]:
+                    - generic [ref=e379]:
+                      - paragraph [ref=e381]: Unfound PO
+                      - paragraph [ref=e382]:
+                        - generic [ref=e383]: 0/?
+                    - generic [ref=e384]: 12s
+                - option "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 31m" [ref=e385]:
+                  - button "Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS* 1/1 31m" [ref=e386] [cursor=pointer]:
+                    - generic [ref=e388]:
+                      - paragraph [ref=e390]: Bose SoundTouch 10 Wireless Music System 416776 Black *WORKS*
+                      - paragraph [ref=e391]:
+                        - generic [ref=e392]: 1/1
+                    - generic [ref=e393]: 31m
+                - option "Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested 1/1 8h" [ref=e394]:
+                  - button "Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested 1/1 8h" [ref=e395] [cursor=pointer]:
+                    - generic [ref=e397]:
+                      - paragraph [ref=e399]: Bose CineMate GS Series II Acoustimass Module Subwoofer Speaker Untested
+                      - paragraph [ref=e400]:
+                        - generic [ref=e401]: 1/1
+                    - generic [ref=e402]: 8h
+                - option "Bose Model AWR1-1W Wave Radio 1/1 8h" [ref=e403]:
+                  - button "Bose Model AWR1-1W Wave Radio 1/1 8h" [ref=e404] [cursor=pointer]:
+                    - generic [ref=e406]:
+                      - paragraph [ref=e408]: Bose Model AWR1-1W Wave Radio
+                      - paragraph [ref=e409]:
+                        - generic [ref=e410]: 1/1
+                    - generic [ref=e411]: 8h
+                - button "Collapse package" [expanded] [ref=e412] [cursor=pointer]:
+                  - img [ref=e414]
+                  - generic [ref=e416]: PKG · 5
+                  - generic [ref=e417]: 5 items
+                - option "Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver 1/1 3h" [ref=e418]:
+                  - button "Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver 1/1 3h" [ref=e419] [cursor=pointer]:
+                    - generic [ref=e421]:
+                      - paragraph [ref=e423]: Bose Wave Music System Multi Disc Changer Remote Speakers Black Silver
+                      - paragraph [ref=e424]:
+                        - generic [ref=e425]: 1/1
+                    - generic [ref=e426]: 3h
+                - option "Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III 1/1 9h" [ref=e427]:
+                  - button "Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III 1/1 9h" [ref=e428] [cursor=pointer]:
+                    - generic [ref=e430]:
+                      - paragraph [ref=e432]: Bose 321 Home Theater System Speaker - Media Center AV 3-2-1 III
+                      - paragraph [ref=e433]:
+                        - generic [ref=e434]: 1/1
+                    - generic [ref=e435]: 9h
+                - option "Bose 321 Remote 1/1 9h" [ref=e436]:
+                  - button "Bose 321 Remote 1/1 9h" [ref=e437] [cursor=pointer]:
+                    - generic [ref=e439]:
+                      - paragraph [ref=e441]: Bose 321 Remote
+                      - paragraph [ref=e442]:
+                        - generic [ref=e443]: 1/1
+                    - generic [ref=e444]: 9h
+                - option "Bose Wave Music System Remote 1/1 9h" [ref=e445]:
+                  - button "Bose Wave Music System Remote 1/1 9h" [ref=e446] [cursor=pointer]:
+                    - generic [ref=e448]:
+                      - paragraph [ref=e450]: Bose Wave Music System Remote
+                      - paragraph [ref=e451]:
+                        - generic [ref=e452]: 1/1
+                    - generic [ref=e453]: 9h
+                - option "Bose GS Gemstone Speaker 1/1 9h" [ref=e454]:
+                  - button "Bose GS Gemstone Speaker 1/1 9h" [ref=e455] [cursor=pointer]:
+                    - generic [ref=e457]:
+                      - paragraph [ref=e459]: Bose GS Gemstone Speaker
+                      - paragraph [ref=e460]:
+                        - generic [ref=e461]: 1/1
+                    - generic [ref=e462]: 9h
+                - button "Collapse package" [expanded] [ref=e463] [cursor=pointer]:
+                  - img [ref=e465]
+                  - generic [ref=e467]: PKG · 3
+                  - generic [ref=e468]: 3 items
+                - option "Bose CineMate GS Series II Digital Home Theater Speaker System - Remote Control 1/1 9h" [ref=e469]:
+                  - button "Bose CineMate GS Series II Digital Home Theater Speaker System - Remote Control 1/1 9h" [ref=e470] [cursor=pointer]:
+                    - generic [ref=e472]:
+                      - paragraph [ref=e474]: Bose CineMate GS Series II Digital Home Theater Speaker System - Remote Control
+                      - paragraph [ref=e475]:
+                        - generic [ref=e476]: 1/1
+                    - generic [ref=e477]: 9h
+                - option "BOSE 321 Remote Control for AV 3-2-1 Media Center Series II or III 1/1 9h" [ref=e478]:
+                  - button "BOSE 321 Remote Control for AV 3-2-1 Media Center Series II or III 1/1 9h" [ref=e479] [cursor=pointer]:
+                    - generic [ref=e481]:
+                      - paragraph [ref=e483]: BOSE 321 Remote Control for AV 3-2-1 Media Center Series II or III
+                      - paragraph [ref=e484]:
+                        - generic [ref=e485]: 1/1
+                    - generic [ref=e486]: 9h
+                - option "Bose 321 Remote 1/1 9h" [ref=e487]:
+                  - button "Bose 321 Remote 1/1 9h" [ref=e488] [cursor=pointer]:
+                    - generic [ref=e490]:
+                      - paragraph [ref=e492]: Bose 321 Remote
+                      - paragraph [ref=e493]:
+                        - generic [ref=e494]: 1/1
+                    - generic [ref=e495]: 9h
+                - option "Bose Companion 2 Series III Multimedia Speakers with Power Adapter & Cable 1/1 9h" [ref=e496]:
+                  - button "Bose Companion 2 Series III Multimedia Speakers with Power Adapter & Cable 1/1 9h" [ref=e497] [cursor=pointer]:
+                    - generic [ref=e499]:
+                      - paragraph [ref=e501]: Bose Companion 2 Series III Multimedia Speakers with Power Adapter & Cable
+                      - paragraph [ref=e502]:
+                        - generic [ref=e503]: 1/1
+                    - generic [ref=e504]: 9h
+                - option "Bose Solo 5 TV Sound System Model 418775 with Power Adapter 1/1 9h" [ref=e505]:
+                  - button "Bose Solo 5 TV Sound System Model 418775 with Power Adapter 1/1 9h" [ref=e506] [cursor=pointer]:
+                    - generic [ref=e508]:
+                      - paragraph [ref=e510]: Bose Solo 5 TV Sound System Model 418775 with Power Adapter
+                      - paragraph [ref=e511]:
+                        - generic [ref=e512]: 1/1
+                    - generic [ref=e513]: 9h
+                - option "BOSE RC18T1-27 Remote Control For Lifestyle 18/28/35/38/III/IV White 1/1 9h" [ref=e514]:
+                  - button "BOSE RC18T1-27 Remote Control For Lifestyle 18/28/35/38/III/IV White 1/1 9h" [ref=e515] [cursor=pointer]:
+                    - generic [ref=e517]:
+                      - paragraph [ref=e519]: BOSE RC18T1-27 Remote Control For Lifestyle 18/28/35/38/III/IV White
+                      - paragraph [ref=e520]:
+                        - generic [ref=e521]: 1/1
+                    - generic [ref=e522]: 9h
+                - 'option "Bose Wave IV Music System Radio CD Player (Model: 417788-WMS) W/Remote Good Cond 1/1 9h" [ref=e523]':
+                  - 'button "Bose Wave IV Music System Radio CD Player (Model: 417788-WMS) W/Remote Good Cond 1/1 9h" [ref=e524] [cursor=pointer]':
+                    - generic [ref=e526]:
+                      - paragraph [ref=e528]: "Bose Wave IV Music System Radio CD Player (Model: 417788-WMS) W/Remote Good Cond"
+                      - paragraph [ref=e529]:
+                        - generic [ref=e530]: 1/1
+                    - generic [ref=e531]: 9h
+                - option "Bose 151 SE Environmental Speakers Black Wall Mountable Weatherproof 1/1 9h" [ref=e532]:
+                  - button "Bose 151 SE Environmental Speakers Black Wall Mountable Weatherproof 1/1 9h" [ref=e533] [cursor=pointer]:
+                    - generic [ref=e535]:
+                      - paragraph [ref=e537]: Bose 151 SE Environmental Speakers Black Wall Mountable Weatherproof
+                      - paragraph [ref=e538]:
+                        - generic [ref=e539]: 1/1
+                    - generic [ref=e540]: 9h
+                - option "BOSE Wave Radio Model AWR1-1W AM/FM Alarm Clock- Tested, Working No Remote-S 1/1 9h" [ref=e541]:
+                  - button "BOSE Wave Radio Model AWR1-1W AM/FM Alarm Clock- Tested, Working No Remote-S 1/1 9h" [ref=e542] [cursor=pointer]:
+                    - generic [ref=e544]:
+                      - paragraph [ref=e546]: BOSE Wave Radio Model AWR1-1W AM/FM Alarm Clock- Tested, Working No Remote-S
+                      - paragraph [ref=e547]:
+                        - generic [ref=e548]: 1/1
+                    - generic [ref=e549]: 9h
+                - option "Bose TV Speaker Soundbar Model 431974 Black HDMI Optical Aux In Powers On 1/1 9h" [ref=e550]:
+                  - button "Bose TV Speaker Soundbar Model 431974 Black HDMI Optical Aux In Powers On 1/1 9h" [ref=e551] [cursor=pointer]:
+                    - generic [ref=e553]:
+                      - paragraph [ref=e555]: Bose TV Speaker Soundbar Model 431974 Black HDMI Optical Aux In Powers On
+                      - paragraph [ref=e556]:
+                        - generic [ref=e557]: 1/1
+                    - generic [ref=e558]: 9h
+                - button "Collapse package" [expanded] [ref=e559] [cursor=pointer]:
+                  - img [ref=e561]
+                  - generic [ref=e563]: PKG · 2
+                  - generic [ref=e564]: 2 items
+                - option "Bose Wave Music System IV Black CD AM/FM w/ Soundtouch Pedestal 417788-WMS WORKS 1/1 10h" [ref=e565]:
+                  - button "Bose Wave Music System IV Black CD AM/FM w/ Soundtouch Pedestal 417788-WMS WORKS 1/1 10h" [ref=e566] [cursor=pointer]:
+                    - generic [ref=e568]:
+                      - paragraph [ref=e570]: Bose Wave Music System IV Black CD AM/FM w/ Soundtouch Pedestal 417788-WMS WORKS
+                      - paragraph [ref=e571]:
+                        - generic [ref=e572]: 1/1
+                    - generic [ref=e573]: 10h
+                - option "Bose SoundTouch Pedestal - Black 1/1 9h" [ref=e574]:
+                  - button "Bose SoundTouch Pedestal - Black 1/1 9h" [ref=e575] [cursor=pointer]:
+                    - generic [ref=e577]:
+                      - paragraph [ref=e579]: Bose SoundTouch Pedestal - Black
+                      - paragraph [ref=e580]:
+                        - generic [ref=e581]: 1/1
+                    - generic [ref=e582]: 9h
+                - option "Bose Wave Radio II AWR1B1 AM/FM Radio White For Parts As Is Only Ships Free 1/1 11h" [ref=e583]:
+                  - button "Bose Wave Radio II AWR1B1 AM/FM Radio White For Parts As Is Only Ships Free 1/1 11h" [ref=e584] [cursor=pointer]:
+                    - generic [ref=e586]:
+                      - paragraph [ref=e588]: Bose Wave Radio II AWR1B1 AM/FM Radio White For Parts As Is Only Ships Free
+                      - paragraph [ref=e589]:
+                        - generic [ref=e590]: 1/1
+                    - generic [ref=e591]: 11h
+                - option "Bose Wave Music System IV With Remote 1/1 10h" [ref=e592]:
+                  - button "Bose Wave Music System IV With Remote 1/1 10h" [ref=e593] [cursor=pointer]:
+                    - generic [ref=e595]:
+                      - paragraph [ref=e597]: Bose Wave Music System IV With Remote
+                      - paragraph [ref=e598]:
+                        - generic [ref=e599]: 1/1
+                    - generic [ref=e600]: 10h
+                - option "Bose Wave Music System Model AWRCC1 Radio CD Player *For Parts/Repair* 1/1 11h" [ref=e601]:
+                  - button "Bose Wave Music System Model AWRCC1 Radio CD Player *For Parts/Repair* 1/1 11h" [ref=e602] [cursor=pointer]:
+                    - generic [ref=e604]:
+                      - paragraph [ref=e606]: Bose Wave Music System Model AWRCC1 Radio CD Player *For Parts/Repair*
+                      - paragraph [ref=e607]:
+                        - generic [ref=e608]: 1/1
+                    - generic [ref=e609]: 11h
+                - option "Bose AWR1W1 Radio - Tested 1/1 11h" [ref=e610]:
+                  - button "Bose AWR1W1 Radio - Tested 1/1 11h" [ref=e611] [cursor=pointer]:
+                    - generic [ref=e613]:
+                      - paragraph [ref=e615]: Bose AWR1W1 Radio - Tested
+                      - paragraph [ref=e616]:
+                        - generic [ref=e617]: 1/1
+                    - generic [ref=e618]: 11h
+    - generic [ref=e73]:
+      - banner [ref=e74]:
+        - button "Hide sidebar" [pressed] [ref=e75] [cursor=pointer]:
+          - img [ref=e76]
+        - button "Daily goal" [ref=e116] [cursor=pointer]:
+          - generic [ref=e117]:
+            - img [ref=e118]
+            - generic [ref=e122]: "0"
+          - generic [ref=e123]:
+            - generic [ref=e124]: Tech
+            - generic [ref=e125]: 0/10 scans
+          - img [ref=e126]
+        - generic [ref=e79]:
+          - button "Open command bar" [ref=e80] [cursor=pointer]:
+            - img [ref=e81]
+          - button "Notifications" [ref=e84] [cursor=pointer]:
+            - img [ref=e85]
+          - button "Account & quick access" [ref=e89] [cursor=pointer]: M
+      - main [ref=e90]:
+        - generic [ref=e168]:
+          - navigation "Receiving progress" [ref=e169]:
+            - list [ref=e170]:
+              - listitem [ref=e171]:
+                - img [ref=e173]
+                - generic [ref=e175]: Scan
+              - listitem [ref=e176]
+              - listitem [ref=e178]:
+                - generic [ref=e179]: "2"
+                - generic [ref=e180]: Photos
+              - listitem [ref=e181]
+              - listitem [ref=e183]:
+                - generic [ref=e184]: "3"
+                - generic [ref=e185]: Condition
+              - listitem [ref=e186]
+              - listitem [ref=e188]:
+                - generic [ref=e189]: "4"
+                - generic [ref=e190]: Serial
+              - listitem [ref=e191]
+              - listitem [ref=e193]:
+                - generic [ref=e194]: "5"
+                - generic [ref=e195]: Print
+          - generic [ref=e197]:
+            - generic [ref=e199]:
+              - button "Refresh line from Zoho" [ref=e200] [cursor=pointer]:
+                - img [ref=e202]
+              - button "Share receiving link" [ref=e204] [cursor=pointer]:
+                - img [ref=e206]
+              - button "View audit log" [ref=e209] [cursor=pointer]:
+                - img [ref=e211]
+              - button "Copy all receiving details" [ref=e213] [cursor=pointer]:
+                - img [ref=e215]
+              - button "Share to phone" [ref=e217] [cursor=pointer]:
+                - img [ref=e219]
+              - button "Open receiving details" [ref=e221] [cursor=pointer]:
+                - img [ref=e222]
+              - button "Previous recent line" [ref=e224] [cursor=pointer]:
+                - img [ref=e225]
+              - button "Next recent line" [ref=e227] [cursor=pointer]:
+                - img [ref=e228]
+            - generic [ref=e231]:
+              - generic [ref=e235]:
+                - generic [ref=e237]:
+                  - 'button "Urgency: High — click to change" [ref=e239] [cursor=pointer]': High
+                  - 'button "Platform: Unfound — click to change" [ref=e241] [cursor=pointer]': Unfound
+                  - 'button "Type: PO — click to change" [ref=e243] [cursor=pointer]': PO
+                  - generic [ref=e244]:
+                    - button "Open listing in new tab" [disabled] [ref=e245]:
+                      - img [ref=e246]
+                    - button "----" [ref=e249] [cursor=pointer]:
+                      - generic [ref=e250]: "----"
+                    - button "Edit listing URL" [ref=e251] [cursor=pointer]:
+                      - img [ref=e252]
+                  - generic [ref=e254]:
+                    - button "Open PO in Zoho" [disabled] [ref=e255]:
+                      - img [ref=e256]
+                    - button "----" [ref=e259] [cursor=pointer]:
+                      - img [ref=e261]
+                      - generic [ref=e264]: "----"
+                    - button "Edit PO#" [expanded] [ref=e265] [cursor=pointer]:
+                      - img [ref=e266]
+                  - generic [ref=e269]:
+                    - button "Open carrier tracking" [ref=e270] [cursor=pointer]:
+                      - img [ref=e271]
+                    - button "0999" [ref=e274] [cursor=pointer]:
+                      - img [ref=e276]
+                      - generic [ref=e279]: "0999"
+                    - button "Edit tracking" [ref=e280] [cursor=pointer]:
+                      - img [ref=e281]
+                  - button "Claim →" [ref=e283] [cursor=pointer]
+                  - button "Add photos" [ref=e284] [cursor=pointer]:
+                    - img [ref=e285]
+                    - img [ref=e288]
+                - generic [ref=e291]:
+                  - generic [ref=e292]: PO number
+                  - generic [ref=e296]:
+                    - img [ref=e298]
+                    - textbox "PO-1234" [ref=e300]
+                    - button "Paste from clipboard" [ref=e302] [cursor=pointer]:
+                      - img [ref=e303]
+              - generic [ref=e306]:
+                - generic [ref=e307]:
+                  - heading "PO items · 0" [level=3] [ref=e308]
+                  - generic [ref=e310]:
+                    - button "Link repair service" [ref=e316] [cursor=pointer]:
+                      - img [ref=e317]
+                      - text: Link repair service
+                    - button "Add to carton" [ref=e320] [cursor=pointer]:
+                      - img [ref=e321]
+                - generic [ref=e620]:
+                  - generic [ref=e621]:
+                    - radiogroup "Condition grade" [ref=e623]:
+                      - radio "NEW" [ref=e624] [cursor=pointer]
+                      - radio "L-New" [ref=e625] [cursor=pointer]
+                      - radio "REFURB" [ref=e626] [cursor=pointer]
+                      - radio "A" [checked] [ref=e627] [cursor=pointer]
+                      - radio "B" [ref=e628] [cursor=pointer]
+                      - radio "C" [ref=e629] [cursor=pointer]
+                      - radio "PARTS" [ref=e630] [cursor=pointer]
+                    - generic [ref=e633]:
+                      - textbox "Serial" [disabled] [ref=e634]:
+                        - /placeholder: " "
+                      - generic: Serial
+                    - button "Saving…" [disabled] [ref=e668]
+                  - generic [ref=e670]:
+                    - img [ref=e671]
+                    - text: Matching serial — importing the sales order…
+              - generic [ref=e639]:
+                - textbox "Notes" [ref=e640]:
+                  - /placeholder: " "
+                - generic: Notes
+              - generic [ref=e644]:
+                - generic [ref=e645]:
+                  - generic [ref=e646]:
+                    - generic [ref=e647]: Unfound - PO
+                    - generic [ref=e648]: 6/10/26
+                  - generic [ref=e650]:
+                    - generic [ref=e651]: Used - A
+                    - generic [ref=e652]: "0999"
+                - img "DataMatrix barcode" [ref=e654]:
+                  - img [ref=e655]
+            - generic [ref=e659]:
+              - button "Print only, mark as scanned, or receive all (no print)" [ref=e661] [cursor=pointer]:
+                - img [ref=e662]
+              - button "Print · receive" [ref=e664] [cursor=pointer]:
+                - img [ref=e665]
+                - generic [ref=e667]: Print · receive
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e109] [cursor=pointer]:
+    - img [ref=e110]
+  - alert [ref=e113]

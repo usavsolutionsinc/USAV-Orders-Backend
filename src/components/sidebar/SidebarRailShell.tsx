@@ -2,14 +2,16 @@
 
 import {
   useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
-  type ReactNode,
+  type MouseEvent as ReactMouseEvent, type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown } from '@/components/Icons';
+import { Check, ChevronDown, Pencil } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { useRailEditMode } from '@/components/sidebar/rail-edit-mode';
 import { staggerRevealContainer, staggerRevealItem } from '@/design-system/primitives/StaggerReveal';
+import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 
 /**
  * Generic sidebar "recent activity" rail skeleton. Owns the reusable shell —
@@ -116,6 +118,16 @@ export function SidebarRailShell<TRow>({
   renderRowMain, renderPopover,
 }: SidebarRailShellProps<TRow>) {
   const queryClient = useQueryClient();
+  // Pencil-toggle multi-select (provided by the owning panel; inactive default
+  // when no provider). While active, row clicks toggle checkboxes instead of
+  // opening the workspace.
+  const editMode = useRailEditMode();
+  // Shift-select anchor: the id of the last row whose checkbox was toggled by a
+  // plain click. A shift-click then applies the clicked row's NEW state to the
+  // whole visible range between anchor and click (Gmail-style). Anchored by id,
+  // not index, so live feed reordering can't silently shift the range.
+  const editAnchorIdRef = useRef<number | null>(null);
+  useEffect(() => { editAnchorIdRef.current = null; }, [editMode.active]);
 
   const { data, isLoading } = useQuery<TRow[]>({
     queryKey,
@@ -329,19 +341,56 @@ export function SidebarRailShell<TRow>({
     if (btn) btn.focus();
   }, []);
 
+  // Edit-mode checkbox click. A plain click toggles the row and re-anchors;
+  // shift-click applies the clicked row's NEW state to every visible row
+  // between the anchor and the click (the industry-standard range select).
+  const handleEditClick = useCallback((idx: number, withShift: boolean) => {
+    const id = getId(rows[idx]);
+    const anchorId = editAnchorIdRef.current;
+    if (withShift && anchorId != null && anchorId !== id) {
+      const anchorPos = visibleIndices.findIndex((i) => getId(rows[i]) === anchorId);
+      const clickPos = visibleIndices.indexOf(idx);
+      if (anchorPos >= 0 && clickPos >= 0) {
+        const [lo, hi] = anchorPos <= clickPos ? [anchorPos, clickPos] : [clickPos, anchorPos];
+        const ids = visibleIndices.slice(lo, hi + 1).map((i) => getId(rows[i]));
+        editMode.setMany(ids, !editMode.selectedIds.has(id));
+        editAnchorIdRef.current = id;
+        return;
+      }
+    }
+    editMode.toggle(id);
+    editAnchorIdRef.current = id;
+  }, [rows, visibleIndices, editMode, getId]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLUListElement>) => {
     if (visibleIndices.length === 0) return;
     // Arrow/Home/End move focus only (roving tabindex); selection happens on
     // Enter/Space or click. Previously every arrow keypress dispatched onSelect,
-    // opening the line in the workspace on each step.
-    const moveTo = (rowIdx: number) => { setFocusIndex(rowIdx); focusRow(rowIdx); };
+    // opening the line in the workspace on each step. In edit mode, Shift+Arrow
+    // additionally extends the checked range as focus moves (standard
+    // multi-select keyboarding).
+    const moveTo = (rowIdx: number, extend = false) => {
+      if (extend && editMode.active && rowIdx >= 0 && rowIdx < rows.length) {
+        const ids = [rowIdx, focusIndex]
+          .filter((i) => i >= 0 && i < rows.length)
+          .map((i) => getId(rows[i]));
+        editMode.setMany(ids, true);
+        editAnchorIdRef.current = getId(rows[rowIdx]);
+      }
+      setFocusIndex(rowIdx);
+      focusRow(rowIdx);
+    };
     const pos = visibleIndices.indexOf(focusIndex);
-    if (e.key === 'ArrowDown') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.min(pos + 1, visibleIndices.length - 1)]); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.max(pos - 1, 0)]); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.min(pos + 1, visibleIndices.length - 1)], e.shiftKey); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveTo(pos < 0 ? visibleIndices[0] : visibleIndices[Math.max(pos - 1, 0)], e.shiftKey); }
     else if (e.key === 'Home') { e.preventDefault(); moveTo(visibleIndices[0]); }
     else if (e.key === 'End') { e.preventDefault(); moveTo(visibleIndices[visibleIndices.length - 1]); }
-    else if ((e.key === 'Enter' || e.key === ' ') && focusIndex >= 0 && focusIndex < rows.length) { e.preventDefault(); onSelect(rows[focusIndex]); }
-  }, [rows, visibleIndices, focusIndex, focusRow, onSelect]);
+    else if ((e.key === 'Enter' || e.key === ' ') && focusIndex >= 0 && focusIndex < rows.length) {
+      e.preventDefault();
+      if (editMode.active) handleEditClick(focusIndex, e.shiftKey);
+      else onSelect(rows[focusIndex]);
+    }
+  }, [rows, visibleIndices, focusIndex, focusRow, onSelect, editMode, getId, handleEditClick]);
 
   return (
     <section className="border-t border-gray-100 bg-white">
@@ -352,16 +401,21 @@ export function SidebarRailShell<TRow>({
             <span className="ml-1 font-bold text-gray-300">/ {allRows.length}</span>
           ) : null}
         </p>
-        {eyebrowAction
-          ? eyebrowAction
-          : eyebrowSuffix && (
-              // leading-none: without it the 8.5px suffix inherits the base
-              // line-height (1.5 ≈ 12.75px), taller than the 9px/lh-1.2 eyebrow
-              // title — which made the suffixed rail (Unfound) ~2px taller than
-              // the action-button rail (Found). Tight leading lets the title
-              // govern the row height so both eyebrows align.
-              <p className="text-[8.5px] font-bold uppercase leading-none tracking-widest text-gray-300">{eyebrowSuffix}</p>
-            )}
+        <div className="flex items-center gap-2">
+          {eyebrowAction
+            ? eyebrowAction
+            : eyebrowSuffix && (
+                // leading-none: without it the 8.5px suffix inherits the base
+                // line-height (1.5 ≈ 12.75px), taller than the 9px/lh-1.2 eyebrow
+                // title — which made the suffixed rail (Unfound) ~2px taller than
+                // the action-button rail (Found). Tight leading lets the title
+                // govern the row height so both eyebrows align.
+                <p className="text-[8.5px] font-bold uppercase leading-none tracking-widest text-gray-300">{eyebrowSuffix}</p>
+              )}
+          {editMode.enabled ? (
+            <RailEditPencil active={editMode.active} onToggle={editMode.toggleActive} />
+          ) : null}
+        </div>
       </div>
       {isLoading && rows.length === 0 ? (
         <div className={`space-y-1 ${SIDEBAR_GUTTER} py-2`}>
@@ -404,6 +458,8 @@ export function SidebarRailShell<TRow>({
                   staggerReveal={staggerReveal}
                   isSelected={getId(row) === selectedId}
                   isFocused={idx === focusIndex}
+                  editActive={editMode.active}
+                  isChecked={editMode.active && editMode.selectedIds.has(getId(row))}
                   groupSize={g.groupSize}
                   groupIndex={g.groupIndex}
                   isCollapsed={isCollapsed}
@@ -413,7 +469,11 @@ export function SidebarRailShell<TRow>({
                   getActivityAt={getActivityAt}
                   renderRowMain={renderRowMain}
                   renderPopover={renderPopover}
-                  onClick={() => { setFocusIndex(idx); onSelect(row); }}
+                  onClick={(e) => {
+                    setFocusIndex(idx);
+                    if (editMode.active) handleEditClick(idx, e?.shiftKey ?? false);
+                    else onSelect(row);
+                  }}
                 />,
               );
               return nodes;
@@ -425,14 +485,44 @@ export function SidebarRailShell<TRow>({
   );
 }
 
+/**
+ * Eyebrow pencil — flips the rail into checkbox multi-select (see
+ * {@link useRailEditMode}). Eyebrow-scale sibling of actions like the Scanned
+ * rail's "Sync Zoho"; active state fills blue and swaps to a ✓ ("done").
+ *
+ * `-my-1.5` bleeds the 20px hit box out of the row's height math (same trick
+ * as the Sync Zoho pill) so every rail eyebrow keeps the identical compact
+ * text-governed height whether its right slot is a suffix, an action, or this.
+ */
+function RailEditPencil({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label={active ? 'Done — exit select mode' : 'Select rows for bulk actions'}
+      title={active ? 'Done' : 'Select rows (bulk delete)'}
+      className={`-my-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
+        active
+          ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
+          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+      }`}
+    >
+      {active ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+    </button>
+  );
+}
+
 function RailRow<TRow>({
-  row, index, isSelected, isFocused, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
+  row, index, isSelected, isFocused, editActive, isChecked, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
   staggerReveal, onToggleGroup, getStatusDot, getActivityAt, renderRowMain, renderPopover, onClick,
 }: {
   row: TRow;
   index: number;
   isSelected: boolean;
   isFocused: boolean;
+  editActive: boolean;
+  isChecked: boolean;
   groupSize: number;
   groupIndex: number;
   isCollapsed: boolean;
@@ -443,7 +533,8 @@ function RailRow<TRow>({
   getActivityAt?: (row: TRow) => string | null | undefined;
   renderRowMain: (row: TRow, ctx: SidebarRailRowContext) => ReactNode;
   renderPopover?: (row: TRow, ctx: { groupSize: number; openWorkspace: () => void; dismiss: () => void }) => ReactNode;
-  onClick: () => void;
+  /** Event is absent when invoked synthetically (popover "Open →"). */
+  onClick: (e?: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   const isGrouped = groupSize > 1;
   const isGroupLast = isGrouped && groupIndex === groupSize - 1;
@@ -457,11 +548,16 @@ function RailRow<TRow>({
   const closeTimer = useRef<number | null>(null);
 
   const scheduleOpen = useCallback(() => {
-    if (!renderPopover) return;
+    // Edit mode: no hover previews — the surface is for picking rows, and the
+    // popover's "Open →" CTA contradicts the click-to-check behavior.
+    if (!renderPopover || editActive) return;
     if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
     if (previewOpen || openTimer.current) return;
     openTimer.current = window.setTimeout(() => { openTimer.current = null; setPreviewOpen(true); }, 200);
-  }, [previewOpen, renderPopover]);
+  }, [previewOpen, renderPopover, editActive]);
+
+  // Entering edit mode mid-hover: dismiss any preview already showing.
+  useEffect(() => { if (editActive) setPreviewOpen(false); }, [editActive]);
 
   const scheduleClose = useCallback(() => {
     if (openTimer.current) { window.clearTimeout(openTimer.current); openTimer.current = null; }
@@ -507,7 +603,7 @@ function RailRow<TRow>({
     <motion.li
       ref={rowRef}
       role="option"
-      aria-selected={isSelected}
+      aria-selected={editActive ? isChecked : isSelected}
       {...motionProps}
       className="relative"
       onMouseEnter={scheduleOpen}
@@ -529,12 +625,25 @@ function RailRow<TRow>({
         data-rail-index={index}
         tabIndex={-1}
         onClick={onClick}
+        // Shift-click range select: stop the browser's native shift-click text
+        // selection from highlighting row labels across the range.
+        onMouseDown={(e) => { if (editActive && e.shiftKey) e.preventDefault(); }}
         className={`relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
-          isSelected
+          (editActive ? isChecked : isSelected)
             ? 'items-center rounded-md bg-blue-50 ring-1 ring-inset ring-blue-400 py-1.5'
             : `items-center rounded-md py-1.5 ${isFocused ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : 'hover:bg-gray-50'}`
         }`}
       >
+        {editActive ? (
+          <span
+            aria-hidden
+            className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
+              isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+            }`}
+          >
+            {isChecked ? <Check className="h-2.5 w-2.5" /> : null}
+          </span>
+        ) : null}
         <span className={`h-2 w-2 shrink-0 rounded-full ${getStatusDot(row)}`} aria-hidden />
         <div className="min-w-0 flex-1">
           {renderRowMain(row, { isSelected, isFocused, pkgChip })}
@@ -655,7 +764,7 @@ export function RailPopover({
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: coords.flipped ? 8 : -8, scale: 0.97 }}
       transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.6 }}
-      style={{ position: 'fixed', top: coords.top, left: coords.left, width: POPOVER_WIDTH, zIndex: 9999 }}
+      style={{ position: 'fixed', top: coords.top, left: coords.left, width: POPOVER_WIDTH, zIndex: zLayer.panelPopover }}
       className="rounded-xl border border-gray-200 bg-white shadow-2xl ring-1 ring-black/5"
     >
       {children}

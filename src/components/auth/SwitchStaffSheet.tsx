@@ -42,7 +42,6 @@ function writeRecent(staffId: number): void {
 function humanError(code: string | undefined): string {
   switch (code) {
     case 'WRONG':              return 'PIN incorrect. Try again.';
-    case 'LOCKED':             return 'Too many tries. Locked for 5 minutes.';
     case 'NO_PIN':             return 'This account has no PIN. Ask an admin for an enrollment QR.';
     case 'NOT_FOUND':          return 'Account not found.';
     case 'TOO_SHORT':          return 'PIN is too short.';
@@ -97,7 +96,7 @@ export function SwitchStaffSheet() {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-panel flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
       onClick={closeSwitcher}
       role="dialog"
       aria-modal="true"

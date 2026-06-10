@@ -23,8 +23,16 @@ function ScannedZohoRefreshButton() {
     try {
       const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
       if (!res.ok) throw new Error(await res.text());
+      const data = (await res.json().catch(() => null)) as
+        | { mirror?: { lines_marked_received?: number } }
+        | null;
       await queryClient.invalidateQueries({ queryKey: ['receiving-lines-table', 'rail', 'scanned'] });
-      toast.success('Synced Zoho received status');
+      const cleared = data?.mirror?.lines_marked_received ?? 0;
+      toast.success(
+        cleared > 0
+          ? `Synced Zoho — ${cleared} item${cleared === 1 ? '' : 's'} marked received`
+          : 'Synced Zoho received status',
+      );
     } catch {
       toast.error('Zoho sync failed');
     } finally {
@@ -80,16 +88,25 @@ export function ReceivingScannedRail({
   selectedRow = null,
   filterText = '',
   limit = 50,
+  scope = 'triage',
 }: {
   selectedLineId: number | null;
   selectedRow?: ReceivingLineRow | null;
   filterText?: string;
   limit?: number;
+  /**
+   * Which mode mounts this rail — triage's Prioritize tab or unbox's Queue
+   * toggle. Scopes the query key so each mode owns its own cache entry and
+   * one mode's in-flight/stale rows can never flash into the other. The
+   * Sync-Zoho invalidation targets the shared
+   * ['receiving-lines-table','rail','scanned'] prefix, so it covers both.
+   */
+  scope?: 'triage' | 'unbox';
 }) {
   const q = filterText.trim().toLowerCase();
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', 'scanned', 'triage', 'priority', q] as const,
-    [q],
+    () => ['receiving-lines-table', 'rail', 'scanned', scope, 'priority', q] as const,
+    [scope, q],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {

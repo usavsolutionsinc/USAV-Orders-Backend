@@ -122,8 +122,9 @@ async function findExistingClaim(
     const { rows } = await pool.query<{ id: number; claim_number: string; status: WarrantyClaimStatus }>(
       `SELECT id, claim_number, status
          FROM warranty_claims
-        WHERE order_id = $1
-           OR ($2::text IS NOT NULL AND UPPER(TRIM(serial_number)) = UPPER(TRIM($2)))
+        WHERE deleted_at IS NULL
+          AND (order_id = $1
+           OR ($2::text IS NOT NULL AND UPPER(TRIM(serial_number)) = UPPER(TRIM($2))))
         ORDER BY created_at DESC, id DESC
         LIMIT 1`,
       [orderId, serialNumber],

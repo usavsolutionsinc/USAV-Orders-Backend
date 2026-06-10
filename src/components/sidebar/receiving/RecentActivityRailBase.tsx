@@ -45,6 +45,14 @@ export interface RecentActivityRailBaseProps {
   eyebrowAction?: ReactNode;
   autoSelectFirstWhenEmpty?: boolean;
 
+  /**
+   * Timestamp the row's relative-time label reads. MUST match the feed's sort
+   * axis or the rail's times read shuffled (e.g. sorted by unbox activity but
+   * labeled with door-scan time). Defaults to last_activity_at → created_at.
+   * Pass a module-scope (stable-identity) function — the shell wires it into
+   * a listener effect.
+   */
+  getActivityAt?: (row: ReceivingLineRow) => string | null | undefined;
   getStatusDot: (row: ReceivingLineRow) => string;
   renderQuantity: (row: ReceivingLineRow) => ReactNode;
   previewQtyLabel: string;
@@ -92,6 +100,7 @@ export function RecentActivityRailBase({
   eyebrowSuffix,
   eyebrowAction,
   autoSelectFirstWhenEmpty = false,
+  getActivityAt = getRowActivityAt,
   getStatusDot,
   renderQuantity,
   previewQtyLabel,
@@ -119,7 +128,7 @@ export function RecentActivityRailBase({
       staggerReveal
       getId={getRowId}
       getGroupId={getRowGroupId}
-      getActivityAt={getRowActivityAt}
+      getActivityAt={getActivityAt}
       onSelect={selectRow}
       getStatusDot={getStatusDot}
       renderRowMain={(row, ctx) => <ReceivingRowMain row={row} ctx={ctx} renderQuantity={renderQuantity} />}
@@ -129,6 +138,7 @@ export function RecentActivityRailBase({
           groupSize={p.groupSize}
           qtyLabel={previewQtyLabel}
           getQty={getPreviewQty}
+          activityAt={getActivityAt(row) ?? null}
           onOpenWorkspace={() => { p.openWorkspace(); p.dismiss(); }}
         />
       )}
@@ -165,12 +175,14 @@ function ReceivingRowMain({
 }
 
 function ReceivingPopoverContent({
-  row, groupSize, qtyLabel, getQty, onOpenWorkspace,
+  row, groupSize, qtyLabel, getQty, activityAt, onOpenWorkspace,
 }: {
   row: ReceivingLineRow;
   groupSize: number;
   qtyLabel: string;
   getQty: (row: ReceivingLineRow) => { current: number; total: number | null };
+  /** Same timestamp the row's relative-time label shows (the feed's sort axis). */
+  activityAt: string | null;
   onOpenWorkspace: () => void;
 }) {
   const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
@@ -264,7 +276,7 @@ function ReceivingPopoverContent({
 
       <div className="flex items-center justify-between border-t border-gray-100 pt-2.5">
         <span className="text-eyebrow font-bold uppercase tracking-widest text-gray-400">
-          {railRelativeTime(row.last_activity_at ?? row.created_at)} ago
+          {railRelativeTime(activityAt ?? row.created_at)} ago
           {row.assigned_tech_id ? ` · ${getStaffName(row.assigned_tech_id)}` : ''}
         </span>
         <button

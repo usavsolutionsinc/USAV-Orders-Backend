@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Layer } from '@/design-system/primitives';
 import { X } from '@/components/Icons';
 
 interface AssignmentOverlayCardProps {
@@ -135,27 +136,32 @@ export function AssignmentOverlayCard({
     </section>
   );
 
+  // Portal to <body> so the full-bleed takeover escapes any transformed /
+  // animated ancestor (it's rendered inside slide-over detail panels' motion.div
+  // — a stacking + containing-context trap that would otherwise confine this
+  // `fixed inset-0` overlay to the panel). Some call sites also wrap this in
+  // their own createPortal; that's a harmless redundant body portal.
   return (
-    <>
+    <Layer level="takeover">
       <button
         type="button"
         aria-label="Close overlay"
         onClick={onClose}
-        className="fixed inset-0 z-[1200] bg-gray-950/55 backdrop-blur-[4px]"
+        className="fixed inset-0 z-takeover bg-gray-950/55 backdrop-blur-[4px]"
       />
       {isBottom ? (
-        <div className="pointer-events-none fixed inset-0 z-[1201] flex items-end justify-center p-3 pb-[max(1rem,5vh)] sm:p-4 sm:pb-[max(1rem,5vh)]">
+        <div className="pointer-events-none fixed inset-0 z-takeover flex items-end justify-center p-3 pb-[max(1rem,5vh)] sm:p-4 sm:pb-[max(1rem,5vh)]">
           <div className="pointer-events-auto min-w-0">{dialog}</div>
         </div>
       ) : isMidAnchor ? (
-        <div className="pointer-events-auto fixed bottom-1/2 left-1/2 z-[1201] min-w-0 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 sm:max-w-[calc(100vw-2rem)]">
+        <div className="pointer-events-auto fixed bottom-1/2 left-1/2 z-takeover min-w-0 max-w-[calc(100vw-1.5rem)] -translate-x-1/2 sm:max-w-[calc(100vw-2rem)]">
           {dialog}
         </div>
       ) : (
-        <div className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-3 sm:p-4">
+        <div className="pointer-events-none fixed inset-0 z-takeover flex items-center justify-center p-3 sm:p-4">
           <div className="pointer-events-auto min-w-0">{dialog}</div>
         </div>
       )}
-    </>
+    </Layer>
   );
 }
