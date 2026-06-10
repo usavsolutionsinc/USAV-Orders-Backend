@@ -29,6 +29,14 @@ export const WarrantyClaimListQuery = z
 
 export type WarrantyClaimListQueryInput = z.infer<typeof WarrantyClaimListQuery>;
 
+// ─── GET /api/warranty/lookup (coverage check) ──────────────────────────────
+export const WarrantyCoverageQuery = z
+  .object({
+    /** Order #, serial, or SKU the rep typed/scanned. */
+    q: trimmed.min(1).max(200),
+  })
+  .strip();
+
 // ─── Shared scalars ─────────────────────────────────────────────────────────
 const isoDate = trimmed
   .min(1)
