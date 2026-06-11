@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
     console.log('[cron.shipping.reconcile-delivered]', {
       delivered: {
         deliveredReconciled: delivered.deliveredReconciled,
+        scanDelivered: delivered.scanDelivered,
         coherenceFixed: delivered.coherenceFixed,
         erroredRecovered: delivered.erroredRecovered,
         durationMs: delivered.durationMs,

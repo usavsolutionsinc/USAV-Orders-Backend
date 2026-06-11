@@ -81,19 +81,32 @@ export const INBOUND_SHIPMENT_PREDICATE = `(
  * receiving_scans (written via last8FromStoredTracking) + an index and swap the
  * inline regexp for an equality/index lookup against it.
  */
+/**
+ * The bare scan→shipment match condition — references `rs` (a `receiving_scans`
+ * row), `r2` (its `receiving` row), and the outer `stn`. Extracted so the EXISTS
+ * predicate below AND the delivered-from-scan derivation (reconcile-delivered's
+ * 'receiving_scan' pass, which needs the earliest matching `rs.scanned_at`) share
+ * ONE definition of "this scan is for this shipment" — last-8 of the tracking, or
+ * the shipment link. Callers must join `receiving_scans rs LEFT JOIN receiving r2
+ * ON r2.id = rs.receiving_id`.
+ */
+export const SHIPMENT_SCAN_MATCH_CONDITION = `(
+  (
+    length(stn.tracking_number_normalized) >= 8
+    AND position(
+          right(stn.tracking_number_normalized, 8)
+          IN regexp_replace(upper(rs.tracking_number), '[^A-Z0-9]', '', 'g')
+        ) > 0
+  )
+  OR r2.shipment_id = stn.id
+  OR rs.shipment_id = stn.id
+)`;
+
 export const SHIPMENT_SCANNED_PREDICATE = `EXISTS (
   SELECT 1
     FROM receiving_scans rs
     LEFT JOIN receiving r2 ON r2.id = rs.receiving_id
-   WHERE (
-           length(stn.tracking_number_normalized) >= 8
-           AND position(
-                 right(stn.tracking_number_normalized, 8)
-                 IN regexp_replace(upper(rs.tracking_number), '[^A-Z0-9]', '', 'g')
-               ) > 0
-         )
-      OR r2.shipment_id = stn.id
-      OR rs.shipment_id = stn.id
+   WHERE ${SHIPMENT_SCAN_MATCH_CONDITION}
 )`;
 
 /**
