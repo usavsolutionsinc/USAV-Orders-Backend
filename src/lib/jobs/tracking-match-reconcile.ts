@@ -14,6 +14,12 @@
  *       so it enters the poll loop;
  *   D3  else (a tracking-shaped value we can't place), upsert a
  *       `tracking_exceptions` row for triage instead of leaving it invisible.
+ *   D4  advance still-EXPECTED PO lines whose shipment tracking's LAST 8 matches
+ *       a dock scan → MATCHED + attach to the scanned carton, so a scanned box
+ *       actually leaves Incoming in the data (not just hidden by the read-side
+ *       SHIPMENT_SCANNED_PREDICATE). Keyed on last-8 because the Zoho-pasted
+ *       number and the scanned barcode are different representations of the same
+ *       package; this is the write-path twin of that predicate.
  *
  * Bounded per run; the exact/suffix links are set-based SQL (no per-row calls),
  * only the carrier-detect/register/except residual loops in JS. No carrier API
@@ -38,6 +44,8 @@ export interface TrackingMatchReconcileResult {
   registered: number;
   /** tracking-shaped rows we couldn't place → tracking_exceptions (D3). */
   exceptions: number;
+  /** still-EXPECTED PO lines advanced to MATCHED by a last-8 scan match (D4). */
+  advancedLines: number;
   durationMs: number;
 }
 
@@ -160,12 +168,70 @@ export async function runTrackingMatchReconcileJob(): Promise<TrackingMatchRecon
     // intentionally left alone — they are not "missing carrier status".
   }
 
+  // ─── D4. Advance scanned PO lines by last-8 (set-based) ──────────────────
+  // A still-EXPECTED incoming line should leave Incoming once its box is scanned
+  // at the dock. The PO-id linker (lookup-po's linkLocalPoLinesToReceiving) only
+  // fires when the scan resolves to the PO at scan time, so lines scanned via the
+  // unmatched path — or synced after the scan — stay EXPECTED forever. Bridge them
+  // by tracking number: resolve each incoming line to its shipment (the carton it
+  // soft-joins to, FK or PO# fallback), and if any dock scan's digits contain that
+  // shipment tracking's LAST 8, advance the line to MATCHED and attach it to the
+  // scanned carton. Last-8 because the Zoho-pasted value and the scanned barcode
+  // are different representations — the same key the read-side predicate uses, so
+  // the display guard and this write agree.
+  const advanced = await pool.query(
+    `WITH inc AS (
+       SELECT rl.id AS rl_id, rl.receiving_id, rl.zoho_purchaseorder_id
+         FROM receiving_lines rl
+        WHERE rl.workflow_status = 'EXPECTED'
+          AND COALESCE(rl.quantity_received, 0) = 0
+          AND rl.zoho_purchaseorder_id IS NOT NULL
+     ),
+     resolved AS (
+       SELECT inc.rl_id, inc.receiving_id, stn.tracking_number_normalized AS norm
+         FROM inc
+         JOIN LATERAL (
+           SELECT r.shipment_id FROM receiving r
+            WHERE r.id = inc.receiving_id
+               OR (inc.receiving_id IS NULL
+                   AND r.source = 'zoho_po'
+                   AND r.zoho_purchaseorder_id = inc.zoho_purchaseorder_id)
+            ORDER BY (r.id = inc.receiving_id) DESC,
+                     (r.shipment_id IS NOT NULL) DESC,
+                     r.id DESC
+            LIMIT 1
+         ) r ON TRUE
+         JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+        WHERE length(stn.tracking_number_normalized) >= 8
+     ),
+     matched AS (
+       SELECT DISTINCT ON (resolved.rl_id)
+              resolved.rl_id,
+              rs.receiving_id AS scan_carton
+         FROM resolved
+         JOIN receiving_scans rs
+           ON position(
+                right(resolved.norm, 8)
+                IN regexp_replace(upper(rs.tracking_number), '[^A-Z0-9]', '', 'g')
+              ) > 0
+        ORDER BY resolved.rl_id, rs.scanned_at DESC NULLS LAST
+     )
+     UPDATE receiving_lines rl
+        SET workflow_status = 'MATCHED',
+            receiving_id = COALESCE(rl.receiving_id, matched.scan_carton),
+            updated_at = now()
+       FROM matched
+      WHERE rl.id = matched.rl_id
+        AND rl.workflow_status = 'EXPECTED'`,
+  );
+
   return {
     ok: true,
     linkedExact: exact.rowCount ?? 0,
     linkedSuffix: suffix.rowCount ?? 0,
     registered,
     exceptions,
+    advancedLines: advanced.rowCount ?? 0,
     durationMs: Date.now() - start,
   };
 }

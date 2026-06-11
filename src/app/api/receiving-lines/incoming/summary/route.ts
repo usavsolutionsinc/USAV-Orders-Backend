@@ -33,6 +33,7 @@ import {
   getEmailDeliveredUnscannedCount,
   NOT_ZOHO_RECEIVED_PREDICATE,
   CARRIER_MISMATCH_PREDICATE,
+  SHIPMENT_SCANNED_PREDICATE,
 } from '@/lib/receiving/delivered-unscanned';
 
 export const dynamic = 'force-dynamic';
@@ -108,7 +109,11 @@ export const GET = withAuth(async (_request: NextRequest) => {
          AND rl.zoho_purchaseorder_id IS NOT NULL
          -- Drop POs Zoho now reports received/closed/cancelled, so a
          -- received order leaves Incoming after a Refresh-Zoho mirror sync.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+         -- A scanned box has left Incoming (it shows in the scanned view now), so
+         -- exclude it here too — keeps these chip counts in sync with the list's
+         -- view=incoming rows, which now apply the same scan guard.
+         AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
     );
 
     const row = r.rows[0] ?? {
@@ -186,6 +191,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
               AND COALESCE(rl.quantity_received, 0) = 0
               AND rl.zoho_purchaseorder_id IS NOT NULL
               AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+              AND NOT ${SHIPMENT_SCANNED_PREDICATE}
               AND upper(COALESCE(stn.carrier, '')) IN ('UPS','USPS','FEDEX','UNKNOWN')
             ORDER BY stn.id
          )

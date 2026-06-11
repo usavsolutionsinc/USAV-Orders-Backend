@@ -14,7 +14,7 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
-import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 
 type LineSerial = {
@@ -529,7 +529,15 @@ export const GET = withAuth(async (request: NextRequest) => {
          AND rl.zoho_purchaseorder_id IS NOT NULL
          -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
          -- so a received order drops off Incoming after a Refresh-Zoho sync.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+         -- Honor this view's contract: a row drops off "the instant the operator
+         -- scans". A door scan writes receiving_scans against the carton's
+         -- receiving row but never advances this Zoho-PO line's workflow_status /
+         -- quantity_received (the line's receiving_id is often NULL), so without
+         -- this guard a scanned/unboxed box stays stuck in Incoming and renders
+         -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
+         -- delivered-unscanned tile count (count === rows).
+         AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
       );
 
       // Optional delivery_state facet filter. Each bucket is the exact same
@@ -542,9 +550,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         // "this box is here but nobody has touched it" signal.
         conditions.push(
           `stn.is_delivered = true
-           AND NOT EXISTS (
-             SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
-           )`,
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
         );
       } else if (deliveryStateFilter === 'DELIVERED_EMAIL') {
         // Email-driven counterpart to DELIVERED_UNOPENED: an "ORDER DELIVERED"
@@ -734,9 +740,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   WHEN COALESCE(rl.quantity_received, 0) > 0 OR rl.workflow_status <> 'EXPECTED'
                     THEN 'RECEIVED'
                   WHEN stn.is_delivered = true
-                       AND NOT EXISTS (
-                         SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
-                       )
+                       AND NOT ${SHIPMENT_SCANNED_PREDICATE}
                     THEN 'DELIVERED_UNOPENED'
                   WHEN stn.latest_status_category = 'OUT_FOR_DELIVERY'
                     THEN 'ARRIVING_TODAY'
