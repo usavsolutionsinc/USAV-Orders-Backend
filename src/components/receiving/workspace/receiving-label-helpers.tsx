@@ -6,7 +6,11 @@ import {
   receivingLabelPlatformDisplay,
   receivingLabelPoCornerDisplay,
 } from '@/lib/print/printReceivingLabel';
+import { printHtmlSilent } from '@/lib/print/silentPrint';
 import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
+
+/** Microns per inch — the unit Electron's silent-print pageSize expects. */
+const MICRONS_PER_INCH = 25400;
 
 export type ReceivingLabelPayload = {
   /** Numeric receiving id — used to build the phone-scannable QR URL. */
@@ -101,14 +105,31 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
 </script>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) {
-    console.warn('printReceivingLabel: popup blocked');
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // Match the settings "Print test label" path: try the Electron silent-print
+  // bridge first (printHtmlSilent → api.printHtml), which sends straight to the
+  // configured/default printer. Only fall back to the browser popup + window.print()
+  // when we're not in the desktop shell — that raw popup print is what throws
+  // "no Windows app for printing" when no default print handler is registered.
+  // The 2×1" label face is mirrored into the microns pageSize so the thermal
+  // printer picks the right stock.
+  void printHtmlSilent(html, {
+    pageSize: {
+      width: 2 * MICRONS_PER_INCH,
+      height: 1 * MICRONS_PER_INCH,
+    },
+    margins: { marginType: 'none' },
+    waitMs: 250,
+  }).then((handled) => {
+    if (handled) return;
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) {
+      console.warn('printReceivingLabel: popup blocked');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  });
 }
 
 /**
