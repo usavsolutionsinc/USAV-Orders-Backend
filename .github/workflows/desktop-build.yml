@@ -42,8 +42,12 @@ jobs:
       #   APPLE_ID                     — your Apple ID email
       #   APPLE_APP_SPECIFIC_PASSWORD  — app-specific password from appleid.apple.com
       #   APPLE_TEAM_ID                — Team ID from developer.apple.com
+      # --publish never: electron-builder must NOT publish to GitHub itself
+      # (it would auto-publish on CI and 403 against the read-only build token).
+      # The dedicated publish-release job below owns publishing. latest-mac.yml is
+      # still generated locally and uploaded as an artifact regardless.
       - name: Build and package (macOS)
-        run: npm run electron:build:mac
+        run: npm run electron:build:mac -- --publish never
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -87,8 +91,10 @@ jobs:
 
       # Optional Authenticode signing (avoids SmartScreen warnings). NSIS
       # auto-update works even unsigned, so these are not required to ship.
+      # --publish never: see the macOS job note — our publish-release job owns
+      # publishing; electron-builder's implicit CI publish 403s on the build token.
       - name: Build and package (Windows)
-        run: npm run electron:build:win
+        run: npm run electron:build:win -- --publish never
         env:
           CSC_LINK: ${{ secrets.CSC_LINK_WIN }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD_WIN }}
