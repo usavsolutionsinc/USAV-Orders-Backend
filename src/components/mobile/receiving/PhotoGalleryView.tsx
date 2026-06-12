@@ -146,7 +146,19 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
               onClick={() => setZoom(p.photoUrl)}
               className="relative aspect-square bg-gray-900"
             >
-              <Image src={p.photoUrl} alt="" fill sizes="33vw" className="object-cover" />
+              {/* Photos served through the same-origin /api/nas proxy are
+                  auth-gated, so the Next image optimizer (which fetches the URL
+                  server-side WITHOUT the session cookie) 401s on them. Render
+                  those unoptimized so the browser loads them directly with the
+                  cookie; public absolute NAS URLs still optimize normally. */}
+              <Image
+                src={p.photoUrl}
+                alt=""
+                fill
+                sizes="33vw"
+                className="object-cover"
+                unoptimized={p.photoUrl.startsWith('/api/nas')}
+              />
             </button>
           ))}
         </div>

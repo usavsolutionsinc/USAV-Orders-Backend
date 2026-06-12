@@ -53,7 +53,8 @@ export function isNasPhotoUrl(url: string): boolean {
   if (/vercel-storage\.com|blob\.vercel-storage/.test(url)) return false;
   const base = getNasBaseUrl();
   if (base && url.startsWith(base)) return true;
-  return url.startsWith('/api/nas-dev');
+  // Same-origin proxy paths: the prod /api/nas CRUD proxy and the dev mount proxy.
+  return url.startsWith('/api/nas-dev') || url.startsWith('/api/nas');
 }
 
 export interface NasEntry {
