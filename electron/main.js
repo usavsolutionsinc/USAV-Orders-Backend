@@ -1,6 +1,22 @@
 const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('electron');
 const path = require('path');
 
+// File logger — makes auto-update activity inspectable after the fact instead of
+// vanishing into a hidden console. Logs land at:
+//   Windows: %AppData%\USAV Orders\logs\main.log
+//   macOS:   ~/Library/Logs/USAV Orders/main.log
+// Wrapped defensively: a logging dependency must never be able to stop the app
+// from launching, so fall back to console if electron-log is unavailable.
+let log;
+try {
+  log = require('electron-log/main');
+  log.initialize();
+  log.transports.file.level = 'info';
+  log.transports.console.level = 'info';
+} catch (_) {
+  log = { info: console.log, warn: console.warn, error: console.error };
+}
+
 const DEFAULT_URL = 'https://usav-orders-backend.vercel.app';
 const DEV_URL = 'http://127.0.0.1:3000';
 const SIDECAR_PORT = 3001;
@@ -366,10 +382,25 @@ if (!isDev && !isLegacyElectron) {
   try {
     const { autoUpdater } = require('electron-updater');
 
+    // Send every updater event to the file logger so a maintainer can confirm
+    // the update flow ran (checking → available → downloaded) or read the exact
+    // failure reason — see the log paths noted at the top of this file.
+    autoUpdater.logger = log;
     autoUpdater.autoDownload = true;       // download in background automatically
     autoUpdater.autoInstallOnAppQuit = true; // install when the user next quits
 
+    log.info(`[updater] app v${app.getVersion()} — will check GitHub Releases for a newer build`);
+
+    autoUpdater.on('checking-for-update', () => log.info('[updater] checking for update…'));
+    autoUpdater.on('update-available', (info) =>
+      log.info(`[updater] update available: v${info && info.version} — downloading in background`));
+    autoUpdater.on('update-not-available', (info) =>
+      log.info(`[updater] no update — v${(info && info.version) || app.getVersion()} is already latest`));
+    autoUpdater.on('download-progress', (p) =>
+      log.info(`[updater] downloading ${Math.round((p && p.percent) || 0)}%`));
+
     autoUpdater.on('update-downloaded', (info) => {
+      log.info(`[updater] downloaded v${info && info.version} — prompting restart`);
       // Prompt the user to restart and apply the update now, or wait
       dialog.showMessageBox({
         type: 'info',
@@ -384,13 +415,16 @@ if (!isDev && !isLegacyElectron) {
     });
 
     autoUpdater.on('error', (err) => {
-      // Log silently — don't interrupt the user for update errors
-      console.error('[updater] Error:', err.message);
+      // Don't interrupt the user, but record the full reason for diagnosis.
+      log.error('[updater] error:', err == null ? 'unknown' : (err.stack || err.message || String(err)));
     });
 
     // Check 3 seconds after launch so startup isn't delayed
-    setTimeout(() => autoUpdater.checkForUpdates(), 3000);
-  } catch (_) {
-    // electron-updater not installed yet — skip silently
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch((err) =>
+        log.error('[updater] checkForUpdates failed:', (err && err.message) || err));
+    }, 3000);
+  } catch (err) {
+    log.error('[updater] init failed:', (err && err.message) || err);
   }
 }

@@ -32,8 +32,32 @@ mac:
   category: public.app-category.business
   # icon: public/icon.icns   # TODO: add 512×512 .icns
   minimumSystemVersion: '11.0.0'
+  # Space-free asset name. GitHub Releases rewrites spaces in asset filenames to
+  # dots, which would desync the name from the URL inside latest-mac.yml and 404
+  # the auto-update download. Keep ${arch} so the install-page classifier still
+  # buckets the arm64 dmg correctly.
+  artifactName: USAV-Orders-${version}-${arch}.${ext}
+  # Hardened runtime + entitlements are required for Developer ID signing and
+  # notarization — which are in turn REQUIRED for macOS auto-update. Squirrel.Mac
+  # (what electron-updater uses on macOS) refuses to apply an update unless the
+  # running app is signed and the downloaded update's signature validates.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  # Notarize with Apple. Needs APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+  # in the environment (CI secrets). For a local build WITHOUT those creds, skip
+  # notarization with:  npm run electron:build:mac -- -c.mac.notarize=false
+  notarize: true
   target:
+    # dmg = the download users run for a first install.
+    # zip = what electron-updater consumes for auto-update; Squirrel.Mac updates
+    #       from a zip, not a dmg, and latest-mac.yml points at this zip. Without
+    #       it, macOS auto-update has nothing valid to download.
     - target: dmg
+      arch:
+        - arm64
+    - target: zip
       arch:
         - arm64
 
@@ -61,6 +85,9 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # Space-free asset name so the GitHub Release asset name matches the URL inside
+  # latest.yml (GitHub rewrites spaces to dots, which would 404 the auto-update).
+  artifactName: USAV-Orders-Setup-${version}.${ext}
   # installerIcon: public/icon.ico
   # uninstallerIcon: public/icon.ico
 

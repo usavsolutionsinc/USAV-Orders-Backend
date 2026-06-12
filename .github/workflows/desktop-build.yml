@@ -1,7 +1,9 @@
 name: Desktop Build
 
-# Trigger on pushes to main and on published releases.
-# You can also trigger manually via Actions → Run workflow.
+# Trigger on pushes to main (e.g. a version bump) and manual dispatch.
+# NOTE: the old `release: [published]` trigger was removed on purpose — the
+# publish-release job below now CREATES the release, and re-triggering on that
+# event would rebuild everything for nothing.
 on:
   push:
     branches: [main]
@@ -11,16 +13,14 @@ on:
       - 'package.json'
       - 'electron-builder.yml'
       - '.github/workflows/desktop-build.yml'
-  release:
-    types: [published]
   workflow_dispatch:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # macOS — produces a universal .dmg (Intel + Apple Silicon)
+  # macOS — signed + notarized .dmg (install) and .zip (auto-update feed)
   # ---------------------------------------------------------------------------
   build-mac:
-    name: Build macOS (.dmg)
+    name: Build macOS (.dmg + .zip)
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -35,32 +35,39 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Code signing — only runs when the secrets are present.
+      # Code signing + notarization — REQUIRED for macOS auto-update.
       # Add these in GitHub → Settings → Secrets and variables → Actions:
-      #   CSC_LINK            — base64-encoded .p12 certificate
-      #   CSC_KEY_PASSWORD    — certificate password
-      #   APPLE_ID            — your Apple ID email
-      #   APPLE_ID_PASS       — app-specific password from appleid.apple.com
-      #   APPLE_TEAM_ID       — Team ID from developer.apple.com
+      #   CSC_LINK                     — base64-encoded Developer ID .p12 certificate
+      #   CSC_KEY_PASSWORD             — that certificate's password
+      #   APPLE_ID                     — your Apple ID email
+      #   APPLE_APP_SPECIFIC_PASSWORD  — app-specific password from appleid.apple.com
+      #   APPLE_TEAM_ID                — Team ID from developer.apple.com
       - name: Build and package (macOS)
         run: npm run electron:build:mac
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Upload the installer AND the updater metadata (.zip + latest-mac.yml +
+      # blockmaps). Without latest-mac.yml the in-app updater can't detect updates.
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: usav-orders-mac
-          path: desktop-dist/*.dmg
+          path: |
+            desktop-dist/*.dmg
+            desktop-dist/*.zip
+            desktop-dist/*.blockmap
+            desktop-dist/latest-mac.yml
           retention-days: 14
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # Windows — produces an NSIS installer .exe
+  # Windows — NSIS installer .exe (+ latest.yml for the auto-update feed)
   # ---------------------------------------------------------------------------
   build-win:
     name: Build Windows (.exe)
@@ -78,9 +85,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Code signing — add these secrets to enable Authenticode signing:
-      #   CSC_LINK          — base64-encoded .p12 certificate
-      #   CSC_KEY_PASSWORD  — certificate password
+      # Optional Authenticode signing (avoids SmartScreen warnings). NSIS
+      # auto-update works even unsigned, so these are not required to ship.
       - name: Build and package (Windows)
         run: npm run electron:build:win
         env:
@@ -88,39 +94,81 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD_WIN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # latest.yml is REQUIRED by electron-updater — upload it alongside the .exe.
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: usav-orders-win
-          path: desktop-dist/*.exe
+          path: |
+            desktop-dist/*.exe
+            desktop-dist/*.blockmap
+            desktop-dist/latest.yml
           retention-days: 14
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # On a published GitHub Release, attach the built installers automatically
+  # Publish a GitHub Release named v<version> carrying the installers AND the
+  # update metadata (latest.yml / latest-mac.yml). This release is exactly what
+  # the in-app electron-updater reads. Runs even if the macOS job failed (e.g.
+  # signing secrets not added yet) so Windows auto-update still ships.
   # ---------------------------------------------------------------------------
-  attach-to-release:
-    name: Attach installers to GitHub Release
+  publish-release:
+    name: Publish GitHub Release (auto-update feed)
     needs: [build-mac, build-win]
+    if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    permissions:
+      contents: write
     steps:
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: usav-orders-mac
-          path: artifacts/mac
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: ver
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: usav-orders-win
-          path: artifacts/win
+          path: dist/win
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
-          files: |
-            artifacts/mac/*.dmg
-            artifacts/win/*.exe
+          name: usav-orders-mac
+          path: dist/mac
+
+      - name: Create or update release with installers + update metadata
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG="v${VERSION}"
+          mkdir -p dist/all
+          # Updater needs: installers + blockmaps + the *.yml channel files.
+          find dist/win dist/mac -type f \
+            \( -name '*.exe' -o -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name '*.yml' \) \
+            -exec cp -f {} dist/all/ \; 2>/dev/null || true
+          echo "Assets to publish for ${TAG}:"; ls -la dist/all || true
+
+          shopt -s nullglob
+          files=(dist/all/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::No installer artifacts were produced — nothing to release." >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — clobbering assets."
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "USAV Orders $TAG" \
+              --notes "Automated desktop build for $TAG. Installers + auto-update metadata (latest.yml / latest-mac.yml)."
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+          echo "Published ${#files[@]} asset(s) to $TAG."
