@@ -24,6 +24,7 @@ import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneH
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
 import {
   getReceivingModeDescriptor,
+  historySortGroupAxis,
   INCOMING_PAGE_SIZE,
   type ReceivingModeContext,
 } from '@/lib/receiving/receiving-modes';
@@ -130,6 +131,9 @@ export interface ReceivingLineRow {
   received_by_name?: string | null;
   /** Unbox timestamp — receiving.unboxed_at; null until the carton is unboxed. */
   unboxed_at?: string | null;
+  /** Terminal "Received" (DONE) transition time — receiving_lines.received_done_at;
+   *  null until the line is fully received. Distinct from received_at (door scan). */
+  received_done_at?: string | null;
   /** Staff who unboxed (receiving.unboxed_by → staff.name). */
   unboxed_by_name?: string | null;
   /** First tracking scan time (receiving_scans, earliest). */
@@ -192,25 +196,50 @@ export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: numbe
 }
 
 /**
- * Activity timestamp the History feed groups + sorts by: the last scan/receive
- * (`last_activity_at` — the same axis the Recent rail orders by, per its
- * "Same as History" label), falling back to created_at. Grouping on created_at
- * alone bucketed today's scans of older Zoho-PO lines into long-past weeks, so
- * the current-week History view rendered its empty state while the rail was
- * full of the very same activity.
+ * Activity timestamp the History feed groups + sorts by. Default ('scanned')
+ * axis = the last scan/receive (`last_activity_at` — the same axis the Recent
+ * rail orders by, per its "Same as History" label), falling back to created_at.
+ * Grouping on created_at alone bucketed today's scans of older Zoho-PO lines
+ * into long-past weeks, so the current-week History view rendered its empty
+ * state while the rail was full of the very same activity.
+ *
+ * The 'unboxed' axis (History's Sort → Unboxed) bands + orders by `unboxed_at`,
+ * and 'received' by `received_done_at` (the terminal DONE transition) — each
+ * falling back to scan/created so a row not yet at that stage still lands in a
+ * real day band rather than collapsing to "Unknown". History is client-sorted
+ * (serverSorted=false), so switching this axis is what actually reorders the
+ * feed — the server just returns the matching 500-row window.
  */
-function receivingRowActivityTs(row: {
-  last_activity_at?: string | null;
-  created_at?: string | null;
-}): string | null {
+type ReceivingActivityAxis = 'scanned' | 'unboxed' | 'received';
+
+function receivingRowActivityTs(
+  row: {
+    last_activity_at?: string | null;
+    created_at?: string | null;
+    unboxed_at?: string | null;
+    received_done_at?: string | null;
+  },
+  axis: ReceivingActivityAxis = 'scanned',
+): string | null {
+  if (axis === 'unboxed') {
+    return row.unboxed_at ?? row.last_activity_at ?? row.created_at ?? null;
+  }
+  if (axis === 'received') {
+    return row.received_done_at ?? row.unboxed_at ?? row.last_activity_at ?? row.created_at ?? null;
+  }
   return row.last_activity_at ?? row.created_at ?? null;
 }
 
-function receivingRowActivityMs(row: {
-  last_activity_at?: string | null;
-  created_at?: string | null;
-}): number {
-  const raw = receivingRowActivityTs(row);
+function receivingRowActivityMs(
+  row: {
+    last_activity_at?: string | null;
+    created_at?: string | null;
+    unboxed_at?: string | null;
+    received_done_at?: string | null;
+  },
+  axis: ReceivingActivityAxis = 'scanned',
+): number {
+  const raw = receivingRowActivityTs(row, axis);
   const t = raw ? new Date(raw).getTime() : 0;
   return Number.isFinite(t) ? t : 0;
 }
@@ -803,6 +832,10 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   // the API query string below; no client-side filtering of date range
   // because the server already narrows results.
   const incomingSort = isIncomingMode ? (searchParams.get('sort') || '').trim() : '';
+  // History reuses the shared `?sort=` param (modes are exclusive). The axis it
+  // resolves to drives both the server window and the client day-banding below.
+  const historySort = isHistoryMode ? (searchParams.get('sort') || '').trim() : '';
+  const historyAxis = isHistoryMode ? historySortGroupAxis(historySort) : 'scanned';
   const incomingPoFrom = isIncomingMode ? (searchParams.get('po_from') || '').trim() : '';
   const incomingPoTo = isIncomingMode ? (searchParams.get('po_to') || '').trim() : '';
   // Pagination — server-side LIMIT 50 + page offset. Page numbers are
@@ -827,6 +860,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       historySearch,
       historySearchField,
       historySearchScope,
+      historySort,
       incomingSearch,
       incomingState,
       incomingSort,
@@ -839,6 +873,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       historySearch,
       historySearchField,
       historySearchScope,
+      historySort,
       incomingSearch,
       incomingState,
       incomingSort,
@@ -1174,18 +1209,20 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       if (mode.groupAxis === 'po_date') {
         anchorTs = rows.find((r) => r.po_date)?.po_date ?? rows[0]?.created_at ?? null;
       } else {
+        // History's Sort axis (scanned vs unboxed) decides which timestamp the
+        // group is banded + ordered by; Receive always uses scan activity.
         let bestMs = -1;
         for (const r of rows) {
-          const ms = receivingRowActivityMs(r);
+          const ms = receivingRowActivityMs(r, historyAxis);
           if (ms > bestMs) {
             bestMs = ms;
-            anchorTs = receivingRowActivityTs(r);
+            anchorTs = receivingRowActivityTs(r, historyAxis);
           }
         }
       }
       return { key, rows, anchorTs };
     });
-  }, [dedupedRows, mode.groupAxis]);
+  }, [dedupedRows, mode.groupAxis, historyAxis]);
 
   const groupedRecords = useMemo(() => {
     const groups: Record<string, ReceivingPoGroup[]> = {};

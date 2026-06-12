@@ -20,6 +20,7 @@ function ctx(overrides: Partial<ReceivingModeContext> = {}): ReceivingModeContex
     historySearch: '',
     historySearchField: 'all',
     historySearchScope: 'all',
+    historySort: '',
     incomingSearch: '',
     incomingState: null,
     incomingSort: '',
@@ -90,6 +91,26 @@ test('history buildParams omits search when blank but always sends field/scope',
   assert.equal(p.has('search'), false);
   assert.equal(p.get('search_field'), 'all');
   assert.equal(p.get('search_scope'), 'all');
+});
+
+test('history sort: default scanned is omitted from the URL, unboxed is sent', () => {
+  // Default axis stays out of the URL so a clean History link has no ?sort=.
+  assert.equal(RECEIVING_MODES.history.buildParams(ctx()).has('sort'), false);
+  assert.equal(
+    RECEIVING_MODES.history.buildParams(ctx({ historySort: 'scanned_newest' })).has('sort'),
+    false,
+  );
+  // A non-default / unknown axis is normalized and forwarded.
+  assert.equal(
+    RECEIVING_MODES.history.buildParams(ctx({ historySort: 'unboxed_newest' })).get('sort'),
+    'unboxed_newest',
+  );
+});
+
+test('history sort axis varies the query key so a sort flip refetches', () => {
+  const scanned = RECEIVING_MODES.history.queryKey(ctx());
+  const unboxed = RECEIVING_MODES.history.queryKey(ctx({ historySort: 'unboxed_newest' }));
+  assert.notDeepEqual(scanned, unboxed);
 });
 
 test('incoming buildParams computes server offset from the 1-based page', () => {

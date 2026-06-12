@@ -12,6 +12,12 @@ import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBa
  * received qty has met expected reads green even if the workflow hasn't been
  * advanced yet — "fully in" is the signal receivers scan for.
  */
+// Zoho statuses that mean "the vendor side considers this PO received". Mirror
+// of the canonical server constant ZOHO_RECEIVED_LIKE_STATUSES in
+// src/lib/receiving/zoho-received-reconcile.ts — inlined here because that module
+// imports the DB pool and can't be pulled into a client bundle. Keep in sync.
+const ZOHO_RECEIVED_LIKE = new Set(['received', 'billed', 'closed']);
+
 export function getReceivingStatusDot(row: ReceivingLineRow): string {
   const { workflow_status: status, quantity_received: qtyReceived, quantity_expected: qtyExpected } = row;
 
@@ -21,6 +27,17 @@ export function getReceivingStatusDot(row: ReceivingLineRow): string {
   if (row.receiving_source === 'unmatched') return 'bg-emerald-500';
 
   const stage = workflowStage(status);
+
+  // Zoho is the source of truth for "received": once its PO reads
+  // received/billed/closed the box is physically in, even if this line's local
+  // workflow_status still sits at an earlier unbox-pipeline stage (EXPECTED /
+  // MATCHED / UNBOXED) or its qty hasn't been counted yet. Show it green so a
+  // Zoho-received carton can't render a mix of gray/blue/indigo "unbox" dots in
+  // the rail. Terminal dispositions (failed / RTV / scrap) still win — those
+  // happen after receiving and must keep their own color.
+  const zohoReceived = ZOHO_RECEIVED_LIKE.has(String(row.zoho_status ?? '').trim().toLowerCase());
+  if (zohoReceived && stage.phase !== 'TERMINAL') return 'bg-emerald-500';
+
   const qtyComplete =
     qtyExpected != null && qtyExpected > 0 && qtyReceived != null && qtyReceived >= qtyExpected;
 
@@ -45,11 +62,13 @@ interface Props {
  * stable identity (the shell wires it into a listener effect).
  */
 function getUnboxActivityAt(r: ReceivingLineRow): string | null {
-  const stamps = [r.unboxed_at, r.updated_at]
-    .map((raw) => (raw ? { raw, t: new Date(raw).getTime() } : null))
-    .filter((x): x is { raw: string; t: number } => x != null && Number.isFinite(x.t));
-  if (stamps.length === 0) return r.last_activity_at ?? r.created_at;
-  return stamps.sort((a, b) => b.t - a.t)[0].raw;
+  // Label with the UNBOXED time so the relative stamp matches the rail's
+  // sort axis (unboxed_at DESC). A later line edit (qty bump, note, condition)
+  // must NOT bump the displayed time — that's what made an old carton read
+  // "8h" at the wrong spot. Fall back to line activity only for rows with no
+  // unbox stamp yet (they sort last anyway).
+  if (r.unboxed_at) return r.unboxed_at;
+  return r.last_activity_at ?? r.updated_at ?? r.created_at;
 }
 
 /**
@@ -77,12 +96,12 @@ export function ReceivingRecentRail({
     // are excluded — they live in History, not this rail, which drives the
     // unboxing workspace (LineEditPanel).
     params.set('view', 'activity');
-    // Order by unbox-pipeline activity (unboxed_at OR the line's last write),
-    // NOT scan-based last activity — a door re-scan in triage bumps neither,
-    // so triage scans can't reorder this rail, while a return-paired /
-    // just-received carton with no unbox stamp yet still surfaces by its
-    // line activity instead of sinking past the render window.
-    params.set('sort', 'unbox_activity');
+    // Order by when the carton was UNBOXED (unboxed_at DESC), so this reads as
+    // a "recently unboxed" feed. NOT GREATEST(unboxed_at, updated_at): that let
+    // a later line edit (qty bump, note, condition) re-bump a carton unboxed
+    // days ago to the top. Cartons with no unbox stamp yet sort last (NULLS
+    // LAST) — they belong in History, not the unboxing rail.
+    params.set('sort', 'unboxed_newest');
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     return res.json();
