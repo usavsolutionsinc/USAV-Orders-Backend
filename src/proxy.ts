@@ -158,7 +158,10 @@ function resolveMobileUaRewrite(pathname: string, ua: string | null): string | n
  * preserve the app's existing functionality:
  *
  *  - Camera is allowed on same-origin only (mobile receiving photo capture).
- *  - Mic / geolocation / payment / usb / fullscreen all disabled by default.
+ *  - USB + Serial allowed same-origin only — browser-native silent label
+ *    printing (WebUSB / Web Serial) in Settings → Hardware. Without `usb=(self)`
+ *    `navigator.usb.requestDevice()` throws "disallowed by permissions policy".
+ *  - Mic / geolocation / payment all disabled by default.
  *  - frame-ancestors 'self' (CSP) + X-Frame-Options DENY — defense in depth.
  *  - HSTS with 1y max-age + subdomains. Don't preload yet (irreversible).
  *  - Referrer policy trims cross-origin leak surface.
@@ -169,7 +172,8 @@ const PERMISSIONS_POLICY = [
   'microphone=()',
   'geolocation=()',
   'payment=()',
-  'usb=()',
+  'usb=(self)',
+  'serial=(self)',
   'fullscreen=(self)',
   'interest-cohort=()',
 ].join(', ');

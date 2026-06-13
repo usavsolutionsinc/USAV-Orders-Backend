@@ -124,6 +124,19 @@ function registerIpcHandlers() {
         finish({ success: false, reason: `load failed: ${desc} (${code})` });
       });
 
+      // Our label/report HTML embeds `window.onload -> window.print()` so the
+      // BROWSER fallback (popup) can drive its own printing. Inside this hidden
+      // silent-print window that same call would pop the Windows print dialog
+      // before we run webContents.print({ silent: true }) against the configured
+      // printer. Neutralize the page's print as soon as the DOM is ready — the
+      // embedded call is delayed ~120ms, so this always lands first and only the
+      // controlled silent print to the saved device runs.
+      printWin.webContents.once('dom-ready', () => {
+        printWin.webContents
+          .executeJavaScript('window.print = function () {};')
+          .catch(() => {});
+      });
+
       printWin.webContents.once('did-finish-load', () => {
         // Give in-page scripts (JsBarcode, web fonts, etc.) a moment to render
         const waitMs = Number.isFinite(options.waitMs) ? options.waitMs : 450;

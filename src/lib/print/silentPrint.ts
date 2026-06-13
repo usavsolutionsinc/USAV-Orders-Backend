@@ -200,8 +200,17 @@ export async function printHtmlSilent(
     pageSize: presetPaper?.pageSize ?? options.pageSize,
   };
 
+  // Label/report HTML embeds `window.onload -> window.print()` so the BROWSER
+  // fallback popup can drive its own printing. In the Electron silent path the
+  // main process drives the print via webContents.print({ silent: true }); the
+  // page's own window.print() would instead pop the OS print dialog (the exact
+  // bug where the receiving Print button shows the Windows dialog while the
+  // dialog-free Test label — which has no such script — works). Neutralize any
+  // page-initiated print before handing the HTML to the shell.
+  const safeHtml = html.replace(/window\.print\s*\(\s*\)/g, 'void 0');
+
   try {
-    const result = await api.printHtml(html, merged);
+    const result = await api.printHtml(safeHtml, merged);
     if (!result?.success) {
       console.warn('[silentPrint] failed:', result?.reason);
       return false;

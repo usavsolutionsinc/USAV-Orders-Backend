@@ -1,9 +1,109 @@
 {
-  "generatedAt": "2026-06-10T15:20:55.958Z",
-  "count": 199,
+  "generatedAt": "2026-06-13T02:15:12.192Z",
+  "count": 200,
   "commits": [
     {
-      "sha": "4da45509b55976274f42369ecbf8b88dda1bc51a",
+      "sha": "'7f51a452466d847f3dfa4254639d7f988209a161",
+      "shortSha": "7f51a452",
+      "date": "2026-06-12T16:59:58-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the NAS from receiving and unbox pipeline",
+      "body": "",
+      "type": "other",
+      "title": "updated the NAS from receiving and unbox pipeline"
+    },
+    {
+      "sha": "'\n'308b216e5840b5f96d8209211a27a5c1e814b7a8",
+      "shortSha": "308b216e",
+      "date": "2026-06-12T15:01:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "docs: track pending macOS auto-update work (blocked on Developer ID cert)",
+      "body": "Windows auto-update is live. macOS is wired in code but blocked on creating a\nDeveloper ID Application cert + setting a valid CSC_LINK secret (currently empty;\nmachine only has an Apple Development cert, which notarization rejects).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "track pending macOS auto-update work (blocked on Developer ID cert)"
+    },
+    {
+      "sha": "'\n'864da58a0f9f0072f619f1e747e24cdb1e1af2b9",
+      "shortSha": "864da58a",
+      "date": "2026-06-12T14:53:08-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(ci): pass --publish never to electron-builder build jobs",
+      "body": "electron-builder auto-publishes on CI detection and 403s against the read-only\nbuild-job token (and now that the v0.1.1 release exists, it fails the whole job).\nOur dedicated publish-release job owns publishing; the build jobs only produce\nartifacts (latest.yml/latest-mac.yml still generated locally regardless).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "pass --publish never to electron-builder build jobs"
+    },
+    {
+      "sha": "'\n'c9311ffe514ceda3c96a0f172456468a3f96d92c",
+      "shortSha": "c9311ffe",
+      "date": "2026-06-12T14:05:34-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(desktop): make auto-update actually work + observable (win now, mac on signing)",
+      "body": "The in-app updater never updated because (a) the version never changed and\n(b) no Release ever carried the latest.yml/latest-mac.yml metadata electron-updater\nrequires. This wires up a real, verifiable auto-update feed.\n\n- CI: publish a GitHub Release v<version> on each version bump, uploading the\n  installers AND the update metadata (latest.yml / latest-mac.yml / blockmaps).\n  Windows publishes even if the macOS job fails (e.g. signing secrets not yet set).\n- Windows: works now — public repo, NSIS updates unsigned. Space-free artifact\n  names so GitHub's space->dot asset rename can't 404 the update URL.\n- macOS: add Developer ID hardened-runtime signing + notarization + a zip target\n  (Squirrel.Mac updates from a zip, not a dmg) + latest-mac.yml. Activates once\n  the Apple secrets (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,\n  APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) are added to the repo.\n- Observability: route electron-updater through electron-log so the update\n  lifecycle (checking/available/downloaded/error) is written to main.log.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "make auto-update actually work + observable (win now, mac on signing)"
+    },
+    {
+      "sha": "'\n'a08929e610b25aa9df366af01d167e925be4bf0d",
+      "shortSha": "a08929e6",
+      "date": "2026-06-12T13:39:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "chore(desktop): bump version 0.1.0 -> 0.1.1 to ship current Electron shell",
+      "body": "The app version had never been bumped from 0.1.0 since the first commit, so\nelectron-updater always saw the published release as equal to the installed\nversion and never updated. Bump to 0.1.1 so the Windows build carries the\ncurrent shell (silent-print print-html IPC handler, added 2026-05-17) and\nauto-update can recognise it as newer.\n\nTouches package.json, which triggers the Desktop Build CI workflow to produce\na fresh Windows NSIS installer on a windows-latest runner.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "bump version 0.1.0 -> 0.1.1 to ship current Electron shell"
+    },
+    {
+      "sha": "'\n'452b38c069116f145a8d9b3e38a9012b4b68d576",
+      "shortSha": "452b38c0",
+      "date": "2026-06-12T12:31:37-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): silent-print labels via Electron bridge, popup fallback",
+      "body": "printReceivingLabel went straight to window.open()+window.print(), which\non Windows throws \"no Windows app for printing\" when no default print\nhandler is registered. Route it through printHtmlSilent first (the same\npath the settings \"Print test label\" button uses), falling back to the\nbrowser popup only when not in the desktop shell. Covers both the\nPrint-only and Print·receive receiving buttons.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "silent-print labels via Electron bridge, popup fallback"
+    },
+    {
+      "sha": "'\n'6e66fffb1f4b9636c0dd93f497e8f6876d29144e",
+      "shortSha": "6e66fffb",
+      "date": "2026-06-12T09:10:36-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "incoming display and receiving corrections",
+      "body": "",
+      "type": "other",
+      "title": "incoming display and receiving corrections"
+    },
+    {
+      "sha": "'\n'b89e80462a2fbb3c86e614dca2d1bc9f1896664d",
+      "shortSha": "b89e8046",
+      "date": "2026-06-11T00:02:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(receiving): derive delivery from physical dock scan when carrier lags",
+      "body": "Carrier \"delivered\" is absent or late for most inbound boxes: of 1,291 scanned\ncartons, 728 were scanned (707 fully opened) while the carrier still said NOT\ndelivered — USPS access-blocked/NULL-status (540), unknown-carrier numbers that\nnever poll (165), FedEx stale (22); when it does land the lag runs to ~87 days\nfor USPS. The physical scan is the real delivery truth.\n\nAdd a 'receiving_scan' pass to runReconcileDeliveredJob: for an inbound shipment\nmatched by the same last-8 / shipment-link rule the Incoming display uses, set\nis_delivered + is_terminal, stamp the earliest matching scan as delivered_at,\nand stop polling. Gated by INBOUND_SHIPMENT_PREDICATE so an outbound order\nshipment whose tracking last-8 coincidentally collides with a scan is never\nflipped (warranty-safe). Extract SHIPMENT_SCAN_MATCH_CONDITION so the EXISTS\npredicate and the delivered_at derivation share one match definition.\n\nScanned boxes are excluded from delivered-unscanned by construction, so flipping\nis_delivered cannot resurface them (verified: 0 receiving_scan rows in the\ndelivered-unscanned base). Backfilled 766 inbound shipments.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "derive delivery from physical dock scan when carrier lags"
+    },
+    {
+      "sha": "'\n'38a86698f9fa3e2e93d9e203229a723788e1fe6c",
+      "shortSha": "38a86698",
+      "date": "2026-06-10T17:36:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): drop scanned boxes from Incoming via last-8 tracking match",
+      "body": "Incoming only dropped a row when the Zoho-PO line advanced off EXPECTED, but a\ndock scan/unbox writes to the carton's receiving_scans and never touches that\nline (receiving_id is usually NULL), so scanned boxes stayed stuck in Incoming\nand rendered as delivery_state='UNKNOWN'.\n\nRead-side: add one SHIPMENT_SCANNED_PREDICATE — the last 8 of the Zoho-pasted\ntracking number matched inside the scanned barcode digits (Zoho-pasted and\nscanned values are different representations of the same package), plus a\nshipment-link fallback. Apply it across the Incoming base, the DELIVERED_UNOPENED\nfacet/CASE, the summary chip counts + per-carrier CTE, and the canonical\ndelivered-unscanned tile, so a scanned box leaves Incoming the instant a scan\nlands and count === rows.\n\nWrite-path twin: extend runTrackingMatchReconcileJob (reconcile-delivered cron)\nwith a D4 pass that advances a still-EXPECTED line to MATCHED + attaches it to\nthe scanned carton on the same last-8 match, so the line truly progresses in the\ndata model rather than only being hidden by the read-side guard.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "drop scanned boxes from Incoming via last-8 tracking match"
+    },
+    {
+      "sha": "'\n'f15a447db0757b9b6e15fe0e3eb78d7512f4cade",
+      "shortSha": "f15a447d",
+      "date": "2026-06-10T08:53:34-07:00",
+      "author": "DENSENSE8",
+      "subject": "receiving",
+      "body": "",
+      "type": "other",
+      "title": "receiving"
+    },
+    {
+      "sha": "'\n'4da45509b55976274f42369ecbf8b88dda1bc51a",
       "shortSha": "4da45509",
       "date": "2026-06-09T18:10:45-07:00",
       "author": "DENSENSE8",
@@ -13,7 +113,7 @@
       "title": "drop HANDLING_UNITS flag — always-on"
     },
     {
-      "sha": "57f8a94b6d73c66dd170f7299d236f3e8b127a35",
+      "sha": "'\n'57f8a94b6d73c66dd170f7299d236f3e8b127a35",
       "shortSha": "57f8a94b",
       "date": "2026-06-09T18:10:38-07:00",
       "author": "DENSENSE8",
@@ -23,7 +123,17 @@
       "title": "read-only coverage lookup card + /api/warranty/lookup"
     },
     {
-      "sha": "359fc99a238af7c61f51982f1c8aeeb8a819adc8",
+      "sha": "'\n'4c1dcb68a9cd1c34c8970f6e01416f66c0d839ba",
+      "shortSha": "4c1dcb68",
+      "date": "2026-06-09T15:57:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(po-gmail): surface mailbox reconnect as 409 instead of opaque 500",
+      "body": "Recover the PO-mailbox error-handling work from the GitHub Desktop stash:\n\n- po-gmail/client.ts: add PoGmailNotConnectedError, thrown when the mailbox\n  is unconnected or the Google refresh token is revoked/expired (the weekly\n  test-mode invalid_grant). Callers map it to a 409 + reconnect prompt.\n- admin/po-gmail/reconcile route: catch PoGmailNotConnectedError -> 409 with\n  needs_reconnect, so operators see \"reconnect\", not \"try again\".\n- e2e: po-mailbox-fetch spec asserts reconcile returns 200 or 409, never 500.\n- IncomingDetailsPanel EmailTab restyle (border-left cards + OrderIdChip).\n- receiving-claim-photos: point the claim link at the desktop receiving\n  workspace (/receiving?recvId=) instead of the mobile carton page.\n\nStash changes to ConditionPills and IncomingSidebarPanel were dropped as\nobsolete (HEAD rewrote ConditionPills; the rescan button moved to the\nreceiving.view-scoped endpoint), as was a duplicate FK-delete migration\nalready shipped in a1665101.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "surface mailbox reconnect as 409 instead of opaque 500"
+    },
+    {
+      "sha": "'\n'359fc99a238af7c61f51982f1c8aeeb8a819adc8",
       "shortSha": "359fc99a",
       "date": "2026-06-09T11:22:04-07:00",
       "author": "usavsolutionsinc",
@@ -33,7 +143,7 @@
       "title": "on click update for the master nav"
     },
     {
-      "sha": "923fd2710ecadc6a60f88f499587f2db3f568abc",
+      "sha": "'\n'923fd2710ecadc6a60f88f499587f2db3f568abc",
       "shortSha": "923fd271",
       "date": "2026-06-09T08:44:15-07:00",
       "author": "DENSENSE8",
@@ -43,7 +153,7 @@
       "title": "updates to the receiving routes"
     },
     {
-      "sha": "69d454e84271f93a1f6b9b6d70943d055fa1eeea",
+      "sha": "'\n'69d454e84271f93a1f6b9b6d70943d055fa1eeea",
       "shortSha": "69d454e8",
       "date": "2026-06-09T00:01:04-07:00",
       "author": "DENSENSE8",
@@ -53,7 +163,7 @@
       "title": "adding more the warranty logger and the receiving pages flow"
     },
     {
-      "sha": "a1665101153ded71dcb122324b826a9332de9b51",
+      "sha": "'\n'a1665101153ded71dcb122324b826a9332de9b51",
       "shortSha": "a1665101",
       "date": "2026-06-08T09:49:44-07:00",
       "author": "usavsolutionsinc",
@@ -63,7 +173,7 @@
       "title": "FK delete rules so receiving/line/exception deletes don't 500"
     },
     {
-      "sha": "5fb90f3b79a0727cb9aff571bb01c5eb0a54c94a",
+      "sha": "'\n'5fb90f3b79a0727cb9aff571bb01c5eb0a54c94a",
       "shortSha": "5fb90f3b",
       "date": "2026-06-08T09:30:03-07:00",
       "author": "usavsolutionsinc",
@@ -73,7 +183,7 @@
       "title": "keep USPS out of sync-due pending OAuth credentials"
     },
     {
-      "sha": "e60ddb130b0c3bf6698dfb6c6bddb1df1c69bd95",
+      "sha": "'\n'e60ddb130b0c3bf6698dfb6c6bddb1df1c69bd95",
       "shortSha": "e60ddb13",
       "date": "2026-06-07T23:32:46-07:00",
       "author": "DENSENSE8",
@@ -83,7 +193,7 @@
       "title": "pin discriminated-union narrowing so Vercel typecheck passes"
     },
     {
-      "sha": "2cbeeaf4be2f7bce548c6ecf7dbdf2430e5092d1",
+      "sha": "'\n'2cbeeaf4be2f7bce548c6ecf7dbdf2430e5092d1",
       "shortSha": "2cbeeaf4",
       "date": "2026-06-07T23:20:02-07:00",
       "author": "DENSENSE8",
@@ -93,7 +203,7 @@
       "title": "updated the app to have a cron job display for readability"
     },
     {
-      "sha": "f9d176f17bbba18a38d44378e0df2123e78af0ec",
+      "sha": "'\n'f9d176f17bbba18a38d44378e0df2123e78af0ec",
       "shortSha": "f9d176f1",
       "date": "2026-06-07T20:25:32-07:00",
       "author": "DENSENSE8",
@@ -103,7 +213,7 @@
       "title": "schedule Zoho PO-mirror sync (po-sync) so received POs auto-clear from Incoming"
     },
     {
-      "sha": "62139378b0d4ec256b8ed9f5078e7b491b2f4680",
+      "sha": "'\n'62139378b0d4ec256b8ed9f5078e7b491b2f4680",
       "shortSha": "62139378",
       "date": "2026-06-07T00:55:24-07:00",
       "author": "DENSENSE8",
@@ -113,7 +223,7 @@
       "title": "added a full scouting system for all the different systems including ebay and goodwill and added a warranty mode in the orders and shipping page"
     },
     {
-      "sha": "e8afdccdadd590479984a2e18b5875426ff31ab7",
+      "sha": "'\n'e8afdccdadd590479984a2e18b5875426ff31ab7",
       "shortSha": "e8afdccd",
       "date": "2026-06-06T19:40:20-07:00",
       "author": "DENSENSE8",
@@ -123,7 +233,7 @@
       "title": "pruning out dead code, and updating the work process on mobile"
     },
     {
-      "sha": "fe7abee6541f6312680525640469c9358d8b84ea",
+      "sha": "'\n'fe7abee6541f6312680525640469c9358d8b84ea",
       "shortSha": "fe7abee6",
       "date": "2026-06-06T16:32:43-07:00",
       "author": "DENSENSE8",
@@ -133,7 +243,7 @@
       "title": "actual dead code removal waves"
     },
     {
-      "sha": "65e0c5b559c9f2b0731218695d8f453c8a8afecd",
+      "sha": "'\n'65e0c5b559c9f2b0731218695d8f453c8a8afecd",
       "shortSha": "65e0c5b5",
       "date": "2026-06-06T16:10:32-07:00",
       "author": "DENSENSE8",
@@ -143,7 +253,7 @@
       "title": "Phase 2 legacy routes removal + admin dead code wave + doc cleanup"
     },
     {
-      "sha": "e0cc680cb0cc8931aa81bb9c3aa31146acc9c9bc",
+      "sha": "'\n'e0cc680cb0cc8931aa81bb9c3aa31146acc9c9bc",
       "shortSha": "e0cc680c",
       "date": "2026-06-06T16:06:26-07:00",
       "author": "DENSENSE8",
@@ -153,7 +263,7 @@
       "title": "delete 5 more from knip top (Wave 4)"
     },
     {
-      "sha": "21712e2d3737a1ce73a874d9f313ad4fb82df670",
+      "sha": "'\n'21712e2d3737a1ce73a874d9f313ad4fb82df670",
       "shortSha": "21712e2d",
       "date": "2026-06-06T16:06:02-07:00",
       "author": "DENSENSE8",
@@ -163,7 +273,7 @@
       "title": "delete another 4 high-confidence unused components (Wave 3)"
     },
     {
-      "sha": "93c39cc34dfd3dd01f2f9a6cc93ce939df6acf64",
+      "sha": "'\n'93c39cc34dfd3dd01f2f9a6cc93ce939df6acf64",
       "shortSha": "93c39cc3",
       "date": "2026-06-06T15:59:09-07:00",
       "author": "DENSENSE8",
@@ -173,7 +283,7 @@
       "title": "updates to the mobile flow and the UX and UI as well as adding updating details to the inventory panel"
     },
     {
-      "sha": "b9a7d503c6aefd2cf448d2136ea5a786699d92b9",
+      "sha": "'\n'b9a7d503c6aefd2cf448d2136ea5a786699d92b9",
       "shortSha": "b9a7d503",
       "date": "2026-06-06T12:41:01-07:00",
       "author": "DENSENSE8",
@@ -183,7 +293,7 @@
       "title": "ignore PWA service worker build artifacts in public/"
     },
     {
-      "sha": "d1d8feff75a42cf8f317f1ddbd9f3a2b96a93d30",
+      "sha": "'\n'd1d8feff75a42cf8f317f1ddbd9f3a2b96a93d30",
       "shortSha": "d1d8feff",
       "date": "2026-06-06T12:40:55-07:00",
       "author": "DENSENSE8",
@@ -193,7 +303,7 @@
       "title": "simplify eslint.config.mjs to avoid circular validation error"
     },
     {
-      "sha": "4ea456c6e8bdc7b272d164e9eee5965546eec5e9",
+      "sha": "'\n'4ea456c6e8bdc7b272d164e9eee5965546eec5e9",
       "shortSha": "4ea456c6",
       "date": "2026-06-06T12:40:40-07:00",
       "author": "DENSENSE8",
@@ -203,7 +313,7 @@
       "title": "delete 5 more high-confidence unused components (Wave 2)"
     },
     {
-      "sha": "8ccd326bcee4539eb4f50626f1593006b6685e2b",
+      "sha": "'\n'8ccd326bcee4539eb4f50626f1593006b6685e2b",
       "shortSha": "8ccd326b",
       "date": "2026-06-06T12:39:57-07:00",
       "author": "DENSENSE8",
@@ -213,7 +323,7 @@
       "title": "introduce dead code cleanup plan + tooling + first surface wave"
     },
     {
-      "sha": "2808cfb7ffd2c52b8a1aa6c3dc59b6b40f47998e",
+      "sha": "'\n'2808cfb7ffd2c52b8a1aa6c3dc59b6b40f47998e",
       "shortSha": "2808cfb7",
       "date": "2026-06-06T11:57:57-07:00",
       "author": "DENSENSE8",
@@ -223,7 +333,7 @@
       "title": "updating the receiving flow and the making it more priority based"
     },
     {
-      "sha": "40a41f76a0a2b466fff65bb11461804e876a1cfa",
+      "sha": "'\n'40a41f76a0a2b466fff65bb11461804e876a1cfa",
       "shortSha": "40a41f76",
       "date": "2026-06-05T15:58:32-07:00",
       "author": "usavsolutionsinc",
@@ -233,7 +343,7 @@
       "title": "disable USPS sync pending OAuth credentials"
     },
     {
-      "sha": "cacdbddc8a6a9a8f2d7eb361a218c32e78c9312f",
+      "sha": "'\n'cacdbddc8a6a9a8f2d7eb361a218c32e78c9312f",
       "shortSha": "cacdbddc",
       "date": "2026-06-05T15:06:01-07:00",
       "author": "usavsolutionsinc",
@@ -243,7 +353,7 @@
       "title": "updated and simplfied the recieving pipeline and the incoming display"
     },
     {
-      "sha": "973b207df5c80dcafc59ef2758c68cc157fc66bf",
+      "sha": "'\n'973b207df5c80dcafc59ef2758c68cc157fc66bf",
       "shortSha": "973b207d",
       "date": "2026-06-05T14:14:15-07:00",
       "author": "usavsolutionsinc",
@@ -253,7 +363,7 @@
       "title": "sync pnpm-lock.yaml with package.json to unblock prod deploys"
     },
     {
-      "sha": "565f85f9cbce93a1e577ef1bfbeb1adff755e3a3",
+      "sha": "'\n'565f85f9cbce93a1e577ef1bfbeb1adff755e3a3",
       "shortSha": "565f85f9",
       "date": "2026-06-05T08:43:13-07:00",
       "author": "DENSENSE8",
@@ -263,7 +373,7 @@
       "title": "edits to the mobile UI and UX and the components connection"
     },
     {
-      "sha": "ed6b2b214ebeb0c9ea5fb3031d1e1189e0462d4d",
+      "sha": "'\n'ed6b2b214ebeb0c9ea5fb3031d1e1189e0462d4d",
       "shortSha": "ed6b2b21",
       "date": "2026-06-05T05:39:45-07:00",
       "author": "DENSENSE8",
@@ -273,7 +383,7 @@
       "title": "updated the mobile app display to be usable in terms of all the UI and UX flows"
     },
     {
-      "sha": "4a57370f0c14b6733f4b837a4f7e499324fc2fb3",
+      "sha": "'\n'4a57370f0c14b6733f4b837a4f7e499324fc2fb3",
       "shortSha": "4a57370f",
       "date": "2026-06-05T03:51:16-07:00",
       "author": "DENSENSE8",
@@ -283,7 +393,7 @@
       "title": "making updates to the mobile app display for ease of use and better overall UX and UI"
     },
     {
-      "sha": "a0b915c20a2eb81c812dcedc886d5fa6e1b66a2c",
+      "sha": "'\n'a0b915c20a2eb81c812dcedc886d5fa6e1b66a2c",
       "shortSha": "a0b915c2",
       "date": "2026-06-05T02:18:27-07:00",
       "author": "DENSENSE8",
@@ -293,7 +403,7 @@
       "title": "cleaning up the admin page and adding more to the support for the mobiles pages"
     },
     {
-      "sha": "0a5b7d639e61825b3743793708597a9baf8c43ac",
+      "sha": "'\n'0a5b7d639e61825b3743793708597a9baf8c43ac",
       "shortSha": "0a5b7d63",
       "date": "2026-06-04T23:48:10-07:00",
       "author": "DENSENSE8",
@@ -303,7 +413,7 @@
       "title": "cleaned up the god components"
     },
     {
-      "sha": "ed53df1383931e803196d733a372f43880f52d02",
+      "sha": "'\n'ed53df1383931e803196d733a372f43880f52d02",
       "shortSha": "ed53df13",
       "date": "2026-06-04T23:05:10-07:00",
       "author": "DENSENSE8",
@@ -313,7 +423,7 @@
       "title": "updates to the shipping display logic and the inventory and receiving mobile page"
     },
     {
-      "sha": "456088096a3887d265e01cbf7b8639083bd9d415",
+      "sha": "'\n'456088096a3887d265e01cbf7b8639083bd9d415",
       "shortSha": "45608809",
       "date": "2026-06-04T10:09:59-07:00",
       "author": "usavsolutionsinc",
@@ -323,7 +433,7 @@
       "title": "updated all the packages for a successful build"
     },
     {
-      "sha": "acfaad014c817406cf799193f0cbe05c5770bf90",
+      "sha": "'\n'acfaad014c817406cf799193f0cbe05c5770bf90",
       "shortSha": "acfaad01",
       "date": "2026-06-04T09:36:11-07:00",
       "author": "usavsolutionsinc",
@@ -333,7 +443,7 @@
       "title": "NAS picker: fix prod thumbnails (q=75) + preview z-index"
     },
     {
-      "sha": "55d1f93fcfb429b6ba174d7814c6a1cab34dc553",
+      "sha": "'\n'55d1f93fcfb429b6ba174d7814c6a1cab34dc553",
       "shortSha": "55d1f93f",
       "date": "2026-06-04T09:20:24-07:00",
       "author": "usavsolutionsinc",
@@ -343,7 +453,7 @@
       "title": "fixed all TS errors"
     },
     {
-      "sha": "34c527587795171ad15464530124bd82f92bb560",
+      "sha": "'\n'34c527587795171ad15464530124bd82f92bb560",
       "shortSha": "34c52758",
       "date": "2026-06-04T08:38:03-07:00",
       "author": "DENSENSE8",
@@ -353,7 +463,7 @@
       "title": "audit logs and filter button and warehouse flow mapping upgrades to inventory page"
     },
     {
-      "sha": "5c395a17088f5051eb32d9bd320e27006ca38a9a",
+      "sha": "'\n'5c395a17088f5051eb32d9bd320e27006ca38a9a",
       "shortSha": "5c395a17",
       "date": "2026-06-04T01:47:13-07:00",
       "author": "DENSENSE8",
@@ -363,7 +473,7 @@
       "title": "audit-trail: surface line-less label-print events in the SKU view (Q2)"
     },
     {
-      "sha": "484ef4c846f0419b6f02378c8a50be254b7d2f99",
+      "sha": "'\n'484ef4c846f0419b6f02378c8a50be254b7d2f99",
       "shortSha": "484ef4c8",
       "date": "2026-06-04T01:43:30-07:00",
       "author": "DENSENSE8",
@@ -373,7 +483,7 @@
       "title": "audit-trail: finish unification — packing onto the spine, shared event card, latent-bug fixes"
     },
     {
-      "sha": "24cdba39d60d3cbc4b49fc56b81f24d170c00b15",
+      "sha": "'\n'24cdba39d60d3cbc4b49fc56b81f24d170c00b15",
       "shortSha": "24cdba39",
       "date": "2026-06-04T01:24:43-07:00",
       "author": "DENSENSE8",
@@ -383,7 +493,7 @@
       "title": "Updated the dock the PDF upload so when you upload a Microsoft Word component, it will automatically convert it to PDF updating the SKU catalogue search for checklist for testing as well as the inventory page and the all-in-one filter component"
     },
     {
-      "sha": "e22e60f24ba7695a240a7117a9793e720dd4100c",
+      "sha": "'\n'e22e60f24ba7695a240a7117a9793e720dd4100c",
       "shortSha": "e22e60f2",
       "date": "2026-06-04T00:57:58-07:00",
       "author": "DENSENSE8",
@@ -393,7 +503,7 @@
       "title": "workflow: add 5 more FBA-pattern flows to the Operations page (deep scan)"
     },
     {
-      "sha": "968c8879b31a4e0ad81d1e0b938237c796465151",
+      "sha": "'\n'968c8879b31a4e0ad81d1e0b938237c796465151",
       "shortSha": "968c8879",
       "date": "2026-06-04T00:29:47-07:00",
       "author": "DENSENSE8",
@@ -403,7 +513,7 @@
       "title": "updated the good base to favor more consistency across all the different design components and animation components"
     },
     {
-      "sha": "e74d02073333bce96d446a80ef00504b69bbdacd",
+      "sha": "'\n'e74d02073333bce96d446a80ef00504b69bbdacd",
       "shortSha": "e74d0207",
       "date": "2026-06-03T23:54:12-07:00",
       "author": "DENSENSE8",
@@ -413,7 +523,7 @@
       "title": "workflow: flows display now mirrors the REAL codebase stages (deep scan)"
     },
     {
-      "sha": "21da19638704c5ea3ddd0643256f720e07c36133",
+      "sha": "'\n'21da19638704c5ea3ddd0643256f720e07c36133",
       "shortSha": "21da1963",
       "date": "2026-06-03T23:13:19-07:00",
       "author": "DENSENSE8",
@@ -423,7 +533,7 @@
       "title": "workflow: Operations main panel shows flows as a descriptive display"
     },
     {
-      "sha": "c20cb368a3c0a172e98905d60d9d1e5dbc0c9955",
+      "sha": "'\n'c20cb368a3c0a172e98905d60d9d1e5dbc0c9955",
       "shortSha": "c20cb368",
       "date": "2026-06-03T22:43:57-07:00",
       "author": "DENSENSE8",
@@ -433,7 +543,7 @@
       "title": "workflow: Operations sidebar — stations, identifiers, flows + board spotlight"
     },
     {
-      "sha": "ce94f2e88bde391cb01fbecf7f4c38af8a078ff0",
+      "sha": "'\n'ce94f2e88bde391cb01fbecf7f4c38af8a078ff0",
       "shortSha": "ce94f2e8",
       "date": "2026-06-03T22:32:55-07:00",
       "author": "DENSENSE8",
@@ -443,7 +553,7 @@
       "title": "recent receiving rail updates"
     },
     {
-      "sha": "25bfd736438e5962230e7bd2e7011f91ed81f769",
+      "sha": "'\n'25bfd736438e5962230e7bd2e7011f91ed81f769",
       "shortSha": "25bfd736",
       "date": "2026-06-03T22:32:31-07:00",
       "author": "DENSENSE8",
@@ -453,7 +563,7 @@
       "title": "workflow: Operations item-flow audit board, replaces admin Architecture page"
     },
     {
-      "sha": "d99e813b763036eb7c6b537573b65ebacb5f1c66",
+      "sha": "'\n'd99e813b763036eb7c6b537573b65ebacb5f1c66",
       "shortSha": "d99e813b",
       "date": "2026-06-03T22:20:03-07:00",
       "author": "DENSENSE8",
@@ -463,7 +573,7 @@
       "title": "workflow: engine core — contract, registry, router, runtime, advance (Phase B)"
     },
     {
-      "sha": "06ba00e34c1c46a8f8fede8ee11b3d3ee5097130",
+      "sha": "'\n'06ba00e34c1c46a8f8fede8ee11b3d3ee5097130",
       "shortSha": "06ba00e3",
       "date": "2026-06-03T22:14:07-07:00",
       "author": "DENSENSE8",
@@ -473,7 +583,7 @@
       "title": "workflow: add graph + item-state tables (schema only, no behavior)"
     },
     {
-      "sha": "4a857d7020a78e574e7a0d50e38b34f6e6e2167b",
+      "sha": "'\n'4a857d7020a78e574e7a0d50e38b34f6e6e2167b",
       "shortSha": "4a857d70",
       "date": "2026-06-03T21:13:58-07:00",
       "author": "DENSENSE8",
@@ -483,7 +593,7 @@
       "title": " improving overall consistency of the design system"
     },
     {
-      "sha": "87124d580e667d4349492f933dc6179ce18d9988",
+      "sha": "'\n'87124d580e667d4349492f933dc6179ce18d9988",
       "shortSha": "87124d58",
       "date": "2026-06-03T20:20:44-07:00",
       "author": "DENSENSE8",
@@ -493,7 +603,7 @@
       "title": "overall consistency improvements for code base and cleaning up"
     },
     {
-      "sha": "76d0e3fd19a78a30a6b8509c1ed6dd4ab2ab11c0",
+      "sha": "'\n'76d0e3fd19a78a30a6b8509c1ed6dd4ab2ab11c0",
       "shortSha": "76d0e3fd",
       "date": "2026-06-03T17:00:30-07:00",
       "author": "usavsolutionsinc",
@@ -503,7 +613,7 @@
       "title": "docs for ai upgrade and ton of other features as well"
     },
     {
-      "sha": "14b5fbebbcbcc2220eb5c4c65ec66339b660083e",
+      "sha": "'\n'14b5fbebbcbcc2220eb5c4c65ec66339b660083e",
       "shortSha": "14b5fbeb",
       "date": "2026-06-03T16:53:45-07:00",
       "author": "usavsolutionsinc",
@@ -513,7 +623,7 @@
       "title": "Zendesk claim: archive photos to NAS via office agent + warn on failure"
     },
     {
-      "sha": "6faa66f0fc49693807e33c69799766fdcb6ac3ac",
+      "sha": "'\n'6faa66f0fc49693807e33c69799766fdcb6ac3ac",
       "shortSha": "6faa66f0",
       "date": "2026-06-03T16:33:04-07:00",
       "author": "usavsolutionsinc",
@@ -523,7 +633,7 @@
       "title": "Receiving: NAS picker speed, claim popover align + prod NAS-archive test"
     },
     {
-      "sha": "0e22d54e42ef193bb8b9bf7f1ea0cad4bedff4a0",
+      "sha": "'\n'0e22d54e42ef193bb8b9bf7f1ea0cad4bedff4a0",
       "shortSha": "0e22d54e",
       "date": "2026-06-03T16:21:45-07:00",
       "author": "usavsolutionsinc",
@@ -533,7 +643,7 @@
       "title": "updates to the receiving photos viewer and attachments"
     },
     {
-      "sha": "f59d26d01379e066eb5046cdbd14d4b89b33807f",
+      "sha": "'\n'f59d26d01379e066eb5046cdbd14d4b89b33807f",
       "shortSha": "f59d26d0",
       "date": "2026-06-03T15:02:17-07:00",
       "author": "usavsolutionsinc",
@@ -543,7 +653,7 @@
       "title": "Allow NAS tunnel + Vercel Blob hosts through next/image"
     },
     {
-      "sha": "5f07e207ddd5b20762206432f6b224da702930fa",
+      "sha": "'\n'5f07e207ddd5b20762206432f6b224da702930fa",
       "shortSha": "5f07e207",
       "date": "2026-06-03T14:18:26-07:00",
       "author": "usavsolutionsinc",
@@ -553,7 +663,7 @@
       "title": "updated the receiving flow and the testing flow"
     },
     {
-      "sha": "81cdd833bfd4f7586a79df3414bde8668b1775d9",
+      "sha": "'\n'81cdd833bfd4f7586a79df3414bde8668b1775d9",
       "shortSha": "81cdd833",
       "date": "2026-06-03T08:44:28-07:00",
       "author": "DENSENSE8",
@@ -563,7 +673,7 @@
       "title": "overall consistency improvements"
     },
     {
-      "sha": "bb73e3a4837ad4c150ab3a3bdb58a6554cbd6a14",
+      "sha": "'\n'bb73e3a4837ad4c150ab3a3bdb58a6554cbd6a14",
       "shortSha": "bb73e3a4",
       "date": "2026-06-03T00:27:17-07:00",
       "author": "DENSENSE8",
@@ -573,7 +683,7 @@
       "title": "Add Zoho fulfillment sync, unify sidebar search, and improve receiving/local-pickup UX."
     },
     {
-      "sha": "4e55286b9ee1c8bbf6a917a6ed3c4fd38d5fa9bc",
+      "sha": "'\n'4e55286b9ee1c8bbf6a917a6ed3c4fd38d5fa9bc",
       "shortSha": "4e55286b",
       "date": "2026-06-02T21:10:14-07:00",
       "author": "DENSENSE8",
@@ -583,7 +693,7 @@
       "title": "modernizing"
     },
     {
-      "sha": "27554f15a60518b98fce932675889f0818c0d184",
+      "sha": "'\n'27554f15a60518b98fce932675889f0818c0d184",
       "shortSha": "27554f15",
       "date": "2026-06-02T21:08:27-07:00",
       "author": "DENSENSE8",
@@ -593,7 +703,7 @@
       "title": "Simplify tech shipping panel: full-width scan bar, fixed History pane"
     },
     {
-      "sha": "a8b2dfa8004519647a244451d7cd0b0ee66c559e",
+      "sha": "'\n'a8b2dfa8004519647a244451d7cd0b0ee66c559e",
       "shortSha": "a8b2dfa8",
       "date": "2026-06-02T16:57:00-07:00",
       "author": "usavsolutionsinc",
@@ -603,7 +713,7 @@
       "title": "ai chat and order bullk"
     },
     {
-      "sha": "6cf20e831b1e7118e662641aba9ef8b95dded3a3",
+      "sha": "'\n'6cf20e831b1e7118e662641aba9ef8b95dded3a3",
       "shortSha": "6cf20e83",
       "date": "2026-06-02T13:38:56-07:00",
       "author": "usavsolutionsinc",
@@ -613,7 +723,7 @@
       "title": "UX updates"
     },
     {
-      "sha": "afc7eb7bc82275062940285ce087c7f7092dafc0",
+      "sha": "'\n'afc7eb7bc82275062940285ce087c7f7092dafc0",
       "shortSha": "afc7eb7b",
       "date": "2026-06-02T10:47:21-07:00",
       "author": "usavsolutionsinc",
@@ -623,7 +733,7 @@
       "title": "updated the packer roles bug"
     },
     {
-      "sha": "6904c668cc506545e98ea6e01a9e57c1b8c3e952",
+      "sha": "'\n'6904c668cc506545e98ea6e01a9e57c1b8c3e952",
       "shortSha": "6904c668",
       "date": "2026-06-02T10:37:41-07:00",
       "author": "usavsolutionsinc",
@@ -633,7 +743,7 @@
       "title": "main UX and UI updates"
     },
     {
-      "sha": "1c07f39303b0ba5a4aba174dae3f5f2eff298811",
+      "sha": "'\n'1c07f39303b0ba5a4aba174dae3f5f2eff298811",
       "shortSha": "1c07f393",
       "date": "2026-06-02T08:48:17-07:00",
       "author": "DENSENSE8",
@@ -643,7 +753,7 @@
       "title": "updated receiving and all side bars UI and UX display"
     },
     {
-      "sha": "e57f49c6ea6263531c90ff2564f9faf50b5aa05b",
+      "sha": "'\n'e57f49c6ea6263531c90ff2564f9faf50b5aa05b",
       "shortSha": "e57f49c6",
       "date": "2026-06-02T08:45:53-07:00",
       "author": "DENSENSE8",
@@ -653,7 +763,7 @@
       "title": "parts auto-sort spec (grade→PARTS sorts to TECH-PARTS bin)"
     },
     {
-      "sha": "37e887bb788c71095b7346d1c2979d31a2e990f1",
+      "sha": "'\n'37e887bb788c71095b7346d1c2979d31a2e990f1",
       "shortSha": "37e887bb",
       "date": "2026-06-02T07:53:58-07:00",
       "author": "DENSENSE8",
@@ -663,7 +773,7 @@
       "title": "parts bin uses NULL zone_letter to avoid unique collision"
     },
     {
-      "sha": "dd2a35a8b9884f666fb2b5855af4a1e02f06dc4d",
+      "sha": "'\n'dd2a35a8b9884f666fb2b5855af4a1e02f06dc4d",
       "shortSha": "dd2a35a8",
       "date": "2026-06-02T07:52:25-07:00",
       "author": "DENSENSE8",
@@ -673,7 +783,7 @@
       "title": "snapshot: admin CRUD tabs + locations WIP before pulling feature work"
     },
     {
-      "sha": "35df11cc9e6ed89bc9ca778c873ff4b7adc2c714",
+      "sha": "'\n'35df11cc9e6ed89bc9ca778c873ff4b7adc2c714",
       "shortSha": "35df11cc",
       "date": "2026-06-02T07:48:39-07:00",
       "author": "DENSENSE8",
@@ -683,7 +793,7 @@
       "title": "production plan for NAS photo viewing/attaching feature"
     },
     {
-      "sha": "37fdd6ed52885170c3d51f488ad2df79bd6249c9",
+      "sha": "'\n'37fdd6ed52885170c3d51f488ad2df79bd6249c9",
       "shortSha": "37fdd6ed",
       "date": "2026-06-02T07:47:16-07:00",
       "author": "DENSENSE8",
@@ -693,7 +803,7 @@
       "title": "production plan for NAS photo viewing/attaching feature"
     },
     {
-      "sha": "da549c250e79ba745c0d900b55a2904bb787e46f",
+      "sha": "'\n'da549c250e79ba745c0d900b55a2904bb787e46f",
       "shortSha": "da549c25",
       "date": "2026-06-02T07:39:52-07:00",
       "author": "DENSENSE8",
@@ -703,7 +813,7 @@
       "title": "repair issues and auto sort to parts bins from parts condition selection"
     },
     {
-      "sha": "00fd5fbf17b36b659e0a61d895edc89c33f513fe",
+      "sha": "'\n'00fd5fbf17b36b659e0a61d895edc89c33f513fe",
       "shortSha": "00fd5fbf",
       "date": "2026-06-02T07:38:16-07:00",
       "author": "DENSENSE8",
@@ -713,7 +823,7 @@
       "title": "auto-sort \"For Parts\" units to the Technical Room parts bin"
     },
     {
-      "sha": "f2c92dea90fedc21f9842a97778678795d4294c7",
+      "sha": "'\n'f2c92dea90fedc21f9842a97778678795d4294c7",
       "shortSha": "f2c92dea",
       "date": "2026-06-02T00:44:47-07:00",
       "author": "DENSENSE8",
@@ -723,7 +833,7 @@
       "title": "full-width \"click to add photos\" empty state for NAS attach"
     },
     {
-      "sha": "f4ed9d72b3fe125a8ba4dc8c4b73199f8bb36b09",
+      "sha": "'\n'f4ed9d72b3fe125a8ba4dc8c4b73199f8bb36b09",
       "shortSha": "f4ed9d72",
       "date": "2026-06-02T00:38:28-07:00",
       "author": "DENSENSE8",
@@ -733,7 +843,7 @@
       "title": "pair NAS photos to a PO from the desktop photo strip"
     },
     {
-      "sha": "10892eee08191870929ea2d8ea05d6359d1e8efb",
+      "sha": "'\n'10892eee08191870929ea2d8ea05d6359d1e8efb",
       "shortSha": "10892eee",
       "date": "2026-06-02T00:09:37-07:00",
       "author": "DENSENSE8",
@@ -743,7 +853,7 @@
       "title": "overall consistency in UX and UI and api endpoints"
     },
     {
-      "sha": "5b9a36650c915746eb322b01b410ec63ac6a058e",
+      "sha": "'\n'5b9a36650c915746eb322b01b410ec63ac6a058e",
       "shortSha": "5b9a3665",
       "date": "2026-06-01T23:37:44-07:00",
       "author": "DENSENSE8",
@@ -753,7 +863,7 @@
       "title": "deploy NAS photo server via Caddy (no Docker)"
     },
     {
-      "sha": "6c14bdd2f76bf2acab1c3d908f163cc5011aaf81",
+      "sha": "'\n'6c14bdd2f76bf2acab1c3d908f163cc5011aaf81",
       "shortSha": "6c14bdd2",
       "date": "2026-06-01T23:28:58-07:00",
       "author": "DENSENSE8",
@@ -763,7 +873,7 @@
       "title": "record staff + repairs key migrations; note dashboard-table deferral"
     },
     {
-      "sha": "6173971d84524c9bffa84aec943bbf40b03c9438",
+      "sha": "'\n'6173971d84524c9bffa84aec943bbf40b03c9438",
       "shortSha": "6173971d",
       "date": "2026-06-01T23:27:55-07:00",
       "author": "DENSENSE8",
@@ -773,7 +883,7 @@
       "title": "migrate repairs keys into qk factory"
     },
     {
-      "sha": "44ed7f28294efd570bdf32daae92a2a62c45f0f0",
+      "sha": "'\n'44ed7f28294efd570bdf32daae92a2a62c45f0f0",
       "shortSha": "44ed7f28",
       "date": "2026-06-01T23:25:37-07:00",
       "author": "DENSENSE8",
@@ -783,7 +893,7 @@
       "title": "migrate staff/staff-schedule keys into qk factory"
     },
     {
-      "sha": "7d45b7103d96e852c0d90701ea07807515f4f212",
+      "sha": "'\n'7d45b7103d96e852c0d90701ea07807515f4f212",
       "shortSha": "7d45b710",
       "date": "2026-06-01T23:15:02-07:00",
       "author": "DENSENSE8",
@@ -793,7 +903,7 @@
       "title": "record Phase 3 query-key factory progress in dedup plan"
     },
     {
-      "sha": "aba046319df455c0258e779d5b84c267fb262fd1",
+      "sha": "'\n'aba046319df455c0258e779d5b84c267fb262fd1",
       "shortSha": "aba04631",
       "date": "2026-06-01T23:14:21-07:00",
       "author": "DENSENSE8",
@@ -803,7 +913,7 @@
       "title": "centralize FBA realtime invalidation keys in qk"
     },
     {
-      "sha": "5dba4f5db61b731508c0d1191b955bbad6cff6e5",
+      "sha": "'\n'5dba4f5db61b731508c0d1191b955bbad6cff6e5",
       "shortSha": "5dba4f5d",
       "date": "2026-06-01T23:12:30-07:00",
       "author": "DENSENSE8",
@@ -813,7 +923,7 @@
       "title": "migrate admin-features keys into qk factory"
     },
     {
-      "sha": "aeaed8ede9b6838957eb4fcc3f9c811d91db3f04",
+      "sha": "'\n'aeaed8ede9b6838957eb4fcc3f9c811d91db3f04",
       "shortSha": "aeaed8ed",
       "date": "2026-06-01T23:11:13-07:00",
       "author": "DENSENSE8",
@@ -823,7 +933,7 @@
       "title": "centralize dashboard invalidation keys in qk"
     },
     {
-      "sha": "026d4ee09366da3d851a5d46b8cb348c847a172e",
+      "sha": "'\n'026d4ee09366da3d851a5d46b8cb348c847a172e",
       "shortSha": "026d4ee0",
       "date": "2026-06-01T23:09:44-07:00",
       "author": "DENSENSE8",
@@ -833,7 +943,7 @@
       "title": "migrate admin-fba-fnskus keys into qk factory"
     },
     {
-      "sha": "afa19394f635ef348d06c2d6df551907160e1c2f",
+      "sha": "'\n'afa19394f635ef348d06c2d6df551907160e1c2f",
       "shortSha": "afa19394",
       "date": "2026-06-01T23:02:54-07:00",
       "author": "DENSENSE8",
@@ -843,7 +953,7 @@
       "title": "add React Query key factory; adopt for walk-in-sales + ebay-accounts"
     },
     {
-      "sha": "fc53c04d0799eed67fff219cb61262661c88f4f3",
+      "sha": "'\n'fc53c04d0799eed67fff219cb61262661c88f4f3",
       "shortSha": "fc53c04d",
       "date": "2026-06-01T20:49:36-07:00",
       "author": "DENSENSE8",
@@ -853,7 +963,7 @@
       "title": "gitignore Playwright e2e artifacts"
     },
     {
-      "sha": "dcf9bc0185cd4b9aac6330ff6d2decffe475847e",
+      "sha": "'\n'dcf9bc0185cd4b9aac6330ff6d2decffe475847e",
       "shortSha": "dcf9bc01",
       "date": "2026-06-01T20:48:27-07:00",
       "author": "DENSENSE8",
@@ -863,7 +973,7 @@
       "title": "NAS photo picker — attach-by-URL contract + gated UI smoke"
     },
     {
-      "sha": "ff38c089b742cf7c68094ecbeb0f305e78dce9b3",
+      "sha": "'\n'ff38c089b742cf7c68094ecbeb0f305e78dce9b3",
       "shortSha": "ff38c089",
       "date": "2026-06-01T20:44:32-07:00",
       "author": "DENSENSE8",
@@ -873,7 +983,7 @@
       "title": "consolidate in-flight working-tree work onto main"
     },
     {
-      "sha": "323dc611fe97e5272d1f1fc8f60e35fe923c8f26",
+      "sha": "'\n'323dc611fe97e5272d1f1fc8f60e35fe923c8f26",
       "shortSha": "323dc611",
       "date": "2026-06-01T20:41:39-07:00",
       "author": "DENSENSE8",
@@ -883,7 +993,7 @@
       "title": "\"Select from NAS\" photo picker"
     },
     {
-      "sha": "4d90e5a4e84998177026cafcfbb89fca866d28c7",
+      "sha": "'\n'4d90e5a4e84998177026cafcfbb89fca866d28c7",
       "shortSha": "4d90e5a4",
       "date": "2026-06-01T20:38:55-07:00",
       "author": "DENSENSE8",
@@ -893,7 +1003,7 @@
       "title": "remove dead DetailLineRow"
     },
     {
-      "sha": "8a29191c9214723af5d16f78928b1ae88e3eb3f5",
+      "sha": "'\n'8a29191c9214723af5d16f78928b1ae88e3eb3f5",
       "shortSha": "8a29191c",
       "date": "2026-06-01T20:18:26-07:00",
       "author": "DENSENSE8",
@@ -903,7 +1013,7 @@
       "title": "align labels unit-status colors to canonical palette"
     },
     {
-      "sha": "5351e824e7fda2215b0fb3a6a6b19181777ba3a9",
+      "sha": "'\n'5351e824e7fda2215b0fb3a6a6b19181777ba3a9",
       "shortSha": "5351e824",
       "date": "2026-06-01T19:59:48-07:00",
       "author": "DENSENSE8",
@@ -913,7 +1023,7 @@
       "title": "remove unused /work-orders route + its wiring"
     },
     {
-      "sha": "77888b999507efe87d231c2edb35e864c9b56039",
+      "sha": "'\n'77888b999507efe87d231c2edb35e864c9b56039",
       "shortSha": "77888b99",
       "date": "2026-06-01T19:40:11-07:00",
       "author": "DENSENSE8",
@@ -923,7 +1033,7 @@
       "title": "global header + contextual table selection (receiving + testing)"
     },
     {
-      "sha": "7be45c919597209b2207c2ccfe18413685120607",
+      "sha": "'\n'7be45c919597209b2207c2ccfe18413685120607",
       "shortSha": "7be45c91",
       "date": "2026-06-01T19:33:14-07:00",
       "author": "DENSENSE8",
@@ -933,7 +1043,7 @@
       "title": "decouple serial numbers from receiving"
     },
     {
-      "sha": "bcc51a67fa4f65188a490252915a6ae071499a61",
+      "sha": "'\n'bcc51a67fa4f65188a490252915a6ae071499a61",
       "shortSha": "bcc51a67",
       "date": "2026-06-01T19:13:59-07:00",
       "author": "DENSENSE8",
@@ -943,7 +1053,7 @@
       "title": "cleaning up"
     },
     {
-      "sha": "ddeaa3fb29936cdec9e990aa3e9f7b20691e1f99",
+      "sha": "'\n'ddeaa3fb29936cdec9e990aa3e9f7b20691e1f99",
       "shortSha": "ddeaa3fb",
       "date": "2026-06-01T18:46:03-07:00",
       "author": "DENSENSE8",
@@ -953,7 +1063,7 @@
       "title": "Stop tracking auto-generated next-env.d.ts"
     },
     {
-      "sha": "84642c1e1c98c5e038c164c79479f6a968e23b7c",
+      "sha": "'\n'84642c1e1c98c5e038c164c79479f6a968e23b7c",
       "shortSha": "84642c1e",
       "date": "2026-06-01T17:02:17-07:00",
       "author": "usavsolutionsinc",
@@ -963,7 +1073,7 @@
       "title": "zendesk and uopating to the testing"
     },
     {
-      "sha": "ec326b12808ee10a535fa7ed946981f05f0526f0",
+      "sha": "'\n'ec326b12808ee10a535fa7ed946981f05f0526f0",
       "shortSha": "ec326b12",
       "date": "2026-06-01T14:53:38-07:00",
       "author": "usavsolutionsinc",
@@ -973,7 +1083,7 @@
       "title": "unit condition in accordion header + swap serial/condition layout"
     },
     {
-      "sha": "f8c91c91d71dc84d7c1e081b9debd810cded3097",
+      "sha": "'\n'f8c91c91d71dc84d7c1e081b9debd810cded3097",
       "shortSha": "f8c91c91",
       "date": "2026-06-01T14:21:59-07:00",
       "author": "usavsolutionsinc",
@@ -983,7 +1093,7 @@
       "title": "label tracks selected unit condition on multi-qty lines"
     },
     {
-      "sha": "1e1c77bd91648242820a401b18eec1f7471b3b2c",
+      "sha": "'\n'1e1c77bd91648242820a401b18eec1f7471b3b2c",
       "shortSha": "1e1c77bd",
       "date": "2026-06-01T14:16:30-07:00",
       "author": "usavsolutionsinc",
@@ -993,7 +1103,7 @@
       "title": "assign staff_roles on create/invite + honor persistent sessions"
     },
     {
-      "sha": "93cd071bbada82fcc0c776cd5bba0d414e2e296b",
+      "sha": "'\n'93cd071bbada82fcc0c776cd5bba0d414e2e296b",
       "shortSha": "93cd071b",
       "date": "2026-06-01T09:09:31-07:00",
       "author": "usavsolutionsinc",
@@ -1003,7 +1113,7 @@
       "title": "updated the testing components and the ai chat page"
     },
     {
-      "sha": "952f423a0ba9792ae65a47b984839ca04ef298b7",
+      "sha": "'\n'952f423a0ba9792ae65a47b984839ca04ef298b7",
       "shortSha": "952f423a",
       "date": "2026-05-29T11:11:26-07:00",
       "author": "usavsolutionsinc",
@@ -1013,7 +1123,7 @@
       "title": "FBA combine workspace, receiving workflow stages, step-up client wiring + sidebar polish"
     },
     {
-      "sha": "2214870b78c5c323c294eeef04614e3b95f83a54",
+      "sha": "'\n'2214870b78c5c323c294eeef04614e3b95f83a54",
       "shortSha": "2214870b",
       "date": "2026-05-29T09:15:03-07:00",
       "author": "usavsolutionsinc",
@@ -1023,7 +1133,7 @@
       "title": "type the filter callback so prod build passes"
     },
     {
-      "sha": "bdb0d583efd5b05b1edf1d1e0c4333134dc4729f",
+      "sha": "'\n'bdb0d583efd5b05b1edf1d1e0c4333134dc4729f",
       "shortSha": "bdb0d583",
       "date": "2026-05-28T16:58:59-07:00",
       "author": "usavsolutionsinc",
@@ -1033,7 +1143,7 @@
       "title": "FBA ai chat and recieving and testing updates to UI and flow - simpler and more robust"
     },
     {
-      "sha": "38623bc3d612a1843cd3b3fe2caf6631369c3daa",
+      "sha": "'\n'38623bc3d612a1843cd3b3fe2caf6631369c3daa",
       "shortSha": "38623bc3",
       "date": "2026-05-27T16:59:45-07:00",
       "author": "usavsolutionsinc",
@@ -1043,7 +1153,7 @@
       "title": "shipping updates and receiving incoming page"
     },
     {
-      "sha": "6e75b78bc3a8307866602bb9fd96af9c21e1823b",
+      "sha": "'\n'6e75b78bc3a8307866602bb9fd96af9c21e1823b",
       "shortSha": "6e75b78b",
       "date": "2026-05-27T10:36:25-07:00",
       "author": "usavsolutionsinc",
@@ -1053,7 +1163,7 @@
       "title": "receiving udpate adn the testing sub page update"
     },
     {
-      "sha": "55fd66e4bad66d32c4a0c2c0e20e70e34ef3f5e7",
+      "sha": "'\n'55fd66e4bad66d32c4a0c2c0e20e70e34ef3f5e7",
       "shortSha": "55fd66e4",
       "date": "2026-05-26T16:59:57-07:00",
       "author": "usavsolutionsinc",
@@ -1063,7 +1173,7 @@
       "title": "added a testing pipeline to the testing page and updated the receiving pipeline"
     },
     {
-      "sha": "2d3c2f037f3639dd25dc87610ec4d53a65d427b3",
+      "sha": "'\n'2d3c2f037f3639dd25dc87610ec4d53a65d427b3",
       "shortSha": "2d3c2f03",
       "date": "2026-05-26T12:32:47-07:00",
       "author": "usavsolutionsinc",
@@ -1073,7 +1183,7 @@
       "title": "station scan bar updates and dashboard order created at bug from search"
     },
     {
-      "sha": "f2736f95508575742d87ccf2dcbf469b7164c5ce",
+      "sha": "'\n'f2736f95508575742d87ccf2dcbf469b7164c5ce",
       "shortSha": "f2736f95",
       "date": "2026-05-26T10:36:29-07:00",
       "author": "usavsolutionsinc",
@@ -1083,7 +1193,7 @@
       "title": "updated the staff colors"
     },
     {
-      "sha": "401c0c8eec34ca176094f373ae1dc0527a5948fb",
+      "sha": "'\n'401c0c8eec34ca176094f373ae1dc0527a5948fb",
       "shortSha": "401c0c8e",
       "date": "2026-05-26T09:43:51-07:00",
       "author": "usavsolutionsinc",
@@ -1093,7 +1203,7 @@
       "title": "updated the packer to be more supportive of older devices"
     },
     {
-      "sha": "272c0b1387c65895909b0b4c8d5631dee0530ab0",
+      "sha": "'\n'272c0b1387c65895909b0b4c8d5631dee0530ab0",
       "shortSha": "272c0b13",
       "date": "2026-05-26T08:48:22-07:00",
       "author": "DENSENSE8",
@@ -1103,7 +1213,7 @@
       "title": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page"
     },
     {
-      "sha": "0bf84c1f9c664edde138d1ff623b086d3f1a5fb9",
+      "sha": "'\n'0bf84c1f9c664edde138d1ff623b086d3f1a5fb9",
       "shortSha": "0bf84c1f",
       "date": "2026-05-26T01:40:38-07:00",
       "author": "DENSENSE8",
@@ -1113,7 +1223,7 @@
       "title": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component"
     },
     {
-      "sha": "7a12428b30ce0c8750dd92d6eec63f44b463122f",
+      "sha": "'\n'7a12428b30ce0c8750dd92d6eec63f44b463122f",
       "shortSha": "7a12428b",
       "date": "2026-05-26T00:27:07-07:00",
       "author": "DENSENSE8",
@@ -1123,7 +1233,7 @@
       "title": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access"
     },
     {
-      "sha": "0cc4ac89ed663d467b46323a8411b73c7a2d4613",
+      "sha": "'\n'0cc4ac89ed663d467b46323a8411b73c7a2d4613",
       "shortSha": "0cc4ac89",
       "date": "2026-05-25T23:48:01-07:00",
       "author": "DENSENSE8",
@@ -1133,7 +1243,7 @@
       "title": "update in the mobile page resolver to resolve two data matrix instead of posting to the receiving table and small edits to the manual routes"
     },
     {
-      "sha": "4fad25cd814541cabf1693e3d35ef7930c9227c3",
+      "sha": "'\n'4fad25cd814541cabf1693e3d35ef7930c9227c3",
       "shortSha": "4fad25cd",
       "date": "2026-05-25T22:26:10-07:00",
       "author": "DENSENSE8",
@@ -1143,7 +1253,7 @@
       "title": "Updated the usability of the FBA page and the products page to be easier to use an easier to find items that we need"
     },
     {
-      "sha": "064d0e764c2d8560e07da8f0ac9048736b4bf828",
+      "sha": "'\n'064d0e764c2d8560e07da8f0ac9048736b4bf828",
       "shortSha": "064d0e76",
       "date": "2026-05-25T15:56:22-07:00",
       "author": "usavsolutionsinc",
@@ -1153,7 +1263,7 @@
       "title": "updates to the PO main receiving"
     },
     {
-      "sha": "846ef0c1074d8fdf46175017915a290e30cc0110",
+      "sha": "'\n'846ef0c1074d8fdf46175017915a290e30cc0110",
       "shortSha": "846ef0c1",
       "date": "2026-05-25T14:48:25-07:00",
       "author": "usavsolutionsinc",
@@ -1163,7 +1273,7 @@
       "title": "ai extract and updates to the unfound receiving orders list"
     },
     {
-      "sha": "23f6295a708c574e3a29a8027e7a18c0a37c0e05",
+      "sha": "'\n'23f6295a708c574e3a29a8027e7a18c0a37c0e05",
       "shortSha": "23f6295a",
       "date": "2026-05-25T09:08:30-07:00",
       "author": "usavsolutionsinc",
@@ -1173,7 +1283,7 @@
       "title": "updated the TS error fixed and should deploy now"
     },
     {
-      "sha": "4815e12266583da23d63d23f5441957dc9424086",
+      "sha": "'\n'4815e12266583da23d63d23f5441957dc9424086",
       "shortSha": "4815e122",
       "date": "2026-05-25T01:23:38-07:00",
       "author": "DENSENSE8",
@@ -1183,7 +1293,7 @@
       "title": "rollup of in-flight receiving, repair, operations, and FBA work"
     },
     {
-      "sha": "84ed2cce32d6c7ae1f8544d963daacd0cf56dff4",
+      "sha": "'\n'84ed2cce32d6c7ae1f8544d963daacd0cf56dff4",
       "shortSha": "84ed2cce",
       "date": "2026-05-25T01:21:51-07:00",
       "author": "DENSENSE8",
@@ -1193,7 +1303,7 @@
       "title": "tabbed sidebar overhaul + activity inbox in FAB popover"
     },
     {
-      "sha": "1ac48ae07402b9ef692e5b21e66af81105053141",
+      "sha": "'\n'1ac48ae07402b9ef692e5b21e66af81105053141",
       "shortSha": "1ac48ae0",
       "date": "2026-05-24T13:26:30-07:00",
       "author": "DENSENSE8",
@@ -1203,7 +1313,7 @@
       "title": "updated the main interface and design system, tech pages to be very simple"
     },
     {
-      "sha": "0f309dafb0fed78f6edb88a661a18a776705de6e",
+      "sha": "'\n'0f309dafb0fed78f6edb88a661a18a776705de6e",
       "shortSha": "0f309daf",
       "date": "2026-05-22T17:04:20-07:00",
       "author": "usavsolutionsinc",
@@ -1213,7 +1323,7 @@
       "title": "updated a lot"
     },
     {
-      "sha": "11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
+      "sha": "'\n'11476f0c26b9a1cb444061a1bfd1cd9cccd5a7ac",
       "shortSha": "11476f0c",
       "date": "2026-05-22T11:59:04-07:00",
       "author": "usavsolutionsinc",
@@ -1223,7 +1333,7 @@
       "title": "Edit menu + draggable top strip"
     },
     {
-      "sha": "c4452a12e09dbb383d45288af7357ef76201b55d",
+      "sha": "'\n'c4452a12e09dbb383d45288af7357ef76201b55d",
       "shortSha": "c4452a12",
       "date": "2026-05-22T11:26:23-07:00",
       "author": "usavsolutionsinc",
@@ -1233,7 +1343,7 @@
       "title": "optimistic receive, idempotent rescans, Zoho slide-in pane"
     },
     {
-      "sha": "5e19cd9197b8ace5573b5c262dd56988fdced00e",
+      "sha": "'\n'5e19cd9197b8ace5573b5c262dd56988fdced00e",
       "shortSha": "5e19cd91",
       "date": "2026-05-22T10:18:21-07:00",
       "author": "usavsolutionsinc",
@@ -1243,7 +1353,7 @@
       "title": "fixed ts error"
     },
     {
-      "sha": "5e9208c97d7143c48c2b3fcd53bbc503842f2569",
+      "sha": "'\n'5e9208c97d7143c48c2b3fcd53bbc503842f2569",
       "shortSha": "5e9208c9",
       "date": "2026-05-22T08:49:21-07:00",
       "author": "DENSENSE8",
@@ -1253,7 +1363,7 @@
       "title": "receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements"
     },
     {
-      "sha": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
+      "sha": "'\n'dac10049ce9d7d40b18d879bfe7c99c1c981c139",
       "shortSha": "dac10049",
       "date": "2026-05-21T17:00:21-07:00",
       "author": "usavsolutionsinc",
@@ -1263,7 +1373,7 @@
       "title": "sku and receiving and products mutlisku component"
     },
     {
-      "sha": "7a7b8108393066d8537b9249fc8dbf53a10b76cd",
+      "sha": "'\n'7a7b8108393066d8537b9249fc8dbf53a10b76cd",
       "shortSha": "7a7b8108",
       "date": "2026-05-21T13:48:15-07:00",
       "author": "usavsolutionsinc",
@@ -1273,7 +1383,7 @@
       "title": "updated picker and receiving mobile display"
     },
     {
-      "sha": "5884266918d534731142c2c64246a217e7f2bcfd",
+      "sha": "'\n'5884266918d534731142c2c64246a217e7f2bcfd",
       "shortSha": "58842669",
       "date": "2026-05-21T12:13:19-07:00",
       "author": "usavsolutionsinc",
@@ -1283,7 +1393,7 @@
       "title": "updated the receiving display for the mobile view"
     },
     {
-      "sha": "914779ede2725eaafe0a70db213ab31839cd57f0",
+      "sha": "'\n'914779ede2725eaafe0a70db213ab31839cd57f0",
       "shortSha": "914779ed",
       "date": "2026-05-21T11:14:43-07:00",
       "author": "usavsolutionsinc",
@@ -1293,7 +1403,7 @@
       "title": "bug fix for tech and packer org id"
     },
     {
-      "sha": "a03598e71c21e430a958e79700a826c8dbf86e1e",
+      "sha": "'\n'a03598e71c21e430a958e79700a826c8dbf86e1e",
       "shortSha": "a03598e7",
       "date": "2026-05-21T15:12:40+07:00",
       "author": "IT-USAV",
@@ -1303,7 +1413,7 @@
       "title": "remove .env from github"
     },
     {
-      "sha": "21b9ab08abec6d513c3beb1f3057fc62f5d15d9e",
+      "sha": "'\n'21b9ab08abec6d513c3beb1f3057fc62f5d15d9e",
       "shortSha": "21b9ab08",
       "date": "2026-05-20T16:11:47-07:00",
       "author": "usavsolutionsinc",
@@ -1313,7 +1423,7 @@
       "title": "updated silent printing for macos intel support"
     },
     {
-      "sha": "cfe69d23ea5e3a36863c8e66b4640e062a52cbef",
+      "sha": "'\n'cfe69d23ea5e3a36863c8e66b4640e062a52cbef",
       "shortSha": "cfe69d23",
       "date": "2026-05-20T13:27:30-07:00",
       "author": "usavsolutionsinc",
@@ -1323,7 +1433,7 @@
       "title": "updated ZD updates from receiving and zoho submit via async functions, permissions update,"
     },
     {
-      "sha": "0349c92339216fdafdc59bedfc31302738a38654",
+      "sha": "'\n'0349c92339216fdafdc59bedfc31302738a38654",
       "shortSha": "0349c923",
       "date": "2026-05-20T12:58:31-07:00",
       "author": "DENSENSE8",
@@ -1333,7 +1443,7 @@
       "title": "updated global staff and org and move resolver qr code"
     },
     {
-      "sha": "908fc1ae39780f4767d197236d654f7251048a68",
+      "sha": "'\n'908fc1ae39780f4767d197236d654f7251048a68",
       "shortSha": "908fc1ae",
       "date": "2026-05-19T16:54:50-07:00",
       "author": "usavsolutionsinc",
@@ -1343,7 +1453,7 @@
       "title": "fixed some bugs causing errors in the system like role picker for staff and packing website problems"
     },
     {
-      "sha": "9ec76f3843e4d55ae869019755b0c854d03e5885",
+      "sha": "'\n'9ec76f3843e4d55ae869019755b0c854d03e5885",
       "shortSha": "9ec76f38",
       "date": "2026-05-19T15:13:55-07:00",
       "author": "usavsolutionsinc",
@@ -1353,7 +1463,7 @@
       "title": "products: restore SKU label printer workspace on /products"
     },
     {
-      "sha": "216e036fe1e3874449d7a486477ed221c7702863",
+      "sha": "'\n'216e036fe1e3874449d7a486477ed221c7702863",
       "shortSha": "216e036f",
       "date": "2026-05-19T14:40:42-07:00",
       "author": "usavsolutionsinc",
@@ -1363,7 +1473,7 @@
       "title": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes"
     },
     {
-      "sha": "48506e38eadf55193dae69483467bdcafcf8243e",
+      "sha": "'\n'48506e38eadf55193dae69483467bdcafcf8243e",
       "shortSha": "48506e38",
       "date": "2026-05-19T14:31:29-07:00",
       "author": "usavsolutionsinc",
@@ -1373,7 +1483,7 @@
       "title": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library"
     },
     {
-      "sha": "2abe07fcdbfa69d3b24856b61f0de0de99cafd1e",
+      "sha": "'\n'2abe07fcdbfa69d3b24856b61f0de0de99cafd1e",
       "shortSha": "2abe07fc",
       "date": "2026-05-19T02:06:59-07:00",
       "author": "DENSENSE8",
@@ -1383,7 +1493,7 @@
       "title": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,"
     },
     {
-      "sha": "2ad4f44515f6251a083365e53f6c0c203496a085",
+      "sha": "'\n'2ad4f44515f6251a083365e53f6c0c203496a085",
       "shortSha": "2ad4f445",
       "date": "2026-05-18T16:52:07-07:00",
       "author": "usavsolutionsinc",
@@ -1393,7 +1503,7 @@
       "title": "inventory: ByFilter view + State/Condition chips"
     },
     {
-      "sha": "b158976f49247c610acfa5dcc06724c3e4c7b895",
+      "sha": "'\n'b158976f49247c610acfa5dcc06724c3e4c7b895",
       "shortSha": "b158976f",
       "date": "2026-05-18T16:47:02-07:00",
       "author": "usavsolutionsinc",
@@ -1403,7 +1513,7 @@
       "title": "inventory rename Phase D + ByUnit view + empty-bin toggle"
     },
     {
-      "sha": "a418c2cd8a9af467443602e8e642e9b8d298eaea",
+      "sha": "'\n'a418c2cd8a9af467443602e8e642e9b8d298eaea",
       "shortSha": "a418c2cd",
       "date": "2026-05-18T16:40:50-07:00",
       "author": "usavsolutionsinc",
@@ -1413,7 +1523,7 @@
       "title": "inventory/warehouse rename Phase B/C + pinless signin"
     },
     {
-      "sha": "03c06df08c26bc90512e72c6da3d657e81fc81d0",
+      "sha": "'\n'03c06df08c26bc90512e72c6da3d657e81fc81d0",
       "shortSha": "03c06df0",
       "date": "2026-05-18T16:40:47-07:00",
       "author": "usavsolutionsinc",
@@ -1423,7 +1533,7 @@
       "title": "desktop app: install page with OS detection + Vercel Blob installer hosting"
     },
     {
-      "sha": "b822685c8908bd175d4e3c3a98dca0db0af1cfb6",
+      "sha": "'\n'b822685c8908bd175d4e3c3a98dca0db0af1cfb6",
       "shortSha": "b822685c",
       "date": "2026-05-18T12:47:24-07:00",
       "author": "DENSENSE8",
@@ -1433,7 +1543,7 @@
       "title": "auth: admin perms no step-up; sidebar avatar uses DB color_hex"
     },
     {
-      "sha": "3d8b201e3a5846e170728696dacafe1912bf7101",
+      "sha": "'\n'3d8b201e3a5846e170728696dacafe1912bf7101",
       "shortSha": "3d8b201e",
       "date": "2026-05-18T08:40:24-07:00",
       "author": "DENSENSE8",
@@ -1443,7 +1553,7 @@
       "title": "plan: Products / Inventory / Warehouse rename + modernization"
     },
     {
-      "sha": "735375c2bf8f76f2a6d614c557f9132491bf9aba",
+      "sha": "'\n'735375c2bf8f76f2a6d614c557f9132491bf9aba",
       "shortSha": "735375c2",
       "date": "2026-05-18T08:01:05-07:00",
       "author": "DENSENSE8",
@@ -1453,7 +1563,7 @@
       "title": "inventory v2 #4: Zoho order-intake webhook + auto-allocation"
     },
     {
-      "sha": "35ff10b04eb50d5f39b9d8b5f297a860cd3be69b",
+      "sha": "'\n'35ff10b04eb50d5f39b9d8b5f297a860cd3be69b",
       "shortSha": "35ff10b0",
       "date": "2026-05-18T07:58:02-07:00",
       "author": "DENSENSE8",
@@ -1463,7 +1573,7 @@
       "title": "inventory v2 #2: cycle count admin UI"
     },
     {
-      "sha": "c90635eaae4afa42b8ca03a31103a5263825c0ec",
+      "sha": "'\n'c90635eaae4afa42b8ca03a31103a5263825c0ec",
       "shortSha": "c90635ea",
       "date": "2026-05-18T07:53:09-07:00",
       "author": "DENSENSE8",
@@ -1473,7 +1583,7 @@
       "title": "inventory v2 #3: throughput dashboard"
     },
     {
-      "sha": "4d69d80d9891d4eb5f695ba2694f2c20ad66299a",
+      "sha": "'\n'4d69d80d9891d4eb5f695ba2694f2c20ad66299a",
       "shortSha": "4d69d80d",
       "date": "2026-05-18T07:50:54-07:00",
       "author": "DENSENSE8",
@@ -1483,7 +1593,7 @@
       "title": "inventory v2 #1: returns intake admin tool + shared helper"
     },
     {
-      "sha": "e18cb4d292b21971a71883de489ae8f9fa6b117e",
+      "sha": "'\n'e18cb4d292b21971a71883de489ae8f9fa6b117e",
       "shortSha": "e18cb4d2",
       "date": "2026-05-18T07:47:09-07:00",
       "author": "DENSENSE8",
@@ -1493,7 +1603,7 @@
       "title": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview"
     },
     {
-      "sha": "91169695c8714654dbe06daa3aa025f9713d701a",
+      "sha": "'\n'91169695c8714654dbe06daa3aa025f9713d701a",
       "shortSha": "91169695",
       "date": "2026-05-18T01:06:18-07:00",
       "author": "DENSENSE8",
@@ -1503,7 +1613,7 @@
       "title": "inventory v2: hold/release helpers + admin page"
     },
     {
-      "sha": "ccc06043b9aa9a51a86ff8301838c0fe02e34d90",
+      "sha": "'\n'ccc06043b9aa9a51a86ff8301838c0fe02e34d90",
       "shortSha": "ccc06043",
       "date": "2026-05-18T01:01:45-07:00",
       "author": "DENSENSE8",
@@ -1513,7 +1623,7 @@
       "title": "inventory v2: bulk-allocate admin page + shared allocation helper"
     },
     {
-      "sha": "85cca78f8183c64bbb0f57a2d3a6449453cf5700",
+      "sha": "'\n'85cca78f8183c64bbb0f57a2d3a6449453cf5700",
       "shortSha": "85cca78f",
       "date": "2026-05-18T00:56:18-07:00",
       "author": "DENSENSE8",
@@ -1523,7 +1633,7 @@
       "title": "inventory v2 admin: events explorer page + dashboard link"
     },
     {
-      "sha": "6ad1979408590e112d167a37da79561f27f37178",
+      "sha": "'\n'6ad1979408590e112d167a37da79561f27f37178",
       "shortSha": "6ad19794",
       "date": "2026-05-18T00:52:18-07:00",
       "author": "DENSENSE8",
@@ -1533,7 +1643,7 @@
       "title": "inventory v2 admin: preflight panel + open DRIFT alerts surface"
     },
     {
-      "sha": "c040e55107f3a2212f2fd5871e1c0b63d862e458",
+      "sha": "'\n'c040e55107f3a2212f2fd5871e1c0b63d862e458",
       "shortSha": "c040e551",
       "date": "2026-05-18T00:44:43-07:00",
       "author": "DENSENSE8",
@@ -1543,7 +1653,7 @@
       "title": "inventory v2: drift-check cron + DRIFT stock-alert type"
     },
     {
-      "sha": "86e6d3b9dde0951f41ddf54ca809a6cbcc1fb20d",
+      "sha": "'\n'86e6d3b9dde0951f41ddf54ca809a6cbcc1fb20d",
       "shortSha": "86e6d3b9",
       "date": "2026-05-18T00:37:49-07:00",
       "author": "DENSENSE8",
@@ -1553,7 +1663,7 @@
       "title": "QR label migration: QR-only print template + GTIN backfill ran"
     },
     {
-      "sha": "d6e7326df6a8e8615d6ff695fe344055ac90a9fa",
+      "sha": "'\n'd6e7326df6a8e8615d6ff695fe344055ac90a9fa",
       "shortSha": "d6e7326d",
       "date": "2026-05-18T00:30:16-07:00",
       "author": "DENSENSE8",
@@ -1563,7 +1673,7 @@
       "title": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)"
     },
     {
-      "sha": "f9005d2331082aacc63794e04dff5bd96e7c4b87",
+      "sha": "'\n'f9005d2331082aacc63794e04dff5bd96e7c4b87",
       "shortSha": "f9005d23",
       "date": "2026-05-17T23:57:58-07:00",
       "author": "DENSENSE8",
@@ -1573,7 +1683,7 @@
       "title": "QStash: bootstrap script + sync replenishment entry back to config"
     },
     {
-      "sha": "8085f0bed3d41d9b7d89037add424e55bf18d993",
+      "sha": "'\n'8085f0bed3d41d9b7d89037add424e55bf18d993",
       "shortSha": "8085f0be",
       "date": "2026-05-17T23:40:43-07:00",
       "author": "DENSENSE8",
@@ -1583,7 +1693,7 @@
       "title": "Move Vercel crons to QStash (zero Vercel cron billing)"
     },
     {
-      "sha": "058b7771599626782667d077e27508904cefa82f",
+      "sha": "'\n'058b7771599626782667d077e27508904cefa82f",
       "shortSha": "058b7771",
       "date": "2026-05-17T23:31:15-07:00",
       "author": "DENSENSE8",
@@ -1593,7 +1703,7 @@
       "title": "inventory v2 Phase 8.4: SKU detail page + cross-links"
     },
     {
-      "sha": "b04c75a7eb67639ecd3699f7c5f537cccf4fd01f",
+      "sha": "'\n'b04c75a7eb67639ecd3699f7c5f537cccf4fd01f",
       "shortSha": "b04c75a7",
       "date": "2026-05-17T23:17:24-07:00",
       "author": "DENSENSE8",
@@ -1603,7 +1713,7 @@
       "title": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form"
     },
     {
-      "sha": "b4b01225206c70ba17465f90988fcc2f376617a3",
+      "sha": "'\n'b4b01225206c70ba17465f90988fcc2f376617a3",
       "shortSha": "b4b01225",
       "date": "2026-05-17T23:14:05-07:00",
       "author": "DENSENSE8",
@@ -1613,7 +1723,7 @@
       "title": "inventory v2 Phase 8.1: admin status page + backfill fix"
     },
     {
-      "sha": "caadad3c4530b39d67e804dabd304924dd9119fd",
+      "sha": "'\n'caadad3c4530b39d67e804dabd304924dd9119fd",
       "shortSha": "caadad3c",
       "date": "2026-05-17T22:59:17-07:00",
       "author": "DENSENSE8",
@@ -1623,7 +1733,7 @@
       "title": "inventory v2 Phase 7: returns intake + hold/release (flagged)"
     },
     {
-      "sha": "426ff893817e7df650b401e7704c79fc17dde01b",
+      "sha": "'\n'426ff893817e7df650b401e7704c79fc17dde01b",
       "shortSha": "426ff893",
       "date": "2026-05-17T22:57:08-07:00",
       "author": "DENSENSE8",
@@ -1633,7 +1743,7 @@
       "title": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)"
     },
     {
-      "sha": "24a7e4f58b441b4c8bb62b96ca4f92c653c4b3eb",
+      "sha": "'\n'24a7e4f58b441b4c8bb62b96ca4f92c653c4b3eb",
       "shortSha": "24a7e4f5",
       "date": "2026-05-17T22:55:03-07:00",
       "author": "DENSENSE8",
@@ -1643,7 +1753,7 @@
       "title": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)"
     },
     {
-      "sha": "1735fec158d97427f4dc930840143b8903afd9a0",
+      "sha": "'\n'1735fec158d97427f4dc930840143b8903afd9a0",
       "shortSha": "1735fec1",
       "date": "2026-05-17T22:53:00-07:00",
       "author": "DENSENSE8",
@@ -1653,7 +1763,7 @@
       "title": "inventory v2 Phase 4: order allocation + pick scan (flagged)"
     },
     {
-      "sha": "19f7154524a23b79a5cfcc6ce07794b9fd73a0bd",
+      "sha": "'\n'19f7154524a23b79a5cfcc6ce07794b9fd73a0bd",
       "shortSha": "19f71545",
       "date": "2026-05-17T22:49:30-07:00",
       "author": "DENSENSE8",
@@ -1663,7 +1773,7 @@
       "title": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)"
     },
     {
-      "sha": "14ebb811e2e037994c42ccb40d2fd8a9db75ffd7",
+      "sha": "'\n'14ebb811e2e037994c42ccb40d2fd8a9db75ffd7",
       "shortSha": "14ebb811",
       "date": "2026-05-17T22:33:10-07:00",
       "author": "DENSENSE8",
@@ -1673,7 +1783,7 @@
       "title": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)"
     },
     {
-      "sha": "4fdada3d0f3d47e1ceba083b8659c7adbfc754ba",
+      "sha": "'\n'4fdada3d0f3d47e1ceba083b8659c7adbfc754ba",
       "shortSha": "4fdada3d",
       "date": "2026-05-17T22:28:29-07:00",
       "author": "DENSENSE8",
@@ -1683,7 +1793,7 @@
       "title": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes"
     },
     {
-      "sha": "2a8fc962147ddea5d3ab6c077e065e985a52d966",
+      "sha": "'\n'2a8fc962147ddea5d3ab6c077e065e985a52d966",
       "shortSha": "2a8fc962",
       "date": "2026-05-17T11:20:14-07:00",
       "author": "DENSENSE8",
@@ -1693,7 +1803,7 @@
       "title": "inventory v2 Phase 0: schema declarations + migration + repositories"
     },
     {
-      "sha": "b8dc5725016aac60a3f7d142209e5d72d7641a7d",
+      "sha": "'\n'b8dc5725016aac60a3f7d142209e5d72d7641a7d",
       "shortSha": "b8dc5725",
       "date": "2026-05-17T00:38:43-07:00",
       "author": "DENSENSE8",
@@ -1703,7 +1813,7 @@
       "title": "auth system + sidebar nav pills redesign"
     },
     {
-      "sha": "64072679780411d302725476086f8b6b2afcc94d",
+      "sha": "'\n'64072679780411d302725476086f8b6b2afcc94d",
       "shortSha": "64072679",
       "date": "2026-05-15T17:01:00-07:00",
       "author": "usavsolutionsinc",
@@ -1713,7 +1823,7 @@
       "title": "updated the receiving pipeline for photos and the inventory bin creation"
     },
     {
-      "sha": "900993ece57d1b799150749923a4eee41fba3907",
+      "sha": "'\n'900993ece57d1b799150749923a4eee41fba3907",
       "shortSha": "900993ec",
       "date": "2026-05-14T17:00:37-07:00",
       "author": "usavsolutionsinc",
@@ -1723,7 +1833,7 @@
       "title": "updated the architecture"
     },
     {
-      "sha": "209791d6310d5b18b9120f4f88754268c1e79edf",
+      "sha": "'\n'209791d6310d5b18b9120f4f88754268c1e79edf",
       "shortSha": "209791d6",
       "date": "2026-05-14T17:00:22-07:00",
       "author": "usavsolutionsinc",
@@ -1733,7 +1843,7 @@
       "title": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows"
     },
     {
-      "sha": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
+      "sha": "'\n'b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
       "shortSha": "b680dbdf",
       "date": "2026-05-14T13:28:28-07:00",
       "author": "usavsolutionsinc",
@@ -1743,7 +1853,7 @@
       "title": "updated the proxy problem"
     },
     {
-      "sha": "433578b0df63ddf857a8d7ea090ab8b27560ba78",
+      "sha": "'\n'433578b0df63ddf857a8d7ea090ab8b27560ba78",
       "shortSha": "433578b0",
       "date": "2026-05-13T17:00:28-07:00",
       "author": "usavsolutionsinc",
@@ -1753,7 +1863,7 @@
       "title": "updated the whole receiving pipeline"
     },
     {
-      "sha": "7ae98020d827673d9331466b5e987e88eea147f5",
+      "sha": "'\n'7ae98020d827673d9331466b5e987e88eea147f5",
       "shortSha": "7ae98020",
       "date": "2026-05-13T08:45:08-07:00",
       "author": "DENSENSE8",
@@ -1763,7 +1873,7 @@
       "title": "udpated the receiving side bar to be more modern"
     },
     {
-      "sha": "b4c236d99cf9daf908cf8671a0dc292315c4d400",
+      "sha": "'\n'b4c236d99cf9daf908cf8671a0dc292315c4d400",
       "shortSha": "b4c236d9",
       "date": "2026-05-11T16:07:27-07:00",
       "author": "usavsolutionsinc",
@@ -1773,7 +1883,7 @@
       "title": "updated the print window sizing for the receiving side bar"
     },
     {
-      "sha": "f87910d902c7ac3a084ea1fff7a3fb0aa2800f50",
+      "sha": "'\n'f87910d902c7ac3a084ea1fff7a3fb0aa2800f50",
       "shortSha": "f87910d9",
       "date": "2026-05-11T15:39:35-07:00",
       "author": "usavsolutionsinc",
@@ -1783,7 +1893,7 @@
       "title": "updated the unique key bug in packer table"
     },
     {
-      "sha": "c955543d918895847b32736883661d587d39caae",
+      "sha": "'\n'c955543d918895847b32736883661d587d39caae",
       "shortSha": "c955543d",
       "date": "2026-05-11T15:30:54-07:00",
       "author": "usavsolutionsinc",
@@ -1793,7 +1903,7 @@
       "title": "udpated the packer flow to included the photos in mobile mode"
     },
     {
-      "sha": "dc87e8b9148a48aa36cb3c6bde9e244387890e43",
+      "sha": "'\n'dc87e8b9148a48aa36cb3c6bde9e244387890e43",
       "shortSha": "dc87e8b9",
       "date": "2026-05-11T14:46:56-07:00",
       "author": "usavsolutionsinc",
@@ -1803,7 +1913,7 @@
       "title": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more"
     },
     {
-      "sha": "cdc71016fa809430953ef82e9bab2880999681f8",
+      "sha": "'\n'cdc71016fa809430953ef82e9bab2880999681f8",
       "shortSha": "cdc71016",
       "date": "2026-04-15T16:55:14-07:00",
       "author": "usavsolutionsinc",
@@ -1813,7 +1923,7 @@
       "title": "tracking excetpions table and zoho addition"
     },
     {
-      "sha": "ec81f15ba54763e98090c51cabc9d28e400dad5c",
+      "sha": "'\n'ec81f15ba54763e98090c51cabc9d28e400dad5c",
       "shortSha": "ec81f15b",
       "date": "2026-04-15T13:31:52-07:00",
       "author": "usavsolutionsinc",
@@ -1823,7 +1933,7 @@
       "title": "updated the safari qrcode check and scanning"
     },
     {
-      "sha": "c25d2afcc6b50a97455fd5a9fc76187413f809f5",
+      "sha": "'\n'c25d2afcc6b50a97455fd5a9fc76187413f809f5",
       "shortSha": "c25d2afc",
       "date": "2026-04-15T13:17:13-07:00",
       "author": "usavsolutionsinc",
@@ -1833,7 +1943,7 @@
       "title": "updated the receiving pipeline and the tech pipeline a lot"
     },
     {
-      "sha": "76fff128fc5a3b97ebd15ab7dbf012bd8ff28a4e",
+      "sha": "'\n'76fff128fc5a3b97ebd15ab7dbf012bd8ff28a4e",
       "shortSha": "76fff128",
       "date": "2026-04-14T17:02:08-07:00",
       "author": "usavsolutionsinc",
@@ -1843,7 +1953,7 @@
       "title": "updated the notes display"
     },
     {
-      "sha": "0fc12ce1c3b7ab72125d6857cab506f3124fab6f",
+      "sha": "'\n'0fc12ce1c3b7ab72125d6857cab506f3124fab6f",
       "shortSha": "0fc12ce1",
       "date": "2026-04-14T16:52:44-07:00",
       "author": "usavsolutionsinc",
@@ -1853,7 +1963,7 @@
       "title": "updated the current receiving pipeline"
     },
     {
-      "sha": "1bbf52e9b2354d273dad9d80604c48e5bd7b06e2",
+      "sha": "'\n'1bbf52e9b2354d273dad9d80604c48e5bd7b06e2",
       "shortSha": "1bbf52e9",
       "date": "2026-04-13T16:25:41-07:00",
       "author": "usavsolutionsinc",
@@ -1863,7 +1973,7 @@
       "title": "updated receiving flow UX & UI and FBA stability"
     },
     {
-      "sha": "b37f303a711860868e83dbc53337ce369b6350e7",
+      "sha": "'\n'b37f303a711860868e83dbc53337ce369b6350e7",
       "shortSha": "b37f303a",
       "date": "2026-04-10T17:01:18-07:00",
       "author": "usavsolutionsinc",
@@ -1873,7 +1983,7 @@
       "title": "big updates to the current receiving pipeline and more"
     },
     {
-      "sha": "348ab20d62f3f4d3638a66c133eb12d59adda8ed",
+      "sha": "'\n'348ab20d62f3f4d3638a66c133eb12d59adda8ed",
       "shortSha": "348ab20d",
       "date": "2026-04-08T21:26:14-07:00",
       "author": "DENSENSE8",
@@ -1883,114 +1993,11 @@
       "title": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch"
     },
     {
-      "sha": "5fdff86261417133bc5b4beeef7061307ce23652",
-      "shortSha": "5fdff862",
-      "date": "2026-04-08T21:24:07-07:00",
-      "author": "DENSENSE8",
-      "subject": "updated the chat and FBA flow",
+      "sha": "'",
+      "subject": "",
       "body": "",
       "type": "other",
-      "title": "updated the chat and FBA flow"
-    },
-    {
-      "sha": "9231dd18d7e7b90353b11e760ad57c54d6b7bde7",
-      "shortSha": "9231dd18",
-      "date": "2026-04-08T16:55:06-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the api hammering and qstash jobs and sku table display in sku stock",
-      "body": "",
-      "type": "other",
-      "title": "updated the api hammering and qstash jobs and sku table display in sku stock"
-    },
-    {
-      "sha": "6fdd92a115c802c1e5bdc60e585ba89b2bfef632",
-      "shortSha": "6fdd92a1",
-      "date": "2026-04-08T16:19:38-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "more consistency and receiving zoho api calls lessened",
-      "body": "",
-      "type": "other",
-      "title": "more consistency and receiving zoho api calls lessened"
-    },
-    {
-      "sha": "b717215bb92f4505bec82b4458088881b3c53797",
-      "shortSha": "b717215b",
-      "date": "2026-04-07T16:58:42-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "ton of updates to the repair page to walk in page and forms",
-      "body": "",
-      "type": "other",
-      "title": "ton of updates to the repair page to walk in page and forms"
-    },
-    {
-      "sha": "def5e0072732c08a9c2f52e005bccd3079bf886f",
-      "shortSha": "def5e007",
-      "date": "2026-04-07T07:48:09-07:00",
-      "author": "DENSENSE8",
-      "subject": "open claw router RAG & bose manual and troubleshooting",
-      "body": "",
-      "type": "other",
-      "title": "open claw router RAG & bose manual and troubleshooting"
-    },
-    {
-      "sha": "3dbe4c08150cb76884cb8a251e53b48a49e0725e",
-      "shortSha": "3dbe4c08",
-      "date": "2026-04-06T21:05:13-07:00",
-      "author": "DENSENSE8",
-      "subject": "open claw router RAG & bose manual and troubleshooting",
-      "body": "",
-      "type": "other",
-      "title": "open claw router RAG & bose manual and troubleshooting"
-    },
-    {
-      "sha": "35c6a5dd47be5d2e45632136dde04350f373e042",
-      "shortSha": "35c6a5dd",
-      "date": "2026-04-06T16:59:53-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "udpated the overall consistency and improved code base and added replenish page",
-      "body": "",
-      "type": "other",
-      "title": "udpated the overall consistency and improved code base and added replenish page"
-    },
-    {
-      "sha": "c4f61ba51d5dacbb3fbe9ab974c00acd103822cb",
-      "shortSha": "c4f61ba5",
-      "date": "2026-04-06T11:40:50-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "feat: show transfer + exceptions stats in sidebar, remove redundant schedule",
-      "body": "- Updated DashboardManagementPanel with animated result card showing\n  processed/inserted/updated counts and exceptions auto-resolved badge\n- Exceptions sync now runs inline after Google Sheets transfer, making\n  the separate 30-min QStash schedule redundant (already removed from config)\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "feature",
-      "title": "show transfer + exceptions stats in sidebar, remove redundant schedule"
-    },
-    {
-      "sha": "188bc31a3a2c3e747cfdc636ba0de6b23dc20e78",
-      "shortSha": "188bc31a",
-      "date": "2026-04-06T10:45:48-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: resolve FK violation in orders-exceptions sync by marking resolved instead of deleting",
-      "body": "DELETE FROM orders_exceptions violated the station_scan_sessions FK\nconstraint. Changed to UPDATE status='resolved' to preserve the audit\ntrail. Also added isQStashOrigin auth guard for consistency.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "resolve FK violation in orders-exceptions sync by marking resolved instead of deleting"
-    },
-    {
-      "sha": "8f59de2f6347bc761511d489d65f922266ce7974",
-      "shortSha": "8f59de2f",
-      "date": "2026-04-06T10:16:45-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes",
-      "body": "All 8 QStash route handlers were failing with SignatureError due to the\nverifySignatureAppRouter wrapper. Extracted a shared isQStashOrigin()\nhelper in lib/qstash.ts and applied it consistently to every route.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes"
-    },
-    {
-      "sha": "0e771c45700304a489a72b23055b9ae5fc5afb6e",
-      "shortSha": "0e771c45",
-      "date": "2026-04-06T10:03:39-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: replace broken QStash signature verification with origin check",
-      "body": "The verifySignatureAppRouter wrapper was causing SignatureError on every\nQStash delivery, resulting in persistent 500s. Switched to a lightweight\norigin check (upstash-signature header presence) and added detailed\nlogging to surface any downstream job errors.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "replace broken QStash signature verification with origin check"
+      "title": ""
     }
   ]
 }

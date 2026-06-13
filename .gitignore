@@ -75,3 +75,7 @@ docker-compose.db.yml
 /test-results/
 /tests/.auth/
 .env*
+
+# Build installers (large artifacts; do not commit)
+context/*.exe
+*.exe

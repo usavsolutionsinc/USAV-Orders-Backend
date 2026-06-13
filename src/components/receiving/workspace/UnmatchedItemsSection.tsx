@@ -28,6 +28,7 @@ import {
   type AssignedBox,
 } from '@/components/receiving/workspace/CartonAddPopover';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
+import { LabelIdentifyButton } from '@/components/receiving/label-identify/LabelIdentifyButton';
 import { SerialCard, SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import {
   SerialMatchResult,
@@ -556,6 +557,21 @@ export function UnmatchedItemsSection({
             }
           />
         ) : null}
+        {/* Identify an item by photographing its printed label. The LAN vision box
+            OCRs the Bose model, the server resolves it to a catalog SKU, and the
+            confirmed candidate is added via the same add-unmatched-line path the
+            CartonAddPopover uses. Hidden when no vision box is configured. */}
+        <LabelIdentifyButton
+          onConfirm={(c) =>
+            handleAddLine({
+              sku_platform_id_row: null,
+              sku_catalog_id: c.sku_catalog_id,
+              sku: c.sku ?? '',
+              item_name: c.product_title ?? c.item_name ?? c.model,
+              image_url: c.image_url,
+            })
+          }
+        />
         {lines.map((line) => (
           <UnmatchedLineRow
             key={line.id}
