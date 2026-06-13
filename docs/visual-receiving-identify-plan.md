@@ -128,14 +128,65 @@ resolves it directly. (Or enroll by `sku_catalog_id` — pick one and keep it co
 ## Status / phasing
 
 - [x] Plan
-- [ ] Vision service scaffold (`vision/`) — embedder, index, enroll, FastAPI server
-- [ ] Vercel glue — `/api/vision-config`, `src/lib/vision-identify.ts`,
-      `/api/receiving/visual-identify`
-- [ ] Seed enrollment (10–15 popular discontinued models) for a first win
-- [ ] UI: unfound-carton identify path (`UnmatchedItemsSection`)
-- [ ] UI: `LineEditPanel` per-line identify (`useVisualIdentify` hook)
+- [x] Vision service scaffold (`vision/`) — embedder, index, enroll, FastAPI server
+- [x] Box stood up on the RTX 5070 Ti — cu128/Blackwell (sm_120) verified, DINOv2-base
+      loads on GPU, identify discriminates (self-match 1.0, distinct products separated).
+- [x] Seed enrollment from **photos already in our DB** — 38 received Bose products
+      pulled from `zoho_item_images` (bytea) via `scripts/pull_zoho_images.mjs`, enrolled
+      keyed by `zoho_item_id`. Zero external image calls. (See `data/received_ranking.json`.)
+- [x] **OCR-of-label is the working identifier (not visual embedding).** Measured the hard
+      way: naive DINOv2 over timestamp-paired NAS photos scored 25% — because (a) timestamp
+      attribution is contaminated (a session unboxes many products minutes apart; proven: a
+      SoundTouch label sat in the "Wave IV" folder) and (b) Bose product labels are visually
+      identical to DINOv2 but carry the model in PRINT. Switched to EasyOCR (GPU) + a fuzzy
+      Bose model lexicon. **Result: 21 distinct Bose products identified correctly from their
+      labels, each verified by viewing the actual label** (`vision/data/ocr_labels.json`).
+      Pipeline: `nas_pair_by_time.mjs` → `download_scan.mjs` → `ocr_extract.py` (OCR-cached) →
+      `reclassify.py` (instant lexicon iteration). Label-OCR ground truth beats timestamp folders.
+- [ ] Thicken reference sets (multi-photo per product) — fine-grained variants (e.g.
+      SoundDock II vs III) sit at ~0.87 with a single photo; needs more refs + held-out eval.
+
+### Honest coverage caveat (important)
+Only ~5% of historical NAS intake photos show a legible product label; the rest are product
+fronts, boxes, accessories, glare, rotated, or paperwork. So label-OCR is ~100% accurate **when
+a clean label is in frame**, but that's a minority of existing photos. The real path to reliable
+identification is a **deliberate capture step at receiving** (operator photographs the bottom
+label → OCR → ~100%), with visual DINOv2 (trained on OCR-cleaned labels) as the no-label fallback.
+Paperwork in-frame (Amazon return labels, repair invoices listing multiple models) causes false
+matches — the strict filter (`classify(strict=True)`: require a MODEL/SER-NO anchor, reject
+invoice text) handles it.
+- [ ] Extend coverage: ~95 received items have NO photo in DB → external (Google/eBay)
+      + canonicalize freeform eBay titles → correct manufacturer model.
+- [ ] Fix the receiving→Zoho→catalog link: ~82 received Zoho items don't resolve to
+      `sku_catalog` (so `/api/receiving/visual-identify` can't enrich them yet).
+- [x] **Label-identify engine + full app wiring built out** (the "add an item by
+      photographing its label" flow):
+      - Vision box: `POST /identify-label` (`vision/app/server.py`) → shared
+        `vision/app/label_ocr.py` `LabelIdentifier` (EasyOCR + lexicon, strict filter).
+      - Resolver: `src/lib/receiving/label-identify.ts` — model string → Zoho `items`
+        → `zoho_item_id` → `sku_catalog_id` (verified against the live DB for all 21).
+      - API: `POST /api/receiving/identify-label` (withAuth `receiving.view`; in the
+        route-permissions manifest).
+      - Client: `identifyLabelFromVisionBox` / `resolveLabelModels` /
+        `identifyLabelAndResolve` in `src/lib/vision-identify.ts`.
+      - UI: `useLabelIdentify` hook + `LabelIdentifyButton`
+        (`src/components/receiving/label-identify/`), wired into `UnmatchedItemsSection`
+        → confirm → existing `add-unmatched-line`. Hidden when no vision box configured.
+      - Local-pickup data: `vision/scripts/crawl_lcpu.mjs` pulls the NAS `1 LCPU` tree
+        (1,311 unique pickup photos / 58 sessions) for broader enrollment/eval.
+- [x] Vercel glue — `src/lib/vision-identify.ts`, `/api/receiving/visual-identify`
+      (DINOv2 path) + `/api/receiving/identify-label` (OCR path).
+- [x] UI: unfound-carton identify path (`UnmatchedItemsSection` → `LabelIdentifyButton`).
+- [ ] UI: `LineEditPanel` per-line identify (re-use `LabelIdentifyButton` on a line).
 - [ ] Optional: fine-tuned/open-vocab detector crop for cluttered scenes
 - [ ] Optional: auto-enroll confirmed crops back into the index (active learning)
+
+### Enrollment identity & image-source priority (decided from real receiving data)
+- **Enroll key = `zoho_item_id`** (stable Zoho identity). `/identify` returns it; the
+  Vercel resolver maps it back via `resolveSkuCatalogByPlatformId` (the crosswalk).
+- **Image-source priority:** (1) `zoho_item_images` bytes already in DB → (2) Zoho
+  `image_document_id` via the item-image proxy → (3) real NAS intake photos →
+  (4) external Google/eBay **only** for the no-photo tail. Don't start with Google.
 
 ## Open decisions
 

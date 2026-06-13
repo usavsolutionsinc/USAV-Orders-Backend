@@ -37,6 +37,7 @@
     "test:zoho-fulfillment": "tsx --test src/lib/zoho/fulfillment-sync.test.ts",
     "test:auth": "tsx --test src/lib/auth/permission-registry.test.ts src/lib/auth/permissions-shared.test.ts src/lib/auth/route-permission-manifest.test.ts",
     "test:warranty": "tsx --test src/lib/warranty/clock.test.ts src/lib/warranty/transitions.test.ts src/lib/warranty/outputs.test.ts src/lib/warranty/zendesk-format.test.ts",
+    "test:vision": "tsx --test src/lib/vision/frame-quality.test.ts",
     "test:e2e:fba-sidebar": "node scripts/e2e-fba-sidebar.mjs",
     "test:e2e:station-serial": "node scripts/e2e-station-serial.mjs",
     "test:e2e:station-sku-pull": "node scripts/e2e-station-sku-pull.mjs",

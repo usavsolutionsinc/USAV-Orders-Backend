@@ -2,6 +2,23 @@
 __pycache__/
 *.pyc
 .env
+*.pt
+
+# Local image data — enrolled references, eval/tuning sets, crawled NAS dumps.
+# None of this belongs in git: the OCR lexicon (label_ocr.py) is the code, and the
+# embedding index is rebuilt on the box from data/reference/.
 data/reference/
 data/index/
-*.pt
+data/eval/
+data/lcpu/
+data/nas/
+*.jpg
+*.jpeg
+*.png
+*.webp
+# Derived/cache artifacts from the crawl + OCR scripts (manifests, pairing, caches).
+data/*.json
+
+# Keep a committed golden set (if present) so test_golden.py has fixtures in CI.
+!data/golden/
+!data/golden/**
