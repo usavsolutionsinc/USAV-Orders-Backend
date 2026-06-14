@@ -6,10 +6,7 @@ import { Barcode, ExternalLink, Plus } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { WorkspaceCard } from '@/design-system/components';
-import { sourcePlatformMeta, sourcePlatformLabel } from '@/lib/source-platform';
 import {
-  SOURCE_PLATFORM_OPTS,
-  RECEIVING_TYPE_OPTS,
   FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   RECEIVING_TRAIL_SLOT_CLASS,
@@ -21,24 +18,8 @@ import { ReceivingTicketChip } from './ReceivingTicketChip';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
-import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
+import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/hooks/useCatalog';
 
-/** Display order for the source-platform pills (left → right). */
-const PLATFORM_ORDER = [
-  'ebay',
-  'goodwill',
-  'amazon',
-  'fba',
-  'aliexpress',
-  'walmart',
-  'ecwid',
-  'other',
-] as const;
-
-// Built-in value sets — used to detect which catalog rows are CUSTOM (so they
-// get appended to the pickers without duplicating the curated built-ins).
-const BUILTIN_PLATFORM_VALUES = new Set<string>(SOURCE_PLATFORM_OPTS.map((o) => o.value));
-const BUILTIN_TYPE_VALUES = new Set<string>(RECEIVING_TYPE_OPTS.map((o) => o.value));
 
 /**
  * Carton-level context card: staff dropdown + photo strip, the listing /
@@ -162,12 +143,13 @@ export function CartonContextCard({
 
   // Canonical platform tone/label for the listing chip — same SoT the platform
   // pill and printed label read, so a platform never presents two ways.
-  const platformMeta = sourcePlatformMeta(platformValue);
-
-  // Org-editable platform/type catalogs — used to append any CUSTOM entries to
-  // the pickers below (falls back to the built-in lists until seeded).
+  // Org-editable platform/type catalogs drive the pickers below (fall back to
+  // the built-in lists until seeded). The platform tone/label resolver reads
+  // the catalog too, so a renamed or custom platform reads correctly here.
   const platformCatalog = usePlatformCatalog();
   const typeCatalog = useReceivingTypeCatalog();
+  const resolvePlatformMeta = usePlatformMeta();
+  const platformMeta = resolvePlatformMeta(platformValue);
 
   // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
   // shows the *effective* tier — the manual override when set, else the
@@ -215,20 +197,12 @@ export function CartonContextCard({
   // top row is chips + pencils only.
   const anyBelow = trackingEditorsOpen || listingEditorOpen || poEditorOpen;
 
-  // Platform/Type pill options feed the inline collapse-to-active pickers. The
-  // synthesized amber "Unfound" pill leads the platform set for unmatched cartons
-  // (front-end only — never written to source_platform).
-  // Org-editable catalog: built-ins keep their curated order + tones; any
-  // CUSTOM platforms/types the org added (via the catalog manager) are appended
-  // so they appear in the carton-bar pickers too. (Renames/hides of built-ins
-  // are the read-side phase — see docs/platform-account-type-catalog-plan.md.)
-  const customPlatforms = platformCatalog.options
-    .filter((o) => o.id != null && !BUILTIN_PLATFORM_VALUES.has(o.value))
-    .map((o) => ({ value: o.value, label: o.label }));
-  const customTypes = typeCatalog.options
-    .filter((o) => o.id != null && !BUILTIN_TYPE_VALUES.has(o.value))
-    .map((o) => ({ value: o.value, label: o.label }));
-
+  // Platform/Type pill options come straight from the org catalog (active rows,
+  // org sort order) — so renames, hides, reorders, and custom entries the org
+  // makes in the catalog manager all propagate here. Falls back to the built-in
+  // lists until the catalog is seeded. The synthesized amber "Unfound" pill
+  // leads the platform set for unmatched cartons (front-end only — never written
+  // to source_platform).
   const platformOptions: InlinePillOption[] = [
     ...(isUnmatched
       ? [
@@ -242,15 +216,11 @@ export function CartonContextCard({
           } as InlinePillOption,
         ]
       : []),
-    ...PLATFORM_ORDER.map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
-      .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
-      .map((o) => ({ value: o.value, label: o.label })),
-    ...customPlatforms,
+    ...platformCatalog.options.map((o) => ({ value: o.value, label: o.label })),
   ];
-  const typeOptions: InlinePillOption[] = [
-    ...RECEIVING_TYPE_OPTS.filter((o) => o.value !== 'PICKUP').map((o) => ({ value: o.value, label: o.label })),
-    ...customTypes,
-  ];
+  const typeOptions: InlinePillOption[] = typeCatalog.options
+    .filter((o) => o.value !== 'PICKUP')
+    .map((o) => ({ value: o.value, label: o.label }));
 
   return (
     <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
@@ -320,7 +290,7 @@ export function CartonContextCard({
               display={
                 listingLink
                   ? platformValue
-                    ? sourcePlatformLabel(platformValue)
+                    ? platformMeta.label
                     : isUnmatched
                       ? 'Unfound'
                       : 'Listing'

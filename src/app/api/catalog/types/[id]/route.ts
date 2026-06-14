@@ -3,6 +3,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { parseBody } from '@/lib/schemas/parse';
 import { TypeUpdateBody } from '@/lib/schemas/catalog';
 import { getTypeById, updateType } from '@/lib/neon/catalog-queries';
+import { invalidateCatalogCache } from '@/lib/catalog/org-catalog';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 
@@ -44,6 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       after: updated ? { ...updated } : null,
     });
 
+    invalidateCatalogCache(gate.ctx.organizationId);
     return NextResponse.json({ success: true, type: updated });
   } catch (error: any) {
     console.error('Error in PATCH /api/catalog/types/[id]:', error);
@@ -79,6 +81,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       after: updated ? { ...updated } : null,
     });
 
+    invalidateCatalogCache(gate.ctx.organizationId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error in DELETE /api/catalog/types/[id]:', error);

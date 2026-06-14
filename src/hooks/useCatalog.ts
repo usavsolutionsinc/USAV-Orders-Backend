@@ -1,9 +1,10 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { catalogKeys, platformsQuery, typesQuery } from '@/lib/queries/catalog-queries';
 import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
-import { SOURCE_PLATFORMS } from '@/lib/source-platform';
+import { SOURCE_PLATFORMS, sourcePlatformMeta, type SourcePlatformMeta } from '@/lib/source-platform';
 import { RECEIVING_TYPE_OPTS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 
 /** A picker option resolved from the catalog (or the built-in fallback). */
@@ -47,6 +48,34 @@ export function useReceivingTypeCatalog() {
     ? rows.map((r) => ({ value: r.slug.toUpperCase(), label: r.label, id: r.id, sortOrder: r.sort_order, isSystem: r.is_system }))
     : BUILTIN_TYPES;
   return { ...q, rows, options };
+}
+
+/**
+ * Catalog-aware platform tone/label resolver. Returns `resolve(value)` →
+ * {@link SourcePlatformMeta}: the org catalog's **label** wins (so a renamed or
+ * custom platform reads correctly), the catalog `tone` overrides the text tone
+ * when set, and everything else falls back to the built-in `sourcePlatformMeta`
+ * (which also supplies the border tone the catalog doesn't store yet). A custom
+ * slug with no built-in match resolves to its catalog label + neutral border
+ * instead of "Unknown".
+ */
+export function usePlatformMeta(): (value: string | null | undefined) => SourcePlatformMeta {
+  const { rows } = usePlatformCatalog();
+  return useMemo(() => {
+    const byValue = new Map(rows.map((r) => [r.slug, r]));
+    return (value: string | null | undefined): SourcePlatformMeta => {
+      const key = String(value ?? '').trim().toLowerCase();
+      const builtin = sourcePlatformMeta(key);
+      const row = byValue.get(key);
+      if (!row) return builtin;
+      return {
+        value: key,
+        label: row.label,
+        text: row.tone ?? builtin.text,
+        border: builtin.border,
+      };
+    };
+  }, [rows]);
 }
 
 /** Invalidate both catalog lists — call after a CRUD mutation. */

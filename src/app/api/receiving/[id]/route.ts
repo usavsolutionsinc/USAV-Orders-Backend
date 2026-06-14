@@ -6,6 +6,7 @@ import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { readTimeline } from '@/lib/inventory/events';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { getOrgPlatforms, getOrgTypes } from '@/lib/catalog/org-catalog';
 
 const SOURCE_PLATFORMS = new Set([
   'zoho',
@@ -377,26 +378,41 @@ export async function PATCH(
     if (Object.prototype.hasOwnProperty.call(body, 'source_platform')) {
       const raw = body.source_platform;
       const next = raw == null || raw === '' ? null : String(raw).trim().toLowerCase();
-      if (next != null && !SOURCE_PLATFORMS.has(next)) {
-        return NextResponse.json(
-          { success: false, error: `Invalid source_platform. Allowed: ${Array.from(SOURCE_PLATFORMS).join(', ')}` },
-          { status: 400 },
-        );
+      if (next != null) {
+        // Union the hardcoded built-ins (incl. internal 'zoho') with the org's
+        // catalog slugs so custom platforms are accepted; never narrower than
+        // the legacy allowlist. See docs/platform-account-type-catalog-plan.md.
+        const allowed = new Set([
+          ...SOURCE_PLATFORMS,
+          ...(await getOrgPlatforms(ctx.organizationId)).map((p) => p.slug),
+        ]);
+        if (!allowed.has(next)) {
+          return NextResponse.json(
+            { success: false, error: `Invalid source_platform. Allowed: ${Array.from(allowed).join(', ')}` },
+            { status: 400 },
+          );
+        }
       }
       updates.push(`source_platform = $${idx++}`);
       values.push(next);
     }
 
-    // Carton-level default receiving type (PO|RETURN|TRADE_IN). Per-line
-    // receiving_lines.receiving_type overrides this; null clears the default.
+    // Carton-level default receiving type (PO|RETURN|TRADE_IN + org custom).
+    // Per-line receiving_lines.receiving_type overrides this; null clears it.
     if (Object.prototype.hasOwnProperty.call(body, 'intake_type')) {
       const raw = body.intake_type;
       const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
-      if (next != null && !INTAKE_TYPES.has(next)) {
-        return NextResponse.json(
-          { success: false, error: `Invalid intake_type. Allowed: ${Array.from(INTAKE_TYPES).join(', ')}` },
-          { status: 400 },
-        );
+      if (next != null) {
+        const allowed = new Set([
+          ...INTAKE_TYPES,
+          ...(await getOrgTypes(ctx.organizationId)).map((t) => t.slug.toUpperCase()),
+        ]);
+        if (!allowed.has(next)) {
+          return NextResponse.json(
+            { success: false, error: `Invalid intake_type. Allowed: ${Array.from(allowed).join(', ')}` },
+            { status: 400 },
+          );
+        }
       }
       updates.push(`intake_type = $${idx++}`);
       values.push(next);

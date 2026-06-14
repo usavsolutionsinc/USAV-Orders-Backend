@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { parseBody } from '@/lib/schemas/parse';
 import { TypeCreateBody } from '@/lib/schemas/catalog';
 import { createType, listTypes, slugify } from '@/lib/neon/catalog-queries';
+import { invalidateCatalogCache } from '@/lib/catalog/org-catalog';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -66,6 +67,7 @@ export const POST = withAuth(
         before: null,
         after: { ...type },
       });
+      invalidateCatalogCache(ctx.organizationId);
 
       const responseBody = { success: true, type };
       if (idemKey) {
