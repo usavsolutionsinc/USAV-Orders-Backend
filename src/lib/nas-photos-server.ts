@@ -64,6 +64,12 @@ export async function getNasConfigForOperator(
     getOrganization(organizationId),
     resolveOperatorNasFolder(organizationId, staffId),
   ]);
-  const baseUrl = org ? getActiveNasBaseUrl(org.settings) : '';
+  // The browser no longer talks to the NAS directly — it goes through the
+  // same-origin /api/nas proxy (which holds the real tunnel URL + x-agent-token
+  // server-side). So the client base URL is the proxy when a NAS is configured,
+  // and '' (not configured) otherwise. The actual upstream is resolved inside
+  // the proxy from NAS_RW_URL / the active nasPhotoServers slot.
+  const configured = org ? getActiveNasBaseUrl(org.settings) : '';
+  const baseUrl = configured ? '/api/nas' : '';
   return { baseUrl, folder };
 }

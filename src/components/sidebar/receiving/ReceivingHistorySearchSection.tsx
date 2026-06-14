@@ -14,6 +14,8 @@ import {
   Cpu,
   AlertTriangle,
   Plus,
+  PackageOpen,
+  PackageCheck,
 } from '@/components/Icons';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { useDebounce } from '@/hooks';
@@ -28,6 +30,11 @@ import {
   type ReceivingHistorySearchField,
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
+import {
+  HISTORY_SORT_OPTIONS,
+  HISTORY_DEFAULT_SORT,
+  normalizeHistorySort,
+} from '@/lib/receiving/receiving-modes';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 
 type ChipIcon = React.FC<{ className?: string }>;
@@ -45,6 +52,15 @@ const FIELD_ICONS: Record<ReceivingHistorySearchField, ChipIcon> = {
   sku: Barcode,
   product: FileText,
   serial: Cpu,
+};
+
+// Sort axes come from the History mode descriptor (single source of truth);
+// the sidebar only maps each id to an icon. Adding an axis there surfaces it
+// here automatically.
+const SORT_ICONS: Record<string, ChipIcon> = {
+  scanned_newest: Barcode,
+  unboxed_newest: PackageOpen,
+  received_newest: PackageCheck,
 };
 
 interface Props {
@@ -75,6 +91,13 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
   );
   const searchScope = useMemo(
     () => normalizeReceivingHistorySearchScope(searchParams.get(RECEIVING_HISTORY_URL_PARAMS.scope)),
+    [searchParams],
+  );
+  // Shared `?sort=` param (modes are exclusive on /receiving). The descriptor
+  // normalizes unknown values — incl. an Incoming sort left in the URL — to the
+  // History default, so the control never shows a foreign axis.
+  const sort = useMemo(
+    () => normalizeHistorySort(searchParams.get('sort')),
     [searchParams],
   );
 
@@ -111,14 +134,33 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
     [replaceParams, searchParams],
   );
 
+  const setSort = useCallback(
+    (id: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      const norm = normalizeHistorySort(id);
+      // Keep the default axis out of the URL so a plain History link is clean.
+      if (norm === HISTORY_DEFAULT_SORT) next.delete('sort');
+      else next.set('sort', norm);
+      replaceParams(next);
+    },
+    [replaceParams, searchParams],
+  );
+
   const clearFilters = useCallback(() => {
-    replaceParams(setReceivingHistoryUrlParams(searchParams, { scope: 'all', field: 'all' }));
+    const next = setReceivingHistoryUrlParams(searchParams, { scope: 'all', field: 'all' });
+    next.delete('sort');
+    replaceParams(next);
   }, [replaceParams, searchParams]);
 
   // Scope + field each count as one active refinement (their `all` is the
   // unfiltered default, so it doesn't count) and surface as a removable chip.
   const refinements = useMemo(() => {
     const out: { id: string; label: string; onRemove: () => void }[] = [];
+    // Non-default sort reads as a removable chip (default Scanned is implicit).
+    if (sort !== HISTORY_DEFAULT_SORT) {
+      const label = HISTORY_SORT_OPTIONS.find((o) => o.id === sort)?.label ?? sort;
+      out.push({ id: 'sort', label: `Sort: ${label}`, onRemove: () => setSort(HISTORY_DEFAULT_SORT) });
+    }
     if (searchScope !== 'all') {
       const label = SCOPE_ITEMS.find((s) => s.id === searchScope)?.label ?? searchScope;
       out.push({ id: 'scope', label, onRemove: () => setScope('all') });
@@ -129,7 +171,7 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
       out.push({ id: 'field', label, onRemove: () => setField('all') });
     }
     return out;
-  }, [searchScope, searchField, setScope, setField]);
+  }, [sort, searchScope, searchField, setSort, setScope, setField]);
   const activeFilterCount = refinements.length;
 
   const tableFetching =
@@ -172,6 +214,37 @@ export function ReceivingHistorySearchSection({ onSwitchToReceiving }: Props) {
         onClearAll: activeFilterCount > 0 ? clearFilters : undefined,
         renderDropdown: () => (
           <div className="space-y-3">
+            {/* Sort by — the History time axis (Scanned vs Unboxed). Drives both
+                the day-band a row lands in and the order within it. Options come
+                from the History mode descriptor (HISTORY_SORT_OPTIONS). */}
+            <div>
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                Sort by
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {HISTORY_SORT_OPTIONS.map((option) => {
+                  const Icon = SORT_ICONS[option.id] ?? Layers;
+                  const active = sort === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setSort(option.id)}
+                      aria-pressed={active}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
+                        active
+                          ? 'bg-blue-600 text-white ring-blue-600'
+                          : 'bg-white text-gray-700 ring-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Carton source — was the scope slider (All / PO / Unmatched). */}
             <div>
               <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">

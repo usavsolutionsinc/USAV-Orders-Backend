@@ -6,7 +6,15 @@ import {
   receivingLabelPlatformDisplay,
   receivingLabelPoCornerDisplay,
 } from '@/lib/print/printReceivingLabel';
+import { printHtmlSilent } from '@/lib/print/silentPrint';
+import { getProfileForRole, printRawToProfile, resolvePaperSize } from '@/lib/print/browserPrint';
+import { buildReceivingLabelCommands } from '@/lib/print/labelCommands';
+import { printHtmlInIframe } from '@/lib/print/iframePrint';
+import { isSilentPrintEnabled } from '@/lib/print/printMode';
 import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
+
+/** Microns per inch — the unit Electron's silent-print pageSize expects. */
+const MICRONS_PER_INCH = 25400;
 
 export type ReceivingLabelPayload = {
   /** Numeric receiving id — used to build the phone-scannable QR URL. */
@@ -111,14 +119,56 @@ window.onafterprint=function(){setTimeout(function(){window.close();},80);};
 </script>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=900,height=700');
-  if (!w) {
-    console.warn('printReceivingLabel: popup blocked');
-    return;
-  }
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  // Match the settings "Print test label" path: try the Electron silent-print
+  // bridge first (printHtmlSilent → api.printHtml), which sends straight to the
+  // configured/default printer. Only fall back to the browser popup + window.print()
+  // when we're not in the desktop shell — that raw popup print is what throws
+  // "no Windows app for printing" when no default print handler is registered.
+  // The 2×1" label face is mirrored into the microns pageSize so the thermal
+  // printer picks the right stock.
+  // Silent printing OFF (Settings → Hardware) skips every dialog-free path and
+  // hands the label to the browser's print dialog so an operator can pick a
+  // printer / preview.
+  const silent = isSilentPrintEnabled();
+
+  void (async () => {
+    if (silent) {
+      // 1) Electron desktop shell — webContents.print({ silent:true }).
+      const handled = await printHtmlSilent(html, {
+        pageSize: { width: 2 * MICRONS_PER_INCH, height: 1 * MICRONS_PER_INCH },
+        margins: { marginType: 'none' },
+        waitMs: 250,
+      });
+      if (handled) return;
+      // 2) Browser-native raw (WebUSB / Web Serial) to the paired label printer.
+      //    Sends raw TSPL/ZPL/ESC-POS so the firmware renders the label — no OS
+      //    print dialog. Skipped for `os` profiles (those use the dialog path).
+      const labelProfile = getProfileForRole('label');
+      if (labelProfile && labelProfile.kind !== 'os') {
+        const commands = buildReceivingLabelCommands(
+          payload,
+          labelProfile.language,
+          resolvePaperSize(labelProfile.paperSizeId),
+          labelProfile.copies,
+        );
+        const res = await printRawToProfile(commands, labelProfile);
+        if (res.success) return; // silent print to the paired thermal printer
+        // Raw send failed — fall through to the iframe/window.print() path
+        // below, which still prints (silently under --kiosk-printing, else the
+        // dialog). We do NOT toast "failed" here: window.print() is
+        // fire-and-forget, so the label may well print on the fallback and a
+        // failure toast would be a false alarm. Diagnostics live in the
+        // Settings → Hardware "Test" button (which reports the reason).
+        console.warn('printReceivingLabel: browser raw print failed, falling back:', res.reason);
+      }
+    }
+    // 3) Dialog path — hidden iframe + the page's own window.print(). Silent
+    //    only under `--kiosk-printing` (default printer); otherwise the normal
+    //    print dialog. Reached when silent printing is OFF, or no silent path
+    //    was available. An iframe (vs a popup) never flashes and dodges the
+    //    popup blocker.
+    printHtmlInIframe(html, { name: 'Receiving label' });
+  })();
 }
 
 /**

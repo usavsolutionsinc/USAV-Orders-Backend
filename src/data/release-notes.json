@@ -1,7 +1,127 @@
 {
-  "generatedAt": "2026-06-13T21:30:37.837Z",
+  "generatedAt": "2026-06-14T01:44:20.097Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "489330f89a6ca65a401ab317aad53774300774be",
+      "shortSha": "489330f8",
+      "date": "2026-06-13T17:05:07-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat: tenancy isolation guards + Studio/stations/sourcing/testing WIP",
+      "body": "Large batch across several in-flight initiatives:\n\n- Tenancy hardening: org-scope/permission guards added across ~100 API\n  routes, RLS enforcement infra + app_tenant role template migrations,\n  cross-org isolation harness/tests, and CI gates (tenancy:guard:check\n  static + live BYPASSRLS invariant). New scripts: tenancy-guard.ts,\n  tenancy-coverage.mjs, tenancy-route-audit.mjs.\n- Operations Studio: /studio page, lenses + semantic zoom, diagnostics\n  linter, draft/publish, node-stats; StudioSidebarPanel + /api/studio.\n- Station builder: src/lib/stations registries, /api/stations,\n  station_definitions + seed reseller workflow migrations, station nodes.\n- Workflow engine: node types, diagnostics, tap, node-stats cron.\n- Sourcing hub: SourceAdapter layer, saved searches, scour-watch cron,\n  demand-unify migration, Source-this/Watch buttons.\n- Testing refactor: split TechTestingWorkspace -> TestingLineWorkspace/\n  TestingPanel + hooks; recordTestVerdict; slim serial-units test route.\n- Warranty/Zendesk round-trip: link candidates, ticket popover, soft\n  delete, claims zendesk link route.\n- Unshipped/outbound: AddTracking + OrdersSync popovers, EventTimeline +\n  timeline lib, order timeline, ship-confirm scan-out + outbound-state.\n- Receiving: carton intake_type model, line-edit mode-registry + hooks,\n  Viewed rail (line views), carton-source-link, source-order migration.\n- Staff messages + clipboard history; DateGroupHeader consolidation;\n  realtime channels/publish refactor; new project skills (ops-studio,\n  reseller-flow, station-block, workflow-node).\n\nExcludes secrets (.env/.env.local) and local debug artifacts.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "tenancy isolation guards + Studio/stations/sourcing/testing WIP"
+    },
+    {
+      "sha": "891571795857dff37a4266fd3ebedd2c114ba957",
+      "shortSha": "89157179",
+      "date": "2026-06-13T14:43:38-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: commit remaining WIP (silent printing, vision scripts, misc)",
+      "body": "Bundles the rest of the working tree per request, minus the 198MB installer\nartifact (removed; context/*.exe now gitignored).\n\n- Silent label printing: src/lib/print/* (browserPrint, iframePrint,\n  labelCommands, printErrors, printMode, printLabel, silentPrint),\n  PrintPreferences, CommandBar, electron/main.js, playwright.silentprint.config\n  + receiving-silent-print e2e + docs/receiving-silent-printing.md\n- Vision data pipeline scripts: vision/scripts/* (crawl, download, NAS pairing,\n  OCR dump/extract/identify, eval/golden, zoho image pull, reclassify)\n- Misc: receiving workspace tweaks (UnmatchedItemsSection, label helpers),\n  proxy.ts, route-permissions.json, release-notes.json, .gitignore\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "commit remaining WIP (silent printing, vision scripts, misc)"
+    },
+    {
+      "sha": "b68404d826c0cd5f558ed869e8b7b8ca3824ab45",
+      "shortSha": "b68404d8",
+      "date": "2026-06-13T14:38:24-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): live hands-free label scanning on mobile identify",
+      "body": "Replace the shutter-tap on /m/identify with a continuous, gated, consensus-based\nscan loop so operators can aim the camera and have the Bose model auto-detected.\nBuilds on the existing OCR identify path; the human still taps Add.\n\n- frame-quality.ts: cheap on-device gate (Laplacian-variance sharpness,\n  frame-diff motion, luma) so only steady/sharp/well-lit frames reach the LAN\n  vision box (5070 Ti)\n- useLiveLabelScan: throttled capture loop, single-in-flight backpressure\n  (AbortController, latest-wins), 2-of-3 consensus before lock, tab-hidden\n  pause/resume\n- useLabelIdentify: extract stateless identifyOnce/applyResult shared by the\n  manual and live paths\n- vision-identify: thread AbortSignal through the identify-label calls\n- MobileIdentify: Live/Manual toggle (persisted), quality-tinted reticle +\n  coaching hints, reuses the existing confirm sheet; manual shutter kept\n- tests: frame-quality unit tests + receiving-live-identify Playwright suite\n  (gate, lock+add, consensus, no-label, error, backpressure, re-arm)\n- vision/.gitignore: ignore local image data + crawl/OCR cache artifacts\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "live hands-free label scanning on mobile identify"
+    },
+    {
+      "sha": "7f51a452466d847f3dfa4254639d7f988209a161",
+      "shortSha": "7f51a452",
+      "date": "2026-06-12T16:59:58-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the NAS from receiving and unbox pipeline",
+      "body": "",
+      "type": "other",
+      "title": "updated the NAS from receiving and unbox pipeline"
+    },
+    {
+      "sha": "308b216e5840b5f96d8209211a27a5c1e814b7a8",
+      "shortSha": "308b216e",
+      "date": "2026-06-12T15:01:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "docs: track pending macOS auto-update work (blocked on Developer ID cert)",
+      "body": "Windows auto-update is live. macOS is wired in code but blocked on creating a\nDeveloper ID Application cert + setting a valid CSC_LINK secret (currently empty;\nmachine only has an Apple Development cert, which notarization rejects).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "track pending macOS auto-update work (blocked on Developer ID cert)"
+    },
+    {
+      "sha": "864da58a0f9f0072f619f1e747e24cdb1e1af2b9",
+      "shortSha": "864da58a",
+      "date": "2026-06-12T14:53:08-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(ci): pass --publish never to electron-builder build jobs",
+      "body": "electron-builder auto-publishes on CI detection and 403s against the read-only\nbuild-job token (and now that the v0.1.1 release exists, it fails the whole job).\nOur dedicated publish-release job owns publishing; the build jobs only produce\nartifacts (latest.yml/latest-mac.yml still generated locally regardless).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "pass --publish never to electron-builder build jobs"
+    },
+    {
+      "sha": "c9311ffe514ceda3c96a0f172456468a3f96d92c",
+      "shortSha": "c9311ffe",
+      "date": "2026-06-12T14:05:34-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(desktop): make auto-update actually work + observable (win now, mac on signing)",
+      "body": "The in-app updater never updated because (a) the version never changed and\n(b) no Release ever carried the latest.yml/latest-mac.yml metadata electron-updater\nrequires. This wires up a real, verifiable auto-update feed.\n\n- CI: publish a GitHub Release v<version> on each version bump, uploading the\n  installers AND the update metadata (latest.yml / latest-mac.yml / blockmaps).\n  Windows publishes even if the macOS job fails (e.g. signing secrets not yet set).\n- Windows: works now — public repo, NSIS updates unsigned. Space-free artifact\n  names so GitHub's space->dot asset rename can't 404 the update URL.\n- macOS: add Developer ID hardened-runtime signing + notarization + a zip target\n  (Squirrel.Mac updates from a zip, not a dmg) + latest-mac.yml. Activates once\n  the Apple secrets (CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID,\n  APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID) are added to the repo.\n- Observability: route electron-updater through electron-log so the update\n  lifecycle (checking/available/downloaded/error) is written to main.log.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "make auto-update actually work + observable (win now, mac on signing)"
+    },
+    {
+      "sha": "a08929e610b25aa9df366af01d167e925be4bf0d",
+      "shortSha": "a08929e6",
+      "date": "2026-06-12T13:39:47-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "chore(desktop): bump version 0.1.0 -> 0.1.1 to ship current Electron shell",
+      "body": "The app version had never been bumped from 0.1.0 since the first commit, so\nelectron-updater always saw the published release as equal to the installed\nversion and never updated. Bump to 0.1.1 so the Windows build carries the\ncurrent shell (silent-print print-html IPC handler, added 2026-05-17) and\nauto-update can recognise it as newer.\n\nTouches package.json, which triggers the Desktop Build CI workflow to produce\na fresh Windows NSIS installer on a windows-latest runner.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "bump version 0.1.0 -> 0.1.1 to ship current Electron shell"
+    },
+    {
+      "sha": "452b38c069116f145a8d9b3e38a9012b4b68d576",
+      "shortSha": "452b38c0",
+      "date": "2026-06-12T12:31:37-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): silent-print labels via Electron bridge, popup fallback",
+      "body": "printReceivingLabel went straight to window.open()+window.print(), which\non Windows throws \"no Windows app for printing\" when no default print\nhandler is registered. Route it through printHtmlSilent first (the same\npath the settings \"Print test label\" button uses), falling back to the\nbrowser popup only when not in the desktop shell. Covers both the\nPrint-only and Print·receive receiving buttons.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "silent-print labels via Electron bridge, popup fallback"
+    },
+    {
+      "sha": "6e66fffb1f4b9636c0dd93f497e8f6876d29144e",
+      "shortSha": "6e66fffb",
+      "date": "2026-06-12T09:10:36-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "incoming display and receiving corrections",
+      "body": "",
+      "type": "other",
+      "title": "incoming display and receiving corrections"
+    },
+    {
+      "sha": "b89e80462a2fbb3c86e614dca2d1bc9f1896664d",
+      "shortSha": "b89e8046",
+      "date": "2026-06-11T00:02:50-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(receiving): derive delivery from physical dock scan when carrier lags",
+      "body": "Carrier \"delivered\" is absent or late for most inbound boxes: of 1,291 scanned\ncartons, 728 were scanned (707 fully opened) while the carrier still said NOT\ndelivered — USPS access-blocked/NULL-status (540), unknown-carrier numbers that\nnever poll (165), FedEx stale (22); when it does land the lag runs to ~87 days\nfor USPS. The physical scan is the real delivery truth.\n\nAdd a 'receiving_scan' pass to runReconcileDeliveredJob: for an inbound shipment\nmatched by the same last-8 / shipment-link rule the Incoming display uses, set\nis_delivered + is_terminal, stamp the earliest matching scan as delivered_at,\nand stop polling. Gated by INBOUND_SHIPMENT_PREDICATE so an outbound order\nshipment whose tracking last-8 coincidentally collides with a scan is never\nflipped (warranty-safe). Extract SHIPMENT_SCAN_MATCH_CONDITION so the EXISTS\npredicate and the delivered_at derivation share one match definition.\n\nScanned boxes are excluded from delivered-unscanned by construction, so flipping\nis_delivered cannot resurface them (verified: 0 receiving_scan rows in the\ndelivered-unscanned base). Backfilled 766 inbound shipments.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "derive delivery from physical dock scan when carrier lags"
+    },
+    {
+      "sha": "38a86698f9fa3e2e93d9e203229a723788e1fe6c",
+      "shortSha": "38a86698",
+      "date": "2026-06-10T17:36:00-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(receiving): drop scanned boxes from Incoming via last-8 tracking match",
+      "body": "Incoming only dropped a row when the Zoho-PO line advanced off EXPECTED, but a\ndock scan/unbox writes to the carton's receiving_scans and never touches that\nline (receiving_id is usually NULL), so scanned boxes stayed stuck in Incoming\nand rendered as delivery_state='UNKNOWN'.\n\nRead-side: add one SHIPMENT_SCANNED_PREDICATE — the last 8 of the Zoho-pasted\ntracking number matched inside the scanned barcode digits (Zoho-pasted and\nscanned values are different representations of the same package), plus a\nshipment-link fallback. Apply it across the Incoming base, the DELIVERED_UNOPENED\nfacet/CASE, the summary chip counts + per-carrier CTE, and the canonical\ndelivered-unscanned tile, so a scanned box leaves Incoming the instant a scan\nlands and count === rows.\n\nWrite-path twin: extend runTrackingMatchReconcileJob (reconcile-delivered cron)\nwith a D4 pass that advances a still-EXPECTED line to MATCHED + attaches it to\nthe scanned carton on the same last-8 match, so the line truly progresses in the\ndata model rather than only being hidden by the read-side guard.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "drop scanned boxes from Incoming via last-8 tracking match"
+    },
     {
       "sha": "f15a447db0757b9b6e15fe0e3eb78d7512f4cade",
       "shortSha": "f15a447d",
@@ -1871,126 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "updated the current receiving pipeline"
-    },
-    {
-      "sha": "1bbf52e9b2354d273dad9d80604c48e5bd7b06e2",
-      "shortSha": "1bbf52e9",
-      "date": "2026-04-13T16:25:41-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated receiving flow UX & UI and FBA stability",
-      "body": "",
-      "type": "other",
-      "title": "updated receiving flow UX & UI and FBA stability"
-    },
-    {
-      "sha": "b37f303a711860868e83dbc53337ce369b6350e7",
-      "shortSha": "b37f303a",
-      "date": "2026-04-10T17:01:18-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "big updates to the current receiving pipeline and more",
-      "body": "",
-      "type": "other",
-      "title": "big updates to the current receiving pipeline and more"
-    },
-    {
-      "sha": "348ab20d62f3f4d3638a66c133eb12d59adda8ed",
-      "shortSha": "348ab20d",
-      "date": "2026-04-08T21:26:14-07:00",
-      "author": "DENSENSE8",
-      "subject": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch",
-      "body": "",
-      "type": "other",
-      "title": "upgraded the main nemoclaw to USAV build AI chat bot for RAG fetch"
-    },
-    {
-      "sha": "5fdff86261417133bc5b4beeef7061307ce23652",
-      "shortSha": "5fdff862",
-      "date": "2026-04-08T21:24:07-07:00",
-      "author": "DENSENSE8",
-      "subject": "updated the chat and FBA flow",
-      "body": "",
-      "type": "other",
-      "title": "updated the chat and FBA flow"
-    },
-    {
-      "sha": "9231dd18d7e7b90353b11e760ad57c54d6b7bde7",
-      "shortSha": "9231dd18",
-      "date": "2026-04-08T16:55:06-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the api hammering and qstash jobs and sku table display in sku stock",
-      "body": "",
-      "type": "other",
-      "title": "updated the api hammering and qstash jobs and sku table display in sku stock"
-    },
-    {
-      "sha": "6fdd92a115c802c1e5bdc60e585ba89b2bfef632",
-      "shortSha": "6fdd92a1",
-      "date": "2026-04-08T16:19:38-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "more consistency and receiving zoho api calls lessened",
-      "body": "",
-      "type": "other",
-      "title": "more consistency and receiving zoho api calls lessened"
-    },
-    {
-      "sha": "b717215bb92f4505bec82b4458088881b3c53797",
-      "shortSha": "b717215b",
-      "date": "2026-04-07T16:58:42-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "ton of updates to the repair page to walk in page and forms",
-      "body": "",
-      "type": "other",
-      "title": "ton of updates to the repair page to walk in page and forms"
-    },
-    {
-      "sha": "def5e0072732c08a9c2f52e005bccd3079bf886f",
-      "shortSha": "def5e007",
-      "date": "2026-04-07T07:48:09-07:00",
-      "author": "DENSENSE8",
-      "subject": "open claw router RAG & bose manual and troubleshooting",
-      "body": "",
-      "type": "other",
-      "title": "open claw router RAG & bose manual and troubleshooting"
-    },
-    {
-      "sha": "3dbe4c08150cb76884cb8a251e53b48a49e0725e",
-      "shortSha": "3dbe4c08",
-      "date": "2026-04-06T21:05:13-07:00",
-      "author": "DENSENSE8",
-      "subject": "open claw router RAG & bose manual and troubleshooting",
-      "body": "",
-      "type": "other",
-      "title": "open claw router RAG & bose manual and troubleshooting"
-    },
-    {
-      "sha": "35c6a5dd47be5d2e45632136dde04350f373e042",
-      "shortSha": "35c6a5dd",
-      "date": "2026-04-06T16:59:53-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "udpated the overall consistency and improved code base and added replenish page",
-      "body": "",
-      "type": "other",
-      "title": "udpated the overall consistency and improved code base and added replenish page"
-    },
-    {
-      "sha": "c4f61ba51d5dacbb3fbe9ab974c00acd103822cb",
-      "shortSha": "c4f61ba5",
-      "date": "2026-04-06T11:40:50-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "feat: show transfer + exceptions stats in sidebar, remove redundant schedule",
-      "body": "- Updated DashboardManagementPanel with animated result card showing\n  processed/inserted/updated counts and exceptions auto-resolved badge\n- Exceptions sync now runs inline after Google Sheets transfer, making\n  the separate 30-min QStash schedule redundant (already removed from config)\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "feature",
-      "title": "show transfer + exceptions stats in sidebar, remove redundant schedule"
-    },
-    {
-      "sha": "188bc31a3a2c3e747cfdc636ba0de6b23dc20e78",
-      "shortSha": "188bc31a",
-      "date": "2026-04-06T10:45:48-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: resolve FK violation in orders-exceptions sync by marking resolved instead of deleting",
-      "body": "DELETE FROM orders_exceptions violated the station_scan_sessions FK\nconstraint. Changed to UPDATE status='resolved' to preserve the audit\ntrail. Also added isQStashOrigin auth guard for consistency.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "resolve FK violation in orders-exceptions sync by marking resolved instead of deleting"
     }
   ]
 }

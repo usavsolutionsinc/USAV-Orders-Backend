@@ -85,7 +85,7 @@ preflight for the app origin (`ALLOWED_ORIGINS` in `.env`).
 
 ## Config
 
-Copy `config.example.env` → `.env`. Key knobs: `EMBED_MODEL`, `DEVICE`, `TOP_K`,
+Copy `config.example.txt` → `.env`. Key knobs: `EMBED_MODEL`, `DEVICE`, `TOP_K`,
 `USE_DETECTOR`, `ALLOWED_ORIGINS`. See that file for the rest.
 
 ## Notes

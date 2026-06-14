@@ -295,6 +295,13 @@ export function CommandBar() {
             exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -8 }}
             transition={shouldReduceMotion ? { duration: 0 } : { type: 'spring', damping: 28, stiffness: 360, mass: 0.7 }}
             className="fixed inset-x-0 top-0 z-command flex justify-center px-4 pt-[12vh] md:pt-[16vh]"
+            // Click-off to dismiss: the dialog container overlaps the backdrop
+            // (empty space above / beside the palette), so a click that lands on
+            // the container itself — not on the Command palette inside it —
+            // closes the menu, matching the backdrop's behavior.
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setOpen(false);
+            }}
           >
             <Command
               label="Command menu"

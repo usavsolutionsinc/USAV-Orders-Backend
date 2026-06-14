@@ -14,6 +14,20 @@ from .engine import get_engine
 
 app = FastAPI(title="USAV Vision", version="0.1.0")
 
+# Lazy singleton — EasyOCR + models load on first /identify-label call, not at import.
+_label_identifier = None
+
+
+def get_label_identifier():
+    global _label_identifier
+    if _label_identifier is None:
+        from .label_ocr import LabelIdentifier
+
+        device = settings.device
+        use_gpu = device != "cpu"  # "auto"/"cuda" -> GPU; EasyOCR falls back if absent
+        _label_identifier = LabelIdentifier(gpu=use_gpu)
+    return _label_identifier
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
@@ -57,6 +71,24 @@ async def identify(
     image = await _read_image(file)
     candidates = get_engine().identify(image)
     return {"candidates": candidates}
+
+
+@app.post("/identify-label")
+async def identify_label(
+    file: UploadFile = File(...),
+    strict: bool = True,
+    x_vision_token: str | None = Header(default=None),
+) -> dict:
+    """Read the Bose model off a product-label photo. The browser posts a deliberate
+    shot of the bottom label; we OCR it and match against the lexicon. Returns the
+    canonical model string (or null) — the Vercel side resolves it to a sku_catalog
+    row. `strict=true` (default) only returns a model when a real product label is
+    seen (anchor present, no paperwork), so the UI can trust it for auto-fill.
+    """
+    _check_token(x_vision_token)
+    image = await _read_image(file)
+    result = get_label_identifier().identify(image, strict=strict)
+    return result
 
 
 @app.post("/enroll")

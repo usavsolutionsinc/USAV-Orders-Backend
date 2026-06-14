@@ -1,5 +1,7 @@
 import { renderDataMatrixSvg } from '@/lib/barcode/dataMatrixSvg';
 import { printHtmlSilent } from '@/lib/print/silentPrint';
+import { printHtmlInIframe } from '@/lib/print/iframePrint';
+import { isSilentPrintEnabled } from '@/lib/print/printMode';
 
 /**
  * Shared 2×1" DataMatrix label shell. Receiving, repair, and product/testing
@@ -108,22 +110,23 @@ export function printLabel(opts: PrintLabelOptions): void {
   const heightIn = opts.heightIn ?? 1;
   const html = buildLabelHtml(opts);
 
-  void printHtmlSilent(html, {
-    pageSize: {
-      width: Math.round(widthIn * MICRONS_PER_INCH),
-      height: Math.round(heightIn * MICRONS_PER_INCH),
-    },
-    margins: { marginType: 'none' },
-    waitMs: opts.waitMs ?? 250,
-  }).then((handled) => {
-    if (handled) return;
-    const w = window.open('', '_blank', 'width=900,height=700');
-    if (!w) {
-      console.warn(`${opts.name ?? 'printLabel'}: popup blocked`);
-      return;
+  void (async () => {
+    // Silent printing OFF → skip the Electron silent path and go straight to
+    // the dialog (hidden iframe + window.print()).
+    if (isSilentPrintEnabled()) {
+      const handled = await printHtmlSilent(html, {
+        pageSize: {
+          width: Math.round(widthIn * MICRONS_PER_INCH),
+          height: Math.round(heightIn * MICRONS_PER_INCH),
+        },
+        margins: { marginType: 'none' },
+        waitMs: opts.waitMs ?? 250,
+      });
+      if (handled) return;
     }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  });
+    // Browser fallback: print via a hidden iframe + the page's own
+    // window.print(). Silent under `--kiosk-printing` (default printer);
+    // otherwise the normal dialog. No popup flash, no popup-blocker risk.
+    printHtmlInIframe(html, { name: opts.name ?? 'printLabel' });
+  })();
 }

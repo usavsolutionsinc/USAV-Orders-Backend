@@ -45,6 +45,71 @@ export const INBOUND_SHIPMENT_PREDICATE = `(
 )`;
 
 /**
+ * SQL predicate (references alias `stn`) — TRUE when an operator has scanned this
+ * shipment at the dock, in ANY receiving mode. This is the one rule that drops a
+ * row off Incoming, so it's deliberately tracking-number-first and tolerant of
+ * the broken `receiving_id` / `shipment_id` linkage we actually see in the data:
+ *
+ *   (a) Last-8 tracking match — the shipment's tracking# (the value pasted into
+ *       Zoho, stored as `stn.tracking_number_normalized`) and the value the
+ *       scanner reads are DIFFERENT representations of the same package: Zoho
+ *       holds the short human number, the dock scan reads the full IMpb (USPS
+ *       420+ZIP routing prefix, and often several barcodes concatenated). The
+ *       carrier-stable common denominator is the trailing package serial, so we
+ *       match on the LAST 8 chars of the Zoho number appearing inside the scanned
+ *       barcode digits. `position(right(norm,8) in canonical(rs.tracking_number))`
+ *       is a substring test so the 8-char tail is found whether the scan is a
+ *       clean number, a routing-prefixed IMpb, or a concatenated multi-scan. This
+ *       path needs NO receiving_id/shipment_id link — it just compares numbers,
+ *       and last-8 subsumes a full-number match (if the whole number is in the
+ *       scan, its last 8 are too). Guarded to >=8 chars; an 8-digit run colliding
+ *       inside an unrelated scan is ~0.02 expected across the whole table.
+ *
+ *   (b) Shipment link — a scan tied to a receiving row for this shipment
+ *       (`receiving.shipment_id`), or the scan's own `shipment_id`. Kept as a net
+ *       for the rare box whose scanned barcode shares no last-8 with the Zoho
+ *       number but whose carton row WAS resolved to the shipment.
+ *
+ * Either path means "the warehouse has touched it", so Incoming drops it the
+ * instant a scan lands (honoring that view's contract) and it surfaces in the
+ * `scanned` view instead. Shipment-anchored on `stn` (not the picked carton row)
+ * so the Incoming base, the DELIVERED_UNOPENED facet/CASE, and the tile count in
+ * {@link deliveredUnscannedBaseSql} all read the same set (count === rows).
+ *
+ * Perf: `receiving_scans` is ~1.6k rows, so the correlated regexp scan is
+ * negligible. If it ever grows large, store a `tracking_last8` column on
+ * receiving_scans (written via last8FromStoredTracking) + an index and swap the
+ * inline regexp for an equality/index lookup against it.
+ */
+/**
+ * The bare scan→shipment match condition — references `rs` (a `receiving_scans`
+ * row), `r2` (its `receiving` row), and the outer `stn`. Extracted so the EXISTS
+ * predicate below AND the delivered-from-scan derivation (reconcile-delivered's
+ * 'receiving_scan' pass, which needs the earliest matching `rs.scanned_at`) share
+ * ONE definition of "this scan is for this shipment" — last-8 of the tracking, or
+ * the shipment link. Callers must join `receiving_scans rs LEFT JOIN receiving r2
+ * ON r2.id = rs.receiving_id`.
+ */
+export const SHIPMENT_SCAN_MATCH_CONDITION = `(
+  (
+    length(stn.tracking_number_normalized) >= 8
+    AND position(
+          right(stn.tracking_number_normalized, 8)
+          IN regexp_replace(upper(rs.tracking_number), '[^A-Z0-9]', '', 'g')
+        ) > 0
+  )
+  OR r2.shipment_id = stn.id
+  OR rs.shipment_id = stn.id
+)`;
+
+export const SHIPMENT_SCANNED_PREDICATE = `EXISTS (
+  SELECT 1
+    FROM receiving_scans rs
+    LEFT JOIN receiving r2 ON r2.id = rs.receiving_id
+   WHERE ${SHIPMENT_SCAN_MATCH_CONDITION}
+)`;
+
+/**
  * The canonical delivered-unscanned base query body. Selects one shipment row
  * per normalized tracking# (carriers emit master+child numbers for one box),
  * most-recent delivery winning the dedupe.
@@ -70,11 +135,7 @@ export function deliveredUnscannedBaseSql(windowParam: string): string {
      WHERE stn.is_delivered = true
        AND stn.delivered_at > NOW() - (${windowParam} || ' days')::interval
        AND ${INBOUND_SHIPMENT_PREDICATE}
-       AND NOT EXISTS (
-         SELECT 1 FROM receiving r2
-         JOIN receiving_scans rs ON rs.receiving_id = r2.id
-         WHERE r2.shipment_id = stn.id
-       )
+       AND NOT ${SHIPMENT_SCANNED_PREDICATE}
        -- A delivered box whose Zoho PO already reads received/closed/cancelled
        -- is no longer "needs receiving" — drop it so the carrier surface matches
        -- the email path's NOT_ZOHO_RECEIVED guard. The PO is resolved the same

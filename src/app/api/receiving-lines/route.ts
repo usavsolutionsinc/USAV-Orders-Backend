@@ -15,7 +15,7 @@ import {
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
-import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 
 type LineSerial = {
@@ -143,19 +143,28 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             ? 'recently_added'
             : 'zoho_newest';
     // Sort axis for the receiving-history feed (view=recent/all/activity).
-    // Lets the history UI sort by scanned-at (door) or unboxed-at.
+    // Lets the history UI sort by scanned-at (door), unboxed-at, or received-at
+    // (the line's terminal DONE / "Received" transition — receiving_lines.
+    // received_done_at, distinct from the misnamed door-scan receiving.received_at).
     // `unbox_activity` (the unbox Recent rail) = unboxed_at OR the line's own
     // last write (updated_at) — door re-scans bump neither, so triage scans
     // can't reorder the rail, while a return-paired/just-received line (no
     // unbox stamp yet) still surfaces by its line activity.
-    const historySort: 'scanned_newest' | 'scanned_oldest' | 'unboxed_newest' | 'unbox_activity' =
+    const historySort:
+      | 'scanned_newest'
+      | 'scanned_oldest'
+      | 'unboxed_newest'
+      | 'received_newest'
+      | 'unbox_activity' =
       sortRaw === 'scanned_oldest'
         ? 'scanned_oldest'
         : sortRaw === 'unboxed_newest'
           ? 'unboxed_newest'
-          : sortRaw === 'unbox_activity'
-            ? 'unbox_activity'
-            : 'scanned_newest';
+          : sortRaw === 'received_newest'
+            ? 'received_newest'
+            : sortRaw === 'unbox_activity'
+              ? 'unbox_activity'
+              : 'scanned_newest';
     // Prioritize views (triage Prioritize tab + unbox Prioritize toggle) request
     // ?sort=priority — order by source-platform rank first, recency second.
     const wantsPrioritySort = sortRaw === 'priority';
@@ -554,7 +563,15 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          AND rl.zoho_purchaseorder_id IS NOT NULL
          -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
          -- so a received order drops off Incoming after a Refresh-Zoho sync.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}`,
+         AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+         -- Honor this view's contract: a row drops off "the instant the operator
+         -- scans". A door scan writes receiving_scans against the carton's
+         -- receiving row but never advances this Zoho-PO line's workflow_status /
+         -- quantity_received (the line's receiving_id is often NULL), so without
+         -- this guard a scanned/unboxed box stays stuck in Incoming and renders
+         -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
+         -- delivered-unscanned tile count (count === rows).
+         AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
       );
 
       // Optional delivery_state facet filter. Each bucket is the exact same
@@ -567,9 +584,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         // "this box is here but nobody has touched it" signal.
         conditions.push(
           `stn.is_delivered = true
-           AND NOT EXISTS (
-             SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
-           )`,
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
         );
       } else if (deliveryStateFilter === 'DELIVERED_EMAIL') {
         // Email-driven counterpart to DELIVERED_UNOPENED: an "ORDER DELIVERED"
@@ -678,6 +693,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         : view === 'recent' || view === 'all' || view === 'activity'
           ? (historySort === 'unboxed_newest'
               ? `ORDER BY r.unboxed_at::text DESC NULLS LAST, rl.id DESC`
+              : historySort === 'received_newest'
+                // "Received" = the line's terminal DONE transition. Not yet-DONE
+                // lines have a NULL received_done_at and sort last.
+                ? `ORDER BY rl.received_done_at::text DESC NULLS LAST, rl.id DESC`
               : historySort === 'unbox_activity'
                 // GREATEST skips NULLs in Postgres, so this is "unbox time or
                 // last line write, whichever is later"; created_at backstops
@@ -764,9 +783,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   WHEN COALESCE(rl.quantity_received, 0) > 0 OR rl.workflow_status <> 'EXPECTED'
                     THEN 'RECEIVED'
                   WHEN stn.is_delivered = true
-                       AND NOT EXISTS (
-                         SELECT 1 FROM receiving_scans rs WHERE rs.receiving_id = r.id
-                       )
+                       AND NOT ${SHIPMENT_SCANNED_PREDICATE}
                     THEN 'DELIVERED_UNOPENED'
                   WHEN stn.latest_status_category = 'OUT_FOR_DELIVERY'
                     THEN 'ARRIVING_TODAY'
@@ -806,9 +823,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     // Phase 2: surface the Zoho PO mirror status so the UI can badge a
     // physically-present box whose PO Zoho already marks received/closed
     // (instead of the row silently disappearing). Available wherever the
-    // zoho_po_mirror JOIN runs (incoming + scanned).
-    const zohoStatusSelect =
-      view === 'incoming' || view === 'scanned' ? `, mirror.status AS zoho_status` : '';
+    // zoho_po_mirror JOIN runs (incoming + scanned + the unbox activity rail).
+    // The activity rail needs it so a line whose PO Zoho already received reads
+    // "Received" (green) instead of falling back to its local unbox-pipeline
+    // workflow_status — see getReceivingStatusDot.
+    const needsZohoMirror =
+      view === 'incoming' || view === 'scanned' || view === 'activity';
+    const zohoStatusSelect = needsZohoMirror ? `, mirror.status AS zoho_status` : '';
     // view=viewed only: surface the viewer's own viewed_at so the rail labels
     // each row with "when you opened it" (mapRow folds it into last_activity_at)
     // instead of the unrelated scan/line time.
@@ -817,10 +838,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         ? `, (SELECT v.viewed_at FROM receiving_line_views v
                WHERE v.receiving_line_id = rl.id AND v.staff_id = $${viewedParamIdx})::text AS viewed_at`
         : '';
-    const incomingExtrasJoin =
-      view === 'incoming' || view === 'scanned'
-        ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
-        : '';
+    const incomingExtrasJoin = needsZohoMirror
+      ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
+      : '';
 
     const [rowsRes, countRes] = await Promise.all([
       pool.query(
@@ -1772,6 +1792,9 @@ function normalizeRow(row: Record<string, unknown>) {
     // the joins / unmatched stubs).
     received_at:              (row.receiving_received_at as string | null) ?? null,
     received_by_name:         (row.received_by_name as string | null) ?? null,
+    // Terminal "Received" (DONE) transition time — distinct from the door-scan
+    // received_at above. Drives History's "Received" sort axis.
+    received_done_at:         (row.received_done_at as string | null) ?? null,
     unboxed_at:               (row.receiving_unboxed_at as string | null) ?? null,
     unboxed_by_name:          (row.unboxed_by_name as string | null) ?? null,
     scanned_at:               (row.first_scanned_at as string | null) ?? null,

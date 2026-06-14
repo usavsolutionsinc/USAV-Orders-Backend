@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-13T21:23:10Z",
-  "totalRoutes": 585,
+  "generatedAt": "2026-06-14T01:44:19Z",
+  "totalRoutes": 587,
   "summary": {
-    "permissionGated": 495,
+    "permissionGated": 497,
     "authenticatedNoPermission": 22,
     "anonymousIntentional": 48,
     "serviceToService": 3,
@@ -2142,6 +2142,17 @@
       "exemptReason": "dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)"
     },
     {
+      "path": "/api/nas/[[...path]]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/need-to-order/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -3064,6 +3075,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/identify-label/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
       "exemptReason": null
     },
     {
