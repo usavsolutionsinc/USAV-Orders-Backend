@@ -74,6 +74,9 @@ docker-compose.db.yml
 /playwright-report/
 /test-results/
 /tests/.auth/
+# Playwright MCP server scratch output (console logs + page snapshots)
+.playwright-mcp/
+.playwright/
 .env*
 
 # Build installers (large artifacts; do not commit)
