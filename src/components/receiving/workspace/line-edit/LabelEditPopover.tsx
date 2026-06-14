@@ -26,17 +26,18 @@
  * and hands the final draft back via `onApplyAndPrint`.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { Calendar } from '@/design-system/components/Calendar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { RECEIVING_TYPE_OPTS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { Calendar as CalendarIcon, Pencil, Printer, X } from '@/components/Icons';
+import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
+import { Calendar as CalendarIcon, ChevronDown, Pencil, Printer, X } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { ConditionPills } from '../ConditionPills';
 import { ReceivingPoLabelPreview } from '../ReceivingPoLabelPreview';
 import type { ReceivingLabelPayload } from '../receiving-label-helpers';
+import { CatalogManagerPopover, type CatalogKind } from './CatalogManagerPopover';
 
 export type LabelCornerMode = 'order' | 'ticket' | 'tracking';
 
@@ -66,12 +67,59 @@ const FIELD_LABEL = `${microBadge} mb-1.5 block text-gray-500 tracking-wider`;
 const TEXT_INPUT =
   'w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-label text-gray-900 outline-none transition-colors focus:border-blue-500';
 
-const TYPE_ITEMS: HorizontalSliderItem[] = RECEIVING_TYPE_OPTS.map((o) => ({ id: o.value, label: o.label }));
+// Label-face-only platform displays appended after the org's real platforms.
+const PLATFORM_SPECIALS = ['Unfound', 'Local pickup'];
+
 const CORNER_ITEMS: HorizontalSliderItem[] = [
   { id: 'order', label: 'Order #' },
   { id: 'ticket', label: 'Ticket #' },
   { id: 'tracking', label: 'Tracking #' },
 ];
+
+/** Styled native select with a custom chevron, matching TEXT_INPUT chrome. */
+function SelectField({
+  value,
+  onChange,
+  ariaLabel,
+  children,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  ariaLabel: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+        className={`${TEXT_INPUT} cursor-pointer appearance-none pr-8`}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+    </div>
+  );
+}
+
+/** Field label with a pencil that opens the catalog manager for that list. */
+function ManagedFieldLabel({ children, onManage }: { children: ReactNode; onManage: () => void }) {
+  return (
+    <div className="mb-1.5 flex items-center justify-between gap-2">
+      <span className={`${microBadge} text-gray-500 tracking-wider`}>{children}</span>
+      <button
+        type="button"
+        onClick={onManage}
+        aria-label={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
+        title="Add / edit / delete"
+        className="text-gray-400 transition-colors hover:text-blue-600"
+      >
+        <Pencil className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
 
 function parseLabelDate(s: string): Date | undefined {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s.trim());
@@ -107,6 +155,18 @@ export function LabelEditPopover({
 }) {
   const [draft, setDraft] = useState<LabelEditDraft>(defaults);
   const [calOpen, setCalOpen] = useState(false);
+  const [managerKind, setManagerKind] = useState<CatalogKind | null>(null);
+
+  // Org-editable catalogs (fall back to the built-in lists until seeded).
+  const platformCat = usePlatformCatalog();
+  const typeCat = useReceivingTypeCatalog();
+  // Platform dropdown = the org's platform labels + label-face specials, with
+  // the current value guaranteed present.
+  const platformOptions = useMemo(() => {
+    const merged = [...platformCat.options.map((o) => o.label), ...PLATFORM_SPECIALS];
+    if (draft.platform && !merged.includes(draft.platform)) merged.unshift(draft.platform);
+    return Array.from(new Set(merged));
+  }, [platformCat.options, draft.platform]);
 
   // Re-seed from the record whenever the popover (re)opens so it never shows a
   // stale draft from a previous edit / previous line. `defaults` is intentionally
@@ -125,6 +185,7 @@ export function LabelEditPopover({
   const selectedDate = parseLabelDate(draft.date);
 
   return (
+    <>
     <RightPaneOverlay
       open={open}
       onClose={onClose}
@@ -156,15 +217,31 @@ export function LabelEditPopover({
         </div>
 
         <div className="space-y-3.5">
-          <div className="grid grid-cols-2 gap-3">
+          {/* Platform · Type · Date — one condensed row of dropdowns. */}
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className={FIELD_LABEL}>Platform</label>
-              <input
-                value={draft.platform}
-                onChange={(e) => set('platform', e.target.value)}
-                placeholder="Unfound"
-                className={TEXT_INPUT}
-              />
+              <ManagedFieldLabel onManage={() => setManagerKind('platform')}>Platform</ManagedFieldLabel>
+              <SelectField value={draft.platform} onChange={(v) => set('platform', v)} ariaLabel="Platform">
+                {platformOptions.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <div>
+              <ManagedFieldLabel onManage={() => setManagerKind('type')}>Type</ManagedFieldLabel>
+              <SelectField
+                value={draft.receivingType || 'PO'}
+                onChange={(v) => set('receivingType', v)}
+                ariaLabel="Receiving type"
+              >
+                {typeCat.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </SelectField>
             </div>
             <div>
               <label className={FIELD_LABEL}>Date</label>
@@ -174,13 +251,15 @@ export function LabelEditPopover({
                     type="button"
                     className={`${TEXT_INPUT} flex items-center justify-between gap-2 text-left`}
                   >
-                    <span className={draft.date ? '' : 'text-gray-400'}>{draft.date || 'Pick a date'}</span>
+                    <span className={`truncate ${draft.date ? '' : 'text-gray-400'}`}>
+                      {draft.date || 'Pick'}
+                    </span>
                     <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400" />
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
                   <Popover.Content
-                    align="start"
+                    align="end"
                     sideOffset={6}
                     // panelOverlay (130) clears the RightPaneOverlay panel (120).
                     className="z-panelOverlay rounded-xl border border-gray-200 bg-white shadow-lg ring-1 ring-black/5 focus:outline-none"
@@ -198,18 +277,6 @@ export function LabelEditPopover({
                 </Popover.Portal>
               </Popover.Root>
             </div>
-          </div>
-
-          <div>
-            <label className={FIELD_LABEL}>Type</label>
-            <HorizontalButtonSlider
-              items={TYPE_ITEMS}
-              value={draft.receivingType || 'PO'}
-              onChange={(id) => set('receivingType', id)}
-              variant="nav"
-              size="md"
-              aria-label="Receiving type"
-            />
           </div>
 
           <div>
@@ -287,5 +354,13 @@ export function LabelEditPopover({
         </button>
       </div>
     </RightPaneOverlay>
+
+    {/* Catalog CRUD manager — opened by the pencil beside Platform / Type. */}
+    <CatalogManagerPopover
+      open={managerKind != null}
+      kind={managerKind ?? 'platform'}
+      onClose={() => setManagerKind(null)}
+    />
+    </>
   );
 }

@@ -13,6 +13,7 @@
 
 import pool from '@/lib/db';
 import { parseOrgSettings, type OrgSettings } from './settings';
+import { seedOrgCatalog } from '@/lib/neon/catalog-queries';
 import type { OrgId, OrgStatus, PlatformPlan } from './constants';
 
 export interface OrganizationRow {
@@ -143,6 +144,14 @@ export async function createOrganization(input: CreateOrganizationInput): Promis
     [input.slug, input.name, input.plan ?? 'trial', settings, input.trialEndsAt ?? null],
   );
   const org = mapRow(r.rows[0]!);
+  // Provision the org's editable platform/type catalog with the built-in
+  // defaults. Best-effort: a seed failure must not block org creation (the
+  // catalog hooks fall back to the built-in constants until seeded).
+  try {
+    await seedOrgCatalog(org.id);
+  } catch (err) {
+    console.error('seedOrgCatalog failed for new org', org.id, err);
+  }
   invalidateOrgCache(org.id);
   return org;
 }

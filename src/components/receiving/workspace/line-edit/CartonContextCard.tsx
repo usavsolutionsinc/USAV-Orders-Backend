@@ -21,6 +21,7 @@ import { ReceivingTicketChip } from './ReceivingTicketChip';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
+import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
 
 /** Display order for the source-platform pills (left → right). */
 const PLATFORM_ORDER = [
@@ -33,6 +34,11 @@ const PLATFORM_ORDER = [
   'ecwid',
   'other',
 ] as const;
+
+// Built-in value sets — used to detect which catalog rows are CUSTOM (so they
+// get appended to the pickers without duplicating the curated built-ins).
+const BUILTIN_PLATFORM_VALUES = new Set<string>(SOURCE_PLATFORM_OPTS.map((o) => o.value));
+const BUILTIN_TYPE_VALUES = new Set<string>(RECEIVING_TYPE_OPTS.map((o) => o.value));
 
 /**
  * Carton-level context card: staff dropdown + photo strip, the listing /
@@ -158,6 +164,11 @@ export function CartonContextCard({
   // pill and printed label read, so a platform never presents two ways.
   const platformMeta = sourcePlatformMeta(platformValue);
 
+  // Org-editable platform/type catalogs — used to append any CUSTOM entries to
+  // the pickers below (falls back to the built-in lists until seeded).
+  const platformCatalog = usePlatformCatalog();
+  const typeCatalog = useReceivingTypeCatalog();
+
   // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
   // shows the *effective* tier — the manual override when set, else the
   // platform-derived rank (so a no-override carton still reads its auto urgency
@@ -207,6 +218,17 @@ export function CartonContextCard({
   // Platform/Type pill options feed the inline collapse-to-active pickers. The
   // synthesized amber "Unfound" pill leads the platform set for unmatched cartons
   // (front-end only — never written to source_platform).
+  // Org-editable catalog: built-ins keep their curated order + tones; any
+  // CUSTOM platforms/types the org added (via the catalog manager) are appended
+  // so they appear in the carton-bar pickers too. (Renames/hides of built-ins
+  // are the read-side phase — see docs/platform-account-type-catalog-plan.md.)
+  const customPlatforms = platformCatalog.options
+    .filter((o) => o.id != null && !BUILTIN_PLATFORM_VALUES.has(o.value))
+    .map((o) => ({ value: o.value, label: o.label }));
+  const customTypes = typeCatalog.options
+    .filter((o) => o.id != null && !BUILTIN_TYPE_VALUES.has(o.value))
+    .map((o) => ({ value: o.value, label: o.label }));
+
   const platformOptions: InlinePillOption[] = [
     ...(isUnmatched
       ? [
@@ -223,10 +245,12 @@ export function CartonContextCard({
     ...PLATFORM_ORDER.map((id) => SOURCE_PLATFORM_OPTS.find((o) => o.value === id))
       .filter((o): o is (typeof SOURCE_PLATFORM_OPTS)[number] => !!o)
       .map((o) => ({ value: o.value, label: o.label })),
+    ...customPlatforms,
   ];
-  const typeOptions: InlinePillOption[] = RECEIVING_TYPE_OPTS.filter(
-    (o) => o.value !== 'PICKUP',
-  ).map((o) => ({ value: o.value, label: o.label }));
+  const typeOptions: InlinePillOption[] = [
+    ...RECEIVING_TYPE_OPTS.filter((o) => o.value !== 'PICKUP').map((o) => ({ value: o.value, label: o.label })),
+    ...customTypes,
+  ];
 
   return (
     <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
