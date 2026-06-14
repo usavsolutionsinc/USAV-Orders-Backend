@@ -32,6 +32,11 @@ export interface ReceivingLabelPayload {
   conditionCode: string;
   /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
   receivingType?: string | null;
+  /**
+   * Org-catalog-resolved label for `receivingType` (custom / renamed types).
+   * When set, it overrides the built-in slug→label map on the printed face.
+   */
+  receivingTypeLabel?: string | null;
   date: string;
 }
 
@@ -63,10 +68,11 @@ export function receivingLabelTypeDisplay(code: string | null | undefined): stri
  * the platform when no receiving type is set.
  */
 export function receivingLabelPlatformDisplay(
-  payload: Pick<ReceivingLabelPayload, 'platform' | 'receivingType'>,
+  payload: Pick<ReceivingLabelPayload, 'platform' | 'receivingType' | 'receivingTypeLabel'>,
 ): string {
   const platform = String(payload.platform ?? '').trim();
-  const type = receivingLabelTypeDisplay(payload.receivingType);
+  // Prefer the org-catalog label (custom / renamed types); else the built-in map.
+  const type = (payload.receivingTypeLabel ?? '').trim() || receivingLabelTypeDisplay(payload.receivingType);
   return type ? `${platform} - ${type}` : platform;
 }
 

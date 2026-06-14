@@ -33,6 +33,8 @@ export type ReceivingLabelPayload = {
   conditionCode: string;
   /** Receiving type (PO / RETURN / TRADE_IN / PICKUP) — shown after the platform as "Platform - Type". */
   receivingType?: string | null;
+  /** Org-catalog label for `receivingType` (custom / renamed types); overrides the built-in map. */
+  receivingTypeLabel?: string | null;
   date: string;
 };
 

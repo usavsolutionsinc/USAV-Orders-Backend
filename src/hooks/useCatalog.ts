@@ -6,6 +6,7 @@ import { catalogKeys, platformsQuery, typesQuery } from '@/lib/queries/catalog-q
 import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
 import { SOURCE_PLATFORMS, sourcePlatformMeta, type SourcePlatformMeta } from '@/lib/source-platform';
 import { RECEIVING_TYPE_OPTS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { receivingLabelTypeDisplay } from '@/lib/print/printReceivingLabel';
 
 /** A picker option resolved from the catalog (or the built-in fallback). */
 export interface CatalogOption {
@@ -74,6 +75,24 @@ export function usePlatformMeta(): (value: string | null | undefined) => SourceP
         text: row.tone ?? builtin.text,
         border: builtin.border,
       };
+    };
+  }, [rows]);
+}
+
+/**
+ * Catalog-aware receiving-type label resolver. Returns `resolve(code)` → the
+ * org catalog's label for that type slug (so a renamed or custom type reads
+ * correctly), falling back to the built-in `receivingLabelTypeDisplay`. Empty
+ * code → '' (no type shown). Mirror of {@link usePlatformMeta} for types.
+ */
+export function useReceivingTypeLabel(): (code: string | null | undefined) => string {
+  const { rows } = useReceivingTypeCatalog();
+  return useMemo(() => {
+    const byCode = new Map(rows.map((r) => [r.slug.toUpperCase(), r.label]));
+    return (code: string | null | undefined): string => {
+      const key = String(code ?? '').trim().toUpperCase();
+      if (!key) return '';
+      return byCode.get(key) ?? receivingLabelTypeDisplay(key);
     };
   }, [rows]);
 }

@@ -25,6 +25,7 @@ export function ReceivingPoLabelPreview({
   trackingNumber,
   conditionCode,
   receivingType,
+  receivingTypeLabel,
   date,
   embedded,
 }: ReceivingLabelPayload & { embedded?: boolean }) {
@@ -57,7 +58,7 @@ export function ReceivingPoLabelPreview({
         <div className="min-w-0 flex flex-1 flex-col justify-between">
           <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
             <span className="truncate font-bold text-gray-700">
-              {receivingLabelPlatformDisplay({ platform, receivingType })}
+              {receivingLabelPlatformDisplay({ platform, receivingType, receivingTypeLabel })}
             </span>
             <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
           </div>

@@ -15,6 +15,7 @@ import { useLineSerials } from './useLineSerials';
 import { useReceiveAction } from './useReceiveAction';
 import { useZohoLinePrefill } from './useZohoLinePrefill';
 import { useReceivingLineCore } from './useReceivingLineCore';
+import { useReceivingTypeLabel } from '@/hooks/useCatalog';
 import type { LabelEditDraft } from '../LabelEditPopover';
 
 /**
@@ -34,6 +35,8 @@ export function useUnboxLineController(
   { itemTotal }: { itemTotal?: number },
 ) {
   const core = useReceivingLineCore(row, staffId);
+  // Resolve a receiving-type code → its org-catalog label for the printed face.
+  const resolveTypeLabel = useReceivingTypeLabel();
 
   const [qa, setQa] = useState(
     !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
@@ -207,6 +210,8 @@ export function useUnboxLineController(
         notes: draft.notes.trim(),
         conditionCode: draft.conditionCode,
         receivingType: draft.receivingType || null,
+        // Catalog label so a renamed/custom type prints correctly on the face.
+        receivingTypeLabel: resolveTypeLabel(draft.receivingType) || null,
         date: draft.date,
       };
       if (draft.cornerMode === 'ticket') {
@@ -232,7 +237,7 @@ export function useUnboxLineController(
         trackingNumber: trackingHint || null,
       };
     },
-    [row.receiving_id, trackingHint],
+    [row.receiving_id, trackingHint, resolveTypeLabel],
   );
 
   // Seed values for the Edit-label popover. Reference seeds from the real PO#
