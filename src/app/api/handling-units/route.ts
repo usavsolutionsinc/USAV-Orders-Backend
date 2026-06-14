@@ -76,6 +76,7 @@ export const POST = withAuth(
     let box;
     try {
       box = await createHandlingUnit({
+        organizationId: ctx.organizationId,
         createdBy: ctx.staffId,
         locationId: parsed.locationId ?? null,
         notes: parsed.notes ?? null,

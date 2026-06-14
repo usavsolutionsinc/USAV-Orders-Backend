@@ -164,8 +164,8 @@ export async function recordTestVerdict(
     await pool.query(
       `INSERT INTO testing_results
          (serial_unit_id, receiving_line_id, verdict, unit_status,
-          tested_by, notes, inventory_event_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          tested_by, notes, inventory_event_id, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT organization_id FROM serial_units WHERE id = $1))`,
       [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, event.id],
     );
   } catch (err) {

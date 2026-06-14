@@ -114,10 +114,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       await client.query('BEGIN');
 
       const orderResult = await client.query(
-        `INSERT INTO local_pickup_orders (pickup_date, customer_name, notes, created_by, status)
-         VALUES ($1::date, $2, $3, $4, 'DRAFT')
+        `INSERT INTO local_pickup_orders (pickup_date, customer_name, notes, created_by, status, organization_id)
+         VALUES ($1::date, $2, $3, $4, 'DRAFT', $5)
          RETURNING *`,
-        [pickupDate, customerName, notes, createdBy],
+        [pickupDate, customerName, notes, createdBy, ctx.organizationId],
       );
       const order = orderResult.rows[0];
 
@@ -126,8 +126,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const i = item as Record<string, unknown>;
         const result = await client.query(
           `INSERT INTO local_pickup_order_items
-             (order_id, sku, product_title, image_url, quantity, condition_grade, parts_status, missing_parts_note, condition_note, total_price)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric)
+             (order_id, sku, product_title, image_url, quantity, condition_grade, parts_status, missing_parts_note, condition_note, total_price, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric, (SELECT organization_id FROM local_pickup_orders WHERE id = $1))
            RETURNING *`,
           [
             order.id,

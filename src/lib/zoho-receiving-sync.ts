@@ -10,6 +10,12 @@
  */
 
 import pool from '@/lib/db';
+// Transitional: this Zoho sync is a background job with no request ctx to derive
+// the tenant from, and its org isn't threaded through the deep sync chain yet.
+// Single-tenant today → attribute synced local-pickup orders to USAV. Replace
+// with ctx.organizationId once the sync entry points are tenant-aware (Phase A3).
+// eslint-disable-next-line no-restricted-syntax
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from '@/lib/zoho';
 import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
@@ -101,16 +107,16 @@ async function syncLocalPickupOrder(
   // sync populated.
   const orderRes = await client.query<{ id: number; xmax: string }>(
     `INSERT INTO local_pickup_orders (
-       zoho_po_id, zoho_purchaseorder_number, zoho_reference_number, status
+       zoho_po_id, zoho_purchaseorder_number, zoho_reference_number, status, organization_id
      )
-     VALUES ($1, $2, $3, 'DRAFT')
+     VALUES ($1, $2, $3, 'DRAFT', $4)
      ON CONFLICT (zoho_po_id) WHERE zoho_po_id IS NOT NULL
      DO UPDATE SET
        zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, local_pickup_orders.zoho_purchaseorder_number),
        zoho_reference_number     = COALESCE(EXCLUDED.zoho_reference_number, local_pickup_orders.zoho_reference_number),
        updated_at                = NOW()
      RETURNING id, xmax::text`,
-    [normalizedPoId, poNumber, poReference],
+    [normalizedPoId, poNumber, poReference, USAV_ORG_ID],
   );
   const orderId = Number(orderRes.rows[0].id);
   const orderPreexisting = orderRes.rows[0].xmax !== '0';
@@ -140,9 +146,9 @@ async function syncLocalPickupOrder(
     await client.query(
       `INSERT INTO local_pickup_order_items (
          order_id, sku, product_title, quantity,
-         zoho_item_id, zoho_line_item_id
+         zoho_item_id, zoho_line_item_id, organization_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5, $6, (SELECT organization_id FROM local_pickup_orders WHERE id = $1))
        ON CONFLICT (order_id, zoho_line_item_id) WHERE zoho_line_item_id IS NOT NULL
        DO UPDATE SET
          sku           = EXCLUDED.sku,

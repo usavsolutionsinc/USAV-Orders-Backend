@@ -106,8 +106,9 @@ export const POST = withAuth(
       const inserted = await pool.query<{ id: number }>(
         `INSERT INTO repair_actions
             (repair_id, action_type, part_name, old_sku, new_sku,
-             old_serial, new_serial, duration_min, notes, staff_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             old_serial, new_serial, duration_min, notes, staff_id, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                 (SELECT organization_id FROM unit_repairs WHERE id = $1))
          RETURNING id`,
         [
           repairId,

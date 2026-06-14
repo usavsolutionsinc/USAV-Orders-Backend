@@ -30,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const result = await pool.query(
       `INSERT INTO local_pickup_order_items
-         (order_id, sku, product_title, image_url, quantity, condition_grade, parts_status, missing_parts_note, condition_note, total_price)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric)
+         (order_id, sku, product_title, image_url, quantity, condition_grade, parts_status, missing_parts_note, condition_note, total_price, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric, (SELECT organization_id FROM local_pickup_orders WHERE id = $1))
        RETURNING *`,
       [
         orderId,

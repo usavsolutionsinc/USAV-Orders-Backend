@@ -226,6 +226,8 @@ export async function listHandlingUnits(
 // ─── Writes ───────────────────────────────────────────────────────────────────
 
 export interface CreateHandlingUnitInput {
+  /** Owning org (ctx.organizationId) — handling_units is org-scoped (Phase B). */
+  organizationId: string;
   createdBy: number | null;
   locationId?: number | null;
   notes?: string | null;
@@ -238,10 +240,10 @@ export async function createHandlingUnit(
   executor: Queryable = pool,
 ): Promise<HandlingUnitRow> {
   const r = await executor.query<HandlingUnitRow>(
-    `INSERT INTO handling_units (code, location_id, created_by, notes)
-     VALUES (NULLIF(btrim($1), ''), $2, $3, $4)
+    `INSERT INTO handling_units (code, location_id, created_by, notes, organization_id)
+     VALUES (NULLIF(btrim($1), ''), $2, $3, $4, $5)
      RETURNING ${HU_COLS}`,
-    [input.code ?? null, input.locationId ?? null, input.createdBy ?? null, input.notes ?? null],
+    [input.code ?? null, input.locationId ?? null, input.createdBy ?? null, input.notes ?? null, input.organizationId],
   );
   return r.rows[0];
 }

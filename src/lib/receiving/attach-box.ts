@@ -92,8 +92,8 @@ export async function attachBoxToReceiving(params: {
   // junction before we add an extra (covers cartons the backfill hasn't reached).
   if (carton.shipment_id) {
     await pool.query(
-      `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by)
-       VALUES ($1, $2, 1, true, NOW(), $3)
+      `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
+       VALUES ($1, $2, 1, true, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
        ON CONFLICT (receiving_id, shipment_id) DO NOTHING`,
       [receivingId, carton.shipment_id, carton.received_by ?? null],
     );
@@ -108,10 +108,10 @@ export async function attachBoxToReceiving(params: {
   const makePrimary = primaryRes.rows.length === 0;
 
   const inserted = await pool.query<{ box_seq: number; is_primary: boolean }>(
-    `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by)
+    `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
      SELECT $1, $2,
             COALESCE((SELECT MAX(box_seq) FROM receiving_shipments WHERE receiving_id = $1), 0) + 1,
-            $4, NOW(), $3
+            $4, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1)
      WHERE NOT EXISTS (
        SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND shipment_id = $2
      )

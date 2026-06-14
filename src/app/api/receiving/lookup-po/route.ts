@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
-import { getCarrier, normalizeTrackingNumber } from '@/lib/tracking-format';
+import { getCarrier } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, findPurchaseOrderByNumber } from '@/lib/zoho';
@@ -181,8 +181,8 @@ async function memoizeLookupHit(
   const scanSource: 'zoho_po' | 'unmatched' = receivingSource === 'zoho_po' ? 'zoho_po' : 'unmatched';
   const inserted = await pool.query<{ id: number }>(
     `INSERT INTO receiving_scans
-       (receiving_id, tracking_number, scanned_at, source)
-     VALUES ($1, $2, NOW(), $3)
+       (receiving_id, tracking_number, scanned_at, source, organization_id)
+     VALUES ($1, $2, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
      ON CONFLICT (tracking_number, receiving_id) DO UPDATE
        SET scanned_at = EXCLUDED.scanned_at
      RETURNING id`,
@@ -507,8 +507,8 @@ async function recordScan(
 ): Promise<number> {
   const result = await pool.query<{ id: number }>(
     `INSERT INTO receiving_scans
-       (receiving_id, tracking_number, carrier, scanned_at, scanned_by, source)
-     VALUES ($1, $2, $3, NOW(), $4, $5)
+       (receiving_id, tracking_number, carrier, scanned_at, scanned_by, source, organization_id)
+     VALUES ($1, $2, $3, NOW(), $4, $5, (SELECT organization_id FROM receiving WHERE id = $1))
      ON CONFLICT (tracking_number, receiving_id) DO UPDATE
        SET scanned_at = EXCLUDED.scanned_at,
            scanned_by = EXCLUDED.scanned_by
