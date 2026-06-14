@@ -77,6 +77,12 @@ docker-compose.db.yml
 # Playwright MCP server scratch output (console logs + page snapshots)
 .playwright-mcp/
 .playwright/
+
+# Local-only scratch script artifacts (studio verify runs, screenshots, one-off helpers)
+scripts/_screenshots/
+scripts/_verify-*
+scripts/_mint-*
+scripts/_fix-*
 .env*
 
 # Build installers (large artifacts; do not commit)
