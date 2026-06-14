@@ -7,7 +7,6 @@ import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/design-system';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { getCurrentPSTDateKey } from '@/utils/date';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -284,8 +283,7 @@ export function FbaBoardTable({
 
   const weekHeader = (
     <WeekHeader
-      stickyDate={getCurrentPSTDateKey()}
-      fallbackDate="FBA Board"
+      label="Today"
       count={sortedItems.length}
       weekRange={weekRange}
       weekOffset={weekOffset}

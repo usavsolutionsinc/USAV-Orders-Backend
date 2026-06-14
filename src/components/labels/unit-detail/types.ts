@@ -88,6 +88,16 @@ export interface StockSummary {
   product_title: string | null;
 }
 
+/** A photo captured against the unit (entity_type='SERIAL_UNIT'). */
+export interface UnitPhoto {
+  id: number;
+  url: string;
+  /** Capture stage: 'prepack' | 'shipout' (free-text photo_type). */
+  photo_type: string | null;
+  uploaded_by: number | null;
+  created_at: string;
+}
+
 export interface UnitResponse {
   success: boolean;
   serial_unit: UnitDetail;
@@ -98,6 +108,7 @@ export interface UnitResponse {
   tsn_links?: TsnLink[];
   location_detail?: LocationDetail | null;
   stock?: StockSummary | null;
+  photos?: UnitPhoto[];
 }
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────

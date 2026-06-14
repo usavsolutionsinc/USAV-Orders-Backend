@@ -47,7 +47,7 @@ export const POST = withAuth(async (request, ctx) => {
         after: { repairServiceId: result.repairServiceId, status: result.claim.status },
       });
       if (result.claim.status === 'IN_REPAIR') {
-        await notifyWarrantyTransition({ claim: result.claim, event: 'in_repair', actorStaffId: ctx.staffId ?? null });
+        await notifyWarrantyTransition({ organizationId: ctx.organizationId, claim: result.claim, event: 'in_repair', actorStaffId: ctx.staffId ?? null });
       }
       return { status: 201, body: { ok: true, claim: result.claim, repairServiceId: result.repairServiceId } };
     },

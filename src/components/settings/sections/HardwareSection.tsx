@@ -11,7 +11,7 @@ export function HardwareSection() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">Hardware</h2>
+        <h2 className="sr-only">Hardware</h2>
         <p className="mt-1 text-sm text-gray-500">
           Peripherals attached to this workstation. Settings here apply only to this device.
         </p>

@@ -27,10 +27,9 @@ export type AdminSection =
   | 'quality'
   | 'bose_models' | 'compatibility' | 'suppliers'
   | 'station_photos' | 'po_mailbox'
-  | 'logs' | 'architecture' | 'system_sync'
-  | 'billing';
+  | 'logs' | 'architecture' | 'system_sync';
 
-export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System' | 'Account';
+export type AdminGroup = 'Performance' | 'People' | 'Data sources' | 'System';
 
 export interface AdminSectionOption {
   value: AdminSection;
@@ -68,8 +67,6 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
   { value: 'architecture', label: 'Operations',   description: 'Visual flow of how items move through the system — live audit board', group: 'System',  icon: Share2 },
   { value: 'system_sync',  label: 'Sync Activity', description: 'Cron job health, last runs, and history across every scheduled sync', group: 'System', icon: Activity },
-
-  { value: 'billing',      label: 'Billing',      description: 'Plan, entitlements, and Stripe billing portal',                group: 'Account',     icon: ShieldCheck },
 ];
 
 export function getAdminSection(raw: string | null | undefined): AdminSection {

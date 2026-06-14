@@ -5,6 +5,11 @@ import { usePathname } from 'next/navigation';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  getPhoneBridgeChannelName,
+  getStaffStationBridgeChannelName,
+  safeChannelName,
+} from '@/lib/realtime/channels';
 
 type ScanResultMsg = {
   tracking?: string;
@@ -19,18 +24,24 @@ type ScanResultMsg = {
  *
  * Keyed by the signed-in staff (`useAuth().user.staffId`) — no pair handshake
  * required. When the user is signed in on both desktop and phone with the
- * same staff ID, the desktop subscribes to `phone:{staffId}` and either lets
- * the receiving sidebar handle the lookup (on /receiving) or performs the PO
- * lookup itself and echoes the result back on `station:{staffId}`.
+ * same staff ID, the desktop subscribes to the per-staff phone bridge and
+ * either lets the receiving sidebar handle the lookup (on /receiving) or
+ * performs the PO lookup itself and echoes the result back on the per-staff
+ * station bridge.
  */
 export function usePhoneScanBridge(): void {
   const { user } = useAuth();
   const { getClient } = useAblyClient();
   const pathname = usePathname();
 
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
-  const phoneChannelName = staffId > 0 ? `phone:${staffId}` : 'phone:__idle__';
-  const stationChannelName = staffId > 0 ? `station:${staffId}` : 'station:__idle__';
+  // Per-staff bridges (NOT the global station broadcast). Empty string when the
+  // org or staff isn't hydrated yet — the `!!ch` gate disables the subscription.
+  const phoneChannelName =
+    staffId > 0 ? safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId)) : '';
+  const stationChannelName =
+    staffId > 0 ? safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId)) : '';
 
   // Dedup window — desktops can receive the same tracking twice on rapid
   // re-scans; ignore a repeat within 1.5s.
@@ -56,7 +67,7 @@ export function usePhoneScanBridge(): void {
 
         try {
           const client = await getClient();
-          if (client) {
+          if (client && stationChannelName) {
             const ch = client.channels.get(stationChannelName);
             await ch.publish('phone_scan_result', {
               tracking,
@@ -92,7 +103,7 @@ export function usePhoneScanBridge(): void {
         void resolveOffPage(tracking);
       }
     },
-    staffId > 0,
+    !!phoneChannelName && staffId > 0,
   );
 
   // No-op subscription kept so the station channel is attached and ready to
@@ -104,7 +115,7 @@ export function usePhoneScanBridge(): void {
       // Intentional no-op — UI feedback for the scan now lives on the phone
       // (via /m/scan) and the desktop sidebar (when on /receiving).
     },
-    staffId > 0,
+    !!stationChannelName && staffId > 0,
   );
 
   // Clear the dedup map when the signed-in user changes.

@@ -159,7 +159,7 @@ export async function POST(
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.link' });
+    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.link', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json(
       {
@@ -305,7 +305,7 @@ export async function PATCH(
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.update' });
+    await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.update', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({
       success: true,
@@ -365,7 +365,7 @@ export async function DELETE(
     }
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'tracking-unlinked', shipmentId: Number(id), source: 'fba.shipments.tracking.unlink' });
+    await publishFbaShipmentChanged({ action: 'tracking-unlinked', shipmentId: Number(id), source: 'fba.shipments.tracking.unlink', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

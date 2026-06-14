@@ -195,8 +195,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'updated', shipmentId: sourceShipmentId, source: 'fba.split-for-paired' });
-    await publishFbaShipmentChanged({ action: 'created', shipmentId: newShipmentId, source: 'fba.split-for-paired' });
+    await publishFbaShipmentChanged({ action: 'updated', shipmentId: sourceShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
+    await publishFbaShipmentChanged({ action: 'created', shipmentId: newShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,

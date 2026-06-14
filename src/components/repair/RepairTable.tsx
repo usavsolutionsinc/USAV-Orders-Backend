@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -9,11 +9,11 @@ import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { DateGroupHeader } from '@/design-system/components/DateGroupHeader';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { toPSTDateKey } from '@/utils/date';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -25,44 +25,10 @@ export function RepairTable({ filter }: RepairTableProps) {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
   const [selectedRepair, setSelectedRepair] = useState<RSRecord | null>(null);
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
   const [payingRepairId, setPayingRepairId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: repairs = [], isLoading: loading, refetch: refetchRepairs } = useRepairsTable(search, filter);
-
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0');
-      } else {
-        break;
-      }
-    }
-    if (activeDate) setStickyDate(activeDate);
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    let timeoutId: number | null = null;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      timeoutId = window.setTimeout(() => handleScroll(), 100);
-    }
-    return () => {
-      container?.removeEventListener('scroll', handleScroll);
-      if (timeoutId !== null) window.clearTimeout(timeoutId);
-    };
-  }, [handleScroll, repairs]);
 
   /** Open RepairDetailsPanel when landing from printed repair QR (/walk-in?openRepair=). */
   useEffect(() => {
@@ -192,11 +158,6 @@ export function RepairTable({ filter }: RepairTableProps) {
     groupedRepairs[date].push(record);
   });
 
-  const getTodayCount = () => {
-    const today = getCurrentPSTDateKey();
-    return groupedRepairs[today]?.length || 0;
-  };
-
   // Flat sorted list matching the render order (oldest date first, same order as groups)
   const flatRepairs = Object.entries(groupedRepairs)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -218,9 +179,7 @@ export function RepairTable({ filter }: RepairTableProps) {
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         <WeekHeader
-          stickyDate={stickyDate}
-          fallbackDate={getCurrentPSTDateKey()}
-          count={currentCount || getTodayCount()}
+          count={filteredRepairs.length}
           rightSlot={
             <div className="flex items-center gap-2">
               {search && (
@@ -277,7 +236,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .map(([date, records]) => (
                   <div key={date} className="flex flex-col">
-                    <DateGroupHeader date={date} count={records.length} formatDate={formatDateWithOrdinal} />
+                    <DateGroupHeader date={date} total={records.length} />
                     {records.map((repair, index) => (
                       <motion.div
                         key={

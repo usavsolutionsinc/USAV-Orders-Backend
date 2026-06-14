@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { publishOrderChanged, publishShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 /**
  * After a shipment tracking status is updated (webhook or sync job), notify all
@@ -18,10 +19,16 @@ export async function publishShipmentStatusChange(
   source: string,
   trackingNumber?: string | null
 ): Promise<void> {
+  // TRANSITIONAL: carrier webhooks / sync jobs have no session. Until inbound
+  // shipping_tracking_numbers carries organization_id (Phase B), these single-
+  // tenant integration paths stamp the USAV org. Then derive it from the
+  // shipment / linked order's organization_id instead.
+  const orgId = transitionalUsavOrgId();
+
   // (1) Shipment-level event first — never gated on order linkage, so a bad
   // orders lookup can't suppress the receiving-panel live update.
   try {
-    await publishShipmentChanged({ shipmentId, trackingNumber, source });
+    await publishShipmentChanged({ organizationId: orgId, shipmentId, trackingNumber, source });
   } catch (error) {
     console.error('[publish-on-status-change] shipment publish failed:', error);
   }
@@ -38,7 +45,7 @@ export async function publishShipmentStatusChange(
     if (orderIds.length === 0) return;
 
     await invalidateCacheTags(['orders', 'shipped', 'orders-next']);
-    await publishOrderChanged({ orderIds, source });
+    await publishOrderChanged({ organizationId: orgId, orderIds, source });
   } catch (error) {
     console.error('[publish-on-status-change] order publish failed:', error);
   }

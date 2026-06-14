@@ -9,6 +9,7 @@ import {
   Loader2,
   History,
   Box,
+  Camera,
 } from '@/components/Icons';
 import {
   TOKENS,
@@ -18,6 +19,13 @@ import {
 import { SerialChip, SkuSerialChip } from '@/components/ui/CopyChip';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ScanInput } from '@/components/mobile/redesign/ScanInput';
+import {
+  MobilePackerSpamCamera,
+  type CapturedShot,
+} from '@/components/mobile/station/MobilePackerSpamCamera';
+import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { useNasConfig } from '@/hooks/useNasConfig';
+import { getNasBaseUrl, putNasPhoto } from '@/lib/nas-photos';
 import { describeUnitId } from '@/lib/inventory/unit-id-format';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import { useFeedback } from '@/hooks/useFeedback';
@@ -107,6 +115,20 @@ async function resolvePrepacked(scanned: string): Promise<PrepackResult> {
   return { source: 'unknown', serial };
 }
 
+/**
+ * NAS destination for a unit photo. Flat filename in the operator's folder, led
+ * by `U{unitId}__` so a human sorting the folder sees the unit grouping — mirrors
+ * the receiving `buildNasPhotoUrl` poPart convention (a flat name keeps WebDAV
+ * PUT working without auto-creating per-unit subfolders).
+ */
+function buildUnitNasUrl(baseUrl: string, folder: string, unitId: number, shotId: string): string {
+  const segments: string[] = [];
+  const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
+  if (cleanFolder) segments.push(...cleanFolder.split('/'));
+  segments.push(`U${unitId}__${shotId}.jpg`);
+  return `${baseUrl.replace(/\/+$/, '')}/${segments.map(encodeURIComponent).join('/')}`;
+}
+
 function humanizeEvent(type: string): string {
   return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -129,6 +151,11 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
   const [locationOpen, setLocationOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   const moveCounter = useRef(0);
+  // Pack-station photo capture: scan the unit QR (this sheet) → take photos →
+  // store under the unit (entity_type='SERIAL_UNIT') on the NAS.
+  const nas = useNasConfig();
+  const [capturing, setCapturing] = useState(false);
+  const [savingPhotos, setSavingPhotos] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<PrepackResult>({
     queryKey: ['prepack-unit', shown],
@@ -200,6 +227,63 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
     }
   }
 
+  // ── Pack photos: compress each shot, PUT browser-direct to the NAS, then link
+  // them all to the unit in ONE POST (which emits a single timeline NOTE). ──
+  async function handleCapturedPhotos(shots: CapturedShot[]) {
+    setCapturing(false);
+    if (!liveUnitId || shots.length === 0) {
+      shots.forEach((s) => { try { URL.revokeObjectURL(s.previewUrl); } catch { /* ignore */ } });
+      return;
+    }
+    const baseUrl = nas?.baseUrl || getNasBaseUrl();
+    if (!baseUrl) {
+      toast.error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
+      feedback('error');
+      return;
+    }
+    setSavingPhotos(true);
+    try {
+      const urls: string[] = [];
+      for (const shot of shots) {
+        try {
+          const compressed = await compressPhotoForUpload(shot.blob, { source: 'm-prepack' });
+          const targetUrl = buildUnitNasUrl(baseUrl, nas?.folder ?? '', liveUnitId, shot.id);
+          const put = await putNasPhoto(targetUrl, compressed.blob);
+          if (put.ok) urls.push(put.url);
+        } catch {
+          /* skip this shot, keep going */
+        }
+      }
+      if (urls.length === 0) {
+        toast.error('Could not save photos to the NAS.');
+        feedback('error');
+        return;
+      }
+      const res = await fetch(`/api/serial-units/${liveUnitId}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ photoUrls: urls, stage: 'shipout' }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || !d?.success) {
+        toast.error(d?.error || `Save failed (${res.status})`);
+        feedback('error');
+        return;
+      }
+      const n = d.inserted ?? urls.length;
+      toast.success(`Saved ${n} photo${n === 1 ? '' : 's'}`);
+      feedback('success');
+      await refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error saving photos');
+      feedback('error');
+    } finally {
+      setSavingPhotos(false);
+      shots.forEach((s) => { try { URL.revokeObjectURL(s.previewUrl); } catch { /* ignore */ } });
+    }
+  }
+
   return (
     <>
       <BottomSheet open={scanned != null} onClose={onClose} maxWidth="32rem">
@@ -259,16 +343,28 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
               />
             </div>
 
-            {/* Put-away action — needs a real serial_units row (numeric id). */}
+            {/* Put-away + photo capture — both need a real serial_units row. */}
             {liveUnitId ? (
-              <GlassButton
-                variant="primary"
-                className="w-full !rounded-[24px]"
-                icon={MapPin}
-                onClick={() => setLocationOpen(true)}
-              >
-                Scan location to put away
-              </GlassButton>
+              <div className="flex flex-col gap-2">
+                <GlassButton
+                  variant="primary"
+                  className="w-full !rounded-[24px]"
+                  icon={MapPin}
+                  onClick={() => setLocationOpen(true)}
+                >
+                  Scan location to put away
+                </GlassButton>
+                <GlassButton
+                  variant="secondary"
+                  className="w-full !rounded-[24px]"
+                  icon={savingPhotos ? Loader2 : Camera}
+                  onClick={() => {
+                    if (!savingPhotos) setCapturing(true);
+                  }}
+                >
+                  {savingPhotos ? 'Saving photos…' : 'Take photos'}
+                </GlassButton>
+              </div>
             ) : (
               <div className="rounded-2xl border border-amber-100 bg-amber-50/60 px-4 py-3">
                 <p className="text-xs font-bold leading-relaxed text-amber-700">
@@ -343,6 +439,24 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
           </div>
         )}
       </BottomSheet>
+
+      {/* Fullscreen rapid-capture camera — opens over the sheet; on Done the
+          shots are compressed, PUT to the NAS, and linked to this unit. */}
+      {capturing && liveUnitId ? (
+        <MobilePackerSpamCamera
+          onDone={handleCapturedPhotos}
+          onCancel={() => setCapturing(false)}
+          maxPhotos={10}
+          header={
+            <div className="min-w-0">
+              <p className="text-micro font-black uppercase tracking-[0.22em] text-white/60">
+                Pack photos
+              </p>
+              <p className="truncate text-sm font-black text-white">{title}</p>
+            </div>
+          }
+        />
+      ) : null}
     </>
   );
 }

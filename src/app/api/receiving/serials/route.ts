@@ -122,6 +122,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     ]);
     if (lineReceivingId != null) {
       await publishReceivingLogChanged({
+        organizationId: ctx.organizationId,
         action: 'update',
         rowId: String(lineReceivingId),
         source: 'receiving.serials.create',
@@ -171,7 +172,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   },
 });
 
-export const DELETE = withAuth(async (request: NextRequest) => {
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
@@ -207,6 +208,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
     ]);
     if (deleted.rows[0]?.receiving_id != null) {
       await publishReceivingLogChanged({
+        organizationId: ctx.organizationId,
         action: 'update',
         rowId: String(deleted.rows[0].receiving_id),
         source: 'receiving.serials.delete',

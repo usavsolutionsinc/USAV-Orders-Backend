@@ -59,6 +59,13 @@ jobs:
       - name: Route-permission manifest drift
         run: npm run audit-route-auth:check
 
+      # Tenancy isolation static gate (no DB): fails if a route touching an
+      # ENFORCED table isn't GUC-wrapped. Passes today (0 tables enforced) and
+      # tightens automatically as Phase E rolls out. The live BYPASSRLS role
+      # invariant runs in the audit-permissions job below (needs DATABASE_URL).
+      - name: Tenancy isolation guard (static)
+        run: npm run tenancy:guard:check
+
   audit-permissions:
     name: Permission drift audit
     runs-on: ubuntu-latest
@@ -87,3 +94,12 @@ jobs:
             exit 0
           fi
           npm run audit-permissions
+
+      # Live tenancy invariant (B): hard-fail if any table is FORCEd while the
+      # connection role still has BYPASSRLS (which would make FORCE inert).
+      - name: Tenancy isolation guard (live role invariant)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then exit 0; fi
+          npm run tenancy:guard:check

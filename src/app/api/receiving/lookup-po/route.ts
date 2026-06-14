@@ -691,6 +691,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
         try {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'insert',
             rowId: String(receivingId),
             source: 'receiving.lookup-po.order',
@@ -702,6 +703,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           await markReceivingPriority(receivingId);
           try {
             await publishPriorityUnbox({
+              organizationId: ctx.organizationId,
               staffId,
               trackingNumber,
               receivingId,
@@ -764,6 +766,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           after(async () => {
             try {
               await publishPriorityUnbox({
+                organizationId: ctx.organizationId,
                 staffId,
                 trackingNumber,
                 receivingId: existingScan.receiving_id,
@@ -827,6 +830,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
         try {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'insert',
             rowId: String(receivingId),
             source: 'receiving.lookup-po.test',
@@ -838,6 +842,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           await markReceivingPriority(receivingId);
           try {
             await publishPriorityUnbox({
+              organizationId: ctx.organizationId,
               staffId,
               trackingNumber,
               receivingId,
@@ -1111,6 +1116,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
         try {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: preexisting ? 'update' : 'insert',
             rowId: String(primaryReceivingId),
             source: 'receiving.lookup-po',
@@ -1143,6 +1149,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         after(async () => {
           try {
             await publishPriorityUnbox({
+              organizationId: ctx.organizationId,
               staffId,
               trackingNumber,
               receivingId: primaryReceivingId,
@@ -1240,6 +1247,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
       try {
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'insert',
           rowId: String(unmatchedReceivingId),
           source: 'receiving.lookup-po',

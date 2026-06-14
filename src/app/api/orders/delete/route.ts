@@ -48,7 +48,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Dashboard shipped table is backed by /api/packerlogs cache ("packing-logs"),
     // not only /api/shipped, so delete must invalidate both domains.
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
-    await publishOrderChanged({ orderIds: idsToDelete, source: 'orders.delete' });
+    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: idsToDelete, source: 'orders.delete' });
 
     // One audit row per deleted order, with full before snapshot.
     for (const row of beforeRows.rows) {

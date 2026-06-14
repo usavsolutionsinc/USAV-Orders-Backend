@@ -14,7 +14,7 @@ import { getOrganization } from '@/lib/tenancy/organizations';
 import { getSubscription } from '@/lib/billing/subscriptions';
 import { entitlementsForPlan, PLAN_PRICE_IDS } from '@/lib/billing/plans';
 import type { PlatformPlan } from '@/lib/tenancy/constants';
-import { BillingActions } from './BillingActions';
+import { BillingActions, UpgradeButton } from './BillingActions';
 
 const PLAN_LABELS: Record<PlatformPlan, { label: string; tagline: string }> = {
   trial:      { label: 'Trial',      tagline: 'Try everything for 14 days.' },
@@ -112,7 +112,7 @@ export default async function BillingPage() {
                     ) : configured ? (
                       <form action="/api/billing/checkout" method="post">
                         <input type="hidden" name="plan" value={plan} />
-                        <BillingActions.UpgradeButton plan={plan} />
+                        <UpgradeButton plan={plan} />
                       </form>
                     ) : (
                       <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">Not configured</span>

@@ -31,9 +31,13 @@ function extractUnitLookupKey(raw: string): { key: string; kind: 'unit' | 'unkno
 
   const route = routeScan(value);
   if (route?.type === 'serial-unit' && route.redirect) {
-    // Two redirect shapes:  /01/{gtin}/21/{serial}  or  /m/u/{id}
-    const m = /\/m\/u\/(\d+)$/.exec(route.redirect);
-    if (m) return { key: m[1], kind: 'unit' };
+    // Two redirect shapes:  /01/{gtin}/21/{serial}  or  /m/u/{id|serial|unit_uid}.
+    // The /m/u suffix is no longer digits-only — the U- handle now carries
+    // alphanumeric physical serials and minted unit_uids (prefix stripped in the
+    // redirect), so match the whole suffix and decode it (mirrors
+    // resolve-testing-scan.ts). The serial-units API resolves id/serial/unit_uid.
+    const m = /\/m\/u\/(.+)$/.exec(route.redirect);
+    if (m) return { key: decodeURIComponent(m[1]), kind: 'unit' };
     const g = /\/21\/([^/]+)$/.exec(route.redirect);
     if (g) return { key: decodeURIComponent(g[1]), kind: 'unit' };
   }

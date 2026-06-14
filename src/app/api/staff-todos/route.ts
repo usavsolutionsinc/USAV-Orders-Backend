@@ -27,6 +27,7 @@ import {
 } from '@/lib/schemas/staff-todos';
 import {
   archiveStaffTodo,
+  unarchiveStaffTodo,
   createStaffTodo,
   getStaffTodo,
   listStaffTodos,
@@ -112,6 +113,23 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     if (!item) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
     // Check/uncheck is high-frequency and fully reconstructable from
     // staff_todo_completions — no audit row for plain toggles.
+    return NextResponse.json({ success: true, item });
+  }
+
+  if (parsed.action === 'unarchive') {
+    // Reverse of DELETE/archive — restore a task to the live list. Scoped to the
+    // owner; a foreign/already-live id is a clean NOT_FOUND.
+    const restored = await unarchiveStaffTodo(ctx.staffId, parsed.id);
+    if (!restored) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+    const item = await getStaffTodo(ctx.staffId, parsed.id);
+    await recordAudit(pool, ctx, req, {
+      source: AUDIT_SOURCE,
+      action: AUDIT_ACTION.STAFF_TODO_UNARCHIVE,
+      entityType: AUDIT_ENTITY.STAFF_TODO,
+      entityId: parsed.id,
+      before: null,
+      after: item ? { kind: item.kind, text: item.text } : null,
+    });
     return NextResponse.json({ success: true, item });
   }
 

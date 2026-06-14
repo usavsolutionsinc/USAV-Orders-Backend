@@ -64,7 +64,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query('COMMIT');
 
         await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ techId: staffId, action: 'insert', source: 'tech.serial' });
+        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'insert', source: 'tech.serial' });
 
         return NextResponse.json({ success: true, serialNumbers, tsnId: ins.techSerialId });
       }
@@ -86,7 +86,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query('COMMIT');
 
         await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
 
         return NextResponse.json({ success: true, serialNumbers });
       }
@@ -132,7 +132,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query('COMMIT');
 
         await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
 
         return NextResponse.json({ success: true, serialNumbers });
       }
@@ -155,7 +155,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query('COMMIT');
 
         await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ techId: staffId, action: 'update', source: 'tech.serial' });
+        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
 
         return NextResponse.json({ success: true, serialNumbers, removedSerial: lastRow.serial_number });
       }

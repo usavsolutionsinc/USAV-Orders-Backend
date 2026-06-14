@@ -242,7 +242,7 @@ export async function PATCH(
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'update', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.update' });
+    await publishFbaItemChanged({ action: 'update', shipmentId: Number(id), itemId: Number(itemId), source: 'fba.shipments.items.update', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({ success: true, item: result.rows[0] });
   } catch (error: any) {
@@ -343,6 +343,7 @@ export async function DELETE(
       itemId: itemIdNum,
       fnsku: row.fnsku,
       source: 'fba.shipments.items.delete',
+      organizationId: gate.ctx.organizationId,
     }).catch(() => {});
 
     return NextResponse.json({ success: true, deleted_id: itemIdNum });

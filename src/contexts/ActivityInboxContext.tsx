@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getInboxChannelName } from '@/lib/realtime/channels';
+import { getInboxChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { toast } from '@/lib/toast';
 
 const MAX_ITEMS = 20;
@@ -30,7 +30,8 @@ export type ActivityInboxItemKind =
   | 'priority_unbox'
   | 'warranty_claim'
   | 'return_pending_test'
-  | 'order_ready_ship';
+  | 'order_ready_ship'
+  | 'staff_message';
 
 export interface ActivityInboxItem {
   id: string;
@@ -52,6 +53,11 @@ export interface ActivityInboxItem {
   claimId?: number;
   claimNumber?: string;
   claimStatus?: string;
+  // staff_message
+  messageId?: number;
+  senderName?: string;
+  /** Raw copied text — used for the "copy back" affordance in the popover. */
+  body?: string;
 }
 
 const WARRANTY_EVENT_LABEL: Record<string, string> = {
@@ -95,6 +101,8 @@ interface ActivityInboxContextValue {
   pushWarrantyClaim: (args: PushWarrantyClaimArgs) => void;
   undoItem: (id: string) => Promise<void>;
   dismissItem: (id: string) => void;
+  /** Mark a received staff message read (clears it from the bell). */
+  markStaffMessageRead: (messageId: number) => Promise<void>;
   clear: () => void;
 }
 
@@ -118,12 +126,17 @@ export function ActivityInboxProvider({
   // ready to ship). Kept separate from the ephemeral push items so a refetch
   // replaces it wholesale without wiping repair/warranty/priority-unbox toasts.
   const [techQueueItems, setTechQueueItems] = useState<ActivityInboxItem[]>([]);
+  // Persisted staff-to-staff messages (clipboard "send to staff"). Like the
+  // tech backlog, seeded from the DB on mount and refetched on each push so it
+  // survives reload — these are the first inbox items with a durable source.
+  const [staffMessageItems, setStaffMessageItems] = useState<ActivityInboxItem[]>([]);
   const [pendingUndoId, setPendingUndoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
       setItems([]);
       setTechQueueItems([]);
+      setStaffMessageItems([]);
     }
   }, [user]);
 
@@ -173,6 +186,45 @@ export function ActivityInboxProvider({
   useEffect(() => {
     void refreshTechQueue();
   }, [refreshTechQueue]);
+
+  // Persisted unread staff messages. Seeded on mount and refetched whenever a
+  // staff_message push lands (authoritative read model, like the tech queue).
+  const refreshStaffMessages = useCallback(async () => {
+    if (!user?.staffId) {
+      setStaffMessageItems([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/staff-messages?unread=1', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items?: Array<{
+          id: number;
+          senderName: string;
+          body: string;
+          createdAtMs: number;
+        }>;
+      };
+      const mapped: ActivityInboxItem[] = (data.items ?? []).map((m) => ({
+        id: `msg-${m.id}`,
+        kind: 'staff_message' as const,
+        title: `Message · ${truncateLabel(m.senderName, 32)}`,
+        subtitle: m.body,
+        createdAt: Number.isFinite(m.createdAtMs) ? m.createdAtMs : Date.now(),
+        undoUntil: 0, // not reversible
+        messageId: m.id,
+        senderName: m.senderName,
+        body: m.body,
+      }));
+      setStaffMessageItems(mapped);
+    } catch {
+      /* best-effort — next push or reload retries */
+    }
+  }, [user?.staffId]);
+
+  useEffect(() => {
+    void refreshStaffMessages();
+  }, [refreshStaffMessages]);
 
   const pushRepairStatusChange = useCallback(
     ({
@@ -263,7 +315,10 @@ export function ActivityInboxProvider({
 
   // Receiving-door scans that hit a pending order are pushed to inbox:{staffId}
   // server-side; mirror them into the inbox wherever this staff is signed in.
-  const inboxChannel = getInboxChannelName(user?.staffId ?? 'none');
+  const inboxChannel = safeChannelName(() =>
+    getInboxChannelName(user?.organizationId!, user?.staffId ?? 'none'),
+  );
+  const inboxEnabled = !!inboxChannel && Boolean(user?.staffId);
   useAblyChannel(
     inboxChannel,
     'priority_unbox',
@@ -275,7 +330,7 @@ export function ActivityInboxProvider({
         receivingId: typeof d.receivingId === 'number' ? d.receivingId : null,
       });
     },
-    Boolean(user?.staffId),
+    inboxEnabled,
   );
 
   // Warranty claim status changes for claims this staff logged.
@@ -294,13 +349,26 @@ export function ActivityInboxProvider({
         title: typeof d.title === 'string' ? d.title : null,
       });
     },
-    Boolean(user?.staffId),
+    inboxEnabled,
   );
 
   // Tech-station backlog nudges — fan-out reaches primary techs only. Either
   // event just means "your queue changed", so refetch the authoritative list.
-  useAblyChannel(inboxChannel, 'return_pending_test', () => void refreshTechQueue(), Boolean(user?.staffId));
-  useAblyChannel(inboxChannel, 'order_ready_ship', () => void refreshTechQueue(), Boolean(user?.staffId));
+  useAblyChannel(inboxChannel, 'return_pending_test', () => void refreshTechQueue(), inboxEnabled);
+  useAblyChannel(inboxChannel, 'order_ready_ship', () => void refreshTechQueue(), inboxEnabled);
+
+  // Direct staff-to-staff messages (clipboard "send to staff"). Toast the
+  // arrival, then refetch the authoritative unread list for the bell.
+  useAblyChannel(
+    inboxChannel,
+    'staff_message',
+    (msg: { data?: { senderName?: unknown } }) => {
+      const sender = typeof msg?.data?.senderName === 'string' ? msg.data.senderName : 'A teammate';
+      toast.success(`New message from ${sender}`);
+      void refreshStaffMessages();
+    },
+    inboxEnabled,
+  );
 
   const undoItem = useCallback(
     async (id: string) => {
@@ -358,20 +426,55 @@ export function ActivityInboxProvider({
     [items, queryClient],
   );
 
-  const dismissItem = useCallback((id: string) => {
-    setItems((prev) => prev.filter((x) => x.id !== id));
-    setTechQueueItems((prev) => prev.filter((x) => x.id !== id));
+  // Mark a received staff message read on the server and drop it locally.
+  const markStaffMessageRead = useCallback(async (messageId: number) => {
+    setStaffMessageItems((prev) => prev.filter((x) => x.messageId !== messageId));
+    try {
+      await fetch('/api/staff-messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_read', id: messageId }),
+      });
+    } catch {
+      /* best-effort — reload re-fetches the true unread set */
+    }
   }, []);
+
+  const dismissItem = useCallback(
+    (id: string) => {
+      const msg = staffMessageItems.find((x) => x.id === id);
+      if (msg?.messageId != null) {
+        void markStaffMessageRead(msg.messageId);
+        return;
+      }
+      setItems((prev) => prev.filter((x) => x.id !== id));
+      setTechQueueItems((prev) => prev.filter((x) => x.id !== id));
+    },
+    [staffMessageItems, markStaffMessageRead],
+  );
 
   const clear = useCallback(() => {
     setItems([]);
     setTechQueueItems([]);
-  }, []);
+    if (staffMessageItems.length > 0) {
+      setStaffMessageItems([]);
+      // Persisted messages must be marked read or they'd reappear on reload.
+      void fetch('/api/staff-messages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_all_read' }),
+      }).catch(() => {});
+    }
+  }, [staffMessageItems]);
 
-  // Ephemeral push items + the derive-live tech backlog, newest first.
+  // Ephemeral push items + the derive-live tech backlog + persisted unread
+  // staff messages, newest first.
   const mergedItems = useMemo(
-    () => [...items, ...techQueueItems].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_ITEMS),
-    [items, techQueueItems],
+    () =>
+      [...items, ...techQueueItems, ...staffMessageItems]
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, MAX_ITEMS),
+    [items, techQueueItems, staffMessageItems],
   );
 
   const value = useMemo<ActivityInboxContextValue>(
@@ -383,6 +486,7 @@ export function ActivityInboxProvider({
       pushWarrantyClaim,
       undoItem,
       dismissItem,
+      markStaffMessageRead,
       clear,
     }),
     [
@@ -393,6 +497,7 @@ export function ActivityInboxProvider({
       pushWarrantyClaim,
       undoItem,
       dismissItem,
+      markStaffMessageRead,
       clear,
     ],
   );

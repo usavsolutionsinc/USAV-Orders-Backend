@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * /sourcing — the Bose parts sourcing operational hub.
+ * /sourcing — the universal sourcing operational hub (demand → scour → acquire).
  *
- * Master-nav page with modes (Lookup / Alerts / Watchlist). The sidebar is
+ * Master-nav page with modes (Queue / Scout / Watchlist). The sidebar is
  * owned by DashboardSidebar on desktop (SidebarContextPanel → SourcingSidebarPanel)
  * and mounts via RouteShell's `actions` slot on mobile. Permission gating is
  * enforced by middleware via ROUTE_PERMISSIONS ('/sourcing' → 'sourcing.view').

@@ -60,7 +60,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
 
     await invalidateCacheTags(REPAIR_TAGS);
-    await publishRepairChanged({ repairIds: [repairId], source: 'tech.scan-repair-station' });
+    await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [repairId], source: 'tech.scan-repair-station' });
 
     const scanSessionId = await createStationScanSession(pool, {
       staffId,

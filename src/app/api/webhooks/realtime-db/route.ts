@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required event fields' }, { status: 400 });
   }
 
+  // Org-namespaced realtime: the emitting DB trigger / sidecar MUST include the
+  // owning tenant's organization_id so the row-change event lands on that org's
+  // channel only. Fail closed if it's missing or malformed (no cross-tenant
+  // broadcast). The emitter's source is the row's own organization_id column.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!body?.orgId || !UUID_RE.test(String(body.orgId))) {
+    return NextResponse.json({ error: 'Missing or invalid orgId (tenant) on event' }, { status: 400 });
+  }
+
   await publishDbEvent(body);
   return NextResponse.json({ ok: true });
 }

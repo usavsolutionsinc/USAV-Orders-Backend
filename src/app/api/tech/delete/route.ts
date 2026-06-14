@@ -8,7 +8,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Simplified delete: SAL is SoT, cascade to TSN + fba_fnsku_logs.
  * Body: { salId: number }
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
@@ -72,7 +72,7 @@ export const POST = withAuth(async (req: NextRequest) => {
 
     await invalidateCacheTags(['tech-logs', 'orders-next', 'shipped', 'orders']);
     if (staffId) {
-      await publishTechLogChanged({ techId: staffId, action: 'delete', source: 'tech.delete' });
+      await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'delete', source: 'tech.delete' });
     }
 
     return NextResponse.json({ success: true, deletedSerials: deletedSerialCount });

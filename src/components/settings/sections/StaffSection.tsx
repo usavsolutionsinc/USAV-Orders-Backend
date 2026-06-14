@@ -119,7 +119,7 @@ export function StaffSection() {
     <section className="space-y-6">
       <header className="flex items-end justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Staff</h1>
+          <h1 className="sr-only">Staff</h1>
           <p className="text-sm text-gray-500">Add staff, set their role, and send enrollment QRs.</p>
         </div>
         <button

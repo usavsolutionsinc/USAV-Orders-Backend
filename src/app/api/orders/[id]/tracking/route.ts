@@ -67,7 +67,7 @@ async function runTrackingOps(
   }
 
   await invalidateCacheTags(['orders', 'shipped', 'orders-next', 'tech-logs', 'packing-logs', 'need-to-order']);
-  await publishOrderChanged({ orderIds: [id], source: 'orders.tracking' });
+  await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [id], source: 'orders.tracking' });
 
   const after = await getOrderById(id);
   await recordAudit(pool, ctx, req, {

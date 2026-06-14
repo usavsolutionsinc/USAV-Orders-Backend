@@ -138,6 +138,7 @@ export const POST = withAuth(
 
       await invalidateCacheTags(['repair-service']);
       await publishRepairChanged({
+        organizationId: ctx.organizationId,
         repairIds: [repairId],
         source: 'repair.action-logged',
       });

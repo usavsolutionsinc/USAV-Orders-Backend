@@ -257,7 +257,7 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'admin.view' });
 
-export const PUT = withAuth(async (request: NextRequest) => {
+export const PUT = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const staffId = Number(body?.staffId);
@@ -345,6 +345,7 @@ export const PUT = withAuth(async (request: NextRequest) => {
       is_scheduled: isScheduled,
     };
     publishStaffScheduleChanged({
+      organizationId: ctx.organizationId,
       action: 'single',
       source: 'staff.schedule.put',
       changed: [{

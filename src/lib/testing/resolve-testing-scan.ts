@@ -58,6 +58,34 @@ export function looksLikeHandlingUnit(value: string): boolean {
   return HANDLING_UNIT_RE.test(value.trim());
 }
 
+/** `L-{id}` line / `U-{id}` unit / `REP-{id}` repair label handles. */
+const LINE_UNIT_REPAIR_RE = /^(?:L|U|REP)-\d+$/i;
+
+/**
+ * Cheap synchronous test: does this value look like a canonical internal CODE
+ * — a carton/line/unit/handling-unit/repair handle, the legacy `RCV-{id}`
+ * string, or a printed unit-id ({SKU}-{YYWW}-{SEQ6}) — as opposed to a PO
+ * number, an order/reference number, or a carrier tracking number?
+ *
+ * Used by the receiving scan bar to decide whether to run
+ * {@link resolveReceivingCodeToLine} even when the dash auto-classify
+ * heuristic ({@link classifyUnboxScan}) armed Order# mode. EVERY canonical
+ * handle contains a dash, so without this check `R-123` / `H-7` / a unit-id
+ * would be classified as an order and mis-routed to the PO lookup (which
+ * finds nothing). True PO/order/tracking values return false here and keep
+ * their existing lookup-po routing untouched.
+ */
+export function looksLikeReceivingCode(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  return (
+    looksLikeReceivingRef(v) ||      // R-{id} / RCV-{id} carton
+    looksLikeHandlingUnit(v) ||      // H-{id} handling unit
+    LINE_UNIT_REPAIR_RE.test(v) ||   // L-{id} / U-{id} / REP-{id}
+    looksLikeUnitId(v)               // {SKU}-{YYWW}-{SEQ6} printed unit-id
+  );
+}
+
 async function fetchLinesByReceivingId(receivingId: number) {
   const res = await fetch(
     `/api/receiving-lines?receiving_id=${receivingId}&include=serials`,

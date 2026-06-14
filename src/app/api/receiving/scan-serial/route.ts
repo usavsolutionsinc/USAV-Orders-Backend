@@ -5,6 +5,7 @@ import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
 import { attachSerialToLine, detachSerialFromLine } from '@/lib/receiving/serial-attach';
 import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
+import { tapWorkflow } from '@/lib/workflow/tap';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import {
@@ -199,6 +200,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const serialUnitId = serialResult.serial_unit.id;
     const skuForEnrichment = result.line_state.sku;
     const receivingIdForEvent = targetReceivingId;
+    // Snapshot for the after() closure — receivingLineId is a mutable `let`.
+    const tapReceivingLineId = receivingLineId;
 
     after(async () => {
       if (skuForEnrichment && !serialResult.serial_unit.sku_catalog_id) {
@@ -225,6 +228,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         console.warn('scan-serial: syncSerialToZohoPo threw', err);
       });
 
+      // Mirror the scan into the operations graph: enrolls the unit at the
+      // receiving node and advances it (fire-and-forget — tapWorkflow never
+      // throws, an engine error can't fail a scan).
+      await tapWorkflow({
+        serialUnitId,
+        event: 'unit_received',
+        input: { receivingLineId: tapReceivingLineId },
+        staffId,
+        source: 'scan',
+        orgId: ctx.organizationId,
+      });
+
       try {
         await invalidateCacheTags([
           'receiving-lines',
@@ -233,6 +248,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         ]);
         if (receivingIdForEvent != null) {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'update',
             rowId: String(receivingIdForEvent),
             source: 'receiving.scan-serial',
@@ -347,6 +363,7 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
           'pending-unboxing',
         ]);
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'update',
           rowId: String(receivingLineId),
           source: 'receiving.scan-serial.delete',

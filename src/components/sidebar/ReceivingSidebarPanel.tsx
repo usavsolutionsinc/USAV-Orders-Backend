@@ -14,7 +14,7 @@ import {
   SIDEBAR_GUTTER,
 } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
-import { X, Clock, Layers, Loader2, Trash2 } from '@/components/Icons';
+import { X, PackageOpen, History, Layers, Loader2, Trash2 } from '@/components/Icons';
 import { StationScanBar } from '@/components/station/StationScanBar';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
@@ -30,9 +30,11 @@ import {
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
 import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
+import { ReceivingViewedRail } from '@/components/sidebar/receiving/ReceivingViewedRail';
 import { ReceivingScannedRail } from '@/components/sidebar/receiving/ReceivingScannedRail';
 import { TriageSidebarBody } from '@/components/sidebar/receiving/TriageSidebarBody';
 import { IncomingSidebarPanel } from '@/components/sidebar/receiving/IncomingSidebarPanel';
+import { StationSlot } from '@/components/stations/StationSlot';
 import {
   dispatchReceivingWorkspaceOpen,
   dispatchReceivingWorkspaceClose,
@@ -42,6 +44,11 @@ import {
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  safeChannelName,
+  getPhoneBridgeChannelName,
+  getStaffStationBridgeChannelName,
+} from '@/lib/realtime/channels';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
 import { SelectionActionBar } from '@/design-system/components/SelectionActionBar';
@@ -65,7 +72,7 @@ import {
 import { useReceivingLineNavigation } from '@/components/sidebar/receiving/useReceivingLineNavigation';
 import { useReceivingSourcePlatform } from '@/components/sidebar/receiving/useReceivingSourcePlatform';
 import { clearReceivingHistoryUrlParams } from '@/lib/receiving-history-search';
-import { fetchLinesByTracking, resolveReceivingCodeToLine } from '@/lib/testing/resolve-testing-scan';
+import { fetchLinesByTracking, resolveReceivingCodeToLine, looksLikeReceivingCode } from '@/lib/testing/resolve-testing-scan';
 import { useStationTheme } from '@/hooks/useStationTheme';
 
 
@@ -148,12 +155,17 @@ export function ReceivingSidebarPanel() {
   // the live unboxing rail (default); `queue` = the same priority-sorted Scanned
   // rail the triage Prioritize tab shows. Lives in the URL per the sidebar-mode
   // contract so a refresh/deep-link keeps it; absence = recent.
-  const unboxView: 'recent' | 'queue' =
-    searchParams.get('unboxview') === 'queue' ? 'queue' : 'recent';
+  const unboxView: 'recent' | 'queue' | 'viewed' =
+    searchParams.get('unboxview') === 'queue'
+      ? 'queue'
+      : searchParams.get('unboxview') === 'viewed'
+        ? 'viewed'
+        : 'recent';
   // Identity is server-derived. The proxy redirects unauthenticated traffic
   // to /signin, so `user` is non-null whenever this sidebar renders. The
   // optional-chain is a TS-narrowing nicety, not a runtime fallback.
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffIdNum = user?.staffId ?? 0;
   const staffId = String(staffIdNum);
   const { theme: themeColor, inputBorder } = useStationTheme({ staffId: staffIdNum });
@@ -175,8 +187,8 @@ export function ReceivingSidebarPanel() {
   // this file) and the new photo-request publisher below. Hoisting the client
   // + channel names up here keeps the publisher's closure honest.
   const { getClient: getAblyClient } = useAblyClient();
-  const phoneChannelName = `phone:${staffIdNum}`;
-  const stationChannelName = `station:${staffIdNum}`;
+  const phoneChannelName = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffIdNum));
+  const stationChannelName = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffIdNum));
 
   /**
    * Publish a `receiving_photo_request` on `station:{staffId}` so a phone
@@ -186,6 +198,7 @@ export function ReceivingSidebarPanel() {
   const publishPhotoRequestFor = useCallback(
     async (receivingId: number, tracking: string) => {
       if (!Number.isFinite(receivingId) || receivingId <= 0 || staffIdNum <= 0) return;
+      if (!stationChannelName) return;
       try {
         const client = await getAblyClient();
         if (!client) return;
@@ -680,7 +693,19 @@ export function ReceivingSidebarPanel() {
         // fall through to the normal lookup-po flow below untouched. Skipped in
         // Order# mode — an order/PO reference is never a serial/carton code.
         try {
-          const code = lookupMode === 'order' ? null : await resolveReceivingCodeToLine(trackingNumber);
+          // Canonical internal codes — carton/line/unit/handling-unit/repair
+          // handles (R-/RCV-/H-/L-/U-/REP-) and printed unit-ids — always
+          // resolve to their PO line, bypassing carrier-tracking intake. This
+          // is what lets a printed R-{id} receiving label scan back to its own
+          // carton via the IDENTICAL path as any other scan. Every handle
+          // contains a dash, so `classifyUnboxScan` auto-arms Order# mode for
+          // them; we therefore still run the resolver in Order# mode WHEN the
+          // value looks like a code (looksLikeReceivingCode) — a true PO/order
+          // number returns false there and keeps its lookup-po routing. Only
+          // short-circuits on a hit; tracking numbers and anything unrecognised
+          // fall through to the normal lookup-po flow below untouched.
+          const runCodeResolve = lookupMode !== 'order' || looksLikeReceivingCode(trackingNumber);
+          const code = runCodeResolve ? await resolveReceivingCodeToLine(trackingNumber) : null;
           if (code && (code.kind === 'line' || code.kind === 'multi')) {
             const rows = code.kind === 'line' ? [code.row] : code.rows;
             if (rows.length > 0) {
@@ -693,6 +718,26 @@ export function ReceivingSidebarPanel() {
               // surfaced there until a global refresh.
               invalidateReceivingFeeds(queryClient);
             }
+            // Echo the resolution back to the caller (phone-paired scans listen
+            // for this to render their matched/unmatched result). The tracking
+            // + lookup-po branches below already call onResult; the code
+            // short-circuit must too, or a phone scan of an R-/unit handle
+            // never reports back. po_ids/receiving_id are derived from the
+            // resolved rows the same way the local-tracking branch does.
+            const codeReceivingId = rows.find((r) => r.receiving_id != null)?.receiving_id;
+            const codePoIds = [
+              ...new Set(
+                rows
+                  .map((r) => (r.zoho_purchaseorder_id || '').trim())
+                  .filter((x) => x.length > 0),
+              ),
+            ];
+            opts?.onResult?.({
+              tracking: trackingNumber,
+              matched: true,
+              po_ids: codePoIds,
+              receiving_id: codeReceivingId ?? undefined,
+            });
             const openRows = rows.filter(
               (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
             );
@@ -961,6 +1006,7 @@ export function ReceivingSidebarPanel() {
       submitTrackingScan(tracking, {
         onResult: async (result) => {
           try {
+            if (!stationChannelName) return;
             const client = await getAblyClient();
             if (!client) return;
             const ch = client.channels.get(stationChannelName);
@@ -979,7 +1025,7 @@ export function ReceivingSidebarPanel() {
         },
       });
     },
-    Number(staffId) > 0,
+    !!phoneChannelName && Number(staffId) > 0,
   );
 
   // ─── Unboxing mode: serial scan → scan-serial → bump qty, maybe print ───
@@ -1132,7 +1178,7 @@ export function ReceivingSidebarPanel() {
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
-  const updateUnboxView = (next: 'recent' | 'queue') => {
+  const updateUnboxView = (next: 'recent' | 'queue' | 'viewed') => {
     if (next === unboxView) return;
     // Different list = don't carry the prior pick; let the new list auto-select
     // its own top (mirrors the triage Found/Unfound toggle).
@@ -1179,8 +1225,14 @@ export function ReceivingSidebarPanel() {
         // facet controls; the right-pane table renders the rows only (no
         // duplicate header). Scan-bar is intentionally omitted — Incoming
         // is a browse/triage surface, not a scan surface.
-        <div className="min-h-0 flex-1 overflow-hidden">
+        // Below the legacy panel: the station-builder queue slot — owner-
+        // composed blocks (e.g. the unmatched-PO-email checklist) render from
+        // station_definitions; staff with stations.manage get the edit pencil.
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <IncomingSidebarPanel />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <StationSlot pageKey="receiving" modeKey="incoming" slot="queue" stationLabel="Incoming" />
+          </div>
         </div>
       ) : (
         <>
@@ -1276,10 +1328,11 @@ export function ReceivingSidebarPanel() {
           <HorizontalButtonSlider
             items={[
               { id: 'queue', label: 'Queue', icon: Layers },
-              { id: 'recent', label: 'Recent', icon: Clock },
+              { id: 'recent', label: 'Unboxed', icon: PackageOpen },
+              { id: 'viewed', label: 'Viewed', icon: History },
             ]}
             value={unboxView}
-            onChange={(id) => updateUnboxView(id as 'recent' | 'queue')}
+            onChange={(id) => updateUnboxView(id as 'recent' | 'queue' | 'viewed')}
             variant="nav"
             dense
             aria-label="Unbox queue view"
@@ -1322,6 +1375,14 @@ export function ReceivingSidebarPanel() {
         <ReceivingScannedRail
           key="rail-unbox-queue"
           scope="unbox"
+          selectedLineId={selectedLine?.id ?? null}
+          selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
+        />
+      ) : unboxView === 'viewed' ? (
+        // Unbox "Viewed" toggle — the lines THIS operator recently opened in the
+        // workspace (server-backed per-staff recents), newest-opened first.
+        <ReceivingViewedRail
+          key="rail-unbox-viewed"
           selectedLineId={selectedLine?.id ?? null}
           selectedRow={selectedLine && selectedLine.id > 0 ? selectedLine : null}
         />

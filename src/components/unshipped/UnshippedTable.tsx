@@ -3,12 +3,13 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getOrdersChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, safeChannelName } from '@/lib/realtime/channels';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
@@ -56,20 +57,35 @@ export function UnshippedTable({
   bannerTitle,
   bannerSubtitle,
   searchEmptyTitle = 'No orders found',
-  searchResultLabel = 'orders needing tracking',
-  clearSearchLabel = 'Show All Awaiting Orders',
+  searchResultLabel = 'unshipped orders',
+  clearSearchLabel = 'Show All Unshipped Orders',
 }: UnshippedTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const searchQuery = String(searchParams.get('search') || '').trim();
+  // Merged Unshipped mode covers stages: Awaiting (no shipment_id → needs
+  // tracking), Pending (has shipment, not yet packed), and Tested (the pending
+  // subset already tech-tested / currently packing). The FilterRefinementBar
+  // writes `?stage`; default `all` shows everything.
+  const stageParam = String(searchParams.get('stage') || 'all').toLowerCase();
+  const stageFilter: 'all' | 'awaiting' | 'pending' | 'tested' =
+    stageParam === 'awaiting' ? 'awaiting'
+      : stageParam === 'pending' ? 'pending'
+        : stageParam === 'tested' ? 'tested'
+          : 'all';
+  // Sort order from the sidebar Sort control (`?sort`); default keeps priority.
+  const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
+  const sortOrder: 'priority' | 'newest' = sortParam === 'newest' ? 'newest' : 'priority';
   const query = useQuery({
     ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
     placeholderData: (previousData) => previousData,
   });
 
-  const ordersChannelName = getOrdersChannelName();
+  const ordersChannelName = safeChannelName(() => getOrdersChannelName(orgId!));
 
   useAblyChannel(
     ordersChannelName,
@@ -110,7 +126,40 @@ export function UnshippedTable({
         }
       );
     },
-    true,
+    !!ordersChannelName,
+  );
+
+  // Pending-stage rows live in this merged queue too, so reflect tech-test
+  // verdicts (has_tech_scan) in place — same patch the old Pending table did.
+  useAblyChannel(
+    ordersChannelName,
+    'order.tested',
+    (message: any) => {
+      const orderId = Number(message?.data?.orderId);
+      const testedByIdRaw = message?.data?.testedBy;
+      const testedById = testedByIdRaw == null ? null : Number(testedByIdRaw);
+      const normalizedTestedById = testedById != null && Number.isFinite(testedById) ? testedById : null;
+      if (!Number.isFinite(orderId)) return;
+
+      queryClient.setQueriesData(
+        { queryKey: ['dashboard-table', 'unshipped'] },
+        (current: unknown) => {
+          if (!Array.isArray(current)) return current;
+          let changed = false;
+          const next = current.map((row: any) => {
+            if (Number(row?.id) !== orderId) return row;
+            changed = true;
+            return {
+              ...row,
+              has_tech_scan: true,
+              tested_by: normalizedTestedById ?? row?.tested_by ?? null,
+            };
+          });
+          return changed ? next : current;
+        }
+      );
+    },
+    !!ordersChannelName,
   );
 
   useEffect(() => {
@@ -168,14 +217,32 @@ export function UnshippedTable({
     router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath);
   };
 
+  const allRecords = query.data || [];
+  const records = (() => {
+    switch (stageFilter) {
+      case 'awaiting':
+        return allRecords.filter((r) => r.shipment_id == null);
+      case 'pending':
+        return allRecords.filter((r) => r.shipment_id != null);
+      case 'tested':
+        // Pending subset that's already tech-tested (has_tech_scan) → "currently packing".
+        return allRecords.filter(
+          (r) => r.shipment_id != null && Boolean((r as { has_tech_scan?: boolean }).has_tech_scan),
+        );
+      default:
+        return allRecords;
+    }
+  })();
+
   return (
     <OrdersQueueTable
-      records={query.data || []}
+      records={records}
+      sort={sortOrder}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
       onClearSearch={clearSearch}
-      emptyMessage="No orders needing tracking"
+      emptyMessage="No unshipped orders"
       searchEmptyTitle={searchEmptyTitle}
       searchResultLabel={searchResultLabel}
       clearSearchLabel={clearSearchLabel}

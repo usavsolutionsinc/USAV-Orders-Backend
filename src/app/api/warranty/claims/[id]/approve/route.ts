@@ -34,7 +34,7 @@ export const POST = withAuth(async (request, ctx) => {
         entityId: id,
         after: { status: 'APPROVED' },
       });
-      await notifyWarrantyTransition({ claim: result.claim, event: 'approved', actorStaffId: ctx.staffId ?? null });
+      await notifyWarrantyTransition({ organizationId: ctx.organizationId, claim: result.claim, event: 'approved', actorStaffId: ctx.staffId ?? null });
       return { status: 200, body: { ok: true, claim: result.claim } };
     },
   });

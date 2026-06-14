@@ -12,11 +12,23 @@ export function isBrowser(): boolean {
 
 /**
  * Copies text to the clipboard. Returns true on success.
+ *
+ * Also logs to the device clipboard history (the header clipboard popover) so
+ * ad-hoc / bulk "copy all" copies show up alongside CopyChip copies. Pass
+ * `recordHistory: false` for programmatic copies that shouldn't surface there.
  */
-export async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyToClipboard(
+  text: string,
+  opts?: { recordHistory?: boolean; historyKind?: string; historyDisplay?: string },
+): Promise<boolean> {
   if (!isBrowser()) return false;
   try {
     await navigator.clipboard.writeText(text);
+    if (opts?.recordHistory !== false) {
+      // Lazy import keeps this SSR-safe helper free of a static React dep.
+      const { recordCopy } = await import('@/lib/clipboard-history');
+      recordCopy(text, { kind: opts?.historyKind, display: opts?.historyDisplay });
+    }
     return true;
   } catch {
     return false;

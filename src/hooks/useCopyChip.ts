@@ -11,6 +11,7 @@
 import { MouseEvent, MutableRefObject, useCallback, useEffect, useId, useRef } from 'react';
 import { useSiteTooltipOptional } from '@/components/providers/SiteTooltipProvider';
 import { normalizeCopyText } from '@/lib/copy-chip-format';
+import { recordCopy } from '@/lib/clipboard-history';
 
 export interface ChipTooltipAnchor {
   /** Attach to the chip's outer wrapper — the tooltip positions off this rect. */
@@ -97,12 +98,18 @@ export function useCopyChip({
   disableCopy = false,
   disableTooltip = false,
   onCopy,
+  historyKind,
+  historyDisplay,
 }: {
   value: string | null | undefined;
   disableCopy?: boolean;
   disableTooltip?: boolean;
   /** Called after a successful clipboard write. Use for side-effects (e.g. dispatch a custom event). */
   onCopy?: (value: string) => void;
+  /** Chip tone, logged to the device clipboard history for typed re-rendering. */
+  historyKind?: string;
+  /** Short chip label, logged to the device clipboard history. */
+  historyDisplay?: string;
 }): CopyChipBehavior {
   const normalizedValue = normalizeCopyText(value);
   const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
@@ -127,6 +134,7 @@ export function useCopyChip({
     e.stopPropagation();
     if (!canCopy) return;
     navigator.clipboard.writeText(normalizedValue);
+    recordCopy(normalizedValue, { kind: historyKind, display: historyDisplay });
     onCopy?.(normalizedValue);
     if (tooltipCtxRef.current?.isActiveAnchor(anchorId)) {
       tooltipCtxRef.current.notifyCopied(anchorId);

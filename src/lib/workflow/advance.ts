@@ -90,7 +90,7 @@ export async function advanceItem(
         error: message,
       });
       await deps.store.setStatus(state, 'error', { error: message });
-      await safeEmit(deps, errEvent(state, node.type));
+      await safeEmit(deps, errEvent(state, node.type, state.currentNodeId));
       return { status: 'error', output: ERROR_OUTPUT, nodeType: node.type, error: message };
     }
 
@@ -104,6 +104,7 @@ export async function advanceItem(
       nodeType: node.type,
       output: result.output,
       at: nowIso(),
+      nodeId: state.currentNodeId,
     });
 
     // Error output: park the item in an error state for triage.
@@ -167,6 +168,7 @@ async function safeEmit(deps: AdvanceDeps, event: WorkflowEvent): Promise<void> 
 function errEvent(
   state: { serialUnitId: number; workflowDefinitionId: number },
   nodeType: string,
+  nodeId: string,
 ): WorkflowEvent {
   return {
     serialUnitId: state.serialUnitId,
@@ -174,6 +176,7 @@ function errEvent(
     nodeType,
     output: ERROR_OUTPUT,
     at: nowIso(),
+    nodeId,
   };
 }
 

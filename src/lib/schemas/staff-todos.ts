@@ -34,5 +34,10 @@ export const StaffTodoPatchBody = z.discriminatedUnion('action', [
     station: StaffTodoStation,
     intervalMs: z.number().int().positive().max(MAX_INTERVAL_MS),
   }),
+  // Restore an archived task (reverse of DELETE/archive).
+  z.object({
+    action: z.literal('unarchive'),
+    id: z.number().int().positive(),
+  }),
 ]);
 export type StaffTodoPatchBody = z.infer<typeof StaffTodoPatchBody>;

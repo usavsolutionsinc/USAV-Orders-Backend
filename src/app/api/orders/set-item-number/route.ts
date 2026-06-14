@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Updates the item_number on a specific orders row (by DB id).
  * Used by the manual assignment form when an order was created without an item number.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const id = Number(body?.id);
@@ -37,7 +37,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     await invalidateCacheTags(['orders']);
-    await publishOrderChanged({ orderIds: [id], source: 'orders.set-item-number' });
+    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [id], source: 'orders.set-item-number' });
 
     return NextResponse.json({ success: true, updated: true, row: result.rows[0] });
   } catch (error: any) {

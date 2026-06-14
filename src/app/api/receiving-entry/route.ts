@@ -31,7 +31,7 @@ function getPSTWeekRange(pstTimestamp: string): { startStr: string; endStr: stri
 }
 
 // POST - Add entry to receiving table
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
     try {
         const body = await request.json();
         const { trackingNumber, carrier: providedCarrier } = body;
@@ -170,6 +170,7 @@ export const POST = withAuth(async (request: NextRequest) => {
                 // stale surgical cache prepend.
                 await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
                 await publishReceivingLogChanged({
+                    organizationId: ctx.organizationId,
                     action: 'insert',
                     rowId: newRecord.id,
                     row: newRecord,

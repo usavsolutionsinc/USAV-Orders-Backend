@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { squareFetch } from '@/lib/square/client';
 import { insertSquareTransaction } from '@/lib/neon/square-transaction-queries';
 import { publishSaleCompleted } from '@/lib/realtime/walkin-events';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { isRepairSku } from '@/utils/sku';
 
 const WEBHOOK_SIGNATURE_KEY = () =>
@@ -108,6 +109,10 @@ export async function POST(req: NextRequest) {
       });
 
       await publishSaleCompleted({
+        // TRANSITIONAL: Square webhook has no session. Single-tenant (USAV)
+        // today; resolve org from the Square account→org mapping when multi-
+        // tenant Square lands (see docs/tenancy exec plan §D1 open items).
+        orgId: transitionalUsavOrgId(),
         squareOrderId: payment.order_id,
         source: 'square-webhook',
       }).catch((err) => console.error('Failed to publish sale event:', err));

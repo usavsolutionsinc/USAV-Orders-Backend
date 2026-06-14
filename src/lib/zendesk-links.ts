@@ -6,7 +6,7 @@
  * then fetch that entity's photos. See migration 2026-06-01_ticket_links.sql.
  */
 import pool from '@/lib/db';
-import { getTicket } from './zendesk';
+import { getTicket, updateTicket } from './zendesk';
 
 export interface TicketEntityRef {
   type: string;
@@ -70,6 +70,32 @@ export async function unlinkTicket(args: {
     [args.orgId, args.zendeskTicketId, args.entityType, args.entityId],
   );
   return (res.rowCount ?? 0) > 0;
+}
+
+/**
+ * Clear a Zendesk ticket's `external_id` — but ONLY when it still resolves to
+ * the given entity. Called on unlink (receiving + warranty) so a detached
+ * ticket can't be silently re-attached to the same entity via the external_id
+ * fallback in {@link getTicketEntity}. Best-effort: never throws — the
+ * `ticket_links` delete is the authoritative detach, this is the clean-up.
+ * Returns true when an external_id was cleared.
+ */
+export async function clearTicketExternalIdIfMatches(args: {
+  zendeskTicketId: number;
+  entityType: string;
+  entityId: number;
+}): Promise<boolean> {
+  try {
+    const ticket = await getTicket(args.zendeskTicketId);
+    const parsed = parseExternalId(ticket?.external_id as string | undefined);
+    if (parsed && parsed.type === args.entityType && parsed.id === args.entityId) {
+      await updateTicket(args.zendeskTicketId, { external_id: null });
+      return true;
+    }
+  } catch (err) {
+    console.warn('[zendesk-links] external_id clear failed', err);
+  }
+  return false;
 }
 
 /**

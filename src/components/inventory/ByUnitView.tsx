@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from '@/components/Icons';
+import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import type {
     SerialUnitDetailPayload,
     TimelineEventRow,
     ConditionHistoryRow,
     AllocationRow,
     TsnLinkRow,
+    UnitPhotoRow,
 } from './types';
 
 interface ByUnitViewProps {
@@ -20,6 +22,8 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
     const [payload, setPayload] = useState<SerialUnitDetailPayload | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    // Bumped after a photo delete so the detail refetches the server truth.
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
@@ -56,7 +60,7 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
         return () => {
             cancelled = true;
         };
-    }, [ref]);
+    }, [ref, reloadKey]);
 
     if (loading) {
         return (
@@ -82,6 +86,17 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
     const conditions: ConditionHistoryRow[] = payload.conditions ?? [];
     const allocations: AllocationRow[] = payload.allocations ?? [];
     const tsnLinks: TsnLinkRow[] = payload.tsn_links ?? [];
+    const photos: UnitPhotoRow[] = payload.photos ?? [];
+    // Cross-reference photos to their capture event by payload.photo_ids so the
+    // shots render inline on that timeline row (a deleted photo drops too).
+    const photosById = new Map<number, UnitPhotoRow>(photos.map((p) => [p.id, p]));
+    const eventPhotos = (ev: TimelineEventRow): UnitPhotoRow[] => {
+        const raw = ev.payload?.photo_ids;
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .map((x) => photosById.get(Number(x)))
+            .filter((p): p is UnitPhotoRow => !!p);
+    };
 
     return (
         <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6">
@@ -182,6 +197,15 @@ export function ByUnitView({ ref }: ByUnitViewProps) {
                                 </div>
                                 {e.notes ? (
                                     <p className="mt-1 text-sm text-gray-700">{e.notes}</p>
+                                ) : null}
+                                {eventPhotos(e).length > 0 ? (
+                                    <div className="mt-2">
+                                        <PhotoGallery
+                                            photos={eventPhotos(e).map((p) => ({ id: p.id, url: p.url }))}
+                                            launcherLayout="thumbnails"
+                                            onPhotoDeleted={() => setReloadKey((k) => k + 1)}
+                                        />
+                                    </div>
                                 ) : null}
                                 {e.payload && Object.keys(e.payload).length > 0 ? (
                                     <pre className="mt-2 overflow-x-auto rounded bg-gray-50 px-3 py-2 text-xs text-gray-700">

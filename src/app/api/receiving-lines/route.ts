@@ -14,6 +14,7 @@ import {
   type ReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
+import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 
@@ -96,7 +97,7 @@ function parsePositiveTechId(value: unknown): number | null {
 // ?id=<n>              → single row
 // ?receiving_id=<n>    → all lines for a package
 // ?limit&offset&search → paginated list (omit receiving_id to get all)
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const id          = Number(searchParams.get('id'));
@@ -162,6 +163,11 @@ export const GET = withAuth(async (request: NextRequest) => {
     // the supported view set can't drift between the two ends. `null` = no/
     // unknown view → fall back to week-range scoping below.
     const view = parseReceivingView(viewRaw);
+    // view=viewed only: the requesting operator, whose recently-opened lines
+    // (receiving_line_views) this feed returns. `viewedParamIdx` is the $N of the
+    // staff_id param once pushed, reused by the WHERE / ORDER BY / SELECT below.
+    const viewerStaffId = Number(ctx?.staffId);
+    let viewedParamIdx = 0;
     // Phase 2 — physical-vs-financial decoupling. The triage SCANNED queue keys
     // on PHYSICAL lifecycle (received_at set, not unboxed), so a box on the dock
     // stays visible even when Zoho already marks the PO received/closed; it just
@@ -185,6 +191,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 r.carrier,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
+                r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
@@ -263,6 +270,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.carrier,
                   r.source                     AS receiving_source,
                   r.source_platform            AS receiving_source_platform,
+                r.intake_type                AS receiving_intake_type,
                   COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
                   r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
@@ -347,6 +355,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           conditions.push(
             `(COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${idx}
              OR COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${idx}
+             OR COALESCE(rl.source_order_id, '') ILIKE $${idx}
              OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${idx})`,
           );
           values.push(p);
@@ -392,6 +401,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             `COALESCE(rl.sku, '') ILIKE $${patternIdx}`,
             `COALESCE(rl.zoho_purchaseorder_id::text, '') ILIKE $${patternIdx}`,
             `COALESCE(rl.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(rl.source_order_id, '') ILIKE $${patternIdx}`,
             `COALESCE(rl.zoho_item_id, '') ILIKE $${patternIdx}`,
             `COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
             `COALESCE(r.receiving_tracking_number, '') ILIKE $${patternIdx}`,
@@ -515,6 +525,21 @@ export const GET = withAuth(async (request: NextRequest) => {
         conditions.push(
           `EXISTS (SELECT 1 FROM testing_results tr WHERE tr.receiving_line_id = rl.id)`,
         );
+      }
+    } else if (view === 'viewed') {
+      // "Viewed" = lines THIS operator recently opened in the receiving
+      // workspace (receiving_line_views, upserted on open). Scoped to one staff;
+      // ordered by viewed_at DESC below. Unknown viewer → empty feed.
+      if (Number.isFinite(viewerStaffId) && viewerStaffId > 0) {
+        viewedParamIdx = idx;
+        values.push(viewerStaffId);
+        idx++;
+        conditions.push(
+          `EXISTS (SELECT 1 FROM receiving_line_views v
+                    WHERE v.receiving_line_id = rl.id AND v.staff_id = $${viewedParamIdx})`,
+        );
+      } else {
+        conditions.push('FALSE');
       }
     } else if (view === 'incoming') {
       // "Incoming" = on a Zoho PO, vendor has issued it, warehouse hasn't
@@ -670,6 +695,11 @@ export const GET = withAuth(async (request: NextRequest) => {
             // rl.updated_at instead let a non-test edit (or another tester's
             // verdict) bump a line above items this tester verified more recently.
             ? `ORDER BY tr_agg.tested_at DESC NULLS LAST, rl.id DESC`
+            : view === 'viewed'
+              // Newest-opened first — your recents read like a back button.
+              ? (viewedParamIdx > 0
+                  ? `ORDER BY (SELECT v.viewed_at FROM receiving_line_views v WHERE v.receiving_line_id = rl.id AND v.staff_id = $${viewedParamIdx}) DESC NULLS LAST, rl.id DESC`
+                  : `ORDER BY rl.id DESC`)
             : view === 'received'
               ? `ORDER BY COALESCE(rl.updated_at::text, rl.created_at::text) DESC, rl.id DESC`
               : `ORDER BY COALESCE(rl.zoho_last_modified_time, rl.created_at::text) DESC, rl.id DESC`;
@@ -779,6 +809,14 @@ export const GET = withAuth(async (request: NextRequest) => {
     // zoho_po_mirror JOIN runs (incoming + scanned).
     const zohoStatusSelect =
       view === 'incoming' || view === 'scanned' ? `, mirror.status AS zoho_status` : '';
+    // view=viewed only: surface the viewer's own viewed_at so the rail labels
+    // each row with "when you opened it" (mapRow folds it into last_activity_at)
+    // instead of the unrelated scan/line time.
+    const viewedAtSelect =
+      view === 'viewed' && viewedParamIdx > 0
+        ? `, (SELECT v.viewed_at FROM receiving_line_views v
+               WHERE v.receiving_line_id = rl.id AND v.staff_id = $${viewedParamIdx})::text AS viewed_at`
+        : '';
     const incomingExtrasJoin =
       view === 'incoming' || view === 'scanned'
         ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
@@ -800,6 +838,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 staff_sb.name                AS scanned_by_name,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
+                r.intake_type                AS receiving_intake_type,
                 COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
                 r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
@@ -820,6 +859,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                 ${testedAggSelect}
                 ${incomingExtrasSelect}
                 ${zohoStatusSelect}
+                ${viewedAtSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
@@ -938,6 +978,7 @@ export const GET = withAuth(async (request: NextRequest) => {
                   r.support_notes              AS receiving_support_notes,
                   r.listing_url                AS receiving_listing_url,
                   r.source_platform            AS receiving_source_platform,
+                r.intake_type                AS receiving_intake_type,
                   r.source                     AS receiving_source,
                   COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
@@ -1016,7 +1057,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 }, { permission: 'receiving.view' });
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
 
@@ -1082,7 +1123,7 @@ export const POST = withAuth(async (request: NextRequest) => {
 
     const lineId = result.rows[0]?.id;
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-    await publishReceivingLogChanged({ action: 'insert', rowId: String(lineId), source: 'receiving-lines.create' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'insert', rowId: String(lineId), source: 'receiving-lines.create' });
 
     return NextResponse.json({ success: true, receiving_line: normalizeRow(result.rows[0]) }, { status: 201 });
   } catch (error: unknown) {
@@ -1300,7 +1341,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     }
 
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-    await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-lines.update' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'update', rowId: String(id), source: 'receiving-lines.update' });
 
     // Re-fetch with the shipment JOIN so the response carries the just-attached
     // shipment's tracking/carrier/status fields.
@@ -1310,6 +1351,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
               r.carrier,
               r.source                     AS receiving_source,
               r.source_platform            AS receiving_source_platform,
+                r.intake_type                AS receiving_intake_type,
               COALESCE(r.is_priority, false) AS is_priority,
                 r.priority_tier                AS priority_tier,
               r.zoho_purchaseorder_number  AS receiving_zoho_purchaseorder_number,
@@ -1348,7 +1390,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 }, { permission: 'receiving.mark_received' });
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
-export const DELETE = withAuth(async (request: NextRequest) => {
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get('id');
@@ -1408,7 +1450,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
         client.release();
       }
       await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-      await publishReceivingLogChanged({ action: 'delete', rowId: `shipment:${sid}`, source: 'receiving-lines.delete-shipment' });
+      await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: `shipment:${sid}`, source: 'receiving-lines.delete-shipment' });
       return NextResponse.json({ success: true, shipment_id: sid });
     }
 
@@ -1424,7 +1466,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
         );
       }
       await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-      await publishReceivingLogChanged({ action: 'delete', rowId: poId, source: 'receiving-lines.delete' });
+      await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: poId, source: 'receiving-lines.delete' });
       return NextResponse.json({ success: true, po_id: poId, deleted: result.rows.length });
     }
 
@@ -1444,14 +1486,23 @@ export const DELETE = withAuth(async (request: NextRequest) => {
         );
       }
       const result = await pool.query(
-        `DELETE FROM receiving_lines WHERE id = ANY($1::int[]) RETURNING id`,
+        `DELETE FROM receiving_lines WHERE id = ANY($1::int[]) RETURNING id, receiving_id`,
         [ids],
       );
       const deleted = result.rows.map((r) => Number(r.id));
+      // Re-derive each affected carton's source linkage — removing the last
+      // linked line reverts the carton to unmatched (the unlink revert).
+      const affectedCartons = Array.from(
+        new Set(result.rows.map((r) => r.receiving_id).filter((x) => x != null).map(Number)),
+      );
+      for (const rid of affectedCartons) {
+        try { await recomputeCartonSourceLink(rid); } catch (err) { console.warn('recomputeCartonSourceLink failed', rid, err); }
+      }
       await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
       // Count, not the id list — listeners only refetch on this event, and an
       // unbounded id string risks the broker's message size cap.
       await publishReceivingLogChanged({
+        organizationId: ctx.organizationId,
         action: 'delete',
         rowId: `bulk:${deleted.length}`,
         source: 'receiving-lines.delete-bulk',
@@ -1464,13 +1515,22 @@ export const DELETE = withAuth(async (request: NextRequest) => {
       return NextResponse.json({ success: false, error: 'Valid id or po_id is required' }, { status: 400 });
     }
 
-    const result = await pool.query(`DELETE FROM receiving_lines WHERE id = $1 RETURNING id`, [id]);
+    const result = await pool.query(`DELETE FROM receiving_lines WHERE id = $1 RETURNING id, receiving_id`, [id]);
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
     }
 
+    // Re-derive the carton's source linkage — if this was the last line carrying
+    // a source order, the carton reverts to unmatched (the unlink revert). Owns
+    // the downgrade the general PATCH /api/receiving/[id] refuses.
+    const deletedReceivingId = result.rows[0]?.receiving_id;
+    if (deletedReceivingId != null) {
+      try { await recomputeCartonSourceLink(Number(deletedReceivingId)); }
+      catch (err) { console.warn('recomputeCartonSourceLink failed', deletedReceivingId, err); }
+    }
+
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-    await publishReceivingLogChanged({ action: 'delete', rowId: String(id), source: 'receiving-lines.delete' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: String(id), source: 'receiving-lines.delete' });
 
     return NextResponse.json({ success: true, id });
   } catch (error: unknown) {
@@ -1701,6 +1761,11 @@ function normalizeRow(row: Record<string, unknown>) {
     shipment_latest_event_at: (row.shipment_latest_event_at as string | null) ?? null,
     shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,
     receiving_type:            (row.receiving_type as string | null) ?? 'PO',
+    // Per-line unfound intake classification (override grain; null on Zoho lines).
+    intake_type:               (row.intake_type as string | null) ?? null,
+    // Carton-level default receiving type (receiving.intake_type). The carton
+    // pill edits this; receiving_type above overrides per line. Migration 2026-06-13b.
+    carton_intake_type:        (row.receiving_intake_type as string | null) ?? null,
     // Door-scan vs unbox split (history columns). received_at/scanned_at are the
     // "arrived at the door" event; unboxed_at is when items were extracted.
     // *_by_name resolve the staff who performed each (null on views that omit
@@ -1720,7 +1785,8 @@ function normalizeRow(row: Record<string, unknown>) {
     // ordered by); for view=recent/all it's the last scan. Falls through to
     // received_at / created_at so the rail can render a single "last touched"
     // field regardless of view.
-    last_activity_at:         (row.tested_at as string | null)
+    last_activity_at:         (row.viewed_at as string | null)
+                              ?? (row.tested_at as string | null)
                               ?? (row.last_scan_at as string | null)
                               ?? (row.receiving_received_at as string | null)
                               ?? (row.created_at as string | null)

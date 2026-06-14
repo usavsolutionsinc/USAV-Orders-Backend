@@ -119,6 +119,16 @@ export interface SerialUnitDetailPayload {
     conditions?: ConditionHistoryRow[];
     allocations?: AllocationRow[];
     tsn_links?: TsnLinkRow[];
+    photos?: UnitPhotoRow[];
+}
+
+/** A photo captured against the unit (entity_type='SERIAL_UNIT'). */
+export interface UnitPhotoRow {
+    id: number;
+    url: string;
+    photo_type: string | null;
+    uploaded_by: number | null;
+    created_at: string;
 }
 
 export interface TimelineEventRow {

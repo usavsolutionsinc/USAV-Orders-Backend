@@ -8,7 +8,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 // This endpoint updates status = 'shipped' for orders that have any SAL row
 // linked via shipment_id — SAL is the source of truth for station scans.
 // Admin-triggered reconciliation; gated to shipping role.
-export const POST = withAuth(async () => {
+export const POST = withAuth(async (_req, ctx) => {
   try {
     const result = await pool.query(`
       UPDATE orders o
@@ -27,7 +27,7 @@ export const POST = withAuth(async () => {
 
     const updatedIds = (result.rows || []).map((r: any) => Number(r.id)).filter(Number.isFinite);
     if (updatedIds.length > 0) {
-      await publishOrderChanged({ orderIds: updatedIds, source: 'orders.check-shipped' });
+      await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: updatedIds, source: 'orders.check-shipped' });
     }
 
     return NextResponse.json({

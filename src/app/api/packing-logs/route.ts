@@ -321,6 +321,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
                     // Hand off to a paired phone (if any) for the photo flow.
                     publishPackerScanReady({
+                        organizationId: ctx.organizationId,
                         staffId,
                         packerLogId: fbaPackerLogId,
                         variant: 'fba',
@@ -472,10 +473,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 });
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
-                if (nfSalId) publishActivityLogged({ id: nfSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: nfScanRef ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
+                if (nfSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: nfSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: nfScanRef ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
                 if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
 
                 publishPackerScanReady({
+                    organizationId: ctx.organizationId,
                     staffId,
                     packerLogId: notFoundPackerLogId,
                     variant: 'exception',
@@ -631,19 +633,21 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             });
 
             await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
-            if (foundSalId) publishActivityLogged({ id: foundSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: order.tracking_number ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
+            if (foundSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: foundSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: order.tracking_number ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
             if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
 
             // Broadcast to all devices so UpNext + PendingOrdersTable update instantly
             await Promise.allSettled([
-                publishOrderChanged({ orderIds: [order.id], source: 'packing-logs' }),
+                publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [order.id], source: 'packing-logs' }),
                 publishPackerLogChanged({
+                    organizationId: ctx.organizationId,
                     packerId: staffId,
                     action: 'insert',
                     packerLogId: foundPackerLogId ?? undefined,
                     source: 'packing-logs',
                 }),
                 publishPackerScanReady({
+                    organizationId: ctx.organizationId,
                     staffId,
                     packerLogId: foundPackerLogId,
                     variant: 'order',
@@ -817,7 +821,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             },
             createdAt: nonOrderInsert.rows[0]?.created_at ?? packDateTime,
         });
-        if (nonOrderSalId) publishActivityLogged({ id: nonOrderSalId, station: 'PACK', activityType: 'PACK_SCAN', staffId, scanRef: classification.normalizedInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
+        if (nonOrderSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: nonOrderSalId, station: 'PACK', activityType: 'PACK_SCAN', staffId, scanRef: classification.normalizedInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
 
         await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
         if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord);

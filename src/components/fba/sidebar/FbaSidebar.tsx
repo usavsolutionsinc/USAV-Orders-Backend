@@ -18,7 +18,7 @@ import { cn } from '@/utils/_cn';
 import { SidebarSection } from '@/components/layout/SidebarSection';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getDbTableChannelName } from '@/lib/realtime/channels';
+import { getDbTableChannelName, safeChannelName } from '@/lib/realtime/channels';
 import type { FbaPlanQueueItem } from '@/components/station/upnext/upnext-types';
 import { FbaWorkspaceScanField } from '@/components/fba/sidebar/FbaWorkspaceScanField';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
@@ -47,9 +47,6 @@ import { FBA_MODE_ITEMS, resolveFbaMode, type FbaMode } from '@/lib/fba/fba-mode
 
 // Match TechSidebarPanel secondary bands (header-shell uses border-gray-100)
 const sidebarSubBandClass = 'shrink-0 border-b border-gray-100 bg-white';
-const FBA_SHIPMENTS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipments');
-const FBA_SHIPMENT_ITEMS_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_items');
-const FBA_SHIPMENT_TRACKING_DB_CHANNEL = getDbTableChannelName('public', 'fba_shipment_tracking');
 
 type PendingPlan = FbaPlanQueueItem;
 
@@ -276,6 +273,10 @@ function FbaWorkspaceSidebarInner() {
   }, []);
 
   const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const fbaShipmentsDbChannel = safeChannelName(() => getDbTableChannelName(orgId!, 'public', 'fba_shipments'));
+  const fbaShipmentItemsDbChannel = safeChannelName(() => getDbTableChannelName(orgId!, 'public', 'fba_shipment_items'));
+  const fbaShipmentTrackingDbChannel = safeChannelName(() => getDbTableChannelName(orgId!, 'public', 'fba_shipment_tracking'));
   const staffIdNum = user?.staffId ?? 0;
   const selectedStaffMember = staffDirectory.find((m) => m.id === staffIdNum);
   const staffName = selectedStaffMember?.name || (staffDirectory.length === 0 ? '…' : `Staff ${staffIdNum}`);
@@ -421,18 +422,18 @@ function FbaWorkspaceSidebarInner() {
     void loadStageCounts();
   }, [refreshToken, loadPendingPlans, loadStageCounts]);
 
-  useAblyChannel(FBA_SHIPMENT_ITEMS_DB_CHANNEL, 'db.row.changed', () => {
+  useAblyChannel(fbaShipmentItemsDbChannel, 'db.row.changed', () => {
     void loadPendingPlans();
     void loadStageCounts();
-  });
+  }, !!fbaShipmentItemsDbChannel);
 
-  useAblyChannel(FBA_SHIPMENTS_DB_CHANNEL, 'db.row.changed', () => {
+  useAblyChannel(fbaShipmentsDbChannel, 'db.row.changed', () => {
     void loadPendingPlans();
-  });
+  }, !!fbaShipmentsDbChannel);
 
-  useAblyChannel(FBA_SHIPMENT_TRACKING_DB_CHANNEL, 'db.row.changed', () => {
+  useAblyChannel(fbaShipmentTrackingDbChannel, 'db.row.changed', () => {
     void loadPendingPlans();
-  });
+  }, !!fbaShipmentTrackingDbChannel);
 
   useEffect(() => {
     if (activeMode === 'shipped') return;

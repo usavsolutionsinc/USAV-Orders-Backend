@@ -1,16 +1,36 @@
 'use client';
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
-import { Plus } from '@/components/Icons';
+import { Plus, Check } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
-import { AwaitingEbayPanel } from '@/components/unshipped/AwaitingEbayPanel';
+import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
+
+/** The stages folded into the merged Unshipped mode. `tested` is the pending
+ *  subset that's already tech-tested and currently being packed. */
+type UnshippedStage = 'all' | 'awaiting' | 'pending' | 'tested';
+const STAGE_OPTIONS: { id: UnshippedStage; label: string; hint: string }[] = [
+  { id: 'all', label: 'All unshipped', hint: 'Awaiting + Pending' },
+  { id: 'awaiting', label: 'Awaiting tracking', hint: 'No carrier label yet' },
+  { id: 'pending', label: 'Pending packing', hint: 'Labeled, not packed' },
+  { id: 'tested', label: 'Tested, packing', hint: 'Tech-tested, packing now' },
+];
+
+/** Sort order for the queue — written to `?sort`, read by UnshippedTable. */
+type UnshippedSort = 'priority' | 'newest';
+const SORT_OPTIONS: { id: UnshippedSort; label: string }[] = [
+  { id: 'priority', label: 'Priority (due soon)' },
+  { id: 'newest', label: 'Newest first' },
+];
 
 interface UnshippedSidebarProps {
   showIntakeForm?: boolean;
@@ -112,6 +132,92 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
   };
 
+  // ── Stage filter (the merged Awaiting/Pending split) ──────────────────────
+  // Reuses the shared FilterRefinementBar via SidebarShell's `filter` prop, same
+  // as receiving's Incoming facet filter. Writes `?stage`; UnshippedTable reads
+  // it back. `all` clears the param.
+  const stageParam = String(searchParams.get('stage') || 'all').toLowerCase();
+  const stage: UnshippedStage =
+    stageParam === 'awaiting' ? 'awaiting'
+      : stageParam === 'pending' ? 'pending'
+        : stageParam === 'tested' ? 'tested'
+          : 'all';
+
+  const setStage = useCallback(
+    (next: UnshippedStage) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'all') params.delete('stage');
+      else params.set('stage', next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
+    },
+    [router, pathname, searchParams],
+  );
+
+  const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
+  const sort: UnshippedSort = sortParam === 'newest' ? 'newest' : 'priority';
+
+  const setSort = useCallback(
+    (next: UnshippedSort) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === 'priority') params.delete('sort');
+      else params.set('sort', next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
+    },
+    [router, pathname, searchParams],
+  );
+
+  // Single-pass clear (both params at once) — chaining setStage + setSort would
+  // each rebuild from the same stale searchParams and clobber the other.
+  const clearAllFilters = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('stage');
+    params.delete('sort');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
+  }, [router, pathname, searchParams]);
+
+  // Per-stage counts for the filter dropdown. Reuses the SAME query key the
+  // table mounts (React Query dedupes → one fetch, no extra request).
+  const { data: stageData } = useQuery({
+    ...unshippedOrdersQuery({ searchQuery: searchValue, strictSearchScope: true }),
+    placeholderData: (previous) => previous,
+  });
+  const stageCounts = useMemo(() => {
+    const rows = stageData ?? [];
+    const pending = rows.filter((r) => r.shipment_id != null);
+    return {
+      all: rows.length,
+      awaiting: rows.filter((r) => r.shipment_id == null).length,
+      pending: pending.length,
+      tested: pending.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan)).length,
+    } as Record<UnshippedStage, number>;
+  }, [stageData]);
+
+  const filterRefinements = useMemo((): FilterRefinement[] => {
+    const out: FilterRefinement[] = [];
+    if (stage !== 'all') {
+      const label = stage === 'awaiting' ? 'Awaiting' : stage === 'tested' ? 'Tested' : 'Pending';
+      const pillClassName =
+        stage === 'awaiting'
+          ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
+          : stage === 'tested'
+            ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+            : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200';
+      out.push({ id: 'stage', label, onRemove: () => setStage('all'), pillClassName });
+    }
+    if (sort !== 'priority') {
+      out.push({
+        id: 'sort',
+        label: 'Newest',
+        onRemove: () => setSort('priority'),
+        pillClassName: 'bg-gray-100 text-gray-700 ring-1 ring-gray-200',
+      });
+    }
+    return out;
+  }, [stage, sort, setStage, setSort]);
+
   if (showIntakeForm) {
     return (
       <ShippedIntakeForm
@@ -167,6 +273,68 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           ) : null}
         </>
       }
+      filter={{
+        label: 'Filters',
+        refinements: filterRefinements,
+        activeCount: filterRefinements.length,
+        onClearAll: filterRefinements.length > 0 ? clearAllFilters : undefined,
+        renderDropdown: (onClose: () => void) => (
+          <div className="space-y-3">
+            <div>
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                Stage
+              </span>
+              <div className="space-y-1.5">
+                {STAGE_OPTIONS.map((opt) => {
+                  const active = stage === opt.id;
+                  const count = stageCounts[opt.id];
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => { setStage(opt.id); onClose(); }}
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                        active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      {/* Count first, fixed width → every row's number lines up in one column. */}
+                      <span className="shrink-0 w-9 rounded-full bg-gray-100 px-1.5 py-0.5 text-center text-eyebrow font-bold tabular-nums text-gray-600">
+                        {count}
+                      </span>
+                      <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">{opt.label}</span>
+                      <span className="shrink-0 text-eyebrow font-medium text-gray-400">{opt.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                Sort
+              </span>
+              <div className="space-y-1.5">
+                {SORT_OPTIONS.map((opt) => {
+                  const active = sort === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => { setSort(opt.id); onClose(); }}
+                      className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                        active ? 'border-blue-300 bg-blue-50 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {opt.label}
+                      {active ? <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ),
+      }}
       search={{
         value: searchQuery,
         onChange: handleInputChange,
@@ -207,7 +375,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         />
       </motion.div>
 
-      <AwaitingEbayPanel
+      <OrdersSyncPopover
         onRefresh={() => {
           window.dispatchEvent(new CustomEvent('dashboard-refresh'));
           window.dispatchEvent(new CustomEvent('usav-refresh-data'));

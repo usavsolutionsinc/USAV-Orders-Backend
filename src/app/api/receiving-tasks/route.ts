@@ -42,7 +42,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }).returning();
 
     await invalidateCacheTags(['receiving-logs']);
-    await publishReceivingLogChanged({ action: 'insert', rowId: String(result.id), source: 'receiving-tasks.create' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'insert', rowId: String(result.id), source: 'receiving-tasks.create' });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
@@ -76,7 +76,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
     if (!result) throw ApiError.notFound('receiving-task', id);
 
     await invalidateCacheTags(['receiving-logs']);
-    await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-tasks.update' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'update', rowId: String(id), source: 'receiving-tasks.update' });
 
     return NextResponse.json(result);
   } catch (error) {
@@ -84,7 +84,7 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
   }
 }, { permission: 'receiving.mark_received' });
 
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   try {
     const id = new URL(req.url).searchParams.get('id');
     if (!id) throw ApiError.badRequest('id is required');
@@ -97,7 +97,7 @@ export const DELETE = withAuth(async (req: NextRequest) => {
     if (!deleted) throw ApiError.notFound('receiving-task', id);
 
     await invalidateCacheTags(['receiving-logs']);
-    await publishReceivingLogChanged({ action: 'delete', rowId: String(deleted.id), source: 'receiving-tasks.delete' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: String(deleted.id), source: 'receiving-tasks.delete' });
 
     return NextResponse.json({ success: true, id: deleted.id });
   } catch (error) {

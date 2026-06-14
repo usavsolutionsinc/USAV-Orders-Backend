@@ -767,7 +767,7 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'work_orders.view' });
 
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const entityType = String(body?.entityType || '').trim().toUpperCase() as EntityType;
@@ -880,6 +880,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
         const snap = snaps.get(entityId) ?? { testerId: null, packerId: null, deadlineAt: null };
         const nameMap = await getStaffNameMap([snap.testerId, snap.packerId]);
         await publishOrderAssignmentsUpdated({
+          organizationId: ctx.organizationId,
           orderId: entityId,
           testerId: snap.testerId,
           packerId: snap.packerId,
@@ -890,6 +891,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
         });
       } else {
         await publishQueueAssignmentsUpdated({
+          organizationId: ctx.organizationId,
           entityType,
           entityId,
           source: 'work-orders.patch',

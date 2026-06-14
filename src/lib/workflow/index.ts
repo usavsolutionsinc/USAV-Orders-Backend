@@ -13,18 +13,22 @@ import { getNode } from './registry';
 import { createDrizzleStore } from './store';
 import { emitWorkflowEvent } from './events';
 
-let builtinsRegistered = false;
+// Built-in nodes register via import side-effect (each module calls
+// registerNode()). Importing this barrel wires the full palette; tests that
+// want an empty registry import ./advance, ./registry etc. directly.
+import './nodes/receiving.node';
+import './nodes/inspection.node';
+import './nodes/repair.node';
+import './nodes/list-ebay.node';
+import './nodes/pack.node';
+import './nodes/ship.node';
 
 /**
- * Register the built-in node implementations. Idempotent. Phase C adds the
- * `./nodes/*` imports here; in Phase B the registry is intentionally empty
- * (the engine + tests don't depend on any concrete node).
+ * Kept for API compatibility — builtins now register when this module loads
+ * (the side-effect imports above), so this is a no-op.
  */
 export function registerBuiltins(): void {
-  if (builtinsRegistered) return;
-  builtinsRegistered = true;
-  // Phase C: import './nodes/receiving.node', './nodes/inspection.node', etc.
-  // Each module calls registerNode() as an import side-effect.
+  /* no-op */
 }
 
 /** Advance one item through its active workflow using the production wiring. */
@@ -34,7 +38,7 @@ export async function advance(
 ): Promise<AdvanceOutcome> {
   registerBuiltins();
   return advanceItem(
-    { store: createDrizzleStore(orgId), getNode, emit: emitWorkflowEvent },
+    { store: createDrizzleStore(orgId), getNode, emit: (event) => emitWorkflowEvent(orgId, event) },
     { orgId, ...args },
   );
 }

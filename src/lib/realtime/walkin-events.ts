@@ -14,13 +14,15 @@ function getAblyRestClient() {
 }
 
 export async function publishSaleCompleted(payload: {
+  /** Owning tenant — resolve from the Square account→org mapping / matched sale. */
+  orgId: string;
   squareOrderId: string;
   source: string;
 }) {
   const client = getAblyRestClient();
   if (!client) return;
 
-  const channel = getWalkInChannelName();
+  const channel = getWalkInChannelName(payload.orgId);
   try {
     await client.channels.get(channel).publish('sale.completed', {
       squareOrderId: payload.squareOrderId,

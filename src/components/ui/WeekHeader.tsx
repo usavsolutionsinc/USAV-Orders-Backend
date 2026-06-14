@@ -6,31 +6,8 @@ import {
   PaneHeaderTitle,
   PaneHeaderCount,
   PaneHeaderWeekNav,
-  paneHeaderRowClass,
-  paneHeaderHighContrastTitleClass,
 } from './pane-header';
-import { formatDateWithOrdinal, formatWeekRangeCompact, getCurrentPSTDateKey } from '@/utils/date';
-
-/** Inner row for the week strip — re-exported from the generalized PaneHeader so legacy callers keep working. */
-export const weekHeaderInnerRowClass = paneHeaderRowClass;
-
-/**
- * Per-day band in scroll content — same look as the old sticky day row, but **not** sticky.
- * Only the weekly {@link WeekHeader} should stick; these rows scroll normally beneath it.
- */
-export const weekDayGroupBandClass =
-  'border-y border-gray-300 bg-gray-50/95';
-
-/** Date label in a day-group row — matches mobile week tables + {@link DateGroupHeader}. */
-export const weekDayGroupDateClass =
-  'text-caption font-black uppercase tracking-[0.2em] text-gray-700';
-
-/** Count in a day-group row. */
-export const weekDayGroupCountClass =
-  'text-caption font-black tabular-nums text-gray-900';
-
-/** Desktop high-contrast date label — alias of the generalized PaneHeader title class. */
-export const weekHeaderHighContrastDateClass = paneHeaderHighContrastTitleClass;
+import { formatWeekRangeCompact } from '@/utils/date';
 
 interface WeekRange {
   startStr: string;
@@ -38,9 +15,14 @@ interface WeekRange {
 }
 
 interface WeekHeaderProps {
-  stickyDate: string;
-  fallbackDate: string;
+  /** Week total shown on the left. */
   count: number;
+  /**
+   * Optional left-side title (e.g. a board name, or "Today" for un-grouped
+   * boards). Date-grouped tables omit it — the sticky {@link DateGroupHeader}
+   * band inside the scroll container is the live date header.
+   */
+  label?: ReactNode;
   leftSlot?: ReactNode;
   weekRange?: WeekRange;
   weekOffset?: number;
@@ -49,10 +31,18 @@ interface WeekHeaderProps {
   rightSlot?: ReactNode;
 }
 
+/**
+ * Slim week-navigation bar: week total on the left, week range + prev/next on
+ * the right.
+ *
+ * It deliberately does **not** track or echo the active day. Each week table's
+ * day rows are separated by a sticky {@link DateGroupHeader} band that docks to
+ * the top of the scroll container and serves as the live date header. This kept
+ * the per-table `[data-day-header]` scroll handlers from having to exist at all.
+ */
 export default function WeekHeader({
-  stickyDate,
-  fallbackDate,
   count,
+  label,
   leftSlot,
   weekRange,
   weekOffset = 0,
@@ -60,29 +50,6 @@ export default function WeekHeader({
   onNextWeek,
   rightSlot,
 }: WeekHeaderProps) {
-  const getTodayPSTDisplay = () => {
-    try {
-      const today = getCurrentPSTDateKey();
-      return today ? formatDateWithOrdinal(today) : fallbackDate;
-    } catch {
-      return fallbackDate;
-    }
-  };
-
-  const formattedTodayPST = (() => {
-    try {
-      const today = getCurrentPSTDateKey();
-      return today ? formatDateWithOrdinal(today) : '';
-    } catch {
-      return '';
-    }
-  })();
-
-  const formattedStickyDate = stickyDate ? formatDateWithOrdinal(stickyDate) : '';
-  const dateLineDisplay = formattedStickyDate || getTodayPSTDisplay();
-  const stickyDateLabel =
-    formattedTodayPST && dateLineDisplay === formattedTodayPST ? 'Today' : dateLineDisplay;
-
   const resolvedRightSlot =
     rightSlot ??
     (weekRange && onPrevWeek && onNextWeek ? (
@@ -97,14 +64,14 @@ export default function WeekHeader({
   return (
     <PaneHeader
       // Draw the divider as an inner line on the row (gray-300, matching the
-      // sidebar bands + day-group rows) instead of the faint outer border on
+      // sidebar bands + day-group bands) instead of the faint outer border on
       // the translucent sticky shell — keeps it aligned across columns.
       className="border-b-0"
       rowClassName="border-b border-gray-300"
       leftSlot={
         <>
           {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
-          <PaneHeaderTitle>{stickyDateLabel}</PaneHeaderTitle>
+          {label ? <PaneHeaderTitle>{label}</PaneHeaderTitle> : null}
           <PaneHeaderCount count={count} />
         </>
       }

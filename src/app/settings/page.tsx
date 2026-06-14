@@ -1,6 +1,7 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { HardwareSection } from '@/components/settings/sections/HardwareSection';
 import { WorkstationSection } from '@/components/settings/sections/WorkstationSection';
 import { QuickAccessSection } from '@/components/settings/sections/QuickAccessSection';
@@ -14,8 +15,14 @@ import { OperationsLogSection } from '@/components/settings/sections/OperationsL
 import { getActiveSettingsSection } from '@/components/sidebar/SettingsSidebarPanel';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const active = getActiveSettingsSection(searchParams?.get('section'));
+
+  // Billing lives at its own route; ?section=billing is just a deep-link alias.
+  useEffect(() => {
+    if (active === 'billing') router.replace('/settings/billing');
+  }, [active, router]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">

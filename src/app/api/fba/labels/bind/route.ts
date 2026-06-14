@@ -152,7 +152,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'label-bind', shipmentId: Number(shipment_id || 0), source: 'fba.labels.bind' });
+    await publishFbaItemChanged({ action: 'label-bind', shipmentId: Number(shipment_id || 0), source: 'fba.labels.bind', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,

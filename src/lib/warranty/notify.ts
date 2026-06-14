@@ -35,6 +35,8 @@ type NotifiableClaim = Pick<
  * it) and no-ops when there's no distinct recipient.
  */
 export async function notifyWarrantyTransition(args: {
+  /** Owning tenant (from ctx.organizationId) — namespaces the inbox channel. */
+  organizationId: string;
   claim: NotifiableClaim;
   event: WarrantyNotifyEvent;
   actorStaffId: number | null;
@@ -45,6 +47,7 @@ export async function notifyWarrantyTransition(args: {
 
     const title = args.claim.productTitle || args.claim.serialNumber || args.claim.claimNumber;
     await publishWarrantyClaimNotification({
+      organizationId: args.organizationId,
       staffIds: [creator],
       claimId: args.claim.id,
       claimNumber: args.claim.claimNumber,
@@ -70,13 +73,14 @@ export async function notifyWarrantyTransition(args: {
  * Best-effort; partial failures are swallowed.
  */
 export async function notifyWarrantyExpired(
-  claims: Array<{ id: number; claimNumber: string; createdByStaffId: number | null; title: string | null }>,
+  claims: Array<{ organizationId: string; id: number; claimNumber: string; createdByStaffId: number | null; title: string | null }>,
 ): Promise<void> {
   await Promise.all(
     claims.map(async (c) => {
       try {
         if (!c.createdByStaffId) return;
         await publishWarrantyClaimNotification({
+          organizationId: c.organizationId,
           staffIds: [c.createdByStaffId],
           claimId: c.id,
           claimNumber: c.claimNumber,

@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ClipboardList, X } from '@/components/Icons';
+import { ClipboardList, Copy, Check, X } from '@/components/Icons';
+import { copyToClipboard } from '@/utils/_dom';
 import {
     useActivityInbox,
     type ActivityInboxItem,
@@ -35,6 +36,16 @@ function canShowUndo(it: ActivityInboxItem): boolean {
 export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
     const { items, pendingUndoId, undoItem, dismissItem, clear } = useActivityInbox();
     const [, setNowTick] = useState(0);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    const handleCopyBack = async (it: ActivityInboxItem) => {
+        if (!it.body) return;
+        const ok = await copyToClipboard(it.body);
+        if (ok) {
+            setCopiedId(it.id);
+            window.setTimeout(() => setCopiedId((c) => (c === it.id ? null : c)), 1200);
+        }
+    };
 
     useEffect(() => {
         const hasTimedUndo = items.some((i) => canShowUndo(i));
@@ -147,6 +158,21 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                         </p>
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-1">
+                                        {it.kind === 'staff_message' && it.body && (
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleCopyBack(it)}
+                                                aria-label="Copy message"
+                                                title="Copy message"
+                                                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                            >
+                                                {copiedId === it.id ? (
+                                                    <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                ) : (
+                                                    <Copy className="h-3.5 w-3.5" />
+                                                )}
+                                            </button>
+                                        )}
                                         {canShowUndo(it) && (
                                             <button
                                                 type="button"

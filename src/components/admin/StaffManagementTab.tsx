@@ -7,7 +7,8 @@ import { qk } from '@/queries/keys';
 import { StaffScheduleBoard } from './StaffScheduleBoard';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getStaffChannelName } from '@/lib/realtime/channels';
+import { getStaffChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
@@ -39,10 +40,12 @@ import { NextWeekScheduleTable } from './staff-management/NextWeekScheduleTable'
 export function StaffManagementTab() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null);
   const [calendarExpanded, setCalendarExpanded] = useState(true);
-  const staffChannelName = getStaffChannelName();
+  const staffChannelName = safeChannelName(() => getStaffChannelName(orgId!));
 
   // All queries + derived data from the extracted hook
   const {
@@ -66,7 +69,7 @@ export function StaffManagementTab() {
   useAblyChannel(staffChannelName, 'staff.schedule.changed', () => {
     queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
     queryClient.invalidateQueries({ queryKey: qk.staff.all });
-  }, true);
+  }, !!staffChannelName);
 
   const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
   const staffView = searchParams.get('staffView') || 'all';

@@ -9,8 +9,7 @@ import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
-import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey } from '@/utils/date';
+import { DateGroupHeader } from './ui/DateGroupHeader';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
@@ -34,8 +33,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     loading,
     isRefreshing,
     scrollRef,
-    stickyDate,
-    currentCount,
   } = usePackerTableController({ staffId: packedBy });
 
   useEffect(() => {
@@ -54,8 +51,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       window.removeEventListener('close-shipped-details', handleCloseDetails as EventListener);
     };
   }, []);
-
-  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   const toDetailRecord = (record: PackerRecord) => {
     return {
@@ -111,8 +106,6 @@ export function PackerTable({ packedBy }: PackerTableProps) {
     setSelectedDetailId(detailId);
   };
 
-  const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
-
   useEffect(() => {
     const handleNavigateDetails = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
       if (selectedDetailId === null || orderedRecords.length === 0) return;
@@ -160,9 +153,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       )}
       <div className="flex flex-1 flex-col overflow-hidden">
         <WeekHeader
-          stickyDate={stickyDate}
-          fallbackDate={formatHeaderDate()}
-          count={currentCount || getWeekCount()}
+          count={getWeekCount()}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
@@ -185,7 +176,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
                   });
                   return (
                     <div key={date} className="flex flex-col">
-                      <DesktopDateGroupHeader date={date} total={dateRecords.length} />
+                      <DateGroupHeader date={date} total={dateRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
                           sku: record.sku,

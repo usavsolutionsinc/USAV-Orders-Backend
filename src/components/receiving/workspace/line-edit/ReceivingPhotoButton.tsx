@@ -19,6 +19,8 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
@@ -50,6 +52,8 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
 }) {
   // Seed the runtime NAS base URL so nasConfigured() reads true on first paint.
   useNasConfig();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const queryClient = useQueryClient();
   const queryKey = ['receiving-photos', receivingId];
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -67,7 +71,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     staleTime: 10_000,
   });
 
-  const phoneChannel = staffId > 0 ? `phone:${staffId}` : 'phone:__idle__';
+  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   const handlePhoneMessage = useCallback(
     (msg: { data?: { receiving_id?: number } }) => {
       const incoming = Number(msg?.data?.receiving_id);
@@ -77,7 +81,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [receivingId, queryClient],
   );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
+  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
 
   const photos = useMemo(
     () =>

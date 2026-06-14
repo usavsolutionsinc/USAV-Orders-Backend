@@ -1,20 +1,24 @@
-import pool from '@/lib/db';
-import { browseSearch, type BrowseCondition } from '@/lib/ebay/browse-client';
-import { normalizeBrowseItems, type NormalizedCandidate } from '@/lib/sourcing/normalize';
+import type { BrowseCondition } from '@/lib/ebay/browse-client';
 import { saveCandidate } from '@/lib/neon/sourcing-queries';
-import type { OrgId } from '@/lib/tenancy/constants';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import type { CandidateSource, NormalizedCandidate } from '@/lib/sourcing/normalize';
+import { buildScourQuery, type ScourRequest } from './adapters/types';
+import { getEnabledAdapters } from './adapters';
 
 /**
- * Secondary-market sourcing search orchestration.
+ * Secondary-market sourcing orchestration (the "scour").
  *
- * Builds an eBay Browse query (prefers model number + part role keywords),
- * runs a single Browse call, normalizes the hits, logs the call to
- * ebay_api_calls, and — only when `save` is set — persists the hits as
- * sourcing_candidates (deduped on the (source, external_id) unique index).
+ * Builds one query from the most specific signal available, fans it across every
+ * *enabled* SourceAdapter (eBay today; see src/lib/sourcing/adapters), dedupes
+ * the hits, and — only when `save` is set — persists them as sourcing_candidates
+ * (deduped on the (source, external_id) unique index).
  *
- * Quota discipline (Browse ~5k/day): this is user-initiated only, one round
- * trip per call, no auto-fan-out. Callers should short-cache identical queries
- * upstream.
+ * Resilience: adapters run with allSettled, so one failing channel doesn't sink
+ * the others. If *every* adapter fails (e.g. the sole eBay channel errors on
+ * creds), the first error is rethrown so the caller can surface it (502).
+ *
+ * Quota discipline: each adapter does one round trip per call and logs its own
+ * usage. Callers keep this user-initiated and short-cache identical queries.
  */
 
 export interface SearchSecondaryMarketParams {
@@ -30,6 +34,8 @@ export interface SearchSecondaryMarketParams {
   boseModelId?: number | null;
   sourcingAlertId?: number | null;
   orgId?: OrgId;
+  /** Restrict the scour to specific channels (default: all enabled). */
+  sources?: CandidateSource[];
 }
 
 export interface SearchSecondaryMarketResult {
@@ -37,66 +43,64 @@ export interface SearchSecondaryMarketResult {
   results: NormalizedCandidate[];
   total: number;
   saved: number;
+  /** Per-channel hit counts (before cross-channel dedupe). */
+  bySource: Record<string, number>;
 }
 
-/** Build the Browse `q` from the most specific signal available. */
-function buildQuery(params: SearchSecondaryMarketParams): string {
-  const parts: string[] = [];
-  if (params.modelNumber?.trim()) parts.push(params.modelNumber.trim());
-  if (params.partRole?.trim()) parts.push(params.partRole.trim().replace(/_/g, ' '));
-  if (params.query?.trim()) parts.push(params.query.trim());
-  return parts.join(' ').trim();
-}
-
-async function logCall(endpoint: string, latencyMs: number, statusCode: number, errorMessage: string | null) {
-  try {
-    await pool.query(
-      `INSERT INTO ebay_api_calls (method, endpoint, latency_ms, status_code, error_message, created_at)
-       VALUES ('GET', $1, $2, $3, $4, NOW())`,
-      [endpoint, latencyMs, statusCode, errorMessage],
-    );
-  } catch (err) {
-    console.warn('[sourcing.search] ebay_api_calls log failed:', err instanceof Error ? err.message : err);
-  }
-}
-
-export async function searchSecondaryMarket(
+export async function scour(
   params: SearchSecondaryMarketParams,
 ): Promise<SearchSecondaryMarketResult> {
-  const q = buildQuery(params);
+  const orgId = params.orgId ?? USAV_ORG_ID;
+  const req: ScourRequest = {
+    query: params.query ?? null,
+    modelNumber: params.modelNumber ?? null,
+    partRole: params.partRole ?? null,
+    conditions: params.conditions,
+    maxPriceCents: params.maxPriceCents ?? null,
+    limit: params.limit,
+    orgId,
+  };
+
+  const q = buildScourQuery(req);
   if (!q) throw new Error('Provide a query or modelNumber to search');
 
-  const startedAt = Date.now();
-  let normalized: NormalizedCandidate[];
-  let total = 0;
-  try {
-    const browse = await browseSearch({
-      q,
-      conditions: params.conditions,
-      maxPriceCents: params.maxPriceCents ?? null,
-      limit: params.limit,
-      orgId: params.orgId,
-    });
-    normalized = normalizeBrowseItems(browse.items);
-    total = browse.total;
-    await logCall('buy/browse/v1/item_summary/search', Date.now() - startedAt, 200, null);
-  } catch (err) {
-    await logCall(
-      'buy/browse/v1/item_summary/search',
-      Date.now() - startedAt,
-      502,
-      err instanceof Error ? err.message : String(err),
-    );
-    throw err;
+  const adapters = await getEnabledAdapters(orgId, params.sources);
+  if (adapters.length === 0) {
+    throw new Error('No sourcing channels are configured for this organization');
   }
 
-  // Persist to the watchlist only when explicitly requested.
+  const settled = await Promise.allSettled(adapters.map((a) => a.search(req)));
+  const all: NormalizedCandidate[] = [];
+  const bySource: Record<string, number> = {};
+  const errors: unknown[] = [];
+  settled.forEach((s, i) => {
+    if (s.status === 'fulfilled') {
+      all.push(...s.value);
+      bySource[adapters[i].id] = s.value.length;
+    } else {
+      errors.push(s.reason);
+    }
+  });
+  // Every channel failed → surface the first error (preserves single-channel 502).
+  if (all.length === 0 && errors.length > 0) {
+    throw errors[0];
+  }
+
+  // Dedupe across channels: prefer the external id, else title+price.
+  const seen = new Set<string>();
+  const results = all.filter((n) => {
+    const key = `${n.source}:${n.externalId ?? `${n.title}|${n.priceCents}`}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   let saved = 0;
-  if (params.save && normalized.length) {
-    for (const n of normalized) {
+  if (params.save && results.length) {
+    for (const n of results) {
       try {
         await saveCandidate({
-          source: 'ebay',
+          source: n.source,
           externalId: n.externalId,
           title: n.title,
           url: n.url,
@@ -114,10 +118,13 @@ export async function searchSecondaryMarket(
         });
         saved += 1;
       } catch (err) {
-        console.warn('[sourcing.search] saveCandidate failed:', err instanceof Error ? err.message : err);
+        console.warn('[sourcing.scour] saveCandidate failed:', err instanceof Error ? err.message : err);
       }
     }
   }
 
-  return { query: q, results: normalized, total, saved };
+  return { query: q, results, total: results.length, saved, bySource };
 }
+
+/** Back-compat alias — the orchestrator was previously named searchSecondaryMarket. */
+export const searchSecondaryMarket = scour;

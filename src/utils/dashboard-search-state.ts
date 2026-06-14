@@ -34,11 +34,11 @@ export function getDashboardOrderViewFromSearch(
   searchParams: Pick<URLSearchParams, 'has'>
 ): DashboardOrderView {
   if (searchParams.has('shipped')) return 'shipped';
-  if (searchParams.has('unshipped')) return 'unshipped';
-  if (searchParams.has('pending')) return 'pending';
   if (searchParams.has('fba')) return 'fba';
   if (searchParams.has('warranty')) return 'warranty';
-  return 'pending';
+  // The merged pre-ship mode. `?unshipped`, the legacy `?pending` (Awaiting +
+  // Pending are now one mode), and the bare default all resolve here.
+  return 'unshipped';
 }
 
 export function getDashboardViewGroup(view: DashboardOrderView): DashboardViewGroup {

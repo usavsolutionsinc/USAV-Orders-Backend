@@ -9,7 +9,7 @@ import { emitSelection, emitSelectionTotal, onToggleAll } from '@/lib/selection/
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg, getWorkflowIconMeta, shouldShowWorkflowStatusIcon } from '@/components/station/receiving-constants';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
-import { OrderIdChip, TrackingChip, SerialChip, SkuCountChip, SerialCountChip, getLast4 } from '@/components/ui/CopyChip';
+import { OrderIdChip, TrackingChip, SerialChip, SkuCountChip, SerialCountChip, getLast4, AddValueChipFace } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { SOURCE_PLATFORM_LABELS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
@@ -18,7 +18,7 @@ import { groupRowsBy } from '@/lib/group-rows';
 import { DeliveryStateIcon } from '@/components/station/ReceivingDeliveryStateIcon';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { DesktopDateGroupHeader } from '@/components/ui/DesktopDateGroupHeader';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import type { IncomingDeliveryState } from '@/components/sidebar/receiving/IncomingSidebarPanel';
 import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneHeader';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
@@ -29,8 +29,6 @@ import {
 } from '@/lib/receiving/receiving-modes';
 import {
   computeWeekRange,
-  formatDateWithOrdinal,
-  getCurrentPSTDateKey,
   toPSTDateKey,
 } from '@/utils/date';
 import {
@@ -82,6 +80,16 @@ export interface ReceivingLineRow {
   zoho_last_modified_time: string | null;
   zoho_synced_at: string | null;
   receiving_type: string | null;
+  /** Unfound-line intake classification (receiving_lines.intake_type): po | return | trade_in. Null on Zoho-matched lines. */
+  intake_type?: string | null;
+  /** Operator platform override on a manually-added unfound line (receiving_lines.source_platform_pill). Null on Zoho-matched lines. */
+  source_platform_pill?: string | null;
+  /**
+   * Carton-level DEFAULT receiving type (receiving.intake_type): PO|RETURN|TRADE_IN.
+   * The carton pill edits this; receiving_type above overrides per line.
+   * Effective line type = receiving_type ?? carton_intake_type ?? 'PO'. Migration 2026-06-13b.
+   */
+  carton_intake_type?: string | null;
   notes: string | null;
   /** Carton-level support notes from `receiving.support_notes` (same for all lines on the package). */
   receiving_support_notes?: string | null;
@@ -271,13 +279,12 @@ function IncomingAttachTrackingButton({
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           title="Attach a tracking number to this PO before the box arrives"
-          // Sits in the empty tracking chip slot — echoes the blue carrier
-          // tracking chip (dashed underline = "nothing here yet, click to add").
-          // Label kept terse ("Add TRK#") to fit the tracking column width.
-          className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-mini font-bold leading-none tracking-tight text-blue-600 transition-colors hover:text-blue-700"
+          // Sits in the empty tracking chip slot — the shared AddValueChipFace
+          // (dashed underline = "nothing here yet, click to add"). Same face the
+          // dashboard paste-tracking button uses, so the two can't drift.
+          className="inline-flex shrink-0 items-center transition-colors"
         >
-          <Link2 className="h-3.5 w-3.5 shrink-0" />
-          <span className="border-b-2 border-dashed border-blue-400 pb-0.5">Add TRK#</span>
+          <AddValueChipFace label="Add TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} />
         </button>
       }
     />
@@ -857,9 +864,6 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
-  const [activeDateKey, setActiveDateKey] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekRange = computeWeekRange(weekOffset);
@@ -1211,11 +1215,6 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     );
   }, [groupedRecords, weekRange.startStr, weekRange.endStr, skipWeekFilter]);
 
-  const topDateKey = useMemo(() => {
-    const dates = Object.keys(filteredGroupedRecords).sort((a, b) => b.localeCompare(a));
-    return dates[0] ?? '';
-  }, [filteredGroupedRecords]);
-
   /** Flat list of LINES in render order — newest day → newest group → its lines.
    *  Drives selection broadcast, arrow-nav and scroll-into-view (those operate on
    *  individual lines, not PO groups). Incoming defers to the API's server-side
@@ -1376,52 +1375,8 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
     rowEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [selectedId]);
 
-  // ── Scroll-based sticky header (matches TechTable) ────────────────────────
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      // Promote the next day as its band reaches the 40px sticky header edge,
-      // keeping the WeekHeader date in step with the band hiding under it.
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-      } else {
-        break;
-      }
-    }
-    if (activeDate) {
-      setActiveDateKey((prev) => (prev === activeDate ? prev : activeDate));
-      setStickyDate(formatDateWithOrdinal(activeDate));
-      if (activeCount) setCurrentCount(activeCount);
-    } else if (topDateKey) {
-      setActiveDateKey((prev) => (prev === topDateKey ? prev : topDateKey));
-    }
-  }, [topDateKey]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    container.addEventListener('scroll', handleScroll);
-    const t = setTimeout(() => handleScroll(), 100);
-    return () => {
-      container.removeEventListener('scroll', handleScroll);
-      clearTimeout(t);
-    };
-  }, [handleScroll, localRows, topDateKey]);
-
-  useEffect(() => {
-    if (topDateKey) setActiveDateKey(topDateKey);
-  }, [topDateKey]);
-
   const getWeekCount = () =>
     Object.values(filteredGroupedRecords).reduce((sum, rows) => sum + rows.length, 0);
-
-  const formatHeaderDate = () => formatDateWithOrdinal(getCurrentPSTDateKey());
 
   const emptyMessage = useMemo(
     () => mode.emptyMessage(modeContext),
@@ -1444,9 +1399,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
           />
         ) : (
           <WeekHeader
-            stickyDate={stickyDate}
-            fallbackDate={formatHeaderDate()}
-            count={currentCount || getWeekCount()}
+            count={getWeekCount()}
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={() => setWeekOffset(weekOffset + 1)}
@@ -1476,10 +1429,9 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
                       );
                   return (
                     <div key={date} className="flex flex-col">
-                      <DesktopDateGroupHeader
+                      <DateGroupHeader
                         date={date}
                         total={sortedGroups.length}
-                        hidden={date === activeDateKey}
                       />
                       {sortedGroups.map((group, groupIndex) => {
                         // Single-line PO → render the row flat, exactly as before;

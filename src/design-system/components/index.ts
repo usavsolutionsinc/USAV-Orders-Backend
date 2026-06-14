@@ -12,7 +12,6 @@ export * from './ExternalLinkActionIcon';
 export * from './StatusMicroLabel';
 export * from './AssignmentOverlayCard';
 export * from './sidebar-intake';
-export * from './DateGroupHeader';
 export * from './FormField';
 export * from './OverlaySearch';
 export * from './TabSwitch';

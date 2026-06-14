@@ -3,6 +3,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import {
+  safeChannelName,
+  getPhoneBridgeChannelName,
+  getStaffStationBridgeChannelName,
+} from '@/lib/realtime/channels';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
@@ -34,7 +39,10 @@ const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive'] as co
  */
 export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
+  const stationBridgeChannel = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId));
+  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   useRealtimeToasts('receiving');
 
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
@@ -57,9 +65,9 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
       invalidation: { receiving: true },
       // Desktop tracking scan publishes here → surface the new carton instantly.
       ably: {
-        channel: staffId > 0 ? `station:${staffId}` : 'station:__idle__',
+        channel: stationBridgeChannel,
         event: 'receiving_photo_request',
-        enabled: staffId > 0,
+        enabled: !!stationBridgeChannel && staffId > 0,
       },
       windowEvents: ['usav-refresh-data'],
     },
@@ -70,10 +78,10 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   // `x{n}` badge) ticks up. Ably echoes to the publisher, so this fires on the
   // capturing phone too, not just a paired one.
   useAblyChannel(
-    staffId > 0 ? `phone:${staffId}` : 'phone:__idle__',
+    phoneChannel,
     'receiving_photo_uploaded',
     refetch,
-    staffId > 0,
+    !!phoneChannel && staffId > 0,
   );
 
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });

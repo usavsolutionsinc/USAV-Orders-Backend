@@ -10,7 +10,10 @@ from pathlib import Path
 
 from PIL import Image
 
-from vision.app.engine import get_engine
+# Make `vision.*` importable no matter the CWD (repo root or inside vision/).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vision.app.engine import get_engine  # noqa: E402
 
 
 def main() -> None:

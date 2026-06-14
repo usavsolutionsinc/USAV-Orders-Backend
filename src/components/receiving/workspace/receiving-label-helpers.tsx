@@ -59,6 +59,11 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
 
   // Bare handle (R-{id}) — `routeScan()` routes to /m/r/{id}. No URL.
   const qrSvg = renderDataMatrixSvg({ value: qrPayload, symbology: 'datamatrix', scale: 4 });
+  // Human-readable interpretation (HRI) of the carton handle, printed under
+  // the DataMatrix the way a barcode shows its digits. Gives the operator a
+  // value to TYPE into the scan bar when the symbol won't scan — the same
+  // `R-{id}` handle resolves identically by hand (see looksLikeReceivingCode).
+  const handleHri = /^(?:R|RCV)-\d+$/i.test(qrPayload) ? qrPayload.toUpperCase() : '';
 
   const condShort = conditionLabel(payload.conditionCode, 'label');
   const condHtml = escapeHtml(condShort);
@@ -76,8 +81,10 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
   .cond{font-size:13px;font-weight:900;color:#111;white-space:nowrap}
   .po{font-size:12px;font-weight:900;letter-spacing:0.3px;line-height:1.05;color:#111;white-space:nowrap;font-variant-numeric:tabular-nums}
   .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .qr{flex:0 0 auto;width:0.86in;height:0.86in;display:flex;align-items:center;justify-content:center}
+  .qrcol{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  .qr{width:0.74in;height:0.74in;display:flex;align-items:center;justify-content:center}
   .qr svg{width:100%;height:100%;display:block}
+  .hri{font-size:7px;font-weight:800;letter-spacing:0.3px;line-height:1;color:#111;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}
 </style></head><body>
 <div class="wrap">
   <div class="info">
@@ -91,7 +98,10 @@ export function printReceivingLabel(payload: ReceivingLabelPayload) {
       <span class="po">${escapeHtml(receivingLabelPoCornerDisplay(payload))}</span>
     </div>
   </div>
-  <div class="qr">${qrSvg}</div>
+  <div class="qrcol">
+    <div class="qr">${qrSvg}</div>
+    ${handleHri ? `<div class="hri">${escapeHtml(handleHri)}</div>` : ''}
+  </div>
 </div>
 <script>
 window.onload=function(){

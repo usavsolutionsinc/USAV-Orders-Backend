@@ -239,7 +239,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
     await client.query('COMMIT');
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
-    await publishReceivingLogChanged({ action: 'update', rowId: String(receivingId), source: 'receiving.match' });
+    await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'update', rowId: String(receivingId), source: 'receiving.match' });
 
     return NextResponse.json({
       success: true,

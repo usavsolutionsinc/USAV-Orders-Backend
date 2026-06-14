@@ -4,6 +4,7 @@ import { useCallback, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
 
 interface PhotoRequestPayload {
   receiving_id?: number;
@@ -33,7 +34,9 @@ export function ReceivingPhotoRequestCamera() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
+  const stationBridgeChannel = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId));
 
   // Dedupe: Ably can redeliver and the desktop fires one request per scan —
   // ignore a request_id we already routed on.
@@ -66,10 +69,10 @@ export function ReceivingPhotoRequestCamera() {
   );
 
   useAblyChannel(
-    staffId > 0 ? `station:${staffId}` : 'station:__idle__',
+    stationBridgeChannel,
     'receiving_photo_request',
     handleRequest,
-    staffId > 0,
+    !!stationBridgeChannel && staffId > 0,
   );
 
   return null;

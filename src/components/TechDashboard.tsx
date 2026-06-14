@@ -21,7 +21,7 @@ import { ReceivingInboundFeed } from './station/ReceivingInboundFeed';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
 import { RepairDetailsPanel } from './repair/RepairDetailsPanel';
 import { ActiveOrderWorkspace } from './tech/ActiveOrderWorkspace';
-import { TechTestingWorkspace } from './tech/TechTestingWorkspace';
+import { TestingLineWorkspace } from './tech/TestingLineWorkspace';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import type { ActiveStationOrder, ResolvedProductManual } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
@@ -336,7 +336,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     } else if (rightViewMode === 'testing') {
         // Testing mode → the Pass/Test-Again verdict workspace.
         rightPane = (
-            <TechTestingWorkspace
+            <TestingLineWorkspace
                 staffId={techId}
                 selectedLineId={testingLineId}
                 onSelectedLineChange={setTestingLineId}

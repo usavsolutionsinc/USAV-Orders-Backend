@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getStaffChannelName } from '@/lib/realtime/channels';
+import { getStaffChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 import type { StaffMember } from '@/lib/staffCache';
 import type { StaffAvailabilityMember, StaffAvailabilityResponse } from '@/lib/staff-availability';
 import { staffHasRole } from '@/utils/staff';
@@ -71,13 +72,15 @@ async function fetchAvailability(): Promise<StaffAvailabilityResponse> {
 
 export function useTodayStaffAvailability() {
   const queryClient = useQueryClient();
-  const channelName = getStaffChannelName();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const channelName = safeChannelName(() => getStaffChannelName(orgId!));
 
   useAblyChannel(channelName, 'staff.schedule.changed', () => {
     queryClient.invalidateQueries({ queryKey: qk.staff.availabilityToday });
     queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
     queryClient.invalidateQueries({ queryKey: qk.staff.all });
-  }, true);
+  }, !!channelName);
 
   const availabilityQuery = useQuery<StaffAvailabilityResponse>({
     queryKey: qk.staff.availabilityToday,

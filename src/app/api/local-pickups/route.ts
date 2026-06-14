@@ -314,3 +314,42 @@ export const PATCH = withAuth(async (request: NextRequest) => {
     );
   }
 }, { permission: 'walk_in.intake' });
+
+/**
+ * DELETE /api/local-pickups?receiving_id=N — un-flag a wrongly-marked local
+ * pickup, clearing its local_pickup_items detail WITHOUT touching the parent
+ * receiving carton (the reverse of the POST/PATCH upsert). Guards that the
+ * carton exists and is a LOCAL pickup so a non-pickup carton can't be touched;
+ * an already-absent detail row is an idempotent success.
+ */
+export const DELETE = withAuth(async (request: NextRequest) => {
+  try {
+    const receivingId = Number(request.nextUrl.searchParams.get('receiving_id'));
+    if (!Number.isFinite(receivingId) || receivingId <= 0) {
+      return NextResponse.json({ success: false, error: 'receiving_id is required' }, { status: 400 });
+    }
+
+    const recv = await pool.query<{ carrier: string | null }>(
+      `SELECT carrier FROM receiving WHERE id = $1 LIMIT 1`,
+      [receivingId],
+    );
+    if (recv.rows.length === 0) {
+      return NextResponse.json({ success: false, error: 'receiving not found' }, { status: 404 });
+    }
+    if (String(recv.rows[0].carrier ?? '').toUpperCase() !== 'LOCAL') {
+      return NextResponse.json(
+        { success: false, error: 'receiving is not a local pickup source' },
+        { status: 409 },
+      );
+    }
+
+    await pool.query(`DELETE FROM local_pickup_items WHERE receiving_id = $1`, [receivingId]);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[local-pickups][DELETE]', error);
+    return NextResponse.json(
+      { success: false, error: error?.message || 'Failed to clear local pickup detail' },
+      { status: 500 }
+    );
+  }
+}, { permission: 'walk_in.intake' });

@@ -26,6 +26,10 @@
  *                line). The triage "to-do" between the door scan and the unbox
  *                step. Disjoint from `activity` (which requires qty>0 / unboxed).
  * - `testing`  — lines with at least one recorded testing verdict.
+ * - `viewed`   — lines the requesting staff recently OPENED in the receiving
+ *                workspace, newest-opened first. Per-staff, backed by
+ *                receiving_line_views (upserted on open). Powers the unbox
+ *                sidebar's "Viewed" pill.
  */
 export const RECEIVING_VIEWS = [
   'all',
@@ -35,6 +39,7 @@ export const RECEIVING_VIEWS = [
   'activity',
   'scanned',
   'testing',
+  'viewed',
 ] as const;
 
 export type ReceivingView = (typeof RECEIVING_VIEWS)[number];

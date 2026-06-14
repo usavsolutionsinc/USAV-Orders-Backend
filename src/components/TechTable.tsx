@@ -12,11 +12,10 @@ import {
   PlatformChip,
   getLast4,
 } from './ui/CopyChip';
-import { DesktopDateGroupHeader } from './ui/DesktopDateGroupHeader';
+import { DateGroupHeader } from './ui/DateGroupHeader';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from './ui/WeekHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, computeWeekRange } from '@/utils/date';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
@@ -44,7 +43,7 @@ export function TechTable({ testedBy }: TechTableProps) {
     weekOffset, setWeekOffset, weekRange,
     visibleRecords, groupedRecords, loading, isRefreshing,
     getRowKey, removedRowKeys, setRemovedRowKeys,
-    scrollRef, stickyDate, currentCount,
+    scrollRef,
   } = useTechTableController({ staffId: testedBy });
 
   const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy)].text;
@@ -64,8 +63,6 @@ export function TechTable({ testedBy }: TechTableProps) {
       window.removeEventListener('close-shipped-details', handleCloseDetails as any);
     };
   }, []);
-
-  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
 
   const toDetailRecord = (record: TechRecord) => {
     // Normalize deadline to YYYY-MM-DD — field is sourced from work_assignments.deadline_at (TIMESTAMPTZ)
@@ -129,9 +126,6 @@ export function TechTable({ testedBy }: TechTableProps) {
     window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
     setSelectedDetailId(detailId);
   };
-
-  const formatHeaderDate = () => formatDate(getCurrentPSTDateKey());
-
 
   const filteredGroupedRecords = Object.fromEntries(
     Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
@@ -212,9 +206,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       )}
       <div className="flex-1 flex flex-col overflow-hidden">
         <WeekHeader
-          stickyDate={stickyDate}
-          fallbackDate={formatHeaderDate()}
-          count={currentCount || getWeekCount()}
+          count={getWeekCount()}
           weekRange={weekRange}
           weekOffset={weekOffset}
           onPrevWeek={() => setWeekOffset(weekOffset + 1)}
@@ -237,7 +229,7 @@ export function TechTable({ testedBy }: TechTableProps) {
                   });
                   return (
                     <div key={date} className="flex flex-col">
-                      <DesktopDateGroupHeader date={date} total={dateRecords.length} />
+                      <DateGroupHeader date={date} total={dateRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const displayValues = getOrderDisplayValues({
                           sku: record.sku,

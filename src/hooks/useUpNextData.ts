@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Order, RepairQueueItem, FBAQueueItem, ReceivingQueueItem } from '@/components/station/upnext/upnext-types';
 import { parsePositiveInt } from '@/utils/number';
-import { getOrdersChannelName, getRepairsChannelName, getStationChannelName, getFbaChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, getRepairsChannelName, getStationChannelName, getFbaChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface UseUpNextDataOptions {
   techId: string;
@@ -12,6 +13,8 @@ interface UseUpNextDataOptions {
 }
 
 export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) {
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const [allOrders, setAllOrders]           = useState<Order[]>([]);
   const [allRepairs, setAllRepairs]         = useState<RepairQueueItem[]>([]);
   const [fbaItems, setFbaItems]             = useState<FBAQueueItem[]>([]);
@@ -190,10 +193,11 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [techId]);
 
-  const ordersChannelName = getOrdersChannelName();
-  const repairsChannelName = getRepairsChannelName();
-  const stationChannelName = getStationChannelName();
-  const fbaChannelName = getFbaChannelName();
+  const ordersChannelName = safeChannelName(() => getOrdersChannelName(orgId!));
+  const repairsChannelName = safeChannelName(() => getRepairsChannelName(orgId!));
+  // Global per-org station broadcast (receiving log changes) — NOT a per-staff bridge.
+  const stationChannelName = safeChannelName(() => getStationChannelName(orgId!));
+  const fbaChannelName = safeChannelName(() => getFbaChannelName(orgId!));
 
   useAblyChannel(
     ordersChannelName,
@@ -223,33 +227,33 @@ export function useUpNextData({ techId, onAllCompleted }: UseUpNextDataOptions) 
         return hit ? next : prev;
       });
     },
-    true,
+    !!ordersChannelName,
   );
 
   useAblyChannel(
     ordersChannelName,
     'queue.assignments',
     debouncedRefresh,
-    true,
+    !!ordersChannelName,
   );
 
   // Refresh when orders are created/updated/deleted (e.g. Google Sheets transfer,
   // shipping status changes, order adds/deletes).
-  useAblyChannel(ordersChannelName, 'order.changed', debouncedRefresh, true);
+  useAblyChannel(ordersChannelName, 'order.changed', debouncedRefresh, !!ordersChannelName);
 
   // Refresh when an order is tested (removes it from the tech queue).
-  useAblyChannel(ordersChannelName, 'order.tested', debouncedRefresh, true);
+  useAblyChannel(ordersChannelName, 'order.tested', debouncedRefresh, !!ordersChannelName);
 
   // Refresh when repairs change (new intake, status change, pickup).
-  useAblyChannel(repairsChannelName, 'repair.changed', debouncedRefresh, true);
+  useAblyChannel(repairsChannelName, 'repair.changed', debouncedRefresh, !!repairsChannelName);
 
   // Refresh when receiving entries change (new scan, match, update).
-  useAblyChannel(stationChannelName, 'receiving-log.changed', debouncedRefresh, true);
+  useAblyChannel(stationChannelName, 'receiving-log.changed', debouncedRefresh, !!stationChannelName);
 
   // Refresh when FBA items change (scan, ready, shipped).
-  useAblyChannel(fbaChannelName, 'fba.item.changed', debouncedRefresh, true);
-  useAblyChannel(fbaChannelName, 'fba.shipment.changed', debouncedRefresh, true);
-  useAblyChannel(fbaChannelName, 'fba.catalog.changed', debouncedRefresh, true);
+  useAblyChannel(fbaChannelName, 'fba.item.changed', debouncedRefresh, !!fbaChannelName);
+  useAblyChannel(fbaChannelName, 'fba.shipment.changed', debouncedRefresh, !!fbaChannelName);
+  useAblyChannel(fbaChannelName, 'fba.catalog.changed', debouncedRefresh, !!fbaChannelName);
 
   // Mirror the real-time update strategy from PendingOrdersTable: respond to
   // broadcast refresh events so data stays in sync without waiting for the poll.

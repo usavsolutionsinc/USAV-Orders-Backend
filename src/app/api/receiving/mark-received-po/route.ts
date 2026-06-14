@@ -18,6 +18,7 @@ import {
 } from '@/lib/zoho';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
 import { attachSerialToLine } from '@/lib/receiving/serial-attach';
+import { tapWorkflow } from '@/lib/workflow/tap';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -366,6 +367,10 @@ export const POST = withAuth(async (request, ctx) => {
 
     const linesUpdatedViaReceiveUnits = openForReceive.length > 0;
 
+    // Serial units created in the loop below queue here; the after() block
+    // mirrors them into the operations graph off the request path.
+    const workflowTapQueue: Array<{ serialUnitId: number; receivingLineId: number }> = [];
+
     if (openForReceive.length > 0) {
       for (const lineRow of openForReceive) {
       const currentQty = Number(lineRow.quantity_received ?? 0);
@@ -385,6 +390,7 @@ export const POST = withAuth(async (request, ctx) => {
       // Even when unitsToAdd is 0 (line already complete) we still call the
       // helper so QA/disp/cond/workflow_status get set.
       const result = await receiveLineUnits({
+        organizationId: ctx.organizationId,
         receiving_line_id: lineRow.id,
         units: unitsToAdd,
         serials: [],
@@ -401,7 +407,7 @@ export const POST = withAuth(async (request, ctx) => {
       // Attach the inline serial as sidecar metadata — no qty/ledger effect.
       if (serialNumber && lineRow.id === serialOwnerLineId) {
         try {
-          await attachSerialToLine({
+          const attached = await attachSerialToLine({
             receiving_line_id: lineRow.id,
             serial_number: serialNumber,
             condition_grade: conditionGrade,
@@ -409,6 +415,15 @@ export const POST = withAuth(async (request, ctx) => {
             station,
             client_event_id: lineClientEventId,
           });
+          // Queue the workflow-engine tap for the after() block below — the
+          // engine mirror must never sit in the receive request path.
+          // Re-scans (already_attached) tapped on their original scan.
+          if (attached && !attached.already_attached) {
+            workflowTapQueue.push({
+              serialUnitId: attached.serial_unit.id,
+              receivingLineId: lineRow.id,
+            });
+          }
         } catch (err) {
           console.warn('mark-received-po: attachSerialToLine failed (non-fatal)', err);
         }
@@ -593,6 +608,19 @@ export const POST = withAuth(async (request, ctx) => {
       Boolean(notes) || aggregatedSerials.length > 0 || Boolean(serialNumber);
 
     after(async () => {
+      // Mirror newly-created serial units into the operations graph
+      // (fire-and-forget — tapWorkflow never throws).
+      for (const tap of workflowTapQueue) {
+        await tapWorkflow({
+          serialUnitId: tap.serialUnitId,
+          event: 'unit_received',
+          input: { receivingLineId: tap.receivingLineId },
+          staffId,
+          source: 'scan',
+          orgId: ctx.organizationId,
+        });
+      }
+
       // Line-item id resolution (was synchronous; moved here so receive
       // click never waits on Zoho). For lines that already came through
       // the matcher (zoho-receiving-sync), zoho_line_item_id is already
@@ -871,6 +899,7 @@ export const POST = withAuth(async (request, ctx) => {
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'serial-units']);
         for (const l of updatedLines) {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'update',
             rowId: String(l.id),
             source: 'receiving.mark-received-po',

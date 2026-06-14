@@ -58,7 +58,12 @@ export function pendingOrdersQuery({
   });
 }
 
-/** Awaiting-tracking queue (no shipment_id). Matches `UnshippedTable`. */
+/**
+ * The merged **Unshipped** queue — the whole pre-ship backlog (Awaiting ∪ Pending).
+ * Single source behind `UnshippedTable`; the per-stage split is a UI filter.
+ * staleTime 60s (the more-live of the old pending/awaiting values) since this is
+ * the active fulfilment work queue.
+ */
 export function unshippedOrdersQuery({
   searchQuery = '',
   packedBy,
@@ -68,7 +73,7 @@ export function unshippedOrdersQuery({
   return queryOptions({
     queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, strictSearchScope }],
     queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, strictSearchScope }),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60_000,
     gcTime: 15 * 60 * 1000,
   });
 }

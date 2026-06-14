@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { computeWeekRange, formatDateWithOrdinal } from '@/utils/date';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { computeWeekRange } from '@/utils/date';
 import { toPSTDateKey } from '@/utils/date';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
 import { useTechLogs, type TechRecord } from '@/hooks/useTechLogs';
@@ -59,8 +59,6 @@ interface UseTechTableControllerOptions {
 export function useTechTableController({ staffId }: UseTechTableControllerOptions) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [removedRowKeys, setRemovedRowKeys] = useState<Set<string>>(new Set());
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekRange = computeWeekRange(weekOffset);
@@ -176,36 +174,6 @@ export function useTechTableController({ staffId }: UseTechTableControllerOption
     return groups;
   }, [visibleRecords]);
 
-  // ── Scroll-based sticky header ────────────────────────────────────────────
-
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0');
-      } else {
-        break;
-      }
-    }
-    if (activeDate) setStickyDate(formatDateWithOrdinal(activeDate));
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, visibleRecords]);
-
   return {
     // Week navigation
     weekOffset,
@@ -224,10 +192,7 @@ export function useTechTableController({ staffId }: UseTechTableControllerOption
     removedRowKeys,
     setRemovedRowKeys,
 
-    // Scroll
+    // Scroll container
     scrollRef,
-    stickyDate,
-    currentCount,
-    handleScroll,
   };
 }

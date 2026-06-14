@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronDown, ChevronUp } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import type { ReactNode } from 'react';
 
@@ -91,11 +90,6 @@ export function SidebarSectionList<TId extends string = string>({
                 </span>
               )}
             </span>
-            {isActive ? (
-              <ChevronDown className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 mt-0.5" />
-            ) : (
-              <ChevronUp className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 mt-0.5" />
-            )}
           </button>
         );
       })}

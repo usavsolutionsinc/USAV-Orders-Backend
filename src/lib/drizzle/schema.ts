@@ -2366,8 +2366,8 @@ export const ragDocumentChunks = pgTable('rag_document_chunks', {
 
 // ─── Workflow graph layer ─────────────────────────────────────
 //
-// Node-based "Operations" engine (see docs/NODE_WORKFLOW_ARCHITECTURE.md and
-// docs/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md). These tables hold the GRAPH
+// Node-based "Operations" engine (see docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md and
+// docs/operations-studio/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md). These tables hold the GRAPH
 // definition (which node connects to which, with conditional routing) and a
 // pointer into the existing item state machine (serial_units +
 // station_activity_logs). They add no behavior on their own — the engine in
@@ -2449,6 +2449,10 @@ export const itemWorkflowState = pgTable('item_workflow_state', {
 }, (table) => ({
   activeUnitIdx: uniqueIndex('ux_item_workflow_state_unit').on(table.serialUnitId),
   orgIdx: index('idx_item_workflow_state_organization_id').on(table.organizationId),
+  defStatusIdx: index('idx_item_workflow_state_definition_status').on(
+    table.workflowDefinitionId,
+    table.status,
+  ),
 }));
 
 // workflow_runs — append-only log of every node execution, for observability
@@ -2466,6 +2470,63 @@ export const workflowRuns = pgTable('workflow_runs', {
 }, (table) => ({
   unitIdx: index('idx_workflow_runs_serial_unit_id').on(table.serialUnitId),
   orgCreatedIdx: index('idx_workflow_runs_org_created').on(table.organizationId, table.createdAt),
+}));
+
+// workflow_node_stats — daily per-node queue-depth snapshots for the Studio
+// Flow² lens (queue growth / age trends that a point-in-time query can't
+// recover). Written by /api/cron/workflow-node-stats; idempotent per
+// (definition, node, day). Time-in-node medians come from workflow_runs.
+export const workflowNodeStats = pgTable('workflow_node_stats', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  workflowDefinitionId: integer('workflow_definition_id')
+    .notNull()
+    .references(() => workflowDefinitions.id, { onDelete: 'cascade' }),
+  nodeId: text('node_id').notNull(),
+  snapshotDate: date('snapshot_date').notNull(),
+  queueDepth: integer('queue_depth').notNull().default(0),
+  blockedCount: integer('blocked_count').notNull().default(0),
+  errorCount: integer('error_count').notNull().default(0),
+  oldestEnteredAt: timestamp('oldest_entered_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  dayIdx: uniqueIndex('ux_workflow_node_stats_day').on(
+    table.workflowDefinitionId,
+    table.nodeId,
+    table.snapshotDate,
+  ),
+  orgDateIdx: index('idx_workflow_node_stats_org_date').on(table.organizationId, table.snapshotDate),
+}));
+
+// station_definitions — layer 2 of the Operations Studio: one row per
+// (page, mode) station composition, e.g. ('receiving', 'incoming'). `config`
+// holds the ordered slots → block instances → source/action bindings (see
+// docs/operations-studio/station-builder-ui-plan.md §2.4). Blocks/sources/
+// actions are CODE (src/lib/stations registries); this table is the DATA.
+// Versioning + is_active publish semantics copy workflow_definitions exactly:
+// only one row per (org, page, mode) is active; publishing flips the flag.
+export const stationDefinitions = pgTable('station_definitions', {
+  id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
+  pageKey: text('page_key').notNull(), // 'receiving'
+  modeKey: text('mode_key').notNull(), // 'incoming' — one row per sidebar mode
+  label: text('label').notNull(),
+  // Optional tie to the process graph (Studio zoom L2 opens this station).
+  workflowNodeId: text('workflow_node_id'),
+  config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
+  version: integer('version').notNull().default(1),
+  isActive: boolean('is_active').notNull().default(false),
+  updatedBy: integer('updated_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_station_definitions_organization_id').on(table.organizationId),
+  orgPageModeVersionIdx: uniqueIndex('ux_station_definitions_org_page_mode_version').on(
+    table.organizationId,
+    table.pageKey,
+    table.modeKey,
+    table.version,
+  ),
 }));
 
 // ─── Warranty Claim Logger + Repair Outcome Tracker ──────────────────────────

@@ -87,6 +87,7 @@ export const AUDIT_ENTITY = {
   PACKER_LOG: 'PACKER_LOG',
   STAFF: 'staff',
   STAFF_TODO: 'staff_todo',
+  STAFF_MESSAGE: 'staff_message',
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
@@ -100,7 +101,12 @@ export const AUDIT_ENTITY = {
   SUPPLIER: 'supplier',
   SOURCING_ALERT: 'sourcing_alert',
   SOURCING_CANDIDATE: 'sourcing_candidate',
+  SOURCING_SAVED_SEARCH: 'sourcing_saved_search',
   PART_ACQUISITION: 'part_acquisition',
+  // Station builder (Operations Studio layer 2)
+  STATION_DEFINITION: 'station_definition',
+  // Workflow graphs (Operations Studio layer 1)
+  WORKFLOW_DEFINITION: 'workflow_definition',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -146,6 +152,9 @@ export const AUDIT_ACTION = {
   STAFF_TODO_CREATE:       'staff_todo.create',
   STAFF_TODO_SET_INTERVAL: 'staff_todo.set_interval',
   STAFF_TODO_ARCHIVE:      'staff_todo.archive',
+  STAFF_TODO_UNARCHIVE:    'staff_todo.unarchive',
+  // Staff-to-staff messages (clipboard "send to staff")
+  STAFF_MESSAGE_SEND:      'staff_message.send',
   // Per-unit repair records
   REPAIR_OPEN:     'unit_repair.open',
   REPAIR_UPDATE:   'unit_repair.update',
@@ -177,10 +186,20 @@ export const AUDIT_ACTION = {
   RMA_CANCEL: 'rma.cancel',
   // Order record edit (delete uses the legacy 'orders.delete' literal)
   ORDER_UPDATE: 'orders.update',
-  // Repair service soft-cancel
+  // Unshipped governing events — first time a carrier tracking number is added to
+  // an order, and when its shipping label is printed/attached. Feed the order
+  // timeline (EventTimeline) on the dashboard details panel.
+  TRACKING_ADDED: 'orders.tracking.added',
+  LABEL_PRINTED: 'orders.label.printed',
+  // Orders-exceptions reconciliation sweep (writes orders + orders_exceptions)
+  ORDERS_EXCEPTIONS_SYNC: 'orders_exceptions.sync',
+  // Repair service soft-cancel + its reverse (reopen → restore prior status)
   REPAIR_CANCEL: 'repair_service.cancel',
+  REPAIR_REOPEN: 'repair_service.reopen',
   // Pack / order (existing callers — keep their literals stable)
   PACK_COMPLETED: 'PACK_COMPLETED',
+  // Dock scan-out: the package physically left the warehouse (SHIP_CONFIRM event)
+  SHIP_CONFIRM_SCAN: 'shipment.scan_out',
   // Bose Sourcing Engine — compatibility DB + alternative sourcing
   BOSE_MODEL_CREATE: 'bose_model.create',
   BOSE_MODEL_UPDATE: 'bose_model.update',
@@ -191,11 +210,23 @@ export const AUDIT_ACTION = {
   SUPPLIER_CREATE: 'supplier.create',
   SUPPLIER_UPDATE: 'supplier.update',
   SUPPLIER_DELETE: 'supplier.delete',
+  SOURCING_ALERT_CREATE: 'sourcing.alert.create',
   SOURCING_ALERT_RESOLVE: 'sourcing.alert.resolve',
   SOURCING_SEARCH: 'sourcing.search',
+  SOURCING_SAVED_SEARCH_CREATE: 'sourcing.saved_search.create',
+  SOURCING_SAVED_SEARCH_UPDATE: 'sourcing.saved_search.update',
+  SOURCING_SAVED_SEARCH_DELETE: 'sourcing.saved_search.delete',
+  SOURCING_SAVED_SEARCH_RUN: 'sourcing.saved_search.run',
   SOURCING_CANDIDATE_SAVE: 'sourcing.candidate.save',
   SOURCING_CANDIDATE_UPDATE: 'sourcing.candidate.update',
   SOURCING_CANDIDATE_IMPORT: 'sourcing.candidate.import',
+  // Station builder (Operations Studio layer 2) — draft/publish lifecycle
+  STATION_DRAFT_SAVE: 'station.draft.save',
+  STATION_PUBLISH:    'station.publish',
+  // Workflow graphs (Operations Studio layer 1) — draft/publish lifecycle
+  WORKFLOW_DRAFT_CREATE: 'workflow.draft.create',
+  WORKFLOW_DRAFT_SAVE:   'workflow.draft.save',
+  WORKFLOW_PUBLISH:      'workflow.publish',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];

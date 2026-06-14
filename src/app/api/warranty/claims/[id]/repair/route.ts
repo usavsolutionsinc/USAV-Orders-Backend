@@ -60,6 +60,7 @@ export const POST = withAuth(async (request, ctx) => {
         after: { attemptId: result.attemptId, outcome: parsed.data.outcome ?? null, status: result.claim.status },
       });
       await notifyWarrantyTransition({
+        organizationId: ctx.organizationId,
         claim: result.claim,
         event: result.claim.status === 'REPAIRED' ? 'repaired' : 'repair_logged',
         actorStaffId: ctx.staffId ?? null,

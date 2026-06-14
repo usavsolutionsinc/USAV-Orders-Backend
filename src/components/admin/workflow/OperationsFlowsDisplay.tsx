@@ -10,7 +10,7 @@
  * (activity/event type) that marks it, and the modules/routes that implement it.
  *
  * It's intentionally non-interactive for now (the interactive node canvas is the
- * later phase — see docs/NODE_UI_PLAN.md). Live occupancy per state is pulled
+ * later phase — see docs/operations-studio/NODE_UI_PLAN.md). Live occupancy per state is pulled
  * from /api/workflow/flow-audit purely as a "how many units are here right now"
  * annotation, so the description reflects what's currently happening.
  */

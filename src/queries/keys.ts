@@ -82,6 +82,11 @@ export const qk = {
     detail: (id: number) => ['bose-models', 'detail', id] as const,
     lookup: (key: string) => ['bose-models', 'lookup', key] as const,
   },
+  /** Brand-neutral product-model façade (Sourcing Hub §5) — Scout lookup. */
+  productModels: {
+    all: ['product-models'] as const,
+    lookup: (key: string) => ['product-models', 'lookup', key] as const,
+  },
   partCompatibility: {
     /** Broad invalidation prefix — matches every compatibility-edge query. */
     all: ['part-compatibility'] as const,
@@ -101,6 +106,7 @@ export const qk = {
     alerts: (status: string) => ['sourcing', 'alerts', status] as const,
     candidates: (skuId: number) => ['sourcing', 'candidates', skuId] as const,
     search: (q: string) => ['sourcing', 'search', q] as const,
+    savedSearches: (scope: string) => ['sourcing', 'saved-searches', scope] as const,
   },
   repairIssues: {
     /** Broad invalidation prefix — matches every repair-issue-templates query. */

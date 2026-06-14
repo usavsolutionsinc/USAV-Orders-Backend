@@ -40,6 +40,9 @@ export function ReceivingPoLabelPreview({
     date,
   });
   if (!qrPayload) return null;
+  // HRI caption under the matrix — mirrors the printed label (see
+  // receiving-label-helpers printReceivingLabel). Shows the typeable `R-{id}`.
+  const handleHri = /^(?:R|RCV)-\d+$/i.test(qrPayload) ? qrPayload.toUpperCase() : '';
   const innerShell = embedded
     ? 'w-full bg-white'
     : 'w-full rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
@@ -79,12 +82,17 @@ export function ReceivingPoLabelPreview({
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center [&_svg]:block">
-          {/* quietZone=0 makes the ink fill the 96px box edge-to-edge so the
+        <div className="flex shrink-0 flex-col items-center justify-center gap-0.5 [&_svg]:block">
+          {/* quietZone=0 makes the ink fill the box edge-to-edge so the
               top (date) and bottom (PO#) rows line up with the matrix's
               visible top/bottom edges. This is a preview, not the scanned
               symbol — the printed label keeps its scanner-safe quiet zone. */}
-          <Gs1DataMatrix value={qrPayload} size={96} symbology="datamatrix" quietZone={0} />
+          <Gs1DataMatrix value={qrPayload} size={84} symbology="datamatrix" quietZone={0} />
+          {handleHri ? (
+            <span className="font-mono text-[7px] font-extrabold leading-none tracking-wide text-gray-900">
+              {handleHri}
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

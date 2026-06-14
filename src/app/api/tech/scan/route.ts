@@ -367,9 +367,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
         if (!isFbaSource) {
-          await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
+          await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: fnskuLogId!, source: ROUTE });
         }
-        if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'FNSKU_SCANNED', staffId: testedBy, scanRef: null, fnsku, source: stationSource }).catch(() => {});
+        if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'FNSKU_SCANNED', staffId: testedBy, scanRef: null, fnsku, source: stationSource }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -457,8 +457,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
-        if (salId && !isFbaSource) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
-        if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
+        if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+        if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
 
         const scanSessionId = await createStationScanSession(pool, {
           staffId: testedBy,
@@ -514,10 +514,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
       await client.query('COMMIT');
       await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
-      if (salId && !isFbaSource) await publishTechLogChanged({ techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
-      if (salId) publishActivityLogged({ id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
+      if (salId && !isFbaSource) await publishTechLogChanged({ organizationId: ctx.organizationId, techId: testedBy, action: 'insert', rowId: salId, source: ROUTE });
+      if (salId) publishActivityLogged({ organizationId: ctx.organizationId, id: salId, station: salStation, activityType: 'TRACKING_SCANNED', staffId: testedBy, scanRef: resolved.scanRef ?? value, fnsku: null, source: stationSource }).catch(() => {});
       if (!isFbaSource) {
-        await publishOrderTested({ orderId: Number(order.id), testedBy, source: ROUTE });
+        await publishOrderTested({ organizationId: ctx.organizationId, orderId: Number(order.id), testedBy, source: ROUTE });
       }
 
       const scanSessionId = await createStationScanSession(pool, {

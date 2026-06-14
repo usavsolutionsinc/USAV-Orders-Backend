@@ -59,6 +59,12 @@ const GS1_AI_LOCATION_PARENS_RE = /\(414\)(\d{13})\(254\)([^()]+)/i;
 const GS1_AI_UNIT_FNC1_RE = /01(\d{14})(?:\x1D)?21([^\x1D]+?)(?:\x1D10([^\x1D]+))?$/i;
 const GS1_AI_UNIT_PARENS_RE = /\(01\)(\d{14})\(21\)([^()]+)(?:\(10\)([^()]+))?/i;
 
+// Human-readable dashed location code — `A-01-01-1` / `A-01-01-1-01`. A single
+// zone letter then 2–4 hyphenated digit segments. Shared by the location
+// branch AND by the U-/S- handle guards so a zone-letter location (e.g.
+// `U-01-02-3`) is never swallowed by the unit/sku handle parsers above it.
+const DASHED_LOCATION_RE = /^([A-Z])-(\d{2})-(\d{2})-(\d{1,2})(?:-(\d{2}))?$/i;
+
 function pathToRoute(path: string, value: string): ScanRoute | null {
   const m = MOBILE_PATH_RE.exec(path);
   if (m) {
@@ -170,17 +176,30 @@ export function routeScan(raw: string): ScanRoute | null {
   if (rcvShort) return { type: 'receiving',      value, redirect: `/m/r/${rcvShort[1]}` };
   const lineShort = /^L-(\d+)$/i.exec(value);
   if (lineShort) return { type: 'receiving-line', value, redirect: `/m/l/${lineShort[1]}` };
-  const unitShort = /^U-(\d+)$/i.exec(value);
-  if (unitShort) return { type: 'serial-unit',   value, redirect: `/m/u/${unitShort[1]}` };
+  // U-class unit handle — accepts a numeric serial_units.id OR an alphanumeric
+  // physical serial / minted unit_uid suffix. The prefix is STRIPPED in the
+  // redirect so a printed `U-{serial}` / `U-{unit_uid}` label scans back to its
+  // unit (resolved by /api/serial-units/[id] via id → normalized_serial →
+  // unit_uid). Previously digits-only, so an alphanumeric serial (e.g.
+  // `U-CN1A2B3`) fell through to the bin fallback and mis-routed to /inventory.
+  // Skipped when the value is actually a U-zone location code (U-01-02-3…).
+  const unitShort = /^U-([A-Za-z0-9][A-Za-z0-9-]*)$/i.exec(value);
+  if (unitShort && !DASHED_LOCATION_RE.test(value)) {
+    return { type: 'serial-unit', value, redirect: `/m/u/${encodeURIComponent(unitShort[1])}` };
+  }
   // H-class — a license-plated box/tray (handling unit / LPN). One scan opens
   // the box page (/m/h/{id}), which on the testing side fans out to every unit
   // in the box. Anchored here with the other bare handles so "H-12" isn't
   // misread as a bin (section 6 keys on a leading letter).
   const huShort = /^H-(\d+)$/i.exec(value);
   if (huShort) return { type: 'handling-unit',   value, redirect: `/m/h/${huShort[1]}` };
+  // REP-class repair label. Routes to the mobile repair-service detail page
+  // `/m/rs/{id}` — the SAME target the walk-in `?openRepair=` deep-link
+  // redirects to. (Previously emitted `/repair/{id}`, a path with no [id] route
+  // that 404'd, so a scanned repair label never opened its repair.)
   const repairShort = /^REP-(\d+)$/i.exec(value);
   if (repairShort) {
-    return { type: 'receiving', value, redirect: `/repair/${repairShort[1]}` };
+    return { type: 'receiving', value, redirect: `/m/rs/${repairShort[1]}` };
   }
   // Legacy RCV-{id} carton string — kept for back-compat with any
   // pre-DataMatrix labels still in the wild.
@@ -206,7 +225,7 @@ export function routeScan(raw: string): ScanRoute | null {
   //    prefix followed by hyphenated digit segments. Matches the human-
   //    readable code printed alongside the DataMatrix; some operators
   //    type these in or paste them from a phone photo.
-  const dashed = /^([A-Z])-(\d{2})-(\d{2})-(\d{1,2})(?:-(\d{2}))?$/i.exec(value);
+  const dashed = DASHED_LOCATION_RE.exec(value);
   if (dashed) {
     const flat = dashed.slice(1, 6).filter(Boolean).join('').toUpperCase();
     return routeLocationCode(value, flat);
@@ -275,7 +294,10 @@ export const PUBLIC_UNIT_QR_BASE_URL = (
  * Other kinds stay on their dedicated /m/* pages for the receiving / unit flows.
  */
 export function mobileQrUrl(
-  kind: 'r' | 'l' | 'u' | 'b' | 'k',
+  // `k` was dropped — it minted `/m/k/{id}`, which `routeScan` has no branch for
+  // and no page exists; a generator with no scan-back resolver. r/l/u/b all
+  // route (l/u via the proxy rewrite + MOBILE_PATH_RE, b to inventory).
+  kind: 'r' | 'l' | 'u' | 'b',
   id: string | number,
 ): string {
   const encoded = encodeURIComponent(String(id));

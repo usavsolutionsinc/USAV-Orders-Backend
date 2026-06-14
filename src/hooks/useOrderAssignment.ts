@@ -18,6 +18,8 @@ export type OrderAssignPayload = {
   condition?: string | null;
   quantity?: string | null;
   sku?: string | null;
+  /** Canonical SKU linkage → orders.sku_catalog_id (resolved via get-title-by-sku). */
+  skuCatalogId?: number | null;
   performedByStaffId?: number | null;
 };
 

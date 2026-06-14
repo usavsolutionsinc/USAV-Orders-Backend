@@ -5,7 +5,7 @@ import { upsertEbaySupplier, type SupplierRow } from './suppliers-queries';
 
 export interface SourcingAlertRow {
   id: number;
-  sku_id: number;
+  sku_id: number | null;
   bose_model_id: number | null;
   alert_type: string;
   severity: string;
@@ -16,6 +16,12 @@ export interface SourcingAlertRow {
   resolved_by: number | null;
   created_at: string;
   updated_at: string;
+  // Unified-demand metadata (migration 2026-06-13d).
+  demand_source: string;
+  demand_ref_type: string | null;
+  demand_ref_id: number | null;
+  target_qty: number | null;
+  search_query: string | null;
 }
 
 export interface SourcingAlertListRow extends SourcingAlertRow {
@@ -54,9 +60,10 @@ export interface SourcingCandidateRow {
 
 /**
  * List sourcing alerts, optionally filtered by status (defaults to the live
- * statuses open + sourcing). Joined to the SKU + model so the alert pane can
- * render context without N+1 lookups. Ordered critical → warn → info, newest
- * first within a severity.
+ * statuses open + sourcing). LEFT-joined to the SKU + model so the queue pane
+ * can render context without N+1 lookups — and so SKU-less (free-text) demand
+ * rows still appear. Ordered critical → warn → info, newest first within a
+ * severity.
  */
 export async function getSourcingAlerts(params: {
   status?: string | null;
@@ -75,7 +82,7 @@ export async function getSourcingAlerts(params: {
        bm.model_number,
        bm.model_name
      FROM sourcing_alerts sa
-     JOIN sku_catalog sc ON sc.id = sa.sku_id
+     LEFT JOIN sku_catalog sc ON sc.id = sa.sku_id
      LEFT JOIN bose_models bm ON bm.id = sa.bose_model_id
      WHERE (
         $1 = '' AND sa.status IN ('open','sourcing')
@@ -121,6 +128,66 @@ export async function updateSourcingAlertStatus(params: {
     [params.id, params.status, params.reason?.trim() || null, isClosing, params.resolvedBy ?? null],
   );
   return result.rows[0] ?? null;
+}
+
+export interface CreateDemandAlertInput {
+  skuId?: number | null;
+  boseModelId?: number | null;
+  searchQuery?: string | null;
+  alertType?: string;       // default 'manual'
+  demandSource?: string;    // default 'manual'
+  demandRefType?: string | null;
+  demandRefId?: number | null;
+  severity?: string;        // info|warn|critical (default 'warn')
+  reason?: string | null;
+  targetQty?: number | null;
+}
+
+/**
+ * Open a demand alert in the unified sourcing queue. Idempotent for SKU-backed
+ * rows via the partial unique index uniq_sourcing_alert_live (sku_id, alert_type
+ * WHERE status IN ('open','sourcing')): a repeat "Source this" on the same SKU
+ * returns the existing live row instead of duplicating. Free-text (SKU-less)
+ * rows have no natural key, so they always insert. Returns { row, created }.
+ */
+export async function createDemandAlert(
+  input: CreateDemandAlertInput,
+): Promise<{ row: SourcingAlertRow; created: boolean }> {
+  const alertType = (input.alertType || 'manual').trim();
+  const demandSource = (input.demandSource || 'manual').trim();
+  const skuId = input.skuId ?? null;
+
+  const ins = await pool.query<SourcingAlertRow>(
+    `INSERT INTO sourcing_alerts
+       (sku_id, bose_model_id, alert_type, severity, status, reason,
+        demand_source, demand_ref_type, demand_ref_id, target_qty, search_query)
+     VALUES ($1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (sku_id, alert_type) WHERE status IN ('open','sourcing')
+     DO NOTHING
+     RETURNING *`,
+    [
+      skuId,
+      input.boseModelId ?? null,
+      alertType,
+      (input.severity || 'warn').trim(),
+      input.reason?.trim() || null,
+      demandSource,
+      input.demandRefType ?? null,
+      input.demandRefId ?? null,
+      input.targetQty ?? null,
+      input.searchQuery?.trim() || null,
+    ],
+  );
+  if (ins.rows[0]) return { row: ins.rows[0], created: true };
+
+  // Conflict on the live (sku_id, alert_type) index — return the existing row.
+  const existing = await pool.query<SourcingAlertRow>(
+    `SELECT * FROM sourcing_alerts
+      WHERE sku_id = $1 AND alert_type = $2 AND status IN ('open','sourcing')
+      ORDER BY opened_at DESC LIMIT 1`,
+    [skuId, alertType],
+  );
+  return { row: existing.rows[0], created: false };
 }
 
 // ─── Candidates ──────────────────────────────────────────────────────────────

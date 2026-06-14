@@ -187,6 +187,7 @@ export async function POST(
 
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
     await publishReceivingLogChanged({
+      organizationId: ctx.organizationId,
       action: 'update',
       rowId: String(receivingId),
       source: 'receiving.po.attach-box',

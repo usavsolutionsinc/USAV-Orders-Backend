@@ -7,7 +7,9 @@ import {
   getFbaChannelName,
   getInboxChannelName,
   getOrdersChannelName,
+  getPackerBridgeChannelName,
   getRepairsChannelName,
+  getScanLogChannelName,
   getStaffChannelName,
   getStationChannelName,
 } from '@/lib/realtime/channels';
@@ -16,23 +18,31 @@ import { getPrimaryTechStaffIds } from '@/lib/neon/staff-stations-queries';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 
+// Every payload carries `organizationId` so the channel it publishes to is
+// org-namespaced. Route handlers pass `ctx.organizationId`; the transitional
+// jobs (orders-ingest-drain, fulfillment-sync, …) pass `transitionalUsavOrgId()`.
+
 type OrderChangedPayload = {
+  organizationId: string;
   orderIds: number[];
   source: string;
 };
 
 type OrderTestedPayload = {
+  organizationId: string;
   orderId: number;
   testedBy: number | null;
   source: string;
 };
 
 type RepairChangedPayload = {
+  organizationId: string;
   repairIds: number[];
   source: string;
 };
 
 type AiAssistantPayload = {
+  organizationId: string;
   channel?: string;
   sessionId: string;
   prompt: string;
@@ -41,6 +51,7 @@ type AiAssistantPayload = {
 };
 
 type TechLogChangedPayload = {
+  organizationId: string;
   techId: number;
   action: 'insert' | 'update' | 'delete';
   rowId?: number;
@@ -49,6 +60,7 @@ type TechLogChangedPayload = {
 };
 
 type PackerLogChangedPayload = {
+  organizationId: string;
   packerId: number;
   action: 'insert' | 'update' | 'delete';
   packerLogId?: number;
@@ -57,6 +69,7 @@ type PackerLogChangedPayload = {
 };
 
 type ReceivingLogChangedPayload = {
+  organizationId: string;
   action: 'insert' | 'update' | 'delete';
   rowId?: string;
   row?: Record<string, unknown>;
@@ -64,6 +77,7 @@ type ReceivingLogChangedPayload = {
 };
 
 type DashboardUpdatePayload = {
+  organizationId: string;
   type: 'kpi_update' | 'activity_event' | 'distribution_update' | 'staff_progress_update';
   category?: string;
   update?: any;
@@ -71,6 +85,7 @@ type DashboardUpdatePayload = {
 };
 
 type StaffScheduleChangedPayload = {
+  organizationId: string;
   action: 'single' | 'bulk';
   source: string;
   changed: Array<{
@@ -108,7 +123,7 @@ async function publishEvent(channel: string, name: string, data: Record<string, 
 }
 
 export async function publishDashboardUpdate(payload: DashboardUpdatePayload) {
-  await publishEvent(getDashboardChannelName(), payload.type, {
+  await publishEvent(getDashboardChannelName(payload.organizationId), payload.type, {
     ...payload,
     timestamp: formatPSTTimestamp(),
   });
@@ -144,12 +159,16 @@ async function logRealtimeEventToStationActivity(
     return;
   }
 
+  // This self-derived station-activity feed has no request context; it stamps
+  // the transitional org (USAV) — it is single-tenant by construction today.
+  const selfOrgId = transitionalUsavOrgId();
+
   try {
     if (eventName === 'order.tested') {
       const orderId = parseFiniteNumber(payload.orderId);
       const staffId = parseFiniteNumber(payload.testedBy);
       const id = await createStationActivityLog(pool, {
-        organizationId: transitionalUsavOrgId(),
+        organizationId: selfOrgId,
         station: 'TECH',
         activityType: 'WS_ORDER_TESTED',
         staffId,
@@ -159,6 +178,7 @@ async function logRealtimeEventToStationActivity(
       });
       if (!id) return;
       await publishActivityLogged({
+        organizationId: selfOrgId,
         id,
         station: 'TECH',
         activityType: 'WS_ORDER_TESTED',
@@ -174,7 +194,7 @@ async function logRealtimeEventToStationActivity(
         ? payload.repairIds.map((value) => parseFiniteNumber(value)).filter((value): value is number => value != null)
         : [];
       const id = await createStationActivityLog(pool, {
-        organizationId: transitionalUsavOrgId(),
+        organizationId: selfOrgId,
         station: 'ADMIN',
         activityType: 'WS_REPAIR_CHANGED',
         staffId: null,
@@ -185,6 +205,7 @@ async function logRealtimeEventToStationActivity(
       });
       if (!id) return;
       await publishActivityLogged({
+        organizationId: selfOrgId,
         id,
         station: 'ADMIN',
         activityType: 'WS_REPAIR_CHANGED',
@@ -198,7 +219,7 @@ async function logRealtimeEventToStationActivity(
       const rowId = payload.rowId == null ? null : String(payload.rowId);
       const action = payload.action == null ? null : String(payload.action);
       const id = await createStationActivityLog(pool, {
-        organizationId: transitionalUsavOrgId(),
+        organizationId: selfOrgId,
         station: 'RECEIVING',
         activityType: 'WS_RECEIVING_CHANGED',
         staffId: null,
@@ -208,6 +229,7 @@ async function logRealtimeEventToStationActivity(
       });
       if (!id) return;
       await publishActivityLogged({
+        organizationId: selfOrgId,
         id,
         station: 'RECEIVING',
         activityType: 'WS_RECEIVING_CHANGED',
@@ -223,7 +245,7 @@ async function logRealtimeEventToStationActivity(
       const itemId = parseFiniteNumber(payload.itemId);
       const fnsku = payload.fnsku == null ? null : String(payload.fnsku);
       const id = await createStationActivityLog(pool, {
-        organizationId: transitionalUsavOrgId(),
+        organizationId: selfOrgId,
         station: 'ADMIN',
         activityType: 'WS_FBA_SCAN',
         staffId: null,
@@ -235,6 +257,7 @@ async function logRealtimeEventToStationActivity(
       });
       if (!id) return;
       await publishActivityLogged({
+        organizationId: selfOrgId,
         id,
         station: 'ADMIN',
         activityType: 'WS_FBA_SCAN',
@@ -252,7 +275,7 @@ export async function publishOrderChanged(payload: OrderChangedPayload) {
   const normalizedIds = payload.orderIds.map(Number).filter((id) => Number.isFinite(id));
   if (normalizedIds.length === 0) return;
 
-  await publishEvent(getOrdersChannelName(), 'order.changed', {
+  await publishEvent(getOrdersChannelName(payload.organizationId), 'order.changed', {
     type: 'order.changed',
     orderIds: normalizedIds,
     source: payload.source,
@@ -261,6 +284,7 @@ export async function publishOrderChanged(payload: OrderChangedPayload) {
 }
 
 export type OrderAssignmentsBroadcastPayload = {
+  organizationId: string;
   orderId: number;
   testerId: number | null;
   packerId: number | null;
@@ -271,6 +295,7 @@ export type OrderAssignmentsBroadcastPayload = {
 };
 
 export type QueueAssignmentsBroadcastPayload = {
+  organizationId: string;
   entityType: string;
   entityId: number;
   source: string;
@@ -281,7 +306,7 @@ export async function publishOrderAssignmentsUpdated(payload: OrderAssignmentsBr
   const orderId = Number(payload.orderId);
   if (!Number.isFinite(orderId)) return;
 
-  await publishEvent(getOrdersChannelName(), 'order.assignments', {
+  await publishEvent(getOrdersChannelName(payload.organizationId), 'order.assignments', {
     type: 'order.assignments',
     orderId,
     testerId: payload.testerId,
@@ -299,7 +324,7 @@ export async function publishQueueAssignmentsUpdated(payload: QueueAssignmentsBr
   const entityId = Number(payload.entityId);
   if (!Number.isFinite(entityId)) return;
 
-  await publishEvent(getOrdersChannelName(), 'queue.assignments', {
+  await publishEvent(getOrdersChannelName(payload.organizationId), 'queue.assignments', {
     type: 'queue.assignments',
     entityType: String(payload.entityType || '').trim(),
     entityId,
@@ -314,7 +339,7 @@ export async function publishOrderTested(payload: OrderTestedPayload) {
 
   const testedByRaw = payload.testedBy == null ? null : Number(payload.testedBy);
   const testedBy = testedByRaw != null && Number.isFinite(testedByRaw) ? testedByRaw : null;
-  await publishEvent(getOrdersChannelName(), 'order.tested', {
+  await publishEvent(getOrdersChannelName(payload.organizationId), 'order.tested', {
     type: 'order.tested',
     orderId,
     testedBy,
@@ -327,7 +352,7 @@ export async function publishRepairChanged(payload: RepairChangedPayload) {
   const normalizedIds = payload.repairIds.map(Number).filter((id) => Number.isFinite(id));
   if (normalizedIds.length === 0) return;
 
-  await publishEvent(getRepairsChannelName(), 'repair.changed', {
+  await publishEvent(getRepairsChannelName(payload.organizationId), 'repair.changed', {
     type: 'repair.changed',
     repairIds: normalizedIds,
     source: payload.source,
@@ -336,6 +361,7 @@ export async function publishRepairChanged(payload: RepairChangedPayload) {
 }
 
 export type PriorityUnboxPayload = {
+  organizationId: string;
   staffId: number;
   trackingNumber: string;
   receivingId: number | null;
@@ -354,7 +380,7 @@ export async function publishPriorityUnbox(payload: PriorityUnboxPayload) {
   const skus = (payload.skus || []).filter((s) => typeof s === 'string' && s.length > 0);
   if (skus.length === 0) return;
 
-  await publishEvent(getInboxChannelName(staffId), 'priority_unbox', {
+  await publishEvent(getInboxChannelName(payload.organizationId, staffId), 'priority_unbox', {
     type: 'priority_unbox',
     staffId,
     trackingNumber: payload.trackingNumber,
@@ -365,7 +391,42 @@ export async function publishPriorityUnbox(payload: PriorityUnboxPayload) {
   });
 }
 
+export type StaffMessagePayload = {
+  organizationId: string;
+  /** Recipient inbox channel (inbox:{recipientId}). */
+  recipientId: number;
+  messageId: number;
+  senderId: number;
+  senderName: string;
+  body: string;
+  kind: string;
+  context?: Record<string, unknown> | null;
+};
+
+/**
+ * Push a staff-to-staff message to the recipient's inbox channel — the live
+ * half of the header clipboard "send to staff" flow (the row is also persisted
+ * in staff_messages so it survives a reload). No-op on a bad recipient id.
+ */
+export async function publishStaffMessage(payload: StaffMessagePayload) {
+  const recipientId = Number(payload.recipientId);
+  if (!Number.isFinite(recipientId) || recipientId <= 0) return;
+
+  await publishEvent(getInboxChannelName(payload.organizationId, recipientId), 'staff_message', {
+    type: 'staff_message',
+    recipientId,
+    messageId: payload.messageId,
+    senderId: payload.senderId,
+    senderName: payload.senderName,
+    body: payload.body,
+    kind: payload.kind,
+    context: payload.context ?? null,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 export type WarrantyClaimNotificationPayload = {
+  organizationId: string;
   /** Recipient staff inbox channels to push to. */
   staffIds: number[];
   claimId: number;
@@ -405,7 +466,7 @@ export async function publishWarrantyClaimNotification(payload: WarrantyClaimNot
 
   await Promise.all(
     recipients.map((staffId) =>
-      publishEvent(getInboxChannelName(staffId), 'warranty_claim', { ...data, staffId }),
+      publishEvent(getInboxChannelName(payload.organizationId, staffId), 'warranty_claim', { ...data, staffId }),
     ),
   );
 }
@@ -417,13 +478,14 @@ export async function publishWarrantyClaimNotification(payload: WarrantyClaimNot
  * client to refetch (derive-live model). Best-effort + no-op with no recipients.
  */
 type TechInboxPayload = {
+  organizationId: string;
   receivingId: number | null;
   trackingNumber?: string | null;
   source: string;
 };
 
 async function publishTechInbox(eventName: 'return_pending_test' | 'order_ready_ship', payload: TechInboxPayload) {
-  const recipients = await getPrimaryTechStaffIds();
+  const recipients = await getPrimaryTechStaffIds(payload.organizationId);
   if (recipients.length === 0) return;
   const data = {
     type: eventName,
@@ -434,7 +496,7 @@ async function publishTechInbox(eventName: 'return_pending_test' | 'order_ready_
   };
   await Promise.all(
     recipients.map((staffId) =>
-      publishEvent(getInboxChannelName(staffId), eventName, { ...data, staffId }),
+      publishEvent(getInboxChannelName(payload.organizationId, staffId), eventName, { ...data, staffId }),
     ),
   );
 }
@@ -450,7 +512,7 @@ export async function publishOrderReadyShip(payload: TechInboxPayload) {
 }
 
 export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
-  const channel = payload.channel || getAiAssistSessionChannelName(payload.sessionId);
+  const channel = payload.channel || getAiAssistSessionChannelName(payload.organizationId, payload.sessionId);
   await publishEvent(channel, 'ai.assistant.reply', {
     type: 'ai.assistant.reply',
     sessionId: payload.sessionId,
@@ -462,7 +524,7 @@ export async function publishAiAssistantMessage(payload: AiAssistantPayload) {
 }
 
 export async function publishStaffScheduleChanged(payload: StaffScheduleChangedPayload) {
-  await publishEvent(getStaffChannelName(), 'staff.schedule.changed', {
+  await publishEvent(getStaffChannelName(payload.organizationId), 'staff.schedule.changed', {
     type: 'staff.schedule.changed',
     action: payload.action,
     source: payload.source,
@@ -472,7 +534,7 @@ export async function publishStaffScheduleChanged(payload: StaffScheduleChangedP
 }
 
 export async function publishTechLogChanged(payload: TechLogChangedPayload) {
-  await publishEvent(getStationChannelName(), 'tech-log.changed', {
+  await publishEvent(getStationChannelName(payload.organizationId), 'tech-log.changed', {
     type: 'tech-log.changed',
     techId: payload.techId,
     action: payload.action,
@@ -484,7 +546,7 @@ export async function publishTechLogChanged(payload: TechLogChangedPayload) {
 }
 
 export async function publishPackerLogChanged(payload: PackerLogChangedPayload) {
-  await publishEvent(getStationChannelName(), 'packer-log.changed', {
+  await publishEvent(getStationChannelName(payload.organizationId), 'packer-log.changed', {
     type: 'packer-log.changed',
     packerId: payload.packerId,
     action: payload.action,
@@ -501,6 +563,7 @@ export async function publishPackerLogChanged(payload: PackerLogChangedPayload) 
 // can answer "Ready to pack?" and proceed to the photo camera.
 
 export interface PackerScanReadyPayload {
+  organizationId: string;
   staffId: number;
   packerLogId: number | null;
   variant: 'order' | 'fba' | 'exception';
@@ -528,7 +591,7 @@ export interface PackerScanReadyPayload {
 }
 
 export async function publishPackerScanReady(payload: PackerScanReadyPayload) {
-  await publishEvent(`packer:${payload.staffId}`, 'scan_ready', {
+  await publishEvent(getPackerBridgeChannelName(payload.organizationId, payload.staffId), 'scan_ready', {
     type: 'packer.scan_ready',
     staffId: payload.staffId,
     packerLogId: payload.packerLogId,
@@ -550,6 +613,7 @@ export async function publishPackerScanReady(payload: PackerScanReadyPayload) {
 // from the receiving-station `phone:{staffId}` bridge.
 
 export interface ScanLoggedPayload {
+  organizationId: string;
   staffId: number;
   rawValue: string;
   kind: string;
@@ -561,7 +625,7 @@ export async function publishScanLog(payload: ScanLoggedPayload) {
   const staffId = Number(payload.staffId);
   if (!Number.isFinite(staffId) || staffId <= 0) return;
 
-  await publishEvent(`scanlog:${staffId}`, 'scan_logged', {
+  await publishEvent(getScanLogChannelName(payload.organizationId, staffId), 'scan_logged', {
     type: 'scan.logged',
     staffId,
     rawValue: payload.rawValue,
@@ -572,7 +636,7 @@ export async function publishScanLog(payload: ScanLoggedPayload) {
 }
 
 export async function publishReceivingLogChanged(payload: ReceivingLogChangedPayload) {
-  await publishEvent(getStationChannelName(), 'receiving-log.changed', {
+  await publishEvent(getStationChannelName(payload.organizationId), 'receiving-log.changed', {
     type: 'receiving-log.changed',
     action: payload.action,
     rowId: payload.rowId,
@@ -583,6 +647,7 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
 }
 
 type ShipmentChangedPayload = {
+  organizationId: string;
   shipmentId: number;
   trackingNumber?: string | null;
   source: string;
@@ -595,7 +660,7 @@ type ShipmentChangedPayload = {
  * shipments separately get an `order.changed` event for the dashboard views.
  */
 export async function publishShipmentChanged(payload: ShipmentChangedPayload) {
-  await publishEvent(getStationChannelName(), 'shipment.changed', {
+  await publishEvent(getStationChannelName(payload.organizationId), 'shipment.changed', {
     type: 'shipment.changed',
     shipmentId: payload.shipmentId,
     trackingNumber: payload.trackingNumber ?? null,
@@ -607,6 +672,7 @@ export async function publishShipmentChanged(payload: ShipmentChangedPayload) {
 // ─── FBA Events ──────────────────────────────────────────────────────────────
 
 type FbaItemChangedPayload = {
+  organizationId: string;
   action: 'scan' | 'ready' | 'verify' | 'label-bind' | 'shipped' | 'reassign' | 'update' | 'delete';
   shipmentId: number;
   itemId?: number;
@@ -615,12 +681,14 @@ type FbaItemChangedPayload = {
 };
 
 type FbaShipmentChangedPayload = {
+  organizationId: string;
   action: 'created' | 'updated' | 'closed' | 'deleted' | 'mark-shipped' | 'tracking-linked' | 'tracking-unlinked' | 'duplicated' | 'items-added';
   shipmentId: number;
   source: string;
 };
 
 type FbaCatalogChangedPayload = {
+  organizationId: string;
   action: 'created' | 'updated' | 'bulk-uploaded';
   fnsku?: string;
   count?: number;
@@ -628,7 +696,7 @@ type FbaCatalogChangedPayload = {
 };
 
 export async function publishFbaItemChanged(payload: FbaItemChangedPayload) {
-  await publishEvent(getFbaChannelName(), 'fba.item.changed', {
+  await publishEvent(getFbaChannelName(payload.organizationId), 'fba.item.changed', {
     type: 'fba.item.changed',
     action: payload.action,
     shipmentId: payload.shipmentId,
@@ -640,7 +708,7 @@ export async function publishFbaItemChanged(payload: FbaItemChangedPayload) {
 }
 
 export async function publishFbaShipmentChanged(payload: FbaShipmentChangedPayload) {
-  await publishEvent(getFbaChannelName(), 'fba.shipment.changed', {
+  await publishEvent(getFbaChannelName(payload.organizationId), 'fba.shipment.changed', {
     type: 'fba.shipment.changed',
     action: payload.action,
     shipmentId: payload.shipmentId,
@@ -650,7 +718,7 @@ export async function publishFbaShipmentChanged(payload: FbaShipmentChangedPaylo
 }
 
 export async function publishFbaCatalogChanged(payload: FbaCatalogChangedPayload) {
-  await publishEvent(getFbaChannelName(), 'fba.catalog.changed', {
+  await publishEvent(getFbaChannelName(payload.organizationId), 'fba.catalog.changed', {
     type: 'fba.catalog.changed',
     action: payload.action,
     fnsku: payload.fnsku,
@@ -663,6 +731,7 @@ export async function publishFbaCatalogChanged(payload: FbaCatalogChangedPayload
 // ─── Activity Stream ─────────────────────────────────────────────────────────
 
 type ActivityLoggedPayload = {
+  organizationId: string;
   id: number;
   station: string;
   activityType: string;
@@ -679,7 +748,7 @@ type ActivityLoggedPayload = {
 
 export async function publishActivityLogged(payload: ActivityLoggedPayload) {
   // Update station channel for legacy feed
-  await publishEvent(getStationChannelName(), 'activity.logged', {
+  await publishEvent(getStationChannelName(payload.organizationId), 'activity.logged', {
     type: 'activity.logged',
     id: payload.id,
     station: payload.station,
@@ -697,6 +766,7 @@ export async function publishActivityLogged(payload: ActivityLoggedPayload) {
 
   // Update all-in-one dashboard feed
   await publishDashboardUpdate({
+    organizationId: payload.organizationId,
     type: 'activity_event',
     data: {
       id: String(payload.id),
@@ -712,6 +782,7 @@ export async function publishActivityLogged(payload: ActivityLoggedPayload) {
 // ─── Stock Ledger Event Helper ───────────────────────────────────────────────
 
 export type StockLedgerEventInput = {
+  organizationId: string;
   /** Row id from sku_stock_ledger (positive int). Negated on the wire so feed ids never collide with station_activity_logs ids. */
   ledgerId: number;
   sku: string;
@@ -741,6 +812,7 @@ function reasonToStation(reason: string): string {
  */
 export async function publishStockLedgerEvent(input: StockLedgerEventInput) {
   await publishActivityLogged({
+    organizationId: input.organizationId,
     id: -Math.abs(input.ledgerId),
     station: reasonToStation(input.reason),
     activityType: `STOCK_DELTA_${input.reason}`,

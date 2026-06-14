@@ -9,6 +9,7 @@ import { WarrantyClockChip, WarrantyStatusBadge } from '@/components/warranty/ch
 import { WarrantyClaimActions } from '@/components/warranty/WarrantyClaimActions';
 import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopover';
 import { WarrantyQuotesSection } from '@/components/warranty/WarrantyQuotesSection';
+import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 import { formatDateTimePST } from '@/utils/date';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import type { WarrantyClaimDetail } from '@/lib/warranty/types';
@@ -65,6 +66,9 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
           <div className="font-mono text-[11px] text-gray-400">{claim?.claimNumber}</div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          {claim && (claim.productTitle || claim.sku) && (
+            <SourceThisButton searchQuery={claim.productTitle || claim.sku} label="Source" variant="ghost" />
+          )}
           {claim && <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />}
           {claim && (
             <button

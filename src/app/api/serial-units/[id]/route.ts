@@ -118,6 +118,7 @@ export async function GET(
       tsn_links: unknown[];
       location_detail: Record<string, unknown> | null;
       stock: Record<string, unknown> | null;
+      photos: unknown[];
     } | null = null;
 
     if (includeFull) {
@@ -126,7 +127,7 @@ export async function GET(
         typeof unit.current_location === 'string' && unit.current_location.trim()
           ? unit.current_location.trim()
           : null;
-      const [eventsFull, conditions, allocations, tsnLinks, locationDetail, stock] = await Promise.all([
+      const [eventsFull, conditions, allocations, tsnLinks, locationDetail, stock, unitPhotos] = await Promise.all([
         pool
           .query(
             `SELECT ie.id, ie.occurred_at, ie.event_type, ie.station,
@@ -214,6 +215,19 @@ export async function GET(
               .then((r) => r.rows[0] ?? null)
               .catch(() => null)
           : Promise.resolve(null),
+        // Photos captured against THIS unit (entity_type='SERIAL_UNIT') — the
+        // packer's scan-the-QR + take-photos set. Surfaced so the detail panel
+        // can render them alongside the timeline (one screen, full evidence).
+        pool
+          .query(
+            `SELECT id, url, photo_type, taken_by_staff_id AS uploaded_by, created_at
+               FROM photos
+              WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1
+              ORDER BY created_at ASC`,
+            [unitId],
+          )
+          .then((r) => r.rows)
+          .catch(() => [] as unknown[]),
       ]);
       fullDetail = {
         events_full: eventsFull,
@@ -222,6 +236,7 @@ export async function GET(
         tsn_links: tsnLinks,
         location_detail: (locationDetail as Record<string, unknown> | null) ?? null,
         stock: (stock as Record<string, unknown> | null) ?? null,
+        photos: unitPhotos,
       };
     }
 
@@ -417,6 +432,7 @@ async function buildPrintFallback(unitId: string) {
     conditions: [],
     allocations: [],
     tsn_links: [],
+    photos: [],
     location_detail: locationDetail,
     stock: stock
       ? { stock: stock.stock, boxed_stock: stock.boxed_stock, product_title: stock.product_title }

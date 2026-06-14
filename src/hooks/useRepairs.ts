@@ -5,13 +5,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { useAblyChannel } from './useAblyChannel';
-import { getDbTableChannelName, getRepairsChannelName } from '@/lib/realtime/channels';
-
-const REPAIRS_CHANNEL = getRepairsChannelName();
-const REPAIR_DB_CHANNEL = getDbTableChannelName('public', 'repair_service');
+import { getDbTableChannelName, getRepairsChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function useRepairsTable(search?: string | null, tab: RepairTab = 'active') {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const repairsChannel = safeChannelName(() => getRepairsChannelName(orgId!));
+  const repairDbChannel = safeChannelName(() => getDbTableChannelName(orgId!, 'public', 'repair_service'));
   const queryKey = ['repairs', search || '', tab] as const;
 
   const query = useQuery<RSRecord[]>({
@@ -31,13 +33,13 @@ export function useRepairsTable(search?: string | null, tab: RepairTab = 'active
   });
 
   // Live invalidation via Ably whenever any repair row changes.
-  useAblyChannel(REPAIRS_CHANNEL, 'repair.changed', () => {
+  useAblyChannel(repairsChannel, 'repair.changed', () => {
     queryClient.invalidateQueries({ queryKey: qk.repairs.all });
-  });
+  }, !!repairsChannel);
 
-  useAblyChannel(REPAIR_DB_CHANNEL, 'db.row.changed', () => {
+  useAblyChannel(repairDbChannel, 'db.row.changed', () => {
     queryClient.invalidateQueries({ queryKey: qk.repairs.all });
-  });
+  }, !!repairDbChannel);
 
   useEffect(() => {
     const handleRefresh = () => {

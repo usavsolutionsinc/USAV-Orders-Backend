@@ -125,6 +125,13 @@ export function EcwidProductSearchPopover({
   const [manualTitleMode, setManualTitleMode] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
   const [manualSubmitting, setManualSubmitting] = useState(false);
+  // repair_service mode: client filter over the loaded recent list + a manual
+  // order#-entry path for orders NOT in the recent list (the "custom manual
+  // input" fallback). Both converge on the SAME onSelect → add-unmatched-line
+  // persistence as picking a recent row, so manual == list-pick downstream.
+  const [repairFilter, setRepairFilter] = useState('');
+  const [repairManualMode, setRepairManualMode] = useState(false);
+  const [manualOrderId, setManualOrderId] = useState('');
 
   const listboxId = useId();
   const abortRef = useRef<AbortController | null>(null);
@@ -138,6 +145,9 @@ export function EcwidProductSearchPopover({
     setManualTitle('');
     setManualSubmitting(false);
     manualSubmitLockRef.current = false;
+    setRepairFilter('');
+    setRepairManualMode(false);
+    setManualOrderId('');
   }, [popoverMode]);
 
   // ─── Recent repair-service orders (Ecwid `-RS` SKUs) ─────────────────────────
@@ -287,6 +297,45 @@ export function EcwidProductSearchPopover({
     }
   }, [manualTitle, onSelect]);
 
+  // Client filter over the loaded recent repair list (the "search display").
+  const visibleItems = useMemo(() => {
+    if (popoverMode !== 'repair_service' || !repairFilter.trim()) return items;
+    const q = repairFilter.trim().toLowerCase().replace(/^#/, '');
+    return items.filter(
+      (it) =>
+        (it.order_id ?? '').toLowerCase().includes(q) ||
+        (it.product_title ?? '').toLowerCase().includes(q) ||
+        (it.sku ?? it.zoho_sku ?? '').toLowerCase().includes(q),
+    );
+  }, [items, popoverMode, repairFilter]);
+
+  // Manual repair-order link — for an Ecwid order NOT in the recent list. Same
+  // onSelect path as a list pick, so the carton link + per-line persistence are
+  // identical; only the order# (and optional description) are operator-typed.
+  const handleManualRepairSubmit = useCallback(async () => {
+    const orderId = manualOrderId.trim().replace(/^#/, '');
+    if (!orderId) return;
+    if (manualSubmitLockRef.current) return;
+    const title = manualTitle.trim() || `Repair service · order #${orderId}`;
+    manualSubmitLockRef.current = true;
+    setManualSubmitting(true);
+    try {
+      await onSelect({
+        sku_platform_id_row: null,
+        sku_catalog_id: null,
+        sku: '',
+        item_name: title,
+        image_url: null,
+        is_repair_service: true,
+        ecwid_order_id: orderId,
+        ecwid_product_url: null,
+      });
+    } finally {
+      manualSubmitLockRef.current = false;
+      setManualSubmitting(false);
+    }
+  }, [manualOrderId, manualTitle, onSelect]);
+
   const placeholder = useMemo(
     () =>
       searchFieldOverride
@@ -362,6 +411,18 @@ export function EcwidProductSearchPopover({
           >
             {searchFieldOverride === 'zoho_catalog' ? '← Back to Zoho search' : '← Back to Ecwid search'}
           </button>
+        ) : popoverMode === 'repair_service' && repairManualMode ? (
+          <button
+            type="button"
+            onClick={() => {
+              setRepairManualMode(false);
+              setManualOrderId('');
+              setManualTitle('');
+            }}
+            className={`${microBadge} rounded px-2 py-1 text-blue-700 transition-colors hover:bg-blue-50`}
+          >
+            ← Back to recent orders
+          </button>
         ) : (
           <span className={`${microBadge} text-gray-700`}>
             Recent -RS Ecwid orders
@@ -434,6 +495,63 @@ export function EcwidProductSearchPopover({
             {manualSubmitting ? 'Adding…' : 'Add to carton'}
           </button>
         </div>
+      ) : popoverMode === 'repair_service' && !repairManualMode ? (
+        <div className="px-2 pt-2">
+          <SearchBar
+            value={repairFilter}
+            onChange={setRepairFilter}
+            placeholder="Filter by order #, title, or SKU…"
+            autoFocus
+            variant="blue"
+            size="compact"
+            hideUnderline
+            trailingPrefix={
+              <button
+                type="button"
+                onClick={() => {
+                  setRepairManualMode(true);
+                  setManualOrderId(repairFilter.trim().replace(/^#/, ''));
+                  setManualTitle('');
+                }}
+                className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-blue-200 bg-blue-50/80 px-1.5 py-0.5 text-left text-[10px] font-semibold text-blue-800 hover:bg-blue-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
+                title="Order not in the list? Enter it manually"
+              >
+                Order not listed?
+              </button>
+            }
+          />
+        </div>
+      ) : popoverMode === 'repair_service' && repairManualMode ? (
+        <div className="space-y-2 px-2 pt-2">
+          <SearchBar
+            value={manualOrderId}
+            onChange={setManualOrderId}
+            placeholder="Ecwid order # (e.g. 12345)"
+            autoFocus
+            variant="blue"
+            size="compact"
+            hideUnderline
+          />
+          <SearchBar
+            value={manualTitle}
+            onChange={setManualTitle}
+            placeholder="Product / repair description (optional)"
+            variant="blue"
+            size="compact"
+            hideUnderline
+            onSearch={() => {
+              if (manualOrderId.trim()) void handleManualRepairSubmit();
+            }}
+          />
+          <button
+            type="button"
+            disabled={manualSubmitting || submittingId != null || !manualOrderId.trim()}
+            onClick={() => void handleManualRepairSubmit()}
+            className="w-full rounded-lg bg-blue-600 py-2.5 text-caption font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {manualSubmitting ? 'Linking…' : 'Link order'}
+          </button>
+        </div>
       ) : (
         <p className="px-3 pt-2 text-micro text-gray-500">
           Pick an order containing a repair-service SKU to link this carton.
@@ -471,9 +589,21 @@ export function EcwidProductSearchPopover({
         {!error &&
           !isLoading &&
           popoverMode === 'repair_service' &&
+          !repairManualMode &&
           items.length === 0 && (
           <li className="px-3 py-3 text-label text-gray-500">
-            No recent repair-service line items (-RS SKU) found in Ecwid orders.
+            No recent repair-service line items (-RS SKU) found. Use &ldquo;Order not listed?&rdquo; to link an order by its number.
+          </li>
+        )}
+
+        {!error &&
+          !isLoading &&
+          popoverMode === 'repair_service' &&
+          !repairManualMode &&
+          items.length > 0 &&
+          visibleItems.length === 0 && (
+          <li className="px-3 py-3 text-label text-gray-500">
+            No recent orders match that filter. Use &ldquo;Order not listed?&rdquo; to link it by number.
           </li>
         )}
 
@@ -486,7 +616,12 @@ export function EcwidProductSearchPopover({
             </li>
           )}
 
-        {items.map((item) => (
+        {(popoverMode === 'repair_service'
+          ? repairManualMode
+            ? []
+            : visibleItems
+          : items
+        ).map((item) => (
           <ResultRow
             key={item.id}
             item={item}

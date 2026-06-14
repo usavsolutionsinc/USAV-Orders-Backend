@@ -20,6 +20,10 @@ const SOURCE_PLATFORMS = new Set([
   'ecwid',
 ]);
 
+// Carton-level default receiving type (receiving.intake_type). Per-line
+// receiving_lines.receiving_type overrides; see migration 2026-06-13b.
+const INTAKE_TYPES = new Set(['PO', 'RETURN', 'TRADE_IN']);
+
 /**
  * GET /api/receiving/:id
  * Full carton view used by the mobile /m/r/:id page. One round-trip:
@@ -54,6 +58,7 @@ export async function GET(
          COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)            AS carrier,
          r.source,
          r.source_platform,
+         r.intake_type,
          lpo.id AS local_pickup_order_id,
          r.is_return,
          r.return_platform,
@@ -125,6 +130,10 @@ export async function GET(
          rl.zoho_purchaseorder_number,
          rl.zoho_line_item_id,
          rl.receiving_type,
+         rl.intake_type,
+         rl.source_platform_pill,
+         rl.location_code,
+         rl.listing_reference,
          COALESCE(stn_line.tracking_number_raw, r_cart.receiving_tracking_number) AS tracking_number,
          rl.notes,
          to_char(rl.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
@@ -306,7 +315,7 @@ export async function PATCH(
 
     // Snapshot the row before the update so the audit row carries a real diff.
     const beforeRow = await pool.query(
-      `SELECT id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number,
+      `SELECT id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number,
               shipment_id, support_notes, listing_url, source, receiving_tracking_number
        FROM receiving WHERE id = $1 LIMIT 1`,
       [id],
@@ -378,6 +387,21 @@ export async function PATCH(
       values.push(next);
     }
 
+    // Carton-level default receiving type (PO|RETURN|TRADE_IN). Per-line
+    // receiving_lines.receiving_type overrides this; null clears the default.
+    if (Object.prototype.hasOwnProperty.call(body, 'intake_type')) {
+      const raw = body.intake_type;
+      const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
+      if (next != null && !INTAKE_TYPES.has(next)) {
+        return NextResponse.json(
+          { success: false, error: `Invalid intake_type. Allowed: ${Array.from(INTAKE_TYPES).join(', ')}` },
+          { status: 400 },
+        );
+      }
+      updates.push(`intake_type = $${idx++}`);
+      values.push(next);
+    }
+
     // PO# linkage — writing either field with a non-null value flips
     // `source` to 'zoho_po' so the carton drops off the Unfound queue.
     // The repair-service link flow only writes _number (Ecwid order #),
@@ -435,6 +459,7 @@ export async function PATCH(
     const result = await pool.query<{
       id: number;
       source_platform: string | null;
+      intake_type: string | null;
       zoho_purchaseorder_id: string | null;
       zoho_purchaseorder_number: string | null;
       shipment_id: number | null;
@@ -442,7 +467,7 @@ export async function PATCH(
       listing_url: string | null;
     }>(
       `UPDATE receiving SET ${updates.join(', ')} WHERE id = $${values.length}
-       RETURNING id, source_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
+       RETURNING id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
       values,
     );
 
@@ -452,6 +477,7 @@ export async function PATCH(
 
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
     await publishReceivingLogChanged({
+      organizationId: ctx.organizationId,
       action: 'update',
       rowId: String(id),
       source: 'receiving.patch',

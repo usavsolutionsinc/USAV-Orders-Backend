@@ -45,7 +45,7 @@ export const POST = withAuth(async (request, ctx) => {
         reasonCode: parsed.data.reasonCode,
         after: { status: 'DENIED', reasonCode: parsed.data.reasonCode },
       });
-      await notifyWarrantyTransition({ claim: result.claim, event: 'denied', actorStaffId: ctx.staffId ?? null });
+      await notifyWarrantyTransition({ organizationId: ctx.organizationId, claim: result.claim, event: 'denied', actorStaffId: ctx.staffId ?? null });
       return { status: 200, body: { ok: true, claim: result.claim } };
     },
   });

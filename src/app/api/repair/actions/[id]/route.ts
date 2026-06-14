@@ -109,6 +109,7 @@ export const PATCH = withAuth(
       );
       await invalidateCacheTags(['repair-service']);
       await publishRepairChanged({
+        organizationId: ctx.organizationId,
         repairIds: [existing.repair_id],
         source: 'repair.action-edited',
       });
@@ -150,6 +151,7 @@ export const DELETE = withAuth(
       );
       await invalidateCacheTags(['repair-service']);
       await publishRepairChanged({
+        organizationId: ctx.organizationId,
         repairIds: [existing.repair_id],
         source: 'repair.action-deleted',
       });

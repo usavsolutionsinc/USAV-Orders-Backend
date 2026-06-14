@@ -16,6 +16,10 @@ import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface ReceiveLineUnitsInput {
+  /** Owning tenant (from ctx.organizationId) — required so the realtime stock
+   *  ledger event is published on this org's channel. */
+  organizationId: string;
+
   /** receiving_lines.id */
   receiving_line_id: number;
 
@@ -354,6 +358,7 @@ export async function receiveLineUnits(
         ledgerEventIds.push(ledgerId);
         // Realtime fan-out (existing publisher).
         publishStockLedgerEvent({
+          organizationId: input.organizationId,
           ledgerId,
           sku: line.sku,
           delta: 1,
@@ -475,6 +480,7 @@ export async function receiveLineUnits(
       if (ledgerId) {
         ledgerEventIds.push(ledgerId);
         publishStockLedgerEvent({
+          organizationId: input.organizationId,
           ledgerId,
           sku: line.sku,
           delta: 1,

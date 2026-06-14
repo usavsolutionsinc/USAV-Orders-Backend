@@ -1,12 +1,27 @@
 import type { BrowseItemSummary } from '@/lib/ebay/browse-client';
 
 /**
+ * The set of secondary-market channels a candidate can come from. eBay is the
+ * only one wired today; the rest are reserved for additional SourceAdapters
+ * (Sourcing Hub plan §4.1). NOTE: the sourcing_candidates.source CHECK still
+ * only allows 'ebay'|'manual' — widen it (a migration) before enabling a new
+ * channel that persists candidates.
+ */
+export type CandidateSource =
+  | 'ebay'
+  | 'amazon'
+  | 'google_shopping'
+  | 'zoho_po'
+  | 'distributor'
+  | 'manual';
+
+/**
  * Normalized secondary-market hit — the shape the sourcing UI renders and that
  * maps 1:1 onto a sourcing_candidates row (see saveCandidate). Money is in
- * integer cents to match the schema; `raw` carries the full eBay summary.
+ * integer cents to match the schema; `raw` carries the full source payload.
  */
 export interface NormalizedCandidate {
-  source: 'ebay';
+  source: CandidateSource;
   externalId: string | null;
   title: string;
   url: string | null;
@@ -16,7 +31,7 @@ export interface NormalizedCandidate {
   shippingCents: number | null;
   currency: string;
   sellerName: string | null;
-  raw: BrowseItemSummary;
+  raw: unknown;
 }
 
 /** eBay conditionId → our condition enum. */

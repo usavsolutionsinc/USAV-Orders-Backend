@@ -37,6 +37,8 @@ function conditionChipLabel(grade: string | null | undefined): string {
  *      encoded as plain `datamatrix`. The internal scanner routes it.
  *   4. Bare SKU for labels without a serial — encoded as plain
  *      `datamatrix`. `routeScan()` falls through to the SKU branch.
+ *      (NOTE: a SKU-only scan has no product-detail destination wired yet —
+ *      see docs/reversibility-fixes-plan.md §1.3; deferred until one exists.)
  *
  * No URL, no host, no protocol on the wire. Consumer phone cameras see
  * opaque text; the internal app's scanner decodes via `routeScan()`.

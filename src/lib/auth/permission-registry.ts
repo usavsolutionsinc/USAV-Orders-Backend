@@ -141,6 +141,11 @@ export const PERMISSIONS = [
   { id: 'work_orders.complete',     category: 'ops', label: 'Complete work order' },
   { id: 'walk_in.view',             category: 'ops', label: 'View walk-ins' },
   { id: 'walk_in.intake',           category: 'ops', label: 'Intake walk-in' },
+  { id: 'stations.manage',          category: 'ops', label: 'Customize station pages (blocks, publish)' },
+  { id: 'studio.view',              category: 'ops', label: 'View Operations Studio' },
+  // Step-up is enforced on the PUBLISH route only (withAuth stepUp: true) so
+  // ordinary draft edits don't prompt for a PIN every five minutes.
+  { id: 'studio.manage',            category: 'ops', label: 'Edit & publish Operations Studio workflows' },
   { id: 'reports.view',             category: 'ops', label: 'View reports' },
   { id: 'reports.export',           category: 'ops', label: 'Export reports' },
   { id: 'print.label',              category: 'ops', label: 'Print labels' },

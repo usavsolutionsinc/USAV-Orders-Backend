@@ -37,7 +37,7 @@ export const POST = withAuth(async (request, ctx) => {
         entityId: id,
         after: { status: 'CLOSED' },
       });
-      await notifyWarrantyTransition({ claim: result.claim, event: 'closed', actorStaffId: ctx.staffId ?? null });
+      await notifyWarrantyTransition({ organizationId: ctx.organizationId, claim: result.claim, event: 'closed', actorStaffId: ctx.staffId ?? null });
 
       // Round-trip: solve the linked Zendesk ticket. Best-effort — the claim is
       // already closed; a Zendesk hiccup surfaces as a warning, never an error.

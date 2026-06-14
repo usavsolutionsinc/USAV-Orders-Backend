@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Package } from '@/components/Icons';
 import { useSkuQcChecks } from '@/hooks/useSkuQcChecks';
 import { QcChecklistSection } from '@/components/manuals/sections/QcChecklistSection';
+import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 
 /**
  * Right-pane workspace for the Products → QC Checklist view. Reads the selected
@@ -92,6 +93,7 @@ export function QcChecklistWorkspace() {
             )}
           </div>
         </div>
+        <SourceThisButton skuId={catalog.id} label="Source" variant="secondary" />
         <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-blue-600">
           {checks.length} {checks.length === 1 ? 'step' : 'steps'}
         </span>

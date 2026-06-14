@@ -3,6 +3,8 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
@@ -41,6 +43,8 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   staffId,
 }: ReceivingPhotoStripProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   // Seed the runtime NAS base URL (admin test/prod setting) and re-render once it
   // resolves. Without this, nasConfigured() reads an empty base on first render
   // and the empty state falls back to "No photos yet." instead of the
@@ -65,7 +69,7 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     staleTime: 10_000,
   });
 
-  const phoneChannel = staffId > 0 ? `phone:${staffId}` : 'phone:__idle__';
+  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   const handlePhoneMessage = useCallback(
     (msg: { data?: { receiving_id?: number } }) => {
       const incoming = Number(msg?.data?.receiving_id);
@@ -75,7 +79,7 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [receivingId, queryClient],
   );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
+  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
 
   const galleryPhotos = useMemo(
     () =>

@@ -105,7 +105,7 @@ export function OperationsLogSection() {
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-gray-900">Operations log</h1>
+        <h1 className="sr-only">Operations log</h1>
         <p className="text-sm text-gray-500">
           Every bin, SKU, and receiving mutation, attributed to the signed-in staff.
         </p>

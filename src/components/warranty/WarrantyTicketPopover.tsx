@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ExternalLink, Loader2, MessageSquare, Send } from '@/components/Icons';
+import { ExternalLink, Link2, Loader2, MessageSquare, Search, Send, Unlink, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { toast } from '@/lib/toast';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
 import { useWarrantyClaim } from '@/hooks/useWarrantyClaims';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 import {
   useWarrantyTicket,
+  useWarrantyTicketCandidates,
   useWarrantyTicketComments,
   useWarrantyZendeskMutations,
   WarrantyZendeskDraftError,
@@ -113,12 +115,25 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
 
   const ticketQuery = useWarrantyTicket(claimId, linked);
   const commentsQuery = useWarrantyTicketComments(claimId, linked);
-  const { createTicket, reply } = useWarrantyZendeskMutations(claimId);
+  const { createTicket, reply, linkExisting, unlink } = useWarrantyZendeskMutations(claimId);
   const { lifecycle } = useWarrantyMutations();
 
   const [draft, setDraft] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Link-an-existing-ticket picker (only relevant while unlinked). `linkQuery`
+  // doubles as the search box and the manual "#1234" id entry — the server
+  // resolves a bare id to a direct lookup, so typing one behaves exactly like
+  // picking it from the recent list. Debounced so each keystroke isn't a fetch.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(linkQuery), 250);
+    return () => clearTimeout(t);
+  }, [linkQuery]);
+  const candidatesQuery = useWarrantyTicketCandidates(claimId, debouncedQuery, linkOpen && !linked);
 
   const timeline = useMemo(
     () => mergeWarrantyTimeline(claim?.events ?? [], commentsQuery.data ?? []),
@@ -176,6 +191,37 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
+          )}
+          {linked && (
+            <button
+              type="button"
+              disabled={unlink.isPending}
+              aria-label="Unlink ticket"
+              title="Unlink ticket (it stays in Zendesk)"
+              onClick={() => {
+                const ticketId = claim?.zendeskTicketId;
+                if (ticketId == null) return;
+                if (
+                  !window.confirm(
+                    `Unlink ticket #${ticketId} from this claim? The ticket stays in Zendesk — only the claim link is removed.`,
+                  )
+                ) {
+                  return;
+                }
+                unlink.mutate(ticketId, {
+                  onSuccess: () => toast.success(`Unlinked ticket #${ticketId}`),
+                  onError: (e) =>
+                    toast.error(e instanceof Error ? e.message : 'Unlink failed'),
+                });
+              }}
+              className="rounded-md p-1 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+            >
+              {unlink.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Unlink className="h-3.5 w-3.5" />
+              )}
+            </button>
           )}
           {canResolve && (
             <button
@@ -250,6 +296,103 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                   {createTicket.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Create Zendesk ticket
                 </button>
+
+                {/* Link an EXISTING ticket — for claims whose ticket was filed
+                    by email (the common case). Search, or type a ticket # by
+                    hand; the manual id resolves identically to a list pick. */}
+                {!linkOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setLinkOpen(true)}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Link an existing ticket
+                  </button>
+                ) : (
+                  <div className="space-y-2 rounded-lg border border-gray-200 p-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-gray-600">Link existing ticket</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLinkOpen(false);
+                          setLinkQuery('');
+                        }}
+                        aria-label="Cancel linking"
+                        className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={linkQuery}
+                        onChange={(e) => setLinkQuery(e.target.value)}
+                        placeholder="Search subject or type ticket # (e.g. 12345)"
+                        autoFocus
+                        className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-[12px] focus:border-blue-300 focus:outline-none"
+                      />
+                    </div>
+                    {linkExisting.isError && (
+                      <p className="text-[11px] text-rose-600">
+                        {linkExisting.error instanceof Error ? linkExisting.error.message : 'Link failed.'}
+                      </p>
+                    )}
+                    <div className="max-h-44 space-y-1 overflow-y-auto">
+                      {candidatesQuery.isFetching ? (
+                        <div className="flex items-center justify-center py-3">
+                          <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        </div>
+                      ) : candidatesQuery.isError ? (
+                        <p className="px-1 py-2 text-[11px] text-rose-600">
+                          {candidatesQuery.error instanceof Error ? candidatesQuery.error.message : 'Search failed.'}
+                        </p>
+                      ) : (candidatesQuery.data?.tickets.length ?? 0) === 0 ? (
+                        <p className="px-1 py-2 text-center text-[11px] text-gray-400">
+                          {debouncedQuery.trim() ? 'No matching tickets.' : 'No recent tickets.'}
+                        </p>
+                      ) : (
+                        candidatesQuery.data!.tickets.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            disabled={linkExisting.isPending}
+                            onClick={() =>
+                              linkExisting.mutate(t.id, {
+                                onSuccess: () => {
+                                  setLinkOpen(false);
+                                  setLinkQuery('');
+                                  toast.success(`Linked ticket #${t.id}`);
+                                },
+                              })
+                            }
+                            className="flex w-full items-start gap-2 rounded-md border border-gray-100 px-2 py-1.5 text-left transition hover:border-blue-200 hover:bg-blue-50/40 disabled:opacity-50"
+                          >
+                            <span className="mt-0.5 shrink-0 font-mono text-[10px] font-semibold text-gray-400">
+                              #{t.id}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px] font-medium text-gray-700">
+                                {t.subject || '(no subject)'}
+                              </span>
+                              <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                                {t.status}
+                              </span>
+                            </span>
+                            <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    {(candidatesQuery.data?.hiddenLinked ?? 0) > 0 && (
+                      <p className="px-1 text-[10px] text-gray-400">
+                        {candidatesQuery.data!.hiddenLinked} hidden — already linked elsewhere.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

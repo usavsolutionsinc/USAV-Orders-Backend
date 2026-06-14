@@ -194,7 +194,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     }
 }, { permission: 'receiving.view' });
 
-export const DELETE = withAuth(async (request: NextRequest) => {
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
     try {
         const { searchParams } = new URL(request.url);
 
@@ -222,6 +222,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
             // Count, not the id list — listeners only refetch on this event,
             // and an unbounded id string risks the broker's message size cap.
             await publishReceivingLogChanged({
+                organizationId: ctx.organizationId,
                 action: 'delete',
                 rowId: `bulk:${deleted.length}`,
                 source: 'receiving-logs.delete-bulk',
@@ -252,7 +253,7 @@ export const DELETE = withAuth(async (request: NextRequest) => {
         }
 
         await invalidateCacheTags(['receiving-logs', 'pending-unboxing']);
-        await publishReceivingLogChanged({ action: 'delete', rowId: String(id), source: 'receiving-logs.delete' });
+        await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: String(id), source: 'receiving-logs.delete' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error deleting receiving log:', error);
@@ -501,7 +502,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         }
 
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'pending-unboxing']);
-        await publishReceivingLogChanged({ action: 'update', rowId: String(id), source: 'receiving-logs.patch' });
+        await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'update', rowId: String(id), source: 'receiving-logs.patch' });
         return NextResponse.json({ success: true, id });
     } catch (error: any) {
         console.error('Error updating receiving log:', error);

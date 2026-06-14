@@ -42,8 +42,10 @@ interface PhotoGalleryProps {
   launcherTitle?: string;
   /**
    * `toolbar` — slim row with download-all, copy links, and fullscreen (shipped UX uses `default`).
+   * `thumbnails` — a clickable thumbnail strip (no launcher button); each opens the
+   * fullscreen viewer at that photo. Used to promote photos inline into a timeline row.
    */
-  launcherLayout?: 'default' | 'toolbar';
+  launcherLayout?: 'default' | 'toolbar' | 'thumbnails';
   /**
    * Called after a successful DELETE /api/photos/[id]. Parents typically use
    * this to invalidate their react-query cache so a refetch picks up the
@@ -686,7 +688,30 @@ export function PhotoGallery({
 
   return (
     <>
-      {launcherLayout === 'toolbar' ? (
+      {launcherLayout === 'thumbnails' ? (
+        <div className={`flex w-full flex-wrap items-center gap-1.5 ${className}`}>
+          {photoItems.map((photo, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => openViewer(index)}
+              className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-blue-200 bg-blue-50 transition-all hover:ring-2 hover:ring-blue-300 active:scale-95"
+              aria-label={`View photo ${index + 1} fullscreen`}
+              title={`View photo ${index + 1} fullscreen`}
+            >
+              {photo.status === 'loaded' ? (
+                <img src={photo.url} alt={`Photo ${index + 1}`} className="h-full w-full object-cover" />
+              ) : photo.status === 'error' ? (
+                <div className="flex h-full w-full items-center justify-center bg-red-50">
+                  <AlertCircle className="h-4 w-4 text-red-400" />
+                </div>
+              ) : (
+                <div className="h-full w-full animate-pulse bg-blue-100" />
+              )}
+            </button>
+          ))}
+        </div>
+      ) : launcherLayout === 'toolbar' ? (
         <div
           className={`flex w-full items-stretch gap-1 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 pl-2 pr-1 ${
             compact ? 'min-h-9 py-0.5' : 'min-h-[3.25rem] py-1'

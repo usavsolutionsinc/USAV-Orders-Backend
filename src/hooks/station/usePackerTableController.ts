@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { computeWeekRange, toPSTDateKey } from '@/utils/date';
 import { isFbaOrder } from '@/utils/order-platform';
 import { usePackerLogs, type PackerRecord } from '@/hooks/usePackerLogs';
@@ -26,8 +26,6 @@ interface UsePackerTableControllerOptions {
 
 export function usePackerTableController({ staffId, searchTerm = '' }: UsePackerTableControllerOptions) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [stickyDate, setStickyDate] = useState<string>('');
-  const [currentCount, setCurrentCount] = useState<number>(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const weekRange = computeWeekRange(weekOffset);
@@ -109,36 +107,6 @@ export function usePackerTableController({ staffId, searchTerm = '' }: UsePacker
     [filteredGroupedRecords],
   );
 
-  // ── Scroll-based sticky header ────────────────────────────────────────────
-
-  const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollTop } = scrollRef.current;
-    const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-    let activeDate = '';
-    let activeCount = 0;
-    for (let i = 0; i < headers.length; i++) {
-      const header = headers[i] as HTMLElement;
-      if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-        activeDate = header.getAttribute('data-date') || '';
-        activeCount = parseInt(header.getAttribute('data-count') || '0');
-      } else {
-        break;
-      }
-    }
-    if (activeDate) setStickyDate(activeDate);
-    if (activeCount) setCurrentCount(activeCount);
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, visibleRecords]);
-
   return {
     weekOffset,
     setWeekOffset,
@@ -152,7 +120,5 @@ export function usePackerTableController({ staffId, searchTerm = '' }: UsePacker
     loading,
     isRefreshing,
     scrollRef,
-    stickyDate,
-    currentCount,
   };
 }

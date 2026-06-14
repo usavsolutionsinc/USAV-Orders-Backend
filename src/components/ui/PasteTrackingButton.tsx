@@ -1,12 +1,20 @@
 'use client';
 
 import { MouseEvent, useState } from 'react';
-import { Clipboard, Check, Loader2 } from '@/components/Icons';
+import { Link2, Check, Loader2 } from '@/components/Icons';
 import { useOrderAssignment } from '@/hooks/useOrderAssignment';
-import { monoValue } from '@/design-system/tokens/typography/presets';
+import { AddValueChipFace } from '@/components/ui/CopyChip';
 
 type Status = 'idle' | 'saving' | 'success' | 'error';
 
+/**
+ * Empty-tracking-slot action on the unshipped queue: pastes the clipboard's
+ * tracking number onto the order. Renders the shared {@link AddValueChipFace}
+ * "Add TRK#" affordance (dashed underline) — the SAME chip-family look the
+ * Incoming "Add TRK#" popover uses — instead of a bare "----" placeholder, so
+ * the two surfaces read identically (same chain-link Link2 icon). Status drives
+ * the icon + color for saving/success/error feedback.
+ */
 export function PasteTrackingButton({ orderId }: { orderId: number }) {
   const [status, setStatus] = useState<Status>('idle');
   const mutation = useOrderAssignment();
@@ -29,29 +37,33 @@ export function PasteTrackingButton({ orderId }: { orderId: number }) {
     }
   };
 
+  // Chain-link icon (Link2) so the dashboard paste affordance matches the
+  // receiving "Add TRK#" exactly; spinner/check only swap in for transient
+  // saving/success feedback.
   const icon =
-    status === 'saving' ? <Loader2 className="w-4 h-4 shrink-0 text-blue-500 animate-spin" /> :
-    status === 'success' ? <Check className="w-4 h-4 shrink-0 text-emerald-500" /> :
-    status === 'error' ? <Clipboard className="w-4 h-4 shrink-0 text-red-500" /> :
-    <Clipboard className="w-4 h-4 shrink-0 text-blue-500" />;
+    status === 'saving' ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /> :
+    status === 'success' ? <Check className="h-3.5 w-3.5 shrink-0" /> :
+    <Link2 className="h-3.5 w-3.5 shrink-0" />;
 
-  const underline =
-    status === 'success' ? 'border-emerald-500' :
-    status === 'error' ? 'border-red-500' :
-    'border-blue-500';
+  const colorClass =
+    status === 'success' ? 'text-emerald-600' :
+    status === 'error' ? 'text-red-600' :
+    'text-blue-600';
+  const underlineClass =
+    status === 'success' ? 'border-emerald-400' :
+    status === 'error' ? 'border-red-400' :
+    'border-blue-400';
 
   return (
-    <div className="relative flex w-fit max-w-full items-center justify-start px-1.5">
-      <button
-        type="button"
-        onClick={handlePaste}
-        className="inline-flex w-fit max-w-full items-center justify-start gap-0.5 py-0 bg-white text-black text-left transition-all active:scale-95"
-      >
-        <span className="shrink-0">{icon}</span>
-        <span className={`${monoValue} tracking-tight leading-none border-b-2 pb-0.5 min-w-0 text-left whitespace-nowrap ${underline}`}>
-          ----
-        </span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={handlePaste}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      title="Paste a copied tracking number onto this order"
+      className="inline-flex shrink-0 items-center transition-transform active:scale-95"
+    >
+      <AddValueChipFace label="Add TRK#" icon={icon} colorClass={colorClass} underlineClass={underlineClass} />
+    </button>
   );
 }

@@ -8,6 +8,7 @@ import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/la
 import { CopyChip, HashIcon } from '@/components/ui/CopyChip';
 import { PlatformChip } from '@/components/ui/CopyChip';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 import {
   type NeedToOrderRow,
   type ReplenishmentStatus,
@@ -109,6 +110,10 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                 const waitingCount = waitingOrders.length;
                 const qtyToOrder = numText(row.quantity_to_order);
                 const sku = String(row.sku || '').trim();
+                // Bridge to secondary-market sourcing: escalate this vendor-restock
+                // need to the sourcing queue keyed on the item title (avoids the
+                // items↔sku_catalog SKU-string collision — see that memory).
+                const qtyNum = Math.round(Number(row.quantity_to_order) || 0);
 
                 return (
                   <motion.div
@@ -142,8 +147,8 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                       </div>
                     </div>
 
-                    {/* Right: SKU chip + Ecwid link */}
-                    <div className="flex items-center shrink-0">
+                    {/* Right: SKU chip + Ecwid link + scour bridge */}
+                    <div className="flex items-center gap-1.5 shrink-0">
                       {sku && (
                         <PlatformChip
                           label={sku}
@@ -157,6 +162,13 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                         />
                       )}
                       <SkuChip sku={sku} />
+                      <SourceThisButton
+                        searchQuery={row.item_name}
+                        targetQty={qtyNum > 1 ? qtyNum : null}
+                        label="Scour"
+                        doneLabel="Queued"
+                        variant="ghost"
+                      />
                     </div>
                   </motion.div>
                 );

@@ -119,6 +119,10 @@ export function warrantyEventLabel(event: WarrantyClaimEventRow): string {
       return 'Claim deleted';
     case 'ZENDESK_TICKET_CREATED':
       return 'Zendesk ticket created';
+    case 'ZENDESK_LINKED':
+      return 'Zendesk ticket linked';
+    case 'ZENDESK_UNLINKED':
+      return 'Zendesk ticket unlinked';
     case 'ZENDESK_REPLY':
       return 'Reply sent to Zendesk';
     case 'ZENDESK_STATUS':

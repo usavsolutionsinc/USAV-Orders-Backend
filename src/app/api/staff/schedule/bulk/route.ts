@@ -40,7 +40,7 @@ function isValidIsoDate(value: string | null | undefined): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const updatesRaw = Array.isArray(body?.updates) ? body.updates : [];
@@ -150,6 +150,7 @@ export const POST = withAuth(async (request: NextRequest) => {
 
     await invalidateCacheTags(['staff']);
     publishStaffScheduleChanged({
+      organizationId: ctx.organizationId,
       action: 'bulk',
       source: 'staff.schedule.bulk',
       changed,

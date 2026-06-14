@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
+import pool from '@/lib/db';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { syncOrderExceptionsToOrders } from '@/lib/orders-exceptions';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -25,7 +28,11 @@ function isTrustedAppOrigin(request: NextRequest): boolean {
   return false;
 }
 
-export async function POST(request: NextRequest) {
+// Session + permission gate (the origin check alone is spoofable — it was the
+// only guard when this route first shipped, kept as a CSRF belt). orders.view
+// mirrors the receiving refresh/stream sibling: any staff who works the
+// orders surfaces may trigger the sync; anonymous calls 401.
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   if (!isTrustedAppOrigin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -37,6 +44,15 @@ export async function POST(request: NextRequest) {
       if (result.matched > 0) {
         await invalidateAllOrdersApiCaches();
       }
+      // The sweep writes orders + orders_exceptions rows — record who pulled
+      // the trigger and what landed (the stream result isn't otherwise kept).
+      await recordAudit(pool, ctx, request, {
+        source: 'orders-exceptions-api',
+        action: AUDIT_ACTION.ORDERS_EXCEPTIONS_SYNC,
+        entityType: AUDIT_ENTITY.ORDER,
+        entityId: 'orders_exceptions_sweep',
+        extra: { ...result },
+      });
       stream.emit({
         type: 'result',
         result: {
@@ -45,11 +61,14 @@ export async function POST(request: NextRequest) {
           timestamp: formatPSTTimestamp(),
         },
       });
-    } catch (error: any) {
-      console.error('Error syncing orders_exceptions:', error);
+    } catch (error) {
+      console.error(
+        'Error syncing orders_exceptions:',
+        error instanceof Error ? error.message : String(error),
+      );
       stream.emit({
         type: 'error',
-        error: error?.message || 'Failed to sync orders_exceptions',
+        error: error instanceof Error ? error.message : 'Failed to sync orders_exceptions',
       });
     } finally {
       stream.finish();
@@ -57,4 +76,4 @@ export async function POST(request: NextRequest) {
   })();
 
   return new Response(stream.body, { headers: ndjsonResponseHeaders() });
-}
+}, { permission: 'orders.view' });

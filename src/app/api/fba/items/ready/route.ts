@@ -122,7 +122,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready' });
+    await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,

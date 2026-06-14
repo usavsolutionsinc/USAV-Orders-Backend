@@ -1,14 +1,14 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-10T08:38:22Z",
-  "totalRoutes": 562,
+  "generatedAt": "2026-06-13T21:23:10Z",
+  "totalRoutes": 585,
   "summary": {
-    "permissionGated": 475,
-    "authenticatedNoPermission": 20,
-    "anonymousIntentional": 46,
+    "permissionGated": 495,
+    "authenticatedNoPermission": 22,
+    "anonymousIntentional": 48,
     "serviceToService": 3,
     "ungatedRead": 17,
-    "ungatedWrite": 1
+    "ungatedWrite": 0
   },
   "routes": [
     {
@@ -1090,6 +1090,15 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/cron/sourcing/scour/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/staff-goals/history/route.ts",
       "methods": [
         "GET"
@@ -1100,6 +1109,15 @@
     },
     {
       "path": "/api/cron/stock-alerts/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/workflow-node-stats/route.ts",
       "methods": [
         "GET"
       ],
@@ -1744,6 +1762,7 @@
     {
       "path": "/api/handling-units/[id]/route.ts",
       "methods": [
+        "DELETE",
         "GET"
       ],
       "gate": "withAuth",
@@ -1933,6 +1952,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/local-pickup-orders/[id]/reopen/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.void",
+      "exemptReason": null
+    },
+    {
       "path": "/api/local-pickup-orders/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -1965,6 +1993,7 @@
     {
       "path": "/api/local-pickups/route.ts",
       "methods": [
+        "DELETE",
         "GET",
         "PATCH",
         "POST"
@@ -2172,8 +2201,8 @@
       "methods": [
         "POST"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "orders.view",
       "exemptReason": null
     },
     {
@@ -2209,6 +2238,15 @@
         "DELETE",
         "GET",
         "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/timeline/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "requireRoutePerm",
       "permission": "orders.view",
@@ -2722,6 +2760,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/product-models/lookup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/products/[sku]/route.ts",
       "methods": [
         "GET"
@@ -2928,6 +2975,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving-lines/view/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -3268,6 +3324,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/repair-service/[id]/reopen/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "repair.intake",
       "exemptReason": null
     },
     {
@@ -3709,6 +3774,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/serial-units/[id]/photos/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/serial-units/[id]/quality/route.ts",
       "methods": [
         "GET"
@@ -3825,6 +3900,15 @@
       ],
       "gate": "withAuth",
       "permission": "shipping.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipped/scan-out/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
       "exemptReason": null
     },
     {
@@ -4227,7 +4311,8 @@
       "path": "/api/sourcing/alerts/route.ts",
       "methods": [
         "GET",
-        "PATCH"
+        "PATCH",
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "sourcing.view",
@@ -4253,6 +4338,35 @@
     },
     {
       "path": "/api/sourcing/candidates/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/saved-searches/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/saved-searches/[id]/run/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sourcing.search",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sourcing/saved-searches/route.ts",
       "methods": [
         "GET",
         "POST"
@@ -4296,6 +4410,17 @@
       ],
       "gate": "withAuth",
       "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/staff-messages/route.ts",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -4382,12 +4507,94 @@
       "exemptReason": null
     },
     {
+      "path": "/api/stations/publish/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "stations.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/stations/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "dashboard.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/stock-alerts/route.ts",
       "methods": [
         "GET"
       ],
       "gate": "withAuth",
       "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/definitions/[id]/discard/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/definitions/[id]/graph/route.ts",
+      "methods": [
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/definitions/[id]/publish/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/definitions/draft/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/graph/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/live/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/studio/nodes/[id]/station/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.view",
       "exemptReason": null
     },
     {
@@ -4870,6 +5077,17 @@
     {
       "path": "/api/warranty/claims/[id]/zendesk/comments/route.ts",
       "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/zendesk/link/route.ts",
+      "methods": [
+        "DELETE",
         "GET",
         "POST"
       ],

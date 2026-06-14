@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useState, useMemo, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, X, Printer, ExternalLink, ShoppingCart } from '../Icons';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
-import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
-import WeekHeader, { weekDayGroupCountClass } from '../ui/WeekHeader';
+import { DateGroupHeader, dayGroupCountClass } from '@/components/ui/DateGroupHeader';
+import WeekHeader from '../ui/WeekHeader';
 import { cn } from '@/utils/_cn';
 import { useWalkInSales } from '@/hooks/useWalkInSales';
 import { formatCentsToDollars } from '@/lib/square/client';
@@ -15,7 +15,6 @@ import { getSalesWeekRange } from '@/lib/sales-week-range';
 import { isRepairSku } from '@/utils/sku';
 import { SalesDetailsPanel } from './SalesDetailsPanel';
 import type { SquareTransactionRecord } from '@/lib/neon/square-transaction-queries';
-import { formatDateWithOrdinal } from '@/utils/date';
 
 export function SalesTable() {
   const router = useRouter();
@@ -23,12 +22,7 @@ export function SalesTable() {
   const searchParams = useSearchParams();
   const search = searchParams.get('search');
   const [selectedSale, setSelectedSale] = useState<SquareTransactionRecord | null>(null);
-  const [stickyDate, setStickyDate] = useState('');
-  const [activeDateKey, setActiveDateKey] = useState('');
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollRafRef = useRef(0);
 
   // ── Week pagination via URL ──
   const weekOffsetParam = searchParams.get('salesWeekOffset');
@@ -51,59 +45,6 @@ export function SalesTable() {
     weekStart: weekRange.startStr,
     weekEnd: weekRange.endStr,
   });
-
-  const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
-
-  // ── Scroll tracking ──
-  const handleScroll = useCallback(() => {
-    if (scrollRafRef.current) return;
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      if (!scrollRef.current) return;
-      const { scrollTop } = scrollRef.current;
-      const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-      let activeDate = '';
-      let activeCount = 0;
-      for (let i = 0; i < headers.length; i++) {
-        const header = headers[i] as HTMLElement;
-        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 5) {
-          activeDate = header.getAttribute('data-date') || '';
-          activeCount = parseInt(header.getAttribute('data-count') || '0');
-        } else break;
-      }
-      if (activeDate) {
-        setActiveDateKey(activeDate);
-        setStickyDate(activeDate);
-      }
-      if (activeCount) setCurrentCount(activeCount);
-      const scrolled = scrollTop > 10;
-      setIsScrolled((prev) => (prev === scrolled ? prev : scrolled));
-    });
-  }, []);
-
-  useEffect(() => {
-    const c = scrollRef.current;
-    if (c) {
-      c.addEventListener('scroll', handleScroll);
-      window.setTimeout(() => handleScroll(), 100);
-    }
-    return () => c?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, sales]);
-
-  useEffect(() => {
-    // Initial display sync
-    const today = new Date().toISOString().split('T')[0];
-    if (sales.length > 0) {
-      const first = new Date(sales[0].created_at!).toISOString().split('T')[0];
-      setActiveDateKey(first);
-      setStickyDate(first);
-      setCurrentCount(sales.filter(s => new Date(s.created_at!).toISOString().split('T')[0] === first).length);
-    } else {
-      setActiveDateKey(today);
-      setStickyDate(today);
-      setCurrentCount(0);
-    }
-  }, [sales]);
 
   const clearSearch = () => {
     const params = new URLSearchParams(searchParams.toString());
@@ -132,21 +73,13 @@ export function SalesTable() {
     return `${items[0].name || 'Item'} +${items.length - 1} more`;
   };
 
-  // Fallback date for header
-  const fallbackDate = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return formatDate(today);
-  }, [formatDate]);
-
   return (
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* WeekHeader */}
         <div className="relative z-20">
           <WeekHeader
-            stickyDate={stickyDate}
-            fallbackDate={fallbackDate}
-            count={currentCount || sales.length}
+            count={sales.length}
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
@@ -178,10 +111,7 @@ export function SalesTable() {
         {/* Sales rows */}
         <div
           ref={scrollRef}
-          className={cn(
-            "flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10",
-            "-mt-[40px] pt-[40px]"
-          )}
+          className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full"
         >
           {loading ? (
             <div className="flex flex-col items-center justify-center py-40 gap-3">
@@ -218,16 +148,14 @@ export function SalesTable() {
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .map(([date, records]) => {
                   const dayRevenue = records.reduce((s, r) => s + (r.total || 0), 0);
-                  const hidePinnedDayHeader = date === activeDateKey && isScrolled;
                   
                   return (
                     <div key={date} className="flex flex-col">
                       <DateGroupHeader
                         date={date}
                         total={records.length}
-                        hidden={hidePinnedDayHeader}
                         actions={
-                          <p className={cn(weekDayGroupCountClass, "text-emerald-600 pr-2")}>
+                          <p className={cn(dayGroupCountClass, "text-emerald-600 pr-2")}>
                             {formatCentsToDollars(dayRevenue)}
                           </p>
                         }

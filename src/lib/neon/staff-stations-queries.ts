@@ -46,10 +46,19 @@ export async function getStaffStations(staffId: number): Promise<StaffStationRow
  * Staff ids whose PRIMARY station is TECH — the recipients for tech-station
  * inbox notifications (unboxed returns awaiting test, orders ready to ship).
  * Fan-out target for the publishers in src/lib/realtime/publish.ts.
+ *
+ * Org-scoped: `staff_stations` has no `organization_id` column, so we JOIN
+ * `staff` and filter on its org — otherwise a second tenant's techs would be
+ * enumerated into this org's fan-out.
  */
-export async function getPrimaryTechStaffIds(): Promise<number[]> {
+export async function getPrimaryTechStaffIds(orgId: string): Promise<number[]> {
   const r = await pool.query(
-    `SELECT staff_id FROM staff_stations WHERE station = 'TECH' AND is_primary = true`,
+    `SELECT ss.staff_id
+       FROM staff_stations ss
+       JOIN staff s ON s.id = ss.staff_id
+      WHERE ss.station = 'TECH' AND ss.is_primary = true
+        AND s.organization_id = $1`,
+    [orgId],
   );
   return r.rows
     .map((row) => Number(row.staff_id))

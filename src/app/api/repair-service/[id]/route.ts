@@ -74,7 +74,7 @@ export async function DELETE(
 
     if (!result.alreadyCancelled) {
       await invalidateCacheTags(['repair-service']);
-      await publishRepairChanged({ repairIds: [repairId], source: 'repair-service.cancel' });
+      await publishRepairChanged({ organizationId: gate.ctx.organizationId, repairIds: [repairId], source: 'repair-service.cancel' });
       await recordAudit(pool, gate.ctx, req, {
         source: 'repair-service-api',
         action: AUDIT_ACTION.REPAIR_CANCEL,

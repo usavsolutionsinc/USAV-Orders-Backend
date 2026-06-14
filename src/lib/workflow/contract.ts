@@ -6,8 +6,8 @@
  * thin adapter over an existing src/lib/* module (receiving, tech, shipping…),
  * and the engine only decides ROUTING based on which output port fired.
  *
- * See docs/NODE_WORKFLOW_ARCHITECTURE.md §3 and
- * docs/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md (Phase B).
+ * See docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md §3 and
+ * docs/operations-studio/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md (Phase B).
  */
 
 import type { OrgId } from '@/lib/tenancy/constants';
@@ -70,6 +70,12 @@ export interface WorkflowEvent {
   /** Output port that fired, or a lifecycle marker like 'entered' | 'done' | 'error'. */
   output: string;
   at: string;
+  /**
+   * Source node INSTANCE id that fired (not the registry type). Optional, but
+   * when present it lets the Studio's Live lens animate the exact traversed
+   * edge `(nodeId, output)` rather than guessing from `nodeType`.
+   */
+  nodeId?: string;
 }
 
 // ─── Persistence boundary ────────────────────────────────────

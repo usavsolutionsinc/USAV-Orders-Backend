@@ -372,3 +372,26 @@ export async function refreshHandlingUnitStatus(
     return null;
   }
 }
+
+/**
+ * Dissolve a handling-unit box (the reverse of {@link createHandlingUnit}) — for
+ * an empty/abandoned/mis-scanned H-box. Unassigns every member unit FIRST
+ * (handling_unit_id → NULL) so no unit is left pointing at a deleted box, then
+ * deletes the box row. Owns the unassign→delete cascade so there are no orphans.
+ * `serial_units.handling_unit_id` is ON DELETE SET NULL, so the order is belt-
+ * and-braces; doing it explicitly also keeps the units' updated_at fresh.
+ * Returns null when the box doesn't exist (already gone).
+ */
+export async function dissolveHandlingUnit(
+  id: number,
+): Promise<{ dissolved: HandlingUnitRow; unassigned: number } | null> {
+  const hu = await getHandlingUnitById(id);
+  if (!hu) return null;
+  const upd = await pool.query(
+    `UPDATE serial_units SET handling_unit_id = NULL, updated_at = NOW()
+      WHERE handling_unit_id = $1`,
+    [id],
+  );
+  await pool.query(`DELETE FROM handling_units WHERE id = $1`, [id]);
+  return { dissolved: hu, unassigned: upd.rowCount ?? 0 };
+}

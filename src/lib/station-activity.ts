@@ -2,7 +2,7 @@ type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
 };
 
-export type StationName = 'TECH' | 'PACK' | 'FBA' | 'RECEIVING' | 'ADMIN';
+export type StationName = 'TECH' | 'PACK' | 'FBA' | 'RECEIVING' | 'ADMIN' | 'OUTBOUND';
 export type StationActivityType =
   | 'TRACKING_SCANNED'
   | 'FNSKU_SCANNED'
@@ -10,6 +10,11 @@ export type StationActivityType =
   | 'PACK_COMPLETED'
   | 'PACK_SCAN'
   | 'FBA_READY'
+  // Dock / handoff scan: the package physically left the building. Distinct from
+  // PACK_* (in the box) and from carrier-reported custody on shipping_tracking_numbers.
+  // `station_activity_logs.activity_type`/`station` are free-text VARCHAR, so this
+  // needs no migration — only this union edit.
+  | 'SHIP_CONFIRM'
   | 'WS_ORDER_TESTED'
   | 'WS_REPAIR_CHANGED'
   | 'WS_RECEIVING_CHANGED'

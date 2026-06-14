@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
+import { tapWorkflow } from '@/lib/workflow/tap';
 
 /**
  * Per-serial repair history (unit_repairs) + the failure modes each repair
@@ -270,6 +271,20 @@ export async function updateRepair(
       await pool.query(`UPDATE unit_repairs SET done_event_id = $2 WHERE id = $1`, [repairId, event.id]);
     } catch (eventErr) {
       console.warn('[updateRepair] REPAIR_COMPLETED event failed (non-fatal)', eventErr);
+    }
+
+    // Workflow-engine tap (fire-and-forget — never throws). Only a repair
+    // that lands on 'completed' fires the repair node's `repaired` port
+    // (→ back to inspection for re-test); 'failed'/'scrapped' repairs leave
+    // the unit parked at the repair node until a disposition lane exists.
+    if (params.status === 'completed') {
+      await tapWorkflow({
+        serialUnitId,
+        event: 'repair_completed',
+        input: { repairId },
+        staffId: params.staffId ?? null,
+        source: 'manual',
+      });
     }
   }
 

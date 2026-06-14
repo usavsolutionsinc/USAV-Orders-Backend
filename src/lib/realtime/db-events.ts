@@ -3,6 +3,8 @@ import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import { getDbRowChannelName, getDbTableChannelName } from '@/lib/realtime/channels';
 
 export type RealtimeDbEvent = {
+  /** Owning tenant — required so the row-change channel is org-namespaced. */
+  orgId: string;
   id: string;
   schema: string;
   table: string;
@@ -51,9 +53,9 @@ export async function publishDbEvent(event: RealtimeDbEvent) {
     timestamp: event.createdAt ?? new Date().toISOString(),
   };
 
-  await client.channels.get(getDbTableChannelName(event.schema, event.table)).publish('db.row.changed', basePayload);
+  await client.channels.get(getDbTableChannelName(event.orgId, event.schema, event.table)).publish('db.row.changed', basePayload);
 
   if (rowId != null) {
-    await client.channels.get(getDbRowChannelName(event.schema, event.table, rowId)).publish('db.row.changed', basePayload);
+    await client.channels.get(getDbRowChannelName(event.orgId, event.schema, event.table, rowId)).publish('db.row.changed', basePayload);
   }
 }

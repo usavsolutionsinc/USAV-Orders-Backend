@@ -202,6 +202,7 @@ export async function POST(
       ]);
       if (promotedReceivingId) {
         await publishReceivingLogChanged({
+          organizationId: gate.ctx.organizationId,
           action: 'update',
           rowId: String(promotedReceivingId),
           source: 'tracking-exceptions.refresh',

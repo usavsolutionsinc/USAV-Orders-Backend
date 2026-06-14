@@ -4,19 +4,17 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   getTicket,
-  listTickets,
-  searchTickets,
   updateTicket,
   ZendeskNotConfiguredError,
-  type ZendeskTicket,
 } from '@/lib/zendesk';
 import {
   buildExternalId,
+  clearTicketExternalIdIfMatches,
   getTicketEntity,
   linkTicket,
-  parseExternalId,
   unlinkTicket,
 } from '@/lib/zendesk-links';
+import { listTicketLinkCandidates } from '@/lib/zendesk-link-candidates';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import pool from '@/lib/db';
 
@@ -69,88 +67,17 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     });
     const { entityType, entityId } = entityRef(parsed.receivingId, parsed.lineId);
 
-    // No query → most recent tickets (newest first). A bare "#1234" / "1234"
-    // is a direct ticket lookup; anything else goes through Zendesk search.
-    let tickets: ZendeskTicket[];
-    const query = parsed.query ?? '';
-    const idMatch = /^#?(\d{1,12})$/.exec(query);
-    if (!query) {
-      tickets = (await listTickets({ perPage: 20 })).tickets;
-    } else if (idMatch) {
-      const ticket = await getTicket(Number(idMatch[1]));
-      tickets = ticket ? [ticket] : [];
-    } else {
-      tickets = (await searchTickets(query, { perPage: 20 })).results;
-    }
+    // Recent / search / direct-#id candidates with "linked elsewhere" hidden —
+    // shared with the warranty link route so manual-id entry behaves identically
+    // on both surfaces (see listTicketLinkCandidates).
+    const { tickets, hiddenLinked } = await listTicketLinkCandidates({
+      orgId: ctx.organizationId,
+      entityType,
+      entityId,
+      query: parsed.query,
+    });
 
-    // Resolve existing links for the whole result page in two bulk queries
-    // (ticket_links is authoritative; unfound_overlay stores the id as text,
-    // sometimes "#"-prefixed). external_id rides along on the search payload.
-    const ids = tickets.map((t) => t.id);
-    const linkByTicket = new Map<number, { type: string; id: number }>();
-    if (ids.length > 0) {
-      const links = await pool.query<{ zendesk_ticket_id: string; entity_type: string; entity_id: string }>(
-        `SELECT zendesk_ticket_id, entity_type, entity_id FROM ticket_links
-          WHERE organization_id = $1 AND zendesk_ticket_id = ANY($2::bigint[])`,
-        [ctx.organizationId, ids],
-      );
-      for (const row of links.rows) {
-        linkByTicket.set(Number(row.zendesk_ticket_id), { type: row.entity_type, id: Number(row.entity_id) });
-      }
-      const overlay = await pool.query<{ zendesk_ticket_id: string; source_kind: string; source_id: string }>(
-        `SELECT zendesk_ticket_id, source_kind, source_id FROM unfound_overlay
-          WHERE organization_id = $1
-            AND zendesk_ticket_id = ANY($2::text[])`,
-        [ctx.organizationId, ids.flatMap((id) => [String(id), `#${id}`])],
-      );
-      for (const row of overlay.rows) {
-        const ticketId = Number(String(row.zendesk_ticket_id).replace(/^#/, ''));
-        if (linkByTicket.has(ticketId)) continue;
-        const isReceiving = row.source_kind === 'unmatched_receiving' && /^\d+$/.test(row.source_id);
-        linkByTicket.set(
-          ticketId,
-          isReceiving
-            ? { type: 'RECEIVING', id: Number(row.source_id) }
-            : { type: 'UNFOUND', id: 0 },
-        );
-      }
-    }
-
-    let hiddenLinked = 0;
-    const out: Array<{
-      id: number;
-      subject: string | null;
-      description: string | null;
-      status: string;
-      priority: string | null;
-      createdAt: string;
-      updatedAt: string;
-      url: string | null;
-      linkedToThis: boolean;
-    }> = [];
-    for (const t of tickets) {
-      const link = linkByTicket.get(t.id) ?? parseExternalId(t.external_id as string | undefined);
-      const linkedToThis = !!link && link.type === entityType && link.id === entityId;
-      if (link && !linkedToThis) {
-        hiddenLinked++;
-        continue;
-      }
-      out.push({
-        id: t.id,
-        subject: t.subject ?? null,
-        // First comment body — enough for the expanded preview row; capped so
-        // a long email thread doesn't bloat the list payload.
-        description: typeof t.description === 'string' ? t.description.slice(0, 600) : null,
-        status: String(t.status ?? ''),
-        priority: t.priority ? String(t.priority) : null,
-        createdAt: t.created_at,
-        updatedAt: t.updated_at,
-        url: zendeskTicketUrl(t.id),
-        linkedToThis,
-      });
-    }
-
-    return NextResponse.json({ success: true, tickets: out, hiddenLinked });
+    return NextResponse.json({ success: true, tickets, hiddenLinked });
   } catch (err) {
     if (err instanceof ZendeskNotConfiguredError) return notConfigured(context);
     return errorResponse(err, context);
@@ -249,6 +176,16 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
 
     const removed = await unlinkTicket({
       orgId: ctx.organizationId,
+      zendeskTicketId: parsed.ticketId,
+      entityType,
+      entityId,
+    });
+
+    // Clear the dangling external_id off the Zendesk ticket (only when it still
+    // resolves to this entity) so getTicketEntity can't re-attach it via the
+    // external_id fallback after the ticket_links row is gone. Mirrors the
+    // warranty unlink — full clean detach.
+    await clearTicketExternalIdIfMatches({
       zendeskTicketId: parsed.ticketId,
       entityType,
       entityId,

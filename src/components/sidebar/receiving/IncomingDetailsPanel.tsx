@@ -17,12 +17,13 @@ import { OrderIdChip } from '@/components/ui/CopyChip';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { EventTimeline } from '@/components/ui/EventTimeline';
+import { carrierEventsToTimeline } from '@/lib/timeline';
 import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getStationChannelName } from '@/lib/realtime/channels';
-
-const STATION_CHANNEL = getStationChannelName();
+import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
 type TabId = 'po' | 'shipment' | 'email' | 'notes';
@@ -175,31 +176,6 @@ function deliveredAgoLabel(deliveredAt: string | null | undefined): string | nul
   return `${formatDistanceToNowStrict(d)} ago`;
 }
 
-// Color-code a carrier event's timeline dot by its normalized status so the
-// operator can eyeball the trail — delivery (green), exception (red),
-// out-for-delivery (amber), label created / pre-transit (gray), and the
-// in-transit default (blue).
-function eventDotClass(category: string | null | undefined): string {
-  const c = (category || '').toLowerCase();
-  if (c.includes('deliver') && !c.includes('out')) return 'bg-emerald-500';
-  if (c.includes('exception') || c.includes('fail') || c.includes('return')) return 'bg-rose-500';
-  if (c.includes('out_for_delivery') || c.includes('ofd')) return 'bg-amber-500';
-  if (c.includes('pre_transit') || c.includes('label') || c.includes('created') || c.includes('unknown'))
-    return 'bg-gray-300';
-  return 'bg-blue-500';
-}
-
-// Split a carrier event's date and time so the timeline can lead with a clear,
-// scannable time and tuck the location on its own line.
-function fmtEventTime(value: string | null | undefined): { date: string; time: string } {
-  return { date: fmtDate(value, 'MMM d'), time: fmtDate(value, 'h:mma') };
-}
-
-// Day key for grouping the event trail into "Jun 6 / Jun 5 / …" bands.
-function eventDayKey(value: string | null | undefined): string {
-  return fmtDate(value, 'EEE, MMM d');
-}
-
 // Tone for the status hero — mirrors the dot colors so the headline status
 // reads the same as its trail. Returns the wrapper + accent classes.
 function heroTone(category: string | null | undefined, delivered: boolean | null): {
@@ -260,6 +236,8 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, shipme
   const [tab, setTab] = useState<TabId>(isShipmentOnly ? 'shipment' : 'po');
   const [syncing, setSyncing] = useState(false);
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const stationChannel = safeChannelName(() => getStationChannelName(user?.organizationId!));
 
   // Reset to the default tab when the row changes (PO id or shipment id).
   useEffect(() => setTab(isShipmentOnly ? 'shipment' : 'po'), [zohoPurchaseOrderId, shipmentId, isShipmentOnly]);
@@ -348,11 +326,11 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, shipme
   // Realtime: a carrier webhook (or poll) that updates this shipment fires
   // `shipment.changed`; refresh the panel + the incoming list/summary instantly
   // so the displayed status matches the carrier's live state without a reload.
-  useAblyChannel(STATION_CHANNEL, 'shipment.changed', () => {
+  useAblyChannel(stationChannel, 'shipment.changed', () => {
     queryClient.invalidateQueries({ queryKey: ['incoming-details', detailsKey] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
     queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
-  });
+  }, !!stationChannel);
 
   const headerPo = poNumberHint || data?.po?.zoho_purchaseorder_number || '';
   // Shipment-only rows have no PO chip — fall back to the tracking# so the
@@ -629,71 +607,10 @@ function ShipmentTab({ data }: { data: DetailsResponse }) {
         <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
           Recent carrier events
         </h3>
-        {s.events.length === 0 ? (
-          <Empty msg="No carrier events yet." />
-        ) : (
-          <ol className="relative ml-1 border-l border-gray-200">
-            {s.events.map((e, i) => {
-              const { time } = fmtEventTime(e.event_occurred_at);
-              const location = e.event_city
-                ? `${e.event_city}${e.event_state ? ', ' + e.event_state : ''}`
-                : null;
-              // Lead with the human-readable phrase. `external_status_label` is
-              // often a cryptic raw carrier code (UPS sends single letters —
-              // D=delivered, I=in-transit, X=exception, M=manifest), so prefer
-              // the carrier's description, fall back to a readable label (>2
-              // chars), and finally the prettified normalized category. The
-              // single-letter codes are never shown.
-              const rawLabel = (e.external_status_label || '').trim();
-              const eventTitle =
-                e.external_status_description?.trim() ||
-                (rawLabel.length > 2 ? rawLabel : '') ||
-                prettyStatus(e.normalized_status_category);
-              const isLatest = i === 0;
-              const dayKey = eventDayKey(e.event_occurred_at);
-              const showDay = i === 0 || dayKey !== eventDayKey(s.events[i - 1]?.event_occurred_at);
-              return (
-                <li key={e.id} className="relative">
-                  {showDay ? (
-                    <div className="-ml-px mb-1.5 mt-1 border-l-2 border-transparent pl-5 text-eyebrow font-black uppercase tracking-wider text-gray-400 first:mt-0">
-                      {dayKey}
-                    </div>
-                  ) : null}
-                  <div className="relative pb-4 pl-5 last:pb-0">
-                    <span
-                      className={`absolute -left-[5px] top-[5px] h-2.5 w-2.5 rounded-full ring-2 ring-white ${eventDotClass(
-                        e.normalized_status_category,
-                      )} ${isLatest ? 'shadow-[0_0_0_3px_rgba(59,130,246,0.15)]' : ''}`}
-                    />
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className={`text-caption font-black ${isLatest ? 'text-gray-900' : 'text-gray-700'}`}>
-                        {eventTitle}
-                      </span>
-                      <span className="shrink-0 whitespace-nowrap text-eyebrow font-semibold tabular-nums text-gray-400">
-                        {time}
-                      </span>
-                    </div>
-                    {location ? (
-                      <div className="mt-0.5 text-eyebrow font-semibold uppercase tracking-wide text-gray-400">
-                        {location}
-                      </div>
-                    ) : null}
-                    {e.signed_by ? (
-                      <div className="mt-1 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-eyebrow font-bold text-emerald-700">
-                        Signed by {e.signed_by}
-                      </div>
-                    ) : null}
-                    {e.exception_description ? (
-                      <div className="mt-1 inline-flex items-center rounded bg-rose-50 px-1.5 py-0.5 text-eyebrow font-bold text-rose-700">
-                        {e.exception_description}
-                      </div>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
+        <EventTimeline
+          items={carrierEventsToTimeline(s.events)}
+          emptyMessage="No carrier events yet."
+        />
       </div>
     </div>
   );

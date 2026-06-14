@@ -6,6 +6,7 @@ import { Camera, Monitor } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
 
 interface SharePayload {
   receiving_id?: number;
@@ -26,7 +27,9 @@ interface SharePayload {
 export function ReceivingShareToPhoneSheet() {
   const router = useRouter();
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
+  const stationBridgeChannel = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId));
   const [shared, setShared] = useState<{ receivingId: number; label: string; poLabel: string } | null>(null);
 
   const handleShare = useCallback((msg: { data?: SharePayload }) => {
@@ -39,10 +42,10 @@ export function ReceivingShareToPhoneSheet() {
   }, []);
 
   useAblyChannel(
-    staffId > 0 ? `station:${staffId}` : 'station:__idle__',
+    stationBridgeChannel,
     'receiving_share_to_phone',
     handleShare,
-    staffId > 0,
+    !!stationBridgeChannel && staffId > 0,
   );
 
   const close = useCallback(() => setShared(null), []);

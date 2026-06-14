@@ -51,7 +51,7 @@ export function AuditSection() {
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-gray-900">Audit log</h1>
+        <h1 className="sr-only">Audit log</h1>
         <p className="text-sm text-gray-500">Latest 200 auth events: sign-ins, denials, role changes, enrollments.</p>
       </header>
 

@@ -59,7 +59,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-fnskus']);
-    await publishFbaCatalogChanged({ action: 'updated', fnsku: fnsku || '', source: 'fba.fnskus.update' });
+    await publishFbaCatalogChanged({ action: 'updated', fnsku: fnsku || '', source: 'fba.fnskus.update', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, fnsku: result.rows[0] });
     await recordRouteAudit(request, gate.ctx, response, {

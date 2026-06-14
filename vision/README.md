@@ -48,9 +48,13 @@ vision/data/reference/
 Folder name = the SKU (match `sku_catalog.sku` so the Vercel side resolves it).
 
 ```bash
-python -m vision.scripts.enroll_folder data/reference
+# from inside vision/ (file-path form):
+python scripts/enroll_folder.py data/reference
 # add more later, incrementally:
-python -m vision.scripts.enroll_folder data/reference/BOSE-901-VI
+python scripts/enroll_folder.py data/reference/BOSE-901-VI
+
+# equivalently, from the repo root (module form):
+#   python -m vision.scripts.enroll_folder vision/data/reference
 ```
 
 ## 3. Run the service
@@ -67,8 +71,8 @@ uvicorn vision.app.server:app --host 0.0.0.0 --port 8700
 Quick test:
 
 ```bash
-python -m vision.scripts.identify_image path/to/test.jpg
-# or
+python scripts/identify_image.py path/to/test.jpg   # from inside vision/
+# or, against the running server:
 curl -F file=@test.jpg http://localhost:8700/identify
 ```
 

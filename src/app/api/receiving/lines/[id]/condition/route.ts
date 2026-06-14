@@ -24,7 +24,7 @@ function normalizeGrade(raw: unknown): Grade | null {
   return (ALLOWED_GRADES as readonly string[]).includes(upper) ? (upper as Grade) : null;
 }
 
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   const segments = request.nextUrl.pathname.split('/');
   const idIdx = segments.indexOf('lines') + 1;
   const lineId = Number(segments[idIdx]);
@@ -78,6 +78,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
       await invalidateCacheTags(['receiving-lines', 'receiving-logs']);
       if (updated.receiving_id != null) {
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'update',
           rowId: String(updated.receiving_id),
           source: 'receiving.lines.condition',

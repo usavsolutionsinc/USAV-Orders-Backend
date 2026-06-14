@@ -1,0 +1,81 @@
+-- ============================================================================
+-- Phase E1 — non-BYPASSRLS application role  (THE keystone)
+--
+-- *** TEMPLATE — NOT AUTO-APPLIED ***
+-- Filename ends in `.sql.template`, so scripts/run-pending-migrations.mjs
+-- (which only applies `*.sql`) skips it. Apply MANUALLY and deliberately, as a
+-- coordinated operation paired with a DATABASE_URL change + a redeploy.
+--
+-- WHY THIS EXISTS
+--   The app connects as `neondb_owner`, which has rolbypassrls=TRUE. BYPASSRLS
+--   overrides FORCE ROW LEVEL SECURITY (empirically confirmed), so every RLS
+--   policy in this database is INERT today. `enforce_tenant_isolation()` cannot
+--   isolate anything until the runtime connects under a role that is NOT a
+--   superuser and does NOT have BYPASSRLS. This template creates that role.
+--   See docs/tenancy/multi-tenancy-execution-plan.md §Phase E.
+--
+-- HOW TO APPLY
+--   1. Pick a strong password; do NOT commit it. From psql, connected as
+--      neondb_owner (or via the Neon console SQL editor):
+--        \set app_tenant_pw 'PUT-A-STRONG-SECRET-HERE'
+--      then run this file:  \i 2026-06-21_app_tenant_role.sql.template
+--      (Neon console: paste the body, replacing :'app_tenant_pw' with a literal.)
+--   2. Store the password in Vercel as a NEW connection string and point the
+--      runtime at it (two-pool split, step at the bottom).
+--   3. Verify:  SELECT rolname, rolbypassrls, rolsuper FROM pg_roles
+--               WHERE rolname='app_tenant';   -- expect: app_tenant | f | f
+--   4. Run the canary BEFORE enforcing any table:
+--        TENANT_APP_DATABASE_URL=<app_tenant DSN> \
+--          node --test --import tsx src/lib/tenancy/cross-org-isolation.test.ts
+--      It must show RLS isolating a scratch table under app_tenant.
+--
+-- ROLLBACK
+--   Point DATABASE_URL back at the neondb_owner DSN. Optionally:
+--     REASSIGN OWNED BY app_tenant TO neondb_owner;  DROP OWNED BY app_tenant;
+--     DROP ROLE app_tenant;
+-- ============================================================================
+
+-- 1. The runtime role: login, but no privileges that bypass tenant isolation.
+CREATE ROLE app_tenant WITH
+  LOGIN
+  PASSWORD :'app_tenant_pw'
+  NOSUPERUSER
+  NOCREATEDB
+  NOCREATEROLE
+  NOBYPASSRLS
+  NOREPLICATION;
+
+-- 2. Grants: full DML on the current schema, but it owns nothing (so even
+--    without FORCE it is subject to RLS; enforce_tenant_isolation still adds
+--    FORCE as defense-in-depth against an accidental owner connection).
+GRANT CONNECT ON DATABASE neondb TO app_tenant;          -- adjust db name if not 'neondb'
+GRANT USAGE ON SCHEMA public TO app_tenant;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_tenant;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_tenant;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO app_tenant;
+
+-- 3. Future objects created by the migration owner must stay reachable by the
+--    runtime role (otherwise the next migration's new table is invisible to it).
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_tenant;
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO app_tenant;
+ALTER DEFAULT PRIVILEGES FOR ROLE neondb_owner IN SCHEMA public
+  GRANT EXECUTE ON FUNCTIONS TO app_tenant;
+
+-- 4. (Optional, recommended) keep a privileged path for cross-org admin work.
+--    The cron org-enumeration, REFRESH MATERIALIZED VIEW, the order_ingest_queue
+--    cross-org claim, and the hermes_agent AI read path must NOT run as
+--    app_tenant (FORCE would scope them to one org / nothing). Continue using
+--    the neondb_owner DSN for those, exposed to the app as ADMIN_DATABASE_URL.
+--    No SQL needed here — it's a wiring decision (see below).
+
+-- ── TWO-POOL WIRING (application code, not SQL) ─────────────────────────────
+--   DATABASE_URL        -> app_tenant DSN   (src/lib/db.ts WS pool, withTenantDrizzle,
+--                                            every withTenantConnection/route/cron body)
+--   ADMIN_DATABASE_URL  -> neondb_owner DSN (a separate privileged Pool for:
+--                                            migrations, forEachActiveOrg enumeration,
+--                                            MV refresh, cross-org claims, hermes_agent)
+--   After switching DATABASE_URL, REDEPLOY (Vercel env changes need a redeploy;
+--   see the CRON_SECRET memory note). Then run scripts/tenancy-guard.ts --check
+--   with DATABASE_URL set — invariant (B) confirms bypassrls=false.

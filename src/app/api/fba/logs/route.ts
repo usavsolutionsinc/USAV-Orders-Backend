@@ -196,7 +196,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-logs']);
-    await publishFbaItemChanged({ action: 'scan', shipmentId: 0, source: 'fba.logs.create' });
+    await publishFbaItemChanged({ action: 'scan', shipmentId: 0, source: 'fba.logs.create', organizationId: ctx.organizationId });
 
     return NextResponse.json(
       {

@@ -94,6 +94,17 @@ export default [
   // stacking — `z-[1]` decorative masks, `whileDrag zIndex: 20` lifts — stays
   // native and is intentionally left alone. The one documented exception
   // (SerialCard's in-flow hover tooltip) carries an inline disable.
+  //
+  // ── Tenancy escape-hatch guard (merged into the same no-restricted-syntax) ─
+  // `USAV_ORG_ID` / `transitionalUsavOrgId()` hardcode the dogfood org instead
+  // of reading `ctx.organizationId` from the session. New code MUST NOT add
+  // either. Both selectors live in THIS block (not a second one) because a
+  // second block re-declaring no-restricted-syntax for the same files would
+  // override — not merge with — this one, silently dropping the z-index guard.
+  // The current known callers are allowlisted in the SEPARATE "rule off" block
+  // immediately below (the burn-down list) — that disables only this rule for
+  // those files, keeping them parsed + linted by every other rule. Delete each
+  // allowlist entry as it is refactored so the debt can never regress.
   {
     files: ['src/**/*.{ts,tsx}'],
     ignores: ['src/design-system/tokens/**'],
@@ -119,7 +130,55 @@ export default [
           message:
             'Inline global zIndex literal is banned. Use zIndex.<token> from tokens/z-index.ts (or useZIndex()/<Layer>). Local in-flow lifts (< 50) are fine.',
         },
+        {
+          selector: "ImportSpecifier[imported.name='USAV_ORG_ID']",
+          message:
+            'Do not import USAV_ORG_ID in new code — derive the tenant from ctx.organizationId. See docs/tenancy/multi-tenancy-execution-plan.md §A3.',
+        },
+        {
+          selector: "ImportSpecifier[imported.name='transitionalUsavOrgId']",
+          message:
+            'transitionalUsavOrgId() is deprecated migration debt — thread ctx.organizationId through instead. See docs/tenancy/multi-tenancy-execution-plan.md §A3.',
+        },
+        {
+          selector: "CallExpression[callee.name='transitionalUsavOrgId']",
+          message:
+            'transitionalUsavOrgId() is deprecated migration debt — thread ctx.organizationId through instead. See docs/tenancy/multi-tenancy-execution-plan.md §A3.',
+        },
       ],
+    },
+  },
+
+  // ── Tenancy burn-down allowlist ──────────────────────────────────────────
+  // The current known `USAV_ORG_ID` / `transitionalUsavOrgId()` callers. This
+  // block turns OFF no-restricted-syntax ONLY for these files (they stay parsed
+  // by tsParser from the block above and linted by every other rule). As each
+  // file is refactored to thread ctx.organizationId, DELETE its entry here so
+  // the guard starts enforcing it. When this list is empty, the debt is paid.
+  // (z-index does not apply to these backend files, so disabling the whole rule
+  // here is harmless.)
+  {
+    files: [
+      'src/lib/tenancy/**/*.{ts,tsx}',
+      'src/lib/ebay/browse-client.ts',
+      'src/lib/integrations/credentials.ts',
+      'src/app/api/auth/staff-picker/route.ts',
+      'src/app/api/cron/zoho/orders-ingest-drain/route.ts',
+      'src/lib/pipeline/orchestrator.ts',
+      'src/lib/pipeline/collect.ts',
+      'src/lib/zoho/fulfillment-sync.ts',
+      'src/lib/realtime/publish.ts',
+      'src/lib/jobs/google-sheets-transfer-orders.ts',
+      'src/services/OrderSyncService.ts',
+      // D1 (Ably org-namespacing) session-less integration publishers — these
+      // carrier/Square/shipping-sync paths have no request org yet (single-tenant
+      // USAV today); they resolve org from the row's organization_id post-Phase-B.
+      'src/lib/shipping/publish-on-status-change.ts',
+      'src/lib/neon/stock-ledger-helpers.ts',
+      'src/app/api/webhooks/square/route.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
     },
   },
 
@@ -129,6 +188,7 @@ export default [
       'no-console': 'off',
       'unused-imports/no-unused-imports': 'warn',
       'unused-imports/no-unused-vars': 'warn',
+      'no-restricted-syntax': 'off',
     },
   },
 ];

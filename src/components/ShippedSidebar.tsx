@@ -7,6 +7,8 @@ import {
     Copy,
     Check,
     Plus,
+    List,
+    Barcode,
 } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -28,6 +30,8 @@ import {
 import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
 import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
 import { PickupReportButton } from '@/components/shipped/PickupReportButton';
+import { ShippedScanOutSidebar } from '@/components/shipped/ShippedScanOutSidebar';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 
 interface SearchHistory {
     query: string;
@@ -75,6 +79,16 @@ export default function ShippedSidebar({
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
+    // Scan-out mode (toggled by the List/Scan-Out pills below the search). When
+    // active, the sidebar body is the dock scan bar + cross-reference tiles.
+    const shippedView = searchParams.get('shippedView') === 'scanout' ? 'scanout' : 'list';
+    const setShippedViewInUrl = (next: 'list' | 'scanout') => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (next === 'scanout') params.set('shippedView', 'scanout');
+        else params.delete('shippedView');
+        const qs = params.toString();
+        router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard', { scroll: false });
+    };
     // Industry-standard search pipeline:
     //   1) Input owns its own state (`inputValue`). Nothing else writes to it.
     //   2) `useDebounce` collapses keystrokes into a committed value (250ms quiet period).
@@ -270,7 +284,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
     const visibleSearchHistory = showAllSearchHistory ? searchHistory : searchHistory.slice(0, 3);
 
     const panelContent = showIntakeForm ? (
-        <ShippedIntakeForm 
+        <ShippedIntakeForm
             onClose={onCloseForm || (() => {})}
             onSubmit={onFormSubmit || (() => {})}
         />
@@ -284,10 +298,10 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
                             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                                Shipped Orders
+                                {shippedView === 'scanout' ? 'Scan Out' : 'Shipped Orders'}
                             </h2>
                             <p className={`${microBadge} text-blue-600 mt-1`}>
-                                Search Database
+                                {shippedView === 'scanout' ? 'Dock Handoff' : 'Search Database'}
                             </p>
                         </motion.header>
                     ) : null}
@@ -317,12 +331,30 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     </button>
                 ),
             }}
-            filter={{
-                label: 'Shipment Filters',
+            // List / Scan-Out pills live right below the search (above the filter),
+            // with no hairline band — matching the clean scan-out layout.
+            searchGroup={(searchBar) => (
+                <>
+                    {searchBar}
+                    <div className={`${SIDEBAR_GUTTER} pt-1.5`}>
+                        <HorizontalButtonSlider
+                            items={[
+                                { id: 'list', label: 'List', icon: List },
+                                { id: 'scanout', label: 'Scan Out', icon: Barcode },
+                            ]}
+                            value={shippedView}
+                            onChange={(id) => setShippedViewInUrl(id === 'scanout' ? 'scanout' : 'list')}
+                            variant="nav"
+                            className="w-full"
+                            aria-label="Shipped view"
+                        />
+                    </div>
+                </>
+            )}
+            filter={shippedView === 'scanout' ? undefined : {
+                label: 'Filters',
                 refinements,
                 onClearAll: clearAll,
-                // The "Search by" field dropdown lives in the filter popover
-                // below Needs attention (it used to slide down on search-bar focus).
                 renderDropdown: (onClose) => (
                     <ShippedFilterDropdown
                         onClose={onClose}
@@ -333,6 +365,11 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             }}
             bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
         >
+                {shippedView === 'scanout' ? (
+                    <motion.div variants={itemVariants}>
+                        <ShippedScanOutSidebar />
+                    </motion.div>
+                ) : (
                 <motion.div variants={itemVariants} className="space-y-4">
                         {/* Manual Zoho fulfillment sync — gated by integrations.zoho */}
                         <ZohoSyncButton variant="sidebar" />
@@ -452,6 +489,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
                     </motion.div>
+                )}
         </SidebarShell>
     );
 

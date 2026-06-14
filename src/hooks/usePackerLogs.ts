@@ -2,8 +2,9 @@
 
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getStationChannelName } from '@/lib/realtime/channels';
+import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface PackerRecord {
   id: number;
@@ -60,6 +61,10 @@ export interface PackerRecord {
   has_exception?: boolean | null;
   exception_at?: string | null;
   is_terminal?: boolean | null;
+  /** Dock scan-out (station_activity_logs SHIP_CONFIRM) — when the package left the warehouse. */
+  ship_confirmed_at?: string | null;
+  shipped_out_by?: number | null;
+  shipped_out_by_name?: string | null;
 }
 
 export interface UsePackerLogsOptions {
@@ -80,11 +85,14 @@ function computeCurrentPSTWeek(): { startStr: string; endStr: string } {
   return { startStr: fmt(sun), endStr: fmt(sat) };
 }
 
-const STATION_CHANNEL = getStationChannelName();
-
 export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  // Global per-org station broadcast (packer logs are filtered by packerId in
+  // the handler) — NOT a per-staff bridge.
+  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
   const queryKey = [
     'packer-logs',
     packerId,
@@ -113,7 +121,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
 
   // ── Ably: live row-level updates from any session (mobile or web) ─────────
   useAblyChannel(
-    STATION_CHANNEL,
+    stationChannel,
     'packer-log.changed',
     (msg: any) => {
       const { packerId: changedId, action, row } = msg?.data ?? {};
@@ -133,6 +141,7 @@ export function usePackerLogs(packerId: number, options: UsePackerLogsOptions = 
         queryClient.invalidateQueries({ queryKey: ['packer-logs', packerId] });
       }
     },
+    !!stationChannel,
   );
 
   // ── Local surgical insert (same-tab scans dispatched via CustomEvent) ─────

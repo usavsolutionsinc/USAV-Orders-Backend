@@ -264,3 +264,20 @@ export async function archiveStaffTodo(staffId: number, id: number): Promise<boo
   );
   return (r.rowCount ?? 0) > 0;
 }
+
+/**
+ * Reverse of {@link archiveStaffTodo} — restore an archived task (archived_at →
+ * NULL) so it returns to the live list. Scoped to the owning staffer and guarded
+ * on `archived_at IS NOT NULL`, so a double-unarchive (or a foreign id) is a
+ * clean no-op → the route surfaces it as NOT_FOUND. The recurring-done cycle
+ * math reads recur_anchor + completions, not archived_at, so a restored
+ * recurring task resumes its prior cycle without drift.
+ */
+export async function unarchiveStaffTodo(staffId: number, id: number): Promise<boolean> {
+  const r = await pool.query(
+    `UPDATE staff_todos SET archived_at = NULL, updated_at = now()
+      WHERE id = $2 AND staff_id = $1 AND archived_at IS NOT NULL`,
+    [staffId, id],
+  );
+  return (r.rowCount ?? 0) > 0;
+}

@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyClient } from '@/contexts/AblyContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import {
   MobilePackerSpamCamera,
   type CapturedShot,
@@ -43,7 +44,9 @@ function PhotoPageInner() {
   const receivingId = Number(params?.id);
   // Identity from the verified session cookie.
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
+  const phoneChannelName = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   const requestId = searchParams.get('requestId');
   // Title to show in the camera header — the PO title / "Unfound PO". When the
   // entry point (carton sheet, share-to-phone) passes ?title= we use it
@@ -112,11 +115,11 @@ function PhotoPageInner() {
       idx: number;
       total: number;
     }) => {
-      if (staffId <= 0) return;
+      if (staffId <= 0 || !phoneChannelName) return;
       try {
         const client = await getClient();
         if (!client) return;
-        const ch = client.channels.get(`phone:${staffId}`);
+        const ch = client.channels.get(phoneChannelName);
         await ch.publish('receiving_photo_uploaded', {
           receiving_id: receivingId,
           request_id: requestId,
@@ -126,7 +129,7 @@ function PhotoPageInner() {
         console.warn('photos page: publish failed', err);
       }
     },
-    [getClient, receivingId, requestId, staffId],
+    [getClient, receivingId, requestId, staffId, phoneChannelName],
   );
 
   // ── Upload one entry ──

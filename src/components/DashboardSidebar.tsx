@@ -2,16 +2,14 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Clock, Menu, PackageCheck, ShieldCheck, X } from '@/components/Icons';
+import { Inbox, Menu, PackageCheck, ShieldCheck, X } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SidebarSection } from '@/components/layout/SidebarSection';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from '@/components/admin/admin-sections';
 import { WarehouseSidebarPanel } from '@/components/sidebar/WarehouseSidebarPanel';
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
-import { RepairSidebarPanel } from '@/components/sidebar/RepairSidebarPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
@@ -21,6 +19,7 @@ import { ProductsSidebarPanel } from '@/components/sidebar/ProductsSidebarPanel'
 import { TechSidebarPanel } from '@/components/sidebar/TechSidebarPanel';
 import { PackerSidebarPanel } from '@/components/sidebar/PackerSidebarPanel';
 import { ReceivingSidebarPanel } from '@/components/sidebar/ReceivingSidebarPanel';
+import { StudioSidebarPanel } from '@/components/sidebar/StudioSidebarPanel';
 import { InventorySidebarPanel } from '@/components/sidebar/InventorySidebarPanel';
 import { SourcingSidebarPanel } from '@/components/sidebar/SourcingSidebarPanel';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
@@ -53,10 +52,9 @@ const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
 ]);
 
 // Sub-views shown above the search bar. Rail order matches SIDEBAR_PAGE_NAV:
-// Awaiting · Pending · Shipped · Warranty Logger.
+// Unshipped · Shipped · Warranty Logger. (Awaiting + Pending merged → Unshipped.)
 const DASHBOARD_ORDERS_SUBVIEW_ITEMS: HorizontalSliderItem[] = [
-  { id: 'unshipped', label: 'Awaiting',         icon: AlertCircle },
-  { id: 'pending',   label: 'Pending',          icon: Clock },
+  { id: 'unshipped', label: 'Unshipped',        icon: Inbox },
   { id: 'shipped',   label: 'Shipped',          icon: PackageCheck },
   { id: 'warranty',  label: 'Warranty Logger',  icon: ShieldCheck },
 ];
@@ -66,6 +64,7 @@ function getSidebarTitle(pathname: string | null) {
   const titles: Record<string, string> = {
     dashboard: 'Orders / Shipping',
     operations: 'Operations',
+    studio: 'Operations Studio',
     fba: 'Amazon FBA',
     receiving: 'Receiving',
     repair: 'Repair',
@@ -241,6 +240,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
     );
   }
 
+  if (routeKey === 'studio') return <StudioSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'ai-chat') return <AiChatSidebarPanel />;
   if (routeKey === 'settings') return <SettingsSidebarPanel />;

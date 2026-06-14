@@ -2,6 +2,7 @@ import {
   AlertCircle,
   Barcode,
   Box,
+  Boxes,
   Calendar,
   Check,
   ClipboardList,
@@ -37,6 +38,7 @@ import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 export type SidebarRouteKey =
   | 'dashboard'
   | 'operations'
+  | 'studio'
   | 'fba'
   | 'receiving'
   | 'walk-in'
@@ -77,6 +79,7 @@ export interface SidebarNavItem {
 
 const MOBILE_RESTRICTED_SIDEBAR_IDS = new Set<SidebarRouteKey>([
   'operations',
+  'studio',
   'manuals-library',
   'support',
   'previous-quarters',
@@ -111,9 +114,10 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
-  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Package,         kind: 'station', requires: 'fba.view' },
+  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'station', requires: 'fba.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
+  { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
   // Audit Log is no longer a top-level sidebar row — it lives under Admin › Logs
@@ -158,6 +162,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
   if (pathname === '/operations' || pathname.startsWith('/operations/')) return 'operations';
+  if (pathname === '/studio' || pathname.startsWith('/studio/')) return 'studio';
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
   if (pathname === '/walk-in' || pathname.startsWith('/walk-in/')) return 'walk-in';
@@ -316,22 +321,23 @@ const ADMIN = '/admin';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
-  // Bare presence params (`?unshipped` / `?pending` / `?shipped` / `?warranty`);
-  // first match wins in the reader, default `pending`. (FBA order-view is its
-  // own page.) Rail order: Awaiting · Pending · Shipped · Warranty Logger.
+  // Bare presence params (`?unshipped` / `?shipped` / `?warranty`); first match
+  // wins in the reader, default `unshipped`. (FBA order-view is its own page.)
+  // Rail order: Unshipped · Shipped · Warranty Logger. The former "Awaiting" +
+  // "Pending" modes are merged into one "Unshipped" mode (the whole pre-ship
+  // backlog); the legacy `?pending` param resolves here for back-compat.
   {
     id: 'dashboard', label: 'Orders / Shipping', href: DASHBOARD, icon: LayoutDashboard, kind: 'main', requires: 'dashboard.view',
     modes: [
-      { id: 'unshipped', label: 'Awaiting',         icon: AlertCircle,  to: () => ({ pathname: DASHBOARD, params: { unshipped: '', pending: null, shipped: null, fba: null, warranty: null } }) },
-      { id: 'pending',   label: 'Pending',          icon: Clock,        to: () => ({ pathname: DASHBOARD, params: { pending: '', shipped: null, unshipped: null, fba: null, warranty: null } }) },
+      { id: 'unshipped', label: 'Unshipped',        icon: Inbox,        to: () => ({ pathname: DASHBOARD, params: { unshipped: '', pending: null, shipped: null, fba: null, warranty: null } }) },
       { id: 'shipped',   label: 'Shipped',          icon: PackageCheck, to: () => ({ pathname: DASHBOARD, params: { shipped: '', pending: null, unshipped: null, fba: null, warranty: null } }) },
       { id: 'warranty',  label: 'Warranty Logger',  icon: ShieldCheck,  to: () => ({ pathname: DASHBOARD, params: { warranty: '', pending: null, shipped: null, unshipped: null, fba: null } }) },
     ],
     resolveMode: ({ params }) => {
       if (params.has('shipped')) return 'shipped';
-      if (params.has('unshipped')) return 'unshipped';
       if (params.has('warranty')) return 'warranty';
-      return 'pending';
+      // `?unshipped`, legacy `?pending`, or nothing → the merged Unshipped mode.
+      return 'unshipped';
     },
   },
   // ── Receiving ─────────────────────────────────────────────────────────────
@@ -359,25 +365,30 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     },
   },
   // ── Sourcing ──────────────────────────────────────────────────────────────
-  // `?mode=alerts|watchlist`; bare /sourcing = the Lookup surface (default).
+  // `?mode=scout|watchlist`; bare /sourcing = the Queue (demand) surface (default).
+  // Legacy keys aliased: `alerts`→queue, `lookup`→scout.
   {
     id: 'sourcing', label: 'Sourcing', href: SOURCING, icon: Search, kind: 'main', requires: 'sourcing.view',
     modes: [
-      { id: 'lookup',    label: 'Lookup',    icon: Search,      to: () => ({ pathname: SOURCING, params: { mode: null, q: null, status: null } }) },
-      { id: 'alerts',    label: 'Alerts',    icon: AlertCircle, to: () => ({ pathname: SOURCING, params: { mode: 'alerts', q: null, status: null } }) },
+      { id: 'queue',     label: 'Queue',     icon: AlertCircle, to: () => ({ pathname: SOURCING, params: { mode: null, q: null, status: null } }) },
+      { id: 'scout',     label: 'Scout',     icon: Search,      to: () => ({ pathname: SOURCING, params: { mode: 'scout', q: null, status: null } }) },
       { id: 'watchlist', label: 'Watchlist', icon: Star,        to: () => ({ pathname: SOURCING, params: { mode: 'watchlist', q: null, status: null } }) },
+      { id: 'searches',  label: 'Searches',  icon: Clock,       to: () => ({ pathname: SOURCING, params: { mode: 'searches', q: null, status: null } }) },
+      { id: 'suppliers', label: 'Suppliers', icon: Link2,       to: () => ({ pathname: SOURCING, params: { mode: 'suppliers', q: null, status: null } }) },
     ],
     resolveMode: ({ params }) => {
       const m = params.get('mode');
-      if (m === 'alerts') return 'alerts';
+      if (m === 'scout' || m === 'lookup') return 'scout';
       if (m === 'watchlist') return 'watchlist';
-      return 'lookup';
+      if (m === 'searches') return 'searches';
+      if (m === 'suppliers') return 'suppliers';
+      return 'queue';
     },
   },
   // ── Amazon FBA ────────────────────────────────────────────────────────────
   // `?mode=plan|combine|shipped`; default `combine` (param cleared).
   {
-    id: 'fba', label: 'Amazon FBA', href: FBA, icon: Package, kind: 'station', requires: 'fba.view',
+    id: 'fba', label: 'Amazon FBA', href: FBA, icon: Boxes, kind: 'station', requires: 'fba.view',
     modes: [
       { id: 'plan',    label: 'Plan',    icon: ClipboardList, to: () => ({ pathname: FBA, params: { mode: 'plan' } }) },
       { id: 'combine', label: 'Combine', icon: Package,       to: () => ({ pathname: FBA, params: { mode: null } }) },

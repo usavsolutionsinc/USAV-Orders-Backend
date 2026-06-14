@@ -37,16 +37,24 @@ export interface WorkspaceCapabilities {
   saveBar: boolean;
   /** Standalone notes card. Off in triage — fast classification only, no prose. */
   notes: boolean;
+  /**
+   * Offer the unmatched-carton "open in unbox" jump. On in triage (identify →
+   * hand to unbox); off in unbox (you're already there). Routing it through caps
+   * keeps the cards free of any `variant === 'triage'` knowledge.
+   */
+  openInUnbox: boolean;
 }
 
 export const WORKSPACE_CAPABILITIES: Record<ReceivingWorkspaceVariant, WorkspaceCapabilities> = {
   unbox: {
     photos: true, claim: true, labelPreview: true, receiveBar: true,
     serialScan: true, editLines: true, saveBar: false, notes: true,
+    openInUnbox: false,
   },
   triage: {
     photos: true, claim: true, labelPreview: false, receiveBar: false,
     serialScan: false, editLines: false, saveBar: true, notes: false,
+    openInUnbox: true,
   },
 };
 

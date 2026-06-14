@@ -7,15 +7,12 @@ import {
   getRepairsChannelName,
   getStationChannelName,
   getWalkInChannelName,
+  safeChannelName,
 } from '@/lib/realtime/channels';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAblyChannel } from './useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 import { qk } from '@/queries/keys';
-
-const ORDERS_CHANNEL = getOrdersChannelName();
-const REPAIRS_CHANNEL = getRepairsChannelName();
-const STATION_CHANNEL = getStationChannelName();
-const WALKIN_CHANNEL = getWalkInChannelName();
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;
@@ -43,9 +40,17 @@ export function useRealtimeInvalidation({
   reconnect = false,
 }: UseRealtimeInvalidationOptions = {}) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const ordersChannel = safeChannelName(() => getOrdersChannelName(orgId!));
+  const repairsChannel = safeChannelName(() => getRepairsChannelName(orgId!));
+  // Global per-org station broadcast (receiving/shipment row changes) — NOT a
+  // per-staff bridge.
+  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
+  const walkInChannel = safeChannelName(() => getWalkInChannelName(orgId!));
 
   useAblyChannel(
-    ORDERS_CHANNEL,
+    ordersChannel,
     'order.changed',
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
@@ -55,13 +60,13 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
     },
-    dashboard,
+    !!ordersChannel && dashboard,
   );
 
   // Assignment changes can patch one table in-place, but other dashboard
   // caches (including alternate filters/views) still need a refetch.
   useAblyChannel(
-    ORDERS_CHANNEL,
+    ordersChannel,
     'order.assignments',
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
@@ -71,11 +76,11 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
     },
-    dashboard,
+    !!ordersChannel && dashboard,
   );
 
   useAblyChannel(
-    ORDERS_CHANNEL,
+    ordersChannel,
     'queue.assignments',
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
@@ -85,13 +90,13 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
     },
-    dashboard,
+    !!ordersChannel && dashboard,
   );
 
   // Serial added from the tech station publishes order.tested (not order.changed).
   // Invalidate shipped views so the serial list in the details panel stays current.
   useAblyChannel(
-    ORDERS_CHANNEL,
+    ordersChannel,
     'order.tested',
     () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
@@ -99,20 +104,20 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
     },
-    dashboard,
+    !!ordersChannel && dashboard,
   );
 
   useAblyChannel(
-    REPAIRS_CHANNEL,
+    repairsChannel,
     'repair.changed',
     () => {
       queryClient.invalidateQueries({ queryKey: qk.repairs.all });
     },
-    repair,
+    !!repairsChannel && repair,
   );
 
   useAblyChannel(
-    STATION_CHANNEL,
+    stationChannel,
     'receiving-log.changed',
     () => {
       queryClient.invalidateQueries({ queryKey: ['receiving'] });
@@ -132,7 +137,7 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['receiving-photos'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-item-photos'] });
     },
-    receiving,
+    !!stationChannel && receiving,
   );
 
   // Carrier tracking status changed (webhook push or sync poll). Keeps the
@@ -140,23 +145,23 @@ export function useRealtimeInvalidation({
   // carrier's real-world state — the receiving-side equivalent of the
   // order.changed dashboard refresh above.
   useAblyChannel(
-    STATION_CHANNEL,
+    stationChannel,
     'shipment.changed',
     () => {
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-incoming-summary'] });
       queryClient.invalidateQueries({ queryKey: ['incoming-details'] });
     },
-    receiving,
+    !!stationChannel && receiving,
   );
 
   useAblyChannel(
-    WALKIN_CHANNEL,
+    walkInChannel,
     'sale.completed',
     () => {
       queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
     },
-    walkIn,
+    !!walkInChannel && walkIn,
   );
 
   // ─── Reconnect listener ────────────────────────────────────────────────

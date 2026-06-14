@@ -85,7 +85,7 @@ export function QuickAccessSection() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">Quick access</h2>
+        <h2 className="sr-only">Quick access</h2>
         <p className="mt-1 text-sm text-gray-500">
           The bottom-right floating button. Pin pages for one-click navigation and toggle which built-in
           actions appear.

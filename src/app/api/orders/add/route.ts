@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * POST /api/orders/add - Add a new order to the system
  * Used by mobile verification screen to add missing orders
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const {
@@ -75,7 +75,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     );
 
     await invalidateCacheTags(['orders', 'shipped']);
-    await publishOrderChanged({ orderIds: [result.rows[0].id], source: 'orders.add' });
+    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [result.rows[0].id], source: 'orders.add' });
     return NextResponse.json({
       success: true,
       message: 'Order added successfully',

@@ -237,6 +237,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
+      organizationId: ctx.organizationId,
       techId: staffId,
       action: 'update',
       source: 'tech.scan-sku',
@@ -245,6 +246,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (ledgerIdForPublish && canonicalSkuForPublish) {
       try {
         await publishStockLedgerEvent({
+          organizationId: ctx.organizationId,
           ledgerId: ledgerIdForPublish,
           sku: canonicalSkuForPublish,
           delta: -qtyToDecrement,

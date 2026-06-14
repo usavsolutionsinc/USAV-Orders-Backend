@@ -41,7 +41,7 @@ export function AppearanceSection() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">Appearance</h2>
+        <h2 className="sr-only">Appearance</h2>
         <p className="mt-1 text-sm text-gray-500">How the interface looks on this device.</p>
       </header>
 

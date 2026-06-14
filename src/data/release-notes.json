@@ -1,7 +1,17 @@
 {
-  "generatedAt": "2026-06-10T15:20:55.958Z",
+  "generatedAt": "2026-06-13T21:30:37.837Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "f15a447db0757b9b6e15fe0e3eb78d7512f4cade",
+      "shortSha": "f15a447d",
+      "date": "2026-06-10T08:53:34-07:00",
+      "author": "DENSENSE8",
+      "subject": "receiving",
+      "body": "",
+      "type": "other",
+      "title": "receiving"
+    },
     {
       "sha": "4da45509b55976274f42369ecbf8b88dda1bc51a",
       "shortSha": "4da45509",
@@ -21,6 +31,16 @@
       "body": "Adds the 'on the phone with a customer' warranty-coverage check: a rep\ntypes/scans an order #, serial, or SKU into the warranty search and the\nWarrantyCoverageCard (above the claims table) answers in/out-of-warranty\nwith a days-left clock, surfaces any existing claim, and offers a\nprefilled Log Claim.\n\n- GET /api/warranty/lookup (auth, warranty.view, Zod, WARRANTY_LOGGER-gated)\n- lib/warranty/coverage.lookupCoverage(): read-only order->warranty clock\n- WarrantyCoverageQuery schema, fetchWarrantyCoverage client, query factory,\n  useWarrantyCoverage hook, and Log Claim 'initial' prefill\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
       "type": "feature",
       "title": "read-only coverage lookup card + /api/warranty/lookup"
+    },
+    {
+      "sha": "4c1dcb68a9cd1c34c8970f6e01416f66c0d839ba",
+      "shortSha": "4c1dcb68",
+      "date": "2026-06-09T15:57:55-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(po-gmail): surface mailbox reconnect as 409 instead of opaque 500",
+      "body": "Recover the PO-mailbox error-handling work from the GitHub Desktop stash:\n\n- po-gmail/client.ts: add PoGmailNotConnectedError, thrown when the mailbox\n  is unconnected or the Google refresh token is revoked/expired (the weekly\n  test-mode invalid_grant). Callers map it to a 409 + reconnect prompt.\n- admin/po-gmail/reconcile route: catch PoGmailNotConnectedError -> 409 with\n  needs_reconnect, so operators see \"reconnect\", not \"try again\".\n- e2e: po-mailbox-fetch spec asserts reconcile returns 200 or 409, never 500.\n- IncomingDetailsPanel EmailTab restyle (border-left cards + OrderIdChip).\n- receiving-claim-photos: point the claim link at the desktop receiving\n  workspace (/receiving?recvId=) instead of the mobile carton page.\n\nStash changes to ConditionPills and IncomingSidebarPanel were dropped as\nobsolete (HEAD rewrote ConditionPills; the rescan button moved to the\nreceiving.view-scoped endpoint), as was a duplicate FK-delete migration\nalready shipped in a1665101.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "surface mailbox reconnect as 409 instead of opaque 500"
     },
     {
       "sha": "359fc99a238af7c61f51982f1c8aeeb8a819adc8",
@@ -1971,26 +1991,6 @@
       "body": "DELETE FROM orders_exceptions violated the station_scan_sessions FK\nconstraint. Changed to UPDATE status='resolved' to preserve the audit\ntrail. Also added isQStashOrigin auth guard for consistency.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
       "type": "fix",
       "title": "resolve FK violation in orders-exceptions sync by marking resolved instead of deleting"
-    },
-    {
-      "sha": "8f59de2f6347bc761511d489d65f922266ce7974",
-      "shortSha": "8f59de2f",
-      "date": "2026-04-06T10:16:45-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes",
-      "body": "All 8 QStash route handlers were failing with SignatureError due to the\nverifySignatureAppRouter wrapper. Extracted a shared isQStashOrigin()\nhelper in lib/qstash.ts and applied it consistently to every route.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "replace verifySignatureAppRouter with shared isQStashOrigin across all QStash routes"
-    },
-    {
-      "sha": "0e771c45700304a489a72b23055b9ae5fc5afb6e",
-      "shortSha": "0e771c45",
-      "date": "2026-04-06T10:03:39-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fix: replace broken QStash signature verification with origin check",
-      "body": "The verifySignatureAppRouter wrapper was causing SignatureError on every\nQStash delivery, resulting in persistent 500s. Switched to a lightweight\norigin check (upstash-signature header presence) and added detailed\nlogging to surface any downstream job errors.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-      "type": "fix",
-      "title": "replace broken QStash signature verification with origin check"
     }
   ]
 }

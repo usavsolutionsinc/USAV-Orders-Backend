@@ -28,6 +28,24 @@ export const Package = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Three stacked boxes — the "multi package" icon for Amazon FBA (lucide boxes).
+export const Boxes = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z" />
+        <path d="m7 16.5-4.74-2.85" />
+        <path d="m7 16.5 5-3" />
+        <path d="M7 16.5v5.17" />
+        <path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z" />
+        <path d="m17 16.5-5-3" />
+        <path d="m17 16.5 4.74-2.85" />
+        <path d="M17 16.5v5.17" />
+        <path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z" />
+        <path d="M12 8 7.26 5.15" />
+        <path d="m12 8 4.74-2.85" />
+        <path d="M12 13.5V8" />
+    </svg>
+);
+
 // Open box — the "unbox" icon for the receiving flow (lucide package-open).
 export const PackageOpen = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
@@ -168,10 +186,13 @@ export const DollarSign = ({ className = "w-6 h-6" }: { className?: string }) =>
     </svg>
 );
 
+// Hammer — generic "tool / work" glyph (lucide hammer). Distinct from the gear
+// (Settings) and the single wrench (Wrench) so repair/units rows don't collide.
 export const Tool = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M15 12l-8.5 8.5a2.12 2.12 0 1 1-3-3L12 9" />
+        <path d="M17.64 15 22 10.64" />
+        <path d="M20.91 11.7l-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.86L16.01 4.6a5.56 5.56 0 0 0-3.94-1.64H9l.92.82A6.18 6.18 0 0 1 12 8.4v1.56l2 2h.86c.85 0 1.65.33 2.25.93l1.25 1.25" />
     </svg>
 );
 
@@ -228,9 +249,14 @@ export const Mail = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Clock with a counter-clockwise rewind arrow — "history / past" glyph (lucide
+// history). Previously identical to Clock, so log/history rows looked the same
+// as pending/time rows; the rewind arrow now distinguishes them.
 export const History = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l4 2" />
     </svg>
 );
 
@@ -252,10 +278,12 @@ export const PackageCheck = ({ className = "w-6 h-6" }: { className?: string }) 
     </svg>
 );
 
+// Single spanner — repair / Testing glyph (lucide wrench). Previously a copy of
+// the Settings gear, which made the Testing nav row indistinguishable from
+// Settings; this is the real wrench so the two no longer collide.
 export const Wrench = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
 );
 
@@ -265,18 +293,26 @@ export const User = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// 3D cube — Products / box glyph (lucide box). Previously a copy of the
+// Database cylinder, so the Products nav row rendered as a DB barrel identical
+// to Database; this is the real cube.
 export const Box = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+        <path d="m3.3 7 8.7 5 8.7-5" />
+        <path d="M12 22V12" />
     </svg>
 );
 
 /** 3D package — physical unbox / prepacked-product scans (not the Products master-nav CMS icon). */
-export const Cms = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m3.3 7 8.7 5 8.7-5" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22V12" />
+// Lidded storage box — "pack/archive" glyph (lucide archive). Renamed from the
+// misleading `Cms` export, which was a duplicate of the Box cube; this is a
+// distinct box-with-lid used for the mobile Packing tab.
+export const Archive = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect width="20" height="5" x="2" y="3" rx="1" />
+        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+        <path d="M10 12h4" />
     </svg>
 );
 
@@ -304,9 +340,14 @@ export const Clock = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Header + sidebar frame — generic "layout" glyph (lucide layout). Previously a
+// copy of the LayoutDashboard 4-panel grid; this distinguishes a generic layout
+// from the Orders/Shipping dashboard row.
 export const Layout = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+        <line x1="3" x2="21" y1="9" y2="9" />
+        <line x1="9" x2="9" y1="21" y2="9" />
     </svg>
 );
 

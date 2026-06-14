@@ -1,0 +1,424 @@
+'use client';
+
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  printReceivingLabel,
+  type ReceivingLabelPayload,
+} from '../../receiving-label-helpers';
+import { markConditionSet } from '../../ReceivingProgressStepper';
+import { useSerialLookup, type SerialMatchedOrder } from '../../SerialMatchResult';
+import { takeSerialEditHandoff } from '../../serialEditHandoff';
+import { printProductLabel } from '@/lib/print/printProductLabel';
+import { SOURCE_PLATFORM_LABELS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { useLineSerials } from './useLineSerials';
+import { useReceiveAction } from './useReceiveAction';
+import { useZohoLinePrefill } from './useZohoLinePrefill';
+import { useReceivingLineCore } from './useReceivingLineCore';
+import type { LabelEditDraft } from '../LabelEditPopover';
+
+/**
+ * Controller for the UNBOX + TRIAGE workspace display. Composes the mode-agnostic
+ * `useReceivingLineCore` (carton identity / scratch / copy·share / priority) and
+ * layers the unbox-specific domain on top: condition grade, serial scanning, the
+ * receive/print action, the RETURN serial-match flow, and the printed-label
+ * payload. Returns `{ ...core, ...unbox }` so the panel reads one object.
+ *
+ * Testing has its own controller (Phase 3) that composes the SAME core but swaps
+ * this layer for verdicts + unit-id minting — so the shared carton logic lives in
+ * exactly one place.
+ */
+export function useUnboxLineController(
+  row: ReceivingLineRow,
+  staffId: string,
+  { itemTotal }: { itemTotal?: number },
+) {
+  const core = useReceivingLineCore(row, staffId);
+
+  const [qa, setQa] = useState(
+    !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
+  );
+  const [disp, setDisp] = useState(
+    !row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code,
+  );
+  // Unfound cartons carry a placeholder carton grade (BRAND_NEW); the real grade
+  // lives per line and defaults to USED_A.
+  const initialCond =
+    row.receiving_source === 'unmatched' ? 'USED_A' : row.condition_grade || 'USED_A';
+  const [cond, setCond] = useState(initialCond);
+  // Effective condition of the selected unit on a multi-qty line (reported up
+  // from ReceivingUnitRows). Null on single-qty lines.
+  const [unitLabelCondition, setUnitLabelCondition] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
+  const [serialInput, setSerialInput] = useState('');
+  // RETURN flow: on serial commit we check the serial against serial_units.
+  const serialLookup = useSerialLookup();
+  const [headerSerialEdit, setHeaderSerialEdit] = useState<{
+    id?: number;
+    serial_number: string;
+    condition_grade?: string | null;
+  } | null>(null);
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
+  const [returnClaimPrefill, setReturnClaimPrefill] = useState<string | null>(null);
+  // Guards the auto-bind-PO# effect so a matched order is only written once.
+  const autoBoundOrderRef = useRef<string | null>(null);
+  const [extraSerials, setExtraSerials] = useState<string[]>([]);
+  const serialRef = useRef<HTMLInputElement>(null);
+
+  // Reset the unbox-specific buffers on line/carton change. (Carton-level resets
+  // live in the core.)
+  useEffect(() => {
+    setQa(!row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status);
+    setDisp(!row.disposition_code || row.disposition_code === 'HOLD' ? 'ACCEPT' : row.disposition_code);
+    setCond(row.receiving_source === 'unmatched' ? 'USED_A' : row.condition_grade || 'USED_A');
+    setUnitLabelCondition(null);
+  }, [row.id, row.qa_status, row.disposition_code, row.condition_grade, row.receiving_source]);
+
+  useLayoutEffect(() => {
+    setNotes(row.notes ?? '');
+  }, [row.id, row.notes]);
+
+  // Serial is per line; prefill from the row's recorded serials (most recent
+  // wins) so the panel reflects what the table chip shows.
+  useEffect(() => {
+    const localSerials = (row.serials ?? []) as Array<{ serial_number?: string | null }>;
+    const latest = localSerials.length > 0
+      ? String(localSerials[localSerials.length - 1]?.serial_number || '').trim()
+      : '';
+    setSerialInput(latest);
+  }, [row.id, row.serials]);
+
+  // Clear any RETURN match when switching lines.
+  useEffect(() => {
+    serialLookup.reset();
+  }, [row.id, serialLookup.reset]);
+
+  // Consume a serial-edit handoff queued by Edit on a non-active accordion row.
+  useEffect(() => {
+    const handoff = takeSerialEditHandoff(row.id);
+    if (handoff) setHeaderSerialEdit(handoff);
+  }, [row.id]);
+
+  // Prefill Zendesk, listing, and serial from Zoho PO notes + line description.
+  useZohoLinePrefill({
+    row,
+    setZendesk: core.setZendesk,
+    setListingLink: core.setListingLink,
+    setSerialInput,
+  });
+
+  const {
+    serialSubmitting,
+    submitSerial,
+    enqueueSerial,
+    deleteSerialUnit,
+    replaceSerialUnit,
+    setUnitGrade,
+  } = useLineSerials({
+    row,
+    staffId,
+    receivingType: core.receivingType,
+    serialInput,
+    setSerialInput,
+    serialLookup,
+    serialInputRef: serialRef,
+  });
+
+  const submitExtraSerial = useCallback(async (idx: number) => {
+    const serial = (extraSerials[idx] ?? '').trim();
+    if (!serial) return;
+    await submitSerial(serial);
+    setExtraSerials((xs) => xs.filter((_, j) => j !== idx));
+  }, [extraSerials, submitSerial]);
+
+  const {
+    lastReceiveResponse,
+    setLastReceiveResponse,
+    responseExpanded,
+    setResponseExpanded,
+    handleReceive,
+  } = useReceiveAction(row, {
+    qa,
+    disp,
+    cond,
+    notes,
+    zendesk: core.zendesk,
+    listingLink: core.listingLink,
+    serialInput,
+    staffId,
+  });
+
+  const scanValue = core.poNumber || (row.receiving_id != null ? `RCV-${row.receiving_id}` : '');
+  const trackingHint = (row.tracking_number || core.trackingEdit || '').trim();
+  // Platform precedence on the printed label.
+  const derivedPlatform = core.sourcePlatform
+    ? (SOURCE_PLATFORM_LABELS[core.sourcePlatform] ?? core.sourcePlatform)
+    : String(core.receivingType || 'PO').toUpperCase() === 'PICKUP'
+      ? 'Local pickup'
+      : row.receiving_source === 'unmatched'
+        ? 'Unfound'
+        : 'Unknown';
+  const derivedDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+  const isMultiQtyLine = (row.quantity_expected ?? 0) > 1;
+  const labelConditionCode = isMultiQtyLine && unitLabelCondition ? unitLabelCondition : cond;
+
+  // Custom-print override for the label-only FACE bits (Edit on the label
+  // preview). These have no clean canonical home / are display-only choices —
+  // platform display, date, and the bottom-right corner source (order# / ticket#
+  // / tracking#). Notes / condition / reference / type persist through their own
+  // handlers, so the payload below already reflects them. Reset per carton so a
+  // custom print never leaks to the next line. See LabelEditPopover.
+  const [labelOverride, setLabelOverride] = useState<{
+    platform?: string;
+    date?: string;
+    cornerMode?: 'order' | 'ticket' | 'tracking';
+    ticket?: string;
+    tracking?: string;
+  }>({});
+  useEffect(() => {
+    setLabelOverride({});
+  }, [row.id]);
+
+  // Numeric ticket parsed from the carton's Zendesk field (same rule the label
+  // corner uses): plain #digits only — URLs / free text don't count.
+  const derivedTicket = (/^#?(\d+)$/.exec(core.zendesk.replace(/\s+/g, ''))?.[1]) ?? '';
+
+  const labelPlatform = labelOverride.platform ?? derivedPlatform;
+  const labelDate = labelOverride.date ?? derivedDate;
+  const cornerMode: 'order' | 'ticket' | 'tracking' =
+    labelOverride.cornerMode ?? (derivedTicket ? 'ticket' : 'order');
+  const cornerTicket = labelOverride.ticket ?? derivedTicket;
+  const cornerTracking = labelOverride.tracking ?? trackingHint;
+
+  // Assemble the exact payload a popover draft previews + prints. The bottom-
+  // right corner is operator-chosen, so we steer the label-corner helper:
+  //   ticket   → set zendeskTicket    (helper shows `#ticket`)
+  //   tracking → force scanValue to the internal `RCV-{id}` handle + set
+  //              trackingNumber       (helper falls through to tracking last-4)
+  //   order    → drop both so it shows the order/PO last-4.
+  // labelPayload (the always-on card preview) is just this run over the current
+  // defaults, so the card and popover can never drift.
+  const buildLabelPayload = useCallback(
+    (draft: LabelEditDraft): ReceivingLabelPayload => {
+      const rcv = row.receiving_id != null ? `RCV-${row.receiving_id}` : '';
+      const base = {
+        receivingId: row.receiving_id ?? null,
+        platform: draft.platform,
+        notes: draft.notes.trim(),
+        conditionCode: draft.conditionCode,
+        receivingType: draft.receivingType || null,
+        date: draft.date,
+      };
+      if (draft.cornerMode === 'ticket') {
+        return {
+          ...base,
+          scanValue: draft.reference.trim() || rcv,
+          zendeskTicket: draft.ticket.trim() || undefined,
+          trackingNumber: trackingHint || null,
+        };
+      }
+      if (draft.cornerMode === 'tracking') {
+        return {
+          ...base,
+          scanValue: rcv,
+          zendeskTicket: undefined,
+          trackingNumber: draft.tracking.trim() || trackingHint || null,
+        };
+      }
+      return {
+        ...base,
+        scanValue: draft.reference.trim() || rcv,
+        zendeskTicket: undefined,
+        trackingNumber: trackingHint || null,
+      };
+    },
+    [row.receiving_id, trackingHint],
+  );
+
+  // Seed values for the Edit-label popover. Reference seeds from the real PO#
+  // (empty on an unfound carton), not the `R-{id}` corner fallback.
+  const labelDraftDefaults: LabelEditDraft = {
+    platform: labelPlatform,
+    receivingType: (core.receivingType || '').toUpperCase(),
+    notes,
+    conditionCode: labelConditionCode,
+    cornerMode,
+    reference: core.poNumber,
+    ticket: cornerTicket,
+    tracking: cornerTracking,
+    date: labelDate,
+  };
+
+  const labelPayload: ReceivingLabelPayload = buildLabelPayload(labelDraftDefaults);
+
+  // Stamp the "label printed" marker + event so the row chips flip. One place,
+  // shared by the default print and the custom print.
+  const markLabelPrinted = useCallback(() => {
+    try {
+      window.localStorage.setItem(`receiving-label-printed:${row.id}`, String(Date.now()));
+    } catch {
+      /* private-mode / quota — non-fatal */
+    }
+    window.dispatchEvent(
+      new CustomEvent('receiving-label-printed', { detail: { line_id: row.id } }),
+    );
+  }, [row.id]);
+
+  const runPrintLabel = useCallback(() => {
+    let didPrint = false;
+    if (scanValue.trim()) {
+      printReceivingLabel(labelPayload);
+      didPrint = true;
+    } else {
+      const skuTrim = (row.sku || '').trim();
+      if (skuTrim) {
+        printProductLabel({
+          sku: skuTrim,
+          title: row.item_name ?? undefined,
+          serialNumber: serialInput.trim() || undefined,
+        });
+        didPrint = true;
+      }
+    }
+    if (didPrint) markLabelPrinted();
+  }, [scanValue, labelPayload, row.sku, row.item_name, serialInput, markLabelPrinted]);
+
+  // Custom print (Edit label → Save & print): persist what has a home (notes /
+  // condition / reference / type), keep the label-only bits (platform / date /
+  // corner choice) as an override, then print the EXACT previewed payload built
+  // from the draft (not stale state, which wouldn't have the just-set values
+  // yet this tick).
+  const applyAndPrintLabel = useCallback(
+    (draft: LabelEditDraft) => {
+      const nextNotes = draft.notes;
+      const nextCond = draft.conditionCode;
+      const nextRef = draft.reference.trim();
+      const nextType = (draft.receivingType || '').toUpperCase();
+      const notesChanged = nextNotes !== notes;
+      const condChanged = nextCond !== cond;
+
+      if (notesChanged) setNotes(nextNotes);
+      if (condChanged) {
+        setCond(nextCond);
+        markConditionSet(row.id);
+      }
+      if (notesChanged || condChanged) {
+        void core.patch({ notes: nextNotes, condition_grade: nextCond });
+      }
+      if (nextRef && nextRef !== core.poNumber) {
+        void core.persistPoNumber(nextRef);
+      }
+      if (nextType && nextType !== (core.receivingType || '').toUpperCase()) {
+        core.setReceivingType(nextType);
+        void core.saveType(nextType);
+      }
+      // Label-only / display-only choices — kept as a print-time override so the
+      // card preview reflects them, but never written to the record.
+      setLabelOverride({
+        platform: draft.platform,
+        date: draft.date,
+        cornerMode: draft.cornerMode,
+        ticket: draft.ticket,
+        tracking: draft.tracking,
+      });
+
+      printReceivingLabel(buildLabelPayload(draft));
+      markLabelPrinted();
+    },
+    [
+      notes, cond, row.id,
+      core.patch, core.poNumber, core.persistPoNumber, core.receivingType, core.setReceivingType, core.saveType,
+      buildLabelPayload, markLabelPrinted,
+    ],
+  );
+
+  const handlePrintAndReceive = useCallback(() => {
+    runPrintLabel();
+    handleReceive('zoho_receive');
+  }, [runPrintLabel, handleReceive]);
+
+  const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
+  const canReceiveReview = row.receiving_id != null;
+  const combinedReviewDisabled = !canReceiveReview || !canPrintReview;
+  const isSinglePoItem = itemTotal === 1;
+  const receiveMenuLabel = isSinglePoItem ? 'Receive' : 'Receive all';
+  const printReceivePrimaryLabel = 'Print · receive';
+  const splitMenuAriaLabel = isSinglePoItem
+    ? 'Print only, mark as scanned, or receive (no print)'
+    : 'Print only, mark as scanned, or receive all (no print)';
+  const splitMenuHoverTitle = isSinglePoItem
+    ? 'Hover for print-only, mark as scanned, or receive without print'
+    : 'Hover for print-only, mark as scanned, or receive all without print';
+  const printThenReceiveTitle =
+    row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
+      ? 'Need a shipment link or SKU to continue'
+      : isSinglePoItem
+        ? 'Print label (if available), then receive this line'
+        : 'Print label (if available), then receive every open line on this PO';
+
+  // RETURN flow: pair the carton with the shipped order a scanned serial matched.
+  useEffect(() => {
+    if (core.receivingType !== 'RETURN') return;
+    if (serialLookup.state !== 'found') return;
+    const orderNo = (serialLookup.matchedOrder?.order_id || '').trim();
+    if (!orderNo) return;
+    if (core.poNumber) return; // never overwrite an operator/Zoho-set PO#
+    if (autoBoundOrderRef.current === orderNo) return;
+    autoBoundOrderRef.current = orderNo;
+    void core.persistPoNumber(orderNo);
+  }, [core.receivingType, serialLookup.state, serialLookup.matchedOrder, core.poNumber, core.persistPoNumber]);
+
+  // Reset the auto-bind guard when the line changes.
+  useEffect(() => {
+    autoBoundOrderRef.current = null;
+  }, [row.id]);
+
+  // "File return claim" CTA: ensure the order is paired, then open the claim
+  // modal pre-filled with the matched order + serial.
+  const handleFileReturnClaim = useCallback(
+    (matchedOrder: SerialMatchedOrder | null, explicitSerial?: string) => {
+      const orderNo = (matchedOrder?.order_id || '').trim();
+      const title = (matchedOrder?.product_title || '').trim();
+      const sn = (explicitSerial ?? serialLookup.serial).trim();
+      if (orderNo && !core.poNumber) {
+        autoBoundOrderRef.current = orderNo;
+        void core.persistPoNumber(orderNo);
+      }
+      const lines = ['Return received and matched to a previously shipped order.'];
+      if (title) lines.push(`Item: ${title}.`);
+      if (orderNo) lines.push(`Original order: ${orderNo}.`);
+      if (matchedOrder?.tracking_number) lines.push(`Shipped tracking: ${matchedOrder.tracking_number}.`);
+      if (sn) lines.push(`Serial: ${sn}.`);
+      setReturnClaimPrefill(lines.join(' '));
+      setClaimModalOpen(true);
+    },
+    [serialLookup.serial, core.poNumber, core.persistPoNumber],
+  );
+
+  return {
+    ...core,
+    // condition / qa / disposition
+    qa, setQa, disp, setDisp,
+    cond, setCond, unitLabelCondition, setUnitLabelCondition, isMultiQtyLine,
+    // notes
+    notes, setNotes,
+    // serial scanning
+    serialInput, setSerialInput, serialRef,
+    headerSerialEdit, setHeaderSerialEdit,
+    serialLookup,
+    serialSubmitting, submitSerial, enqueueSerial, deleteSerialUnit, replaceSerialUnit, setUnitGrade,
+    extraSerials, setExtraSerials, submitExtraSerial,
+    // receive / print
+    lastReceiveResponse, setLastReceiveResponse, responseExpanded, setResponseExpanded, handleReceive,
+    scanValue, labelPayload, runPrintLabel, handlePrintAndReceive,
+    // custom label print (Edit on the label preview)
+    labelDraftDefaults, buildLabelPayload, applyAndPrintLabel,
+    canPrintReview, canReceiveReview, combinedReviewDisabled,
+    receiveMenuLabel, printReceivePrimaryLabel, splitMenuAriaLabel, splitMenuHoverTitle, printThenReceiveTitle,
+    // claim / RETURN flow
+    claimModalOpen, setClaimModalOpen, returnClaimPrefill, setReturnClaimPrefill,
+    handleFileReturnClaim,
+    // re-exported helper used by the active-row condition change
+    markConditionSet,
+  };
+}

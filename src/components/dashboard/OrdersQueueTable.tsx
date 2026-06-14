@@ -5,27 +5,23 @@ import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Loader2 } from '@/components/Icons';
-import { cn } from '@/utils/_cn';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
-import { OrderIdChip, OrderIdChipPlaceholder, TrackingOrSkuScanChip, PlatformChip, getLast4 } from '@/components/ui/CopyChip';
-import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { OrderIdentityChips } from '@/components/ui/OrderIdentityChips';
 import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
-import { PasteTrackingButton } from '@/components/ui/PasteTrackingButton';
+import { AddTrackingPopover } from '@/components/unshipped/AddTrackingPopover';
+import { AddTrackingNavProvider } from '@/components/unshipped/add-tracking-context';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
-import { getStaffTextColor } from '@/design-system/components/StaffBadge';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey, getDaysLateNullable, getDaysLateTone } from '@/utils/date';
+import { toPSTDateKey, getDaysLateNullable, getDaysLateTone } from '@/utils/date';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
-import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
 import { isSkuSourceRecord } from '@/utils/source-dot';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
-  dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
 
@@ -144,49 +140,18 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         />
       </div>
 
-      {(() => {
-        const columns: ChipColumn[] = [
-          {
-            key: 'platform',
-            width: CHIP_COL.platform,
-            node: !isFba ? (
-              <PlatformChip
-                label={platformLabel}
-                underlineClass={getOrderPlatformBorderColor(platformLabel)}
-                iconClass={platformLabel && productPageUrl ? platformColor : 'text-gray-500'}
-                onClick={() => {
-                  if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
-                }}
-              />
-            ) : null,
-          },
-          {
-            key: 'orderid',
-            width: CHIP_COL.id,
-            node: hideOrderIdChip ? (
-              <OrderIdChipPlaceholder />
-            ) : (
-              <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
-            ),
-          },
-          {
-            key: 'tracking',
-            width: CHIP_COL.tracking,
-            node: trackingRaw ? (
-              <TrackingOrSkuScanChip value={trackingRaw} />
-            ) : (
-              <PasteTrackingButton orderId={Number(record.id)} />
-            ),
-          },
-        ];
-        return isMobile ? (
-          <div className={dashboardOrderRowChipsClass(true)}>
-            {columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}
-          </div>
-        ) : (
-          <ChipColumns columns={columns} />
-        );
-      })()}
+      <OrderIdentityChips
+        platformLabel={platformLabel}
+        platformIconClass={platformLabel && productPageUrl ? platformColor : 'text-gray-500'}
+        platformBorderClass={getOrderPlatformBorderColor(platformLabel)}
+        productPageUrl={productPageUrl}
+        isFba={isFba}
+        orderId={record.order_id || ''}
+        hideOrderId={hideOrderIdChip}
+        tracking={trackingRaw}
+        trackingAction={<AddTrackingPopover record={record} />}
+        isMobile={isMobile}
+      />
     </motion.div>
   );
 }, (prev, next) => {
@@ -208,6 +173,11 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.quantity !== next.record.quantity) return false;
   return true;
 });
+
+/** Sort order for the date-banded queue. `priority` (default) keeps the current
+ *  behavior (soonest deadline, Awaiting-before-Pending within a day); `newest`
+ *  bands by created date, most-recently-added first. */
+export type OrdersQueueSort = 'priority' | 'newest';
 
 export interface OrdersQueueTableProps {
   records: ShippedOrder[];
@@ -231,6 +201,8 @@ export interface OrdersQueueTableProps {
   onCloseRecord?: (record: ShippedOrder | null) => void;
   /** When true, display tester/packer from work_assignments (tester_id, packer_id) only */
   useWaForDisplay?: boolean;
+  /** Sort order (default `priority`). Driven by `?sort` on the merged Unshipped mode. */
+  sort?: OrdersQueueSort;
 }
 
 export function OrdersQueueTable({
@@ -254,16 +226,13 @@ export function OrdersQueueTable({
   onOpenRecord,
   onCloseRecord,
   useWaForDisplay = false,
+  sort = 'priority',
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
   const [selectedRecord, setSelectedRecord] = useState<ShippedOrder | null>(null);
-  const [stickyDate, setStickyDate] = useState('');
-  const [currentCount, setCurrentCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollRafRef = useRef(0);
 
-  const formatDate = (dateStr: string) => formatDateWithOrdinal(dateStr);
   const isShippedByLatestStatus = (record: ShippedOrder): boolean => {
     const category = String(record.latest_status_category ?? '').trim().toUpperCase();
     const label = String(record.latest_status_label ?? '').toUpperCase();
@@ -314,7 +283,10 @@ export function OrdersQueueTable({
 
   const groupedRecords: Record<string, ShippedOrder[]> = {};
   visibleRecords.forEach((record) => {
-    const dateSource = record.deadline_at || record.created_at;
+    // `newest` bands by when the order was added; otherwise by its deadline.
+    const dateSource = sort === 'newest'
+      ? (record.created_at || record.deadline_at)
+      : (record.deadline_at || record.created_at);
     if (!dateSource || dateSource === '1') return;
 
     let date = '';
@@ -329,17 +301,35 @@ export function OrdersQueueTable({
   });
 
   const sortedGroupedEntries = Object.entries(groupedRecords)
-    .sort((a, b) => a[0].localeCompare(b[0]));
+    // `newest` shows the most recent day band first; `priority` shows soonest.
+    .sort((a, b) => (sort === 'newest' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0])));
 
   const displayedRecords = sortedGroupedEntries
     .flatMap(([_, dayRecords]) => {
       const sortedRecords = [...dayRecords].sort((a, b) => {
+        if (sort === 'newest') {
+          const ta = new Date(a.created_at || a.deadline_at || 0).getTime();
+          const tb = new Date(b.created_at || b.deadline_at || 0).getTime();
+          return tb - ta;
+        }
+        // Priority: within a day, Awaiting (no shipment/tracking yet) sorts before
+        // Pending so the "needs a label" work surfaces first. No-op for
+        // single-stage tables (e.g. shipped — all have a shipment).
+        const stageA = a.shipment_id == null ? 0 : 1;
+        const stageB = b.shipment_id == null ? 0 : 1;
+        if (stageA !== stageB) return stageA - stageB;
         const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
         const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
         return timeA - timeB;
       });
       return sortedRecords;
     });
+
+  // Awaiting (no-tracking) order ids in display order — drives the add-tracking
+  // popover's prev/next worklist navigation.
+  const awaitingOrderIds = displayedRecords
+    .filter((r) => r.shipment_id == null)
+    .map((r) => Number(r.id));
 
   useEffect(() => {
     const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
@@ -362,52 +352,7 @@ export function OrdersQueueTable({
     };
   }, [displayedRecords, onOpenRecord, selectedRecord]);
 
-  const handleScroll = useCallback(() => {
-    if (scrollRafRef.current) return;
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      if (!scrollRef.current) return;
-      const { scrollTop } = scrollRef.current;
-      const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-      let activeDate = '';
-      let activeCount = 0;
-
-      for (let i = 0; i < headers.length; i += 1) {
-        const header = headers[i] as HTMLElement;
-        // Promote the next day as its band reaches the 40px sticky header edge,
-        // keeping the WeekHeader date in step with the band hiding under it.
-        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
-          activeDate = header.getAttribute('data-date') || '';
-          activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-        } else {
-          break;
-        }
-      }
-
-      if (activeDate) setStickyDate(activeDate);
-      if (activeCount) setCurrentCount(activeCount);
-    });
-  }, []);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      window.setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll, visibleRecords]);
-
-  useEffect(() => {
-    if (sortedGroupedEntries.length > 0) {
-      const firstDate = sortedGroupedEntries[0][0];
-      setStickyDate(firstDate);
-      setCurrentCount(sortedGroupedEntries[0][1].length);
-    }
-  }, [sortedGroupedEntries.length]);
-
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
-  const fallbackDate = formatDate(getCurrentPSTDateKey());
 
   if (loading) {
     return (
@@ -436,6 +381,7 @@ export function OrdersQueueTable({
   }
 
   return (
+    <AddTrackingNavProvider orderedIds={awaitingOrderIds}>
     <div className="flex h-full min-w-0 flex-1 bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         {bannerTitle ? (
@@ -453,25 +399,21 @@ export function OrdersQueueTable({
             </div>
           </div>
         ) : (
-          <div className="relative z-20">
-            <WeekHeader
-              stickyDate={stickyDate}
-              fallbackDate={fallbackDate}
-              count={currentCount || totalCount}
-              weekRange={weekRange}
-              weekOffset={weekOffset}
-              onPrevWeek={onPrevWeek}
-              onNextWeek={onNextWeek}
-              rightSlot={
-                !showWeekControls
-                  ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
-                  : undefined
-              }
-            />
-          </div>
+          <WeekHeader
+            count={totalCount}
+            weekRange={weekRange}
+            weekOffset={weekOffset}
+            onPrevWeek={onPrevWeek}
+            onNextWeek={onNextWeek}
+            rightSlot={
+              !showWeekControls
+                ? <div className="min-w-[18px] flex items-center justify-end">{isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}</div>
+                : undefined
+            }
+          />
         )}
 
-        <div ref={scrollRef} className={cn("flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10", !bannerTitle && "-mt-[40px] pt-[40px]")}>
+        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
           {Object.keys(groupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {searchValue ? (
@@ -508,7 +450,7 @@ export function OrdersQueueTable({
 
                   return (
                     <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dayRecords.length} hidden={date === stickyDate} />
+                      <DateGroupHeader date={date} total={dayRecords.length} />
                       {sortedRecords.map((record, index) => {
                         const r = record as QueueRowRecord;
                         const testerName = useWaForDisplay
@@ -557,5 +499,6 @@ export function OrdersQueueTable({
         </div>
       </div>
     </div>
+    </AddTrackingNavProvider>
   );
 }

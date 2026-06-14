@@ -16,7 +16,6 @@ import { PoMailboxAdminSection } from '@/components/admin/PoMailboxAdminSection'
 import { BoseModelsManagementTab } from '@/components/admin/sourcing/BoseModelsManagementTab';
 import { CompatibilityManagementTab } from '@/components/admin/sourcing/CompatibilityManagementTab';
 import { SuppliersManagementTab } from '@/components/admin/sourcing/SuppliersManagementTab';
-import { BillingTab } from '@/components/admin/BillingTab';
 import { SystemSyncActivityTab } from '@/components/admin/SystemSyncActivityTab';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { getAdminSection, type AdminSection } from '@/components/admin/admin-sections';
@@ -53,7 +52,6 @@ function renderTab(
     case 'system_sync':  return <SystemSyncActivityTab />;
     case 'station_photos': return <StationNasFoldersTab />;
     case 'po_mailbox':   return <PoMailboxAdminSection />;
-    case 'billing':      return <BillingTab />;
     case 'repair_issues': return <RepairIssuesManagementTab />;
     case 'favorites':    return <FavoritesManagementTab />;
     case 'locations':    return <LocationsManagementTab />;

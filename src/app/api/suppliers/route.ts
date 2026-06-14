@@ -3,6 +3,7 @@ import {
   createSupplier,
   getSupplierByEbaySellerId,
   getSupplierList,
+  getSupplierListWithStats,
 } from '@/lib/neon/suppliers-queries';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseBody } from '@/lib/schemas/parse';
@@ -19,6 +20,8 @@ const ROUTE_SUPPLIERS_POST = 'suppliers.post';
 
 /**
  * GET /api/suppliers — Paginated supplier list. Query: q, type, limit, offset.
+ * Pass `stats=1` for the sourcing-activity rollup (candidate/acquisition counts,
+ * spend, last order) used by the sourcing-hub Suppliers mode.
  */
 export const GET = withAuth(async (req: NextRequest) => {
   try {
@@ -28,7 +31,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     const limit = Math.max(1, Math.min(500, Number(searchParams.get('limit') || 100)));
     const offset = Math.max(0, Number(searchParams.get('offset') || 0));
 
-    const { items, total } = await getSupplierList({ q, type, limit, offset });
+    const { items, total } = searchParams.get('stats') === '1'
+      ? await getSupplierListWithStats({ q, type, limit, offset })
+      : await getSupplierList({ q, type, limit, offset });
     return NextResponse.json({ success: true, items, total });
   } catch (error: any) {
     console.error('Error in GET /api/suppliers:', error);

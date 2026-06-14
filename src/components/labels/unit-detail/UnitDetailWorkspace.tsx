@@ -30,7 +30,7 @@ export function UnitDetailWorkspace() {
   const historyId = searchParams.get('historyId') || '';
   const fromRecent = searchParams.get('labelsView') === 'recent';
 
-  const { data, isLoading, isError, error } = useSerialUnitDetail(historyId);
+  const { data, isLoading, isError, error, refetch } = useSerialUnitDetail(historyId);
 
   if (!historyId) return <DetailEmptyState fromRecent={fromRecent} />;
   if (isLoading) return <DetailLoadingState />;
@@ -63,7 +63,11 @@ export function UnitDetailWorkspace() {
 
           <UnitQualityPanel serialUnitId={unit.id} />
 
-          <TimelineCard events={data.events_full ?? data.events ?? []} />
+          <TimelineCard
+            events={data.events_full ?? data.events ?? []}
+            photos={data.photos ?? []}
+            onPhotoChanged={() => void refetch()}
+          />
           {allocations.length > 0 && <AllocationsCard rows={allocations} />}
           {(data.conditions?.length ?? 0) > 0 && <ConditionsCard rows={data.conditions ?? []} />}
           {(data.tsn_links?.length ?? 0) > 0 && <TsnLinksCard rows={data.tsn_links ?? []} />}

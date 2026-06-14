@@ -162,7 +162,14 @@ export function CopyChip({
     canCopy,
     isDisabled,
     handleCopy,
-  } = useCopyChip({ value, disableCopy, disableTooltip, onCopy });
+  } = useCopyChip({
+    value,
+    disableCopy,
+    disableTooltip,
+    onCopy,
+    historyKind: tone,
+    historyDisplay: display,
+  });
 
   const toneDef = tone ? CHIP_TONES[tone] : undefined;
   const resolvedIcon = icon === undefined ? toneDef?.icon : icon;
@@ -514,6 +521,45 @@ export const SourceOrderChip = ({
 }) => (
   <CopyChip value={value} display={display} tone="id" width={width} disableCopy={disableCopy} />
 );
+
+/**
+ * The "empty slot, click to fill" affordance for an identity column — a colored
+ * icon + a DASHED-underline label, vs the solid underline of a real
+ * {@link CopyChip}. The dashed underline is the design-system signal for
+ * "nothing here yet, click to add" (it must read differently from a chip that
+ * carries a value). Shared by the Incoming "Add TRK#" popover trigger and the
+ * dashboard paste-tracking button so the two surfaces can't drift.
+ *
+ * Presentational only — the caller owns the surrounding <button>/trigger and the
+ * action (open a popover, paste from clipboard, …). Pass `colorClass` /
+ * `underlineClass` to recolor for transient feedback (saving/success/error).
+ */
+export function AddValueChipFace({
+  label,
+  icon,
+  colorClass = 'text-blue-600',
+  underlineClass = 'border-blue-400',
+  dense = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  /** Icon + label text color. Override for status feedback (emerald/red). */
+  colorClass?: string;
+  /** Dashed underline border color. Override for status feedback. */
+  underlineClass?: string;
+  dense?: boolean;
+}) {
+  return (
+    <span className={`inline-flex items-center gap-0.5 ${colorClass}`}>
+      <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''}`}>{icon}</span>
+      <span
+        className={`${dense ? 'text-[11px]' : 'text-mini'} whitespace-nowrap border-b-2 border-dashed pb-0.5 font-bold leading-none tracking-tight ${underlineClass}`}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
 
 /** Platform chip — opens product page via item number on click, does NOT copy. */
 export const PlatformChip = ({

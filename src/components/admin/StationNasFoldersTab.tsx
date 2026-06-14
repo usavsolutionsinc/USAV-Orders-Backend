@@ -136,7 +136,7 @@ export function StationNasFoldersTab() {
     <div className="h-full overflow-y-auto bg-gray-50 p-6">
       <div className="mx-auto max-w-2xl space-y-5">
         <div>
-          <h1 className="text-lg font-black text-gray-900">Receiving Photos</h1>
+          <h1 className="sr-only">Receiving Photos</h1>
           <p className="mt-1 text-caption text-gray-500">
             Phones write receiving photos straight to the NAS. Set the NAS address below
             (and flip between your testing and production NAS), then set the folder each

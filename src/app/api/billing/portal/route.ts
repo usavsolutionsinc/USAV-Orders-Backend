@@ -24,7 +24,7 @@ export const POST = withAuth(async (_req, ctx) => {
   try {
     const session = await createBillingPortalSession({
       customerId: org.stripeCustomerId,
-      returnUrl: `${origin}/admin?section=billing`,
+      returnUrl: `${origin}/settings/billing`,
       orgId: org.id,
     });
     return NextResponse.json({ url: session.url });

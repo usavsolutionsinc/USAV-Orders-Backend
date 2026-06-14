@@ -5,9 +5,9 @@
  * pane (SourcingWorkspace) is the visual display.
  *
  * URL-state contract:
- *   ?mode=lookup|alerts|watchlist   (bare = lookup)
- *   lookup:    ?q=<term> ?by=serial|model
- *   alerts:    ?status=''(live)|resolved|dismissed
+ *   ?mode=scout|watchlist           (bare = queue, the default demand surface)
+ *   scout:     ?q=<term> ?by=serial|model
+ *   queue:     ?status=''(live)|resolved|dismissed
  *   watchlist: ?status=''(all)|watching|ordered|imported
  */
 
@@ -34,6 +34,13 @@ const WATCH_STATUS_ITEMS: HorizontalSliderItem[] = [
   { id: 'ordered', label: 'Ordered' },
   { id: 'imported', label: 'Imported' },
 ];
+const SUPPLIER_TYPE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'all', label: 'All' },
+  { id: 'ebay_seller', label: 'eBay' },
+  { id: 'distributor', label: 'Distributor' },
+  { id: 'salvage', label: 'Salvage' },
+  { id: 'oem', label: 'OEM' },
+];
 
 export function SourcingSidebarPanel() {
   const router = useRouter();
@@ -53,11 +60,12 @@ export function SourcingSidebarPanel() {
 
   const goMode = (next: string) =>
     setParam((p) => {
-      if (next === 'lookup') p.delete('mode');
+      if (next === 'queue') p.delete('mode');
       else p.set('mode', next);
       // Cross-mode params don't carry over.
       p.delete('q');
       p.delete('status');
+      p.delete('type');
     });
 
   const q = searchParams.get('q') ?? '';
@@ -78,8 +86,8 @@ export function SourcingSidebarPanel() {
     </div>
   ) : null;
 
-  // ── Lookup: search + serial/model toggle ──────────────────────────────────
-  if (mode === 'lookup') {
+  // ── Scout: search + serial/model toggle ───────────────────────────────────
+  if (mode === 'scout') {
     return (
       <SidebarShell
         search={{
@@ -105,15 +113,60 @@ export function SourcingSidebarPanel() {
         ]}
       >
         <p className="px-3 py-4 text-caption text-gray-500">
-          {by === 'serial' ? 'Scan a Bose serial to decode the model.' : 'Find a model to see its compatible parts and stock.'}
+          {by === 'serial' ? 'Scan a serial to decode the model.' : 'Find a product or model to see compatible parts and stock.'}
         </p>
       </SidebarShell>
     );
   }
 
-  // ── Alerts / Watchlist: status filter ─────────────────────────────────────
-  const statusItems = mode === 'alerts' ? ALERT_STATUS_ITEMS : WATCH_STATUS_ITEMS;
-  const sentinel = mode === 'alerts' ? 'live' : 'all';
+  // ── Searches: no filter, just the mode rail + a hint ──────────────────────
+  if (mode === 'searches') {
+    return (
+      <SidebarShell headerRows={[modeRail]}>
+        <p className="px-3 py-4 text-caption text-gray-500">
+          Standing searches the scour watcher re-runs on a cadence to auto-fill the watchlist. Add one, then run, pause, or remove it.
+        </p>
+      </SidebarShell>
+    );
+  }
+
+  // ── Suppliers: name search + type filter ──────────────────────────────────
+  if (mode === 'suppliers') {
+    const type = searchParams.get('type') || 'all';
+    return (
+      <SidebarShell
+        search={{
+          value: q,
+          onChange: (v: string) => setParam((p) => { if (v.trim()) p.set('q', v.trim()); else p.delete('q'); }),
+          onClear: () => setParam((p) => p.delete('q')),
+          placeholder: 'Search suppliers',
+          variant: 'blue',
+        }}
+        headerRows={[
+          modeRail,
+          <div key="type" className={sidebarHeaderPillRowClass}>
+            <HorizontalButtonSlider
+              items={SUPPLIER_TYPE_ITEMS}
+              value={type}
+              onChange={(next) => setParam((p) => { if (next === 'all') p.delete('type'); else p.set('type', next); })}
+              variant="nav"
+              dense
+              className="w-full"
+              aria-label="Supplier type"
+            />
+          </div>,
+        ]}
+      >
+        <p className="px-3 py-4 text-caption text-gray-500">
+          Sourcing suppliers ranked by spend. Read-only — add or edit suppliers in Admin › Suppliers.
+        </p>
+      </SidebarShell>
+    );
+  }
+
+  // ── Queue / Watchlist: status filter ──────────────────────────────────────
+  const statusItems = mode === 'queue' ? ALERT_STATUS_ITEMS : WATCH_STATUS_ITEMS;
+  const sentinel = mode === 'queue' ? 'live' : 'all';
   const activeStatus = status === '' ? sentinel : status;
 
   return (
@@ -134,9 +187,9 @@ export function SourcingSidebarPanel() {
       ]}
     >
       <p className="px-3 py-4 text-caption text-gray-500">
-        {mode === 'alerts'
-          ? 'EOL / low-stock / no-stock alerts from the nightly scan. Resolve or dismiss with a reason.'
-          : 'Saved eBay candidates. Import one into inventory to track its cost & condition.'}
+        {mode === 'queue'
+          ? 'Everything that needs sourcing — EOL, low/no stock, and replenish-on-sold. Resolve or dismiss with a reason.'
+          : 'Saved candidates across channels. Import one into inventory to track its cost & condition.'}
       </p>
     </SidebarShell>
   );

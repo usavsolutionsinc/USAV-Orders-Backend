@@ -88,7 +88,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
-    await publishOrderChanged({ orderIds: [id], source: 'orders.update' });
+    await publishOrderChanged({ organizationId: gate.ctx.organizationId, orderIds: [id], source: 'orders.update' });
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'orders-api',
@@ -147,7 +147,7 @@ export async function DELETE(
     }
 
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
-    await publishOrderChanged({ orderIds: [id], source: 'orders.delete' });
+    await publishOrderChanged({ organizationId: gate.ctx.organizationId, orderIds: [id], source: 'orders.delete' });
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'orders-api',

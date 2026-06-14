@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { NextRequest } from 'next/server';
 import { createCrudHandler, ApiError } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
@@ -75,7 +76,7 @@ const handler = createCrudHandler({
 
 // Override PATCH to include realtime publishing with the parsed body
 const originalPatch = handler.PATCH;
-handler.PATCH = async function PATCH(req) {
+async function patchWithRealtime(req: NextRequest, ctx: { organizationId: string }) {
   // Clone the request so we can read body twice (once here for realtime, once in handler)
   const clonedReq = req.clone();
   const response = await originalPatch(req);
@@ -86,6 +87,7 @@ handler.PATCH = async function PATCH(req) {
       const body = await clonedReq.json();
       if (body?.id) {
         await publishRepairChanged({
+          organizationId: ctx.organizationId,
           repairIds: [Number(body.id)],
           source: 'repair-service.patch',
         });
@@ -96,7 +98,7 @@ handler.PATCH = async function PATCH(req) {
   }
 
   return response;
-};
+}
 
 export const GET = withAuth(handler.GET as any, { permission: 'repair.view' });
-export const PATCH = withAuth(handler.PATCH as any, { permission: 'repair.mark_repaired' });
+export const PATCH = withAuth(patchWithRealtime as any, { permission: 'repair.mark_repaired' });

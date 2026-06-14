@@ -8,7 +8,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 /**
  * POST /api/orders/missing-parts - Move order to missing parts status
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const { orderId, reason } = body;
@@ -41,7 +41,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     await invalidateCacheTags(['orders', 'shipped', 'need-to-order']);
-    await publishOrderChanged({ orderIds: [Number(orderId)], source: 'orders.missing-parts' });
+    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [Number(orderId)], source: 'orders.missing-parts' });
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error marking order as missing parts:', error);

@@ -98,6 +98,15 @@ export const WarrantyZendeskTicketBody = z
   })
   .strict();
 
+// ─── POST /api/warranty/claims/[id]/zendesk/link (link an EXISTING ticket) ──
+export const WarrantyZendeskLinkBody = z
+  .object({
+    /** Existing Zendesk ticket id to attach to this claim. */
+    ticketId: positiveInt,
+    idempotencyKey: optionalIdempotencyKey,
+  })
+  .strict();
+
 // ─── POST /api/warranty/claims/[id]/zendesk/comments (reply / note) ─────────
 export const WarrantyZendeskCommentBody = z
   .object({

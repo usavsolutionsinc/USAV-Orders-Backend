@@ -6,6 +6,7 @@ import { Clock, Image, X } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { safeChannelName, getScanLogChannelName } from '@/lib/realtime/channels';
 
 interface ScanHistoryEntry {
   id: number;
@@ -72,6 +73,7 @@ interface PhoneHistoryPopoverProps {
 export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -100,11 +102,12 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
 
   // Live-prepend: when this staff scans a receiving label on their phone, the
   // resolver publishes on scanlog:{staffId} — refetch so it appears instantly.
+  const scanLogChannel = safeChannelName(() => getScanLogChannelName(orgId!, staffId));
   useAblyChannel(
-    staffId > 0 ? `scanlog:${staffId}` : 'scanlog:__idle__',
+    scanLogChannel,
     'scan_logged',
     () => { void fetchScans(); },
-    staffId > 0,
+    !!scanLogChannel && staffId > 0,
   );
 
   const handleOpenScan = useCallback(

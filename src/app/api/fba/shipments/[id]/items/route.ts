@@ -132,6 +132,7 @@ export async function POST(
       itemId: result.itemId,
       fnsku,
       source: 'api:add-item',
+      organizationId: gate.ctx.organizationId,
     }).catch(() => {});
 
     if (result.action === 'condensed' && result.fromPlanId) {
@@ -139,6 +140,7 @@ export async function POST(
         action: 'updated',
         shipmentId: result.fromPlanId,
         source: 'api:condense-item-removed',
+        organizationId: gate.ctx.organizationId,
       }).catch(() => {});
     }
 

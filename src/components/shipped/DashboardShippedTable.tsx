@@ -4,9 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from '@/components/Icons';
-import { cn } from '@/utils/_cn';
-import { MobileDateGroupHeader } from '@/components/mobile/MobileDateGroupHeader';
-import { DateGroupHeader } from '@/components/shipped/DateGroupHeader';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
@@ -20,7 +18,7 @@ import {
   PlatformChip,
   getLast4,
 } from '@/components/ui/CopyChip';
-import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { ChipColumns, CHIP_COL } from '@/components/ui/ChipColumns';
 import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
 import { isStalled } from '@/components/shipping/ShipmentStatusBadge';
 import {
@@ -28,7 +26,7 @@ import {
   readShippedExceptionsFilter,
   readShippedStatusFilter,
 } from '@/components/shipping/ShippedFilterToolbar';
-import { formatDateWithOrdinal, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { toPSTDateKey } from '@/utils/date';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dashboardShippedQuery } from '@/lib/queries/dashboard-queries';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
@@ -39,7 +37,7 @@ import { getOrderDisplayValues } from '@/utils/order-display';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
-import { normalizeShippedSearchField, type ShippedSearchField } from '@/lib/shipped-search';
+import { normalizeShippedSearchField } from '@/lib/shipped-search';
 import {
   readShippedFilterPreference,
   writeShippedFilterPreference,
@@ -52,6 +50,12 @@ import {
   dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
+import { OutboundStateDot } from './OutboundStateDot';
+import {
+  dedupeShippedRecords,
+  deriveShippedRecord,
+  type DerivedPackerRecord,
+} from '@/lib/shipped-records';
 
 // FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
 // (FBAxxxxxxxx) or by tracking_type being 'FBA' / 'FNSKU'.
@@ -108,9 +112,6 @@ export function DashboardShippedTable({
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
-  const [stickyDate, setStickyDate] = useState('');
-  const [currentCount, setCurrentCount] = useState(0);
-  const [activeDateKey, setActiveDateKey] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const shippedSearchField = normalizeShippedSearchField(searchParams.get('shippedSearchField'));
@@ -130,7 +131,6 @@ export function DashboardShippedTable({
     return 0;
   }, [weekOffsetParam]);
   const weekRange = getWeekRangeForOffset(weekOffset);
-  const formatDate = useCallback((dateStr: string) => formatDateWithOrdinal(dateStr), []);
 
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrierFilter = readShippedCarrierFilter(searchParams);
@@ -322,15 +322,7 @@ export function DashboardShippedTable({
     is_terminal: record.is_terminal ?? null,
   } as PackerRecord), []);
 
-  const dedupedRecords = useMemo(() => {
-    const seen = new Map<string, PackerRecord>();
-    [...rawRecords].sort((a, b) => a.id - b.id).forEach((record) => {
-      const orderKey = String(record.order_id || '').trim();
-      const key = orderKey || (record.shipping_tracking_number || record.scan_ref || String(record.id)).trim();
-      seen.set(key, record);
-    });
-    return Array.from(seen.values());
-  }, [rawRecords]);
+  const dedupedRecords = useMemo(() => dedupeShippedRecords(rawRecords), [rawRecords]);
 
   const typeFilteredRecords = useMemo(() =>
     shippedFilter === 'fba'
@@ -390,6 +382,14 @@ export function DashboardShippedTable({
     () => (normalizedSearch ? searchFilteredRecords : carrierFilteredRecords),
     [normalizedSearch, searchFilteredRecords, carrierFilteredRecords],
   );
+
+  // Attach the derived outbound state (packed-time vs left-warehouse-time) once,
+  // so the grouped list and the scan-out sections read the same source of truth.
+  const derivedRecords = useMemo<DerivedPackerRecord[]>(
+    () => records.map(deriveShippedRecord),
+    [records],
+  );
+
   const searchMeta = searchResult.data?.meta ?? null;
   const isResolvingSearch = searchResult.isFetching && normalizedSearch.length > 0;
 
@@ -404,9 +404,11 @@ export function DashboardShippedTable({
   }, [getDetailId, selectedDetailId, toDetailRecord]);
 
   const groupedRecords = useMemo(() => {
-    const groups: Record<string, PackerRecord[]> = {};
-    records.forEach((record) => {
-      const dateSource = record.created_at;
+    const groups: Record<string, DerivedPackerRecord[]> = {};
+    derivedRecords.forEach((record) => {
+      // File each package under the day it LEFT (scanned out), falling back to the
+      // day it was packed — so a package packed Mon and shipped out Tue shows Tue.
+      const dateSource = record.effShipTime || record.created_at;
       if (!dateSource || dateSource === '1') return;
       let date = '';
       try {
@@ -416,7 +418,7 @@ export function DashboardShippedTable({
       groups[date].push(record);
     });
     return groups;
-  }, [records]);
+  }, [derivedRecords]);
 
   const sortedGroupedEntries = useMemo(
     () => Object.entries(groupedRecords).sort((a, b) => b[0].localeCompare(a[0])),
@@ -425,8 +427,8 @@ export function DashboardShippedTable({
 
   const orderedRecords = sortedGroupedEntries.flatMap(([, dayRecords]) =>
       [...dayRecords].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
+        const timeA = new Date(a.effShipTime || a.created_at || 0).getTime();
+        const timeB = new Date(b.effShipTime || b.created_at || 0).getTime();
         return timeB - timeA;
       })
     );
@@ -448,74 +450,14 @@ export function DashboardShippedTable({
     };
   }, [getDetailId, orderedRecords, selectedDetailId, toDetailRecord]);
 
-  const scrollRafRef = useRef(0);
-  const handleScroll = useCallback(() => {
-    if (scrollRafRef.current) return;
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = 0;
-      if (!scrollRef.current) return;
-      const { scrollTop } = scrollRef.current;
-      const headers = scrollRef.current.querySelectorAll('[data-day-header]');
-      let activeDate = '';
-      let activeCount = 0;
-
-      for (let i = 0; i < headers.length; i += 1) {
-        const header = headers[i] as HTMLElement;
-        // Hand off to the next day the moment its band reaches the 40px sticky
-        // header edge — not after it has slid fully behind it — so the WeekHeader
-        // date updates in step with the band that's disappearing under it.
-        if (header.offsetTop - scrollRef.current.offsetTop <= scrollTop + 40) {
-          activeDate = header.getAttribute('data-date') || '';
-          activeCount = parseInt(header.getAttribute('data-count') || '0', 10);
-        } else break;
-      }
-
-      if (activeDate) {
-        setActiveDateKey((prev) => (prev === activeDate ? prev : activeDate));
-        setStickyDate(activeDate);
-        setCurrentCount(activeCount);
-      } else if (sortedGroupedEntries.length > 0) {
-        const firstDate = sortedGroupedEntries[0][0];
-        setActiveDateKey((prev) => (prev === firstDate ? prev : firstDate));
-        setStickyDate(firstDate);
-        setCurrentCount(sortedGroupedEntries[0][1].length);
-      }
-    });
-  }, [sortedGroupedEntries]);
-
   useEffect(() => {
+    // Reset to the top of the list when the week / filter changes so a new
+    // window opens at its first day rather than wherever the prior scroll sat.
     const container = scrollRef.current;
     if (container) container.scrollTop = 0;
-    if (sortedGroupedEntries.length > 0) {
-      const firstDate = sortedGroupedEntries[0][0];
-      setActiveDateKey(firstDate);
-      setStickyDate(firstDate);
-      setCurrentCount(sortedGroupedEntries[0][1].length);
-      return;
-    }
-    setActiveDateKey('');
-    setStickyDate(
-      weekOffset > 0
-        ? `${weekRange.startStr} - ${weekRange.endStr}`
-        : getCurrentPSTDateKey()
-    );
-    setCurrentCount(0);
-  }, [sortedGroupedEntries, weekOffset, weekRange.endStr, weekRange.startStr]);
-
-  useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      window.setTimeout(() => handleScroll(), 100);
-    }
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+  }, [sortedGroupedEntries]);
 
   const totalCount = Object.values(groupedRecords).reduce((sum, dayRecords) => sum + dayRecords.length, 0);
-  const fallbackDate =
-    weekOffset > 0
-      ? `${formatDate(weekRange.startStr)} - ${formatDate(weekRange.endStr)}`
-      : formatDate(getCurrentPSTDateKey());
   const normalizePersonName = (value: unknown): string => {
     const text = String(value ?? '').replace(/^tech:\s*/i, '').replace(/^packer:\s*/i, '').trim();
     if (!text || /^(not specified|n\/a|null|undefined|staff\s*#\d+)$/i.test(text)) return '---';
@@ -532,6 +474,59 @@ export function DashboardShippedTable({
       </div>
     );
   }
+
+  // One row renderer, reused by the day-grouped list AND the two scan-out sections
+  // so both render the exact same shipped row (chips, platform, state pill, staff).
+  const renderRecordRow = (record: DerivedPackerRecord, index: number) => {
+    const detail = toDetailRecord(record);
+    const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
+    const dotType = getSourceDotType({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: record.scan_ref });
+    const rowIsFba = isFbaPackerRecord(record);
+    const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
+    const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
+    const techDisplay = normalizePersonName(String((record as any).tested_by_name || (record as any).tester_name || getStaffName(techStaffId)));
+    const packerDisplay = normalizePersonName(String((record as any).packed_by_name || (record as any).packer_name || getStaffName(packerStaffId)));
+    const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+    const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
+    const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
+    const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
+
+    return (
+      <div
+        key={record.id}
+        onClick={() => handleRowClick(record)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(record); } }}
+        role="button"
+        tabIndex={0}
+        aria-pressed={selectedDetailId === detail.id}
+        className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+          selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+        }`}
+      >
+        <div className="flex flex-col min-w-0">
+          <RowTitle dot={SOURCE_DOT_BG[dotType]} dotTitle={SOURCE_DOT_LABEL[dotType]} title={record.product_title || record.item_number || record.sku || 'Unknown Product'} />
+          <RowMetaColumns
+            qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
+            condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
+            rest={<div className="flex items-center gap-2"><OutboundStateDot state={record.outboundState} /><StaffInitials staffId={techStaffId} name={techDisplay} /><StaffInitials staffId={packerStaffId} name={packerDisplay} /></div>}
+          />
+        </div>
+        {(() => {
+          const platformNode = !orderIsFbaMeta ? (
+            <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
+          ) : null;
+          const orderIdNode = hideOrderIdChip ? <OrderIdChipPlaceholder /> : <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />;
+          const serialNode = <SerialChip value={String(record.serial_number || '').trim()} width="w-fit max-w-full" />;
+          const columns = rowIsFba
+            ? [{ key: 'platform', width: CHIP_COL.platform, node: null }, { key: 'orderid', width: CHIP_COL.id, node: null }, { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={String(record.scan_ref || '').trim()} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }]
+            : [{ key: 'platform', width: CHIP_COL.platform, node: platformNode }, { key: 'orderid', width: CHIP_COL.id, node: orderIdNode }, { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }];
+          return isMobile ? (
+            <div className={dashboardOrderRowChipsClass(true)}>{columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}</div>
+          ) : <ChipColumns columns={columns} />;
+        })()}
+      </div>
+    );
+  };
 
   const shippedTableInner = (
     <>
@@ -558,27 +553,18 @@ export function DashboardShippedTable({
             </div>
           </div>
         ) : (
-          <div className="relative z-20">
-            <WeekHeader
-              stickyDate={stickyDate}
-              fallbackDate={fallbackDate}
-              count={currentCount || totalCount}
-              weekRange={weekRange}
-              weekOffset={weekOffset}
-              onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
-              onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
-            />
-          </div>
+          <WeekHeader
+            count={totalCount}
+            weekRange={weekRange}
+            weekOffset={weekOffset}
+            onPrevWeek={() => setWeekOffsetInUrl(weekOffset + 1)}
+            onNextWeek={() => setWeekOffsetInUrl(Math.max(0, weekOffset - 1))}
+          />
         )}
 
         <div
           ref={scrollRef}
-          className={cn(
-            "flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full z-10",
-            // Pull the scroll area up under the 40px WeekHeader so each day band docks
-            // *behind* the opaque header instead of flashing on top as it scrolls past.
-            !bannerTitle && !normalizedSearch && !anyCarrierFilter && "-mt-[40px] pt-[40px]"
-          )}
+          className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full"
         >
           {Object.keys(groupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
@@ -617,68 +603,14 @@ export function DashboardShippedTable({
             <div className="flex flex-col w-full">
               {sortedGroupedEntries.map(([date, dayRecords]) => {
                 const sortedRecords = [...dayRecords].sort((a, b) => {
-                  const timeA = new Date(a.created_at || 0).getTime();
-                  const timeB = new Date(b.created_at || 0).getTime();
+                  const timeA = new Date(a.effShipTime || a.created_at || 0).getTime();
+                  const timeB = new Date(b.effShipTime || b.created_at || 0).getTime();
                   return timeB - timeA;
                 });
-                const isDuplicateOfHeader = date === activeDateKey;
                 return (
                   <div key={date} className="flex flex-col">
-                    {embedded ? (
-                      <MobileDateGroupHeader date={date} total={dayRecords.length} hidden={isDuplicateOfHeader} />
-                    ) : (
-                      <DateGroupHeader date={date} total={dayRecords.length} hidden={isDuplicateOfHeader} />
-                    )}
-                    {sortedRecords.map((record, index) => {
-                      const detail = toDetailRecord(record);
-                      const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
-                      const dotType = getSourceDotType({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: record.scan_ref });
-                      const rowIsFba = isFbaPackerRecord(record);
-                      const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
-                      const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
-                      const techDisplay = normalizePersonName(String((record as any).tested_by_name || (record as any).tester_name || getStaffName(techStaffId)));
-                      const packerDisplay = normalizePersonName(String((record as any).packed_by_name || (record as any).packer_name || getStaffName(packerStaffId)));
-                      const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
-                      const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
-                      const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
-                      const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
-
-                      return (
-                        <div
-                          key={record.id}
-                          onClick={() => handleRowClick(record)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(record); } }}
-                          role="button"
-                          tabIndex={0}
-                          aria-pressed={selectedDetailId === detail.id}
-                          className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-                            selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
-                          }`}
-                        >
-                          <div className="flex flex-col min-w-0">
-                            <RowTitle dot={SOURCE_DOT_BG[dotType]} dotTitle={SOURCE_DOT_LABEL[dotType]} title={record.product_title || record.item_number || record.sku || 'Unknown Product'} />
-                            <RowMetaColumns
-                              qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
-                              condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
-                              rest={<div className="flex items-center gap-2"><StaffInitials staffId={techStaffId} name={techDisplay} /><StaffInitials staffId={packerStaffId} name={packerDisplay} /></div>}
-                            />
-                          </div>
-                          {(() => {
-                            const platformNode = !orderIsFbaMeta ? (
-                              <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
-                            ) : null;
-                            const orderIdNode = hideOrderIdChip ? <OrderIdChipPlaceholder /> : <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />;
-                            const serialNode = <SerialChip value={String(record.serial_number || '').trim()} width="w-fit max-w-full" />;
-                            const columns = rowIsFba
-                              ? [{ key: 'platform', width: CHIP_COL.platform, node: null }, { key: 'orderid', width: CHIP_COL.id, node: null }, { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={String(record.scan_ref || '').trim()} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }]
-                              : [{ key: 'platform', width: CHIP_COL.platform, node: platformNode }, { key: 'orderid', width: CHIP_COL.id, node: orderIdNode }, { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> }, { key: 'serial', width: CHIP_COL.serial, node: serialNode }];
-                            return isMobile ? (
-                              <div className={dashboardOrderRowChipsClass(true)}>{columns.map((c) => c.node && <span key={c.key} className="contents">{c.node}</span>)}</div>
-                            ) : <ChipColumns columns={columns} />;
-                          })()}
-                        </div>
-                      );
-                    })}
+                    <DateGroupHeader date={date} total={dayRecords.length} />
+                    {sortedRecords.map((record, index) => renderRecordRow(record, index))}
                   </div>
                 );
               })}

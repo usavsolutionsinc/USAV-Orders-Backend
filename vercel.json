@@ -5,6 +5,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/workflow-node-stats",
+      "schedule": "45 0 * * *"
+    },
+    {
       "path": "/api/cron/shipping/sync-due?limit=150&concurrency=8",
       "schedule": "*/15 * * * *"
     },
@@ -87,6 +91,10 @@
     {
       "path": "/api/cron/sourcing/replenish",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/sourcing/scour",
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/sku-catalog/refresh-suggestions",

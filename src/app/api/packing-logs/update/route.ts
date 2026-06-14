@@ -305,6 +305,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       for (const row of ledgerRows) {
         try {
           await publishStockLedgerEvent({
+            organizationId: ctx.organizationId,
             ledgerId: row.id,
             sku: row.sku,
             delta: row.delta,
@@ -335,6 +336,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         photos: photoUrlList,
       };
       await publishPackerLogChanged({
+        organizationId: ctx.organizationId,
         packerId: staffId,
         action: 'insert',
         packerLogId,
@@ -342,7 +344,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         source: 'packing-logs.update',
       });
       if (shippedOrderId) {
-        await publishOrderChanged({ orderIds: [shippedOrderId], source: 'packing-logs.update' });
+        await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [shippedOrderId], source: 'packing-logs.update' });
       }
 
       return NextResponse.json({

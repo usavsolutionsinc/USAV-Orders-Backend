@@ -263,6 +263,67 @@ export async function cancelRepair(id: number, reason?: string | null): Promise<
   return { ok: true, repair: repair!, alreadyCancelled: false };
 }
 
+export type UnopenRepairResult =
+  | { ok: true; repair: RSRecord; alreadyOpen: boolean }
+  | { ok: false; status: 404 | 409; error: string };
+
+/**
+ * Reverse of {@link cancelRepair}: reopen a Cancelled repair, restoring the
+ * EXACT status it held before cancellation. The prior status is recovered from
+ * status_history (the cancel recorded it as `previous_status` on the most
+ * recent `Cancelled` entry) — so reopen is a true inverse, not a reset to a
+ * fixed status. Refuses when the repair isn't Cancelled, or when no prior
+ * status can be recovered from history.
+ */
+export async function unopenRepair(id: number, reason?: string | null): Promise<UnopenRepairResult> {
+  const existing = await getRepairById(id);
+  if (!existing) return { ok: false, status: 404, error: 'Repair not found' };
+  if (existing.status !== REPAIR_CANCELLED_STATUS) {
+    return { ok: false, status: 409, error: `Repair is ${existing.status}, not Cancelled — nothing to reopen` };
+  }
+
+  const histRes = await pool.query<{ status_history: RepairStatusHistoryEntry[] | null }>(
+    `SELECT status_history FROM repair_service WHERE id = $1`,
+    [id],
+  );
+  const history = (histRes.rows[0]?.status_history ?? []) as RepairStatusHistoryEntry[];
+  let priorStatus: string | null = null;
+  // 1. Cleanest source: the most recent Cancelled entry records the pre-cancel
+  //    status as previous_status.
+  for (let i = history.length - 1; i >= 0; i--) {
+    const e = history[i];
+    if (e && e.status === REPAIR_CANCELLED_STATUS && e.previous_status) {
+      priorStatus = String(e.previous_status);
+      break;
+    }
+  }
+  // 2. Fallback: the most recent NON-Cancelled status in history — covers a
+  //    cancel from an empty/NULL status, where previous_status was stripped, so
+  //    a reason-less cancel of a status-less row can still be reopened.
+  if (!priorStatus) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const e = history[i];
+      if (e && e.status && e.status !== REPAIR_CANCELLED_STATUS) {
+        priorStatus = String(e.status);
+        break;
+      }
+    }
+  }
+  if (!priorStatus) {
+    return { ok: false, status: 409, error: 'Cannot determine the prior status to reopen to' };
+  }
+
+  await updateRepairStatus(id, priorStatus);
+  await appendRepairStatusHistory(id, {
+    status: priorStatus,
+    previous_status: REPAIR_CANCELLED_STATUS,
+    source: 'repair-service.reopen',
+    ...(reason && reason.trim() ? { metadata: { reason: reason.trim() } } : {}),
+  });
+  const repair = await getRepairById(id);
+  return { ok: true, repair: repair!, alreadyOpen: false };
+}
+
 export async function updateRepairStatus(id: number, newStatus: string): Promise<void> {
   try {
     const timestamp = formatPSTTimestamp();

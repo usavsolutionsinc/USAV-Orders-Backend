@@ -155,7 +155,7 @@ export async function DELETE(
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-logs']);
-    await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void' });
+    await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({
       success: true,

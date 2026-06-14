@@ -21,6 +21,8 @@ import { VelocityAndDeadStock } from './VelocityAndDeadStock';
 import { SupportOverviewCard } from './SupportOverviewCard';
 import { SecondaryKPITiles } from './SecondaryKPITiles';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { getDashboardChannelName, safeChannelName } from '@/lib/realtime/channels';
 import PendingOrdersTable from '@/components/PendingOrdersTable';
 import type { DashboardData } from '@/features/operations/types';
 import { sectionLabel, cardTitle } from '@/design-system/tokens/typography/presets';
@@ -44,6 +46,7 @@ function SectionHeader({ eyebrow, title, meta }: { eyebrow: string; title: strin
 
 export function OperationsDashboard() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [openKpi, setOpenKpi] = useState<KpiKind | null>(null);
 
   const { data, isLoading } = useQuery<DashboardData>({
@@ -56,21 +59,21 @@ export function OperationsDashboard() {
     refetchInterval: 60000,
   });
 
-  const channelName = 'dashboard:operations';
+  const channelName = safeChannelName(() => getDashboardChannelName(user?.organizationId ?? ''));
 
   useAblyChannel(channelName, 'kpi_update', (msg) => {
     queryClient.setQueryData(['dashboard-operations', '24h'], (old: any) => {
       if (!old) return old;
       return { ...old, summary: { ...old.summary, [msg.data.category]: msg.data.update } };
     });
-  });
+  }, !!channelName);
 
   useAblyChannel(channelName, 'activity_event', (msg) => {
     queryClient.setQueryData(['dashboard-operations', '24h'], (old: any) => {
       if (!old) return old;
       return { ...old, activityFeed: [msg.data, ...old.activityFeed].slice(0, 20) };
     });
-  });
+  }, !!channelName);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">

@@ -297,6 +297,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         // that Zoho rejected the receive.
         try {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'update',
             rowId: String(receivingIdForBg),
             source: 'zoho.purchase-orders.receive.failed',
@@ -358,6 +359,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       } catch { /* silent */ }
       try {
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'update',
           rowId: String(receivingIdForBg),
           source: 'zoho.purchase-orders.receive',
@@ -383,6 +385,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
       try {
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'update',
           rowId: String(receivingIdForBg),
           source: alreadyReceived

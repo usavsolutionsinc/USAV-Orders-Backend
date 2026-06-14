@@ -24,6 +24,7 @@ import {
 // off /signin or the enrollment landing while their session is null.
 const CLIENT_PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
+  /^\/signup(?:$|\/)/,                  // public account creation — must match proxy.ts
   /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
@@ -43,6 +44,9 @@ export function isClientPublicPath(pathname: string | null): boolean {
 
 export interface AuthSessionUser {
   staffId: number;
+  /** Active tenant. Used to build org-namespaced realtime channel names on the
+   *  client (security is still enforced server-side by the Ably token grant). */
+  organizationId: string;
   name: string;
   role: string;
   permissions: string[];

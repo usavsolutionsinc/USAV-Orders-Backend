@@ -232,7 +232,7 @@ function extractEcwidContactInfo(order: any): string {
   return parts.join(', ');
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
@@ -316,6 +316,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     if (touchedRepairIds.size > 0) {
       await invalidateCacheTags(['repair-service']);
       await publishRepairChanged({
+        organizationId: ctx.organizationId,
         repairIds: Array.from(touchedRepairIds),
         source: 'ecwid.sync-exception-tracking',
       });

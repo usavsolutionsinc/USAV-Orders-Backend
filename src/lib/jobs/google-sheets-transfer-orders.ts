@@ -4,7 +4,7 @@ import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 import { getGoogleAuth } from '@/lib/google-auth';
-import { invalidateAllOrdersApiCaches, invalidateOrderViews } from '@/lib/orders/invalidation';
+import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -912,6 +912,7 @@ export async function runGoogleSheetsTransferOrders(
     progress({ type: 'phase', phase: 'publishing' });
     if (uniqueProcessedIds.length > 0) {
       await publishOrderChanged({
+        organizationId: transitionalUsavOrgId(),
         orderIds: uniqueProcessedIds,
         source: 'google-sheets-transfer-orders',
       });

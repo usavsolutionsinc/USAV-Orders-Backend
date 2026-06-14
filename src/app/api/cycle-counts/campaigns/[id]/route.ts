@@ -13,7 +13,9 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
  *   page and the LocationDetailView's "active campaign" banner.
  *
  * PATCH /api/cycle-counts/campaigns/[id]
- *   Body: { action: 'close', staffId } — closes an open campaign.
+ *   Body: { action: 'close' | 'reopen', staffId } — close an open campaign, or
+ *   reopen a mistakenly-closed one (closed → open). Counts are applied per-line
+ *   at approve time, so reopen only flips the header status flag.
  */
 
 export async function GET(
@@ -110,18 +112,34 @@ export async function PATCH(
     if (!Number.isFinite(campaignId) || campaignId <= 0) {
       return NextResponse.json({ error: 'Valid id required' }, { status: 400 });
     }
-    if (action !== 'close') {
+    if (action !== 'close' && action !== 'reopen') {
       return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
     }
-    const r = await pool.query<{ id: number }>(
-      `UPDATE cycle_count_campaigns
-       SET status = 'closed', closed_at = NOW()
-       WHERE id = $1 AND status = 'open'
-       RETURNING id`,
-      [campaignId],
-    );
-    if (r.rows.length === 0) {
-      return NextResponse.json({ error: 'Already closed or not found' }, { status: 409 });
+    if (action === 'close') {
+      const r = await pool.query<{ id: number }>(
+        `UPDATE cycle_count_campaigns
+         SET status = 'closed', closed_at = NOW()
+         WHERE id = $1 AND status = 'open'
+         RETURNING id`,
+        [campaignId],
+      );
+      if (r.rows.length === 0) {
+        return NextResponse.json({ error: 'Already closed or not found' }, { status: 409 });
+      }
+    } else {
+      // reopen — the inverse of close (closed → open, clear closed_at) so a
+      // campaign closed by mistake can take counts again. Guarded on status so a
+      // double-reopen is a clean 409, mirroring close.
+      const r = await pool.query<{ id: number }>(
+        `UPDATE cycle_count_campaigns
+         SET status = 'open', closed_at = NULL
+         WHERE id = $1 AND status = 'closed'
+         RETURNING id`,
+        [campaignId],
+      );
+      if (r.rows.length === 0) {
+        return NextResponse.json({ error: 'Not closed or not found' }, { status: 409 });
+      }
     }
     return NextResponse.json({ success: true });
   } catch (err: any) {

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { getHandlingUnitDetail, getHandlingUnitByCode } from '@/lib/neon/handling-unit-queries';
+import {
+  getHandlingUnitDetail,
+  getHandlingUnitByCode,
+  dissolveHandlingUnit,
+} from '@/lib/neon/handling-unit-queries';
+import { recordAudit } from '@/lib/audit-logs';
+import pool from '@/lib/db';
 
 /**
  * GET /api/handling-units/:id — box + contents + rollup status.
@@ -43,6 +49,52 @@ export const GET = withAuth(
     });
   },
   { permission: 'handling_unit.view' },
+);
+
+/**
+ * DELETE /api/handling-units/:id — dissolve an H-box (reverse of create).
+ *
+ * Unassigns every member unit (handling_unit_id → NULL) then deletes the box
+ * row, so a mis-scanned / abandoned tote can be removed without orphaning its
+ * units. Accepts the same numeric id / `H-{id}` / code forms as GET.
+ */
+export const DELETE = withAuth(
+  async (request: NextRequest, ctx) => {
+    const raw = extractIdSegment(request.nextUrl.pathname);
+    if (!raw) {
+      return NextResponse.json({ success: false, error: 'handling unit id required' }, { status: 400 });
+    }
+    let id: number | null = /^\d+$/.test(raw) ? Number(raw) : null;
+    if (id == null) {
+      const hMatch = /^H-(\d+)$/i.exec(raw);
+      if (hMatch) id = Number(hMatch[1]);
+      else {
+        const byCode = await getHandlingUnitByCode(raw);
+        if (byCode) id = byCode.id;
+      }
+    }
+    if (id == null || !Number.isFinite(id)) {
+      return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
+    }
+
+    const result = await dissolveHandlingUnit(id);
+    if (!result) {
+      return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
+    }
+
+    await recordAudit(pool, ctx, request, {
+      source: 'handling-units-api',
+      action: 'handling_unit.dissolve',
+      entityType: 'handling_unit',
+      entityId: id,
+      before: { ...result.dissolved },
+      after: null,
+      note: result.unassigned > 0 ? `unassigned ${result.unassigned} unit(s)` : null,
+    });
+
+    return NextResponse.json({ success: true, unassigned: result.unassigned });
+  },
+  { permission: 'handling_unit.manage' },
 );
 
 function extractIdSegment(pathname: string): string {

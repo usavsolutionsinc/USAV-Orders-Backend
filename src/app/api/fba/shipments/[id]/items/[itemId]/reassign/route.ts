@@ -77,7 +77,7 @@ export async function PATCH(
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'reassign', shipmentId: Number(targetShipmentId || 0), itemId: Number(itemId), source: 'fba.shipments.items.reassign' });
+    await publishFbaItemChanged({ action: 'reassign', shipmentId: Number(targetShipmentId || 0), itemId: Number(itemId), source: 'fba.shipments.items.reassign', organizationId: gate.ctx.organizationId });
 
     return NextResponse.json({ success: true, moved: { item_id: itemIdNum, from: sourceShipmentId, to: targetShipmentId } });
   } catch (error: any) {

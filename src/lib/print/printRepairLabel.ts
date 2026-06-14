@@ -30,7 +30,7 @@ export interface RepairLabelPayload {
 /**
  * The string actually encoded in the printed DataMatrix. Bare handle
  * `REP-{id}` — `routeScan()` parses the prefix and navigates to
- * /repair/{id}. No URL on the wire.
+ * /m/rs/{id} (the mobile repair-service detail page). No URL on the wire.
  */
 export function resolveRepairQrValue(payload: RepairLabelPayload): string {
   if (payload.qrValue && payload.qrValue.trim()) return payload.qrValue.trim();
@@ -65,7 +65,7 @@ export function printRepairLabel(payload: RepairLabelPayload): void {
       <span class="po">${escapeLabelHtml(repairLabelCornerDisplay(payload))}</span>
     </div>`;
 
-  // DataMatrix (`REP-{id}` handle) — routeScan() routes to /repair/{id}.
+  // DataMatrix (`REP-{id}` handle) — routeScan() routes to /m/rs/{id}.
   printLabel({
     name: 'Label',
     infoHtml,

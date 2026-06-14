@@ -32,7 +32,7 @@ import { AUDIT_ENTITY } from '@/lib/audit-logs';
  *  - If ALL items in a shipment are SHIPPED and actual_qty >= expected_qty,
  *    the shipment is DELETED (fully fulfilled).
  */
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   const client = await pool.connect();
   try {
     const body = await request.json();
@@ -195,7 +195,7 @@ export const POST = withAuth(async (request: NextRequest) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'mark-shipped', shipmentId: 0, source: 'fba.shipments.mark-shipped' });
+    await publishFbaShipmentChanged({ action: 'mark-shipped', shipmentId: 0, source: 'fba.shipments.mark-shipped', organizationId: ctx.organizationId });
 
     return NextResponse.json(
       {

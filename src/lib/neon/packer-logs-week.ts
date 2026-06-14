@@ -26,7 +26,8 @@ export interface FetchPackerLogRowsResult {
   cacheHit: boolean;
 }
 
-const CACHE_NAMESPACE = 'api:packing-logs-v5';
+// v6: adds ship_confirmed_at / shipped_out_by / shipped_out_by_name (dock scan-out).
+const CACHE_NAMESPACE = 'api:packing-logs-v6';
 const CACHE_TAGS = ['packing-logs'];
 
 /**
@@ -251,7 +252,10 @@ export async function fetchPackerLogRows(
         stn.latest_event_at::text              AS latest_event_at,
         stn.has_exception                      AS has_exception,
         stn.exception_at::text                 AS exception_at,
-        stn.is_terminal                        AS is_terminal
+        stn.is_terminal                        AS is_terminal,
+        to_char(ship_out.ship_confirmed_at, 'YYYY-MM-DD HH24:MI:SS') AS ship_confirmed_at,
+        ship_out.shipped_out_by                AS shipped_out_by,
+        shipped_out_staff.name                 AS shipped_out_by_name
     FROM station_activity_logs sal
     JOIN page ON page.id = sal.id
     LEFT JOIN packer_logs pl ON pl.id = sal.packer_log_id
@@ -286,6 +290,18 @@ export async function fetchPackerLogRows(
         LIMIT 1
     ) sku_lookup ON TRUE
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
+    -- Dock scan-out (SHIP_CONFIRM) for this package's shipment, if any. Bounded:
+    -- runs once per page row. This is the "left the warehouse" timestamp.
+    LEFT JOIN LATERAL (
+        SELECT
+            MAX(so.created_at) AS ship_confirmed_at,
+            (ARRAY_AGG(so.staff_id ORDER BY so.created_at DESC))[1] AS shipped_out_by
+        FROM station_activity_logs so
+        WHERE so.activity_type = 'SHIP_CONFIRM'
+          AND sal.shipment_id IS NOT NULL
+          AND so.shipment_id = sal.shipment_id
+    ) ship_out ON TRUE
+    LEFT JOIN staff shipped_out_staff ON shipped_out_staff.id = ship_out.shipped_out_by
     LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
     LEFT JOIN staff packed_staff ON packed_staff.id = sal.staff_id
     LEFT JOIN LATERAL (

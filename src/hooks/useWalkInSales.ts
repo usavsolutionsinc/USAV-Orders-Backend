@@ -3,11 +3,10 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from './useAblyChannel';
-import { getWalkInChannelName } from '@/lib/realtime/channels';
+import { getWalkInChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 import { qk } from '@/queries/keys';
 import type { SquareTransactionRecord } from '@/lib/neon/square-transaction-queries';
-
-const WALKIN_CHANNEL = getWalkInChannelName();
 
 export function useWalkInSales(
   search?: string | null,
@@ -18,6 +17,9 @@ export function useWalkInSales(
   },
 ) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const walkInChannel = safeChannelName(() => getWalkInChannelName(orgId!));
   const weekStart = options?.weekStart || '';
   const weekEnd = options?.weekEnd || '';
   const status = options?.status || '';
@@ -43,9 +45,9 @@ export function useWalkInSales(
     placeholderData: (prev) => prev,
   });
 
-  useAblyChannel(WALKIN_CHANNEL, 'sale.completed', () => {
+  useAblyChannel(walkInChannel, 'sale.completed', () => {
     queryClient.invalidateQueries({ queryKey: qk.walkInSales.all });
-  });
+  }, !!walkInChannel);
 
   useEffect(() => {
     const handleRefresh = () => {

@@ -45,7 +45,7 @@ export function AboutSection() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">About</h2>
+        <h2 className="sr-only">About</h2>
         <p className="mt-1 text-sm text-gray-500">Build information for support and troubleshooting.</p>
       </header>
 

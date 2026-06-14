@@ -185,6 +185,7 @@ export async function recomputeProvisionalClocks(limit = RECOMPUTE_LIMIT): Promi
 export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireResult> {
   const client = await pool.connect();
   let expiredClaims: Array<{
+    organizationId: string;
     id: number;
     claimNumber: string;
     createdByStaffId: number | null;
@@ -194,13 +195,14 @@ export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireRe
     await client.query('BEGIN');
     const { rows } = await client.query<{
       id: string | number;
+      organization_id: string;
       status: string;
       claim_number: string;
       created_by_staff_id: number | null;
       product_title: string | null;
       serial_number: string | null;
     }>(
-      `SELECT id, status, claim_number, created_by_staff_id, product_title, serial_number
+      `SELECT id, organization_id, status, claim_number, created_by_staff_id, product_title, serial_number
          FROM warranty_claims
         WHERE deleted_at IS NULL
           AND status IN ('LOGGED', 'SUBMITTED')
@@ -230,6 +232,7 @@ export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireRe
     );
     await client.query('COMMIT');
     expiredClaims = rows.map((r) => ({
+      organizationId: r.organization_id,
       id: Number(r.id),
       claimNumber: r.claim_number,
       createdByStaffId: r.created_by_staff_id == null ? null : Number(r.created_by_staff_id),

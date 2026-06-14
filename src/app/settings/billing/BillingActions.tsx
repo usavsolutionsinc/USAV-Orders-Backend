@@ -55,7 +55,7 @@ export function BillingActions({ hasStripeCustomer }: BillingActionsProps) {
 
 interface UpgradeButtonProps { plan: PlatformPlan }
 
-function UpgradeButton({ plan }: UpgradeButtonProps) {
+export function UpgradeButton({ plan }: UpgradeButtonProps) {
   const [busy, setBusy] = useState(false);
   const onClick = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -88,5 +88,3 @@ function UpgradeButton({ plan }: UpgradeButtonProps) {
     </button>
   );
 }
-
-BillingActions.UpgradeButton = UpgradeButton;

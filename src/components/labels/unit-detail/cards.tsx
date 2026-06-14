@@ -5,6 +5,7 @@ import { timeAgo } from '@/utils/_date';
 import { unitStatusBadgeClass } from '@/lib/unit-status';
 import { conditionBadgeTone } from '@/components/station/receiving-constants';
 import { SerialChip, SkuSerialChip } from '@/components/ui/CopyChip';
+import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import {
   History,
   Package,
@@ -27,6 +28,7 @@ import type {
   ConditionRow,
   TsnLink,
   LocationDetail,
+  UnitPhoto,
 } from './types';
 
 // ─── Shared formatting helpers ───────────────────────────────────────────────
@@ -200,11 +202,33 @@ export function OrderCard({ allocation }: { allocation: Allocation | null }) {
 
 // ─── Timeline ────────────────────────────────────────────────────────────────
 
-export function TimelineCard({ events }: { events: TimelineEvent[] }) {
+/** Pull the photo_ids array an event carries (photo-capture NOTE events). */
+function eventPhotoIds(payload: Record<string, unknown> | null): number[] {
+  const raw = payload?.photo_ids;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => Number(x)).filter((n) => Number.isFinite(n));
+}
+
+export function TimelineCard({
+  events,
+  photos = [],
+  onPhotoChanged,
+}: {
+  events: TimelineEvent[];
+  /** The unit's photos, cross-referenced by event.payload.photo_ids so capture
+   *  events render their shots inline (and a deleted photo drops from the row). */
+  photos?: UnitPhoto[];
+  onPhotoChanged?: () => void;
+}) {
   const sorted = useMemo(
     () => [...events].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
     [events],
   );
+  const photosById = useMemo(() => {
+    const m = new Map<number, UnitPhoto>();
+    for (const p of photos) m.set(p.id, p);
+    return m;
+  }, [photos]);
 
   return (
     <section className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60">
@@ -223,7 +247,12 @@ export function TimelineCard({ events }: { events: TimelineEvent[] }) {
       ) : (
         <ol className="border-t border-gray-100 divide-y divide-gray-100">
           {sorted.map((e) => (
-            <TimelineRow key={e.id} event={e} />
+            <TimelineRow
+              key={e.id}
+              event={e}
+              photosById={photosById}
+              onPhotoChanged={onPhotoChanged}
+            />
           ))}
         </ol>
       )}
@@ -231,10 +260,24 @@ export function TimelineCard({ events }: { events: TimelineEvent[] }) {
   );
 }
 
-function TimelineRow({ event }: { event: TimelineEvent }) {
+function TimelineRow({
+  event,
+  photosById,
+  onPhotoChanged,
+}: {
+  event: TimelineEvent;
+  photosById?: Map<number, UnitPhoto>;
+  onPhotoChanged?: () => void;
+}) {
   const { icon: Icon, tone } = ICON_FOR_EVENT[event.event_type] ?? ICON_FOR_EVENT.DEFAULT;
   const statusChanged =
     event.prev_status && event.next_status && event.prev_status !== event.next_status;
+
+  // Photos captured at this event — resolved against the live photos list so a
+  // delete drops the thumbnail too (rather than a stale id baked into payload).
+  const eventPhotos = photosById
+    ? eventPhotoIds(event.payload).map((id) => photosById.get(id)).filter((p): p is UnitPhoto => !!p)
+    : [];
 
   return (
     <li className="flex gap-3 px-5 py-3">
@@ -263,6 +306,15 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
           {event.bin_name ? <span className="font-mono">@ {event.bin_name}</span> : null}
         </div>
         {event.notes ? <p className="mt-1 text-caption text-gray-600">{event.notes}</p> : null}
+        {eventPhotos.length > 0 ? (
+          <div className="mt-2">
+            <PhotoGallery
+              photos={eventPhotos.map((p) => ({ id: p.id, url: p.url }))}
+              launcherLayout="thumbnails"
+              onPhotoDeleted={onPhotoChanged}
+            />
+          </div>
+        ) : null}
       </div>
     </li>
   );

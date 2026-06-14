@@ -58,7 +58,9 @@ test('regression: sourcing.view gates the Bose model + compatibility read routes
   // method's permission per file, so these read-first routes land on view.
   assert.ok(paths.includes('/api/bose-models/route.ts'), 'sourcing.view should gate /api/bose-models');
   assert.ok(paths.some((p) => p.includes('bose-models/lookup')), 'sourcing.view should gate the compatibility lookup');
+  assert.ok(paths.some((p) => p.includes('product-models/lookup')), 'sourcing.view should gate the brand-neutral lookup façade');
   assert.ok(paths.includes('/api/part-compatibility/route.ts'), 'sourcing.view should gate compatibility list');
+  assert.ok(paths.includes('/api/sourcing/saved-searches/route.ts'), 'sourcing.view should gate the saved-searches list');
 });
 
 test('regression: sourcing.manage gates the compatibility mutation route', () => {
@@ -66,6 +68,10 @@ test('regression: sourcing.manage gates the compatibility mutation route', () =>
   assert.ok(
     paths.includes('/api/part-compatibility/[id]/route.ts'),
     'sourcing.manage should gate compatibility edit/delete',
+  );
+  assert.ok(
+    paths.includes('/api/sourcing/saved-searches/[id]/route.ts'),
+    'sourcing.manage should gate saved-search edit/delete',
   );
 });
 
@@ -76,6 +82,43 @@ test('regression: handling_unit.view gates the handling-units read routes', () =
   const paths = routesGatedBy('handling_unit.view').map((r) => r.path);
   assert.ok(paths.includes('/api/handling-units/route.ts'), 'handling_unit.view should gate the box list');
   assert.ok(paths.includes('/api/handling-units/[id]/route.ts'), 'handling_unit.view should gate the box detail');
+});
+
+test('regression: stations routes are gated (station builder, ops-studio layer 2)', () => {
+  // Reads land on dashboard.view (any signed-in staff renders their stations);
+  // the manifest records the first-declared method's permission per file.
+  const readPaths = routesGatedBy('dashboard.view').map((r) => r.path);
+  assert.ok(readPaths.includes('/api/stations/route.ts'), 'dashboard.view should gate the station definitions read');
+  // Draft saves + publish are stations.manage.
+  const managePaths = routesGatedBy('stations.manage').map((r) => r.path);
+  assert.ok(
+    managePaths.includes('/api/stations/publish/route.ts'),
+    'stations.manage should gate station publish',
+  );
+});
+
+test('regression: studio.view gates the Operations Studio graph feed (ST1)', () => {
+  const paths = routesGatedBy('studio.view').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/studio/graph/route.ts'),
+    'studio.view should gate the studio canvas graph read',
+  );
+});
+
+test('regression: studio.manage gates the draft/publish lifecycle (ST4)', () => {
+  const paths = routesGatedBy('studio.manage').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/studio/definitions/draft/route.ts'),
+    'studio.manage should gate draft creation',
+  );
+  assert.ok(
+    paths.includes('/api/studio/definitions/[id]/graph/route.ts'),
+    'studio.manage should gate draft graph saves',
+  );
+  assert.ok(
+    paths.includes('/api/studio/definitions/[id]/publish/route.ts'),
+    'studio.manage should gate publish',
+  );
 });
 
 test('regression: handling_unit.manage gates the assign/unassign mutations', () => {

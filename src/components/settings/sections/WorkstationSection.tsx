@@ -40,7 +40,7 @@ export function WorkstationSection() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-lg font-semibold text-gray-900">Workstation</h2>
+        <h2 className="sr-only">Workstation</h2>
         <p className="mt-1 text-sm text-gray-500">
           Identifies which station this is so forms and filters can pre-fill. Local to this device.
         </p>

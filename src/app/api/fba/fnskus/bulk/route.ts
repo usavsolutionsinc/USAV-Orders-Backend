@@ -29,7 +29,7 @@ function splitCsvLine(line: string): string[] {
   return line.split(',').map((cell) => cell.trim());
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const form = await request.formData();
     const file = form.get('file');
@@ -116,7 +116,7 @@ export const POST = withAuth(async (request: NextRequest) => {
     );
 
     await invalidateCacheTags(['fba-fnskus']);
-    await publishFbaCatalogChanged({ action: 'bulk-uploaded', count: unique.length, source: 'fba.fnskus.bulk' });
+    await publishFbaCatalogChanged({ action: 'bulk-uploaded', count: unique.length, source: 'fba.fnskus.bulk', organizationId: ctx.organizationId });
 
     return NextResponse.json({ success: true, inserted: unique.length });
   } catch (error: any) {

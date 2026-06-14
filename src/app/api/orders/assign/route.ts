@@ -153,6 +153,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       condition,
       quantity,
       sku,
+      skuCatalogId,
       performedByStaffId,
       actorStaffId,
       staffId,
@@ -198,7 +199,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
 
       // ── 2b. Update carrier tracking through shipment backbone ──────────────
-      if (shippingTrackingNumber !== undefined) {
+      // Capture which orders had NO tracking yet (shipment_id IS NULL) BEFORE the
+      // upsert, so we can record a one-time `orders.tracking.added` event only on
+      // the first add (re-edits stay just ORDER_ASSIGNMENT_UPDATED). Powers the
+      // order timeline + the Unshipped "tracking added" record.
+      let newlyTrackedIds: number[] = [];
+      const trimmedTracking = String(shippingTrackingNumber ?? '').trim();
+      if (shippingTrackingNumber !== undefined && trimmedTracking) {
+        const priorNull = await client.query(
+          `SELECT id FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NULL`,
+          [idsToUpdate]
+        );
+        newlyTrackedIds = priorNull.rows.map((r: { id: number }) => Number(r.id));
+        await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client);
+      } else if (shippingTrackingNumber !== undefined) {
         await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client);
       }
 
@@ -322,6 +336,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         updates.push(`sku = $${paramCount++}`);
         values.push(sku || null);
       }
+      // Canonical SKU linkage (orders.sku_catalog_id → sku_catalog.id), resolved
+      // via /api/get-title-by-sku in the add-tracking popover. Never string-joined.
+      if (skuCatalogId !== undefined) {
+        updates.push(`sku_catalog_id = $${paramCount++}`);
+        values.push(skuCatalogId == null ? null : Number(skuCatalogId));
+      }
 
       if (updates.length > 0) {
         const idPlaceholders = idsToUpdate.map(() => `$${paramCount++}`).join(', ');
@@ -347,6 +367,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       if (condition !== undefined) changedFields.condition = condition;
       if (quantity !== undefined) changedFields.quantity = quantity;
       if (sku !== undefined) changedFields.sku = sku;
+      if (skuCatalogId !== undefined) changedFields.skuCatalogId = skuCatalogId;
 
       await Promise.all(
         idsToUpdate.map((id) =>
@@ -367,6 +388,26 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           }),
         ),
       );
+
+      // One-time "tracking added" event for orders that had no tracking before.
+      if (newlyTrackedIds.length > 0) {
+        await Promise.all(
+          newlyTrackedIds.map((id) =>
+            createAuditLog(client, {
+              actorStaffId: actorId,
+              source: 'api.orders.assign',
+              action: 'orders.tracking.added',
+              entityType: 'ORDER',
+              entityId: String(id),
+              requestId,
+              ipAddress,
+              userAgent,
+              afterData: { trackingNumber: trimmedTracking },
+              metadata: { orderId: id },
+            }),
+          ),
+        );
+      }
 
       await client.query('COMMIT');
     } catch (txError) {
@@ -398,7 +439,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
     }
     try {
-      await publishOrderChanged({ orderIds: idsToUpdate, source: 'orders.assign' });
+      await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: idsToUpdate, source: 'orders.assign' });
     } catch (realtimeErr) {
       console.warn('[orders/assign] realtime publish failed (non-critical):', realtimeErr);
     }
@@ -409,6 +450,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       for (const orderId of idsToUpdate) {
         const snap = snaps.get(orderId) ?? { testerId: null, packerId: null, deadlineAt: null };
         await publishOrderAssignmentsUpdated({
+          organizationId: ctx.organizationId,
           orderId,
           testerId: snap.testerId,
           packerId: snap.packerId,

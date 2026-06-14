@@ -17,6 +17,7 @@ const PERM_BY_ENTITY_TYPE: Record<string, PermissionString> = {
   SKU: 'receiving.upload_photo',
   SKU_STOCK: 'sku_stock.adjust',
   BIN_ADJUSTMENT: 'bin.adjust',
+  SERIAL_UNIT: 'tech.scan_serial',
 };
 
 export async function DELETE(

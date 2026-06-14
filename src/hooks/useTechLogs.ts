@@ -3,8 +3,9 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toPSTDateKey } from '@/utils/date';
-import { getStationChannelName } from '@/lib/realtime/channels';
+import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from './useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface TechRecord {
   id: number;
@@ -93,11 +94,14 @@ function prependTechRecordToMatchingWeekCaches(
   }
 }
 
-const STATION_CHANNEL = getStationChannelName();
-
 export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   const { weekOffset = 0, weekRange } = options;
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  // Global per-org station broadcast (tech logs are filtered by techId in the
+  // handler) — NOT a per-staff bridge.
+  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
   const queryKey = [
     'tech-logs',
     techId,
@@ -131,7 +135,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
   // DELETE            → invalidate (TSN id ≠ SAL row id so we can't remove
   //                     surgically; a fresh fetch is the safest approach).
   useAblyChannel(
-    STATION_CHANNEL,
+    stationChannel,
     'tech-log.changed',
     (msg: any) => {
       const { techId: changedId, action, row } = msg?.data ?? {};
@@ -145,6 +149,7 @@ export function useTechLogs(techId: number, options: UseTechLogsOptions = {}) {
         queryClient.invalidateQueries({ queryKey: ['tech-logs', techId] });
       }
     },
+    !!stationChannel,
   );
 
   // ── Local surgical insert (same-tab tracking scans via CustomEvent) ────────

@@ -16,6 +16,7 @@ import {
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 
 interface PhotoCaptureSurfaceProps {
   /** PO receiving package id — required (every photo binds to a receiving row). */
@@ -77,14 +78,16 @@ export function PhotoCaptureSurface({
   // live — same device (Ably echoes to the publisher) and the paired desktop.
   const { getClient } = useAblyClient();
   const { user } = useAuth();
+  const orgId = user?.organizationId;
   const notifyStaffId = user?.staffId ?? 0;
+  const phoneChannelName = safeChannelName(() => getPhoneBridgeChannelName(orgId!, notifyStaffId));
   useEffect(() => {
-    if (notifyStaffId <= 0) return;
+    if (notifyStaffId <= 0 || !phoneChannelName) return;
     photoUploadQueue.configureNotifier(async (notice) => {
       try {
         const client = await getClient();
         if (!client) return;
-        const ch = client.channels.get(`phone:${notifyStaffId}`);
+        const ch = client.channels.get(phoneChannelName);
         await ch.publish('receiving_photo_uploaded', {
           receiving_id: notice.receivingId,
           receiving_line_id: notice.receivingLineId,
@@ -97,7 +100,7 @@ export function PhotoCaptureSurface({
     });
     // No cleanup — the notifier must survive this surface unmounting so a photo
     // that finishes uploading in the background still announces itself.
-  }, [getClient, notifyStaffId]);
+  }, [getClient, notifyStaffId, phoneChannelName]);
 
   const scope = useMemo<PhotoScope>(
     () => ({ receivingId, receivingLineId, poRef }),

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Package, Trash2, X } from '../Icons';
+import { Package, Trash2 } from '../Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { buildShippedCopyInfo } from '@/utils/copyallshipped';
 import { DashboardDetailsStack } from './stacks/DashboardDetailsStack';
@@ -10,6 +10,7 @@ import { TechDetailsStack } from './stacks/TechDetailsStack';
 import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent, type ShippedActiveSection } from './ShippedDetailsPanelContent';
+import { OrderTimelineSection } from './OrderTimelineSection';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
@@ -19,7 +20,7 @@ import { toPSTDateKey } from '@/utils/date';
 import { getPresentStaffForToday, type StaffMember } from '@/lib/staffCache';
 import { WorkOrderAssignmentCard, type AssignmentConfirmPayload } from '@/components/work-orders/WorkOrderAssignmentCard';
 import type { WorkOrderRow } from '@/components/work-orders/types';
-import { sectionLabel, microBadge } from '@/design-system/tokens/typography/presets';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -506,6 +507,10 @@ export function ShippedDetailsPanel({
               )}
             </div>
           )}
+
+          {(context === 'dashboard' || context === 'queue' || context === 'shipped') && shipped?.id ? (
+            <OrderTimelineSection orderId={Number(shipped.id)} />
+          ) : null}
       </div>
 
       <AnimatePresence>

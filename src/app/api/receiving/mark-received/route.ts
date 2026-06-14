@@ -491,12 +491,14 @@ export const POST = withAuth(async (request, ctx) => {
           try {
             if (carton.is_return) {
               await publishReturnPendingTest({
+                organizationId: ctx.organizationId,
                 receivingId,
                 trackingNumber: carton.tracking,
                 source: 'receiving.mark-received',
               });
             } else if (carton.is_priority) {
               await publishOrderReadyShip({
+                organizationId: ctx.organizationId,
                 receivingId,
                 trackingNumber: carton.tracking,
                 source: 'receiving.mark-received',
@@ -685,6 +687,7 @@ export const POST = withAuth(async (request, ctx) => {
       try {
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'serial-units']);
         await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
           action: 'update',
           rowId: String(receivingLineId),
           source: 'receiving.mark-received',

@@ -356,12 +356,14 @@ export async function insertTechSerialForTracking(
   if (!options?.skipInvalidateAndPublish) {
     await invalidateCacheTags(['tech-logs', 'orders-next']);
     await publishTechLogChanged({
+      organizationId: params.organizationId,
       techId: staffId,
       action: 'insert',
       source: 'tech.add-serial',
     });
     if (order?.id) {
       await publishOrderTested({
+        organizationId: params.organizationId,
         orderId: Number(order.id),
         testedBy: staffId,
         source: 'tech.add-serial',

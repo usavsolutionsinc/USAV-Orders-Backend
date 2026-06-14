@@ -105,7 +105,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['repair-service']);
-    await publishRepairChanged({ repairIds: [Number(repairId)], source: 'repair-service.repaired' });
+    await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [Number(repairId)], source: 'repair-service.repaired' });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

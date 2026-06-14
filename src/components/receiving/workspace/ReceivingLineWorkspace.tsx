@@ -79,6 +79,19 @@ export function ReceivingLineWorkspace({
     return () => window.removeEventListener('receiving-label-printed', handler);
   }, [row.id]);
 
+  // Record this open into the operator's recents (server-backed, per-staff) so
+  // the unbox sidebar's "Viewed" pill can list recently-opened lines. Fire-and-
+  // forget — a failure never blocks the workspace. Upsert keys on (staff, line),
+  // so re-opening just bumps viewed_at.
+  useEffect(() => {
+    if (!(row.id > 0)) return;
+    void fetch('/api/receiving-lines/view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ receiving_line_id: row.id, receiving_id: row.receiving_id ?? null }),
+    }).catch(() => {});
+  }, [row.id, row.receiving_id]);
+
   return (
     <motion.div
       key={row.id}
@@ -111,13 +124,6 @@ export function ReceivingLineWorkspace({
         <LineEditPanel
           row={row}
           staffId={staffId}
-          compact={scanDriven}
-          accordionBootstrap={accordionBootstrap}
-          onPrev={onPrev}
-          onNext={onNext}
-          canPrev={nav?.canPrev ?? false}
-          canNext={nav?.canNext ?? false}
-          itemIndex={nav?.currentIndex}
           itemTotal={nav?.total}
           variant={variant}
           onClose={onClose}

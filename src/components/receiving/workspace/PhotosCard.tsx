@@ -3,6 +3,8 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { Camera, Smartphone } from '@/components/Icons';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
@@ -38,6 +40,8 @@ interface Props {
  */
 export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const enabled = Number.isFinite(receivingId) && (receivingId ?? 0) > 0;
   const queryKey = ['receiving-photos', receivingId] as const;
 
@@ -55,7 +59,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
   });
 
   // Phone uploads → invalidate the cache so the strip reflects new shots.
-  const phoneChannel = staffId > 0 ? `phone:${staffId}` : 'phone:__idle__';
+  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   const handlePhoneMessage = useCallback(
     (msg: { data?: { receiving_id?: number } }) => {
       const incoming = Number(msg?.data?.receiving_id);
@@ -65,7 +69,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryKey identity is stable per receivingId
     [receivingId, queryClient],
   );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, staffId > 0);
+  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
 
   const galleryPhotos = useMemo(
     () =>

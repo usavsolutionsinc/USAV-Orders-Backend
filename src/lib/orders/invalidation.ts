@@ -8,6 +8,9 @@ export async function invalidateAllOrdersApiCaches(extraTags: string[] = []) {
 }
 
 type InvalidateOrderViewsOptions = {
+  /** Owning tenant — from ctx.organizationId. Required so the realtime broadcast
+   *  is org-namespaced. */
+  organizationId: string;
   orderIds: number[];
   source: string;
   extraTags?: string[];
@@ -19,6 +22,7 @@ type InvalidateOrderViewsOptions = {
  * reads and realtime-driven dashboard views stay in sync.
  */
 export async function invalidateOrderViews({
+  organizationId,
   orderIds,
   source,
   extraTags = [],
@@ -29,5 +33,5 @@ export async function invalidateOrderViews({
   if (normalizedIds.length === 0) return;
 
   await invalidateAllOrdersApiCaches(extraTags);
-  await publishOrderChanged({ orderIds: normalizedIds, source });
+  await publishOrderChanged({ organizationId, orderIds: normalizedIds, source });
 }

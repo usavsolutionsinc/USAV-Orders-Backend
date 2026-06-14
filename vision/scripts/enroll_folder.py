@@ -12,8 +12,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from vision.app.config import settings
-from vision.app.engine import get_engine
+# Make `vision.*` importable no matter the CWD (repo root or inside vision/).
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from vision.app.config import settings  # noqa: E402
+from vision.app.engine import get_engine  # noqa: E402
 
 
 def main() -> None:

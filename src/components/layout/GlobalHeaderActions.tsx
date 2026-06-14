@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnchoredLayer } from '@/design-system';
-import { Search, Inbox, Pencil } from '@/components/Icons';
+import { Search, Inbox, Pencil, Clipboard } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHeader } from '@/contexts/HeaderContext';
@@ -11,10 +11,11 @@ import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
 import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
+import { ClipboardHistoryPopover } from '@/components/quick-access/ClipboardHistoryPopover';
 import { SyncStatusPopover } from '@/components/quick-access/SyncStatusPopover';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
-type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync';
+type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync' | 'clipboard';
 
 function initials(name: string): string {
   return name
@@ -51,6 +52,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
   const [staffName, setStaffName] = useState('');
   // Each control owns its own anchor so its popover portals out of the header
   // (escaping any transformed/blurred ancestor) yet still pins to the trigger.
+  const clipboardAnchorRef = useRef<HTMLDivElement>(null);
   const inboxAnchorRef = useRef<HTMLDivElement>(null);
   const accountAnchorRef = useRef<HTMLDivElement>(null);
 
@@ -82,6 +84,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
   if (!user) return null;
 
   const inboxOpen = popover === 'inbox';
+  const clipboardOpen = popover === 'clipboard';
   const accountOpen = popover === 'account';
   const isAdmin = !!user.permissions?.includes('admin.view');
 
@@ -120,6 +123,33 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           <Search className="h-4 w-4" />
         </button>
       )}
+
+      {/* Clipboard history — recent copies + send-to-staff. Sits between the
+          search launcher and the notifications bell. */}
+      <div ref={clipboardAnchorRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setPopover((p) => (p === 'clipboard' ? 'none' : 'clipboard'))}
+          aria-label="Clipboard history"
+          aria-expanded={clipboardOpen}
+          title="Clipboard history"
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            clipboardOpen && 'bg-gray-100',
+          )}
+        >
+          <Clipboard className="h-4 w-4" />
+        </button>
+        <AnchoredLayer
+          open={clipboardOpen}
+          onClose={() => setPopover('none')}
+          anchorRef={clipboardAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <ClipboardHistoryPopover onClose={() => setPopover('none')} />
+        </AnchoredLayer>
+      </div>
 
       {/* Notifications */}
       <div ref={inboxAnchorRef} className="relative">

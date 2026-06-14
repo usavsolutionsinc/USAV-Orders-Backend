@@ -52,6 +52,69 @@ export async function getSupplierList(params: {
   return { items: result.rows, total: countResult.rows[0]?.total || 0 };
 }
 
+export interface SupplierWithStatsRow extends SupplierRow {
+  candidate_count: number;
+  acquisition_count: number;
+  spend_cents: number;
+  last_ordered_at: string | null;
+}
+
+/**
+ * Supplier list enriched with their sourcing activity — candidate count, number
+ * of acquisitions, total spend (acquisition + shipping), and last order date.
+ * Powers the read-only Suppliers rollup in the sourcing hub. Aggregates are
+ * computed in two grouped sub-selects (no per-row N+1).
+ */
+export async function getSupplierListWithStats(params: {
+  q?: string;
+  type?: string | null;
+  limit?: number;
+  offset?: number;
+}): Promise<{ items: SupplierWithStatsRow[]; total: number }> {
+  const search = (params.q || '').trim();
+  const type = (params.type || '').trim();
+  const limit = Math.min(params.limit || 100, 500);
+  const offset = params.offset || 0;
+
+  const result = await pool.query<SupplierWithStatsRow>(
+    `SELECT s.*,
+            COALESCE(c.candidate_count, 0)   AS candidate_count,
+            COALESCE(a.acquisition_count, 0) AS acquisition_count,
+            COALESCE(a.spend_cents, 0)       AS spend_cents,
+            a.last_ordered_at
+       FROM suppliers s
+       LEFT JOIN (
+         SELECT supplier_id, COUNT(*)::int AS candidate_count
+           FROM sourcing_candidates WHERE supplier_id IS NOT NULL GROUP BY supplier_id
+       ) c ON c.supplier_id = s.id
+       LEFT JOIN (
+         SELECT supplier_id,
+                COUNT(*)::int AS acquisition_count,
+                COALESCE(SUM(COALESCE(acquisition_cost_cents,0) + COALESCE(shipping_cost_cents,0)),0)::bigint AS spend_cents,
+                MAX(ordered_at) AS last_ordered_at
+           FROM part_acquisitions WHERE supplier_id IS NOT NULL GROUP BY supplier_id
+       ) a ON a.supplier_id = s.id
+      WHERE s.is_active = true
+        AND ($1 = '' OR s.name ILIKE '%' || $1 || '%' OR s.email ILIKE '%' || $1 || '%' OR s.ebay_seller_id ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR s.supplier_type = $2)
+      ORDER BY a.spend_cents DESC NULLS LAST, s.name
+      LIMIT $3 OFFSET $4`,
+    [search, type, limit, offset],
+  );
+
+  const countResult = await pool.query<{ total: number }>(
+    `SELECT COUNT(*)::int AS total FROM suppliers
+      WHERE is_active = true
+        AND ($1 = '' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%' OR ebay_seller_id ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR supplier_type = $2)`,
+    [search, type],
+  );
+
+  // pg returns bigint (SUM::bigint) as a string — coerce spend to a number.
+  const items = result.rows.map((r) => ({ ...r, spend_cents: Number(r.spend_cents) }));
+  return { items, total: countResult.rows[0]?.total || 0 };
+}
+
 export async function getSupplierById(id: number): Promise<SupplierRow | null> {
   const result = await pool.query<SupplierRow>(
     `SELECT * FROM suppliers WHERE id = $1 LIMIT 1`,

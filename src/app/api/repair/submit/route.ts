@@ -196,7 +196,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         // Invalidate repair cache
         await invalidateCacheTags(['repair-service']);
-        await publishRepairChanged({ repairIds: [Number(dbId)], source: 'repair.submit' });
+        await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [Number(dbId)], source: 'repair.submit' });
 
         return NextResponse.json({
             success: true,

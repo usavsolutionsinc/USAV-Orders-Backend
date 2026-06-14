@@ -159,6 +159,25 @@ export const RECEIVING_TYPE_OPTS = [
   { value: 'PICKUP', label: 'Pick Up' },
 ];
 
+/** Carton-level default types the carton pill can set (PICKUP is a carton source, not a pill type). */
+export const CARTON_INTAKE_TYPES = ['PO', 'RETURN', 'TRADE_IN'] as const;
+
+/**
+ * Effective receiving type for a line: the per-line override wins, else the
+ * carton-level default, else 'PO'. One resolver so every surface (pill, label,
+ * copy-all) reads type the same way. See migration 2026-06-13b.
+ */
+export function effectiveReceivingType(
+  lineOverride: string | null | undefined,
+  cartonDefault: string | null | undefined,
+): string {
+  const ov = (lineOverride || '').trim().toUpperCase();
+  if (ov && ov !== 'PO') return ov;
+  const def = (cartonDefault || '').trim().toUpperCase();
+  if (def) return def;
+  return ov || 'PO';
+}
+
 // Pill options + printed-label map both derive from the platform SoT so a
 // platform never reads two ways across surfaces. Add a platform in
 // src/lib/source-platform.ts, not here. The leading '' (Unknown) entry is

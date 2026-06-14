@@ -8,7 +8,7 @@ import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 // ── POST /api/fba/fnskus ──────────────────────────────────────────────────────
 // Add a new FNSKU to the fba_fnskus catalog.
 // Body: { fnsku, product_title?, asin?, sku? }
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const fnsku = String(body?.fnsku || '').trim().toUpperCase();
@@ -36,7 +36,7 @@ export const POST = withAuth(async (request: NextRequest) => {
     );
 
     await invalidateCacheTags(['fba-fnskus']);
-    await publishFbaCatalogChanged({ action: 'created', fnsku: fnsku || '', source: 'fba.fnskus.create' });
+    await publishFbaCatalogChanged({ action: 'created', fnsku: fnsku || '', source: 'fba.fnskus.create', organizationId: ctx.organizationId });
 
     return NextResponse.json({ success: true, fnsku: result.rows[0] });
   } catch (error: any) {

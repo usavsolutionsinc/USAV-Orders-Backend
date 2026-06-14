@@ -343,9 +343,12 @@ export function UnmatchedItemsSection({
           source_platform_pill: effectiveSourcePlatformPill,
           intake_type: receivingTypeHint.toLowerCase(),
           listing_url: effectiveListingUrl,
-          // Forwarded so downstream tagging (Zoho receive, repair queue,
-          // line list filters) can branch on repair-service lines.
+          // Per-line source-order linkage — the server persists these on the
+          // line (source_order_id / is_repair_service) and re-derives the
+          // carton's representative PO# from its lines, so a box can hold
+          // returns + repairs from different orders, each acknowledged per line.
           is_repair_service: selection.is_repair_service || undefined,
+          ecwid_order_id: selection.ecwid_order_id || undefined,
           client_event_id: clientEventId,
         }),
       });
@@ -361,58 +364,29 @@ export function UnmatchedItemsSection({
       setPopoverMode(null);
       setAddOpen(false);
 
-      // Repair-service linking side-effects on the carton itself. Done as
-      // TWO sequential PATCHes so the critical PO# write isn't rolled
-      // back if the source_platform write hits the DB check constraint
-      // (e.g. 'ecwid' migration not yet applied in this environment).
-      //
-      //   1. zoho_purchaseorder_number = Ecwid order#  → /api/receiving/[id]
-      //      auto-flips receiving.source 'unmatched' → 'zoho_po' (carton
-      //      drops off the Unfound queue).
-      //   2. source_platform = 'ecwid' → drives the ECWID-RS pill in the
-      //      workspace header. Best-effort; logged on failure.
-      if (selection.is_repair_service) {
-        let poApplied = false;
-        if (selection.ecwid_order_id) {
-          try {
-            const r1 = await fetch(`/api/receiving/${receivingId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                zoho_purchaseorder_number: selection.ecwid_order_id,
-              }),
-            });
-            poApplied = r1.ok;
-          } catch {
-            /* surfaced below via toast */
-          }
-        }
-        try {
-          await fetch(`/api/receiving/${receivingId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source_platform: 'ecwid' }),
-          });
-        } catch {
-          /* non-fatal — pill stays as Unfound until operator picks one */
-        }
+      // The server (add-unmatched-line → recomputeCartonSourceLink) now OWNS the
+      // carton's source linkage: a per-line source order flips an unmatched
+      // carton to zoho_po (off the Unfound queue) + source_platform='ecwid',
+      // with the carton PO# as a first-linked DISPLAY representative. We just
+      // mirror the returned carton state into the UI — no client PATCH, so a
+      // multi-order box's representative isn't clobbered by the latest add.
+      if (selection.is_repair_service || selection.ecwid_order_id) {
+        const carton = body.carton as
+          | { zoho_purchaseorder_number: string | null; source_platform: string | null }
+          | null
+          | undefined;
         window.dispatchEvent(new CustomEvent('usav-refresh-data'));
         window.dispatchEvent(
           new CustomEvent('receiving-package-updated', {
             detail: {
               receiving_id: receivingId,
-              source_platform: 'ecwid',
-              zoho_purchaseorder_number: poApplied
-                ? selection.ecwid_order_id
-                : null,
+              source_platform: carton?.source_platform ?? 'ecwid',
+              zoho_purchaseorder_number: carton?.zoho_purchaseorder_number ?? null,
             },
           }),
         );
-        toast.success(
-          poApplied && selection.ecwid_order_id
-            ? `Linked Ecwid order #${selection.ecwid_order_id}`
-            : 'Repair service linked',
-        );
+        const repId = carton?.zoho_purchaseorder_number || selection.ecwid_order_id;
+        toast.success(repId ? `Linked Ecwid order #${repId}` : 'Repair service linked');
       } else {
         toast.success('Item added');
       }

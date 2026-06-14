@@ -31,6 +31,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
+import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { withAuth } from '@/lib/auth/withAuth';
 import { after } from 'next/server';
 import {
@@ -53,6 +54,7 @@ type IntakeType = (typeof INTAKE_TYPES)[number];
 interface ReceivingRow {
   id: number;
   source: string | null;
+  source_platform: string | null;
   organization_id: string | null;
   zoho_purchaseorder_id: string | null;
 }
@@ -74,6 +76,9 @@ interface InsertedLineRow {
   quantity_received: number | null;
   workflow_status: string;
   manual_entry_at: string;
+  source_system: string | null;
+  source_order_id: string | null;
+  is_repair_service: boolean;
 }
 
 function normalizeEnum<T extends string>(
@@ -199,6 +204,26 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   // the receive flow naturally skips it from the Zoho POST.
   const allowOffPo = body.allow_off_po === true;
 
+  // ─── Per-line source-order linkage (item-dependent returns / repairs) ──────
+  // A box can mix a customer's returns + repair services from different orders;
+  // each line carries its OWN source order. is_repair_service marks an Ecwid
+  // repair-service intake (distinct from a RETURN). source_order_id accepts an
+  // explicit value or the ecwid_order_id the repair-link flow sends; source_system
+  // defaults to 'ecwid' whenever either is present.
+  const isRepairService = body.is_repair_service === true;
+  const sourceOrderId =
+    body.source_order_id != null
+      ? String(body.source_order_id).trim() || null
+      : body.ecwid_order_id != null
+        ? String(body.ecwid_order_id).trim() || null
+        : null;
+  const sourceSystem =
+    body.source_system != null
+      ? String(body.source_system).trim().toLowerCase() || null
+      : sourceOrderId || isRepairService
+        ? 'ecwid'
+        : null;
+
   // ─── Idempotency ──────────────────────────────────────────────────────────
   const idempotencyKey = readIdempotencyKey(request, clientEventId);
   if (idempotencyKey) {
@@ -231,7 +256,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
   // ─── Verify receiving row exists and is unmatched ─────────────────────────
   const receivingResult = await pool.query<ReceivingRow>(
-    `SELECT id, source, organization_id, zoho_purchaseorder_id
+    `SELECT id, source, source_platform, organization_id, zoho_purchaseorder_id
        FROM receiving
       WHERE id = $1
       LIMIT 1`,
@@ -246,7 +271,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     );
   }
 
-  if (receiving.source !== 'unmatched' && !allowOffPo) {
+  // An Ecwid-derived carton (flipped to zoho_po by a per-line return/repair
+  // link, no real Zoho PO id) must keep accepting items — a box mixing several
+  // returns/repairs adds them one at a time, and the FIRST link already flipped
+  // source to zoho_po. Treat it like an unmatched carton for additions.
+  const isEcwidDerivedCarton =
+    receiving.source_platform === 'ecwid' && !receiving.zoho_purchaseorder_id;
+  if (receiving.source !== 'unmatched' && !allowOffPo && !isEcwidDerivedCarton) {
     return respond(
       {
         success: false,
@@ -307,6 +338,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        quantity_expected,
        quantity_received,
        workflow_status,
+       source_system,
+       source_order_id,
+       is_repair_service,
        manual_entry_at,
        created_at,
        updated_at
@@ -314,6 +348,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        $1, $2, $3, $4, $5, $6, $7, $8::condition_grade_enum,
        $9, $10, $11, $12, 0,
        'MATCHED'::inbound_workflow_status_enum,
+       $13, $14, $15,
        NOW(), NOW(), NOW()
      )
      RETURNING
@@ -322,6 +357,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        source_platform_pill, intake_type, condition_grade,
        listing_url, listing_reference, location_code,
        quantity_expected, quantity_received, workflow_status,
+       source_system, source_order_id, is_repair_service,
        manual_entry_at`,
     [
       receivingId,
@@ -336,6 +372,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       listingReference,
       locationCode,
       quantityExpected,
+      sourceSystem,
+      sourceOrderId,
+      isRepairService,
     ],
   );
 
@@ -345,6 +384,29 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       { success: false, error: 'insert returned no row' },
       { status: 500 },
     );
+  }
+
+  // ─── Re-derive the carton's source linkage from its lines ─────────────────
+  // The carton's PO# is only a first-linked DISPLAY representative; this flips
+  // an unmatched carton to zoho_po (off the Unfound queue) when the line carries
+  // a source order, and keeps a multi-order box's representative stable. Owns
+  // the state server-side so the client no longer PATCHes the carton itself.
+  let carton: { zoho_purchaseorder_number: string | null; source: string | null; source_platform: string | null } | null = null;
+  if (sourceOrderId || isRepairService) {
+    try {
+      await recomputeCartonSourceLink(receivingId);
+      const cartonRes = await pool.query<{
+        zoho_purchaseorder_number: string | null;
+        source: string | null;
+        source_platform: string | null;
+      }>(
+        `SELECT zoho_purchaseorder_number, source, source_platform FROM receiving WHERE id = $1 LIMIT 1`,
+        [receivingId],
+      );
+      carton = cartonRes.rows[0] ?? null;
+    } catch (err) {
+      console.warn('add-unmatched-line: carton source recompute failed', err);
+    }
   }
 
   // ─── Background: cache invalidation + realtime publish ────────────────────
@@ -357,6 +419,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         'unfound-queue',
       ]);
       await publishReceivingLogChanged({
+        organizationId: ctx.organizationId,
         action: 'update',
         rowId: String(receivingId),
         source: 'receiving.add-unmatched-line',
@@ -366,5 +429,5 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
   });
 
-  return respond({ success: true, line });
+  return respond({ success: true, line, carton });
 });

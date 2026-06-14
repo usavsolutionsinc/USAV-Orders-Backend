@@ -314,7 +314,7 @@ async function matchesForAiTree(tree: Gs1AiTree): Promise<OrderMatch[]> {
 
 // ─── Main resolve flow ───────────────────────────────────────────────────────
 
-async function resolve(input: string, staffId: number, device: unknown): Promise<ResolveResponse> {
+async function resolve(input: string, organizationId: string, staffId: number, device: unknown): Promise<ResolveResponse> {
   const trimmed = String(input ?? '').trim();
   const base = {
     ok: true as const,
@@ -361,7 +361,7 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
     // popover (scanlog:{staffId}). Read-only history feed — never touches
     // receiving_* or the receiving-station `phone:{staffId}` bridge.
     void publishScanLog({
-      staffId, rawValue: trimmed, kind, routedTo: handleRoute.redirect,
+      organizationId, staffId, rawValue: trimmed, kind, routedTo: handleRoute.redirect,
     });
     return result;
   }
@@ -386,7 +386,7 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
         carrier: null, matches: [], outcome: 'single', routedTo: route,
         parsedAis: null, device,
       });
-      void publishScanLog({ staffId, rawValue: trimmed, kind: 'package', routedTo: route });
+      void publishScanLog({ organizationId, staffId, rawValue: trimmed, kind: 'package', routedTo: route });
       return result;
     }
   }
@@ -470,13 +470,13 @@ async function resolve(input: string, staffId: number, device: unknown): Promise
 
 export const GET = withAuth(async (request: NextRequest, ctx) => {
   const input = request.nextUrl.searchParams.get('input') ?? '';
-  const result = await resolve(input, ctx.staffId, null);
+  const result = await resolve(input, ctx.organizationId, ctx.staffId, null);
   return NextResponse.json(result);
 }, { permission: 'sku_stock.view' });
 
 export const POST = withAuth(async (request: NextRequest, ctx) => {
   const body = await request.json().catch(() => ({}));
   const input = typeof body?.input === 'string' ? body.input : '';
-  const result = await resolve(input, ctx.staffId, body?.device ?? null);
+  const result = await resolve(input, ctx.organizationId, ctx.staffId, body?.device ?? null);
   return NextResponse.json(result);
 }, { permission: 'sku_stock.view' });

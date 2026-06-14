@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { AnimatePresence } from 'framer-motion';
 import { DashboardShippedTable, ShippedDetailsPanel } from '@/components/shipped';
-import PendingOrdersTable from '@/components/PendingOrdersTable';
 import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
 import { UnshippedTable } from '@/components/unshipped/UnshippedTable';
 import FBAShipmentsTable from '@/components/dashboard/FBAShipmentsTable';
@@ -22,7 +21,6 @@ import { getDashboardOrderViewFromSearch } from '@/utils/dashboard-search-state'
 import { getWeekRangeForOffset } from '@/lib/dashboard-week-range';
 import { readShippedFilterPreference } from '@/utils/dashboard-preferences';
 import {
-  pendingOrdersQuery,
   unshippedOrdersQuery,
   dashboardShippedQuery,
   fbaShipmentsQuery,
@@ -67,7 +65,8 @@ function warmActiveView(queryClient: QueryClient, searchParamsString: string): P
       dashboardShippedQuery({ weekStart: week.startStr, weekEnd: week.endStr, shippedFilter }),
     );
   }
-  return queryClient.prefetchQuery(pendingOrdersQuery({ searchQuery, strictSearchScope: true }));
+  // Default + legacy `?pending` → the merged Unshipped backlog.
+  return queryClient.prefetchQuery(unshippedOrdersQuery({ searchQuery, strictSearchScope: true }));
 }
 
 function DashboardPageContent() {
@@ -91,13 +90,10 @@ function DashboardPageContent() {
         // Same factories as the BootGate and the tables → guaranteed cache hit.
         void warmActiveView(queryClient, window.location.search);
 
-        // Warm the inactive order tabs after a short idle delay so switching
-        // between them feels instant without competing with the active render.
-        // strictSearchScope mirrors how the dashboard mounts these tables.
+        // Warm the merged Unshipped backlog after a short idle delay so landing
+        // on another tab and switching back feels instant. strictSearchScope
+        // mirrors how the dashboard mounts the table.
         const timer = setTimeout(() => {
-            if (orderView !== 'pending') {
-                void queryClient.prefetchQuery(pendingOrdersQuery({ strictSearchScope: true }));
-            }
             if (orderView !== 'unshipped') {
                 void queryClient.prefetchQuery(unshippedOrdersQuery({ strictSearchScope: true }));
             }
@@ -115,14 +111,13 @@ function DashboardPageContent() {
             }>
                 {orderView === 'shipped' ? (
                     <DashboardShippedTable />
-                ) : orderView === 'unshipped' ? (
-                    <UnshippedTable strictSearchScope />
                 ) : orderView === 'fba' ? (
                     <FBAShipmentsTable />
                 ) : orderView === 'warranty' ? (
                     <WarrantyWorkspace />
                 ) : (
-                    <PendingOrdersTable strictSearchScope />
+                    // 'unshipped' (the merged pre-ship backlog) + the default.
+                    <UnshippedTable strictSearchScope />
                 )}
             </Suspense>
 

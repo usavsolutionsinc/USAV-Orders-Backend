@@ -72,11 +72,16 @@ test('every mode round-trips: resolveMode(apply(to(mode))) === mode', () => {
 test('mode round-trip preserves unrelated params and still resolves', () => {
   for (const page of SIDEBAR_PAGE_NAV) {
     for (const mode of page.modes!) {
+      const target = mode.to();
+      // A mode legitimately sets/clears its OWN params (e.g. sourcing's lookup
+      // clears `q`/`status`). `applyModeTarget` only preserves params the mode's
+      // delta doesn't touch — so assert preservation for those keys only.
+      const delta = target.params ?? {};
       const seed = new URLSearchParams('openOrderId=42&q=widget');
-      const { pathname, search } = applyModeTarget({ pathname: page.href, params: seed }, mode.to());
+      const { pathname, search } = applyModeTarget({ pathname: page.href, params: seed }, target);
       const params = new URLSearchParams(search);
-      assert.equal(params.get('openOrderId'), '42', `${page.id} dropped openOrderId`);
-      assert.equal(params.get('q'), 'widget', `${page.id} dropped q`);
+      if (!('openOrderId' in delta)) assert.equal(params.get('openOrderId'), '42', `${page.id} dropped openOrderId`);
+      if (!('q' in delta)) assert.equal(params.get('q'), 'widget', `${page.id} dropped q`);
       assert.equal(resolveSidebarMode(page.id, { pathname, params }), mode.id);
     }
   }
@@ -151,9 +156,10 @@ test('resolver matches existing panel derivations for known deep-links', () => {
   // FBA defaults to combine, not the leftmost-listed plan.
   assert.equal(resolveSidebarMode('fba', at('/fba')), 'combine');
   assert.equal(resolveSidebarMode('fba', at('/fba', 'mode=plan')), 'plan');
-  // Dashboard: bare presence params, shipped wins over pending if both present.
+  // Dashboard: bare presence params, shipped wins; default + legacy ?pending → unshipped.
   assert.equal(resolveSidebarMode('dashboard', at('/dashboard', 'shipped=')), 'shipped');
-  assert.equal(resolveSidebarMode('dashboard', at('/dashboard')), 'pending');
+  assert.equal(resolveSidebarMode('dashboard', at('/dashboard')), 'unshipped');
+  assert.equal(resolveSidebarMode('dashboard', at('/dashboard', 'pending=')), 'unshipped');
   // Tech: top-mode switch only — view=testing flips to Testing, else Shipping.
   assert.equal(resolveSidebarMode('tech', at('/tech', 'view=testing')), 'testing');
   assert.equal(resolveSidebarMode('tech', at('/tech', 'staffId=7')), 'shipping');

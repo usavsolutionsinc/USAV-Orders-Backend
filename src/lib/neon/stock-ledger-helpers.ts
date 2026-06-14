@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import pool from '../db';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 type Queryable = Pick<PoolClient, 'query'> | typeof pool;
 
@@ -62,9 +63,14 @@ export async function emitShippedLedgerForShipment(
   );
 
   const source = opts?.source ?? 'shipment.carrier-accepted';
+  // TRANSITIONAL: this drains the boxed counter from carrier-sync / webhook
+  // paths that have no session. Single-tenant (USAV) today; derive from the
+  // shipment's organization_id once shipping_tracking_numbers carries it (Phase B).
+  const orgId = transitionalUsavOrgId();
   for (const row of result.rows) {
     try {
       await publishStockLedgerEvent({
+        organizationId: orgId,
         ledgerId: row.id,
         sku: row.sku,
         delta: row.delta,

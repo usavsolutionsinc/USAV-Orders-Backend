@@ -1,13 +1,13 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SidebarSectionList, type SidebarSection } from './SidebarSectionList';
 
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
-  | 'security' | 'staff' | 'sessions' | 'audit' | 'operations-log';
+  | 'security' | 'staff' | 'sessions' | 'audit' | 'operations-log' | 'billing';
 
 const ICON_CLS = 'h-4 w-4 shrink-0';
 
@@ -122,6 +122,18 @@ const SECTIONS: Array<SidebarSection<SettingsSection>> = [
     ),
   },
   {
+    id: 'billing',
+    label: 'Billing',
+    description: 'Plan, entitlements & Stripe portal',
+    requires: 'admin.view',
+    icon: (
+      <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </svg>
+    ),
+  },
+  {
     id: 'about',
     label: 'About',
     description: 'Version & diagnostics',
@@ -142,12 +154,20 @@ export function getActiveSettingsSection(raw: string | null | undefined): Settin
 
 export function SettingsSidebarPanel(): ReactNode {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const active = getActiveSettingsSection(searchParams?.get('section'));
+  // Billing is a dedicated sub-route (/settings/billing), not an inline
+  // ?section= view — derive its active state from the path.
+  const active: SettingsSection =
+    pathname === '/settings/billing' ? 'billing' : getActiveSettingsSection(searchParams?.get('section'));
   const { has, isLoaded, user } = useAuth();
 
   const setSection = useCallback(
     (section: SettingsSection) => {
+      if (section === 'billing') {
+        router.replace('/settings/billing');
+        return;
+      }
       const params = new URLSearchParams(searchParams?.toString());
       params.set('section', section);
       router.replace(`/settings?${params.toString()}`);

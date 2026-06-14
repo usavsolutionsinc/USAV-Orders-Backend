@@ -176,7 +176,7 @@ export async function PATCH(
     }
 
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
-    await publishFbaShipmentChanged({ action: 'updated', shipmentId: Number(id), source: 'fba.shipments.update' });
+    await publishFbaShipmentChanged({ action: 'updated', shipmentId: Number(id), source: 'fba.shipments.update', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, shipment: result.rows[0] });
     await recordRouteAudit(request, gate.ctx, response, {
@@ -242,7 +242,7 @@ export async function DELETE(
     await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [planId]);
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
-    await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete' });
+    await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete', organizationId: gate.ctx.organizationId });
 
     const response = NextResponse.json({ success: true, deleted_id: planId });
     await recordRouteAudit(request, gate.ctx, response, {

@@ -13,12 +13,17 @@
  */
 
 import pool from '@/lib/db';
-import { linkTicket } from '@/lib/zendesk-links';
+import { clearTicketExternalIdIfMatches, linkTicket, unlinkTicket } from '@/lib/zendesk-links';
 
 /** Append a warranty_claim_events row outside the mutations.ts transaction helpers. */
 export async function recordClaimZendeskEvent(args: {
   claimId: number;
-  eventType: 'ZENDESK_TICKET_CREATED' | 'ZENDESK_REPLY' | 'ZENDESK_STATUS';
+  eventType:
+    | 'ZENDESK_TICKET_CREATED'
+    | 'ZENDESK_LINKED'
+    | 'ZENDESK_UNLINKED'
+    | 'ZENDESK_REPLY'
+    | 'ZENDESK_STATUS';
   payload?: Record<string, unknown>;
   actorStaffId: number | null;
 }): Promise<void> {
@@ -30,16 +35,21 @@ export async function recordClaimZendeskEvent(args: {
 }
 
 /**
- * Stamp a freshly created Zendesk ticket onto its claim. The column write is
- * authoritative (it gates "already linked" checks); the ticket_links upsert and
- * the timeline event are best-effort — the ticket already exists in Zendesk, so
- * a mapping hiccup must not turn the creation into an error.
+ * Stamp a Zendesk ticket onto its claim. The column write is authoritative (it
+ * gates "already linked" checks); the ticket_links upsert and the timeline event
+ * are best-effort — the ticket already exists in Zendesk, so a mapping hiccup
+ * must not turn the link into an error.
+ *
+ * `eventType` distinguishes a freshly-created ticket (`ZENDESK_TICKET_CREATED`,
+ * the default, used by POST .../zendesk) from linking an EXISTING ticket
+ * (`ZENDESK_LINKED`, used by POST .../zendesk/link) so the timeline reads true.
  */
 export async function recordClaimTicketLink(args: {
   claimId: number;
   zendeskTicketId: number;
   organizationId: string;
   actorStaffId: number | null;
+  eventType?: 'ZENDESK_TICKET_CREATED' | 'ZENDESK_LINKED';
 }): Promise<void> {
   await pool.query(
     `UPDATE warranty_claims
@@ -63,11 +73,73 @@ export async function recordClaimTicketLink(args: {
   try {
     await recordClaimZendeskEvent({
       claimId: args.claimId,
-      eventType: 'ZENDESK_TICKET_CREATED',
+      eventType: args.eventType ?? 'ZENDESK_TICKET_CREATED',
       payload: { zendeskTicketId: args.zendeskTicketId },
       actorStaffId: args.actorStaffId,
     });
   } catch (err) {
     console.warn('[warranty.zendesk] timeline event insert failed', err);
   }
+}
+
+/**
+ * Detach a Zendesk ticket from a claim — the clean inverse of
+ * {@link recordClaimTicketLink}. Full revert (operator-confirmed default):
+ *   1. null `warranty_claims.zendesk_ticket_id` (only when it still points at
+ *      this ticket, so a stale unlink can't clear a since-relinked ticket),
+ *   2. remove the entity-scoped `ticket_links` row,
+ *   3. clear the dangling `external_id` on the Zendesk ticket (only when it
+ *      still resolves to THIS claim) so a later getTicketEntity can't re-attach
+ *      it via the external_id fallback,
+ *   4. append a `ZENDESK_UNLINKED` timeline event.
+ *
+ * The Zendesk ticket itself is never deleted — unlinking only severs our
+ * reference. Steps 2–4 are best-effort; the authoritative column write (1) is
+ * what flips the claim back to "no ticket". Returns whether anything detached.
+ */
+export async function unlinkClaimTicket(args: {
+  claimId: number;
+  zendeskTicketId: number;
+  organizationId: string;
+  actorStaffId: number | null;
+}): Promise<{ detached: boolean }> {
+  const upd = await pool.query(
+    `UPDATE warranty_claims
+        SET zendesk_ticket_id = NULL, updated_at = NOW()
+      WHERE id = $1 AND zendesk_ticket_id = $2`,
+    [args.claimId, args.zendeskTicketId],
+  );
+  const columnCleared = (upd.rowCount ?? 0) > 0;
+
+  let linkRemoved = false;
+  try {
+    linkRemoved = await unlinkTicket({
+      orgId: args.organizationId,
+      zendeskTicketId: args.zendeskTicketId,
+      entityType: 'WARRANTY_CLAIM',
+      entityId: args.claimId,
+    });
+  } catch (err) {
+    console.warn('[warranty.zendesk] ticket_links delete failed', err);
+  }
+
+  // Clear the dangling external_id (only when it still points at this claim).
+  await clearTicketExternalIdIfMatches({
+    zendeskTicketId: args.zendeskTicketId,
+    entityType: 'WARRANTY_CLAIM',
+    entityId: args.claimId,
+  });
+
+  try {
+    await recordClaimZendeskEvent({
+      claimId: args.claimId,
+      eventType: 'ZENDESK_UNLINKED',
+      payload: { zendeskTicketId: args.zendeskTicketId },
+      actorStaffId: args.actorStaffId,
+    });
+  } catch (err) {
+    console.warn('[warranty.zendesk] timeline event insert failed', err);
+  }
+
+  return { detached: columnCleared || linkRemoved };
 }

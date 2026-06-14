@@ -330,6 +330,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     await invalidateCacheTags(['repair-service']);
     await publishRepairChanged({
+      organizationId: ctx.organizationId,
       repairIds: [repairId],
       source: sourceTag,
     });

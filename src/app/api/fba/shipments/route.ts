@@ -285,7 +285,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
-    await publishFbaShipmentChanged({ action: 'created', shipmentId: Number(shipment.id || 0), source: 'fba.shipments.create' });
+    await publishFbaShipmentChanged({ action: 'created', shipmentId: Number(shipment.id || 0), source: 'fba.shipments.create', organizationId: ctx.organizationId });
 
     return NextResponse.json(
       {

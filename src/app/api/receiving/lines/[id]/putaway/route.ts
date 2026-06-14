@@ -26,6 +26,7 @@ export async function POST(
   try {
     const gate = await requireRoutePerm(request, 'receiving.bin_assign');
     if (gate.denied) return gate.denied;
+    const ctx = gate.ctx;
     const { id: idRaw } = await params;
     const lineId = Number(idRaw);
     if (!Number.isFinite(lineId) || lineId <= 0) {
@@ -167,6 +168,7 @@ export async function POST(
         await invalidateCacheTags(['receiving-lines', 'sku-stock', 'serial-units']);
         if (line.receiving_id != null) {
           await publishReceivingLogChanged({
+            organizationId: ctx.organizationId,
             action: 'update',
             rowId: String(line.receiving_id),
             source: 'receiving.lines.putaway',

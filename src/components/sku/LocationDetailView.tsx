@@ -10,7 +10,8 @@ import { BinStockNumpadSheet } from '@/components/sku/BinStockNumpadSheet';
 import { BinRowDetailsSheet } from '@/components/sku/BinRowDetailsSheet';
 import { BinCycleCountSheet } from '@/components/sku/BinCycleCountSheet';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getStationChannelName } from '@/lib/realtime/channels';
+import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,8 @@ function formatAgo(iso: string | null | undefined): string {
 export function LocationDetailView({ barcode }: LocationDetailViewProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const stationChannel = safeChannelName(() => getStationChannelName(user?.organizationId!));
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [numpadRow, setNumpadRow] = useState<BinContentRow | null>(null);
   const [detailsRow, setDetailsRow] = useState<BinContentRow | null>(null);
@@ -167,7 +170,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
   // useAblyChannel's handler is wrapped in a stable ref internally so passing
   // a fresh callback on every data change is cheap and avoids re-subscribe.
   useAblyChannel(
-    getStationChannelName(),
+    stationChannel,
     'activity.logged',
     (msg: {
       data?: { activityType?: string; scanRef?: string | null };
@@ -180,7 +183,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
       const hit = contents.some((c) => (c.sku || '').toUpperCase() === sku);
       if (hit) queryClient.invalidateQueries({ queryKey });
     },
-    barcode.length > 0,
+    !!stationChannel && barcode.length > 0,
   );
 
   if (!barcode) {

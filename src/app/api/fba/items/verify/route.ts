@@ -99,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query('COMMIT');
 
     await invalidateCacheTags(['fba-board']);
-    await publishFbaItemChanged({ action: 'verify', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.verify' });
+    await publishFbaItemChanged({ action: 'verify', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.verify', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,

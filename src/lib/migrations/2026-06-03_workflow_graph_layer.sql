@@ -2,8 +2,8 @@
 -- 2026-06-03: Workflow graph layer (node-based "Operations" engine)
 -- ============================================================================
 -- Adds the GRAPH-DEFINITION tables for the visual, node-based operations
--- builder (see docs/NODE_WORKFLOW_ARCHITECTURE.md and
--- docs/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md). These tables describe which node
+-- builder (see docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md and
+-- docs/operations-studio/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md). These tables describe which node
 -- connects to which (with conditional routing) and hold a pointer into the
 -- EXISTING item state machine — they add no behavior on their own.
 --

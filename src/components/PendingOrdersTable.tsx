@@ -3,13 +3,14 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getOrdersChannelName } from '@/lib/realtime/channels';
+import { getOrdersChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { fetchPendingOrderRowById } from '@/lib/dashboard-table-data';
 import { pendingOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface PendingOrdersTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
@@ -63,6 +64,8 @@ export default function PendingOrdersTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
   const searchQuery = String(searchParams.get('search') || '').trim();
 
   const query = useQuery({
@@ -70,7 +73,7 @@ export default function PendingOrdersTable({
     placeholderData: (previousData) => previousData,
   });
 
-  const ordersChannelName = getOrdersChannelName();
+  const ordersChannelName = safeChannelName(() => getOrdersChannelName(orgId!));
 
   useAblyChannel(
     ordersChannelName,
@@ -109,7 +112,7 @@ export default function PendingOrdersTable({
         }
       );
     },
-    true,
+    !!ordersChannelName,
   );
 
   useAblyChannel(
@@ -140,7 +143,7 @@ export default function PendingOrdersTable({
         }
       );
     },
-    true,
+    !!ordersChannelName,
   );
 
   // When orders are created/updated/deleted (e.g. Google Sheets transfer),
@@ -151,7 +154,7 @@ export default function PendingOrdersTable({
     () => {
       void queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'], refetchType: 'active' });
     },
-    true,
+    !!ordersChannelName,
   );
 
   useEffect(() => {

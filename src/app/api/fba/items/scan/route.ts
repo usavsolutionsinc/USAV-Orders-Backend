@@ -239,12 +239,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       itemId: Number(updatedItem?.id || 0),
       fnsku: resolvedFnsku,
       source: 'fba.items.scan',
+      organizationId: ctx.organizationId,
     }).catch(() => {});
     if (autoCreatedPlan && updatedItem?.shipment_id) {
       publishFbaShipmentChanged({
         action: 'created',
         shipmentId: updatedItem.shipment_id,
         source: 'fba.items.scan.auto-plan',
+        organizationId: ctx.organizationId,
       }).catch(() => {});
     }
 

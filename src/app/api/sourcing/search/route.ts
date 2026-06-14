@@ -50,9 +50,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     return NextResponse.json({ success: true, ...result });
   } catch (error: any) {
-    // Missing/invalid eBay creds or upstream Browse failure → 502 (not our bug).
+    // Missing/invalid creds, no enabled channel, or upstream failure → 502 (not our bug).
     const msg = error?.message || 'Sourcing search failed';
-    const status = /credential|token|Browse/i.test(msg) ? 502 : 500;
+    const status = /credential|token|Browse|channel|configured/i.test(msg) ? 502 : 500;
     console.error('Error in POST /api/sourcing/search:', error);
     return NextResponse.json({ success: false, error: msg }, { status });
   }

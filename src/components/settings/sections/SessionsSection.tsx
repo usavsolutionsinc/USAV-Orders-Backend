@@ -66,7 +66,7 @@ export function SessionsSection() {
   return (
     <section className="space-y-4">
       <header>
-        <h1 className="text-xl font-semibold text-gray-900">Active sessions</h1>
+        <h1 className="sr-only">Active sessions</h1>
         <p className="text-sm text-gray-500">Anyone signed in right now. Revoke to kick a device.</p>
       </header>
 

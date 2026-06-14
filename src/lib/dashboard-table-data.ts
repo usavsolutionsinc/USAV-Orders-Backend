@@ -154,6 +154,20 @@ export async function fetchDashboardOrderRowById(orderId: number): Promise<Shipp
   }
 }
 
+/**
+ * Unshipped = the whole pre-ship backlog: **Awaiting** (no `shipment_id` → needs
+ * tracking) ∪ **Pending** (has shipment, not yet packed → needs packing). This is
+ * the single fetch behind the merged "Unshipped" dashboard mode; the per-stage
+ * split is a UI filter (`?stage`) derived from `shipment_id`, NOT a separate
+ * fetch.
+ *
+ * `/api/orders?excludePacked=true` already returns exactly this union — its base
+ * query also excludes carrier-shipped orders, and `NOT EXISTS(station_activity_logs)`
+ * is true for shipment-less awaiting orders too — so no per-stage server filter is
+ * needed. When searching with a loose scope we drop `excludePacked` so any order
+ * is findable; `strictSearchScope` (the dashboard default) keeps search inside the
+ * backlog.
+ */
 export async function fetchUnshippedOrdersData({
   searchQuery = '',
   packedBy,
@@ -169,9 +183,9 @@ export async function fetchUnshippedOrdersData({
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
-  // Awaiting tab: only orders without tracking (shipment_id). When searching,
-  // omit so search can find any order; client still filters for display.
-  if (!searchQuery.trim()) params.set('awaitingOnly', 'true');
+  // Scope to the backlog unless doing a loose (find-anything) search.
+  const scoped = !searchQuery.trim() || strictSearchScope;
+  if (scoped) params.set('excludePacked', 'true');
 
   const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
   if (!res.ok) {
@@ -179,11 +193,9 @@ export async function fetchUnshippedOrdersData({
   }
 
   const data = await res.json();
-  const records = ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord);
-  // When searching, show all matches (including those with tracking) so user can find any order.
-  // When not searching, API already filtered via awaitingOnly=true.
-  if (searchQuery.trim() && !strictSearchScope) return records;
-  return records.filter((record) => record.shipment_id == null);
+  return dedupeByOrderId(
+    ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
+  );
 }
 
 export interface DashboardShippedSearchMeta {

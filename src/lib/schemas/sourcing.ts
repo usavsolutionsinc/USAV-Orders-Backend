@@ -24,6 +24,69 @@ export const SourcingAlertPatchBody = z
   })
   .strict();
 
+// ─── POST /api/sourcing/alerts ───────────────────────────────────────────────
+
+/**
+ * Manually open a demand row in the unified sourcing queue ("Source this").
+ * Provide a `skuId` (catalog part) and/or a `searchQuery` (free-text target for
+ * a product not yet in the catalog) — at least one is required. Always lands as
+ * a `manual` demand_source. Idempotent for SKU-backed rows in the query layer.
+ */
+export const SourcingAlertCreateBody = z
+  .object({
+    skuId: optPositiveId,
+    boseModelId: optPositiveId,
+    searchQuery: optNullableText,
+    alertType: z.enum(['manual']).optional(),
+    severity: z.enum(['info', 'warn', 'critical']).optional(),
+    reason: optNullableText,
+    targetQty: z.number().int().positive().nullable().optional(),
+    idempotencyKey: z.string().trim().min(1).optional(),
+  })
+  .strict()
+  .refine((b) => Boolean(b.skuId || b.searchQuery?.trim()), {
+    message: 'Provide a skuId or a searchQuery',
+  });
+
+// ─── /api/sourcing/saved-searches ────────────────────────────────────────────
+
+const cadenceEnum = z.enum(['off', 'daily', 'weekly']);
+const sourceEnum = z.enum(['ebay', 'amazon', 'google_shopping', 'zoho_po', 'distributor']);
+
+/**
+ * Create a standing (saved) sourcing search the scour watcher re-runs on a
+ * cadence. `query` is required; everything else scopes/schedules it.
+ */
+export const SavedSearchCreateBody = z
+  .object({
+    query: trimmed.min(1, 'query is required'),
+    label: optNullableText,
+    skuId: optPositiveId,
+    sourcingAlertId: optPositiveId,
+    sources: z.array(sourceEnum).optional(),
+    conditions: z.array(conditionEnum).optional(),
+    maxPriceCents: optNonNegInt,
+    cadence: cadenceEnum.optional(),
+    idempotencyKey: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+/** Update a saved search (edit the query/scope, retarget cadence, pause/resume). */
+export const SavedSearchUpdateBody = z
+  .object({
+    query: trimmed.min(1).optional(),
+    label: optNullableText,
+    sources: z.array(sourceEnum).optional(),
+    conditions: z.array(conditionEnum).optional(),
+    maxPriceCents: optNonNegInt,
+    cadence: cadenceEnum.optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, {
+    message: 'At least one field must be provided',
+  });
+
 // ─── POST /api/sourcing/search ───────────────────────────────────────────────
 
 /**
@@ -123,6 +186,9 @@ export const SourcingImportBody = z
   .strict();
 
 export type SourcingAlertPatchInput = z.infer<typeof SourcingAlertPatchBody>;
+export type SourcingAlertCreateInput = z.infer<typeof SourcingAlertCreateBody>;
+export type SavedSearchCreateInput = z.infer<typeof SavedSearchCreateBody>;
+export type SavedSearchUpdateInput = z.infer<typeof SavedSearchUpdateBody>;
 export type SourcingSearchInput = z.infer<typeof SourcingSearchBody>;
 export type SourcingCandidateCreateInput = z.infer<typeof SourcingCandidateCreateBody>;
 export type SourcingCandidateUpdateInput = z.infer<typeof SourcingCandidateUpdateBody>;

@@ -2,15 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import Ably from 'ably';
 import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 import {
-  getAiAssistChannelName,
-  getDbChannelPrefix,
-  getFbaChannelName,
+  orgChannelPrefix,
   getOrdersChannelName,
   getRepairsChannelName,
-  getStaffChannelName,
+  getAiAssistChannelName,
+  getAiAssistSessionChannelName,
   getStationChannelName,
+  getStaffChannelName,
+  getFbaChannelName,
+  getDashboardChannelName,
+  getWalkInChannelName,
+  getInboxChannelName,
+  getPhoneBridgeChannelName,
+  getPackerBridgeChannelName,
+  getStaffStationBridgeChannelName,
+  getScanLogChannelName,
+  getDbChannelPrefix,
 } from '@/lib/realtime/channels';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
@@ -26,14 +35,13 @@ function sanitizeSessionId(value: string | null | undefined): string | null {
 function getAblyRestClient() {
   const key = getValidatedAblyApiKey();
   if (!key) return null;
-
   if (!ablyRestClient) {
     ablyRestClient = new Ably.Rest({ key });
   }
   return ablyRestClient;
 }
 
-async function createTokenRequest(req: NextRequest) {
+async function createTokenRequest(req: NextRequest, ctx: AuthContext) {
   const client = getAblyRestClient();
   if (!client) {
     return NextResponse.json(
@@ -42,34 +50,65 @@ async function createTokenRequest(req: NextRequest) {
     );
   }
 
-  const userHint = req.headers.get('x-user-id') || 'dashboard-user';
-  const clientId = `${userHint}-${Math.random().toString(36).slice(2, 10)}`;
+  // Org + identity come from the verified SESSION, never the request. This is
+  // the entire security boundary: Ably enforces these capabilities server-side,
+  // so a client can only ever subscribe/publish within its own org, and only to
+  // its own per-staff channels.
+  const orgId = ctx.organizationId;
+  const staffId = ctx.staffId;
+  const prefix = orgChannelPrefix(orgId); // throws on a non-uuid org → 500 (fail closed)
+
+  // clientId stamps every message this connection publishes — a client can no
+  // longer forge another staffer's identity via a header (the old x-user-id).
+  const clientId = `org:${orgId}:staff:${staffId}`;
+
   const sessionId = sanitizeSessionId(req.headers.get('x-ai-session'));
-  const aiSessionChannel = sessionId ? `${getAiAssistChannelName()}:${sessionId}` : null;
+  const aiSessionChannel = sessionId ? getAiAssistSessionChannelName(orgId, sessionId) : null;
+
+  // Own per-staff channels — subscribe + publish for THIS staffId only.
+  const inboxOwn = getInboxChannelName(orgId, staffId);
+  const phoneOwn = getPhoneBridgeChannelName(orgId, staffId);
+  const packerOwn = getPackerBridgeChannelName(orgId, staffId);
+  const staffStationOwn = getStaffStationBridgeChannelName(orgId, staffId);
+  const scanLogOwn = getScanLogChannelName(orgId, staffId);
 
   const capability: Record<string, string[]> = {
-    [getOrdersChannelName()]: ['subscribe'],
-    [getRepairsChannelName()]: ['subscribe'],
-    [getAiAssistChannelName()]: ['subscribe'],
-    [getStationChannelName()]: ['subscribe'],
-    [getStaffChannelName()]: ['subscribe'],
-    [getFbaChannelName()]: ['subscribe'],
-    [`${getDbChannelPrefix()}:*`]: ['subscribe'],
-    // Per-staff phone↔station bridge: phone publishes scans on phone:{staffId},
-    // desktop echoes lookup results on station:{staffId}. Keyed by the
-    // signed-in user on each side — no separate pair handshake.
-    'phone:*': ['subscribe', 'publish'],
-    'station:*': ['subscribe', 'publish'],
-    // Mobile packer wizard publishes step transitions; desktop display
-    // subscribes to mirror state (scan → confirm → camera → review → success).
-    'packer:*': ['subscribe', 'publish'],
-    // Per-staff inbox alerts (e.g. receiving-door scan hits a pending order).
-    // Server publishes on inbox:{staffId}; the signed-in client subscribes.
-    'inbox:*': ['subscribe', 'publish'],
+    // Org-wide broadcast feeds — read-only for clients (servers publish via REST key).
+    [getOrdersChannelName(orgId)]: ['subscribe'],
+    [getRepairsChannelName(orgId)]: ['subscribe'],
+    [getAiAssistChannelName(orgId)]: ['subscribe'],
+    [getStationChannelName(orgId)]: ['subscribe'],
+    [getStaffChannelName(orgId)]: ['subscribe'],
+    [getFbaChannelName(orgId)]: ['subscribe'],
+    [getDashboardChannelName(orgId)]: ['subscribe'],
+    [getWalkInChannelName(orgId)]: ['subscribe'],
+
+    // Per-org DB-row feed — the wildcard is SCOPED to this org's prefix only,
+    // so it can never reach another tenant's `org:{other}:db:*`.
+    [`${getDbChannelPrefix(orgId)}:*`]: ['subscribe'],
+
+    // Per-staff bridges — NO cross-staff wildcard. Only THIS staffId's channels,
+    // each device side may both publish and subscribe to its own pair.
+    [inboxOwn]: ['subscribe', 'publish'],
+    [phoneOwn]: ['subscribe', 'publish'],
+    [packerOwn]: ['subscribe', 'publish'],
+    [staffStationOwn]: ['subscribe', 'publish'],
+    [scanLogOwn]: ['subscribe', 'publish'],
   };
 
   if (aiSessionChannel) {
     capability[aiSessionChannel] = ['subscribe', 'publish'];
+  }
+
+  // Defense in depth: assert every granted resource is inside this org's prefix.
+  // A future builder regression that leaked a bare/global name fails closed here.
+  for (const resource of Object.keys(capability)) {
+    if (!resource.startsWith(`${prefix}:`)) {
+      return NextResponse.json(
+        { error: 'Internal: capability leaked outside org prefix', resource },
+        { status: 500 },
+      );
+    }
   }
 
   const tokenRequest = await client.auth.createTokenRequest({
@@ -81,9 +120,9 @@ async function createTokenRequest(req: NextRequest) {
   return NextResponse.json(tokenRequest);
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
-    return await createTokenRequest(req);
+    return await createTokenRequest(req, ctx);
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Failed to create realtime token', details: error?.message || 'Unknown error' },
@@ -92,9 +131,9 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'dashboard.view' });
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
-    return await createTokenRequest(req);
+    return await createTokenRequest(req, ctx);
   } catch (error: any) {
     return NextResponse.json(
       { error: 'Failed to create realtime token', details: error?.message || 'Unknown error' },
