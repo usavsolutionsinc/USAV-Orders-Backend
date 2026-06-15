@@ -113,6 +113,9 @@ importers:
       ebay-api:
         specifier: ^9.4.0
         version: 9.5.2
+      electron-log:
+        specifier: ^5.4.4
+        version: 5.4.4
       electron-updater:
         specifier: ^6.8.3
         version: 6.8.3
@@ -137,6 +140,9 @@ importers:
       lucide-react:
         specifier: ^1.7.0
         version: 1.17.0(react@19.2.7)
+      motion-plus:
+        specifier: https://api.motion.dev/registry?package=motion-plus&version=latest&token=decc21f4e8b7544a128a6cff1c5271faeeea5a66dd57823d4528a457fe20132b
+        version: https://api.motion.dev/registry?package=motion-plus&version=latest&token=decc21f4e8b7544a128a6cff1c5271faeeea5a66dd57823d4528a457fe20132b(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       multer:
         specifier: ^2.1.1
         version: 2.1.1
@@ -3867,6 +3873,10 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
+  electron-log@5.4.4:
+    resolution: {integrity: sha512-istWgaXjBfURBSS8LWVW9C3jsc6+ac+tY1lXrQEOTp0lVj+a4OlO1Tmqb36GgnEUDv92DGC9VI1HNXwJinWpgA==}
+    engines: {node: '>= 14'}
+
   electron-publish@26.8.1:
     resolution: {integrity: sha512-q+jrSTIh/Cv4eGZa7oVR+grEJo/FoLMYBAnSL5GCtqwUpr1T+VgKB/dn1pnzxIxqD8S/jP1yilT9VrwCqINR4w==}
 
@@ -4427,6 +4437,20 @@ packages:
 
   framer-motion@11.18.2:
     resolution: {integrity: sha512-5F5Och7wrvtLVElIpclDT0CBzMVg3dL22B64aZwHtsIY8RB4mXICLrkajK4G9R+ieSAGcgrLeae2SeUTg2pr6w==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
+  framer-motion@12.40.0:
+    resolution: {integrity: sha512-uaBd3qC1v3KQqBEjwTUd183K6PbS+j0yR9w9VmEOLWA/tnUcSn8Xa3uck7t4dgpDoUss8xQTcj8W2L07lrnLFg==}
     peerDependencies:
       '@emotion/is-prop-valid': '*'
       react: ^18.0.0 || ^19.0.0
@@ -5452,8 +5476,43 @@ packages:
   motion-dom@11.18.1:
     resolution: {integrity: sha512-g76KvA001z+atjfxczdRtw/RXOM3OMSdd1f4DL77qCTF/+avrRJiawSG4yDibEQ215sr9kpinSlX2pCTJ9zbhw==}
 
+  motion-dom@12.40.0:
+    resolution: {integrity: sha512-HxU3ZaBwNPVQUBQf1xxgq+7JrPNZvjLVxgbpEZL7RrWJnsxOf0/OM+yrHG9ogLQ31Do/r57Oz2gQWPK+6q62mg==}
+
+  motion-plus-dom@2.12.0:
+    resolution: {integrity: sha512-8JgwbaUe5i3YF03/YtBlm0ZbOs8ihCzaZJYJr3g85P1l3AqGCZLlgJ92I/bIhwNB26jP+jY4D0Amj6mYh6Ha6g==}
+
+  motion-plus@https://api.motion.dev/registry?package=motion-plus&version=latest&token=decc21f4e8b7544a128a6cff1c5271faeeea5a66dd57823d4528a457fe20132b:
+    resolution: {integrity: sha512-YKW4tGSs6MY+X+cFDJme7udIu5Nmmw8Z7BIpTCTMQdkU1ajrLgaydnBHSr5cn13ai72kxwFGjEjpq43qiYqFWg==}
+    version: 2.12.0
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      react:
+        optional: true
+      react-dom:
+        optional: true
+
   motion-utils@11.18.1:
     resolution: {integrity: sha512-49Kt+HKjtbJKLtgO/LKj9Ld+6vw9BjH5d9sc40R/kVyH8GLAXgT42M2NnuPcJNuA3s9ZfZBUcwIgpmZWGEE+hA==}
+
+  motion-utils@12.39.0:
+    resolution: {integrity: sha512-8nadJAJjTtqRkmRF36FoJTrywK9nnFmnPwnSMyxaOCU7GDjN9RTMJIxx9De8ErM+vpPhMccr/6fo5WciyQLnMQ==}
+
+  motion@12.40.0:
+    resolution: {integrity: sha512-yjrHUrBFW6kQvjJwRsoiPSAhC5tRwRqNGJWmiJ4CrGnbKp0V88AdzkhBmDoqIsIPfarOe0Uddd37Xq43/gIocA==}
+    peerDependencies:
+      '@emotion/is-prop-valid': '*'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/is-prop-valid':
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   mri@1.2.0:
     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
@@ -10974,6 +11033,8 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
+  electron-log@5.4.4: {}
+
   electron-publish@26.8.1:
     dependencies:
       '@types/fs-extra': 9.0.13
@@ -11777,6 +11838,15 @@ snapshots:
     dependencies:
       motion-dom: 11.18.1
       motion-utils: 11.18.1
+      tslib: 2.8.1
+    optionalDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+
+  framer-motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      motion-dom: 12.40.0
+      motion-utils: 12.39.0
       tslib: 2.8.1
     optionalDependencies:
       react: 19.2.7
@@ -13057,7 +13127,43 @@ snapshots:
     dependencies:
       motion-utils: 11.18.1
 
+  motion-dom@12.40.0:
+    dependencies:
+      motion-utils: 12.39.0
+
+  motion-plus-dom@2.12.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      motion: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      motion-dom: 12.40.0
+      motion-utils: 12.39.0
+    transitivePeerDependencies:
+      - '@emotion/is-prop-valid'
+      - react
+      - react-dom
+
+  motion-plus@https://api.motion.dev/registry?package=motion-plus&version=latest&token=decc21f4e8b7544a128a6cff1c5271faeeea5a66dd57823d4528a457fe20132b(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      motion: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      motion-dom: 12.40.0
+      motion-plus-dom: 2.12.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      motion-utils: 12.39.0
+    optionalDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+    transitivePeerDependencies:
+      - '@emotion/is-prop-valid'
+
   motion-utils@11.18.1: {}
+
+  motion-utils@12.39.0: {}
+
+  motion@12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      framer-motion: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tslib: 2.8.1
+    optionalDependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
 
   mri@1.2.0: {}
 
