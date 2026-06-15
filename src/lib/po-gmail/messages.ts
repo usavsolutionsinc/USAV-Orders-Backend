@@ -14,9 +14,22 @@
  * haven't built yet).
  */
 
-import DOMPurify from 'isomorphic-dompurify';
 import { poGmailFetch } from './client';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
+
+type Sanitizer = {
+  sanitize: (html: string, config?: unknown) => string;
+};
+
+let domPurify: Sanitizer | null = null;
+
+async function getDOMPurify(): Promise<Sanitizer> {
+  if (!domPurify) {
+    const module = await import('isomorphic-dompurify');
+    domPurify = module.default as unknown as Sanitizer;
+  }
+  return domPurify;
+}
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -138,9 +151,10 @@ function stripHtml(html: string): string {
 // strips scripts, event handlers, iframes, and other dangerous nodes; we
 // also drop the zero-width spam-evasion characters so the rendered text
 // reads cleanly. Returns null when the source HTML is effectively empty.
-function sanitizeHtml(html: string): string | null {
+async function sanitizeHtml(html: string): Promise<string | null> {
   const cleaned = html.replace(INVISIBLE_CHARS_RE, '');
-  const safe = DOMPurify.sanitize(cleaned, {
+  const sanitizer = await getDOMPurify();
+  const safe = sanitizer.sanitize(cleaned, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ['style', 'script', 'iframe', 'object', 'embed', 'form'],
     FORBID_ATTR: ['style', 'srcset'],
@@ -175,17 +189,17 @@ function detectAttachments(part: GmailPart | undefined): boolean {
   return (part.parts ?? []).some(detectAttachments);
 }
 
-function extractBody(payload: GmailPart | undefined): {
-  text: string;
-  html: string | null;
-} {
+async function extractBody(
+  payload: GmailPart | undefined,
+  includeHtml: boolean,
+): Promise<{ text: string; html: string | null }> {
   const html = walkForBody(payload, 'text/html');
   const plain = walkForBody(payload, 'text/plain');
   return {
     // Plain-text fallback: prefer the multipart text/plain alternative when
     // the sender included one; otherwise derive readable text from the HTML.
     text: plain ? plain.replace(INVISIBLE_CHARS_RE, '') : html ? stripHtml(html) : '',
-    html: html ? sanitizeHtml(html) : null,
+    html: includeHtml && html ? await sanitizeHtml(html) : null,
   };
 }
 
@@ -214,6 +228,7 @@ export async function listMessageIds(
 export async function fetchMessage(
   id: string,
   orgId: string = USAV_ORG_ID,
+  opts: { includeHtml?: boolean } = {},
 ): Promise<GmailMessageEnvelope> {
   const url = new URL(`${GMAIL_API}/messages/${encodeURIComponent(id)}`);
   url.searchParams.set('format', 'full');
@@ -223,7 +238,7 @@ export async function fetchMessage(
     throw new Error(`Gmail messages.get failed for ${id} (${res.status}): ${await res.text()}`);
   }
   const raw = (await res.json()) as GmailRawMessage;
-  const body = extractBody(raw.payload);
+  const body = await extractBody(raw.payload, opts.includeHtml ?? false);
 
   return {
     id: raw.id,
@@ -244,6 +259,7 @@ export async function fetchMessage(
 export async function fetchMessagesByIds(
   ids: string[],
   orgId: string = USAV_ORG_ID,
+  opts: { includeHtml?: boolean } = {},
 ): Promise<GmailMessageEnvelope[]> {
   // Small concurrent fan-out. Gmail's per-user concurrency limits are
   // generous and individual GETs are cheap; we stay under 5 in flight
@@ -252,7 +268,7 @@ export async function fetchMessagesByIds(
   const chunkSize = 5;
   for (let i = 0; i < ids.length; i += chunkSize) {
     const slice = ids.slice(i, i + chunkSize);
-    const results = await Promise.all(slice.map((id) => fetchMessage(id, orgId)));
+    const results = await Promise.all(slice.map((id) => fetchMessage(id, orgId, opts)));
     out.push(...results);
   }
   return out;
