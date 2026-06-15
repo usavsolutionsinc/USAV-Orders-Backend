@@ -13,6 +13,7 @@ import { isCarrierSyncEnabled } from './enabled-carriers';
 import * as ups from './providers/ups';
 import * as usps from './providers/usps';
 import * as fedex from './providers/fedex';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface SyncShipmentInput {
   shipmentId?: number;
@@ -37,15 +38,18 @@ function getProvider(carrier: CarrierCode) {
   }
 }
 
-export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipmentResult> {
+export async function syncShipment(
+  input: SyncShipmentInput,
+  orgId?: OrgId,
+): Promise<SyncShipmentResult> {
   let shipment =
     input.shipmentId != null
-      ? await getShipmentById(input.shipmentId)
+      ? await getShipmentById(input.shipmentId, orgId)
       : null;
 
   if (!shipment && input.trackingNumber) {
     const normalized = normalizeTrackingNumber(input.trackingNumber);
-    shipment = await getShipmentByTracking(normalized);
+    shipment = await getShipmentByTracking(normalized, orgId);
 
     if (!shipment) {
       const carrier =
@@ -63,7 +67,7 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
         trackingNumberRaw: input.trackingNumber,
         trackingNumberNormalized: normalized,
         carrier,
-      });
+      }, orgId);
     }
   }
 
@@ -107,16 +111,17 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
       shipment.id,
       carrier,
       shipment.tracking_number_normalized,
-      result.events
+      result.events,
+      orgId,
     );
 
-    await updateShipmentSummary(shipment.id, result);
+    await updateShipmentSummary(shipment.id, result, orgId);
     // Only notify clients when the poll actually surfaced new carrier events —
     // otherwise every 2-hour sweep would publish a no-op realtime message per
     // shipment and trigger needless client refetches. Webhook pushes are the
     // real-time path; this poll is the fallback that fires on genuine movement.
     if (inserted > 0) {
-      await publishShipmentStatusChange(shipment.id, 'shipping-sync', shipment.tracking_number_normalized);
+      await publishShipmentStatusChange(shipment.id, 'shipping-sync', shipment.tracking_number_normalized, orgId);
     }
 
     return {
@@ -128,7 +133,7 @@ export async function syncShipment(input: SyncShipmentInput): Promise<SyncShipme
   } catch (err: any) {
     const code = err?.code ?? 'SYNC_ERROR';
     const message = err?.message ?? 'Unknown sync error';
-    await updateShipmentError(shipment.id, code, message, carrier);
+    await updateShipmentError(shipment.id, code, message, carrier, orgId);
 
     return {
       ok: false,
@@ -143,7 +148,7 @@ export async function registerShipment(params: {
   trackingNumber: string;
   carrier?: CarrierCode;
   sourceSystem?: string;
-}) {
+}, orgId?: OrgId) {
   const normalized = normalizeTrackingNumber(params.trackingNumber);
   if (!normalized) throw new Error('Invalid tracking number');
 
@@ -155,18 +160,18 @@ export async function registerShipment(params: {
     trackingNumberNormalized: normalized,
     carrier,
     sourceSystem: params.sourceSystem,
-  });
+  }, orgId);
 }
 
 export async function registerAndSyncShipment(params: {
   trackingNumber: string;
   carrier?: CarrierCode;
   sourceSystem?: string;
-}) {
-  const shipment = await registerShipment(params);
+}, orgId?: OrgId) {
+  const shipment = await registerShipment(params, orgId);
 
   if (!shipment.last_checked_at && !shipment.latest_status_category) {
-    await syncShipment({ shipmentId: shipment.id });
+    await syncShipment({ shipmentId: shipment.id }, orgId);
   }
 
   return shipment;
@@ -182,7 +187,7 @@ export async function registerAndSyncShipment(params: {
 export async function registerShipmentPermissive(params: {
   trackingNumber: string | null | undefined;
   sourceSystem: string;
-}): Promise<ShipmentRow | null> {
+}, orgId?: OrgId): Promise<ShipmentRow | null> {
   const raw = (params.trackingNumber ?? '').trim();
   if (!raw) return null;
   // SKU-formatted scans ("PROD:qty", ":tag") are never carrier tracking numbers.
@@ -202,11 +207,11 @@ export async function registerShipmentPermissive(params: {
     trackingNumberNormalized: normalized,
     carrier,
     sourceSystem: params.sourceSystem,
-  });
+  }, orgId);
 
   // Best-effort carrier sync for known carriers only. Never throw into the caller.
   if (detected && !shipment.last_checked_at) {
-    void syncShipment({ shipmentId: shipment.id }).catch(() => {});
+    void syncShipment({ shipmentId: shipment.id }, orgId).catch(() => {});
   }
 
   return shipment;

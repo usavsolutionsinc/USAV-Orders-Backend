@@ -231,6 +231,33 @@ export function buildNasPhotoUrl(opts: {
   return `${baseUrl.replace(/\/+$/, '')}/${encoded}`;
 }
 
+/**
+ * Destination URL for an outbound shipping LABEL on the NAS. Mirrors
+ * {@link buildNasPhotoUrl} but writes a FLAT `LABEL_<orderRef>__<filename>` into
+ * the configured folder (no `labels/` subdir — plain WebDAV PUT 409s when a
+ * parent collection is missing, the same constraint receiving photos hit). The
+ * `LABEL_` prefix keeps labels eyeball-distinct from photos in the same share.
+ */
+export function buildNasLabelUrl(opts: {
+  baseUrl: string;
+  folder: string;
+  orderRef: string;
+  filename: string;
+}): string {
+  const { baseUrl, folder, orderRef, filename } = opts;
+  const sanitized = (orderRef ?? '')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const prefix = `LABEL_${sanitized || 'order'}__`;
+  const segments: string[] = [];
+  const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
+  if (cleanFolder) segments.push(...cleanFolder.split('/'));
+  segments.push(`${prefix}${filename}`);
+  const encoded = segments.map(encodeURIComponent).join('/');
+  return `${baseUrl.replace(/\/+$/, '')}/${encoded}`;
+}
+
 export interface PutResult {
   ok: boolean;
   /** Canonical URL the file now lives at — store this as the photoUrl. */

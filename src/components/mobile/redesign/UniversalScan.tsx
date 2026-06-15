@@ -23,7 +23,6 @@ import { ScanInput } from '@/components/mobile/redesign/ScanInput';
 import { PrepackedProductSheet } from '@/components/mobile/redesign/PrepackedProductSheet';
 import { ReceivingTriagePanel, TestingRecentPanel } from '@/components/mobile/redesign/ScanModeFeeds';
 import { detectScanMode, type ScanMode } from '@/components/mobile/redesign/scan-mode';
-import { useFeedback } from '@/hooks/useFeedback';
 import { useLabelPrintFeed, type LabelPrintFeedItem } from '@/hooks/useLabelPrintFeed';
 
 const MODES: Array<{ id: ScanMode; label: string; icon: (p: { className?: string }) => JSX.Element; placeholder: string }> = [
@@ -39,7 +38,6 @@ export default function RedesignedMobileUniversalScan() {
   const [testingQuery, setTestingQuery] = useState('');
   // The scanned unit label whose Prepacked Products sheet is open (null = closed).
   const [prepackScan, setPrepackScan] = useState<string | null>(null);
-  const feedback = useFeedback();
   const queryClient = useQueryClient();
   const inFlight = useRef(false);
 
@@ -105,18 +103,15 @@ export default function RedesignedMobileUniversalScan() {
         });
         const data = await res.json().catch(() => null);
         if (!res.ok || !data) {
-          feedback('error');
           return;
         }
-        const matched = Boolean(data.po_matched ?? data.matched);
-        feedback(matched ? 'scanAccepted' : 'confirm');
       } catch {
-        feedback('error');
+        /* swallow — triage rails refetch in finally regardless */
       } finally {
         refreshReceivingTriage();
       }
     },
-    [feedback, refreshReceivingTriage],
+    [refreshReceivingTriage],
   );
 
   // ── dispatch: detect mode → animate slider → run the mode's handler ────────
@@ -129,10 +124,7 @@ export default function RedesignedMobileUniversalScan() {
       const detected = detectScanMode(raw);
       const target: ScanMode = detected ?? mode;
       if (target !== mode) {
-        changeMode(target);
-        feedback('selection'); // slider animates to the detected mode
-      } else {
-        feedback('confirm');
+        changeMode(target); // slider animates to the detected mode
       }
 
       try {
@@ -158,7 +150,7 @@ export default function RedesignedMobileUniversalScan() {
         inFlight.current = false;
       }
     },
-    [mode, feedback, runReceiving, changeMode],
+    [mode, runReceiving, changeMode],
   );
 
   // Prepacked "Recent Scans" is the only in-component feed left (label history).

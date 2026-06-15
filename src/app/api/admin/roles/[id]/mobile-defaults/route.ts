@@ -10,11 +10,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache } from '@/lib/auth/role-store';
 import { sanitizeMobileDisplayConfig } from '@/lib/auth/mobile-display-config';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -37,10 +37,13 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   const raw = (body as { config: unknown }).config;
   const clean = raw === null ? null : sanitizeMobileDisplayConfig(raw);
 
-  const existsR = await pool.query(`SELECT id, key FROM roles WHERE id = $1 LIMIT 1`, [id]);
+  // `roles` is GLOBAL (no organization_id) — no org predicate; routed through
+  // the tenant connection for GUC parity.
+  const existsR = await tenantQuery(ctx.organizationId, `SELECT id, key FROM roles WHERE id = $1 LIMIT 1`, [id]);
   if (!existsR.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
-  const r = await pool.query(
+  const r = await tenantQuery(
+    ctx.organizationId,
     `UPDATE roles
         SET mobile_defaults = $2::jsonb,
             updated_at = NOW()

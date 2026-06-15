@@ -16,7 +16,6 @@
  * actions. Tone presets keep the brand palette consistent across screens.
  */
 
-import { useFeedback } from '@/hooks/useFeedback';
 
 export type ConfirmDockTone = 'primary' | 'success' | 'warning' | 'neutral';
 
@@ -55,18 +54,15 @@ export function ConfirmDock({
   tone = 'primary',
   secondary,
 }: ConfirmDockProps) {
-  const feedback = useFeedback();
   const blocked = disabled || loading;
 
   const handlePrimary = () => {
     if (blocked) return;
-    feedback('confirm');
     onConfirm();
   };
 
   const handleSecondary = () => {
     if (loading || !secondary) return;
-    feedback('tap');
     secondary.onPress();
   };
 

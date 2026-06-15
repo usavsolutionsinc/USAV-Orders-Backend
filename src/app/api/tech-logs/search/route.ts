@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
 
@@ -15,20 +15,21 @@ export const GET = withAuth(async (req: NextRequest) => {
 
         // Search in orders table
         // We match by last 8 digits as per GAS logic
-        const result = await pool.query(`
-            SELECT 
-                order_id, 
-                product_title as product_name, 
-                shipping_tracking_number as tracking, 
-                serial_number as serial, 
+        const result = await tenantQuery(ctx.organizationId, `
+            SELECT
+                order_id,
+                product_title as product_name,
+                shipping_tracking_number as tracking,
+                serial_number as serial,
                 tested_by as tech_name,
                 sku,
                 condition,
                 notes
             FROM orders
             WHERE RIGHT(shipping_tracking_number, 8) = $1
+              AND organization_id = $2
             LIMIT 1
-        `, [last8]);
+        `, [last8, ctx.organizationId]);
 
         if (result.rows.length > 0) {
             const row = result.rows[0];

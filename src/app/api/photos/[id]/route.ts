@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import type { PermissionString } from '@/lib/auth/permissions-shared';
 
 /**
@@ -30,9 +32,22 @@ export async function DELETE(
     return NextResponse.json({ error: 'Valid photo id is required' }, { status: 400 });
   }
 
-  const existing = await pool.query<{ entity_type: string; url: string }>(
-    `SELECT entity_type, url FROM photos WHERE id = $1`,
-    [id],
+  // Resolve the actor's org up front so the entity_type routing read is itself
+  // tenant-scoped — a photo in another org must not reveal its existence or
+  // entity_type. (This reads the established session to get the org; it does
+  // not perform auth establishment.) The entity-specific permission is still
+  // enforced via requireRoutePerm below.
+  const sid = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
+  const actor = await getCurrentUserBySid(sid);
+  if (!actor) {
+    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+  }
+  const orgId = actor.organizationId;
+
+  const existing = await tenantQuery<{ entity_type: string; url: string }>(
+    orgId,
+    `SELECT entity_type, url FROM photos WHERE id = $1 AND organization_id = $2`,
+    [id, orgId],
   );
   if (existing.rowCount === 0) {
     return NextResponse.json({ error: 'Photo not found' }, { status: 404 });
@@ -50,7 +65,9 @@ export async function DELETE(
   const gate = await requireRoutePerm(request, perm);
   if (gate.denied) return gate.denied;
 
-  await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
+  await withTenantTransaction(orgId, (client) =>
+    client.query(`DELETE FROM photos WHERE id = $1 AND organization_id = $2`, [id, orgId]),
+  );
 
   if (photoUrl.includes('blob.vercel-storage.com') || photoUrl.includes('vercel-storage')) {
     try { await del(photoUrl); } catch { /* non-fatal */ }

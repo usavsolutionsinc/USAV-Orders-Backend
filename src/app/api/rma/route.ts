@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Rma } from '@/lib/feature-flags';
 import {
   createAuthorization,
   listOpen,
@@ -12,23 +11,14 @@ const VALID_DIRECTIONS: ReadonlySet<RmaDirection> = new Set([
   'OUTBOUND_TO_VENDOR',
 ]);
 
-function flagOff() {
-  return NextResponse.json(
-    { ok: false, error: 'INVENTORY_V2_RMA flag is OFF', flag: 'INVENTORY_V2_RMA' },
-    { status: 503 },
-  );
-}
-
 /**
  * GET /api/rma
  *
  * Lists open RMAs (AUTHORIZED / RECEIVED / DISPOSITIONED), newest first.
- * Gated by INVENTORY_V2_RMA.
  */
-export const GET = withAuth(async () => {
-  if (!isInventoryV2Rma()) return flagOff();
+export const GET = withAuth(async (_request, ctx) => {
   try {
-    const rmas = await listOpen();
+    const rmas = await listOpen(ctx.organizationId);
     return NextResponse.json({ ok: true, rmas });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'list rma failed';
@@ -50,7 +40,7 @@ export const GET = withAuth(async () => {
  * }
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Rma()) return flagOff();
+  const orgId = ctx.organizationId;
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {
@@ -85,7 +75,7 @@ export const POST = withAuth(async (request, ctx) => {
       notes,
       expiresAt,
       createdByStaffId: actorStaffId,
-    });
+    }, orgId);
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result, { status: 201 });
   } catch (err) {

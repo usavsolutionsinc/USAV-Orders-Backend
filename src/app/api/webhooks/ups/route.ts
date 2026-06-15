@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseUPSTrackingPayload } from '@/lib/shipping/providers/ups';
 import { getShipmentByTracking, updateShipmentSummary, upsertShipment, upsertTrackingEvents } from '@/lib/shipping/repository';
 import { publishShipmentStatusChange } from '@/lib/shipping/publish-on-status-change';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 // UPS authenticates callbacks via the credential we registered on the
 // subscription, echoed back in a header. Header name has varied; check the
@@ -107,6 +108,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  // TRANSITIONAL: UPS carrier callbacks have no session. Single-tenant (USAV)
+  // today; resolve the org from the shipment / linked order when inbound
+  // shipping_tracking_numbers carries organization_id (Phase B). Thread it into
+  // every repository + publish call so they run GUC-scoped (app.current_org).
+  // shipping_tracking_numbers / shipment_tracking_events are tenant-owned-NEEDS-COL
+  // (no organization_id column, no org-bearing parent reachable here) — per the
+  // tenant-isolation pattern rule (6) these calls can only GUC-wrap for now, not
+  // add an explicit organization_id predicate/stamp; the wrap makes them RLS-ready
+  // once the columns + FORCE policy land.
+  const orgId = transitionalUsavOrgId();
+
   const packagePayloads = splitIntoPackagePayloads(payload);
   let processed = 0;
   const trackingNumbers: string[] = [];
@@ -115,22 +127,25 @@ export async function POST(req: NextRequest) {
     const result = parseUPSTrackingPayload(packagePayload);
     if (!result?.trackingNumberNormalized) continue;
 
-    const existing = await getShipmentByTracking(result.trackingNumberNormalized);
+    const existing = await getShipmentByTracking(result.trackingNumberNormalized, orgId);
     const shipment = existing ?? await upsertShipment({
       trackingNumberRaw: result.trackingNumberNormalized,
       trackingNumberNormalized: result.trackingNumberNormalized,
       carrier: 'UPS',
       sourceSystem: 'ups_webhook',
-    });
+    }, orgId);
 
     await upsertTrackingEvents(
       shipment.id,
       'UPS',
       result.trackingNumberNormalized,
-      result.events
+      result.events,
+      orgId
     );
-    await updateShipmentSummary(shipment.id, result);
-    await publishShipmentStatusChange(shipment.id, 'ups-webhook');
+    await updateShipmentSummary(shipment.id, result, orgId);
+    // Pass trackingNumber=null to preserve the pre-migration published payload
+    // shape (it was undefined before); only orgId scoping is added here.
+    await publishShipmentStatusChange(shipment.id, 'ups-webhook', null, orgId);
 
     processed += 1;
     trackingNumbers.push(result.trackingNumberNormalized);

@@ -14,6 +14,8 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AuditLogFilters } from './filters';
 import { readInventorySpine } from './inventory-spine';
 
@@ -65,9 +67,22 @@ interface ListOpts {
   search: string | null;
 }
 
-export async function listTechSessions(opts: ListOpts): Promise<TechSessionSummary[]> {
+export async function listTechSessions(
+  opts: ListOpts,
+  orgId?: OrgId,
+): Promise<TechSessionSummary[]> {
   const { filters, search } = opts;
   const params: unknown[] = [];
+
+  // Tenant scope: when an orgId is supplied we push it first so every CTE can
+  // reference the same $pOrg placeholder, run via tenantQuery (GUC-wrapped),
+  // and add explicit `organization_id = $pOrg` predicates. When omitted the
+  // query runs against the raw pool with byte-identical (un-scoped) behavior.
+  let pOrg = 0;
+  if (orgId) {
+    params.push(orgId);
+    pOrg = params.length;
+  }
 
   // Shared filter values are pushed once; both anchor CTEs reference the same
   // positional placeholders (Postgres allows reusing a $n in multiple spots).
@@ -99,13 +114,19 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
 
   // ── Shipment-anchored sessions (legacy / standalone tech, keyed by tracking) ──
   const shipWhere: string[] = ['tsn.shipment_id IS NOT NULL'];
+  // shipping_tracking_numbers has NO organization_id column (NEEDS-COL); the
+  // anchor tech_serial_numbers row carries org, so scoping tsn covers the
+  // LEFT JOIN to stn (joined on the surrogate stn.id = tsn.shipment_id).
+  if (pOrg) shipWhere.push(`tsn.organization_id = $${pOrg}`);
   if (pStart) shipWhere.push(`tsn.created_at >= $${pStart}::timestamptz`);
   if (pEnd) shipWhere.push(`tsn.created_at <= $${pEnd}::timestamptz`);
   if (pStaff) shipWhere.push(`tsn.tested_by = $${pStaff}`);
   if (pSku) {
+    const skuOrg = pOrg ? ` AND sk.organization_id = $${pOrg}` : '';
+    const ordOrg = pOrg ? ` AND o.organization_id = $${pOrg}` : '';
     shipWhere.push(`(
-      EXISTS (SELECT 1 FROM sku sk WHERE sk.id = tsn.source_sku_id AND sk.static_sku = $${pSku})
-      OR EXISTS (SELECT 1 FROM orders o WHERE o.shipment_id = tsn.shipment_id AND o.sku = $${pSku})
+      EXISTS (SELECT 1 FROM sku sk WHERE sk.id = tsn.source_sku_id AND sk.static_sku = $${pSku}${skuOrg})
+      OR EXISTS (SELECT 1 FROM orders o WHERE o.shipment_id = tsn.shipment_id AND o.sku = $${pSku}${ordOrg})
     )`);
   }
   if (pSearch) {
@@ -118,6 +139,12 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
 
   // ── PO-anchored sessions (receiving lines that were tested — "Line under PO") ──
   const poWhere: string[] = ['rl.zoho_purchaseorder_id IS NOT NULL'];
+  // Scope on both org-bearing tables in the JOIN (testing_results + the
+  // receiving_lines parent it joins on the surrogate rl.id = tr.receiving_line_id).
+  if (pOrg) {
+    poWhere.push(`tr.organization_id = $${pOrg}`);
+    poWhere.push(`rl.organization_id = $${pOrg}`);
+  }
   if (pStart) poWhere.push(`tr.created_at >= $${pStart}::timestamptz`);
   if (pEnd) poWhere.push(`tr.created_at <= $${pEnd}::timestamptz`);
   if (pStaff) poWhere.push(`tr.tested_by = $${pStaff}`);
@@ -148,9 +175,10 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
         (
           SELECT string_agg(DISTINCT COALESCE(sk2.static_sku, o2.sku), ', ')
             FROM tech_serial_numbers tsn2
-            LEFT JOIN sku sk2 ON sk2.id = tsn2.source_sku_id
-            LEFT JOIN orders o2 ON o2.shipment_id = tsn2.shipment_id
+            LEFT JOIN sku sk2 ON sk2.id = tsn2.source_sku_id${pOrg ? ` AND sk2.organization_id = $${pOrg}` : ''}
+            LEFT JOIN orders o2 ON o2.shipment_id = tsn2.shipment_id${pOrg ? ` AND o2.organization_id = $${pOrg}` : ''}
            WHERE tsn2.shipment_id = tsn.shipment_id
+             ${pOrg ? `AND tsn2.organization_id = $${pOrg}` : ''}
              AND COALESCE(sk2.static_sku, o2.sku) IS NOT NULL
         ) AS sku_summary
       FROM tech_serial_numbers tsn
@@ -170,11 +198,12 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
           SELECT string_agg(DISTINCT rl2.sku, ', ')
             FROM receiving_lines rl2
            WHERE rl2.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+             ${pOrg ? `AND rl2.organization_id = $${pOrg}` : ''}
              AND rl2.sku IS NOT NULL
         ) AS sku_summary
       FROM testing_results tr
       JOIN receiving_lines rl ON rl.id = tr.receiving_line_id
-      LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = rl.zoho_purchaseorder_id
+      LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = rl.zoho_purchaseorder_id${pOrg ? ` AND rr.organization_id = rl.organization_id` : ''}
       WHERE ${poWhere.join(' AND ')}
       GROUP BY rl.zoho_purchaseorder_id, rr.zoho_po_number
     ),
@@ -196,7 +225,9 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
     ORDER BY c.latest_event_at DESC NULLS LAST
     LIMIT ${limitParam} OFFSET ${offsetParam}
   `;
-  const { rows } = await pool.query(sql, params);
+  const { rows } = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return rows.map((r: Record<string, unknown>) => ({
     session_key: (r.session_key as string | null) ?? '',
@@ -212,6 +243,7 @@ export async function listTechSessions(opts: ListOpts): Promise<TechSessionSumma
 export async function getTechSessionDetail(
   session: string,
   filters: AuditLogFilters,
+  orgId?: OrgId,
 ): Promise<TechSessionDetail | null> {
   // ── 1. Resolve the session anchor ───────────────────────────────────────
   // Primary: a carrier tracking number → shipment_id (legacy / standalone tech
@@ -223,64 +255,112 @@ export async function getTechSessionDetail(
   let canonicalTracking = session;
   let anchorLineIds: number[] = [];
 
-  const trackingRes = await pool.query(
-    `SELECT id, tracking_number_raw
+  // shipping_tracking_numbers has NO organization_id column (NEEDS-COL) and no
+  // org-bearing parent is reachable from this standalone resolution query, so
+  // when scoped we GUC-wrap it only (tenantQuery) — the RLS GUC is the backstop
+  // once the column lands / FORCE is enabled.
+  const trackingSql = `SELECT id, tracking_number_raw
        FROM shipping_tracking_numbers
        WHERE tracking_number_raw = $1
           OR tracking_number_normalized = $1
           OR tracking_number_normalized = UPPER(REGEXP_REPLACE($1, '[^A-Za-z0-9]', '', 'g'))
-       LIMIT 1`,
-    [session],
-  );
+       LIMIT 1`;
+  const trackingRes = orgId
+    ? await tenantQuery(orgId, trackingSql, [session])
+    : await pool.query(trackingSql, [session]);
   if (trackingRes.rows.length > 0) {
     shipmentId = trackingRes.rows[0].id as number;
     canonicalTracking = trackingRes.rows[0].tracking_number_raw as string;
   } else {
-    const poRes = await pool.query(
-      `SELECT id FROM receiving_lines WHERE zoho_purchaseorder_id = $1`,
-      [session],
-    );
+    const poSql = orgId
+      ? `SELECT id FROM receiving_lines WHERE zoho_purchaseorder_id = $1 AND organization_id = $2`
+      : `SELECT id FROM receiving_lines WHERE zoho_purchaseorder_id = $1`;
+    const poRes = orgId
+      ? await tenantQuery(orgId, poSql, [session, orgId])
+      : await pool.query(poSql, [session]);
     if (poRes.rows.length === 0) return null;
     anchorLineIds = poRes.rows.map((r: Record<string, unknown>) => r.id as number);
   }
 
   // ── 2. Gather the tech_serial_numbers rows for the session ───────────────
+  // When scoped, $2 = orgId: filter the org-bearing anchor (tech_serial_numbers)
+  // and the sku join on the same org so a cross-tenant sku can't leak a label.
   const serialsRes =
     shipmentId != null
-      ? await pool.query(
-          `SELECT tsn.id,
-                  tsn.serial_number,
-                  tsn.serial_type,
-                  tsn.created_at AS test_date_time,
-                  tsn.tested_by AS tester_id,
-                  tsn.receiving_line_id,
-                  tsn.serial_unit_id,
-                  s.name AS tester_name,
-                  sk.static_sku AS sku
-             FROM tech_serial_numbers tsn
-             LEFT JOIN staff s ON s.id = tsn.tested_by
-             LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
-            WHERE tsn.shipment_id = $1
-            ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
-          [shipmentId],
-        )
-      : await pool.query(
-          `SELECT tsn.id,
-                  tsn.serial_number,
-                  tsn.serial_type,
-                  tsn.created_at AS test_date_time,
-                  tsn.tested_by AS tester_id,
-                  tsn.receiving_line_id,
-                  tsn.serial_unit_id,
-                  s.name AS tester_name,
-                  sk.static_sku AS sku
-             FROM tech_serial_numbers tsn
-             LEFT JOIN staff s ON s.id = tsn.tested_by
-             LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
-            WHERE tsn.receiving_line_id = ANY($1::int[])
-            ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
-          [anchorLineIds],
-        );
+      ? orgId
+        ? await tenantQuery(
+            orgId,
+            `SELECT tsn.id,
+                    tsn.serial_number,
+                    tsn.serial_type,
+                    tsn.created_at AS test_date_time,
+                    tsn.tested_by AS tester_id,
+                    tsn.receiving_line_id,
+                    tsn.serial_unit_id,
+                    s.name AS tester_name,
+                    sk.static_sku AS sku
+               FROM tech_serial_numbers tsn
+               LEFT JOIN staff s ON s.id = tsn.tested_by
+               LEFT JOIN sku sk ON sk.id = tsn.source_sku_id AND sk.organization_id = $2
+              WHERE tsn.shipment_id = $1
+                AND tsn.organization_id = $2
+              ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
+            [shipmentId, orgId],
+          )
+        : await pool.query(
+            `SELECT tsn.id,
+                    tsn.serial_number,
+                    tsn.serial_type,
+                    tsn.created_at AS test_date_time,
+                    tsn.tested_by AS tester_id,
+                    tsn.receiving_line_id,
+                    tsn.serial_unit_id,
+                    s.name AS tester_name,
+                    sk.static_sku AS sku
+               FROM tech_serial_numbers tsn
+               LEFT JOIN staff s ON s.id = tsn.tested_by
+               LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
+              WHERE tsn.shipment_id = $1
+              ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
+            [shipmentId],
+          )
+      : orgId
+        ? await tenantQuery(
+            orgId,
+            `SELECT tsn.id,
+                    tsn.serial_number,
+                    tsn.serial_type,
+                    tsn.created_at AS test_date_time,
+                    tsn.tested_by AS tester_id,
+                    tsn.receiving_line_id,
+                    tsn.serial_unit_id,
+                    s.name AS tester_name,
+                    sk.static_sku AS sku
+               FROM tech_serial_numbers tsn
+               LEFT JOIN staff s ON s.id = tsn.tested_by
+               LEFT JOIN sku sk ON sk.id = tsn.source_sku_id AND sk.organization_id = $2
+              WHERE tsn.receiving_line_id = ANY($1::int[])
+                AND tsn.organization_id = $2
+              ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
+            [anchorLineIds, orgId],
+          )
+        : await pool.query(
+            `SELECT tsn.id,
+                    tsn.serial_number,
+                    tsn.serial_type,
+                    tsn.created_at AS test_date_time,
+                    tsn.tested_by AS tester_id,
+                    tsn.receiving_line_id,
+                    tsn.serial_unit_id,
+                    s.name AS tester_name,
+                    sk.static_sku AS sku
+               FROM tech_serial_numbers tsn
+               LEFT JOIN staff s ON s.id = tsn.tested_by
+               LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
+              WHERE tsn.receiving_line_id = ANY($1::int[])
+              ORDER BY tsn.created_at DESC NULLS LAST, tsn.id DESC`,
+            [anchorLineIds],
+          );
 
   const serialIds = serialsRes.rows.map((r: Record<string, unknown>) => r.id as number);
 
@@ -298,12 +378,16 @@ export async function getTechSessionDetail(
   // whose tech_serial_numbers row predates the receiving_line_id backfill, or
   // line-less orphan serials reached via shipment.
   if (serialUnitIds.size > 0) {
-    const suRes = await pool.query(
-      `SELECT id, origin_receiving_line_id
-         FROM serial_units
-        WHERE id = ANY($1::int[])`,
-      [Array.from(serialUnitIds)],
-    );
+    const suSql = orgId
+      ? `SELECT id, origin_receiving_line_id
+           FROM serial_units
+          WHERE id = ANY($1::int[]) AND organization_id = $2`
+      : `SELECT id, origin_receiving_line_id
+           FROM serial_units
+          WHERE id = ANY($1::int[])`;
+    const suRes = orgId
+      ? await tenantQuery(orgId, suSql, [Array.from(serialUnitIds), orgId])
+      : await pool.query(suSql, [Array.from(serialUnitIds)]);
     for (const r of suRes.rows as Record<string, unknown>[]) {
       if (r.origin_receiving_line_id != null) lineIds.add(r.origin_receiving_line_id as number);
     }
@@ -315,8 +399,13 @@ export async function getTechSessionDetail(
     salParams.push(filters.staffId);
     salWhere.push(`sal.staff_id = $${salParams.length}`);
   }
-  const salRes = await pool.query(
-    `SELECT sal.id,
+  let salOrgP = 0;
+  if (orgId) {
+    salParams.push(orgId);
+    salOrgP = salParams.length;
+    salWhere.push(`sal.organization_id = $${salOrgP}`);
+  }
+  const salSql = `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
             sal.staff_id,
@@ -330,12 +419,13 @@ export async function getTechSessionDetail(
             sk.static_sku AS sku
        FROM station_activity_logs sal
        LEFT JOIN staff s ON s.id = sal.staff_id
-       LEFT JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
-       LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
+       LEFT JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id${salOrgP ? ` AND tsn.organization_id = $${salOrgP}` : ''}
+       LEFT JOIN sku sk ON sk.id = tsn.source_sku_id${salOrgP ? ` AND sk.organization_id = $${salOrgP}` : ''}
        WHERE ${salWhere.join(' AND ')}
-       ORDER BY sal.created_at ASC`,
-    salParams,
-  );
+       ORDER BY sal.created_at ASC`;
+  const salRes = orgId
+    ? await tenantQuery(orgId, salSql, salParams)
+    : await pool.query(salSql, salParams);
 
   const auditParams: unknown[] = [
     serialIds.length > 0 ? serialIds.map((id: number) => String(id)) : ['-1'],
@@ -351,8 +441,11 @@ export async function getTechSessionDetail(
     auditParams.push(filters.staffId);
     auditWhere.push(`al.actor_staff_id = $${auditParams.length}`);
   }
-  const auditRes = await pool.query(
-    `SELECT al.id,
+  if (orgId) {
+    auditParams.push(orgId);
+    auditWhere.push(`al.organization_id = $${auditParams.length}`);
+  }
+  const auditSql = `SELECT al.id,
             al.created_at,
             al.action,
             al.source,
@@ -366,15 +459,22 @@ export async function getTechSessionDetail(
        FROM audit_logs al
        LEFT JOIN staff s ON s.id = al.actor_staff_id
        WHERE ${auditWhere.join(' AND ')}
-       ORDER BY al.created_at ASC`,
-    auditParams,
-  );
+       ORDER BY al.created_at ASC`;
+  const auditRes = orgId
+    ? await tenantQuery(orgId, auditSql, auditParams)
+    : await pool.query(auditSql, auditParams);
 
   // ── Unified lifecycle spine (inventory_events) ───────────────────────────
   // The testing verdict path writes inventory_events (TEST_PASS/TEST_FAIL/
   // TEST_START) tagged with receiving_line_id + serial_unit_id, and receiving
   // writes RECEIVED there too. Anchoring on those keys surfaces the full
   // cross-station timeline that the shipment-only query used to miss.
+  // NOTE(tenancy): readInventorySpine takes an opts object that does not yet
+  // accept an orgId. Its anchors here (lineIds/serialUnitIds) are themselves
+  // already org-scoped above (the line/serial ids were derived from org-gated
+  // queries when orgId is present), so the input set is tenant-bounded. Thread
+  // orgId into readInventorySpine once its opts gains the param (sibling module
+  // migration) for defense-in-depth.
   const invRows = await readInventorySpine({
     lineIds: Array.from(lineIds),
     serialUnitIds: Array.from(serialUnitIds),

@@ -20,7 +20,7 @@ const ROUTE_SKU_CATALOG_POST = 'sku-catalog.post';
 /**
  * GET /api/sku-catalog — Paginated SKU catalog list with platform/manual/QC counts.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q') || '';
@@ -30,7 +30,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     const dir = searchParams.get('dir') || 'asc';
     const ecwidOnly = searchParams.get('ecwidOnly') === 'true';
 
-    const { items, total } = await getSkuCatalogList({ q, limit, offset, sort, dir, ecwidOnly });
+    const { items, total } = await getSkuCatalogList(
+      { q, limit, offset, sort, dir, ecwidOnly },
+      ctx.organizationId,
+    );
 
     return NextResponse.json({ success: true, items, total });
   } catch (error: any) {
@@ -67,7 +70,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // True create semantics: reject if an active row already owns this sku.
-    const existing = await getSkuCatalogBySku(parsed.sku);
+    const existing = await getSkuCatalogBySku(parsed.sku, ctx.organizationId);
     if (existing && existing.is_active) {
       return NextResponse.json(
         { success: false, error: 'A SKU catalog entry with that sku already exists', id: existing.id },
@@ -89,7 +92,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       lastKnownCostCents: parsed.lastKnownCostCents ?? null,
       sourcingNotes: parsed.sourcingNotes ?? null,
       replenishTargetCents: parsed.replenishTargetCents ?? null,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'sku-catalog-api',

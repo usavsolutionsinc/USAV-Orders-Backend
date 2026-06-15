@@ -11,6 +11,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { daysUntilExpiry } from './clock';
 import { listQuotes } from './quotes';
 import type {
@@ -106,7 +108,7 @@ function mapListRow(row: RawListRow): WarrantyClaimListRow {
   };
 }
 
-export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyClaimListRow[]> {
+export async function listClaims(input: ListClaimsInput = {}, orgId: OrgId): Promise<WarrantyClaimListRow[]> {
   const limit = Math.min(Math.max(input.limit ?? 200, 1), 500);
   const offset = Math.max(input.offset ?? 0, 0);
   const search = input.search?.trim() || null;
@@ -116,11 +118,13 @@ export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyC
       ? Math.floor(input.expiringWithinDays)
       : null;
 
-  const { rows } = await pool.query<RawListRow>(
+  const { rows } = await tenantQuery<RawListRow>(
+    orgId,
     `SELECT ${LIST_COLUMNS}
        FROM warranty_claims wc
        LEFT JOIN customers c ON c.id = wc.customer_id
       WHERE wc.deleted_at IS NULL
+        AND wc.organization_id = $7
         AND ($1::text IS NULL OR wc.status = $1)
         AND ($2::text IS NULL OR (
               wc.claim_number ILIKE '%' || $2 || '%'
@@ -134,7 +138,7 @@ export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyC
         AND (NOT $4::boolean OR wc.clock_basis = 'PACKED_PLUS_ESTIMATE')
       ORDER BY wc.created_at DESC
       LIMIT $5 OFFSET $6`,
-    [status, search, expiringWithinDays, Boolean(input.provisionalOnly), limit, offset],
+    [status, search, expiringWithinDays, Boolean(input.provisionalOnly), limit, offset, orgId],
   );
   return rows.map(mapListRow);
 }
@@ -146,14 +150,17 @@ export async function listClaims(input: ListClaimsInput = {}): Promise<WarrantyC
  */
 export async function getClaimTicketRef(
   id: number,
+  orgId: OrgId,
 ): Promise<{ id: number; zendeskTicketId: number | null } | null> {
-  const { rows } = await pool.query<{ id: number; zendesk_ticket_id: number | null }>(
+  const { rows } = await tenantQuery<{ id: number; zendesk_ticket_id: number | null }>(
+    orgId,
     `SELECT id, zendesk_ticket_id
        FROM warranty_claims
       WHERE id = $1
         AND deleted_at IS NULL
+        AND organization_id = $2
       LIMIT 1`,
-    [id],
+    [id, orgId],
   );
   if (!rows[0]) return null;
   return {
@@ -162,22 +169,29 @@ export async function getClaimTicketRef(
   };
 }
 
-export async function getClaim(id: number): Promise<WarrantyClaimDetail | null> {
-  const { rows } = await pool.query<RawListRow & {
-    purchase_proof_url: string | null;
-    purchased_at: string | null;
-    delivered_at: string | null;
-    packed_scanned_at: string | null;
-    source_system: string | null;
-    source_order_id: string | null;
-    source_tracking_number: string | null;
-    denial_notes: string | null;
-    notes: string | null;
-    created_by_staff_id: number | null;
-    rma_number: string | null;
-    repair_ticket: string | null;
-  }>(
-    `SELECT ${LIST_COLUMNS},
+type RawDetailRow = RawListRow & {
+  purchase_proof_url: string | null;
+  purchased_at: string | null;
+  delivered_at: string | null;
+  packed_scanned_at: string | null;
+  source_system: string | null;
+  source_order_id: string | null;
+  source_tracking_number: string | null;
+  denial_notes: string | null;
+  notes: string | null;
+  created_by_staff_id: number | null;
+  rma_number: string | null;
+  repair_ticket: string | null;
+};
+
+/**
+ * `orgId` is optional ONLY transitionally: the request routes pass it (and get
+ * a hard organization_id filter), while the in-process write helpers
+ * (mutations.ts / linkage.ts) still call without it. Make it required once the
+ * write path is org-threaded — that's also the precondition for FORCE.
+ */
+export async function getClaim(id: number, orgId?: OrgId): Promise<WarrantyClaimDetail | null> {
+  const sql = `SELECT ${LIST_COLUMNS},
             wc.purchase_proof_url,
             wc.purchased_at::text         AS purchased_at,
             wc.delivered_at::text         AS delivered_at,
@@ -195,17 +209,18 @@ export async function getClaim(id: number): Promise<WarrantyClaimDetail | null> 
        LEFT JOIN rma_authorizations ra ON ra.id = wc.rma_id
        LEFT JOIN repair_service rs ON rs.id = wc.repair_service_id
       WHERE wc.id = $1
-        AND wc.deleted_at IS NULL
-      LIMIT 1`,
-    [id],
-  );
+        AND wc.deleted_at IS NULL${orgId ? '\n        AND wc.organization_id = $2' : ''}
+      LIMIT 1`;
+  const { rows } = orgId
+    ? await tenantQuery<RawDetailRow>(orgId, sql, [id, orgId])
+    : await pool.query<RawDetailRow>(sql, [id]);
   if (rows.length === 0) return null;
   const row = rows[0];
   const base = mapListRow(row);
 
   const [events, attempts, quotes] = await Promise.all([
-    listEvents(id),
-    listRepairAttempts(id),
+    listEvents(id, orgId),
+    listRepairAttempts(id, orgId),
     listQuotes(id),
   ]);
 
@@ -229,8 +244,8 @@ export async function getClaim(id: number): Promise<WarrantyClaimDetail | null> 
   };
 }
 
-async function listEvents(claimId: number): Promise<WarrantyClaimEventRow[]> {
-  const { rows } = await pool.query<{
+async function listEvents(claimId: number, orgId?: OrgId): Promise<WarrantyClaimEventRow[]> {
+  type Row = {
     id: number;
     event_type: string;
     from_status: string | null;
@@ -238,14 +253,15 @@ async function listEvents(claimId: number): Promise<WarrantyClaimEventRow[]> {
     payload: unknown;
     actor_staff_id: number | null;
     created_at: string;
-  }>(
-    `SELECT id, event_type, from_status, to_status, payload, actor_staff_id, created_at::text AS created_at
+  };
+  const sql = `SELECT id, event_type, from_status, to_status, payload, actor_staff_id, created_at::text AS created_at
        FROM warranty_claim_events
-      WHERE claim_id = $1
+      WHERE claim_id = $1${orgId ? '\n        AND organization_id = $2' : ''}
       ORDER BY created_at DESC, id DESC
-      LIMIT 200`,
-    [claimId],
-  );
+      LIMIT 200`;
+  const { rows } = orgId
+    ? await tenantQuery<Row>(orgId, sql, [claimId, orgId])
+    : await pool.query<Row>(sql, [claimId]);
   return rows.map((r) => ({
     id: Number(r.id),
     eventType: r.event_type,
@@ -257,8 +273,8 @@ async function listEvents(claimId: number): Promise<WarrantyClaimEventRow[]> {
   }));
 }
 
-async function listRepairAttempts(claimId: number): Promise<WarrantyRepairAttemptRow[]> {
-  const { rows } = await pool.query<{
+async function listRepairAttempts(claimId: number, orgId?: OrgId): Promise<WarrantyRepairAttemptRow[]> {
+  type Row = {
     id: number;
     attempt_no: number;
     technician_staff_id: number | null;
@@ -273,18 +289,19 @@ async function listRepairAttempts(claimId: number): Promise<WarrantyRepairAttemp
     started_at: string | null;
     completed_at: string | null;
     created_at: string;
-  }>(
-    `SELECT id, attempt_no, technician_staff_id, diagnosis, parts_used, outcome,
+  };
+  const sql = `SELECT id, attempt_no, technician_staff_id, diagnosis, parts_used, outcome,
             labor_minutes, cost_parts::text AS cost_parts, cost_labor::text AS cost_labor,
             photo_attachment_ids, notes,
             started_at::text AS started_at, completed_at::text AS completed_at,
             created_at::text AS created_at
        FROM warranty_repair_attempts
-      WHERE claim_id = $1
+      WHERE claim_id = $1${orgId ? '\n        AND organization_id = $2' : ''}
       ORDER BY attempt_no ASC, id ASC
-      LIMIT 100`,
-    [claimId],
-  );
+      LIMIT 100`;
+  const { rows } = orgId
+    ? await tenantQuery<Row>(orgId, sql, [claimId, orgId])
+    : await pool.query<Row>(sql, [claimId]);
   return rows.map((r) => ({
     id: Number(r.id),
     attemptNo: Number(r.attempt_no),

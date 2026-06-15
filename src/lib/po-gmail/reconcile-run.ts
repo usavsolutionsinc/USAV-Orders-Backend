@@ -19,6 +19,7 @@
  */
 
 import pool from '@/lib/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { listMessageIds, fetchMessagesByIds } from '@/lib/po-gmail/messages';
 import { extractOrderNumbers, extractTrackingNumbers, isOrderDeliveredSubject } from '@/lib/po-gmail/extract';
 import {
@@ -85,6 +86,12 @@ export interface ReconcileRunOpts {
   query?: string;
   /** Persist worklist/signal/tracking writes. Defaults true. */
   persist?: boolean;
+  /**
+   * Calling tenant. The PO mailbox is USAV's singleton; non-USAV callers are
+   * rejected by the token guard before any Gmail read. Defaults to USAV so
+   * cron/server callers keep working without threading an org.
+   */
+  orgId?: string;
 }
 
 function clampLimit(raw: number | undefined): number {
@@ -100,10 +107,11 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
   const limit = clampLimit(opts.limit);
   const query = opts.query ?? 'is:unread';
   const persist = opts.persist !== false; // default true
+  const orgId = opts.orgId ?? USAV_ORG_ID;
 
   const startedAt = Date.now();
-  const { ids } = await listMessageIds(query, limit);
-  const messages = await fetchMessagesByIds(ids);
+  const { ids } = await listMessageIds(query, limit, undefined, orgId);
+  const messages = await fetchMessagesByIds(ids, orgId);
 
   // Build the union of normalized candidates across all messages, so we
   // can do one ANY($1) query against receiving_lines regardless of N.

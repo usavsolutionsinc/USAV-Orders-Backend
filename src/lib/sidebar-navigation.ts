@@ -1,8 +1,9 @@
 import {
   AlertCircle,
+  Archive,
   Barcode,
-  Box,
   Boxes,
+  DoorOpen,
   Calendar,
   Check,
   ClipboardList,
@@ -21,15 +22,16 @@ import {
   Package,
   PackageCheck,
   PackageOpen,
+  Packer,
   Printer,
   Search,
   Settings,
   ShieldCheck,
   ShoppingCart,
   Star,
+  Tags,
   TrendingUp,
   Truck,
-  User,
   Wrench,
   Zap,
 } from '@/components/Icons';
@@ -109,13 +111,13 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'dashboard',         label: 'Orders / Shipping', href: '/dashboard',    icon: LayoutDashboard, kind: 'main',    requires: 'dashboard.view' },
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
-  { id: 'products',          label: 'Products',    href: '/products',           icon: Box,             kind: 'main',    requires: 'sku_stock.view' },
+  { id: 'products',          label: 'Products',    href: '/products',           icon: Tags,            kind: 'main',    requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'station', requires: 'fba.view' },
-  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: User,            kind: 'station', requires: 'packing.view' },
+  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Packer,          kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
   { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
@@ -431,8 +433,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
     modes: [
       { id: 'labels', label: 'Labels', icon: Printer,  to: () => ({ pathname: WAREHOUSE, params: { tab: null } }) },
       { id: 'racks',  label: 'Racks',  icon: Layers,   to: () => ({ pathname: WAREHOUSE, params: { tab: 'racks' } }) },
-      { id: 'rooms',  label: 'Rooms',  icon: Box,      to: () => ({ pathname: WAREHOUSE, params: { tab: 'rooms' } }) },
-      { id: 'bins',   label: 'Bins',   icon: Package,  to: () => ({ pathname: WAREHOUSE, params: { tab: 'bins' } }) },
+      { id: 'rooms',  label: 'Rooms',  icon: DoorOpen, to: () => ({ pathname: WAREHOUSE, params: { tab: 'rooms' } }) },
+      { id: 'bins',   label: 'Bins',   icon: Archive,  to: () => ({ pathname: WAREHOUSE, params: { tab: 'bins' } }) },
       { id: 'map',    label: 'Map',    icon: MapPin,   to: () => ({ pathname: WAREHOUSE, params: { tab: 'map' } }) },
     ],
     resolveMode: ({ params }) => {
@@ -443,7 +445,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Products ──────────────────────────────────────────────────────────────
   // `?view=manuals|labels|pairing|qc`; default `manuals` (param cleared).
   {
-    id: 'products', label: 'Products', href: PRODUCTS, icon: Box, kind: 'main', requires: 'sku_stock.view',
+    id: 'products', label: 'Products', href: PRODUCTS, icon: Tags, kind: 'main', requires: 'sku_stock.view',
     modes: [
       { id: 'manuals', label: 'Manuals', icon: FileText, to: () => ({ pathname: PRODUCTS, params: { view: null } }) },
       { id: 'labels',  label: 'Labels',  icon: Barcode,  to: () => ({ pathname: PRODUCTS, params: { view: 'labels' } }) },

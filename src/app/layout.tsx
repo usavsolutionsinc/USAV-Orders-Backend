@@ -3,6 +3,7 @@ import Providers from "../components/Providers";
 import { ResponsiveLayout } from "../components/layout/ResponsiveLayout";
 import { HeaderProvider } from "../contexts/HeaderContext";
 import { FbaWorkspaceProvider } from "../contexts/FbaWorkspaceContext";
+import { StudioWorkspaceProvider } from "../components/studio/StudioWorkspaceContext";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ActivityInboxProvider } from "../contexts/ActivityInboxContext";
 import { StaffColorsProvider } from "../contexts/StaffColorsProvider";
@@ -50,9 +51,11 @@ export default async function RootLayout({
                         <StaffSwitcherProvider>
                             <HeaderProvider>
                                 <FbaWorkspaceProvider>
-                                    <ResponsiveLayout>
-                                        {children}
-                                    </ResponsiveLayout>
+                                    <StudioWorkspaceProvider>
+                                        <ResponsiveLayout>
+                                            {children}
+                                        </ResponsiveLayout>
+                                    </StudioWorkspaceProvider>
                                 </FbaWorkspaceProvider>
                             </HeaderProvider>
                             <SwitchStaffSheet />

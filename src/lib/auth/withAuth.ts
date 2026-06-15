@@ -26,6 +26,7 @@ import { requiresStepUp, rolesIncludeAdmin, type PermissionString } from './perm
 import { audit } from './audit';
 import pool from '@/lib/db';
 import { recordAudit } from '@/lib/audit-logs';
+import { isTrialBlocked } from '@/lib/billing/trial-gate';
 
 /**
  * Auth context handed to wrapped route handlers.
@@ -236,6 +237,17 @@ export function withAuth(
           { status: 403 },
         );
       }
+    }
+
+    // Trial-expiry gate — OFF by default (TRIAL_ENFORCEMENT). Blocks an
+    // expired-trial tenant from everything except billing/auth so it can still
+    // subscribe. Enterprise/paid orgs never match; no DB read when the flag is
+    // off (see trial-gate.ts).
+    if (await isTrialBlocked(user.organizationId, req.nextUrl.pathname)) {
+      return NextResponse.json(
+        { error: 'TRIAL_EXPIRED', hint: 'Subscribe at /settings/billing to continue.' },
+        { status: 402 },
+      );
     }
 
     const ctx: AuthContext = {

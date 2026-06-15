@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
@@ -21,7 +21,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid log id' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT
          l.id,
          l.fnsku,
@@ -43,10 +44,10 @@ export async function GET(
          ff.sku
        FROM fba_fnsku_logs l
        LEFT JOIN staff s          ON s.id    = l.staff_id
-       LEFT JOIN fba_fnskus ff    ON ff.fnsku = l.fnsku
+       LEFT JOIN fba_fnskus ff    ON ff.fnsku = l.fnsku AND ff.organization_id = l.organization_id
        LEFT JOIN fba_shipments fs ON fs.id   = l.fba_shipment_id
-       WHERE l.id = $1`,
-      [logId]
+       WHERE l.id = $1 AND l.organization_id = $2`,
+      [logId, gate.ctx.organizationId]
     );
 
     if (!result.rows[0]) {
@@ -71,7 +72,6 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Params }
 ) {
-  const client = await pool.connect();
   try {
     const gate = await requireRoutePerm(request, 'fba.stage_shipments');
     if (gate.denied) return gate.denied;
@@ -92,67 +92,73 @@ export async function DELETE(
       );
     }
 
-    await client.query('BEGIN');
-
-    const original = await client.query(
-      `SELECT id, fnsku, source_stage, event_type, staff_id, fba_shipment_id,
-              fba_shipment_item_id, quantity, station, metadata
-       FROM fba_fnsku_logs
-       WHERE id = $1`,
-      [logId]
-    );
-
-    if (!original.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Log not found' }, { status: 404 });
-    }
-
-    const orig = original.rows[0];
-
-    // Block double-voiding
-    if (orig.event_type === 'VOID') {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { success: false, error: 'This log entry is already a VOID record' },
-        { status: 409 }
+    const txResult = await withTenantTransaction<
+      | { ok: false; error: NextResponse }
+      | { ok: true; voidLog: any; voidedBy: any }
+    >(gate.ctx.organizationId, async (client) => {
+      const original = await client.query(
+        `SELECT id, fnsku, source_stage, event_type, staff_id, fba_shipment_id,
+                fba_shipment_item_id, quantity, station, metadata
+         FROM fba_fnsku_logs
+         WHERE id = $1 AND organization_id = $2`,
+        [logId, gate.ctx.organizationId]
       );
-    }
 
-    // Verify voiding staff exists
-    const staffCheck = await client.query(`SELECT id, name FROM staff WHERE id = $1`, [staffId]);
-    if (!staffCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
-    }
+      if (!original.rows[0]) {
+        return { ok: false, error: NextResponse.json({ success: false, error: 'Log not found' }, { status: 404 }) };
+      }
 
-    const voidMetadata = {
-      voided_log_id: logId,
-      original_event_type: orig.event_type,
-      original_source_stage: orig.source_stage,
-      original_quantity: orig.quantity,
-      ...(reason ? { reason } : {}),
-    };
+      const orig = original.rows[0];
 
-    const voidRes = await client.query(
-      `INSERT INTO fba_fnsku_logs
-         (fnsku, source_stage, event_type, staff_id,
-          fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-       VALUES ($1, $2, 'VOID', $3, $4, $5, $6, $7, $8, $9::jsonb)
-       RETURNING *`,
-      [
-        orig.fnsku,
-        orig.source_stage,
-        staffId,
-        orig.fba_shipment_id,
-        orig.fba_shipment_item_id,
-        orig.quantity,
-        orig.station,
-        reason ? `Void of log #${logId}: ${reason}` : `Void of log #${logId}`,
-        JSON.stringify(voidMetadata),
-      ]
-    );
+      // Block double-voiding
+      if (orig.event_type === 'VOID') {
+        return {
+          ok: false,
+          error: NextResponse.json(
+            { success: false, error: 'This log entry is already a VOID record' },
+            { status: 409 }
+          ),
+        };
+      }
 
-    await client.query('COMMIT');
+      // Verify voiding staff exists
+      const staffCheck = await client.query(`SELECT id, name FROM staff WHERE id = $1`, [staffId]);
+      if (!staffCheck.rows[0]) {
+        return { ok: false, error: NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 }) };
+      }
+
+      const voidMetadata = {
+        voided_log_id: logId,
+        original_event_type: orig.event_type,
+        original_source_stage: orig.source_stage,
+        original_quantity: orig.quantity,
+        ...(reason ? { reason } : {}),
+      };
+
+      const voidRes = await client.query(
+        `INSERT INTO fba_fnsku_logs
+           (fnsku, source_stage, event_type, staff_id,
+            fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+         VALUES ($1, $2, 'VOID', $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+         RETURNING *`,
+        [
+          orig.fnsku,
+          orig.source_stage,
+          staffId,
+          orig.fba_shipment_id,
+          orig.fba_shipment_item_id,
+          orig.quantity,
+          orig.station,
+          reason ? `Void of log #${logId}: ${reason}` : `Void of log #${logId}`,
+          JSON.stringify(voidMetadata),
+          gate.ctx.organizationId,
+        ]
+      );
+
+      return { ok: true, voidLog: voidRes.rows[0], voidedBy: staffCheck.rows[0].name };
+    });
+
+    if (!txResult.ok) return txResult.error;
 
     await invalidateCacheTags(['fba-logs']);
     await publishFbaItemChanged({ action: 'delete', shipmentId: 0, source: 'fba.logs.void', organizationId: gate.ctx.organizationId });
@@ -160,8 +166,8 @@ export async function DELETE(
     const response = NextResponse.json({
       success: true,
       message: `Log #${logId} has been voided`,
-      void_log: voidRes.rows[0],
-      voided_by: staffCheck.rows[0].name,
+      void_log: txResult.voidLog,
+      voided_by: txResult.voidedBy,
     });
     await recordRouteAudit(request, gate.ctx, response, {
       source: 'fba.logs.void',
@@ -172,13 +178,10 @@ export async function DELETE(
     });
     return response;
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[DELETE /api/fba/logs/[id]]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to void log' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }

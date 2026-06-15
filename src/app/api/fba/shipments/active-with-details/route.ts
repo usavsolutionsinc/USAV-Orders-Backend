@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/fba/shipments/active-with-details
@@ -16,22 +16,25 @@ import { withAuth } from '@/lib/auth/withAuth';
  *
  * Now returns everything in a single round-trip.
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const shippedLimit = Math.min(Math.max(Number(searchParams.get('shippedLimit')) || 10, 1), 50);
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `
       WITH target_shipments AS (
         -- All active (non-shipped) shipments
         SELECT id, 0 AS sort_bucket FROM fba_shipments
         WHERE status IN ('PLANNED', 'TESTED', 'PACKED', 'LABEL_ASSIGNED')
+          AND organization_id = $2
         UNION ALL
         -- Recently shipped (limited)
         SELECT id, 1 AS sort_bucket FROM (
           SELECT id, updated_at FROM fba_shipments
           WHERE status = 'SHIPPED'
+            AND organization_id = $2
           ORDER BY updated_at DESC
           LIMIT $1
         ) shipped_sub
@@ -69,7 +72,7 @@ export const GET = withAuth(async (request: NextRequest) => {
         COALESCE(tracking_agg.tracking, '[]'::jsonb) AS tracking
 
       FROM target_shipments ts
-      JOIN fba_shipments fs ON fs.id = ts.id
+      JOIN fba_shipments fs ON fs.id = ts.id AND fs.organization_id = $2
       LEFT JOIN staff creator ON creator.id = fs.created_by_staff_id
       LEFT JOIN staff tech    ON tech.id    = fs.assigned_tech_id
       LEFT JOIN staff packer  ON packer.id  = fs.assigned_packer_id
@@ -111,12 +114,13 @@ export const GET = withAuth(async (request: NextRequest) => {
             ORDER BY fsi.status DESC, fsi.fnsku
           ) AS items
         FROM fba_shipment_items fsi
-        LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+        LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = fsi.organization_id
         LEFT JOIN staff r  ON r.id  = fsi.ready_by_staff_id
         LEFT JOIN staff v  ON v.id  = fsi.verified_by_staff_id
         LEFT JOIN staff l  ON l.id  = fsi.labeled_by_staff_id
         LEFT JOIN staff sh ON sh.id = fsi.shipped_by_staff_id
         WHERE fsi.shipment_id = fs.id
+          AND fsi.organization_id = fs.organization_id
       ) item_agg ON true
 
       -- Lateral join: tracking for this shipment (with allocations)
@@ -148,8 +152,9 @@ export const GET = withAuth(async (request: NextRequest) => {
                     ORDER BY fta.shipment_item_id
                   )
                   FROM fba_tracking_item_allocations fta
-                  JOIN fba_shipment_items alloc_item ON alloc_item.id = fta.shipment_item_id
+                  JOIN fba_shipment_items alloc_item ON alloc_item.id = fta.shipment_item_id AND alloc_item.organization_id = fta.organization_id
                   WHERE fta.shipment_id = fst.shipment_id AND fta.tracking_id = fst.tracking_id
+                    AND fta.organization_id = fst.organization_id
                 ),
                 '[]'::jsonb
               )
@@ -159,11 +164,12 @@ export const GET = withAuth(async (request: NextRequest) => {
         FROM fba_shipment_tracking fst
         JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
         WHERE fst.shipment_id = fs.id
+          AND fst.organization_id = fs.organization_id
       ) tracking_agg ON true
 
       ORDER BY ts.sort_bucket, fs.updated_at DESC
       `,
-      [shippedLimit]
+      [shippedLimit, ctx.organizationId]
     );
 
     // Split into active vs shipped for the frontend

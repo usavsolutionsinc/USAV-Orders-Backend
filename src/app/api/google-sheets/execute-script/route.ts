@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { orders, packerLogs } from '@/lib/drizzle/schema';
-import { eq, inArray } from 'drizzle-orm';
 import { sheets as googleSheets } from '@googleapis/sheets';
 import { getGoogleAuth } from '@/lib/google-auth';
-import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { normalizePSTTimestamp } from '@/utils/date';
@@ -18,26 +14,29 @@ import {
 } from '@/lib/sync/sheet-sync-common';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const DEFAULT_SPREADSHEET_ID = '1fM9t4iw_6UeGfNbKZaKA7puEFfWqOiNtITGDVSgApCE';
 const FBA_LIKE_RE = /^(X00|X0|B0|FBA)/i;
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
         const { scriptName } = await req.json();
+        const orgId = ctx.organizationId;
 
         switch (scriptName) {
             case 'checkShippedOrders':
-                return await executeCheckShippedOrders();
+                return await executeCheckShippedOrders(orgId);
             case 'updateNonshippedOrders':
                 return NextResponse.json({
                     success: false,
                     error: 'Google Sheets mutation support has been removed. Update non-shipped state directly in the database.',
                 }, { status: 410 });
             case 'syncTechSerialNumbers':
-                return await executeSyncTechSerialNumbers();
+                return await executeSyncTechSerialNumbers(orgId);
             case 'syncPackerLogs':
-                return await executeSyncPackerLogs();
+                return await executeSyncPackerLogs(orgId);
             default:
                 return NextResponse.json({ success: false, error: 'Unknown script name' }, { status: 400 });
         }
@@ -47,16 +46,22 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 }, { permission: 'admin.manage_features' });
 
-async function executeCheckShippedOrders() {
+async function executeCheckShippedOrders(orgId: OrgId) {
     // Find orders where a packer log exists via the shipment_id FK
     // Shipped state is now derived from shipping_tracking_numbers carrier status;
     // no direct write to orders.is_shipped is needed.
-    const shippedResult = await pool.query(
+    // shipment_id is an integer surrogate PK, so the join is safe bare; tenant
+    // scoping is applied via the explicit organization_id filters below.
+    const shippedResult = await tenantQuery(
+        orgId,
         `SELECT DISTINCT o.id
          FROM orders o
          INNER JOIN packer_logs pl ON pl.shipment_id = o.shipment_id
+           AND pl.organization_id = o.organization_id
          WHERE o.shipment_id IS NOT NULL
-           AND pl.tracking_type = 'ORDERS'`
+           AND pl.tracking_type = 'ORDERS'
+           AND o.organization_id = $1`,
+        [orgId]
     );
     const packedCount = shippedResult.rows.length;
 
@@ -73,7 +78,7 @@ async function executeUpdateNonshippedOrders() {
     }, { status: 410 });
 }
 
-async function executeSyncTechSerialNumbers() {
+async function executeSyncTechSerialNumbers(orgId: OrgId) {
     const auth = getGoogleAuth();
     const sheets = googleSheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
@@ -87,15 +92,16 @@ async function executeSyncTechSerialNumbers() {
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
     const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
-    const client = await pool.connect();
     const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number; exceptionsLogged: number }> = [];
     let totalInserted = 0;
     let totalSkippedExisting = 0;
     let totalSkippedMissingTracking = 0;
     let totalExceptionsLogged = 0;
 
-    try {
-        await client.query('BEGIN');
+    // GUC-wrapped tenant transaction: SET LOCAL app.current_org scopes the
+    // sheet-sync-common helpers (orders/orders_exceptions/fba_fnskus lookups)
+    // and the inline tech_serial_numbers writes below to this tenant.
+    await withTenantTransaction(orgId, async (client) => {
         await ensureOrdersExceptionsTable(client);
 
         for (const techSheet of techSheets) {
@@ -137,7 +143,7 @@ async function executeSyncTechSerialNumbers() {
                 const cacheKey = getTrackingLast8(shippingTrackingNumber) || shippingTrackingNumber.toUpperCase();
                 const hasMatchingOrder = orderMatchCache.has(cacheKey)
                     ? !!orderMatchCache.get(cacheKey)
-                    : await hasOrderByTracking(client, shippingTrackingNumber);
+                    : await hasOrderByTracking(client, shippingTrackingNumber, orgId);
                 if (!orderMatchCache.has(cacheKey)) {
                     orderMatchCache.set(cacheKey, hasMatchingOrder);
                 }
@@ -147,7 +153,7 @@ async function executeSyncTechSerialNumbers() {
                         const fnskuKey = shippingTrackingNumber.trim().toUpperCase();
                         const fnskuExists = fnskuMatchCache.has(fnskuKey)
                             ? !!fnskuMatchCache.get(fnskuKey)
-                            : await hasFbaFnsku(client, shippingTrackingNumber);
+                            : await hasFbaFnsku(client, shippingTrackingNumber, orgId);
                         if (!fnskuMatchCache.has(fnskuKey)) {
                             fnskuMatchCache.set(fnskuKey, fnskuExists);
                         }
@@ -157,6 +163,7 @@ async function executeSyncTechSerialNumbers() {
                                 shippingTrackingNumber,
                                 sourceStation: 'tech',
                                 staffId: techSheet.testedBy,
+                                orgId,
                             });
                             exceptionsLoggedForSheet++;
                         }
@@ -166,6 +173,7 @@ async function executeSyncTechSerialNumbers() {
                             shippingTrackingNumber,
                             sourceStation: 'tech',
                             staffId: techSheet.testedBy,
+                            orgId,
                         });
                         exceptionsLoggedForSheet++;
                     }
@@ -173,8 +181,8 @@ async function executeSyncTechSerialNumbers() {
 
                 const testDateTime = normalizePSTTimestamp(parsedTestDateTime, { fallbackToNow: true })!;
                 const existingByTestDateTime = await client.query(
-                    `SELECT id FROM tech_serial_numbers WHERE created_at = $1::timestamp LIMIT 1`,
-                    [testDateTime]
+                    `SELECT id FROM tech_serial_numbers WHERE created_at = $1::timestamp AND organization_id = $2 LIMIT 1`,
+                    [testDateTime, orgId]
                 );
                 if (existingByTestDateTime.rows.length > 0) {
                     skippedExistingForSheet++;
@@ -188,10 +196,11 @@ async function executeSyncTechSerialNumbers() {
                 const { shipmentId: tsnShipmentId, scanRef: tsnScanRef } = await resolveShipmentId(shippingTrackingNumber);
                 const existingTrackingResult = await client.query(
                     `SELECT id FROM tech_serial_numbers
-                     WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
-                        OR (shipment_id IS NULL AND scan_ref = $2)
+                     WHERE ((shipment_id IS NOT NULL AND shipment_id = $1)
+                        OR (shipment_id IS NULL AND scan_ref = $2))
+                       AND organization_id = $3
                      LIMIT 1`,
-                    [tsnShipmentId, tsnScanRef ?? shippingTrackingNumber]
+                    [tsnShipmentId, tsnScanRef ?? shippingTrackingNumber, orgId]
                 );
                 if (existingTrackingResult.rows.length > 0) {
                     skippedExistingForSheet++;
@@ -205,9 +214,10 @@ async function executeSyncTechSerialNumbers() {
                         serial_number,
                         serial_type,
                         created_at,
-                        tested_by
-                    ) VALUES ($1, $2, $3, 'SERIAL', $4, $5)`,
-                    [tsnShipmentId, tsnScanRef, serialNumber, testDateTime, techSheet.testedBy]
+                        tested_by,
+                        organization_id
+                    ) VALUES ($1, $2, $3, 'SERIAL', $4, $5, $6)`,
+                    [tsnShipmentId, tsnScanRef, serialNumber, testDateTime, techSheet.testedBy, orgId]
                 );
 
                 insertedForSheet++;
@@ -225,14 +235,7 @@ async function executeSyncTechSerialNumbers() {
                 exceptionsLogged: exceptionsLoggedForSheet
             });
         }
-
-        await client.query('COMMIT');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-    } finally {
-        client.release();
-    }
+    });
 
     return NextResponse.json({
         success: true,
@@ -241,7 +244,7 @@ async function executeSyncTechSerialNumbers() {
     });
 }
 
-async function executeSyncPackerLogs() {
+async function executeSyncPackerLogs(orgId: OrgId) {
     const auth = getGoogleAuth();
     const sheets = googleSheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SPREADSHEET_ID || DEFAULT_SPREADSHEET_ID;
@@ -254,15 +257,16 @@ async function executeSyncPackerLogs() {
     const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
     const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
-    const client = await pool.connect();
     const summary: Array<{ sheet: string; inserted: number; skippedExisting: number; skippedMissingTracking: number; exceptionsLogged: number }> = [];
     let totalInserted = 0;
     let totalSkippedExisting = 0;
     let totalSkippedMissingTracking = 0;
     let totalExceptionsLogged = 0;
 
-    try {
-        await client.query('BEGIN');
+    // GUC-wrapped tenant transaction: SET LOCAL app.current_org scopes the
+    // sheet-sync-common helpers (orders/orders_exceptions lookups) and the
+    // inline packer_logs writes below to this tenant.
+    await withTenantTransaction(orgId, async (client) => {
         await ensureOrdersExceptionsTable(client);
 
         for (const packerSheet of packerSheets) {
@@ -296,7 +300,7 @@ async function executeSyncPackerLogs() {
                 const cacheKey = getTrackingLast8(shippingTrackingNumber) || shippingTrackingNumber.toUpperCase();
                 const hasMatchingOrder = orderMatchCache.has(cacheKey)
                     ? !!orderMatchCache.get(cacheKey)
-                    : await hasOrderByTracking(client, shippingTrackingNumber);
+                    : await hasOrderByTracking(client, shippingTrackingNumber, orgId);
                 if (!orderMatchCache.has(cacheKey)) {
                     orderMatchCache.set(cacheKey, hasMatchingOrder);
                 }
@@ -306,6 +310,7 @@ async function executeSyncPackerLogs() {
                         shippingTrackingNumber,
                         sourceStation: 'packer',
                         staffId: packerSheet.packedBy,
+                        orgId,
                     });
                     exceptionsLoggedForSheet++;
                 }
@@ -313,10 +318,11 @@ async function executeSyncPackerLogs() {
                 const { shipmentId: plShipmentId, scanRef: plScanRef } = await resolveShipmentId(shippingTrackingNumber);
                 const existingTrackingResult = await client.query(
                     `SELECT id FROM packer_logs
-                     WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
-                        OR (shipment_id IS NULL AND scan_ref = $2)
+                     WHERE ((shipment_id IS NOT NULL AND shipment_id = $1)
+                        OR (shipment_id IS NULL AND scan_ref = $2))
+                       AND organization_id = $3
                      LIMIT 1`,
-                    [plShipmentId, plScanRef ?? shippingTrackingNumber]
+                    [plShipmentId, plScanRef ?? shippingTrackingNumber, orgId]
                 );
                 if (existingTrackingResult.rows.length > 0) {
                     skippedExistingForSheet++;
@@ -329,10 +335,11 @@ async function executeSyncPackerLogs() {
                         scan_ref,
                         tracking_type,
                         created_at,
-                        packed_by
-                    ) VALUES ($1, $2, $3, $4, $5)
+                        packed_by,
+                        organization_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id`,
-                    [plShipmentId, plScanRef, 'ORDERS', normalizePSTTimestamp(packDateTime) ?? null, packerSheet.packedBy]
+                    [plShipmentId, plScanRef, 'ORDERS', normalizePSTTimestamp(packDateTime) ?? null, packerSheet.packedBy, orgId]
                 );
 
                 const insertedPlId = (insertedPl.rows[0]?.id as number | undefined) ?? null;
@@ -341,7 +348,7 @@ async function executeSyncPackerLogs() {
                         packerLogId: insertedPlId,
                         shipmentId: plShipmentId ?? null,
                         actorStaffId: packerSheet.packedBy ?? null,
-                    });
+                    }, orgId);
                 }
 
                 insertedForSheet++;
@@ -359,14 +366,7 @@ async function executeSyncPackerLogs() {
                 exceptionsLogged: exceptionsLoggedForSheet
             });
         }
-
-        await client.query('COMMIT');
-    } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-    } finally {
-        client.release();
-    }
+    });
 
     return NextResponse.json({
         success: true,

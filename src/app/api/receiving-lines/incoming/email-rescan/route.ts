@@ -38,7 +38,7 @@ function isReconnectNeeded(err: unknown): boolean {
   );
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const url = new URL(req.url);
     const limitRaw = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT);
@@ -47,6 +47,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       limit: Number.isFinite(limitRaw) ? limitRaw : DEFAULT_LIMIT,
       query: 'is:unread',
       persist: true,
+      orgId: ctx.organizationId,
     });
 
     // Counts only — deliberately omit `items` (email bodies/PII).

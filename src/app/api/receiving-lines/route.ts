@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantConnection, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
@@ -27,17 +28,21 @@ type LineSerial = {
   created_at: string;
 };
 
-async function fetchSerialsForLines(lineIds: number[]): Promise<Map<number, LineSerial[]>> {
+async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Map<number, LineSerial[]>> {
   const grouped = new Map<number, LineSerial[]>();
   if (lineIds.length === 0) return grouped;
 
-  const result = await pool.query<SerialUnitRow>(
+  // serial_units is org-owned; org-scope so a cross-tenant line id (or future
+  // RLS under app_tenant) can never surface another tenant's serials.
+  const result = await tenantQuery<SerialUnitRow>(
+    orgId,
     `SELECT id, serial_number, current_status, sku_catalog_id, condition_grade,
             origin_receiving_line_id, created_at
      FROM serial_units
      WHERE origin_receiving_line_id = ANY($1::int[])
+       AND organization_id = $2
      ORDER BY created_at ASC, id ASC`,
-    [lineIds],
+    [lineIds, orgId],
   );
 
   for (const row of result.rows) {
@@ -192,9 +197,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const include     = String(searchParams.get('include') || '').trim().toLowerCase();
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
+    const orgId = ctx.organizationId as OrgId;
+
     // Single row
     if (Number.isFinite(id) && id > 0) {
-      const one = await pool.query(
+      const one = await tenantQuery(
+        orgId,
         `SELECT rl.*,
                 r.receiving_tracking_number,
                 r.carrier,
@@ -219,10 +227,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 stn.delivered_at             AS shipment_delivered_at,
                 sc.image_url,
                 sc.product_title             AS catalog_product_title,
+                -- Zoho item title (canonical SoT). Always preferred for display
+                -- over the PO line's listing-style item_name and over the
+                -- marketplace catalog title — the Zoho SKU's own title governs.
+                (SELECT name FROM items
+                  WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
+                  LIMIT 1)                   AS zoho_item_title,
                 sc.id                        AS sku_catalog_id,
                 (SELECT COUNT(*) FROM photos p
                   WHERE p.entity_type = 'RECEIVING'
-                    AND p.entity_id = rl.receiving_id) AS photo_count
+                    AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback. Partial
          -- unique index ux_receiving_zoho_po_matched (source='zoho_po') ensures
@@ -235,10 +249,11 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          -- actually carries a shipment, else the newest.
          LEFT JOIN LATERAL (
            SELECT r.* FROM receiving r
-            WHERE r.id = rl.receiving_id
+            WHERE r.organization_id = rl.organization_id
+              AND (r.id = rl.receiving_id
                OR (rl.receiving_id IS NULL
                    AND r.source = 'zoho_po'
-                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id))
             ORDER BY (r.id = rl.receiving_id) DESC,
                      (r.shipment_id IS NOT NULL) DESC,
                      r.id DESC
@@ -250,16 +265,27 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             WHERE rs.receiving_id = r.id
          ) rs_agg ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
-         WHERE rl.id = $1`,
-        [id],
+         -- sku_catalog join is on the SKU STRING, which collides across tenants;
+         -- pin to the line's org so a same-SKU row in another tenant can't leak.
+         -- Title-guarded: rl.sku is a Zoho SKU whose numbering collides with the
+         -- marketplace catalog (Zoho 00143 Soundbar vs Ecwid 143 UB-20). Attach
+         -- the catalog row only when it's the SAME product. Compare against both
+         -- the listing-style item_name AND the clean Zoho items.name (canonical)
+         -- so noisy listing titles don't false-reject a correct catalog row.
+         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku AND sc.organization_id = rl.organization_id
+                                                 AND GREATEST(
+                                                       similarity(LOWER(sc.product_title), LOWER(COALESCE(rl.item_name, ''))),
+                                                       similarity(LOWER(sc.product_title), LOWER(COALESCE((SELECT name FROM items WHERE zoho_item_id = rl.zoho_item_id AND status = 'active' LIMIT 1), '')))
+                                                     ) >= 0.25
+         WHERE rl.id = $1 AND rl.organization_id = $2`,
+        [id, orgId],
       );
       if (one.rows.length === 0) {
         return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
       }
       const normalized = normalizeRow(one.rows[0]);
       if (includeSerials) {
-        const serialsByLine = await fetchSerialsForLines([normalized.id]);
+        const serialsByLine = await fetchSerialsForLines([normalized.id], orgId);
         (normalized as Record<string, unknown>).serials = serialsByLine.get(normalized.id) ?? [];
       }
       // Mobile `/receiving/lines/:id` historically read `receiving_lines[]`; desktop sidebar uses `receiving_line`.
@@ -272,8 +298,8 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
 
     // All lines for a specific package
     if (Number.isFinite(receivingId) && receivingId > 0) {
-      const [rows, pkgRes] = await Promise.all([
-        pool.query(
+      const [rows, pkgRes] = await withTenantConnection(orgId, (client) => Promise.all([
+        client.query(
           `SELECT rl.*,
                   r.receiving_tracking_number,
                   r.carrier,
@@ -297,24 +323,38 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   stn.delivered_at             AS shipment_delivered_at,
                   sc.image_url,
                   sc.product_title             AS catalog_product_title,
+                -- Zoho item title (canonical SoT). Always preferred for display
+                -- over the PO line's listing-style item_name and over the
+                -- marketplace catalog title — the Zoho SKU's own title governs.
+                (SELECT name FROM items
+                  WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
+                  LIMIT 1)                   AS zoho_item_title,
                   sc.id                        AS sku_catalog_id,
                   (SELECT COUNT(*) FROM photos p
                     WHERE p.entity_type = 'RECEIVING'
-                      AND p.entity_id = rl.receiving_id) AS photo_count
+                      AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
            FROM receiving_lines rl
-           LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+           LEFT JOIN receiving r                   ON r.id  = rl.receiving_id AND r.organization_id = rl.organization_id
            LEFT JOIN LATERAL (
               SELECT MAX(rs.scanned_at) AS last_scan
               FROM receiving_scans rs
               WHERE rs.receiving_id = r.id
            ) rs_agg ON TRUE
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-           LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
-           WHERE rl.receiving_id = $1
+           -- sku_catalog SKU-string join pinned to the line's org (cross-tenant SKU collision).
+           -- Title-guarded too: only attach when the catalog row is the SAME
+           -- product (Zoho/marketplace SKU namespaces collide on the number).
+           -- Compare against the listing item_name AND the clean Zoho items.name.
+           LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku AND sc.organization_id = rl.organization_id
+                                                   AND GREATEST(
+                                                         similarity(LOWER(sc.product_title), LOWER(COALESCE(rl.item_name, ''))),
+                                                         similarity(LOWER(sc.product_title), LOWER(COALESCE((SELECT name FROM items WHERE zoho_item_id = rl.zoho_item_id AND status = 'active' LIMIT 1), '')))
+                                                       ) >= 0.25
+           WHERE rl.receiving_id = $1 AND rl.organization_id = $2
            ORDER BY rl.id ASC`,
-          [receivingId],
+          [receivingId, orgId],
         ),
-        pool.query(
+        client.query(
           `SELECT received_at::text AS received_at,
                   unboxed_at::text AS unboxed_at,
                   created_at::text AS created_at,
@@ -322,14 +362,14 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   source_platform,
                   COALESCE(is_return, false) AS is_return
            FROM receiving
-           WHERE id = $1
+           WHERE id = $1 AND organization_id = $2
            LIMIT 1`,
-          [receivingId],
+          [receivingId, orgId],
         ),
-      ]);
+      ]));
       const normalizedRows = rows.rows.map(normalizeRow);
       if (includeSerials) {
-        const serialsByLine = await fetchSerialsForLines(normalizedRows.map((r) => r.id));
+        const serialsByLine = await fetchSerialsForLines(normalizedRows.map((r) => r.id), orgId);
         for (const row of normalizedRows) {
           (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
         }
@@ -347,10 +387,15 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: true, receiving_lines: normalizedRows, receiving_package });
     }
 
-    // Paginated list — all lines, optionally filtered
+    // Paginated list — all lines, optionally filtered.
+    // org gate FIRST so every dynamic predicate below sits on a tenant-scoped
+    // base set (and the shared count query inherits it via the same `where`).
     const conditions: string[] = [];
     const values: unknown[]    = [];
     let idx = 1;
+
+    conditions.push(`rl.organization_id = $${idx++}`);
+    values.push(orgId);
 
     if (search) {
       const p = `%${search}%`;
@@ -397,6 +442,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             `EXISTS (
                SELECT 1 FROM serial_units su_hist
                WHERE su_hist.origin_receiving_line_id = rl.id
+                 AND su_hist.organization_id = rl.organization_id
                  AND COALESCE(su_hist.serial_number, '') ILIKE $${idx}
              )`,
           );
@@ -419,6 +465,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             `EXISTS (
                SELECT 1 FROM serial_units su_all
                WHERE su_all.origin_receiving_line_id = rl.id
+                 AND su_all.organization_id = rl.organization_id
                  AND COALESCE(su_all.serial_number, '') ILIKE $${patternIdx}
              )`,
           ];
@@ -595,6 +642,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           `EXISTS (
              SELECT 1 FROM email_delivery_signals eds
               WHERE eds.order_number_norm = rl.zoho_purchaseorder_number_norm
+                AND eds.organization_id = rl.organization_id
                 AND eds.delivered_at > NOW() - interval '30 days'
            )
            AND NOT EXISTS (
@@ -842,8 +890,8 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
       : '';
 
-    const [rowsRes, countRes] = await Promise.all([
-      pool.query(
+    const [rowsRes, countRes] = await withTenantConnection(orgId, (client) => Promise.all([
+      client.query(
         `SELECT rl.*,
                 r.receiving_tracking_number,
                 r.carrier,
@@ -871,10 +919,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 stn.delivered_at             AS shipment_delivered_at,
                 sc.image_url,
                 sc.product_title             AS catalog_product_title,
+                -- Zoho item title (canonical SoT). Always preferred for display
+                -- over the PO line's listing-style item_name and over the
+                -- marketplace catalog title — the Zoho SKU's own title governs.
+                (SELECT name FROM items
+                  WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
+                  LIMIT 1)                   AS zoho_item_title,
                 sc.id                        AS sku_catalog_id,
                 (SELECT COUNT(*) FROM photos p
                   WHERE p.entity_type = 'RECEIVING'
-                    AND p.entity_id = rl.receiving_id) AS photo_count
+                    AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
                 ${lastScanSelect}
                 ${testedAggSelect}
                 ${incomingExtrasSelect}
@@ -890,17 +944,26 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          -- actually carries a shipment, else the newest.
          LEFT JOIN LATERAL (
            SELECT r.* FROM receiving r
-            WHERE r.id = rl.receiving_id
+            WHERE r.organization_id = rl.organization_id
+              AND (r.id = rl.receiving_id
                OR (rl.receiving_id IS NULL
                    AND r.source = 'zoho_po'
-                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id))
             ORDER BY (r.id = rl.receiving_id) DESC,
                      (r.shipment_id IS NOT NULL) DESC,
                      r.id DESC
             LIMIT 1
          ) r ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku
+         -- sku_catalog SKU-string join pinned to the line's org (cross-tenant SKU collision).
+         -- Title-guarded too: only attach when the catalog row is the SAME
+         -- product (Zoho/marketplace SKU namespaces collide on the number).
+         -- Compare against the listing item_name AND the clean Zoho items.name.
+         LEFT JOIN sku_catalog sc                ON sc.sku = rl.sku AND sc.organization_id = rl.organization_id
+                                                 AND GREATEST(
+                                                       similarity(LOWER(sc.product_title), LOWER(COALESCE(rl.item_name, ''))),
+                                                       similarity(LOWER(sc.product_title), LOWER(COALESCE((SELECT name FROM items WHERE zoho_item_id = rl.zoho_item_id AND status = 'active' LIMIT 1), '')))
+                                                     ) >= 0.25
          LEFT JOIN staff staff_rb                ON staff_rb.id = r.received_by
          LEFT JOIN staff staff_ub                ON staff_ub.id = r.unboxed_by
          LEFT JOIN LATERAL (
@@ -919,7 +982,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          LIMIT $${idx} OFFSET $${idx + 1}`,
         values,
       ),
-      pool.query(
+      client.query(
         `SELECT COUNT(*) AS total FROM receiving_lines rl
          -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
          -- fallback. When a line has no FK and its PO has multiple zoho_po
@@ -929,10 +992,11 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          -- actually carries a shipment, else the newest.
          LEFT JOIN LATERAL (
            SELECT r.* FROM receiving r
-            WHERE r.id = rl.receiving_id
+            WHERE r.organization_id = rl.organization_id
+              AND (r.id = rl.receiving_id
                OR (rl.receiving_id IS NULL
                    AND r.source = 'zoho_po'
-                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                   AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id))
             ORDER BY (r.id = rl.receiving_id) DESC,
                      (r.shipment_id IS NOT NULL) DESC,
                      r.id DESC
@@ -943,12 +1007,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          ${where}`,
         values.slice(0, -2),
       ),
-    ]);
+    ]));
 
     let normalizedList = rowsRes.rows.map(normalizeRow);
     let total = Number(countRes.rows[0]?.total ?? 0);
     if (includeSerials) {
-      const serialsByLine = await fetchSerialsForLines(normalizedList.map((r) => r.id));
+      const serialsByLine = await fetchSerialsForLines(normalizedList.map((r) => r.id), orgId);
       for (const row of normalizedList) {
         (row as Record<string, unknown>).serials = serialsByLine.get(row.id) ?? [];
       }
@@ -965,30 +1029,32 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       !receivingHistorySkipsUnmatchedPlaceholders(searchField);
 
     if (includeUnmatchedPlaceholders) {
-      const unmatchedSearchVals: unknown[] = [];
+      // $1 is reserved for orgId (these placeholder queries run on `receiving`,
+      // which is org-owned); the optional search pattern becomes $2.
+      const unmatchedSearchVals: unknown[] = [orgId];
       let unmatchedSearchSql = '';
       if (search) {
         unmatchedSearchVals.push(`%${search}%`);
         if (searchField === 'po') {
           unmatchedSearchSql =
-            ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $1`;
+            ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2`;
         } else if (searchField === 'tracking') {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $1
-            OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
-            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
+               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
           )`;
         } else {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $1
-            OR COALESCE(stn.tracking_number_raw, '') ILIKE $1
-            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $1
-            OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $1
+               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
+            OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
+            OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2
           )`;
         }
       }
-      const [unmatchedPkgsRes, unmatchedCntRes] = await Promise.all([
-        pool.query(
+      const [unmatchedPkgsRes, unmatchedCntRes] = await withTenantConnection(orgId, (client) => Promise.all([
+        client.query(
           `SELECT r.id,
                   r.receiving_tracking_number,
                   r.carrier,
@@ -1011,7 +1077,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   rs_agg.last_scan::text       AS last_scan_at,
                   (SELECT COUNT(*) FROM photos p
                      WHERE p.entity_type = 'RECEIVING'
-                       AND p.entity_id = r.id) AS photo_count
+                       AND p.entity_id = r.id AND p.organization_id = r.organization_id) AS photo_count
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
            LEFT JOIN LATERAL (
@@ -1019,9 +1085,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                FROM receiving_scans rs
                WHERE rs.receiving_id = r.id
             ) rs_agg ON TRUE
-           WHERE r.source IN ('unmatched', 'local_pickup')
+           WHERE r.organization_id = $1
+             AND r.source IN ('unmatched', 'local_pickup')
              AND NOT EXISTS (
-               SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
+               SELECT 1 FROM receiving_lines rl
+                WHERE rl.receiving_id = r.id
+                  AND rl.organization_id = r.organization_id
              )
              ${unmatchedSearchSql}
            ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, r.created_at::text) DESC NULLS LAST,
@@ -1029,18 +1098,21 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
            LIMIT 150`,
           unmatchedSearchVals,
         ),
-        pool.query(
+        client.query(
           `SELECT COUNT(*)::bigint AS n
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-            WHERE r.source IN ('unmatched', 'local_pickup')
+            WHERE r.organization_id = $1
+              AND r.source IN ('unmatched', 'local_pickup')
               AND NOT EXISTS (
-                SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id
+                SELECT 1 FROM receiving_lines rl
+                 WHERE rl.receiving_id = r.id
+                   AND rl.organization_id = r.organization_id
               )
               ${unmatchedSearchSql}`,
           unmatchedSearchVals,
         ),
-      ]);
+      ]));
       total += Number(unmatchedCntRes.rows[0]?.n ?? 0);
       const placeholderNorm = unmatchedPkgsRes.rows.map((pkg) =>
         normalizeRow(buildUnmatchedEmptyReceivingLine(pkg as Record<string, unknown>)),
@@ -1122,24 +1194,28 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'Invalid condition_grade' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const orgId = ctx.organizationId as OrgId;
+    // receiving_lines.organization_id is NOT NULL with a loud-fail GUC default.
+    // Run under the org GUC AND stamp the column explicitly so the insert is
+    // attributed to the caller's tenant (never the GUC fallback).
+    const result = await withTenantTransaction(orgId, (client) => client.query(
       `INSERT INTO receiving_lines (
         receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id,
         zoho_purchaseorder_id, item_name, sku,
         quantity_received, quantity_expected,
         qa_status, disposition_code, condition_grade, disposition_audit, notes,
-        needs_test, assigned_tech_id
+        needs_test, assigned_tech_id, organization_id
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15,$16,$17)
       RETURNING *`,
       [
         receivingId, zohoItemId, zohoLineItemId, zohoPurchaseReceiveId,
         zohoPurchaseOrderId, itemName, sku,
         quantityReceived, quantityExpected,
         qaStatusRaw, dispositionRaw, conditionRaw, JSON.stringify(dispositionAudit), notes,
-        needsTest, assignedTechId,
+        needsTest, assignedTechId, orgId,
       ],
-    );
+    ));
 
     const lineId = result.rows[0]?.id;
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
@@ -1156,6 +1232,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 // ─── PATCH ────────────────────────────────────────────────────────────────────
 export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId as OrgId;
     const body = await request.json();
     const id   = Number(body?.id);
 
@@ -1254,9 +1331,10 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     if (body?.needs_test !== undefined || body?.needsTest !== undefined) {
       const nextNeedsTest = !!(body?.needs_test ?? body?.needsTest);
       if (!nextNeedsTest) {
-        const existing = await pool.query<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
-          `SELECT needs_test, assigned_tech_id FROM receiving_lines WHERE id = $1`,
-          [id],
+        const existing = await tenantQuery<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
+          orgId,
+          `SELECT needs_test, assigned_tech_id FROM receiving_lines WHERE id = $1 AND organization_id = $2`,
+          [id, orgId],
         );
         if (existing.rows.length === 0) {
           return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
@@ -1299,8 +1377,14 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     let updatedRow: { id: number; receiving_id: number | null } | null = null;
     if (updates.length > 0) {
       values.push(id);
-      const result = await pool.query(
-        `UPDATE receiving_lines SET ${updates.join(', ')} WHERE id = $${values.length} RETURNING id, receiving_id`,
+      const idParamN = values.length;
+      values.push(orgId);
+      const orgParamN = values.length;
+      const result = await tenantQuery<{ id: number; receiving_id: number | null }>(
+        orgId,
+        `UPDATE receiving_lines SET ${updates.join(', ')}
+          WHERE id = $${idParamN} AND organization_id = $${orgParamN}
+          RETURNING id, receiving_id`,
         values,
       );
       if (result.rows.length === 0) {
@@ -1314,11 +1398,14 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     // failure must not fail the PATCH.
     if (isPartsCondition) {
       try {
-        const serials = await pool.query<{ id: number }>(
-          `SELECT id FROM serial_units WHERE origin_receiving_line_id = $1`,
-          [id],
+        const serials = await tenantQuery<{ id: number }>(
+          orgId,
+          `SELECT id FROM serial_units WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+          [id, orgId],
         );
         for (const s of serials.rows) {
+          // sortSerialUnitToParts is a shared, session-less helper (also called by
+          // non-route paths); its signature is intentionally left unchanged.
           await sortSerialUnitToParts({
             serialUnitId: s.id,
             staffId: ctx.staffId ?? null,
@@ -1343,9 +1430,10 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         : null;
       let receivingIdForLine = updatedRow?.receiving_id ?? null;
       if (receivingIdForLine == null) {
-        const existing = await pool.query<{ receiving_id: number | null }>(
-          `SELECT receiving_id FROM receiving_lines WHERE id = $1`,
-          [id],
+        const existing = await tenantQuery<{ receiving_id: number | null }>(
+          orgId,
+          `SELECT receiving_id FROM receiving_lines WHERE id = $1 AND organization_id = $2`,
+          [id, orgId],
         );
         if (existing.rows.length === 0) {
           return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
@@ -1353,9 +1441,10 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         receivingIdForLine = existing.rows[0].receiving_id ?? null;
       }
       if (shipment && receivingIdForLine != null) {
-        await pool.query(
-          `UPDATE receiving SET shipment_id = $1 WHERE id = $2`,
-          [shipment.id, receivingIdForLine],
+        await tenantQuery(
+          orgId,
+          `UPDATE receiving SET shipment_id = $1 WHERE id = $2 AND organization_id = $3`,
+          [shipment.id, receivingIdForLine, orgId],
         );
       }
     }
@@ -1365,7 +1454,8 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 
     // Re-fetch with the shipment JOIN so the response carries the just-attached
     // shipment's tracking/carrier/status fields.
-    const fresh = await pool.query(
+    const fresh = await tenantQuery(
+      orgId,
       `SELECT rl.*,
               r.receiving_tracking_number,
               r.carrier,
@@ -1387,15 +1477,15 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
               stn.is_delivered             AS shipment_is_delivered,
               stn.delivered_at             AS shipment_delivered_at
          FROM receiving_lines rl
-         LEFT JOIN receiving r                   ON r.id  = rl.receiving_id
+         LEFT JOIN receiving r                   ON r.id  = rl.receiving_id AND r.organization_id = rl.organization_id
          LEFT JOIN LATERAL (
             SELECT MAX(rs.scanned_at) AS last_scan
             FROM receiving_scans rs
             WHERE rs.receiving_id = r.id
          ) rs_agg ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-        WHERE rl.id = $1`,
-      [id],
+        WHERE rl.id = $1 AND rl.organization_id = $2`,
+      [id, orgId],
     );
     if (fresh.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
@@ -1412,6 +1502,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 export const DELETE = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId as OrgId;
     const { searchParams } = new URL(request.url);
     const idParam = searchParams.get('id');
     // `po_id` (zoho_purchaseorder_id) deletes EVERY receiving_line for that PO
@@ -1431,43 +1522,48 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       // Guard: this path only clears the delivered-unscanned surface. Refuse a
       // shipment that has dock-scan activity (real receiving) or isn't delivered
       // — those aren't Incoming clutter and must not be hard-deleted here.
-      const guard = await pool.query(
-        `SELECT 1
-           FROM shipping_tracking_numbers stn
-          WHERE stn.id = $1
-            AND stn.is_delivered = true
-            AND NOT EXISTS (
-              SELECT 1 FROM receiving r2
-              JOIN receiving_scans rs ON rs.receiving_id = r2.id
-              WHERE r2.shipment_id = stn.id
-            )
-          LIMIT 1`,
-        [sid],
-      );
-      if (guard.rows.length === 0) {
-        return NextResponse.json(
-          { success: false, error: 'Shipment is not a delivered-unscanned box (already scanned, or not delivered)' },
-          { status: 409 },
+      // Tenancy: shipping_tracking_numbers has no organization_id, so org-scope
+      // by requiring the shipment to be referenced by a `receiving` carton in
+      // THIS org (org-owned). That both anchors the tenant and is the exact box
+      // this synthetic Incoming row stands for — a cross-org shipment id 404s.
+      // Run the guard + the hard-delete on the SAME tenant connection so the
+      // org GUC is set for the whole operation.
+      const delResult = await withTenantTransaction(orgId, async (client) => {
+        const guard = await client.query(
+          `SELECT 1
+             FROM shipping_tracking_numbers stn
+            WHERE stn.id = $1
+              AND stn.is_delivered = true
+              AND EXISTS (
+                SELECT 1 FROM receiving r3
+                 WHERE r3.shipment_id = stn.id
+                   AND r3.organization_id = $2
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM receiving r2
+                JOIN receiving_scans rs ON rs.receiving_id = r2.id
+                WHERE r2.shipment_id = stn.id
+                  AND r2.organization_id = $2
+              )
+            LIMIT 1`,
+          [sid, orgId],
         );
-      }
-      // Hard delete. shipment_tracking_events + fba_tracking_item_allocations
-      // cascade; every other reference is ON DELETE SET NULL EXCEPT
-      // station_scan_sessions (no ON DELETE clause → RESTRICT), so clear those
-      // first inside a transaction. A never-scanned box typically has none.
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+        if (guard.rows.length === 0) {
+          return { ok: false as const, status: 409 as const, error: 'Shipment is not a delivered-unscanned box (already scanned, not delivered, or not in this org)' };
+        }
+        // Hard delete. shipment_tracking_events + fba_tracking_item_allocations
+        // cascade; every other reference is ON DELETE SET NULL EXCEPT
+        // station_scan_sessions (no ON DELETE clause → RESTRICT), so clear those
+        // first. A never-scanned box typically has none.
         await client.query('DELETE FROM station_scan_sessions WHERE shipment_id = $1', [sid]);
         const del = await client.query('DELETE FROM shipping_tracking_numbers WHERE id = $1 RETURNING id', [sid]);
-        await client.query('COMMIT');
         if (del.rows.length === 0) {
-          return NextResponse.json({ success: false, error: 'shipment not found' }, { status: 404 });
+          return { ok: false as const, status: 404 as const, error: 'shipment not found' };
         }
-      } catch (txErr) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw txErr;
-      } finally {
-        client.release();
+        return { ok: true as const };
+      });
+      if (!delResult.ok) {
+        return NextResponse.json({ success: false, error: delResult.error }, { status: delResult.status });
       }
       await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
       await publishReceivingLogChanged({ organizationId: ctx.organizationId, action: 'delete', rowId: `shipment:${sid}`, source: 'receiving-lines.delete-shipment' });
@@ -1475,9 +1571,10 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
     }
 
     if (poId) {
-      const result = await pool.query(
-        `DELETE FROM receiving_lines WHERE zoho_purchaseorder_id = $1 RETURNING id`,
-        [poId],
+      const result = await tenantQuery<{ id: number }>(
+        orgId,
+        `DELETE FROM receiving_lines WHERE zoho_purchaseorder_id = $1 AND organization_id = $2 RETURNING id`,
+        [poId, orgId],
       );
       if (result.rows.length === 0) {
         return NextResponse.json(
@@ -1505,19 +1602,26 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
           { status: 400 },
         );
       }
-      const result = await pool.query(
-        `DELETE FROM receiving_lines WHERE id = ANY($1::int[]) RETURNING id, receiving_id`,
-        [ids],
-      );
-      const deleted = result.rows.map((r) => Number(r.id));
-      // Re-derive each affected carton's source linkage — removing the last
-      // linked line reverts the carton to unmatched (the unlink revert).
-      const affectedCartons = Array.from(
-        new Set(result.rows.map((r) => r.receiving_id).filter((x) => x != null).map(Number)),
-      );
-      for (const rid of affectedCartons) {
-        try { await recomputeCartonSourceLink(rid); } catch (err) { console.warn('recomputeCartonSourceLink failed', rid, err); }
-      }
+      // Delete + carton-source-link recompute on one tenant connection so the
+      // org GUC stays set for the recompute (which reads/writes org-owned
+      // receiving / receiving_lines via the passed client). recomputeCartonSourceLink's
+      // signature is unchanged — it already accepts an optional `db`.
+      const deleted = await withTenantTransaction(orgId, async (client) => {
+        const result = await client.query<{ id: number; receiving_id: number | null }>(
+          `DELETE FROM receiving_lines WHERE id = ANY($1::int[]) AND organization_id = $2 RETURNING id, receiving_id`,
+          [ids, orgId],
+        );
+        const deletedIds = result.rows.map((r) => Number(r.id));
+        const cartons = Array.from(
+          new Set(result.rows.map((r) => r.receiving_id).filter((x) => x != null).map(Number)),
+        );
+        // Re-derive each affected carton's source linkage — removing the last
+        // linked line reverts the carton to unmatched (the unlink revert).
+        for (const rid of cartons) {
+          try { await recomputeCartonSourceLink(rid, client); } catch (err) { console.warn('recomputeCartonSourceLink failed', rid, err); }
+        }
+        return deletedIds;
+      });
       await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
       // Count, not the id list — listeners only refetch on this event, and an
       // unbounded id string risks the broker's message size cap.
@@ -1535,18 +1639,25 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'Valid id or po_id is required' }, { status: 400 });
     }
 
-    const result = await pool.query(`DELETE FROM receiving_lines WHERE id = $1 RETURNING id, receiving_id`, [id]);
-    if (result.rows.length === 0) {
+    const deletedRow = await withTenantTransaction(orgId, async (client) => {
+      const result = await client.query<{ id: number; receiving_id: number | null }>(
+        `DELETE FROM receiving_lines WHERE id = $1 AND organization_id = $2 RETURNING id, receiving_id`,
+        [id, orgId],
+      );
+      if (result.rows.length === 0) return null;
+      // Re-derive the carton's source linkage — if this was the last line carrying
+      // a source order, the carton reverts to unmatched (the unlink revert). Owns
+      // the downgrade the general PATCH /api/receiving/[id] refuses. Pass the
+      // tenant client so the recompute stays org-scoped under the GUC.
+      const deletedReceivingId = result.rows[0]?.receiving_id;
+      if (deletedReceivingId != null) {
+        try { await recomputeCartonSourceLink(Number(deletedReceivingId), client); }
+        catch (err) { console.warn('recomputeCartonSourceLink failed', deletedReceivingId, err); }
+      }
+      return result.rows[0];
+    });
+    if (!deletedRow) {
       return NextResponse.json({ success: false, error: 'receiving_line not found' }, { status: 404 });
-    }
-
-    // Re-derive the carton's source linkage — if this was the last line carrying
-    // a source order, the carton reverts to unmatched (the unlink revert). Owns
-    // the downgrade the general PATCH /api/receiving/[id] refuses.
-    const deletedReceivingId = result.rows[0]?.receiving_id;
-    if (deletedReceivingId != null) {
-      try { await recomputeCartonSourceLink(Number(deletedReceivingId)); }
-      catch (err) { console.warn('recomputeCartonSourceLink failed', deletedReceivingId, err); }
     }
 
     await invalidateCacheTags(['receiving-logs', 'receiving-lines']);
@@ -1751,6 +1862,7 @@ function normalizeRow(row: Record<string, unknown>) {
     // line name (eBay etc.) and varies by source. Null when the SKU isn't in
     // the catalog yet; callers fall back to item_name.
     catalog_product_title:    (row.catalog_product_title as string | null) ?? null,
+    zoho_item_title:          (row.zoho_item_title as string | null) ?? null,
     // Canonical sku_catalog.id for this line's SKU (joined). Keys the SKU
     // pairing surface; null when the SKU isn't catalogued yet.
     sku_catalog_id:           row.sku_catalog_id != null ? Number(row.sku_catalog_id) : null,

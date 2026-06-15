@@ -14,7 +14,8 @@ import { getStaffDetail } from '@/lib/audit-log/staff-aggregator';
  * Gate: admin.view_logs.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const filters = parseFilters(searchParams);
 
@@ -26,7 +27,7 @@ export const GET = withAuth(
     }
 
     try {
-      const detail = await getStaffDetail(filters.staffId, filters);
+      const detail = await getStaffDetail(filters.staffId, filters, orgId);
       if (!detail) {
         return NextResponse.json(
           { success: false, error: 'Staff not found' },

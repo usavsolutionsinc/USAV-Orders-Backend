@@ -24,7 +24,11 @@ export async function GET(
     }
     const limitParam = Number(req.nextUrl.searchParams.get('limit'));
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.floor(limitParam) : 200;
-    const events = await getSkuAuditHistory(skuValue, { limit });
+    // Tenant isolation: thread the caller's org so the backbone scopes every
+    // string-key match (audit_logs / inventory_events / sku_stock_ledger) to
+    // this tenant. SKU strings collide across orgs; without this the caller
+    // reads another tenant's SKU audit/lifecycle/ledger history.
+    const events = await getSkuAuditHistory(skuValue, { limit }, gate.ctx.organizationId);
     return NextResponse.json({ success: true, sku: skuValue, events });
   } catch (err: any) {
     console.error('[GET /api/audit/sku/[sku]] error:', err);

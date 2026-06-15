@@ -12,7 +12,8 @@
  * by default.
  */
 
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface PlatformRow {
   id: number;
@@ -46,6 +47,19 @@ export interface TypeRow {
   updated_at: string;
 }
 
+export interface PlatformAccountRow {
+  id: number;
+  organization_id: string;
+  platform_id: number;
+  slug: string;
+  label: string;
+  /** → organization_integrations.scope (the specific connection). */
+  integration_scope: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Built-in seed data — the source of truth for `seedOrgCatalog`. Mirrors the
 // VALUES in migration 2026-06-13g (keep in sync if you add a default).
 const SEED_PLATFORMS: Array<[slug: string, label: string, tone: string, sort: number]> = [
@@ -70,23 +84,46 @@ const SEED_TYPES: Array<[slug: string, label: string, kind: string, isReturn: bo
  * creation (provisioning hook) so new tenants start with the defaults; safe to
  * re-run — existing rows (by slug) are left untouched.
  */
-export async function seedOrgCatalog(organizationId: string): Promise<void> {
-  for (const [slug, label, tone, sort] of SEED_PLATFORMS) {
-    await pool.query(
-      `INSERT INTO platforms (organization_id, slug, label, tone, sort_order, is_system)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (organization_id, slug) DO NOTHING`,
-      [organizationId, slug, label, tone, sort],
+export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
+  await withTenantTransaction(organizationId, async (client) => {
+    for (const [slug, label, tone, sort] of SEED_PLATFORMS) {
+      await client.query(
+        `INSERT INTO platforms (organization_id, slug, label, tone, sort_order, is_system)
+         VALUES ($1, $2, $3, $4, $5, true)
+         ON CONFLICT (organization_id, slug) DO NOTHING`,
+        [organizationId, slug, label, tone, sort],
+      );
+    }
+    for (const [slug, label, kind, isReturn, sort] of SEED_TYPES) {
+      await client.query(
+        `INSERT INTO types (organization_id, slug, label, kind, is_return, sort_order, is_system)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         ON CONFLICT (organization_id, slug) DO NOTHING`,
+        [organizationId, slug, label, kind, isReturn, sort],
+      );
+    }
+    // platform_accounts (mirrors migration 2026-06-14f): eBay storefronts from
+    // ebay_accounts, plus one default '<platform>-main' account per non-eBay
+    // platform so every channel is reachable through an account.
+    await client.query(
+      `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope, is_active)
+       SELECT ea.organization_id, p.id, ea.account_name, ea.account_name, ea.account_name, COALESCE(ea.is_active, true)
+         FROM ebay_accounts ea
+         JOIN platforms p ON p.organization_id = ea.organization_id AND p.slug = 'ebay'
+        WHERE ea.organization_id = $1
+          AND ea.account_name IS NOT NULL AND BTRIM(ea.account_name) <> ''
+       ON CONFLICT (organization_id, platform_id, slug) DO NOTHING`,
+      [organizationId],
     );
-  }
-  for (const [slug, label, kind, isReturn, sort] of SEED_TYPES) {
-    await pool.query(
-      `INSERT INTO types (organization_id, slug, label, kind, is_return, sort_order, is_system)
-       VALUES ($1, $2, $3, $4, $5, $6, true)
-       ON CONFLICT (organization_id, slug) DO NOTHING`,
-      [organizationId, slug, label, kind, isReturn, sort],
+    await client.query(
+      `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, is_active)
+       SELECT p.organization_id, p.id, p.slug || '-main', p.label, true
+         FROM platforms p
+        WHERE p.organization_id = $1 AND p.slug <> 'ebay'
+       ON CONFLICT (organization_id, platform_id, slug) DO NOTHING`,
+      [organizationId],
     );
-  }
+  });
 }
 
 /** lowercase-kebab/underscore slug from a free-text label. */
@@ -102,10 +139,11 @@ export function slugify(input: string): string {
 // ─── platforms ────────────────────────────────────────────────────────────────
 
 export async function listPlatforms(
-  organizationId: string,
+  organizationId: OrgId,
   opts: { includeInactive?: boolean } = {},
 ): Promise<PlatformRow[]> {
-  const res = await pool.query<PlatformRow>(
+  const res = await tenantQuery<PlatformRow>(
+    organizationId,
     `SELECT * FROM platforms
       WHERE organization_id = $1
         AND ($2::boolean OR is_active)
@@ -115,8 +153,9 @@ export async function listPlatforms(
   return res.rows;
 }
 
-export async function getPlatformById(organizationId: string, id: number): Promise<PlatformRow | null> {
-  const res = await pool.query<PlatformRow>(
+export async function getPlatformById(organizationId: OrgId, id: number): Promise<PlatformRow | null> {
+  const res = await tenantQuery<PlatformRow>(
+    organizationId,
     `SELECT * FROM platforms WHERE organization_id = $1 AND id = $2`,
     [organizationId, id],
   );
@@ -124,10 +163,11 @@ export async function getPlatformById(organizationId: string, id: number): Promi
 }
 
 export async function createPlatform(
-  organizationId: string,
+  organizationId: OrgId,
   data: { slug: string; label: string; tone?: string | null; provider?: string | null; sortOrder?: number },
 ): Promise<PlatformRow> {
-  const res = await pool.query<PlatformRow>(
+  const res = await tenantQuery<PlatformRow>(
+    organizationId,
     `INSERT INTO platforms (organization_id, slug, label, tone, provider, sort_order)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
@@ -137,11 +177,12 @@ export async function createPlatform(
 }
 
 export async function updatePlatform(
-  organizationId: string,
+  organizationId: OrgId,
   id: number,
   data: { label?: string; tone?: string | null; provider?: string | null; sortOrder?: number; isActive?: boolean },
 ): Promise<PlatformRow | null> {
-  const res = await pool.query<PlatformRow>(
+  const res = await tenantQuery<PlatformRow>(
+    organizationId,
     `UPDATE platforms SET
        label      = COALESCE($3, label),
        tone       = COALESCE($4, tone),
@@ -166,10 +207,11 @@ export async function updatePlatform(
 // ─── types ──────────────────────────────────────────────────────────────────
 
 export async function listTypes(
-  organizationId: string,
+  organizationId: OrgId,
   opts: { includeInactive?: boolean } = {},
 ): Promise<TypeRow[]> {
-  const res = await pool.query<TypeRow>(
+  const res = await tenantQuery<TypeRow>(
+    organizationId,
     `SELECT * FROM types
       WHERE organization_id = $1
         AND ($2::boolean OR is_active)
@@ -179,8 +221,9 @@ export async function listTypes(
   return res.rows;
 }
 
-export async function getTypeById(organizationId: string, id: number): Promise<TypeRow | null> {
-  const res = await pool.query<TypeRow>(
+export async function getTypeById(organizationId: OrgId, id: number): Promise<TypeRow | null> {
+  const res = await tenantQuery<TypeRow>(
+    organizationId,
     `SELECT * FROM types WHERE organization_id = $1 AND id = $2`,
     [organizationId, id],
   );
@@ -188,30 +231,65 @@ export async function getTypeById(organizationId: string, id: number): Promise<T
 }
 
 export async function createType(
-  organizationId: string,
-  data: { slug: string; label: string; kind?: string; isReturn?: boolean; sortOrder?: number },
+  organizationId: OrgId,
+  data: {
+    slug: string;
+    label: string;
+    kind?: string;
+    isReturn?: boolean;
+    sortOrder?: number;
+    platformAccountId?: number | null;
+    workflowNodeId?: string | null;
+  },
 ): Promise<TypeRow> {
-  const res = await pool.query<TypeRow>(
-    `INSERT INTO types (organization_id, slug, label, kind, is_return, sort_order)
-     VALUES ($1, $2, $3, $4, $5, $6)
+  const res = await tenantQuery<TypeRow>(
+    organizationId,
+    `INSERT INTO types
+       (organization_id, slug, label, kind, is_return, sort_order, platform_account_id, workflow_node_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [organizationId, data.slug, data.label, data.kind ?? 'receiving', data.isReturn ?? false, data.sortOrder ?? 100],
+    [
+      organizationId,
+      data.slug,
+      data.label,
+      data.kind ?? 'receiving',
+      data.isReturn ?? false,
+      data.sortOrder ?? 100,
+      data.platformAccountId ?? null,
+      data.workflowNodeId ?? null,
+    ],
   );
   return res.rows[0];
 }
 
 export async function updateType(
-  organizationId: string,
+  organizationId: OrgId,
   id: number,
-  data: { label?: string; kind?: string; isReturn?: boolean; sortOrder?: number; isActive?: boolean },
+  data: {
+    label?: string;
+    kind?: string;
+    isReturn?: boolean;
+    sortOrder?: number;
+    isActive?: boolean;
+    // `null` is a meaningful value (clear the binding) — distinct from
+    // `undefined` (leave unchanged). The route passes a sentinel so COALESCE
+    // can't collapse an intentional clear back to the existing value.
+    platformAccountId?: number | null;
+    workflowNodeId?: string | null;
+  },
 ): Promise<TypeRow | null> {
-  const res = await pool.query<TypeRow>(
+  const setBinding = Object.prototype.hasOwnProperty.call(data, 'platformAccountId');
+  const setWorkflow = Object.prototype.hasOwnProperty.call(data, 'workflowNodeId');
+  const res = await tenantQuery<TypeRow>(
+    organizationId,
     `UPDATE types SET
-       label      = COALESCE($3, label),
-       kind       = COALESCE($4, kind),
-       is_return  = COALESCE($5, is_return),
-       sort_order = COALESCE($6, sort_order),
-       is_active  = COALESCE($7, is_active)
+       label               = COALESCE($3, label),
+       kind                = COALESCE($4, kind),
+       is_return           = COALESCE($5, is_return),
+       sort_order          = COALESCE($6, sort_order),
+       is_active           = COALESCE($7, is_active),
+       platform_account_id = CASE WHEN $8::boolean THEN $9::bigint ELSE platform_account_id END,
+       workflow_node_id    = CASE WHEN $10::boolean THEN $11::text ELSE workflow_node_id END
      WHERE organization_id = $1 AND id = $2
      RETURNING *`,
     [
@@ -222,7 +300,74 @@ export async function updateType(
       data.isReturn ?? null,
       data.sortOrder ?? null,
       data.isActive ?? null,
+      setBinding,
+      data.platformAccountId ?? null,
+      setWorkflow,
+      data.workflowNodeId ?? null,
     ],
+  );
+  return res.rows[0] ?? null;
+}
+
+// ─── platform_accounts ────────────────────────────────────────────────────────
+
+export async function listPlatformAccounts(
+  organizationId: OrgId,
+  opts: { platformId?: number; includeInactive?: boolean } = {},
+): Promise<PlatformAccountRow[]> {
+  const res = await tenantQuery<PlatformAccountRow>(
+    organizationId,
+    `SELECT * FROM platform_accounts
+      WHERE organization_id = $1
+        AND ($2::boolean OR is_active)
+        AND ($3::bigint IS NULL OR platform_id = $3)
+      ORDER BY platform_id ASC, label ASC`,
+    [organizationId, opts.includeInactive ?? false, opts.platformId ?? null],
+  );
+  return res.rows;
+}
+
+export async function getPlatformAccountById(
+  organizationId: OrgId,
+  id: number,
+): Promise<PlatformAccountRow | null> {
+  const res = await tenantQuery<PlatformAccountRow>(
+    organizationId,
+    `SELECT * FROM platform_accounts WHERE organization_id = $1 AND id = $2`,
+    [organizationId, id],
+  );
+  return res.rows[0] ?? null;
+}
+
+export async function createPlatformAccount(
+  organizationId: OrgId,
+  data: { platformId: number; slug: string; label: string; integrationScope?: string | null },
+): Promise<PlatformAccountRow> {
+  const res = await tenantQuery<PlatformAccountRow>(
+    organizationId,
+    `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [organizationId, data.platformId, data.slug, data.label, data.integrationScope ?? null],
+  );
+  return res.rows[0];
+}
+
+export async function updatePlatformAccount(
+  organizationId: OrgId,
+  id: number,
+  data: { label?: string; integrationScope?: string | null; isActive?: boolean },
+): Promise<PlatformAccountRow | null> {
+  const setScope = Object.prototype.hasOwnProperty.call(data, 'integrationScope');
+  const res = await tenantQuery<PlatformAccountRow>(
+    organizationId,
+    `UPDATE platform_accounts SET
+       label             = COALESCE($3, label),
+       integration_scope = CASE WHEN $4::boolean THEN $5::text ELSE integration_scope END,
+       is_active         = COALESCE($6, is_active)
+     WHERE organization_id = $1 AND id = $2
+     RETURNING *`,
+    [organizationId, id, data.label ?? null, setScope, data.integrationScope ?? null, data.isActive ?? null],
   );
   return res.rows[0] ?? null;
 }

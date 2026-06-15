@@ -11,6 +11,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { computeWarranty, daysUntilExpiry } from './clock';
 import type { WarrantyClockBasis } from './clock';
 import { resolveWarrantyDays } from './term';
@@ -67,12 +69,17 @@ async function runResolve(
   matched: string | null,
   extraJoinAndWhere: string,
   params: unknown[],
+  orgId: string | null,
 ): Promise<OrderRow | null> {
   try {
-    const { rows } = await pool.query<Omit<OrderRow, 'matched_serial'>>(
-      `SELECT ${ORDER_SELECT} ${ORDER_FROM} ${extraJoinAndWhere} ORDER BY o.created_at DESC NULLS LAST, o.id DESC LIMIT 1`,
-      params,
-    );
+    // Scope the order resolution to this org so a guessed order#/serial/SKU
+    // can't surface another tenant's order (the joined serial_units/tech_serial/
+    // STN rows are transitively scoped via the org-filtered orders row).
+    const whereOrg = orgId ? ` AND o.organization_id = $${params.length + 1}` : '';
+    const sql = `SELECT ${ORDER_SELECT} ${ORDER_FROM} ${extraJoinAndWhere}${whereOrg} ORDER BY o.created_at DESC NULLS LAST, o.id DESC LIMIT 1`;
+    const { rows } = orgId
+      ? await tenantQuery<Omit<OrderRow, 'matched_serial'>>(orgId as OrgId, sql, [...params, orgId])
+      : await pool.query<Omit<OrderRow, 'matched_serial'>>(sql, params);
     if (rows.length === 0) return null;
     return { ...rows[0], matched_serial: matched };
   } catch (err) {
@@ -88,8 +95,9 @@ async function runResolve(
  */
 async function resolveOrder(
   q: string,
+  orgId: string | null,
 ): Promise<{ row: OrderRow; matchedBy: 'order' | 'serial' | 'sku' } | null> {
-  const byOrder = await runResolve(null, `WHERE o.order_id = $1`, [q]);
+  const byOrder = await runResolve(null, `WHERE o.order_id = $1`, [q], orgId);
   if (byOrder) return { row: byOrder, matchedBy: 'order' };
 
   const bySerialUnit = await runResolve(
@@ -97,6 +105,7 @@ async function resolveOrder(
     `JOIN serial_units su ON su.shipment_id = o.shipment_id
      WHERE UPPER(TRIM(su.serial_number)) = UPPER(TRIM($1))`,
     [q],
+    orgId,
   );
   if (bySerialUnit) return { row: bySerialUnit, matchedBy: 'serial' };
 
@@ -105,10 +114,11 @@ async function resolveOrder(
     `JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
      WHERE UPPER(TRIM(tsn.serial_number)) = UPPER(TRIM($1))`,
     [q],
+    orgId,
   );
   if (bySerialTech) return { row: bySerialTech, matchedBy: 'serial' };
 
-  const bySku = await runResolve(null, `WHERE o.sku = $1`, [q]);
+  const bySku = await runResolve(null, `WHERE o.sku = $1`, [q], orgId);
   if (bySku) return { row: bySku, matchedBy: 'sku' };
 
   return null;
@@ -117,18 +127,21 @@ async function resolveOrder(
 async function findExistingClaim(
   orderId: number,
   serialNumber: string | null,
+  orgId: string | null,
 ): Promise<WarrantyCoverageResult['existingClaim']> {
   try {
-    const { rows } = await pool.query<{ id: number; claim_number: string; status: WarrantyClaimStatus }>(
-      `SELECT id, claim_number, status
+    // org-scoped so a guessed order#/serial can't reveal another tenant's claim.
+    const whereOrg = orgId ? ` AND organization_id = $3` : '';
+    const sql = `SELECT id, claim_number, status
          FROM warranty_claims
         WHERE deleted_at IS NULL
           AND (order_id = $1
-           OR ($2::text IS NOT NULL AND UPPER(TRIM(serial_number)) = UPPER(TRIM($2))))
+           OR ($2::text IS NOT NULL AND UPPER(TRIM(serial_number)) = UPPER(TRIM($2))))${whereOrg}
         ORDER BY created_at DESC, id DESC
-        LIMIT 1`,
-      [orderId, serialNumber],
-    );
+        LIMIT 1`;
+    const { rows } = orgId
+      ? await tenantQuery<{ id: number; claim_number: string; status: WarrantyClaimStatus }>(orgId as OrgId, sql, [orderId, serialNumber, orgId])
+      : await pool.query<{ id: number; claim_number: string; status: WarrantyClaimStatus }>(sql, [orderId, serialNumber]);
     if (rows.length === 0) return null;
     return { id: Number(rows[0].id), claimNumber: rows[0].claim_number, status: rows[0].status };
   } catch (err) {
@@ -173,7 +186,7 @@ export async function lookupCoverage(
   const query = rawQuery.trim();
   if (!query) return emptyResult(query);
 
-  const resolved = await resolveOrder(query);
+  const resolved = await resolveOrder(query, organizationId);
   if (!resolved) return emptyResult(query);
 
   const { row, matchedBy } = resolved;
@@ -187,7 +200,7 @@ export async function lookupCoverage(
   // Covered through the last day (daysRemaining === 0); expired once negative.
   const inWarranty = daysRemaining == null ? null : daysRemaining >= 0;
 
-  const existingClaim = await findExistingClaim(Number(row.id), row.matched_serial);
+  const existingClaim = await findExistingClaim(Number(row.id), row.matched_serial, organizationId);
 
   return {
     query,

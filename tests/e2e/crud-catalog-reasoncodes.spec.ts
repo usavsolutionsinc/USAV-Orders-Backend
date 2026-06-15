@@ -106,7 +106,7 @@ test.describe('reason-codes CRUD', () => {
     let id: number | undefined;
     try {
       const createRes = await request.post('/api/reason-codes', {
-        data: { code, label: 'E2E reason', category: 'e2e', direction: 'either' },
+        data: { code, label: 'E2E reason', category: 'adjustment', direction: 'either' },
       });
       expect(createRes.status()).toBe(201);
       const created = await createRes.json();
@@ -144,13 +144,13 @@ test.describe('reason-codes CRUD', () => {
     let id: number | undefined;
     try {
       const first = await request.post('/api/reason-codes', {
-        data: { code, label: 'a', category: 'e2e' },
+        data: { code, label: 'a', category: 'adjustment' },
       });
       expect(first.status()).toBe(201);
       id = (await first.json()).reason_code.id;
 
       const second = await request.post('/api/reason-codes', {
-        data: { code, label: 'b', category: 'e2e' },
+        data: { code, label: 'b', category: 'adjustment' },
       });
       expect(second.status()).toBe(409);
     } finally {

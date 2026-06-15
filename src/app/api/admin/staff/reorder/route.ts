@@ -9,9 +9,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -40,11 +40,17 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     params.push(id, i + 1);
     valueParts.push(`($${params.length - 1}::INT, $${params.length}::INT)`);
   });
-  await pool.query(
+  // staff is tenant-owned: only reorder rows in the caller's org. Any id in the
+  // posted order that belongs to another tenant matches no in-org staff row and
+  // is silently skipped — never mutated.
+  params.push(ctx.organizationId);
+  const orgParam = params.length;
+  await tenantQuery(
+    ctx.organizationId,
     `UPDATE staff s
         SET sort_order = v.sort_order
        FROM (VALUES ${valueParts.join(', ')}) AS v(id, sort_order)
-      WHERE s.id = v.id`,
+      WHERE s.id = v.id AND s.organization_id = $${orgParam}`,
     params,
   );
 

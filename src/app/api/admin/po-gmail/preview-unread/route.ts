@@ -19,7 +19,7 @@ const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 25;
 const BODY_PREVIEW_CHARS = 800;
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const url = new URL(req.url);
     const limitRaw = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT);
@@ -29,8 +29,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     const query = url.searchParams.get('q') ?? 'is:unread';
 
     const startedAt = Date.now();
-    const { ids } = await listMessageIds(query, limit);
-    const messages = await fetchMessagesByIds(ids);
+    const { ids } = await listMessageIds(query, limit, undefined, ctx.organizationId);
+    const messages = await fetchMessagesByIds(ids, ctx.organizationId);
 
     const items = messages.map((m) => {
       const extracted = extractOrderNumbers(`${m.subject}\n${m.bodyText}`);

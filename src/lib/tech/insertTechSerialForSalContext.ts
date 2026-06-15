@@ -3,6 +3,7 @@ import { formatPSTTimestamp } from '@/utils/date';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 type Queryable = Pick<Pool, 'query'>;
 
@@ -60,14 +61,16 @@ export async function getTechSerialsBySalId(db: Queryable, salId: number): Promi
 export async function resolveTechSerialSalContext(
   db: Queryable,
   salId: number,
+  /** Phase 3a: tenant scope for the fba_fnsku_logs lookup below. */
+  orgId: OrgId,
 ): Promise<ResolveTechSerialSalContextResult> {
   const salResult = await db.query(
     `SELECT id, staff_id, shipment_id, scan_ref, fnsku, orders_exception_id,
             fba_shipment_id, fba_shipment_item_id
      FROM station_activity_logs
-     WHERE id = $1
+     WHERE id = $1 AND organization_id = $2
      LIMIT 1`,
-    [salId],
+    [salId, orgId],
   );
 
   if (salResult.rows.length === 0) {
@@ -89,9 +92,10 @@ export async function resolveTechSerialSalContext(
     `SELECT id
      FROM fba_fnsku_logs
      WHERE station_activity_log_id = $1
+       AND organization_id = $2
      ORDER BY created_at DESC, id DESC
      LIMIT 1`,
-    [salId],
+    [salId, orgId],
   );
 
   const fnskuLogId = fnskuLogResult.rows[0]?.id != null

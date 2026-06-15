@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getQcChecks } from '@/lib/neon/sku-catalog-queries';
 import { resolveLineCatalog } from '@/lib/receiving/line-catalog';
 
@@ -22,14 +22,17 @@ function lineIdFromPath(pathname: string): number {
   return Number(segments[segments.length - 2]);
 }
 
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   const lineId = lineIdFromPath(request.nextUrl.pathname);
   if (!Number.isFinite(lineId) || lineId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid line id' }, { status: 400 });
   }
 
   try {
-    const resolved = await resolveLineCatalog(lineId);
+    // [id] read gate: scope the line→catalog resolution to ctx.organizationId so
+    // a foreign tenant's lineId resolves to no row (404 below) instead of
+    // leaking that line's SKU/title and reaching its catalog.
+    const resolved = await resolveLineCatalog(lineId, ctx.organizationId);
     if (!resolved) {
       return NextResponse.json({ ok: false, error: 'line not found' }, { status: 404 });
     }
@@ -45,21 +48,31 @@ export const GET = withAuth(async (request) => {
       });
     }
 
-    const cat = await pool.query<{ category: string | null; product_title: string | null }>(
-      `SELECT category, product_title FROM sku_catalog WHERE id = $1`,
-      [resolved.skuCatalogId],
+    // sku_catalog is tenant-owned — only resolve the row if it belongs to this
+    // org (404-on-mismatch behavior preserved below: a foreign catalog id yields
+    // no rows and the response falls back to the resolved line's own title).
+    const cat = await tenantQuery<{ category: string | null; product_title: string | null }>(
+      ctx.organizationId,
+      `SELECT category, product_title FROM sku_catalog WHERE id = $1 AND organization_id = $2`,
+      [resolved.skuCatalogId, ctx.organizationId],
     );
     const category = cat.rows[0]?.category ?? null;
 
     const [checklist, manuals] = await Promise.all([
       // Execution view — only published steps reach the tech.
       getQcChecks(resolved.skuCatalogId, category, { publishedOnly: true }),
-      pool.query(
-        `SELECT id, display_name, type, source_url, thumbnail_url, file_name
-           FROM product_manuals
-          WHERE sku_catalog_id = $1 AND is_active = true
-          ORDER BY updated_at DESC`,
-        [resolved.skuCatalogId],
+      // product_manuals has no organization_id column (child-scoped to
+      // sku_catalog) — GUC-wrap via tenantQuery and scope through its parent's
+      // org so a foreign catalog id can't surface another tenant's manuals.
+      tenantQuery(
+        ctx.organizationId,
+        `SELECT pm.id, pm.display_name, pm.type, pm.source_url, pm.thumbnail_url, pm.file_name
+           FROM product_manuals pm
+           JOIN sku_catalog sc ON sc.id = pm.sku_catalog_id
+          WHERE pm.sku_catalog_id = $1 AND pm.is_active = true
+            AND sc.organization_id = $2
+          ORDER BY pm.updated_at DESC`,
+        [resolved.skuCatalogId, ctx.organizationId],
       ),
     ]);
 

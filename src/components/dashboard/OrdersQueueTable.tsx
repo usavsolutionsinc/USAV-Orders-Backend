@@ -4,10 +4,21 @@ import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
-import { Loader2 } from '@/components/Icons';
+import { Check, Loader2 } from '@/components/Icons';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { OrderIdentityChips } from '@/components/ui/OrderIdentityChips';
-import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
+import {
+  OrderIdChip,
+  PlatformChip,
+  TrackingOrSkuScanChip,
+  TrackingCountChip,
+  getLast4,
+} from '@/components/ui/CopyChip';
+import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
+import { CollapsibleGroupRow } from '@/components/ui/CollapsibleGroupRow';
+import { groupRowsBy, type RowGroup } from '@/lib/group-rows';
+import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
+import { useTableSelectMode } from '@/hooks/useTableSelectMode';
 import { AddTrackingPopover } from '@/components/unshipped/AddTrackingPopover';
 import { AddTrackingNavProvider } from '@/components/unshipped/add-tracking-context';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
@@ -20,10 +31,34 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
 import { isSkuSourceRecord } from '@/utils/source-dot';
+import { deriveUnshippedState, UNSHIPPED_STATE_META, type UnshippedState } from '@/lib/unshipped-state';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
   dashboardOrderRowShellClass,
+  dashboardOrderRowChipsClass,
 } from '@/lib/dashboard-order-row-layout';
+
+/**
+ * Format an order line's realized sale price (orders.sale_amount + currency)
+ * for the row meta. Returns null when there's no amount so the slot stays
+ * empty — most legacy orders have no price yet; only newly-ingested ones do.
+ */
+function formatSalePrice(
+  amount: string | number | null | undefined,
+  currency: string | null | undefined,
+): string | null {
+  if (amount == null || amount === '') return null;
+  const n = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(n)) return null;
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: (currency || 'USD').toUpperCase(),
+    }).format(n);
+  } catch {
+    return `$${n.toFixed(2)}`;
+  }
+}
 
 function normalizePersonName(value: unknown): string {
   const text = String(value ?? '')
@@ -45,12 +80,14 @@ type QueueRowRecord = ShippedOrder & Record<string, unknown>;
 const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   record,
   isSelected,
+  selectMode,
+  isChecked,
   useAlternateStripe,
   testerDisplay,
   packerDisplay,
   testerId,
   packerId,
-  hasTechScan,
+  unshippedState,
   hasOutOfStock,
   outOfStockValue,
   daysLate,
@@ -59,17 +96,24 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
 }: {
   record: QueueRowRecord;
   isSelected: boolean;
+  /** Pencil multi-select on — render a leading checkbox; click toggles. */
+  selectMode: boolean;
+  /** Whether this row is checked (only meaningful when `selectMode`). */
+  isChecked: boolean;
   isMobile: boolean;
   useAlternateStripe: boolean;
   testerDisplay: string;
   packerDisplay: string;
   testerId: number | null;
   packerId: number | null;
-  hasTechScan: boolean;
+  /** Derived pre‑dock pipeline state — drives the status dot color/tooltip. */
+  unshippedState: UnshippedState;
   hasOutOfStock: boolean;
   outOfStockValue: string;
   daysLate: number | null;
-  onRowClick: (record: ShippedOrder) => void;
+  /** `event` carries `shiftKey` for range-select; structural so both mouse +
+   *  keyboard events satisfy it. */
+  onRowClick: (record: ShippedOrder, event?: { shiftKey: boolean }) => void;
 }) {
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const trackingRaw =
@@ -91,6 +135,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   const productPageUrl = getExternalUrlByItemNumber(
     String(record.item_number || '').trim() || skuScanPrefixBeforeColon(trackingRaw),
   );
+  const salePrice = formatSalePrice(record.sale_amount, record.currency);
 
   return (
     <motion.div
@@ -98,17 +143,21 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
       transition={framerTransition.tableRowMount}
       whileHover={{ x: 2 }}
       whileTap={{ scale: 0.998 }}
-      onClick={() => onRowClick(record)}
+      onClick={(event) => onRowClick(record, event)}
+      // Shift-click in select mode otherwise starts a native text selection
+      // across the range — suppress it so range-select reads cleanly.
+      onMouseDown={(event) => { if (selectMode && event.shiftKey) event.preventDefault(); }}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onRowClick(record);
+          onRowClick(record, event);
         }
       }}
-      role="button"
+      role={selectMode ? 'checkbox' : 'button'}
       tabIndex={0}
-      aria-pressed={isSelected}
-      aria-label={`Open order ${record.order_id || record.id}`}
+      aria-checked={selectMode ? isChecked : undefined}
+      aria-pressed={selectMode ? undefined : isSelected}
+      aria-label={selectMode ? `Select order ${record.order_id || record.id}` : `Open order ${record.order_id || record.id}`}
       data-order-row-id={String(record.id)}
       className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-all cursor-pointer hover:bg-blue-50/50 ${
         isSelected ? 'bg-blue-50/80' : useAlternateStripe ? 'bg-white' : 'bg-gray-50/40'
@@ -116,11 +165,25 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     >
       <div className="flex flex-col min-w-0">
         <RowTitle
-          dot={hasTechScan ? 'bg-emerald-500' : hasOutOfStock ? 'bg-red-500' : 'bg-yellow-400'}
-          dotTitle={hasTechScan ? 'Scanned by tech' : hasOutOfStock ? 'Out of stock' : 'Pending order'}
+          leading={
+            selectMode ? (
+              <span
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                  isChecked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                }`}
+              >
+                {isChecked && <Check className="h-3 w-3" />}
+              </span>
+            ) : undefined
+          }
+          dot={UNSHIPPED_STATE_META[unshippedState].dot}
+          dotTitle={`${UNSHIPPED_STATE_META[unshippedState].label} — ${UNSHIPPED_STATE_META[unshippedState].description}`}
           title={record.product_title || 'Unknown Product'}
         />
         <RowMetaColumns
+          // Select mode adds a leading checkbox (w-4 + mr-2 = 1.5rem); shift the
+          // meta indent by that same offset so qty stays under the title.
+          indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
           qty={<span className={qty > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qty}</span>}
           condition={
             <span className={String(record.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>
@@ -129,6 +192,9 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
           }
           rest={
             <>
+              {salePrice ? (
+                <span className="normal-case tracking-normal text-emerald-600">{salePrice}</span>
+              ) : null}
               {daysLate !== null ? (
                 <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
               ) : null}
@@ -158,12 +224,14 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.isMobile !== next.isMobile) return false;
   if (prev.record.id !== next.record.id) return false;
   if (prev.isSelected !== next.isSelected) return false;
+  if (prev.selectMode !== next.selectMode) return false;
+  if (prev.isChecked !== next.isChecked) return false;
   if (prev.useAlternateStripe !== next.useAlternateStripe) return false;
   if (prev.testerDisplay !== next.testerDisplay) return false;
   if (prev.packerDisplay !== next.packerDisplay) return false;
   if (prev.testerId !== next.testerId) return false;
   if (prev.packerId !== next.packerId) return false;
-  if (prev.hasTechScan !== next.hasTechScan) return false;
+  if (prev.unshippedState !== next.unshippedState) return false;
   if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
   if (prev.outOfStockValue !== next.outOfStockValue) return false;
   if (prev.daysLate !== next.daysLate) return false;
@@ -171,8 +239,105 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.condition !== next.record.condition) return false;
   if (prev.record.order_id !== next.record.order_id) return false;
   if (prev.record.quantity !== next.record.quantity) return false;
+  if (prev.record.sale_amount !== next.record.sale_amount) return false;
+  if (prev.record.currency !== next.record.currency) return false;
   return true;
 });
+
+/**
+ * Collapsed-header content for a {@link CollapsibleGroupRow} wrapping several
+ * order lines that share ONE order number but are DIFFERENT products (e.g. a
+ * marketplace order with two items shipped under the same — or different —
+ * tracking). Built from the same RowTitle / RowMetaColumns / chip primitives a
+ * single line uses, so the header reads like a real row and aligns with the
+ * child rows it reveals.
+ *
+ * The order number is the shared identity (one real #chip); tracking shows one
+ * value when the lines ship together, else a ×N count ({@link TrackingCountChip}).
+ */
+function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; isMobile: boolean }) {
+  const first = rows[0];
+  const orderId = String(first.order_id || '').trim();
+  const platformLabel = getOrderPlatformLabel(orderId, first.account_source);
+  const isFba = isFbaOrder(orderId, first.account_source);
+  const productPageUrl = getExternalUrlByItemNumber(String(first.item_number || '').trim());
+  const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
+  const platformIconClass = platformLabel && productPageUrl ? platformColor : 'text-gray-500';
+
+  const qtySum = rows.reduce((sum, r) => sum + (parseInt(String(r.quantity || '1'), 10) || 1), 0);
+  const conditions = new Set(rows.map((r) => String(r.condition || '').trim()).filter(Boolean));
+  const conditionText = conditions.size === 1 ? [...conditions][0] : conditions.size > 1 ? 'MIXED' : 'N/A';
+
+  // Combined sale price across the lines that share this order number.
+  const priceSum = rows.reduce((sum, r) => {
+    const n = r.sale_amount == null || r.sale_amount === '' ? NaN : Number(r.sale_amount);
+    return Number.isFinite(n) ? sum + n : sum;
+  }, 0);
+  const groupPrice = priceSum > 0 ? formatSalePrice(priceSum, rows.find((r) => r.currency)?.currency) : null;
+
+  const trackings = new Set(
+    rows
+      .map((r) => String(((r as QueueRowRecord).tracking_number as string | undefined) || r.shipping_tracking_number || '').trim())
+      .filter(Boolean),
+  );
+  const trackingValue = trackings.size === 1 ? [...trackings][0] : '';
+
+  const platformNode = !isFba ? (
+    <PlatformChip
+      label={platformLabel}
+      underlineClass={getOrderPlatformBorderColor(platformLabel)}
+      iconClass={platformIconClass}
+      onClick={() => {
+        if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
+      }}
+    />
+  ) : null;
+  const trackingNode = trackingValue
+    ? <TrackingOrSkuScanChip value={trackingValue} />
+    : trackings.size > 1
+      ? <TrackingCountChip count={trackings.size} />
+      : null;
+
+  // The row's platform / order-id / tracking columns line up column-for-column
+  // with the child rows beneath.
+  const columns: ChipColumn[] = [
+    { key: 'platform', width: CHIP_COL.platform, node: platformNode },
+    { key: 'orderid', width: CHIP_COL.id, node: <OrderIdChip value={orderId} display={getLast4(orderId)} /> },
+    { key: 'tracking', width: CHIP_COL.tracking, node: trackingNode },
+  ];
+
+  return (
+    <div className={dashboardOrderRowShellClass(isMobile)}>
+      <div className="flex min-w-0 flex-col">
+        <RowTitle
+          // Structural group marker (N products share one order#), not a status —
+          // neutral gray so it never collides with a pipeline-state dot hue.
+          dot="bg-gray-300"
+          dotTitle={`${rows.length} products`}
+          title={platformLabel ? `${platformLabel} · Order ${orderId}` : `Order ${orderId}`}
+        />
+        <RowMetaColumns
+          qty={<span className={qtySum > 1 ? 'text-yellow-600' : 'text-gray-500'}>{qtySum}</span>}
+          condition={<span className="text-gray-400">{conditionText}</span>}
+          rest={groupPrice ? <span className="normal-case tracking-normal text-emerald-600">{groupPrice}</span> : null}
+        />
+      </div>
+      {isMobile ? (
+        <div className={dashboardOrderRowChipsClass(true)}>
+          {platformNode}
+          <OrderIdChip value={orderId} display={getLast4(orderId)} dense />
+          {trackingValue
+            ? <TrackingOrSkuScanChip value={trackingValue} />
+            : trackings.size > 1
+              ? <TrackingCountChip count={trackings.size} dense />
+              : null}
+        </div>
+      ) : (
+        <ChipColumns columns={columns} />
+      )}
+    </div>
+  );
+}
 
 /** Sort order for the date-banded queue. `priority` (default) keeps the current
  *  behavior (soonest deadline, Awaiting-before-Pending within a day); `newest`
@@ -203,6 +368,12 @@ export interface OrdersQueueTableProps {
   useWaForDisplay?: boolean;
   /** Sort order (default `priority`). Driven by `?sort` on the merged Unshipped mode. */
   sort?: OrdersQueueSort;
+  /** Pencil multi-select: rows render checkboxes and click toggles instead of
+   *  opening the detail. Off by default so other consumers are unaffected. */
+  selectMode?: boolean;
+  /** Selection scope shared with the page's useTableSelection + action bar.
+   *  Required when `selectMode` is on. */
+  selectionScope?: string;
 }
 
 export function OrdersQueueTable({
@@ -227,6 +398,8 @@ export function OrdersQueueTable({
   onCloseRecord,
   useWaForDisplay = false,
   sort = 'priority',
+  selectMode = false,
+  selectionScope = 'orders-queue',
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -300,36 +473,123 @@ export function OrdersQueueTable({
     groupedRecords[date].push(record);
   });
 
+  // One canonical per-day ordering, shared by the rendered rows AND the flat
+  // `displayedRecords` (keyboard nav, awaiting worklist, shift-range select) so
+  // the range a shift-click spans matches exactly what's on screen.
+  const sortDayRecords = (dayRecords: ShippedOrder[]): ShippedOrder[] =>
+    [...dayRecords].sort((a, b) => {
+      if (sort === 'newest') {
+        const ta = new Date(a.created_at || a.deadline_at || 0).getTime();
+        const tb = new Date(b.created_at || b.deadline_at || 0).getTime();
+        return tb - ta;
+      }
+      // Priority: within a day, Awaiting (no shipment/tracking yet) sorts before
+      // Pending so the "needs a label" work surfaces first. No-op for
+      // single-stage tables (e.g. shipped — all have a shipment).
+      const stageA = a.shipment_id == null ? 0 : 1;
+      const stageB = b.shipment_id == null ? 0 : 1;
+      if (stageA !== stageB) return stageA - stageB;
+      const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
+      const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
+      return timeA - timeB;
+    });
+
   const sortedGroupedEntries = Object.entries(groupedRecords)
     // `newest` shows the most recent day band first; `priority` shows soonest.
-    .sort((a, b) => (sort === 'newest' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0])));
+    .sort((a, b) => (sort === 'newest' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0])))
+    .map(([date, dayRecords]) => [date, sortDayRecords(dayRecords)] as [string, ShippedOrder[]]);
 
-  const displayedRecords = sortedGroupedEntries
-    .flatMap(([_, dayRecords]) => {
-      const sortedRecords = [...dayRecords].sort((a, b) => {
-        if (sort === 'newest') {
-          const ta = new Date(a.created_at || a.deadline_at || 0).getTime();
-          const tb = new Date(b.created_at || b.deadline_at || 0).getTime();
-          return tb - ta;
-        }
-        // Priority: within a day, Awaiting (no shipment/tracking yet) sorts before
-        // Pending so the "needs a label" work surfaces first. No-op for
-        // single-stage tables (e.g. shipped — all have a shipment).
-        const stageA = a.shipment_id == null ? 0 : 1;
-        const stageB = b.shipment_id == null ? 0 : 1;
-        if (stageA !== stageB) return stageA - stageB;
-        const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
-        const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
-        return timeA - timeB;
-      });
-      return sortedRecords;
-    });
+  // Within each day, fold the lines that share ONE order number into a single
+  // group → a multi-product order renders as one expandable header; the common
+  // single-line case stays a plain row. groupRowsBy preserves the per-day sort
+  // order, and `displayedRecords` is flattened from the SAME grouped order so
+  // keyboard-nav / shift-range select line up with what's actually on screen.
+  const orderGroupsByDate: [string, RowGroup<ShippedOrder>[]][] = sortedGroupedEntries.map(
+    ([date, dayRecords]) => [
+      date,
+      groupRowsBy(dayRecords, (r) => String(r.order_id || '').trim() || `id:${r.id}`),
+    ],
+  );
+
+  const displayedRecords = orderGroupsByDate.flatMap(([, groups]) => groups.flatMap((g) => g.rows));
 
   // Awaiting (no-tracking) order ids in display order — drives the add-tracking
   // popover's prev/next worklist navigation.
   const awaitingOrderIds = displayedRecords
     .filter((r) => r.shipment_id == null)
     .map((r) => Number(r.id));
+
+  // Pencil multi-select wiring (off by default → no-op for non-select callers).
+  const getRowId = useCallback((r: ShippedOrder) => Number(r.id), []);
+  const { selectedIds, toggle } = useTableSelectMode<ShippedOrder>({
+    scope: selectionScope,
+    selectMode,
+    rows: displayedRecords,
+    getId: getRowId,
+  });
+
+  // In select mode a click toggles the checkbox instead of opening the detail;
+  // shift-click extends the range from the last-clicked anchor.
+  const handleRowAction = useCallback(
+    (record: ShippedOrder, event?: { shiftKey: boolean }) => {
+      if (selectMode) {
+        toggle(Number(record.id), event?.shiftKey ?? false);
+        return;
+      }
+      handleRowClick(record);
+    },
+    [selectMode, toggle, handleRowClick],
+  );
+
+  // Render one queue row. Shared by the flat (single-line) case and the children
+  // of a multi-product order group, so both paths resolve tester/packer + flags
+  // identically. `stripeIndex` continues across a day (incl. group children) so
+  // zebra striping stays consistent.
+  const renderRow = useCallback(
+    (record: ShippedOrder, stripeIndex: number) => {
+      const r = record as QueueRowRecord;
+      const testerName = useWaForDisplay
+        ? getStaffName(r.tester_id as number | null | undefined)
+        : (r.tested_by_name as string | undefined) ||
+          (r.tester_name as string | undefined) ||
+          getStaffName(r.tested_by as number | null | undefined) ||
+          getStaffName(r.tester_id as number | null | undefined);
+      const packerName = useWaForDisplay
+        ? getStaffName(r.packer_id as number | null | undefined)
+        : (r.packed_by_name as string | undefined) ||
+          (r.packer_name as string | undefined) ||
+          getStaffName(r.packed_by as number | null | undefined) ||
+          getStaffName(r.packer_id as number | null | undefined);
+      const outOfStockValue = String(r.out_of_stock || '').trim();
+      const unshippedState = deriveUnshippedState({
+        shipmentId: r.shipment_id as number | string | null | undefined,
+        hasTechScan: Boolean(r.has_tech_scan),
+        packedAt: r.packed_at as string | null | undefined,
+        outOfStock: outOfStockValue,
+      });
+      return (
+        <OrdersQueueTableRow
+          key={record.id}
+          record={r}
+          isSelected={selectMode ? selectedIds.has(Number(record.id)) : selectedRecord?.id === record.id}
+          selectMode={selectMode}
+          isChecked={selectMode && selectedIds.has(Number(record.id))}
+          isMobile={isMobile}
+          useAlternateStripe={stripeIndex % 2 === 0}
+          testerDisplay={normalizePersonName(testerName)}
+          packerDisplay={normalizePersonName(packerName)}
+          testerId={useWaForDisplay ? (r.tester_id as number | null) : (r.tested_by as number | null) ?? (r.tester_id as number | null)}
+          packerId={useWaForDisplay ? (r.packer_id as number | null) : (r.packed_by as number | null) ?? (r.packer_id as number | null)}
+          unshippedState={unshippedState}
+          hasOutOfStock={outOfStockValue !== ''}
+          outOfStockValue={outOfStockValue}
+          daysLate={getDaysLateNullable(r.deadline_at as string | null | undefined)}
+          onRowClick={handleRowAction}
+        />
+      );
+    },
+    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction],
+  );
 
   useEffect(() => {
     const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
@@ -441,54 +701,39 @@ export function OrdersQueueTable({
             </div>
           ) : (
             <div className="flex flex-col w-full">
-              {sortedGroupedEntries.map(([date, dayRecords]) => {
-                  const sortedRecords = [...dayRecords].sort((a, b) => {
-                    const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
-                    const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
-                    return timeA - timeB;
-                  });
-
+              {orderGroupsByDate.map(([date, groups]) => {
+                  // groups preserve the per-day sort order (groupRowsBy), matching
+                  // displayedRecords so shift-range select lines up with the view.
+                  // `stripeIndex` runs across the whole day (group children too).
+                  let stripeIndex = 0;
+                  const dayTotal = groups.reduce((sum, g) => sum + g.rows.length, 0);
                   return (
                     <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dayRecords.length} />
-                      {sortedRecords.map((record, index) => {
-                        const r = record as QueueRowRecord;
-                        const testerName = useWaForDisplay
-                          ? getStaffName(r.tester_id as number | null | undefined)
-                          : (r.tested_by_name as string | undefined) ||
-                            (r.tester_name as string | undefined) ||
-                            getStaffName(r.tested_by as number | null | undefined) ||
-                            getStaffName(r.tester_id as number | null | undefined);
-                        const packerName = useWaForDisplay
-                          ? getStaffName(r.packer_id as number | null | undefined)
-                          : (r.packed_by_name as string | undefined) ||
-                            (r.packer_name as string | undefined) ||
-                            getStaffName(r.packed_by as number | null | undefined) ||
-                            getStaffName(r.packer_id as number | null | undefined);
-                        const testerDisplay = normalizePersonName(testerName);
-                        const packerDisplay = normalizePersonName(packerName);
-                        const outOfStockValue = String(r.out_of_stock || '').trim();
-                        const hasOutOfStock = outOfStockValue !== '';
-                        const hasTechScan = Boolean(r.has_tech_scan);
-                        const defaultDaysLate = getDaysLateNullable(r.deadline_at as string | null | undefined);
-
+                      <DateGroupHeader date={date} total={dayTotal} />
+                      {groups.map((group) => {
+                        // Singleton order → a plain row (the common case).
+                        if (group.rows.length === 1) {
+                          const node = renderRow(group.rows[0], stripeIndex);
+                          stripeIndex += 1;
+                          return node;
+                        }
+                        // Multi-product order → one collapsed header, expand to
+                        // reveal each product line. Different products, same order#.
+                        const headerIndex = stripeIndex;
+                        const children = group.rows.map((row) => {
+                          const node = renderRow(row, stripeIndex);
+                          stripeIndex += 1;
+                          return node;
+                        });
                         return (
-                          <OrdersQueueTableRow
-                            key={record.id}
-                            record={r}
-                            isSelected={selectedRecord?.id === record.id}
-                            isMobile={isMobile}
-                            useAlternateStripe={index % 2 === 0}
-                            testerDisplay={testerDisplay}
-                            packerDisplay={packerDisplay}
-                            testerId={useWaForDisplay ? (r.tester_id as number | null) : (r.tested_by as number | null) ?? (r.tester_id as number | null)}
-                            packerId={useWaForDisplay ? (r.packer_id as number | null) : (r.packed_by as number | null) ?? (r.packer_id as number | null)}
-                            hasTechScan={hasTechScan}
-                            hasOutOfStock={hasOutOfStock}
-                            outOfStockValue={outOfStockValue}
-                            daysLate={defaultDaysLate}
-                            onRowClick={handleRowClick}
-                          />
+                          <CollapsibleGroupRow
+                            key={`order-${group.key}`}
+                            index={headerIndex}
+                            showChevron={false}
+                            summary={<OrderGroupSummary rows={group.rows} isMobile={isMobile} />}
+                          >
+                            {children}
+                          </CollapsibleGroupRow>
                         );
                       })}
                     </div>

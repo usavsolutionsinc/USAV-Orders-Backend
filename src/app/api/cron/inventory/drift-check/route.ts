@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import type { PoolClient } from 'pg';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { forEachActiveOrg } from '@/lib/cron/for-each-org';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -28,62 +30,104 @@ export async function GET(request: NextRequest) {
 
 async function runDriftCheck() {
   const startedAt = Date.now();
-  const c = await pool.connect();
-  try {
-    await c.query('BEGIN');
 
-    const opened = await c.query<{ inserted: number }>(
-      `WITH ins AS (
-         INSERT INTO stock_alerts (sku, bin_id, alert_type, qty_at_trigger, notes)
-         SELECT
-           d.sku,
-           NULL::int,
-           'DRIFT',
-           GREATEST(ABS(d.warehouse_drift), ABS(d.boxed_drift)),
-           format(
-             'drift: warehouse stored=%s ledger=%s (Δ=%s) ; boxed stored=%s ledger=%s (Δ=%s)',
-             d.stored_stock, d.ledger_warehouse, d.warehouse_drift,
-             d.stored_boxed, d.ledger_boxed, d.boxed_drift
-           )
-         FROM v_sku_stock_drift d
-         ON CONFLICT DO NOTHING
-         RETURNING 1
-       )
-       SELECT COUNT(*)::int AS inserted FROM ins`,
-    );
+  // Fan out per active org: each pass runs inside that org's tenant connection
+  // (GUC set). v_sku_stock_drift carries no organization_id, so every read of
+  // it is scoped by joining back to sku_stock on (sku, organization_id) — this
+  // constrains each pass to the swept org BOTH before and after RLS FORCE lands
+  // (defense in depth) and aligns the otherwise-bare sku string join.
+  const perOrg = await forEachActiveOrg((orgId, client) =>
+    runDriftCheckForOrg(orgId, client),
+  );
 
-    const resolved = await c.query<{ resolved: number }>(
-      `WITH closed AS (
-         UPDATE stock_alerts sa
-            SET resolved_at = NOW()
-          WHERE sa.alert_type = 'DRIFT'
-            AND sa.resolved_at IS NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM v_sku_stock_drift d WHERE d.sku = sa.sku
-            )
-         RETURNING 1
-       )
-       SELECT COUNT(*)::int AS resolved FROM closed`,
-    );
-
-    const worst = await c.query<{ sku: string; warehouse_drift: number; boxed_drift: number }>(
-      `SELECT sku, warehouse_drift, boxed_drift
-         FROM v_sku_stock_drift
-        ORDER BY ABS(warehouse_drift) + ABS(boxed_drift) DESC
-        LIMIT 5`,
-    );
-
-    await c.query('COMMIT');
-    return {
-      opened: opened.rows[0]?.inserted ?? 0,
-      resolved: resolved.rows[0]?.resolved ?? 0,
-      worst: worst.rows,
-      elapsed_ms: Date.now() - startedAt,
-    };
-  } catch (err) {
-    await c.query('ROLLBACK');
-    throw err;
-  } finally {
-    c.release();
+  let opened = 0;
+  let resolved = 0;
+  const worst: { sku: string; warehouse_drift: number; boxed_drift: number }[] = [];
+  for (const r of perOrg) {
+    if (!r.ok || !r.result) continue;
+    opened += r.result.opened;
+    resolved += r.result.resolved;
+    worst.push(...r.result.worst);
   }
+  worst.sort(
+    (a, b) =>
+      Math.abs(b.warehouse_drift) + Math.abs(b.boxed_drift) -
+      (Math.abs(a.warehouse_drift) + Math.abs(a.boxed_drift)),
+  );
+
+  return {
+    opened,
+    resolved,
+    worst: worst.slice(0, 5),
+    orgs_swept: perOrg.length,
+    orgs_failed: perOrg.filter((r) => !r.ok).length,
+    elapsed_ms: Date.now() - startedAt,
+  };
+}
+
+interface OrgDriftSummary {
+  opened: number;
+  resolved: number;
+  worst: { sku: string; warehouse_drift: number; boxed_drift: number }[];
+}
+
+async function runDriftCheckForOrg(orgId: OrgId, c: PoolClient): Promise<OrgDriftSummary> {
+  // No BEGIN/COMMIT here — forEachActiveOrg wraps each org pass in a transaction
+  // (with the org GUC set via SET LOCAL).
+
+  const opened = await c.query<{ inserted: number }>(
+    `WITH ins AS (
+       INSERT INTO stock_alerts (sku, bin_id, alert_type, qty_at_trigger, notes, organization_id)
+       SELECT
+         d.sku,
+         NULL::int,
+         'DRIFT',
+         GREATEST(ABS(d.warehouse_drift), ABS(d.boxed_drift)),
+         format(
+           'drift: warehouse stored=%s ledger=%s (Δ=%s) ; boxed stored=%s ledger=%s (Δ=%s)',
+           d.stored_stock, d.ledger_warehouse, d.warehouse_drift,
+           d.stored_boxed, d.ledger_boxed, d.boxed_drift
+         ),
+         $1
+       FROM v_sku_stock_drift d
+       JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
+       ON CONFLICT DO NOTHING
+       RETURNING 1
+     )
+     SELECT COUNT(*)::int AS inserted FROM ins`,
+    [orgId],
+  );
+
+  const resolved = await c.query<{ resolved: number }>(
+    `WITH closed AS (
+       UPDATE stock_alerts sa
+          SET resolved_at = NOW()
+        WHERE sa.alert_type = 'DRIFT'
+          AND sa.resolved_at IS NULL
+          AND sa.organization_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM v_sku_stock_drift d
+            JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
+            WHERE d.sku = sa.sku
+          )
+       RETURNING 1
+     )
+     SELECT COUNT(*)::int AS resolved FROM closed`,
+    [orgId],
+  );
+
+  const worst = await c.query<{ sku: string; warehouse_drift: number; boxed_drift: number }>(
+    `SELECT d.sku, d.warehouse_drift, d.boxed_drift
+       FROM v_sku_stock_drift d
+       JOIN sku_stock ss ON ss.sku = d.sku AND ss.organization_id = $1
+      ORDER BY ABS(d.warehouse_drift) + ABS(d.boxed_drift) DESC
+      LIMIT 5`,
+    [orgId],
+  );
+
+  return {
+    opened: opened.rows[0]?.inserted ?? 0,
+    resolved: resolved.rows[0]?.resolved ?? 0,
+    worst: worst.rows,
+  };
 }

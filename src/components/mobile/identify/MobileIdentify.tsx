@@ -99,7 +99,6 @@ export function MobileIdentify() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setFrozen(canvas.toDataURL('image/jpeg', 0.7));
-    if (navigator.vibrate) navigator.vibrate(10);
     const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
     if (blob) await identify(blob);
   }, [identify, videoRef]);
@@ -139,7 +138,6 @@ export function MobileIdentify() {
     if (liveScan.phase === 'locked') {
       setFrozen(liveScan.frozen);
       applyResult({ ok: true, candidates: liveScan.candidates, rawText: liveScan.rawText });
-      if (navigator.vibrate) navigator.vibrate(10);
     } else if (liveScan.phase === 'error' && liveScan.error) {
       applyResult({ ok: false, candidates: [], rawText: '', error: liveScan.error });
     }
@@ -176,7 +174,6 @@ export function MobileIdentify() {
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok || !body.success) { toast.error(body.error ?? 'Add failed'); return; }
-        if (navigator.vibrate) navigator.vibrate([12, 30, 12]);
         const item: AddedItem = { id: clientEventId, title: c.product_title ?? c.model, lineId: body.line?.id };
         setAdded((xs) => [item, ...xs]);
         // Show the success bottom sheet (keeps the freeze-frame behind it) before

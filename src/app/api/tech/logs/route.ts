@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -16,6 +16,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
   const techIdParam = Number(searchParams.get('techId'));
   const isAdminFilter = Number.isFinite(techIdParam) && techIdParam > 0 && ctx.permissions.has('admin.view_logs');
   const techId = isAdminFilter ? techIdParam : ctx.staffId;
+  const orgId = ctx.organizationId;
   const weekStart = searchParams.get('weekStart') || '';
   const weekEnd = searchParams.get('weekEnd') || '';
   const limit = Math.min(Number(searchParams.get('limit')) || 500, 2000);
@@ -25,7 +26,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'techId is required' }, { status: 400 });
   }
 
-  const cacheKey = createCacheLookupKey({ techId, weekStart, weekEnd, limit, offset });
+  const cacheKey = createCacheLookupKey({ orgId, techId, weekStart, weekEnd, limit, offset });
   const isCurrentWeek = !weekStart; // no weekStart means current week
   const cacheTtl = isCurrentWeek ? 60 : 3600; // 30s current week, 1hr historical
 
@@ -38,6 +39,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     // Date range: add 1-day buffer on each side for UTC/PST edge cases
     const dateConditions: string[] = [];
     const params: (string | number)[] = [techId];
+
+    // Tenant scope — appended before the dynamic date/limit/offset params so its
+    // placeholder index is stable ($2); later pushes auto-index via params.length.
+    params.push(orgId);
+    const orgIdx = params.length;
 
     if (weekStart) {
       params.push(weekStart);
@@ -115,7 +121,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
       FROM station_activity_logs sal
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
-      LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku
+      LEFT JOIN fba_fnskus ff ON ff.fnsku = sal.fnsku AND ff.organization_id = sal.organization_id
       LEFT JOIN fba_fnsku_logs fl ON fl.station_activity_log_id = sal.id
       LEFT JOIN LATERAL (
         SELECT
@@ -134,6 +140,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         FROM orders o
         LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
         WHERE sal.shipment_id IS NOT NULL
+          AND o.organization_id = sal.organization_id
           AND (
             osl.shipment_id = sal.shipment_id
             OR o.shipment_id = sal.shipment_id
@@ -202,13 +209,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       WHERE sal.station = 'TECH'
         AND sal.activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')
         AND sal.staff_id = $1
+        AND sal.organization_id = $${orgIdx}
         ${dateWhere}
 
       ORDER BY sal.created_at DESC NULLS LAST
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
 
-    const result = await pool.query(query, params);
+    const result = await tenantQuery(orgId, query, params);
     const rows = result.rows;
 
     after(() => setCachedJson('api:tech-logs-v3', cacheKey, rows, cacheTtl, ['tech-logs']));

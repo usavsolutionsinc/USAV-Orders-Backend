@@ -11,6 +11,8 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface EntityAuditEvent {
   /** Synthetic id stable across runs so React keys hold. */
@@ -35,24 +37,39 @@ export interface EntityAuditEvent {
   detail: Record<string, unknown>;
 }
 
-async function fetchStaffNames(ids: number[]): Promise<Map<number, string>> {
+async function fetchStaffNames(ids: number[], orgId?: OrgId): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (ids.length === 0) return map;
-  const r = await pool.query(
-    `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
-    [ids],
-  );
+  const r = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [ids, orgId],
+      )
+    : await pool.query(
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
+        [ids],
+      );
   const rows = r.rows as { id: number; name: string }[];
   for (const row of rows) map.set(row.id, row.name);
   return map;
 }
 
-async function fetchBinName(id: number): Promise<{ name: string | null; barcode: string | null }> {
+async function fetchBinName(
+  id: number,
+  orgId?: OrgId,
+): Promise<{ name: string | null; barcode: string | null }> {
   try {
-    const r = await pool.query(
-      `SELECT name, barcode FROM locations WHERE id = $1 LIMIT 1`,
-      [id],
-    );
+    const r = orgId
+      ? await tenantQuery(
+          orgId,
+          `SELECT name, barcode FROM locations WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [id, orgId],
+        )
+      : await pool.query(
+          `SELECT name, barcode FROM locations WHERE id = $1 LIMIT 1`,
+          [id],
+        );
     const row = (r.rows as { name: string | null; barcode: string | null }[])[0];
     return { name: row?.name ?? null, barcode: row?.barcode ?? null };
   } catch {
@@ -112,27 +129,48 @@ function metaString(meta: Record<string, unknown> | null, key: string): string |
 export async function getBinAuditHistory(
   binId: number,
   opts: { limit?: number } = {},
+  orgId?: OrgId,
 ): Promise<EntityAuditEvent[]> {
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 1000);
 
   const [auditsRes, invEventsRes, binMeta] = await Promise.all([
-    pool.query(
-      `SELECT * FROM audit_logs
-        WHERE entity_type = 'bin' AND entity_id = $1
-        ORDER BY created_at DESC, id DESC
-        LIMIT $2`,
-      [String(binId), limit],
-    ),
-    pool.query(
-      `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
-              bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
-         FROM inventory_events
-        WHERE bin_id = $1 OR prev_bin_id = $1
-        ORDER BY occurred_at DESC, id DESC
-        LIMIT $2`,
-      [binId, limit],
-    ),
-    fetchBinName(binId),
+    orgId
+      ? tenantQuery(
+          orgId,
+          `SELECT * FROM audit_logs
+            WHERE entity_type = 'bin' AND entity_id = $1 AND organization_id = $3
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [String(binId), limit, orgId],
+        )
+      : pool.query(
+          `SELECT * FROM audit_logs
+            WHERE entity_type = 'bin' AND entity_id = $1
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [String(binId), limit],
+        ),
+    orgId
+      ? tenantQuery(
+          orgId,
+          `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
+                  bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
+             FROM inventory_events
+            WHERE (bin_id = $1 OR prev_bin_id = $1) AND organization_id = $3
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT $2`,
+          [binId, limit, orgId],
+        )
+      : pool.query(
+          `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
+                  bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
+             FROM inventory_events
+            WHERE bin_id = $1 OR prev_bin_id = $1
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT $2`,
+          [binId, limit],
+        ),
+    fetchBinName(binId, orgId),
   ]);
 
   const audits = { rows: auditsRes.rows as AuditLogRow[] };
@@ -141,7 +179,7 @@ export async function getBinAuditHistory(
   const staffIds = new Set<number>();
   for (const r of audits.rows) if (r.actor_staff_id != null) staffIds.add(r.actor_staff_id);
   for (const r of invEvents.rows) if (r.actor_staff_id != null) staffIds.add(r.actor_staff_id);
-  const staffMap = await fetchStaffNames(Array.from(staffIds));
+  const staffMap = await fetchStaffNames(Array.from(staffIds), orgId);
 
   const events: EntityAuditEvent[] = [];
 
@@ -209,39 +247,71 @@ export async function getBinAuditHistory(
 export async function getSkuAuditHistory(
   sku: string,
   opts: { limit?: number } = {},
+  orgId?: OrgId,
 ): Promise<EntityAuditEvent[]> {
   const skuValue = sku.trim();
   if (!skuValue) return [];
   const limit = Math.min(Math.max(opts.limit ?? 200, 1), 1000);
 
   const [auditsRes, invEventsRes, ledgerRes] = await Promise.all([
-    pool.query(
-      `SELECT * FROM audit_logs
-        WHERE (entity_type IN ('sku', 'sku_stock') AND entity_id = $1)
-           OR (entity_type = 'bin' AND (metadata->>'sku') = $1)
-        ORDER BY created_at DESC, id DESC
-        LIMIT $2`,
-      [skuValue, limit],
-    ),
-    pool.query(
-      `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
-              bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
-         FROM inventory_events
-        WHERE sku = $1
-        ORDER BY occurred_at DESC, id DESC
-        LIMIT $2`,
-      [skuValue, limit],
-    ),
-    pool
-      .query(
-        `SELECT id, created_at, sku, delta, reason, staff_id
-           FROM sku_stock_ledger
-          WHERE sku = $1
-          ORDER BY created_at DESC, id DESC
-          LIMIT $2`,
-        [skuValue, limit],
-      )
-      .catch(() => ({ rows: [] as LedgerRow[] })),
+    orgId
+      ? tenantQuery(
+          orgId,
+          `SELECT * FROM audit_logs
+            WHERE ((entity_type IN ('sku', 'sku_stock') AND entity_id = $1)
+               OR (entity_type = 'bin' AND (metadata->>'sku') = $1))
+              AND organization_id = $3
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit, orgId],
+        )
+      : pool.query(
+          `SELECT * FROM audit_logs
+            WHERE (entity_type IN ('sku', 'sku_stock') AND entity_id = $1)
+               OR (entity_type = 'bin' AND (metadata->>'sku') = $1)
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit],
+        ),
+    orgId
+      ? tenantQuery(
+          orgId,
+          `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
+                  bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
+             FROM inventory_events
+            WHERE sku = $1 AND organization_id = $3
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit, orgId],
+        )
+      : pool.query(
+          `SELECT id, occurred_at, event_type, actor_staff_id, station, sku,
+                  bin_id, prev_bin_id, prev_status, next_status, notes, scan_token, payload
+             FROM inventory_events
+            WHERE sku = $1
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit],
+        ),
+    (orgId
+      ? tenantQuery(
+          orgId,
+          `SELECT id, created_at, sku, delta, reason, staff_id
+             FROM sku_stock_ledger
+            WHERE sku = $1 AND organization_id = $3
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit, orgId],
+        )
+      : pool.query(
+          `SELECT id, created_at, sku, delta, reason, staff_id
+             FROM sku_stock_ledger
+            WHERE sku = $1
+            ORDER BY created_at DESC, id DESC
+            LIMIT $2`,
+          [skuValue, limit],
+        )
+    ).catch(() => ({ rows: [] as LedgerRow[] })),
   ]);
 
   const audits = { rows: auditsRes.rows as AuditLogRow[] };
@@ -258,15 +328,21 @@ export async function getSkuAuditHistory(
   for (const r of ledger.rows) if (r.staff_id != null) staffIds.add(r.staff_id);
 
   const [staffMap, binMap] = await Promise.all([
-    fetchStaffNames(Array.from(staffIds)),
+    fetchStaffNames(Array.from(staffIds), orgId),
     (async () => {
       const map = new Map<number, { name: string | null; barcode: string | null }>();
       if (binIds.size === 0) return map;
       try {
-        const r = await pool.query(
-          `SELECT id, name, barcode FROM locations WHERE id = ANY($1::int[])`,
-          [Array.from(binIds)],
-        );
+        const r = orgId
+          ? await tenantQuery(
+              orgId,
+              `SELECT id, name, barcode FROM locations WHERE id = ANY($1::int[]) AND organization_id = $2`,
+              [Array.from(binIds), orgId],
+            )
+          : await pool.query(
+              `SELECT id, name, barcode FROM locations WHERE id = ANY($1::int[])`,
+              [Array.from(binIds)],
+            );
         const rows = r.rows as { id: number; name: string | null; barcode: string | null }[];
         for (const row of rows) map.set(row.id, { name: row.name, barcode: row.barcode });
       } catch {

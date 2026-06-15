@@ -14,10 +14,10 @@ import pool from '@/lib/db';
 const ROUTE_FAILURE_MODES_POST = 'failure-modes.post';
 
 /** GET /api/failure-modes — taxonomy list. `?activeOnly=1` hides deactivated. */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const activeOnly = req.nextUrl.searchParams.get('activeOnly') === '1';
-    const modes = await listFailureModes({ activeOnly });
+    const modes = await listFailureModes({ activeOnly }, ctx.organizationId);
     return NextResponse.json({ success: true, modes });
   } catch (error: any) {
     console.error('Error in GET /api/failure-modes:', error);
@@ -50,7 +50,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       typicalCostCents: parsed.typicalCostCents ?? null,
       capsGradeAt: parsed.capsGradeAt ?? null,
       sortOrder: parsed.sortOrder,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'failure-modes-api',

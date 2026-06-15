@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -27,6 +28,16 @@ function parsePath(req: NextRequest): { staffId: number; passkeyId: number } | n
 export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   const parsed = parsePath(req);
   if (!parsed) return NextResponse.json({ error: 'INVALID_REQUEST' }, { status: 400 });
+
+  // staff_passkeys has no organization_id of its own — it is child-scoped via
+  // staff_id → staff. Gate on the staff PARENT's org: a staffId in another org
+  // reads as NOT_FOUND, so an admin can never revoke another tenant's passkey.
+  const owns = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [parsed.staffId, ctx.organizationId],
+  );
+  if (!owns.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   const r = await pool.query(
     `DELETE FROM staff_passkeys

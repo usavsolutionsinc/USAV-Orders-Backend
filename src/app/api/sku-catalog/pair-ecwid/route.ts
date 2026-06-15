@@ -7,7 +7,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Pair an Ecwid product to a Zoho SKU.
  * Body: { ecwidPlatformRowId: number, skuCatalogId: number }
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const { ecwidPlatformRowId, skuCatalogId } = body;
@@ -19,7 +19,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       );
     }
 
-    const result = await pairEcwidToZoho(Number(ecwidPlatformRowId), Number(skuCatalogId));
+    const result = await pairEcwidToZoho(Number(ecwidPlatformRowId), Number(skuCatalogId), ctx.organizationId);
 
     if (!result.paired) {
       return NextResponse.json(

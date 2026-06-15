@@ -18,7 +18,8 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { resolveModels } from '@/lib/receiving/label-identify';
 
 export const POST = withAuth(
-  async (request: NextRequest) => {
+  async (request: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     let body: Record<string, unknown>;
     try {
       body = (await request.json()) as Record<string, unknown>;
@@ -39,7 +40,9 @@ export const POST = withAuth(
       );
     }
 
-    const candidates = await resolveModels(models);
+    // sku→sku_catalog is a STRING-key join that collides across tenants, so the
+    // model→catalog resolution must be org-scoped (threaded into resolveModels).
+    const candidates = await resolveModels(models, orgId);
     return NextResponse.json({ success: true, candidates });
   },
   { permission: 'receiving.view' },

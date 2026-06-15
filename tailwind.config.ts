@@ -1,5 +1,12 @@
 import type { Config } from "tailwindcss";
-import { zIndex } from "./src/design-system/tokens/z-index";
+// NOTE: the explicit `.ts` extension is required. Next 16's `next dev
+// --turbopack` loads this config through Turbopack's PostCSS pipeline, whose
+// resolver does NOT try the `.ts` extension when guessing an extensionless
+// import — so a bare `./src/.../z-index` raises a non-fatal "Module not found"
+// and the z-* utilities silently fail to generate in dev. The `--webpack`
+// build (jiti loader) resolves either form. Keep the extension. See tsconfig
+// `allowImportingTsExtensions`.
+import { zIndex } from "./src/design-system/tokens/z-index.ts";
 
 // Expose the centralized z-index scale as semantic Tailwind utilities
 // (z-panel, z-modal, z-popover, z-toast, z-tooltip, …) so components stop
@@ -16,6 +23,10 @@ const config: Config = {
         "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
         "./src/features/**/*.{js,ts,jsx,tsx,mdx}",
         "./src/utils/**/*.{js,ts,jsx,tsx,mdx}",
+        // src/lib holds styling SoTs (e.g. outbound-state.ts's status dot/pill
+        // classes). Without this, classes used ONLY here (e.g. orphan's color)
+        // are never generated and render invisible.
+        "./src/lib/**/*.{js,ts,jsx,tsx,mdx}",
     ],
     theme: {
         extend: {

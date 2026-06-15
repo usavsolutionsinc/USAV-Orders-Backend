@@ -63,6 +63,8 @@ export interface ReceivingLineRow {
   zoho_purchaseorder_id: string | null;
   zoho_purchaseorder_number: string | null;
   item_name: string | null;
+  /** The Zoho item's own title (items.name, canonical product SoT). ALWAYS preferred for display — the PO line's item_name is a listing-style per-receipt title, not the product title. Null only when the line has no Zoho item. */
+  zoho_item_title?: string | null;
   /** Canonical Zoho catalog title (sku_catalog.product_title), joined by SKU. Prefer over item_name for display; null when the SKU isn't catalogued yet. */
   catalog_product_title?: string | null;
   /** Canonical sku_catalog.id for this line's SKU. Keys the SKU pairing surface; null when the SKU isn't catalogued yet. */

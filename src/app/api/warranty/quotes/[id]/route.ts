@@ -28,7 +28,11 @@ export const PATCH = withAuth(async (request, ctx) => {
   }
 
   try {
-    const result = await setQuoteStatus(quoteId, parsed.data.status, ctx.staffId ?? null);
+    // Tenant isolation: thread the caller's org so setQuoteStatus locates the
+    // row with `WHERE id = $1 AND organization_id = $2 FOR UPDATE` (org-ownership
+    // 404 gate — a cross-tenant quoteId is treated as not-found, never 403) and
+    // org-pins every downstream UPDATE / repair_service handoff to that tenant.
+    const result = await setQuoteStatus(quoteId, parsed.data.status, ctx.staffId ?? null, ctx.organizationId);
     if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
     await recordAudit(pool, ctx, request, {
       source: 'warranty-logger',

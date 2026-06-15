@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { transaction } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2FbaSerialLink } from '@/lib/feature-flags';
 
 /**
  * POST /api/fba/shipments/[id]/ship-units
@@ -21,17 +20,9 @@ import { isInventoryV2FbaSerialLink } from '@/lib/feature-flags';
  * because units are already SHIPPED and per-unit clientEventId suffixes
  * collide on retry.
  *
- * Gated by INVENTORY_V2_FBA_SERIAL_LINK; off-flag returns 503.
  * Permission: fba.stage_shipments.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2FbaSerialLink()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_FBA_SERIAL_LINK flag is OFF', flag: 'INVENTORY_V2_FBA_SERIAL_LINK' },
-      { status: 503 },
-    );
-  }
-
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const idStr = segments[segments.length - 2];
   const fbaShipmentId = Number(idStr);
@@ -46,7 +37,7 @@ export const POST = withAuth(async (request, ctx) => {
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
 
   try {
-    const result = await transaction(async (client) => {
+    const result = await withTenantTransaction(ctx.organizationId, async (client) => {
       // 1. Resolve all linked units for this shipment.
       const linksQ = await client.query<{
         serial_unit_id: number;
@@ -59,13 +50,16 @@ export const POST = withAuth(async (request, ctx) => {
                 su.current_status::text AS current_status
            FROM fba_shipment_item_units u
            JOIN fba_shipment_items i ON i.id = u.fba_shipment_item_id
+             AND i.organization_id = $2
            JOIN serial_units su      ON su.id = u.serial_unit_id
            LEFT JOIN fba_fnskus f    ON f.fnsku = i.fnsku
+             AND f.organization_id = $2
           WHERE i.shipment_id = $1
+            AND u.organization_id = $2
             AND su.current_status <> 'SHIPPED'
           ORDER BY u.serial_unit_id ASC
           FOR UPDATE OF su`,
-        [fbaShipmentId],
+        [fbaShipmentId, ctx.organizationId],
       );
       const links = linksQ.rows;
       if (links.length === 0) {

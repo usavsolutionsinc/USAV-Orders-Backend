@@ -8,19 +8,35 @@ import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus, Check } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { ShippedScanOutSidebar } from '@/components/shipped/ShippedScanOutSidebar';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
+import { StatusLegend, type StatusLegendItem } from '@/components/ui/StatusLegend';
+import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
+import { UNSHIPPED_STATE_META, countUnshippedStates, type UnshippedState } from '@/lib/unshipped-state';
+
+/** Params that define an Unshipped saved view (filters only — not search text). */
+const UNSHIPPED_VIEW_PARAMS = ['stage', 'sort', 'ustatus'] as const;
+
+/** Pre-dock status legend subset — distinct hues, ordered along the pipeline. */
+const UNSHIPPED_LEGEND_ITEMS: StatusLegendItem<UnshippedState>[] = [
+  { state: 'AWAITING_LABEL', short: 'Awaiting' },
+  { state: 'PENDING', short: 'Pending' },
+  { state: 'TESTED', short: 'Tested' },
+  { state: 'PACKED_STAGED', short: 'Packed' },
+  { state: 'BLOCKED', short: 'Blocked' },
+];
 
 /** The stages folded into the merged Unshipped mode. `tested` is the pending
  *  subset that's already tech-tested and currently being packed. */
 type UnshippedStage = 'all' | 'awaiting' | 'pending' | 'tested';
 const STAGE_OPTIONS: { id: UnshippedStage; label: string; hint: string }[] = [
-  { id: 'all', label: 'All unshipped', hint: 'Awaiting + Pending' },
   { id: 'awaiting', label: 'Awaiting tracking', hint: 'No carrier label yet' },
+  { id: 'all', label: 'All unshipped', hint: 'Awaiting + Pending' },
   { id: 'pending', label: 'Pending packing', hint: 'Labeled, not packed' },
   { id: 'tested', label: 'Tested, packing', hint: 'Tech-tested, packing now' },
 ];
@@ -154,6 +170,19 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     [router, pathname, searchParams],
   );
 
+  // Status legend click-to-filter (`?ustatus`). Clicking the lit chip clears it.
+  const activeStatus = (searchParams.get('ustatus') || '') as UnshippedState | '';
+  const toggleStatus = useCallback(
+    (state: UnshippedState) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (params.get('ustatus') === state) params.delete('ustatus');
+      else params.set('ustatus', state);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard', { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
   const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
   const sort: UnshippedSort = sortParam === 'newest' ? 'newest' : 'priority';
 
@@ -180,10 +209,14 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
 
   // Per-stage counts for the filter dropdown. Reuses the SAME query key the
   // table mounts (React Query dedupes → one fetch, no extra request).
-  const { data: stageData } = useQuery({
+  const { data: stageData, isFetching: stageFetching } = useQuery({
     ...unshippedOrdersQuery({ searchQuery: searchValue, strictSearchScope: true }),
     placeholderData: (previous) => previous,
   });
+  // Pre-dock status-dot counts for the legend, derived from the SAME query rows
+  // the table mounts (no extra fetch). Distinct from `stageCounts`, which buckets
+  // by the coarser Awaiting/Pending/Tested filter facet.
+  const statusCounts = useMemo(() => countUnshippedStates(stageData ?? []), [stageData]);
   const stageCounts = useMemo(() => {
     const rows = stageData ?? [];
     const pending = rows.filter((r) => r.shipment_id != null);
@@ -355,7 +388,34 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           </button>
         ),
       }}
+      // Status-dot color key + live counts — pinned so it explains the table's
+      // pre-dock dots (mirrors the Shipped mode's OutboundStatusLegend).
+      headerBelow={
+        <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+            <SavedViewsControl storageKey="unshipped_saved_views" paramKeys={UNSHIPPED_VIEW_PARAMS} />
+          </div>
+          <StatusLegend
+            items={UNSHIPPED_LEGEND_ITEMS}
+            meta={UNSHIPPED_STATE_META}
+            counts={statusCounts}
+            isFetching={stageFetching}
+            activeState={activeStatus || null}
+            onSelectState={toggleStatus}
+          />
+        </div>
+      }
       bodyClassName="flex flex-col no-scrollbar pb-6"
+      // Dock scan-out pinned at the very bottom — always available (no mode
+      // toggle). The list above is unchanged; scanning a staged label hands the
+      // order off to the carrier (PACKED_STAGED → SCANNED_OUT) and drops it from
+      // this board into Shipped. autoFocus off so it never steals the search box.
+      footer={
+        <div className={`${SIDEBAR_GUTTER} border-t border-gray-100 bg-white pb-4 pt-3`}>
+          <ShippedScanOutSidebar autoFocus={false} />
+        </div>
+      }
     >
       <motion.div variants={itemVariants} initial="hidden" animate="visible" className="space-y-4">
         <RecentSearchesList

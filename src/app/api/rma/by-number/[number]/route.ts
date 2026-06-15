@@ -1,21 +1,14 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Rma } from '@/lib/feature-flags';
 import { findByNumber } from '@/lib/rma/authorizations';
 
 /**
  * GET /api/rma/by-number/[number]
  *
  * Lookup an RMA by its `RMA-YYYY-NNNNN` code. 404 if not found.
- * Gated by INVENTORY_V2_RMA.
  */
-export const GET = withAuth(async (request) => {
-  if (!isInventoryV2Rma()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_RMA flag is OFF', flag: 'INVENTORY_V2_RMA' },
-      { status: 503 },
-    );
-  }
+export const GET = withAuth(async (request, ctx) => {
+  const orgId = ctx.organizationId;
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const numberRaw = segments[segments.length - 1];
   const rmaNumber = decodeURIComponent(numberRaw || '').trim();
@@ -23,7 +16,7 @@ export const GET = withAuth(async (request) => {
     return NextResponse.json({ ok: false, error: 'invalid rma number' }, { status: 400 });
   }
   try {
-    const rma = await findByNumber(rmaNumber);
+    const rma = await findByNumber(rmaNumber, orgId);
     if (!rma) return NextResponse.json({ ok: false, error: 'rma not found' }, { status: 404 });
     return NextResponse.json({ ok: true, rma });
   } catch (err) {

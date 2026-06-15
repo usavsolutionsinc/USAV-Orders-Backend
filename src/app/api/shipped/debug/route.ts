@@ -1,37 +1,36 @@
 import { NextResponse } from 'next/server';
-import { Pool } from 'pg';
 import { withAuth } from '@/lib/auth/withAuth';
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgres://localhost:5432/postgres',
-    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
-});
+import { tenantQuery } from '@/lib/tenancy/db';
 
 // Debug stats — exposes order counts. Admin-only.
-export const GET = withAuth(async () => {
-    const client = await pool.connect();
-    
+export const GET = withAuth(async (_req, ctx) => {
+    const orgId = ctx.organizationId;
+
     try {
-        // Count orders where carrier status = in-transit/delivered (derived shipped)
-        const shippedCount = await client.query(`
+        // Count orders where carrier status = in-transit/delivered (derived shipped).
+        // shipping_tracking_numbers has no organization_id column; scope via the
+        // orders parent (o.organization_id) plus the GUC-wrapped connection.
+        const shippedCount = await tenantQuery(orgId, `
             SELECT COUNT(DISTINCT o.id) AS count
             FROM orders o
             JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-            WHERE stn.is_carrier_accepted OR stn.is_in_transit
-               OR stn.is_out_for_delivery OR stn.is_delivered
-        `);
+            WHERE o.organization_id = $1
+              AND (stn.is_carrier_accepted OR stn.is_in_transit
+               OR stn.is_out_for_delivery OR stn.is_delivered)
+        `, [orgId]);
 
         // Orders with packer logs (FK-based)
-        const packedByCount = await client.query(`
+        const packedByCount = await tenantQuery(orgId, `
             SELECT COUNT(DISTINCT o.id) AS count
             FROM orders o
             INNER JOIN packer_logs pl ON pl.shipment_id = o.shipment_id
-            WHERE o.shipment_id IS NOT NULL
+            WHERE o.organization_id = $1
+              AND o.shipment_id IS NOT NULL
               AND pl.tracking_type = 'ORDERS'
-        `);
+        `, [orgId]);
 
         // Sample shipped orders (derived from stn)
-        const sampleShipped = await client.query(`
+        const sampleShipped = await tenantQuery(orgId, `
             SELECT
                 o.id,
                 o.order_id,
@@ -52,22 +51,24 @@ export const GET = withAuth(async () => {
                 ORDER BY created_at DESC NULLS LAST, id DESC
                 LIMIT 1
             ) pl ON true
-            WHERE stn.is_carrier_accepted OR stn.is_in_transit
-               OR stn.is_out_for_delivery OR stn.is_delivered
+            WHERE o.organization_id = $1
+              AND (stn.is_carrier_accepted OR stn.is_in_transit
+               OR stn.is_out_for_delivery OR stn.is_delivered)
             ORDER BY o.id DESC
             LIMIT 10
-        `);
+        `, [orgId]);
 
         // Orders with packer log but carrier not yet accepted (packed but not yet shipped)
-        const packedButNotShipped = await client.query(`
+        const packedButNotShipped = await tenantQuery(orgId, `
             SELECT COUNT(DISTINCT o.id) AS count
             FROM orders o
             INNER JOIN packer_logs pl ON pl.shipment_id = o.shipment_id
               AND pl.tracking_type = 'ORDERS'
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-            WHERE NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
+            WHERE o.organization_id = $1
+              AND NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
                     OR stn.is_out_for_delivery OR stn.is_delivered, false)
-        `);
+        `, [orgId]);
 
         return NextResponse.json({
             success: true,
@@ -78,14 +79,12 @@ export const GET = withAuth(async () => {
             },
             sample_shipped_orders: sampleShipped.rows
         });
-        
+
     } catch (error: any) {
         console.error('Debug error:', error);
         return NextResponse.json({
             success: false,
             error: error.message
         }, { status: 500 });
-    } finally {
-        client.release();
     }
 }, { permission: 'admin.view_logs' });

@@ -389,7 +389,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         ),
       );
 
-      // One-time "tracking added" event for orders that had no tracking before.
+      // One-time "tracking added" event + first-time stamp for orders that had
+      // no tracking before. The column is a fast read projection; audit_logs is SoT.
       if (newlyTrackedIds.length > 0) {
         await Promise.all(
           newlyTrackedIds.map((id) =>
@@ -406,6 +407,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
               metadata: { orderId: id },
             }),
           ),
+        );
+        await client.query(
+          `UPDATE orders SET tracking_added_at = NOW(), tracking_added_by = $1
+             WHERE id = ANY($2::int[]) AND tracking_added_at IS NULL`,
+          [actorId ?? null, newlyTrackedIds],
         );
       }
 

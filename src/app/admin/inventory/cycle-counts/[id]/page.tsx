@@ -1,5 +1,7 @@
 import { requirePermission } from '@/lib/auth/page-guard';
-import { queryRaw, queryOne } from '@/lib/neon-client';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { submitCount, approveLine, rejectLine, closeCampaign } from '@/lib/inventory/cycle-count';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -57,18 +59,25 @@ function isStatusFilter(v: string | undefined): v is StatusFilter {
   return v === 'all' || v === 'pending' || v === 'counted' || v === 'pending_review' || v === 'approved' || v === 'rejected';
 }
 
-async function loadCampaign(id: number): Promise<CampaignRow | null> {
-  return queryOne<CampaignRow>`
-    SELECT id, name, status::text AS status,
-           variance_tol::text AS variance_tol,
-           created_at, closed_at
-      FROM cycle_count_campaigns WHERE id = ${id} LIMIT 1`;
+async function loadCampaign(id: number, orgId: OrgId): Promise<CampaignRow | null> {
+  const r = await tenantQuery<CampaignRow>(
+    orgId,
+    `SELECT id, name, status::text AS status,
+            variance_tol::text AS variance_tol,
+            created_at, closed_at
+       FROM cycle_count_campaigns WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
+  );
+  return r.rows[0] ?? null;
 }
 
-async function loadLines(id: number, filter: StatusFilter): Promise<LineRow[]> {
-  const filters = filter === 'all' ? '' : `AND l.status = $2`;
+async function loadLines(id: number, filter: StatusFilter, orgId: OrgId): Promise<LineRow[]> {
+  // org param is always $2; the optional status filter is $3.
+  const filters = filter === 'all' ? '' : `AND l.status = $3`;
+  const params = filter === 'all' ? [id, orgId] : [id, orgId, filter];
   try {
-    return await queryRaw<LineRow>(
+    const r = await tenantQuery<LineRow>(
+      orgId,
       `SELECT l.id, l.bin_id, loc.name AS bin_name,
               l.sku, l.expected_qty, l.counted_qty, l.variance,
               l.status::text AS status,
@@ -79,7 +88,7 @@ async function loadLines(id: number, filter: StatusFilter): Promise<LineRow[]> {
          LEFT JOIN locations loc ON loc.id = l.bin_id
          LEFT JOIN staff cb ON cb.id = l.counted_by
          LEFT JOIN staff ab ON ab.id = l.approved_by
-        WHERE l.campaign_id = $1 ${filters}
+        WHERE l.campaign_id = $1 AND l.organization_id = $2 ${filters}
         ORDER BY
           CASE l.status
             WHEN 'pending_review' THEN 0
@@ -91,22 +100,25 @@ async function loadLines(id: number, filter: StatusFilter): Promise<LineRow[]> {
           END,
           loc.name ASC, l.sku ASC
         LIMIT 500`,
-      filter === 'all' ? [id] : [id, filter],
+      params,
     );
+    return r.rows;
   } catch {
     return [];
   }
 }
 
-async function loadStatusCounts(id: number): Promise<StatusCount[]> {
+async function loadStatusCounts(id: number, orgId: OrgId): Promise<StatusCount[]> {
   try {
-    return await queryRaw<StatusCount>(
+    const r = await tenantQuery<StatusCount>(
+      orgId,
       `SELECT status::text AS status, COUNT(*)::int AS count
          FROM cycle_count_lines
-        WHERE campaign_id = $1
+        WHERE campaign_id = $1 AND organization_id = $2
         GROUP BY status`,
-      [id],
+      [id, orgId],
     );
+    return r.rows;
   } catch {
     return [];
   }
@@ -123,8 +135,10 @@ async function submitCountAction(formData: FormData): Promise<void> {
   if (!Number.isFinite(countedQty) || countedQty < 0) {
     redirect(`/admin/inventory/cycle-counts/${campaignId}?error=invalid_qty`);
   }
+  const user = await getCurrentUser();
+  if (!user) return;
   try {
-    await submitCount({ lineId, countedQty: Math.floor(countedQty), countedByStaffId: null });
+    await submitCount({ lineId, countedQty: Math.floor(countedQty), countedByStaffId: user.staffId, organizationId: user.organizationId });
   } catch (err) {
     console.error('[cycle-counts.submit] failed:', err);
   }
@@ -136,8 +150,10 @@ async function approveAction(formData: FormData): Promise<void> {
   const lineId = Number(formData.get('lineId'));
   const campaignId = Number(formData.get('campaignId'));
   if (!Number.isFinite(lineId) || lineId <= 0) return;
+  const user = await getCurrentUser();
+  if (!user) return;
   try {
-    await approveLine({ lineId, approvedByStaffId: null });
+    await approveLine({ lineId, approvedByStaffId: user.staffId, organizationId: user.organizationId });
   } catch (err) {
     console.error('[cycle-counts.approve] failed:', err);
   }
@@ -149,8 +165,10 @@ async function rejectAction(formData: FormData): Promise<void> {
   const lineId = Number(formData.get('lineId'));
   const campaignId = Number(formData.get('campaignId'));
   if (!Number.isFinite(lineId) || lineId <= 0) return;
+  const user = await getCurrentUser();
+  if (!user) return;
   try {
-    await rejectLine({ lineId, approvedByStaffId: null });
+    await rejectLine({ lineId, approvedByStaffId: user.staffId, organizationId: user.organizationId });
   } catch (err) {
     console.error('[cycle-counts.reject] failed:', err);
   }
@@ -161,8 +179,10 @@ async function closeAction(formData: FormData): Promise<void> {
   'use server';
   const campaignId = Number(formData.get('campaignId'));
   if (!Number.isFinite(campaignId) || campaignId <= 0) return;
+  const user = await getCurrentUser();
+  if (!user) return;
   try {
-    await closeCampaign({ campaignId, approvedByStaffId: null });
+    await closeCampaign({ campaignId, approvedByStaffId: user.staffId, organizationId: user.organizationId });
   } catch (err) {
     console.error('[cycle-counts.close] failed:', err);
   }
@@ -178,7 +198,7 @@ export default async function CycleCountDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ status?: string; error?: string }>;
 }) {
-  await requirePermission('admin.view', { enforce: true });
+  const user = await requirePermission('admin.view', { enforce: true });
 
   const { id: idStr } = await params;
   const id = Number(idStr);
@@ -191,9 +211,9 @@ export default async function CycleCountDetailPage({
   const errorCode = sp.error ?? null;
 
   const [campaign, lines, statusCounts] = await Promise.all([
-    loadCampaign(id),
-    loadLines(id, filter),
-    loadStatusCounts(id),
+    loadCampaign(id, user.organizationId),
+    loadLines(id, filter, user.organizationId),
+    loadStatusCounts(id, user.organizationId),
   ]);
 
   if (!campaign) {

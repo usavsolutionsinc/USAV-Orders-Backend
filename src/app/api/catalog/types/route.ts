@@ -57,6 +57,8 @@ export const POST = withAuth(
         kind: parsed.kind,
         isReturn: parsed.isReturn,
         sortOrder: parsed.sortOrder,
+        platformAccountId: parsed.platformAccountId,
+        workflowNodeId: parsed.workflowNodeId,
       });
 
       await recordAudit(pool, ctx, req, {

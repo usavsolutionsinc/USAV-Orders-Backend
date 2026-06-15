@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 type Params = { params: Promise<{ id: string; itemId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
   const gate = await requireRoutePerm(req, 'walk_in.intake');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id, itemId } = await params;
     const orderId = Number(id);
@@ -15,9 +16,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, error: 'Invalid IDs' }, { status: 400 });
     }
 
-    const orderCheck = await pool.query(
-      `SELECT status FROM local_pickup_orders WHERE id = $1`,
-      [orderId],
+    const orderCheck = await tenantQuery(
+      orgId,
+      `SELECT status FROM local_pickup_orders WHERE id = $1 AND organization_id = $2`,
+      [orderId, orgId],
     );
     if (orderCheck.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
@@ -72,22 +74,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const itemIdx = values.length;
     values.push(orderId);
     const orderIdx = values.length;
+    values.push(orgId);
+    const orgIdx = values.length;
 
-    const result = await pool.query(
-      `UPDATE local_pickup_order_items SET ${setClauses.join(', ')} WHERE id = $${itemIdx} AND order_id = $${orderIdx} RETURNING *`,
-      values,
-    );
+    return await withTenantTransaction(orgId, async (client) => {
+      const result = await client.query(
+        `UPDATE local_pickup_order_items SET ${setClauses.join(', ')} WHERE id = $${itemIdx} AND order_id = $${orderIdx} AND organization_id = $${orgIdx} RETURNING *`,
+        values,
+      );
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
-    }
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
+      }
 
-    await pool.query(
-      `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1`,
-      [orderId],
-    );
+      await client.query(
+        `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1 AND organization_id = $2`,
+        [orderId, orgId],
+      );
 
-    return NextResponse.json({ success: true, item: result.rows[0] });
+      return NextResponse.json({ success: true, item: result.rows[0] });
+    });
   } catch (error: any) {
     console.error('[local-pickup-orders][PATCH item]', error);
     return NextResponse.json(
@@ -100,6 +106,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 export async function DELETE(req: NextRequest, { params }: Params) {
   const gate = await requireRoutePerm(req, 'walk_in.intake');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id, itemId } = await params;
     const orderId = Number(id);
@@ -108,9 +115,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       return NextResponse.json({ success: false, error: 'Invalid IDs' }, { status: 400 });
     }
 
-    const orderCheck = await pool.query(
-      `SELECT status FROM local_pickup_orders WHERE id = $1`,
-      [orderId],
+    const orderCheck = await tenantQuery(
+      orgId,
+      `SELECT status FROM local_pickup_orders WHERE id = $1 AND organization_id = $2`,
+      [orderId, orgId],
     );
     if (orderCheck.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
@@ -122,21 +130,23 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       );
     }
 
-    const result = await pool.query(
-      `DELETE FROM local_pickup_order_items WHERE id = $1 AND order_id = $2 RETURNING id`,
-      [itemIdNum, orderId],
-    );
+    return await withTenantTransaction(orgId, async (client) => {
+      const result = await client.query(
+        `DELETE FROM local_pickup_order_items WHERE id = $1 AND order_id = $2 AND organization_id = $3 RETURNING id`,
+        [itemIdNum, orderId, orgId],
+      );
 
-    if (result.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
-    }
+      if (result.rows.length === 0) {
+        return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
+      }
 
-    await pool.query(
-      `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1`,
-      [orderId],
-    );
+      await client.query(
+        `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1 AND organization_id = $2`,
+        [orderId, orgId],
+      );
 
-    return NextResponse.json({ success: true, deleted: true });
+      return NextResponse.json({ success: true, deleted: true });
+    });
   } catch (error: any) {
     console.error('[local-pickup-orders][DELETE item]', error);
     return NextResponse.json(

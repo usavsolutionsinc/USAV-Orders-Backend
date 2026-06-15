@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -18,7 +18,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50)
       : 10;
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          pl.id              AS packer_log_id,
          pl.tracking_type,
@@ -35,10 +36,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
        FROM packer_logs pl
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
        LEFT JOIN orders o ON o.shipment_id = pl.shipment_id AND pl.shipment_id IS NOT NULL
-       WHERE pl.packed_by = $1
+            AND o.organization_id = pl.organization_id
+       WHERE pl.packed_by = $1 AND pl.organization_id = $3
        ORDER BY pl.id DESC
        LIMIT $2`,
-      [user.staffId, limit],
+      [user.staffId, limit, ctx.organizationId],
     );
 
     if (result.rows.length === 0) {
@@ -46,12 +48,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     }
 
     const logIds = result.rows.map((r: any) => r.packer_log_id);
-    const photosResult = await pool.query(
+    const photosResult = await tenantQuery(
+      ctx.organizationId,
       `SELECT id, entity_id, url, photo_type, created_at
        FROM photos
        WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])
+         AND organization_id = $2
        ORDER BY created_at ASC`,
-      [logIds],
+      [logIds, ctx.organizationId],
     );
 
     const photosByLog = new Map<number, any[]>();

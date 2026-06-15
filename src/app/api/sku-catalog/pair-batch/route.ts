@@ -71,6 +71,7 @@ export const POST = withAuth(
         skuCatalogId,
         actorId: ctx.staffId,
         actorKind: 'user',
+        organizationId: ctx.organizationId,
         accept,
         reject,
         unpair,

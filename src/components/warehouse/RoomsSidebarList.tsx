@@ -15,7 +15,6 @@ import { useLocations } from '@/hooks/useLocations';
 import { useBinsOverview } from '@/hooks/useBinsOverview';
 import { useRoomFinder } from './roomFinderContext';
 import { Check, GripVertical, Pencil, Plus, Trash2, X } from '@/components/Icons';
-import { successFeedback, errorFeedback } from '@/lib/feedback/confirm';
 
 interface RoomSummary {
   key: string;
@@ -180,7 +179,6 @@ export function RoomsSidebarList() {
   }, []);
 
   const exitEdit = useCallback(async () => {
-    successFeedback();
     if (localOrder) {
       try {
         const order = localOrder.filter((n) => !pendingDeletes.has(n));
@@ -188,7 +186,6 @@ export function RoomsSidebarList() {
         toast.success('Room order saved');
         setLocalOrder(null);
       } catch (err: any) {
-        errorFeedback();
         toast.error(err?.message || 'Could not save order');
       }
     }
@@ -205,10 +202,8 @@ export function RoomsSidebarList() {
         if (!result) throw new Error('Delete failed');
         setLocalOrder((cur) => cur?.filter((n) => n !== name) ?? cur);
         if (selectedRoom === name) selectRoom(null);
-        successFeedback();
         toast.success(`Room "${name}" deleted`);
       } catch (err: any) {
-        errorFeedback();
         setPendingDeletes((s) => {
           const next = new Set(s);
           next.delete(name);
@@ -252,10 +247,7 @@ export function RoomsSidebarList() {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => {
-                successFeedback();
-                startCreate();
-              }}
+              onClick={() => startCreate()}
               className={`flex h-9 items-center gap-1 rounded-full px-3 text-label font-semibold transition-all active:scale-[0.97] ${
                 creating
                   ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
@@ -270,10 +262,7 @@ export function RoomsSidebarList() {
               type="button"
               onClick={() => {
                 if (editMode) exitEdit();
-                else {
-                  successFeedback();
-                  setEditMode(true);
-                }
+                else setEditMode(true);
               }}
               aria-pressed={editMode}
               className={`flex h-9 w-9 items-center justify-center rounded-full transition-all active:scale-95 ${
@@ -338,10 +327,7 @@ export function RoomsSidebarList() {
                     selected={selectedRoom === s.room}
                     editMode={editMode}
                     mutating={roomMutating}
-                    onSelect={() => {
-                      successFeedback();
-                      selectRoom(s.room);
-                    }}
+                    onSelect={() => selectRoom(s.room)}
                     onDelete={() => handleDelete(s.room)}
                   />
                 </Reorder.Item>

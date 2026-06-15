@@ -52,6 +52,29 @@ export function isIntegrationKmsConfigured(): boolean {
   }
 }
 
+/**
+ * Enforce encryption-at-rest in production. Call this on any code path that
+ * would otherwise fall back to storing a secret as plaintext when no key is
+ * configured (e.g. writeEbayToken). In production (Vercel `production`, or
+ * NODE_ENV=production) a missing/invalid INTEGRATION_KMS_KEY throws; in
+ * dev/preview it only warns so local work keeps going without the key.
+ */
+export function assertIntegrationKmsConfigured(context = 'integration credentials'): void {
+  if (isIntegrationKmsConfigured()) return;
+  const isProduction =
+    process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    throw new Error(
+      `INTEGRATION_KMS_KEY must be configured in production to store ${context} ` +
+        '(encryption-at-rest is required). Generate one with:  ' +
+        'node -e "console.log(require(\'node:crypto\').randomBytes(32).toString(\'base64\'))"',
+    );
+  }
+  console.warn(
+    `[integrations] INTEGRATION_KMS_KEY not set — ${context} will be stored as plaintext (dev only).`,
+  );
+}
+
 export function encryptIntegrationPayload(plaintext: unknown): string {
   const key = getKey();
   const iv = randomBytes(IV_BYTES);

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { normalizeTrackingKey18, normalizeTrackingCanonical } from '@/lib/tracking-format';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
@@ -31,6 +32,7 @@ export type ResolveTechSerialInsertContextResult = ResolveFailure | ResolveSucce
 export async function resolveTechSerialInsertContextFromSal(
   db: TechSerialInsertDb,
   staffId: number,
+  orgId: OrgId,
 ): Promise<ResolveTechSerialInsertContextResult> {
   const lastSalResult = await db.query(
     `SELECT sal.id,
@@ -132,9 +134,9 @@ export async function resolveTechSerialInsertContextFromSal(
       const logRes = await db.query(
         `SELECT l.id, l.fba_shipment_id, l.fba_shipment_item_id
          FROM fba_fnsku_logs l
-         WHERE l.id = $1 AND l.staff_id = $2
+         WHERE l.id = $1 AND l.staff_id = $2 AND l.organization_id = $3
          LIMIT 1`,
-        [flId, staffId],
+        [flId, staffId, orgId],
       );
       matchedFnskuLog = logRes.rows[0] ?? null;
     }
@@ -142,8 +144,8 @@ export async function resolveTechSerialInsertContextFromSal(
     let fnskuCatalogExists = false;
     if (normalizedFnsku) {
       const fnskuLookup = await db.query(
-        `SELECT 1 FROM fba_fnskus WHERE fnsku = $1 LIMIT 1`,
-        [normalizedFnsku],
+        `SELECT 1 FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2 LIMIT 1`,
+        [normalizedFnsku, orgId],
       );
       fnskuCatalogExists = fnskuLookup.rows.length > 0;
     }
@@ -176,8 +178,8 @@ export async function resolveTechSerialInsertContextFromSal(
     }
 
     const fnskuLookup = await db.query(
-      `SELECT 1 FROM fba_fnskus WHERE fnsku = $1 LIMIT 1`,
-      [normalizedFnsku],
+      `SELECT 1 FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2 LIMIT 1`,
+      [normalizedFnsku, orgId],
     );
     const fnskuCatalogExists = fnskuLookup.rows.length > 0;
 
@@ -190,10 +192,11 @@ export async function resolveTechSerialInsertContextFromSal(
          WHERE l.id = $1
            AND l.staff_id = $2
            AND l.fnsku = $3
+           AND l.organization_id = $4
            AND l.source_stage = 'TECH'
            AND l.event_type = 'SCANNED'
          LIMIT 1`,
-        [metaFl, staffId, normalizedFnsku],
+        [metaFl, staffId, normalizedFnsku, orgId],
       );
       matchedFnskuLog = pinned.rows[0] ?? null;
     }
@@ -203,11 +206,12 @@ export async function resolveTechSerialInsertContextFromSal(
          FROM fba_fnsku_logs l
          WHERE l.fnsku = $1
            AND l.staff_id = $2
+           AND l.organization_id = $3
            AND l.source_stage = 'TECH'
            AND l.event_type = 'SCANNED'
          ORDER BY l.created_at DESC, l.id DESC
          LIMIT 1`,
-        [normalizedFnsku, staffId],
+        [normalizedFnsku, staffId, orgId],
       );
       matchedFnskuLog = latest.rows[0] ?? null;
     }

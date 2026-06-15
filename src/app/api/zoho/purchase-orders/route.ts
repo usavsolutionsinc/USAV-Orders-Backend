@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { listPurchaseOrders, getPurchaseOrderById } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
@@ -111,13 +112,14 @@ function normalizePurchaseOrder(raw: unknown) {
  *  ?page=&per_page=    → pagination (max 200)
  *  ?last_modified_time= → ISO date filter for incremental sync
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
+  const orgId = ctx.organizationId;
   try {
     const { searchParams } = request.nextUrl;
     const purchaseOrderId = (searchParams.get('purchaseorder_id') ?? '').trim();
 
     if (purchaseOrderId) {
-      const data = await getPurchaseOrderById(purchaseOrderId);
+      const data = await withZohoOrg(orgId, () => getPurchaseOrderById(purchaseOrderId));
       const normalizedPurchaseOrder = normalizePurchaseOrder(
         (data as Record<string, unknown>).purchaseorder
       );
@@ -137,14 +139,16 @@ export const GET = withAuth(async (request: NextRequest) => {
     const vendorId = (searchParams.get('vendor_id') ?? '').trim() || undefined;
     const lastModifiedTime = (searchParams.get('last_modified_time') ?? '').trim() || undefined;
 
-    const data = await listPurchaseOrders({
-      page,
-      per_page: perPage,
-      status,
-      search_text: searchText,
-      vendor_id: vendorId,
-      last_modified_time: lastModifiedTime,
-    });
+    const data = await withZohoOrg(orgId, () =>
+      listPurchaseOrders({
+        page,
+        per_page: perPage,
+        status,
+        search_text: searchText,
+        vendor_id: vendorId,
+        last_modified_time: lastModifiedTime,
+      })
+    );
 
     const rawPurchaseOrders =
       ((data as Record<string, unknown>).purchaseorders as unknown[]) ||

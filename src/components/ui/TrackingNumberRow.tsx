@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { Clipboard, Copy } from '@/components/Icons';
+import { Copy, ExternalLink } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
 
 export interface TrackingNumberRowProps {
   value: string;
@@ -13,7 +14,9 @@ export interface TrackingNumberRowProps {
   onChange?: (value: string) => void;
   /** Fired when the inline editor blurs (commit point). Only when `allowEdit`. */
   onBlur?: () => void;
-  /** Clipboard paste-&-replace action. Rendered regardless of `allowEdit`. */
+  /** @deprecated The paste-&-replace clipboard icon was replaced by the carrier
+   *  external-link icon. Accepted (so existing callers keep type-checking) but no
+   *  longer rendered. */
   onPasteReplace?: () => Promise<void> | void;
   /**
    * Click-to-edit the value inline. The shipped panel leaves this off (edits go
@@ -32,9 +35,8 @@ export interface TrackingNumberRowProps {
 /**
  * Canonical tracking-number display row, extracted from the shipped details
  * panel (the reference design) so the receiving details panel renders tracking
- * the exact same way — uppercase label, bold value, copy (+ optional
- * paste-replace). Intentionally has NO external-link icon so both panels stay
- * pixel-identical for the tracking field.
+ * the exact same way — uppercase label, bold value, an external-link to the
+ * carrier's tracking page (for the in-depth carrier updates), and copy.
  */
 export function TrackingNumberRow({
   value,
@@ -42,7 +44,6 @@ export function TrackingNumberRow({
   placeholder = 'No tracking number',
   onChange,
   onBlur,
-  onPasteReplace,
   allowEdit = false,
   headerAccessory,
   headerAccessoryClassName,
@@ -53,19 +54,27 @@ export function TrackingNumberRow({
   const [isEditing, setIsEditing] = useState(false);
   const displayValue = String(value || '').trim();
   const iconClassName = 'h-3.5 w-3.5';
+  // Carrier tracking page for the live in-depth updates. getTrackingUrl resolves
+  // known carriers by number pattern; fall back to the carrier-agnostic builder
+  // (a tracking-number web search) so the link always opens something useful.
+  const trackingUrl = displayValue
+    ? (getTrackingUrl(displayValue) ?? getTrackingUrlByCarrier(displayValue, ''))
+    : null;
 
   const actions = (
     <div className="flex items-center gap-1.5 text-gray-400">
-      {onPasteReplace ? (
-        <button
-          type="button"
-          onClick={() => { void onPasteReplace(); }}
+      {trackingUrl ? (
+        <a
+          href={trackingUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
           className="transition-colors hover:text-blue-600"
-          aria-label={`Paste & replace ${label}`}
-          title={`Paste & replace ${label}`}
+          aria-label={`Track ${label} on the carrier site`}
+          title={`Open ${label} on the carrier site for full tracking updates`}
         >
-          <Clipboard className={iconClassName} />
-        </button>
+          <ExternalLink className={iconClassName} />
+        </a>
       ) : null}
       <button
         type="button"

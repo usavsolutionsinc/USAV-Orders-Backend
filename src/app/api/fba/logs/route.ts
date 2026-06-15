@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -14,7 +14,7 @@ type EventType = (typeof VALID_EVENTS)[number];
 // List fba_fnsku_logs with optional filters.
 // Query params: fnsku, source_stage, event_type, staff_id, fba_shipment_id,
 //               from (ISO date), to (ISO date), limit, offset
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
 
@@ -35,6 +35,10 @@ export const GET = withAuth(async (request: NextRequest) => {
     const conditions: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
+
+    // Tenant ownership filter — never return another org's FBA logs.
+    conditions.push(`l.organization_id = $${idx++}`);
+    params.push(ctx.organizationId);
 
     if (fnsku) {
       conditions.push(`l.fnsku = $${idx++}`);
@@ -69,7 +73,8 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     params.push(limit, offset);
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          l.id,
          l.fnsku,
@@ -91,7 +96,7 @@ export const GET = withAuth(async (request: NextRequest) => {
          ff.sku
        FROM fba_fnsku_logs l
        LEFT JOIN staff s               ON s.id   = l.staff_id
-       LEFT JOIN fba_fnskus ff         ON ff.fnsku = l.fnsku
+       LEFT JOIN fba_fnskus ff         ON ff.fnsku = l.fnsku AND ff.organization_id = l.organization_id
        LEFT JOIN fba_shipments fs      ON fs.id  = l.fba_shipment_id
        ${whereClause}
        ORDER BY l.created_at DESC
@@ -117,7 +122,6 @@ export const GET = withAuth(async (request: NextRequest) => {
 //         quantity?, station?, notes?, metadata? }
 // Actor is from the verified session.
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
 
@@ -142,58 +146,68 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    await client.query('BEGIN');
-
-    // Verify FNSKU exists
-    const fnskuCheck = await client.query(
-      `SELECT fnsku, product_title, asin, sku FROM fba_fnskus WHERE fnsku = $1`,
-      [fnsku]
-    );
-    if (!fnskuCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { success: false, error: `FNSKU '${fnsku}' not found in fba_fnskus` },
-        { status: 404 }
+    const txResult = await withTenantTransaction<
+      | { ok: false; error: NextResponse }
+      | { ok: true; log: any; fnskuMeta: any; staffName: any }
+    >(ctx.organizationId, async (client) => {
+      // Verify FNSKU exists (within this tenant)
+      const fnskuCheck = await client.query(
+        `SELECT fnsku, product_title, asin, sku FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2`,
+        [fnsku, ctx.organizationId]
       );
-    }
+      if (!fnskuCheck.rows[0]) {
+        return {
+          ok: false,
+          error: NextResponse.json(
+            { success: false, error: `FNSKU '${fnsku}' not found in fba_fnskus` },
+            { status: 404 }
+          ),
+        };
+      }
 
-    // Verify staff exists
-    const staffCheck = await client.query(`SELECT id, name FROM staff WHERE id = $1`, [staffId]);
-    if (!staffCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
-    }
+      // Verify staff exists
+      const staffCheck = await client.query(`SELECT id, name FROM staff WHERE id = $1`, [staffId]);
+      if (!staffCheck.rows[0]) {
+        return {
+          ok: false,
+          error: NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 }),
+        };
+      }
 
-    const quantity = Math.max(1, Number(body?.quantity) || 1);
-    const shipmentId = body?.fba_shipment_id ? Number(body.fba_shipment_id) : null;
-    const itemId = body?.fba_shipment_item_id ? Number(body.fba_shipment_item_id) : null;
-    const techSerialId = body?.tech_serial_number_id ? Number(body.tech_serial_number_id) : null;
-    const station = body?.station ? String(body.station).trim() : null;
-    const notes = body?.notes ? String(body.notes).trim() : null;
-    const metadata = body?.metadata && typeof body.metadata === 'object' ? body.metadata : {};
+      const quantity = Math.max(1, Number(body?.quantity) || 1);
+      const shipmentId = body?.fba_shipment_id ? Number(body.fba_shipment_id) : null;
+      const itemId = body?.fba_shipment_item_id ? Number(body.fba_shipment_item_id) : null;
+      const techSerialId = body?.tech_serial_number_id ? Number(body.tech_serial_number_id) : null;
+      const station = body?.station ? String(body.station).trim() : null;
+      const notes = body?.notes ? String(body.notes).trim() : null;
+      const metadata = body?.metadata && typeof body.metadata === 'object' ? body.metadata : {};
 
-    const result = await client.query(
-      `INSERT INTO fba_fnsku_logs
-         (fnsku, source_stage, event_type, staff_id, tech_serial_number_id,
-          fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
-       RETURNING *`,
-      [
-        fnsku,
-        sourceStage,
-        eventType,
-        staffId,
-        techSerialId,
-        shipmentId,
-        itemId,
-        quantity,
-        station,
-        notes,
-        JSON.stringify(metadata),
-      ]
-    );
+      const result = await client.query(
+        `INSERT INTO fba_fnsku_logs
+           (fnsku, source_stage, event_type, staff_id, tech_serial_number_id,
+            fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+         RETURNING *`,
+        [
+          fnsku,
+          sourceStage,
+          eventType,
+          staffId,
+          techSerialId,
+          shipmentId,
+          itemId,
+          quantity,
+          station,
+          notes,
+          JSON.stringify(metadata),
+          ctx.organizationId,
+        ]
+      );
 
-    await client.query('COMMIT');
+      return { ok: true, log: result.rows[0], fnskuMeta: fnskuCheck.rows[0], staffName: staffCheck.rows[0].name };
+    });
+
+    if (!txResult.ok) return txResult.error;
 
     await invalidateCacheTags(['fba-logs']);
     await publishFbaItemChanged({ action: 'scan', shipmentId: 0, source: 'fba.logs.create', organizationId: ctx.organizationId });
@@ -201,21 +215,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     return NextResponse.json(
       {
         success: true,
-        log: result.rows[0],
-        fnsku_meta: fnskuCheck.rows[0],
-        staff_name: staffCheck.rows[0].name,
+        log: txResult.log,
+        fnsku_meta: txResult.fnskuMeta,
+        staff_name: txResult.staffName,
       },
       { status: 201 }
     );
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/logs]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to create FBA log' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

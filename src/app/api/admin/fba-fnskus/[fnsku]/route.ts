@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 type Params = Promise<{ fnsku: string }>;
@@ -19,11 +19,12 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'FNSKU is required' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT fnsku, product_title, asin, sku, is_active, last_seen_at, created_at, updated_at
        FROM fba_fnskus
-       WHERE fnsku = $1`,
-      [normalizedFnsku]
+       WHERE fnsku = $1 AND organization_id = $2`,
+      [normalizedFnsku, gate.ctx.organizationId]
     );
 
     if (!result.rows[0]) {
@@ -78,11 +79,14 @@ export async function PATCH(
 
     fields.push(`updated_at = NOW()`);
     values.push(normalizedFnsku);
+    const fnskuIdx = idx++;
+    values.push(gate.ctx.organizationId);
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `UPDATE fba_fnskus
        SET ${fields.join(', ')}
-       WHERE fnsku = $${idx}
+       WHERE fnsku = $${fnskuIdx} AND organization_id = $${idx}
        RETURNING *`,
       values
     );
@@ -118,12 +122,13 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'FNSKU is required' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `UPDATE fba_fnskus
        SET is_active = FALSE, updated_at = NOW()
-       WHERE fnsku = $1
+       WHERE fnsku = $1 AND organization_id = $2
        RETURNING fnsku, is_active, updated_at`,
-      [normalizedFnsku]
+      [normalizedFnsku, gate.ctx.organizationId]
     );
 
     if (!result.rows[0]) {

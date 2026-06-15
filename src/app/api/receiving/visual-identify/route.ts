@@ -48,7 +48,8 @@ function parseCandidates(raw: unknown): RawCandidate[] | null {
 }
 
 export const POST = withAuth(
-  async (request: NextRequest) => {
+  async (request: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     let body: Record<string, unknown>;
     try {
       body = (await request.json()) as Record<string, unknown>;
@@ -73,8 +74,10 @@ export const POST = withAuth(
     }
 
     // Resolve each distinct SKU once, then map back preserving order/score.
+    // Org-scoped: sku is a STRING key that collides across tenants, so the
+    // lookup must filter by organization_id (threaded into getSkuCatalogBySku).
     const distinct = [...new Set(candidates.map((c) => c.sku))];
-    const rows = await Promise.all(distinct.map((sku) => getSkuCatalogBySku(sku)));
+    const rows = await Promise.all(distinct.map((sku) => getSkuCatalogBySku(sku, orgId)));
     const bySku = new Map<string, SkuCatalogRow | null>();
     distinct.forEach((sku, i) => bySku.set(sku, rows[i]));
 

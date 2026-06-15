@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { toPSTDateKey } from '@/utils/date';
-import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 function normalizeHeader(value: unknown) {
   return String(value || '')
@@ -96,8 +95,9 @@ function parseCsv(content: string): string[][] {
   return lines.map(parseCsvLine);
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const formData = await req.formData();
     const file = formData.get('file');
 
@@ -121,6 +121,15 @@ export const POST = withAuth(async (req: NextRequest) => {
     const trackingIdx = getHeaderIndex(headers, ['Shipment - Tracking Number', 'Tracking']);
     const orderDateIdx = getHeaderIndex(headers, ['Date - Order date', 'Order date', 'Order Date']);
     const shipDateIdx = getHeaderIndex(headers, ['Date - Shipped Date', 'Date - Ship date', 'Ship date', 'Ship Date']);
+    // Optional sale-amount column — not required, defaults to null when absent.
+    const saleAmountIdx = getHeaderIndex(headers, [
+      'Order Total',
+      'Order - Total',
+      'Order - Item Unit Price',
+      'Item Unit Price',
+      'Unit Price',
+      'Order - Order Total',
+    ]);
 
     const missingCols: string[] = [];
     if (orderNumberIdx === -1) missingCols.push('Order - Number');
@@ -136,7 +145,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     // Keep only the latest row per order_id from the source tab.
-    const latestByOrderId = new Map<string, { tracking: string; orderDate: Date | null; shipByDate: string | null }>();
+    const latestByOrderId = new Map<string, { tracking: string; orderDate: Date | null; shipByDate: string | null; saleAmount: number | null }>();
     let skippedMissingOrderId = 0;
     let skippedMissingTracking = 0;
 
@@ -145,6 +154,10 @@ export const POST = withAuth(async (req: NextRequest) => {
       const tracking = String(row[trackingIdx] || '').trim();
       const orderDate = parseOrderDate(row[orderDateIdx]);
       const shipByDate = parseShipDate(row[shipDateIdx]);
+      // Optional sale amount — strip currency symbols/commas before parsing.
+      const rawSaleAmount = saleAmountIdx >= 0 ? String(row[saleAmountIdx] || '').trim() : '';
+      const parsedSaleAmount = rawSaleAmount ? Number(rawSaleAmount.replace(/[^0-9.-]/g, '')) : NaN;
+      const saleAmount = Number.isFinite(parsedSaleAmount) ? parsedSaleAmount : null;
 
       if (!orderId) {
         skippedMissingOrderId++;
@@ -155,7 +168,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         continue;
       }
 
-      latestByOrderId.set(orderId, { tracking, orderDate, shipByDate });
+      latestByOrderId.set(orderId, { tracking, orderDate, shipByDate, saleAmount });
     }
 
     const entries = Array.from(latestByOrderId.entries());
@@ -172,7 +185,6 @@ export const POST = withAuth(async (req: NextRequest) => {
       });
     }
 
-    const client = await pool.connect();
     let inserted = 0;
     let updated = 0;
     let unchanged = 0;
@@ -181,7 +193,10 @@ export const POST = withAuth(async (req: NextRequest) => {
     let skippedNoExceptionMatch = 0;
     let skippedInvalidTracking = 0;
 
-    try {
+    // GUC-wrapped tenant transaction: SET LOCAL app.current_org scopes every
+    // read/write below to this tenant; explicit organization_id filters/stamps
+    // are added per statement as the enforced isolation.
+    await withTenantTransaction(orgId, async (client) => {
       for (const [orderId, payload] of entries) {
         const trackingKey18 = normalizeTrackingKey18(payload.tracking);
         if (!trackingKey18) {
@@ -193,9 +208,10 @@ export const POST = withAuth(async (req: NextRequest) => {
           `SELECT id
            FROM orders_exceptions
            WHERE status = 'open'
+             AND organization_id = $2
              AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
            ORDER BY id ASC`,
-          [trackingKey18]
+          [trackingKey18, orgId]
         );
 
         if (openExceptions.rows.length === 0) {
@@ -222,13 +238,15 @@ export const POST = withAuth(async (req: NextRequest) => {
              WHERE wa.entity_type = 'ORDER'
                AND wa.entity_id = o.id
                AND wa.work_type = 'TEST'
+               AND wa.organization_id = o.organization_id
              ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                       wa.updated_at DESC, wa.id DESC
              LIMIT 1
            ) wa_deadline ON TRUE
            WHERE order_id = $1
+             AND o.organization_id = $2
            ORDER BY created_at DESC NULLS LAST, id DESC`,
-          [orderId]
+          [orderId, orgId]
         );
 
         let affectedOrderId: number | null = null;
@@ -241,8 +259,11 @@ export const POST = withAuth(async (req: NextRequest) => {
               status,
               status_history,
               account_source,
-              created_at
-            ) VALUES ($1, $2, $3, $4::jsonb, $5, timezone('America/Los_Angeles', now()))
+              created_at,
+              sale_amount,
+              currency,
+              organization_id
+            ) VALUES ($1, $2, $3, $4::jsonb, $5, timezone('America/Los_Angeles', now()), $6, $7, $8)
             RETURNING id`,
             [
               orderId,
@@ -250,6 +271,9 @@ export const POST = withAuth(async (req: NextRequest) => {
               'shipped',
               JSON.stringify([]),
               'shipstation',
+              payload.saleAmount ?? null,
+              'USD',
+              orgId,
             ]
           );
           affectedOrderId = inserted_row.rows[0]?.id ?? null;
@@ -279,8 +303,9 @@ export const POST = withAuth(async (req: NextRequest) => {
                      WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
                      ELSE status
                    END
-               WHERE order_id = $1`,
-              [orderId, payload.orderDate]
+               WHERE order_id = $1
+                 AND organization_id = $3`,
+              [orderId, payload.orderDate, orgId]
             );
             updated++;
           }
@@ -290,26 +315,25 @@ export const POST = withAuth(async (req: NextRequest) => {
         if (affectedOrderId && payload.shipByDate) {
           await client.query(
             `INSERT INTO work_assignments
-               (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-             VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2::timestamptz, 'Canonical deadline row from shipstation sync', NOW(), NOW(), NOW())
+               (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+             VALUES ($3, 'ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2::timestamptz, 'Canonical deadline row from shipstation sync', NOW(), NOW(), NOW())
              ON CONFLICT ON CONSTRAINT ux_work_assignments_active_entity DO UPDATE
                SET deadline_at = EXCLUDED.deadline_at, updated_at = NOW()
              WHERE work_assignments.status = 'OPEN'`,
-            [affectedOrderId, payload.shipByDate]
+            [affectedOrderId, payload.shipByDate, orgId]
           );
         }
 
         const exceptionIds = openExceptions.rows.map((row: any) => row.id);
         const placeholders = exceptionIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
+        const orgParamIdx = exceptionIds.length + 1;
         const deleted = await client.query(
-          `DELETE FROM orders_exceptions WHERE id IN (${placeholders})`,
-          exceptionIds
+          `DELETE FROM orders_exceptions WHERE id IN (${placeholders}) AND organization_id = $${orgParamIdx}`,
+          [...exceptionIds, orgId]
         );
         clearedExceptions += deleted.rowCount || 0;
       }
-    } finally {
-      client.release();
-    }
+    });
 
     return NextResponse.json({
       success: true,

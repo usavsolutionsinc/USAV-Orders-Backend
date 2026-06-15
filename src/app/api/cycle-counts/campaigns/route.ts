@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import {
   assertPermission,
   PermissionDeniedError,
   permissionDeniedResponse,
 } from '@/lib/auth/permissions';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * GET /api/cycle-counts/campaigns?status=open
@@ -19,18 +19,22 @@ import { withAuth } from '@/lib/auth/withAuth';
  *   scope.minAgeDays?: number    — only count rows not counted in N days
  */
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const params: string[] = [];
     const clauses: string[] = [];
+    // Tenant ownership filter — never list another org's campaigns.
+    params.push(ctx.organizationId);
+    clauses.push(`c.organization_id = $${params.length}`);
     if (status === 'open' || status === 'closed') {
       params.push(status);
-      clauses.push(`status = $${params.length}`);
+      clauses.push(`c.status = $${params.length}`);
     }
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-    const r = await pool.query(
+    const r = await tenantQuery(
+      ctx.organizationId,
       `SELECT c.id, c.name, c.scope, c.variance_tol, c.status, c.created_by, c.created_at, c.closed_at,
               COUNT(l.*) FILTER (WHERE l.status = 'pending')::int        AS pending_lines,
               COUNT(l.*) FILTER (WHERE l.status = 'counted')::int        AS counted_lines,
@@ -56,8 +60,9 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'cycle_count.view' });
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const body = await request.json().catch(() => ({}));
     const name = String(body?.name || '').trim();
     const varianceTol = Number(body?.varianceTol);
@@ -115,29 +120,33 @@ export const POST = withAuth(async (request: NextRequest) => {
       );
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    return await withTenantTransaction(orgId, async (client) => {
       const insCampaign = await client.query<{ id: number }>(
-        `INSERT INTO cycle_count_campaigns (name, scope, variance_tol, status, created_by)
-         VALUES ($1, $2::jsonb, $3, 'open', $4)
+        `INSERT INTO cycle_count_campaigns (name, scope, variance_tol, status, created_by, organization_id)
+         VALUES ($1, $2::jsonb, $3, 'open', $4, $5)
          RETURNING id`,
-        [name, JSON.stringify(scope ?? {}), tol, staffId],
+        [name, JSON.stringify(scope ?? {}), tol, staffId, orgId],
       );
       const campaignId = insCampaign.rows[0].id;
       filterParams.unshift(campaignId);
+      // org param goes LAST (outside the renumber regex, which only bumps the
+      // scope-filter placeholders). It scopes the snapshot to this org's bins
+      // and stamps every snapshotted line.
+      filterParams.push(orgId);
+      const orgIdx = filterParams.length;
 
-      // Snapshot bin_contents → cycle_count_lines.
+      // Snapshot bin_contents → cycle_count_lines (this org's bins only).
       const inserted = await client.query<{ inserted: number }>(
         `WITH snapshot AS (
            SELECT bc.location_id, bc.sku, bc.qty
            FROM bin_contents bc
            JOIN locations l ON l.id = bc.location_id
            WHERE ${filterClauses.join(' AND ').replace(/\$(\d+)/g, (_m, n) => `$${Number(n) + 1}`)}
+             AND bc.organization_id = $${orgIdx}
          ),
          ins AS (
-           INSERT INTO cycle_count_lines (campaign_id, bin_id, sku, expected_qty)
-           SELECT $1, location_id, sku, qty
+           INSERT INTO cycle_count_lines (campaign_id, bin_id, sku, expected_qty, organization_id)
+           SELECT $1, location_id, sku, qty, $${orgIdx}
            FROM snapshot
            ON CONFLICT (campaign_id, bin_id, sku) DO NOTHING
            RETURNING 1
@@ -145,18 +154,12 @@ export const POST = withAuth(async (request: NextRequest) => {
          SELECT COUNT(*)::int AS inserted FROM ins`,
         filterParams,
       );
-      await client.query('COMMIT');
       return NextResponse.json({
         success: true,
         campaign: { id: campaignId },
         lines_snapshotted: inserted.rows[0]?.inserted ?? 0,
       });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   } catch (err: any) {
     console.error('[POST /api/cycle-counts/campaigns] error:', err);
     return NextResponse.json(

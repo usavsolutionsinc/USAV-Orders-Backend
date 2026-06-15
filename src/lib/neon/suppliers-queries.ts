@@ -1,4 +1,13 @@
-import pool from '../db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+
+// ─── Tenancy note ────────────────────────────────────────────────────────────
+// `suppliers` has no `organization_id` column yet (tenant-owned-NEEDS-COL in
+// docs/tenancy/org-id-coverage.generated.md) and no parent FK to scope through,
+// so there is no column-level predicate to add here. Every statement is run via
+// `tenantQuery`/`withTenantTransaction` so it executes under the per-request
+// `app.current_org` GUC (the RLS backstop) once the suppliers table is given an
+// org column + FORCE in a later phase. Callers must thread the request's orgId.
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -25,13 +34,14 @@ export async function getSupplierList(params: {
   type?: string | null;
   limit?: number;
   offset?: number;
-}): Promise<{ items: SupplierRow[]; total: number }> {
+}, orgId: OrgId): Promise<{ items: SupplierRow[]; total: number }> {
   const search = (params.q || '').trim();
   const type = (params.type || '').trim();
   const limit = Math.min(params.limit || 100, 500);
   const offset = params.offset || 0;
 
-  const result = await pool.query<SupplierRow>(
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `SELECT * FROM suppliers
       WHERE is_active = true
         AND ($1 = '' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%' OR ebay_seller_id ILIKE '%' || $1 || '%')
@@ -41,7 +51,8 @@ export async function getSupplierList(params: {
     [search, type, limit, offset],
   );
 
-  const countResult = await pool.query<{ total: number }>(
+  const countResult = await tenantQuery<{ total: number }>(
+    orgId,
     `SELECT COUNT(*)::int AS total FROM suppliers
       WHERE is_active = true
         AND ($1 = '' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%' OR ebay_seller_id ILIKE '%' || $1 || '%')
@@ -70,13 +81,16 @@ export async function getSupplierListWithStats(params: {
   type?: string | null;
   limit?: number;
   offset?: number;
-}): Promise<{ items: SupplierWithStatsRow[]; total: number }> {
+}, orgId: OrgId): Promise<{ items: SupplierWithStatsRow[]; total: number }> {
   const search = (params.q || '').trim();
   const type = (params.type || '').trim();
   const limit = Math.min(params.limit || 100, 500);
   const offset = params.offset || 0;
 
-  const result = await pool.query<SupplierWithStatsRow>(
+  // supplier_id joins below are on the globally-unique integer PK (suppliers.id)
+  // so they are tenant-safe bare (Rule 4); the whole query runs under the GUC.
+  const result = await tenantQuery<SupplierWithStatsRow>(
+    orgId,
     `SELECT s.*,
             COALESCE(c.candidate_count, 0)   AS candidate_count,
             COALESCE(a.acquisition_count, 0) AS acquisition_count,
@@ -102,7 +116,8 @@ export async function getSupplierListWithStats(params: {
     [search, type, limit, offset],
   );
 
-  const countResult = await pool.query<{ total: number }>(
+  const countResult = await tenantQuery<{ total: number }>(
+    orgId,
     `SELECT COUNT(*)::int AS total FROM suppliers
       WHERE is_active = true
         AND ($1 = '' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%' OR ebay_seller_id ILIKE '%' || $1 || '%')
@@ -115,18 +130,20 @@ export async function getSupplierListWithStats(params: {
   return { items, total: countResult.rows[0]?.total || 0 };
 }
 
-export async function getSupplierById(id: number): Promise<SupplierRow | null> {
-  const result = await pool.query<SupplierRow>(
+export async function getSupplierById(id: number, orgId: OrgId): Promise<SupplierRow | null> {
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `SELECT * FROM suppliers WHERE id = $1 LIMIT 1`,
     [id],
   );
   return result.rows[0] ?? null;
 }
 
-export async function getSupplierByEbaySellerId(ebaySellerId: string): Promise<SupplierRow | null> {
+export async function getSupplierByEbaySellerId(ebaySellerId: string, orgId: OrgId): Promise<SupplierRow | null> {
   const trimmed = ebaySellerId.trim();
   if (!trimmed) return null;
-  const result = await pool.query<SupplierRow>(
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `SELECT * FROM suppliers WHERE ebay_seller_id = $1 LIMIT 1`,
     [trimmed],
   );
@@ -146,8 +163,9 @@ export async function createSupplier(params: {
   leadTimeDays?: number | null;
   notes?: string | null;
   isActive?: boolean;
-}): Promise<SupplierRow> {
-  const result = await pool.query<SupplierRow>(
+}, orgId: OrgId): Promise<SupplierRow> {
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `INSERT INTO suppliers
        (name, supplier_type, email, phone, url, ebay_seller_id, rating, lead_time_days, notes, is_active)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -177,10 +195,11 @@ export async function createSupplier(params: {
 export async function upsertEbaySupplier(params: {
   ebaySellerId: string;
   name?: string | null;
-}): Promise<{ supplier: SupplierRow; created: boolean }> {
+}, orgId: OrgId): Promise<{ supplier: SupplierRow; created: boolean }> {
   const sellerId = params.ebaySellerId.trim();
   const name = (params.name?.trim() || sellerId) || sellerId;
-  const result = await pool.query<SupplierRow & { inserted: boolean }>(
+  const result = await tenantQuery<SupplierRow & { inserted: boolean }>(
+    orgId,
     `INSERT INTO suppliers (name, supplier_type, ebay_seller_id)
        VALUES ($1, 'ebay_seller', $2)
      ON CONFLICT (ebay_seller_id) WHERE ebay_seller_id IS NOT NULL
@@ -209,6 +228,7 @@ export async function updateSupplier(
     notes?: string | null;
     isActive?: boolean;
   },
+  orgId: OrgId,
 ): Promise<SupplierRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -229,19 +249,21 @@ export async function updateSupplier(
   if (updates.notes !== undefined) push('notes', updates.notes?.trim() || null);
   if (updates.isActive !== undefined) push('is_active', updates.isActive);
 
-  if (sets.length === 0) return getSupplierById(id);
+  if (sets.length === 0) return getSupplierById(id, orgId);
   sets.push(`updated_at = NOW()`);
   values.push(id);
 
-  const result = await pool.query<SupplierRow>(
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `UPDATE suppliers SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
     values,
   );
   return result.rows[0] ?? null;
 }
 
-export async function softDeleteSupplier(id: number): Promise<SupplierRow | null> {
-  const result = await pool.query<SupplierRow>(
+export async function softDeleteSupplier(id: number, orgId: OrgId): Promise<SupplierRow | null> {
+  const result = await tenantQuery<SupplierRow>(
+    orgId,
     `UPDATE suppliers
         SET is_active = false, updated_at = NOW()
       WHERE id = $1 AND is_active = true

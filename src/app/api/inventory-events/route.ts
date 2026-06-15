@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { readTimeline } from '@/lib/inventory/events';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -10,9 +10,10 @@ import { withAuth } from '@/lib/auth/withAuth';
  *
  * Used by the bin page, the SKU detail timeline, and the future /audit page.
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
+    const orgId = ctx.organizationId;
 
     const num = (key: string): number | null => {
       const v = searchParams.get(key);
@@ -30,7 +31,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       actor_staff_id: num('actor_staff_id'),
       since: searchParams.get('since') || null,
       limit: num('limit') ?? 50,
-    });
+    }, orgId);
 
     if (rawEvents.length === 0) {
       return NextResponse.json({ success: true, events: [] });
@@ -60,30 +61,34 @@ export const GET = withAuth(async (request: NextRequest) => {
     const skuTitleMap = new Map<string, string>();
 
     if (staffIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
-        [staffIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [staffIds, orgId],
       );
       for (const row of r.rows) staffMap.set(row.id, row.name);
     }
     if (binIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM locations WHERE id = ANY($1::int[])`,
-        [binIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM locations WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [binIds, orgId],
       );
       for (const row of r.rows) binMap.set(row.id, row.name);
     }
     if (serialIds.length > 0) {
-      const r = await pool.query<{ id: number; serial_number: string }>(
-        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[])`,
-        [serialIds],
+      const r = await tenantQuery<{ id: number; serial_number: string }>(
+        orgId,
+        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [serialIds, orgId],
       );
       for (const row of r.rows) serialMap.set(row.id, row.serial_number);
     }
     if (skus.length > 0) {
-      const r = await pool.query<{ sku: string; product_title: string | null }>(
-        `SELECT sku, product_title FROM sku_catalog WHERE sku = ANY($1::text[])`,
-        [skus],
+      const r = await tenantQuery<{ sku: string; product_title: string | null }>(
+        orgId,
+        `SELECT sku, product_title FROM sku_catalog WHERE sku = ANY($1::text[]) AND organization_id = $2`,
+        [skus, orgId],
       );
       for (const row of r.rows) skuTitleMap.set(row.sku, row.product_title ?? '');
     }

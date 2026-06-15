@@ -8,7 +8,24 @@ import {
   updateRelationship,
 } from '@/lib/neon/sku-relationship-queries';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { tenantQuery } from '@/lib/tenancy/db';
 import pool from '@/lib/db';
+
+/**
+ * Confirm a relationship edge belongs to `orgId`. `sku_relationships` is
+ * tenant-owned (carries organization_id), but its query helpers don't take an
+ * orgId yet — so we org-scope the edge here with an explicit inline check. A
+ * cross-tenant id reads as missing → the caller 404s, exactly as if the edge
+ * never existed.
+ */
+async function relationshipBelongsToOrg(id: number, orgId: string): Promise<boolean> {
+  const { rows } = await tenantQuery<{ id: number }>(
+    orgId,
+    `SELECT id FROM sku_relationships WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
+  );
+  return rows.length > 0;
+}
 
 /**
  * PATCH /api/sku-catalog/graph/relationships/[id] — Update qty/notes on an edge.
@@ -32,7 +49,7 @@ export async function PATCH(
     if (parsed instanceof NextResponse) return parsed;
 
     const before = await getRelationshipById(id);
-    if (!before) {
+    if (!before || !(await relationshipBelongsToOrg(id, gate.ctx.organizationId))) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
@@ -80,7 +97,7 @@ export async function DELETE(
     }
 
     const before = await getRelationshipById(id);
-    if (!before) {
+    if (!before || !(await relationshipBelongsToOrg(id, gate.ctx.organizationId))) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 

@@ -1,4 +1,5 @@
-import pool from '../db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface ReasonCodeRow {
   id: number;
@@ -14,27 +15,32 @@ export interface ReasonCodeRow {
 
 const COLS = `id, code, label, category, direction, requires_note, requires_photo, sort_order, is_active`;
 
-export async function getReasonCodeById(id: number): Promise<ReasonCodeRow | null> {
-  const r = await pool.query<ReasonCodeRow>(
-    `SELECT ${COLS} FROM reason_codes WHERE id = $1 LIMIT 1`,
-    [id],
+export async function getReasonCodeById(id: number, orgId: OrgId): Promise<ReasonCodeRow | null> {
+  const r = await tenantQuery<ReasonCodeRow>(
+    orgId,
+    `SELECT ${COLS} FROM reason_codes WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
   );
   return r.rows[0] ?? null;
 }
 
-export async function createReasonCode(input: {
-  code: string;
-  label: string;
-  category: string;
-  direction?: 'in' | 'out' | 'either';
-  requiresNote?: boolean;
-  requiresPhoto?: boolean;
-  sortOrder?: number;
-}): Promise<ReasonCodeRow> {
-  const r = await pool.query<ReasonCodeRow>(
+export async function createReasonCode(
+  input: {
+    code: string;
+    label: string;
+    category: string;
+    direction?: 'in' | 'out' | 'either';
+    requiresNote?: boolean;
+    requiresPhoto?: boolean;
+    sortOrder?: number;
+  },
+  orgId: OrgId,
+): Promise<ReasonCodeRow> {
+  const r = await tenantQuery<ReasonCodeRow>(
+    orgId,
     `INSERT INTO reason_codes
-       (code, label, category, direction, requires_note, requires_photo, sort_order, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       (code, label, category, direction, requires_note, requires_photo, sort_order, is_active, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
      RETURNING ${COLS}`,
     [
       input.code.trim(),
@@ -44,6 +50,7 @@ export async function createReasonCode(input: {
       input.requiresNote ?? false,
       input.requiresPhoto ?? false,
       input.sortOrder ?? 0,
+      orgId,
     ],
   );
   return r.rows[0];
@@ -64,8 +71,10 @@ export async function updateReasonCode(
     sortOrder?: number;
     isActive?: boolean;
   },
+  orgId: OrgId,
 ): Promise<ReasonCodeRow | null> {
-  const r = await pool.query<ReasonCodeRow>(
+  const r = await tenantQuery<ReasonCodeRow>(
+    orgId,
     `UPDATE reason_codes SET
         label          = COALESCE($2, label),
         category       = COALESCE($3, category),
@@ -74,7 +83,7 @@ export async function updateReasonCode(
         requires_photo = COALESCE($6, requires_photo),
         sort_order     = COALESCE($7, sort_order),
         is_active      = COALESCE($8, is_active)
-      WHERE id = $1
+      WHERE id = $1 AND organization_id = $9
       RETURNING ${COLS}`,
     [
       id,
@@ -85,6 +94,7 @@ export async function updateReasonCode(
       patch.requiresPhoto ?? null,
       patch.sortOrder ?? null,
       patch.isActive ?? null,
+      orgId,
     ],
   );
   return r.rows[0] ?? null;
@@ -95,13 +105,14 @@ export async function updateReasonCode(
  * inventory_events / bin adjustments, so we never hard-delete. Returns the
  * now-inactive row, or null if it didn't exist or was already inactive.
  */
-export async function softDeleteReasonCode(id: number): Promise<ReasonCodeRow | null> {
-  const r = await pool.query<ReasonCodeRow>(
+export async function softDeleteReasonCode(id: number, orgId: OrgId): Promise<ReasonCodeRow | null> {
+  const r = await tenantQuery<ReasonCodeRow>(
+    orgId,
     `UPDATE reason_codes
         SET is_active = false
-      WHERE id = $1 AND is_active = true
+      WHERE id = $1 AND organization_id = $2 AND is_active = true
       RETURNING ${COLS}`,
-    [id],
+    [id, orgId],
   );
   return r.rows[0] ?? null;
 }

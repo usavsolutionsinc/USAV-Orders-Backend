@@ -12,8 +12,27 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AuditLogFilters } from './filters';
 import { readInventorySpine } from './inventory-spine';
+
+/**
+ * Tenant-aware query helper. When an orgId is supplied the read runs through
+ * `tenantQuery` (GUC-scoped on the non-bypass app_tenant role + explicit
+ * predicates baked into the SQL by the caller); when omitted it falls back to
+ * the raw shared pool so the many un-migrated callers stay byte-identical.
+ */
+function runQuery<T extends Record<string, unknown> = Record<string, unknown>>(
+  orgId: OrgId | undefined,
+  text: string,
+  params?: ReadonlyArray<unknown>,
+): Promise<{ rows: T[] }> {
+  if (orgId) {
+    return tenantQuery<T>(orgId, text, params);
+  }
+  return pool.query(text, params as unknown[] | undefined) as Promise<{ rows: T[] }>;
+}
 
 /**
  * Outbound lifecycle event types surfaced in the packing timeline. Scoped to
@@ -73,10 +92,24 @@ interface ListOpts {
   search: string | null;
 }
 
-export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrackingSummary[]> {
+export async function listPackingTrackings(
+  opts: ListOpts,
+  orgId?: OrgId,
+): Promise<PackingTrackingSummary[]> {
   const { filters, search } = opts;
   const params: unknown[] = [];
   const where: string[] = ['pl.shipment_id IS NOT NULL'];
+
+  // Tenant scope: packer_logs carries organization_id. The LEFT-JOINed
+  // shipping_tracking_numbers (stn) has no organization_id column (NEEDS-COL),
+  // so it is scoped transitively through this org-bearing parent. Correlated
+  // orders subqueries below also carry the explicit org predicate.
+  let orgParam: string | null = null;
+  if (orgId) {
+    params.push(orgId);
+    orgParam = `$${params.length}`;
+    where.push(`pl.organization_id = ${orgParam}::uuid`);
+  }
 
   if (filters.range.start) {
     params.push(filters.range.start);
@@ -92,21 +125,23 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
   }
   if (filters.sku) {
     params.push(filters.sku);
+    const orgPred = orgParam ? ` AND o.organization_id = ${orgParam}::uuid` : '';
     where.push(`EXISTS (
       SELECT 1 FROM orders o
-       WHERE o.shipment_id = pl.shipment_id AND o.sku = $${params.length}
+       WHERE o.shipment_id = pl.shipment_id AND o.sku = $${params.length}${orgPred}
     )`);
   }
   if (search) {
     params.push(`%${search}%`);
     const p = `$${params.length}`;
+    const orgPred = orgParam ? ` AND o2.organization_id = ${orgParam}::uuid` : '';
     where.push(`(
       stn.tracking_number_raw ILIKE ${p}
       OR COALESCE(s.name, '') ILIKE ${p}
       OR EXISTS (
         SELECT 1 FROM orders o2
          WHERE o2.shipment_id = pl.shipment_id
-           AND (o2.sku ILIKE ${p} OR o2.product_title ILIKE ${p})
+           AND (o2.sku ILIKE ${p} OR o2.product_title ILIKE ${p})${orgPred}
       )
     )`);
   }
@@ -127,11 +162,13 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
         SELECT string_agg(DISTINCT o.sku, ', ' ORDER BY o.sku)
           FROM orders o
          WHERE o.shipment_id = pl.shipment_id AND COALESCE(o.sku, '') <> ''
+           ${orgParam ? `AND o.organization_id = ${orgParam}::uuid` : ''}
       ) AS sku_summary,
       (
         SELECT COUNT(*)::int
           FROM station_activity_logs sal
          WHERE sal.packer_log_id = pl.id
+           ${orgParam ? `AND sal.organization_id = ${orgParam}::uuid` : ''}
       ) AS event_count
     FROM packer_logs pl
     LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
@@ -140,7 +177,7 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
     ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC
     LIMIT ${limitParam} OFFSET ${offsetParam}
   `;
-  const { rows } = await pool.query(sql, params);
+  const { rows } = await runQuery(orgId, sql, params);
 
   return rows.map((r: Record<string, unknown>) => ({
     tracking: (r.tracking as string | null) ?? `pl#${r.packer_log_id}`,
@@ -156,22 +193,39 @@ export async function listPackingTrackings(opts: ListOpts): Promise<PackingTrack
 export async function getPackingTrackingDetail(
   tracking: string,
   filters: AuditLogFilters,
+  orgId?: OrgId,
 ): Promise<PackingTrackingDetail | null> {
   // Resolve shipment_id from the tracking text (case/punctuation tolerant).
-  const trackingRes = await pool.query(
+  // shipping_tracking_numbers has no organization_id column (NEEDS-COL) and no
+  // org-bearing parent in this query, so when orgId is present we GUC-wrap the
+  // read AND require an org-owned referencer (packer_logs/orders by shipment_id)
+  // to exist — that is the org-ownership gate (foreign tenants resolve to null).
+  const trackingOrgGate = orgId
+    ? ` AND (
+          EXISTS (SELECT 1 FROM packer_logs pl
+                   WHERE pl.shipment_id = shipping_tracking_numbers.id
+                     AND pl.organization_id = $2::uuid)
+          OR EXISTS (SELECT 1 FROM orders o
+                      WHERE o.shipment_id = shipping_tracking_numbers.id
+                        AND o.organization_id = $2::uuid)
+        )`
+    : '';
+  const trackingRes = await runQuery(
+    orgId,
     `SELECT id, tracking_number_raw
        FROM shipping_tracking_numbers
-       WHERE tracking_number_raw = $1
+       WHERE (tracking_number_raw = $1
           OR tracking_number_normalized = $1
-          OR tracking_number_normalized = UPPER(REGEXP_REPLACE($1, '[^A-Za-z0-9]', '', 'g'))
+          OR tracking_number_normalized = UPPER(REGEXP_REPLACE($1, '[^A-Za-z0-9]', '', 'g')))${trackingOrgGate}
        LIMIT 1`,
-    [tracking],
+    orgId ? [tracking, orgId] : [tracking],
   );
   if (trackingRes.rows.length === 0) return null;
   const shipmentId = trackingRes.rows[0].id as number;
   const canonicalTracking = trackingRes.rows[0].tracking_number_raw as string;
 
-  const packerLogsRes = await pool.query(
+  const packerLogsRes = await runQuery(
+    orgId,
     `SELECT pl.id,
             pl.created_at AS pack_date_time,
             pl.packed_by AS packed_by_id,
@@ -179,9 +233,9 @@ export async function getPackingTrackingDetail(
             pl.tracking_type
        FROM packer_logs pl
        LEFT JOIN staff s ON s.id = pl.packed_by
-       WHERE pl.shipment_id = $1
+       WHERE pl.shipment_id = $1${orgId ? ' AND pl.organization_id = $2::uuid' : ''}
        ORDER BY pl.created_at DESC NULLS LAST, pl.id DESC`,
-    [shipmentId],
+    orgId ? [shipmentId, orgId] : [shipmentId],
   );
 
   const packerLogIds = packerLogsRes.rows.map((r: Record<string, unknown>) => r.id as number);
@@ -190,12 +244,15 @@ export async function getPackingTrackingDetail(
   // not a column on packer_logs. Group them by packer_log id.
   const packerPhotosRes =
     packerLogIds.length > 0
-      ? await pool.query(
+      ? await runQuery(
+          orgId,
           `SELECT entity_id, url
              FROM photos
-            WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])
+            WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])${
+              orgId ? ' AND organization_id = $2::uuid' : ''
+            }
             ORDER BY created_at ASC, id ASC`,
-          [packerLogIds],
+          orgId ? [packerLogIds, orgId] : [packerLogIds],
         )
       : { rows: [] as Record<string, unknown>[] };
   const photosByPackerLog = new Map<number, string[]>();
@@ -209,11 +266,16 @@ export async function getPackingTrackingDetail(
   // SAL events linked to any of these packer_logs.
   const salParams: unknown[] = [packerLogIds.length > 0 ? packerLogIds : [-1]];
   const salWhere: string[] = [`sal.packer_log_id = ANY($1::int[])`];
+  if (orgId) {
+    salParams.push(orgId);
+    salWhere.push(`sal.organization_id = $${salParams.length}::uuid`);
+  }
   if (filters.staffId != null) {
     salParams.push(filters.staffId);
     salWhere.push(`sal.staff_id = $${salParams.length}`);
   }
-  const salRes = await pool.query(
+  const salRes = await runQuery(
+    orgId,
     `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
@@ -246,7 +308,12 @@ export async function getPackingTrackingDetail(
     auditParams.push(filters.staffId);
     auditWhere.push(`al.actor_staff_id = $${auditParams.length}`);
   }
-  const auditRes = await pool.query(
+  if (orgId) {
+    auditParams.push(orgId);
+    auditWhere.push(`al.organization_id = $${auditParams.length}::uuid`);
+  }
+  const auditRes = await runQuery(
+    orgId,
     `SELECT al.id,
             al.created_at,
             al.action,
@@ -274,13 +341,16 @@ export async function getPackingTrackingDetail(
   // timeline reflects the real fulfillment lifecycle, not just the packer_logs
   // row + SAL scans. Resolved via order_unit_allocations → orders.shipment_id
   // (inventory_events has no shipment column of its own).
-  const allocUnitsRes = await pool.query(
+  const allocUnitsRes = await runQuery(
+    orgId,
     `SELECT DISTINCT oua.serial_unit_id
        FROM order_unit_allocations oua
        JOIN orders o ON o.id = oua.order_id
       WHERE o.shipment_id = $1
-        AND oua.serial_unit_id IS NOT NULL`,
-    [shipmentId],
+        AND oua.serial_unit_id IS NOT NULL${
+          orgId ? ' AND o.organization_id = $2::uuid AND oua.organization_id = $2::uuid' : ''
+        }`,
+    orgId ? [shipmentId, orgId] : [shipmentId],
   );
   const allocUnitIds = allocUnitsRes.rows.map(
     (r: Record<string, unknown>) => r.serial_unit_id as number,
@@ -403,11 +473,14 @@ export async function getPackingTrackingDetail(
   );
 
   // SKU summary across all orders for this tracking.
-  const skuRes = await pool.query(
+  const skuRes = await runQuery(
+    orgId,
     `SELECT string_agg(DISTINCT sku, ', ' ORDER BY sku) AS sku_summary
        FROM orders
-       WHERE shipment_id = $1 AND COALESCE(sku, '') <> ''`,
-    [shipmentId],
+       WHERE shipment_id = $1 AND COALESCE(sku, '') <> ''${
+         orgId ? ' AND organization_id = $2::uuid' : ''
+       }`,
+    orgId ? [shipmentId, orgId] : [shipmentId],
   );
 
   return {

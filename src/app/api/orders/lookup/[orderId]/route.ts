@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query, queryOne } from '@/lib/neon-client';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -43,7 +43,8 @@ interface OrderDetail {
   serials: string[];
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
+  const orgId = ctx.organizationId;
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const orderId = segments[segments.length - 1];
   if (!orderId) {
@@ -51,7 +52,11 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
   const decoded = decodeURIComponent(orderId);
 
-  const order = await queryOne<OrderDetail>`
+  // order_id is a per-tenant string key — anchor the read on the org so a
+  // collision across tenants can't surface another org's order.
+  const orderResult = await tenantQuery<OrderDetail>(
+    orgId,
+    `
     SELECT
       o.id,
       o.order_id,
@@ -89,15 +94,17 @@ export const GET = withAuth(async (request: NextRequest) => {
           SELECT array_agg(DISTINCT tsn.serial_number ORDER BY tsn.serial_number)
           FROM tech_serial_numbers tsn
           WHERE tsn.shipment_id = o.shipment_id AND tsn.serial_number IS NOT NULL
+            AND tsn.organization_id = o.organization_id
         ),
         ARRAY[]::text[]
       ) AS serials
     FROM orders o
-    LEFT JOIN customers c ON c.id = o.customer_id
+    LEFT JOIN customers c ON c.id = o.customer_id AND c.organization_id = o.organization_id
     LEFT JOIN LATERAL (
       SELECT deadline_at, assigned_tech_id
       FROM work_assignments
       WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'TEST'
+        AND organization_id = o.organization_id
       ORDER BY assigned_at DESC NULLS LAST
       LIMIT 1
     ) wa_test ON true
@@ -105,12 +112,17 @@ export const GET = withAuth(async (request: NextRequest) => {
       SELECT assigned_packer_id
       FROM work_assignments
       WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK'
+        AND organization_id = o.organization_id
       ORDER BY assigned_at DESC NULLS LAST
       LIMIT 1
     ) wa_pack ON true
-    WHERE o.order_id = ${decoded}
+    WHERE o.order_id = $1
+      AND o.organization_id = $2
     LIMIT 1
-  `;
+  `,
+    [decoded, orgId],
+  );
+  const order = orderResult.rows[0] ?? null;
 
   if (!order) {
     return NextResponse.json({ ok: false, error: 'not_found' }, { status: 404 });
@@ -118,13 +130,15 @@ export const GET = withAuth(async (request: NextRequest) => {
 
   // Recent activity for the activity strip — last 5 work_assignment status
   // transitions on this order.
-  const activity = await query<{
+  const activityResult = await tenantQuery<{
     event_at: string;
     work_type: string;
     status: string;
     actor_id: number | null;
     actor_name: string | null;
-  }>`
+  }>(
+    orgId,
+    `
     SELECT
       wa.updated_at AS event_at,
       wa.work_type,
@@ -132,11 +146,15 @@ export const GET = withAuth(async (request: NextRequest) => {
       COALESCE(wa.assigned_tech_id, wa.assigned_packer_id) AS actor_id,
       s.name AS actor_name
     FROM work_assignments wa
-    LEFT JOIN staff s ON s.id = COALESCE(wa.assigned_tech_id, wa.assigned_packer_id)
-    WHERE wa.entity_type = 'ORDER' AND wa.entity_id = ${order.id}
+    LEFT JOIN staff s ON s.id = COALESCE(wa.assigned_tech_id, wa.assigned_packer_id) AND s.organization_id = wa.organization_id
+    WHERE wa.entity_type = 'ORDER' AND wa.entity_id = $1
+      AND wa.organization_id = $2
     ORDER BY wa.updated_at DESC NULLS LAST
     LIMIT 5
-  `;
+  `,
+    [order.id, orgId],
+  );
+  const activity = activityResult.rows;
 
   return NextResponse.json({ ok: true, order, activity });
 }, { permission: 'sku_stock.view' });

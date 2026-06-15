@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Rma } from '@/lib/feature-flags';
 import { recordDisposition, type DispositionCode } from '@/lib/rma/authorizations';
 
 const VALID_CODES: ReadonlySet<DispositionCode> = new Set([
@@ -22,15 +21,8 @@ const VALID_CODES: ReadonlySet<DispositionCode> = new Set([
  *   disposition_code: 'ACCEPT' | 'HOLD' | 'RTV' | 'REWORK' | 'SCRAP',
  *   notes?: string,
  * }
- * Gated by INVENTORY_V2_RMA.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Rma()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_RMA flag is OFF', flag: 'INVENTORY_V2_RMA' },
-      { status: 503 },
-    );
-  }
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {

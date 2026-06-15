@@ -17,7 +17,14 @@ import { getMyStationGoals } from '@/lib/neon/staff-stations-queries';
 export const runtime = 'nodejs';
 
 export const GET = withAuth(async (_req, ctx) => {
-  const stations = await getMyStationGoals(ctx.staffId);
+  // Thread the verified tenant id so getMyStationGoals routes through the
+  // tenant executor (RLS GUC) and adds the explicit org predicates:
+  //   - station_activity_logs (org-owned) gets `AND organization_id = $n`
+  //   - staff_stations / staff_goals (no org column) are JOIN-scoped to the
+  //     `staff` parent's organization_id.
+  // staffId is still session-derived (never the request), so this also
+  // converges the /me path onto the canonical /api/staff-goals pattern.
+  const stations = await getMyStationGoals(ctx.staffId, ctx.organizationId);
   const primary = stations.find((s) => s.is_primary)?.station ?? stations[0]?.station ?? null;
   return NextResponse.json({
     primary,

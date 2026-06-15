@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -12,7 +12,6 @@ import { withAuth } from '@/lib/auth/withAuth';
 // exists, increments the shipment item's actual_qty and advances it to PACKED
 // (ready to combine). Tech testing is a prior step (PLANNED → TESTED).
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
     const { fnsku, station } = body;
@@ -24,12 +23,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
     const normalizedFnsku = String(fnsku).trim().toUpperCase();
 
-    await client.query('BEGIN');
-
+    const outcome = await withTenantTransaction(ctx.organizationId, async (client) => {
     const staffCheck = await client.query('SELECT id, name FROM staff WHERE id = $1', [staff_id]);
     if (!staffCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
+      return { error: { status: 404, message: 'Staff not found' } } as const;
     }
 
     // Ensure FNSKU exists in catalog. When the scan is a B0 ASIN and the
@@ -39,7 +36,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const meta = await upsertFnskuCatalogRow(client, {
       fnsku: normalizedFnsku,
       asin: isAsinScan ? normalizedFnsku : null,
-    });
+    }, ctx.organizationId);
     const resolvedFnsku = String(meta?.fnsku || normalizedFnsku).trim().toUpperCase();
 
     const itemRes = await client.query(
@@ -52,6 +49,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        WHERE fsi.fnsku = $1
          AND fs.status != 'SHIPPED'
          AND fsi.status != 'SHIPPED'
+         AND fsi.organization_id = $2
+         AND fs.organization_id = $2
        ORDER BY
          CASE fsi.status
            WHEN 'PLANNED' THEN 1
@@ -63,7 +62,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
          fs.created_at ASC,
          fsi.id ASC
        LIMIT 1`,
-      [resolvedFnsku]
+      [resolvedFnsku, ctx.organizationId]
     );
 
     let openItem = itemRes.rows[0] ?? null;
@@ -82,9 +81,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
              verified_by_staff_id = COALESCE(verified_by_staff_id, $1),
              verified_at = COALESCE(verified_at, NOW()),
              updated_at = NOW()
-         WHERE id = $2
+         WHERE id = $2 AND organization_id = $3
          RETURNING *`,
-        [staff_id, openItem.id]
+        [staff_id, openItem.id, ctx.organizationId]
       );
       updatedItem = updatedRes.rows[0];
     } else {
@@ -92,8 +91,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // Find or create today's PLANNED shipment.
       let todayPlanRes = await client.query(
         `SELECT id, shipment_ref FROM fba_shipments
-         WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
+         WHERE due_date = CURRENT_DATE AND status = 'PLANNED' AND organization_id = $1
          ORDER BY created_at DESC LIMIT 1`,
+        [ctx.organizationId],
       );
 
       let todayPlanId: number;
@@ -101,9 +101,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         const dateRes = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
         const ref = buildFbaPlanRefFromIsoDate(String(dateRes.rows[0]?.d || ''));
         const newPlan = await client.query(
-          `INSERT INTO fba_shipments (shipment_ref, due_date, status)
-           VALUES ($1, CURRENT_DATE, 'PLANNED') RETURNING id`,
-          [ref],
+          `INSERT INTO fba_shipments (shipment_ref, due_date, status, organization_id)
+           VALUES ($1, CURRENT_DATE, 'PLANNED', $2) RETURNING id`,
+          [ref, ctx.organizationId],
         );
         todayPlanId = newPlan.rows[0].id;
         autoCreatedPlan = true;
@@ -116,10 +116,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         `INSERT INTO fba_shipment_items
            (shipment_id, fnsku, product_title, asin, sku,
             expected_qty, actual_qty, status,
-            verified_by_staff_id, verified_at)
-         VALUES ($1, $2, $3, $4, $5, 1, 1, 'PACKED', $6, NOW())
+            verified_by_staff_id, verified_at, organization_id)
+         VALUES ($1, $2, $3, $4, $5, 1, 1, 'PACKED', $6, NOW(), $7)
          RETURNING *`,
-        [todayPlanId, resolvedFnsku, meta.product_title, meta.asin, meta.sku, staff_id],
+        [todayPlanId, resolvedFnsku, meta.product_title, meta.asin, meta.sku, staff_id, ctx.organizationId],
       );
       updatedItem = newItemRes.rows[0];
       // Treat it as a found open item for the rest of the flow.
@@ -134,24 +134,24 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         `UPDATE fba_shipments fs
          SET status = CASE
                         WHEN fs.status IN ('PLANNED', 'TESTED')
-                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
-                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2)
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED' AND organization_id = $2)
                           THEN 'PACKED'::fba_shipment_status_enum
                         WHEN fs.status = 'PLANNED'
-                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                          AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2)
                           THEN 'TESTED'::fba_shipment_status_enum
                         ELSE fs.status
                       END,
              updated_at = NOW()
-         WHERE fs.id = $1`,
-        [updatedItem.shipment_id],
+         WHERE fs.id = $1 AND fs.organization_id = $2`,
+        [updatedItem.shipment_id, ctx.organizationId],
       );
     }
 
     const fnskuLogRes = await client.query(
       `INSERT INTO fba_fnsku_logs
-         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-       VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb)
+         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+       VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb, $8)
        RETURNING id, created_at`,
       [
         resolvedFnsku,
@@ -170,6 +170,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           resolved_fnsku: resolvedFnsku,
           matched_open_item: Boolean(openItem),
         }),
+        ctx.organizationId,
       ]
     );
 
@@ -200,8 +201,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
          COALESCE(SUM(quantity) FILTER (WHERE source_stage = 'SHIP' AND event_type = 'SHIPPED'), 0)::int AS shipped_qty
        FROM fba_fnsku_logs
        WHERE fnsku = $1
-         AND event_type != 'VOID'`,
-      [resolvedFnsku]
+         AND event_type != 'VOID'
+         AND organization_id = $2`,
+      [resolvedFnsku, ctx.organizationId]
     );
 
     const summary = summaryRes.rows[0] || {
@@ -222,15 +224,50 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
          WHERE fba_shipment_item_id = $1
            AND source_stage = 'PACK'
            AND event_type IN ('READY', 'VERIFIED', 'BOXED')
-           AND event_type != 'VOID'`,
-        [updatedItem.id]
+           AND event_type != 'VOID'
+           AND organization_id = $2`,
+        [updatedItem.id, ctx.organizationId]
       );
       combinedPackScannedQty = Number(itemPackRes.rows[0]?.q ?? 0);
     }
 
     const plannedQty = Number(updatedItem?.expected_qty ?? 0);
 
-    await client.query('COMMIT');
+    return {
+      resolvedFnsku,
+      meta,
+      openItem,
+      updatedItem,
+      autoCreatedPlan,
+      fnskuLogId: Number(fnskuLogRes.rows[0].id),
+      techScannedQty,
+      packReadyQty,
+      shippedQty,
+      combinedPackScannedQty,
+      plannedQty,
+    };
+    });
+
+    if ('error' in outcome && outcome.error) {
+      return NextResponse.json(
+        { success: false, error: outcome.error.message },
+        { status: outcome.error.status }
+      );
+    }
+
+    const {
+      resolvedFnsku,
+      meta,
+      openItem,
+      updatedItem,
+      autoCreatedPlan,
+      fnskuLogId,
+      techScannedQty,
+      packReadyQty,
+      shippedQty,
+      combinedPackScannedQty,
+      plannedQty,
+    } = outcome;
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
     publishFbaItemChanged({
@@ -254,7 +291,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       success: true,
       fnsku: resolvedFnsku,
       scanned_raw: normalizedFnsku !== resolvedFnsku ? normalizedFnsku : undefined,
-      fnsku_log_id: Number(fnskuLogRes.rows[0].id),
+      fnsku_log_id: fnskuLogId,
       product_title: meta.product_title || null,
       asin: meta.asin || null,
       sku: meta.sku || null,
@@ -276,14 +313,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       },
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/items/scan]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Scan failed' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

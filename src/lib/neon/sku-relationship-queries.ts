@@ -1,4 +1,6 @@
 import pool from '../db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -62,43 +64,43 @@ const NODE_STOCK_JOIN = `
 // ─── Reads ───────────────────────────────────────────────────────────────────
 
 /** All direct PARENTS of a SKU ("what systems does this part belong to?"). */
-export async function getParents(skuId: number): Promise<SkuRelationshipEdgeView[]> {
-  const result = await pool.query(
-    `SELECT r.id AS relationship_id, r.qty, r.notes, ${NODE_SELECT}
+export async function getParents(skuId: number, orgId?: OrgId): Promise<SkuRelationshipEdgeView[]> {
+  const sql = `SELECT r.id AS relationship_id, r.qty, r.notes, ${NODE_SELECT}
        FROM sku_relationships r
-       JOIN sku_catalog c ON c.id = r.parent_sku_id
+       JOIN sku_catalog c ON c.id = r.parent_sku_id${orgId ? ' AND c.organization_id = $2' : ''}
        ${NODE_STOCK_JOIN}
-      WHERE r.child_sku_id = $1
-      ORDER BY c.product_title, c.sku`,
-    [skuId],
-  );
+      WHERE r.child_sku_id = $1${orgId ? ' AND r.organization_id = $2' : ''}
+      ORDER BY c.product_title, c.sku`;
+  const result = orgId
+    ? await tenantQuery<SkuRelationshipEdgeView>(orgId, sql, [skuId, orgId])
+    : await pool.query<SkuRelationshipEdgeView>(sql, [skuId]);
   return result.rows;
 }
 
 /** All direct CHILDREN of a SKU ("what parts make up this item?"). */
-export async function getChildren(skuId: number): Promise<SkuRelationshipEdgeView[]> {
-  const result = await pool.query(
-    `SELECT r.id AS relationship_id, r.qty, r.notes, ${NODE_SELECT}
+export async function getChildren(skuId: number, orgId?: OrgId): Promise<SkuRelationshipEdgeView[]> {
+  const sql = `SELECT r.id AS relationship_id, r.qty, r.notes, ${NODE_SELECT}
        FROM sku_relationships r
-       JOIN sku_catalog c ON c.id = r.child_sku_id
+       JOIN sku_catalog c ON c.id = r.child_sku_id${orgId ? ' AND c.organization_id = $2' : ''}
        ${NODE_STOCK_JOIN}
-      WHERE r.parent_sku_id = $1
-      ORDER BY c.product_title, c.sku`,
-    [skuId],
-  );
+      WHERE r.parent_sku_id = $1${orgId ? ' AND r.organization_id = $2' : ''}
+      ORDER BY c.product_title, c.sku`;
+  const result = orgId
+    ? await tenantQuery<SkuRelationshipEdgeView>(orgId, sql, [skuId, orgId])
+    : await pool.query<SkuRelationshipEdgeView>(sql, [skuId]);
   return result.rows;
 }
 
 /** Fetch enriched catalog nodes for a set of ids (one query). */
-export async function getGraphNodes(skuIds: number[]): Promise<SkuGraphNode[]> {
+export async function getGraphNodes(skuIds: number[], orgId?: OrgId): Promise<SkuGraphNode[]> {
   if (skuIds.length === 0) return [];
-  const result = await pool.query(
-    `SELECT ${NODE_SELECT}
+  const sql = `SELECT ${NODE_SELECT}
        FROM sku_catalog c
        ${NODE_STOCK_JOIN}
-      WHERE c.id = ANY($1::int[])`,
-    [skuIds],
-  );
+      WHERE c.id = ANY($1::int[])${orgId ? ' AND c.organization_id = $2' : ''}`;
+  const result = orgId
+    ? await tenantQuery<SkuGraphNode>(orgId, sql, [skuIds, orgId])
+    : await pool.query<SkuGraphNode>(sql, [skuIds]);
   return result.rows;
 }
 
@@ -114,23 +116,26 @@ export interface SkuTreeResult {
  * that appear anywhere in the tree (root included), so the client can render
  * without N round-trips.
  */
-export async function getTree(rootSkuId: number, maxDepth = 10): Promise<SkuTreeResult> {
-  const edgeResult = await pool.query(
-    `WITH RECURSIVE tree AS (
+export async function getTree(rootSkuId: number, maxDepth = 10, orgId?: OrgId): Promise<SkuTreeResult> {
+  // org-scope BOTH recursive arms so a mixed-org edge can't pull foreign nodes
+  // into the descendant walk; $3 = orgId when provided.
+  const orgClause = orgId ? ' AND r.organization_id = $3' : '';
+  const sql = `WITH RECURSIVE tree AS (
        SELECT r.id, r.parent_sku_id, r.child_sku_id, r.qty, 0 AS depth
          FROM sku_relationships r
-        WHERE r.parent_sku_id = $1
+        WHERE r.parent_sku_id = $1${orgClause}
        UNION ALL
        SELECT r.id, r.parent_sku_id, r.child_sku_id, r.qty, t.depth + 1
          FROM sku_relationships r
          JOIN tree t ON r.parent_sku_id = t.child_sku_id
-        WHERE t.depth < $2
+        WHERE t.depth < $2${orgClause}
      )
      SELECT DISTINCT t.id AS relationship_id, t.parent_sku_id, t.child_sku_id, t.qty, t.depth
        FROM tree t
-      ORDER BY depth`,
-    [rootSkuId, maxDepth],
-  );
+      ORDER BY depth`;
+  const edgeResult = orgId
+    ? await tenantQuery<SkuTreeEdge>(orgId, sql, [rootSkuId, maxDepth, orgId])
+    : await pool.query<SkuTreeEdge>(sql, [rootSkuId, maxDepth]);
   const edges: SkuTreeEdge[] = edgeResult.rows;
 
   const nodeIds = new Set<number>([rootSkuId]);
@@ -138,7 +143,7 @@ export async function getTree(rootSkuId: number, maxDepth = 10): Promise<SkuTree
     nodeIds.add(e.parent_sku_id);
     nodeIds.add(e.child_sku_id);
   }
-  const nodes = await getGraphNodes([...nodeIds]);
+  const nodes = await getGraphNodes([...nodeIds], orgId);
 
   return { root_sku_id: rootSkuId, edges, nodes };
 }
@@ -154,11 +159,12 @@ export async function getRelationshipById(id: number): Promise<SkuRelationshipRo
 export async function findRelationship(
   parentSkuId: number,
   childSkuId: number,
+  orgId?: OrgId,
 ): Promise<SkuRelationshipRow | null> {
-  const result = await pool.query(
-    `SELECT * FROM sku_relationships WHERE parent_sku_id = $1 AND child_sku_id = $2 LIMIT 1`,
-    [parentSkuId, childSkuId],
-  );
+  const sql = `SELECT * FROM sku_relationships WHERE parent_sku_id = $1 AND child_sku_id = $2${orgId ? ' AND organization_id = $3' : ''} LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery<SkuRelationshipRow>(orgId, sql, [parentSkuId, childSkuId, orgId])
+    : await pool.query<SkuRelationshipRow>(sql, [parentSkuId, childSkuId]);
   return result.rows[0] ?? null;
 }
 
@@ -169,18 +175,20 @@ export async function findRelationship(
  * which would otherwise close a loop. UNION (not UNION ALL) terminates even if
  * a cycle somehow already exists.
  */
-export async function isDescendant(rootId: number, targetId: number): Promise<boolean> {
-  const result = await pool.query(
-    `WITH RECURSIVE down AS (
-       SELECT child_sku_id FROM sku_relationships WHERE parent_sku_id = $1
+export async function isDescendant(rootId: number, targetId: number, orgId?: OrgId): Promise<boolean> {
+  const orgClause = orgId ? ' AND organization_id = $3' : '';
+  const orgClauseR = orgId ? ' AND r.organization_id = $3' : '';
+  const sql = `WITH RECURSIVE down AS (
+       SELECT child_sku_id FROM sku_relationships WHERE parent_sku_id = $1${orgClause}
        UNION
        SELECT r.child_sku_id
          FROM sku_relationships r
-         JOIN down d ON r.parent_sku_id = d.child_sku_id
+         JOIN down d ON r.parent_sku_id = d.child_sku_id${orgClauseR}
      )
-     SELECT 1 FROM down WHERE child_sku_id = $2 LIMIT 1`,
-    [rootId, targetId],
-  );
+     SELECT 1 FROM down WHERE child_sku_id = $2 LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [rootId, targetId, orgId])
+    : await pool.query(sql, [rootId, targetId]);
   return result.rows.length > 0;
 }
 
@@ -191,16 +199,21 @@ export async function createRelationship(params: {
   childSkuId: number;
   qty?: number;
   notes?: string | null;
-}): Promise<SkuRelationshipRow> {
-  const result = await pool.query(
-    `INSERT INTO sku_relationships (parent_sku_id, child_sku_id, qty, notes)
-     VALUES ($1, $2, $3, $4)
+}, orgId: OrgId): Promise<SkuRelationshipRow> {
+  // organization_id is stamped explicitly: this runs on the raw pool (no GUC),
+  // and sku_relationships.organization_id is NOT NULL with a loud-fail default,
+  // so omitting it inserted NULL and 500'd every edge create.
+  const result = await tenantQuery<SkuRelationshipRow>(
+    orgId,
+    `INSERT INTO sku_relationships (parent_sku_id, child_sku_id, qty, notes, organization_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [
       params.parentSkuId,
       params.childSkuId,
       params.qty ?? 1,
       params.notes?.trim() || null,
+      orgId,
     ],
   );
   return result.rows[0];

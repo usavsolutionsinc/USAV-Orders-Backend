@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -27,15 +27,17 @@ function poIdFromUrl(req: NextRequest): string {
   }
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const key = poIdFromUrl(req);
     if (!key) throw ApiError.badRequest('poId is required');
 
     // Match by either Zoho internal id OR the visible PO number. Both are
     // common in receiving — labels print the number, but the desktop sidebar
     // often deep-links by id.
-    const lines = await pool.query(
+    const lines = await tenantQuery(
+      orgId,
       `SELECT rl.id,
               rl.receiving_id,
               rl.zoho_purchaseorder_id,
@@ -54,20 +56,25 @@ export const GET = withAuth(async (req: NextRequest) => {
               sc.image_url,
               (SELECT COUNT(*)::int FROM photos p
                  WHERE p.entity_type = 'RECEIVING_LINE'
-                   AND p.entity_id   = rl.id) AS item_photo_count
+                   AND p.entity_id   = rl.id
+                   AND p.organization_id = rl.organization_id) AS item_photo_count
          FROM receiving_lines rl
          LEFT JOIN receiving r ON (
-              r.id = rl.receiving_id
+              (r.id = rl.receiving_id
+               AND r.organization_id = rl.organization_id)
            OR (rl.receiving_id IS NULL
                AND r.source = 'zoho_po'
-               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+               AND r.organization_id = rl.organization_id)
          )
-         LEFT JOIN sku_catalog sc ON sc.sku = rl.sku
-        WHERE rl.zoho_purchaseorder_id = $1
+         LEFT JOIN sku_catalog sc ON (sc.sku = rl.sku
+               AND sc.organization_id = rl.organization_id)
+        WHERE rl.organization_id = $2
+          AND (rl.zoho_purchaseorder_id = $1
            OR rl.zoho_purchaseorder_number = $1
-           OR r.zoho_purchaseorder_number = $1
+           OR r.zoho_purchaseorder_number = $1)
         ORDER BY rl.id ASC`,
-      [key],
+      [key, orgId],
     );
 
     if (lines.rows.length === 0) throw ApiError.notFound('purchase_order', key);
@@ -80,14 +87,17 @@ export const GET = withAuth(async (req: NextRequest) => {
     //   Item-level → (entity_type='RECEIVING_LINE', entity_id IN receiving_lines under this PO)
     const lineIds = lines.rows.map((r) => Number(r.id));
     const photoCountRow = receivingId
-      ? await pool.query(
+      ? await tenantQuery(
+          orgId,
           `SELECT
              (SELECT COUNT(*)::int FROM photos
-               WHERE entity_type = 'RECEIVING' AND entity_id = $1)            AS po_photo_count,
+               WHERE entity_type = 'RECEIVING' AND entity_id = $1
+                 AND organization_id = $3)                                    AS po_photo_count,
              (SELECT COUNT(*)::int FROM photos
                WHERE entity_type = 'RECEIVING_LINE'
-                 AND entity_id = ANY($2::int[]))                              AS item_photo_count`,
-          [receivingId, lineIds],
+                 AND entity_id = ANY($2::int[])
+                 AND organization_id = $3)                                    AS item_photo_count`,
+          [receivingId, lineIds, orgId],
         )
       : null;
     const poPhotoCount = Number(photoCountRow?.rows[0]?.po_photo_count ?? 0);

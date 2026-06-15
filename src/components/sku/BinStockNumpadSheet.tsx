@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Layer } from '@/design-system';
 import { Check, Loader2, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 import { ReasonCodePicker, type ReasonCode } from '@/components/sku/ReasonCodePicker';
 import { queueOrFetch } from '@/lib/offline/write-queue';
 import {
@@ -143,12 +142,10 @@ export function BinStockNumpadSheet({
     }
     if (reason?.requires_note && !noteDraft.trim()) {
       setError(`Reason "${reason.label}" needs a note`);
-      errorFeedback();
       return;
     }
     if (reason?.requires_photo && pendingShots.length === 0) {
       setError(`Reason "${reason.label}" needs a photo`);
-      errorFeedback();
       return;
     }
     setBusy(true);
@@ -183,7 +180,6 @@ export function BinStockNumpadSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await queryClient.invalidateQueries({ queryKey: invalidateKey });
-      successFeedback();
       // 202 = queued for sync — keep the same delta math in the UI so the
       // receiver sees the change land even before the server confirms.
       const queued = data?.queued === true;
@@ -234,7 +230,6 @@ export function BinStockNumpadSheet({
       });
       setPendingShots([]);
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
       setBusy(false);

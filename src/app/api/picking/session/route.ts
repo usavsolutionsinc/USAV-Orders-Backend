@@ -25,11 +25,15 @@ export const POST = withAuth(async (request, ctx) => {
   const deviceIdRaw = typeof body?.device_id === 'string' ? body.device_id.trim() : '';
 
   try {
+    // Thread the caller's tenant id so the shared module enforces the
+    // org-ownership 404 gate (orders WHERE id=$1 AND organization_id=$2) and
+    // runs its writes inside a GUC-wrapped transaction — closes the cross-tenant
+    // session-open leak (a picker in org A opening a session on org B's order).
     const result = await startSession({
       orderId,
       pickerStaffId: actorStaffId,
       deviceId: deviceIdRaw || null,
-    });
+    }, ctx.organizationId);
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result);
   } catch (err) {

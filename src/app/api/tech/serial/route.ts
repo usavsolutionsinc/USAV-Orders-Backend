@@ -35,7 +35,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
       await client.query('BEGIN');
 
-      const salCtxResult = await resolveTechSerialSalContext(client, salId);
+      const salCtxResult = await resolveTechSerialSalContext(client, salId, ctx.organizationId);
       if (!salCtxResult.ok) {
         await client.query('ROLLBACK');
         return NextResponse.json(

@@ -28,7 +28,6 @@ import { useNasConfig } from '@/hooks/useNasConfig';
 import { getNasBaseUrl, putNasPhoto } from '@/lib/nas-photos';
 import { describeUnitId } from '@/lib/inventory/unit-id-format';
 import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
-import { useFeedback } from '@/hooks/useFeedback';
 import type { InventoryEventRow } from '@/lib/inventory/events';
 
 /**
@@ -140,7 +139,6 @@ function formatWhen(iso: string): string {
 }
 
 export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | null; onClose: () => void }) {
-  const feedback = useFeedback();
   // Keep the last scanned value mounted through the close animation so content
   // doesn't blank out while the sheet slides away.
   const [shown, setShown] = useState<string | null>(scanned);
@@ -163,12 +161,6 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
     enabled: scanned != null && shown != null,
     staleTime: 0,
   });
-
-  // Audible/haptic cue once a scan resolves.
-  useEffect(() => {
-    if (!data) return;
-    feedback(data.source === 'unknown' ? 'scanRejected' : 'scanAccepted');
-  }, [data, feedback]);
 
   // Close the location step whenever the sheet itself closes.
   useEffect(() => {
@@ -212,16 +204,13 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
       const d = await res.json().catch(() => null);
       if (!res.ok || !d?.success) {
         toast.error(d?.error || `Move failed (${res.status})`);
-        feedback('error');
         return;
       }
       toast.success(`Moved to ${d.location?.name ?? bin}`);
-      feedback('success');
       setLocationOpen(false);
       await refetch();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error during move');
-      feedback('error');
     } finally {
       setMoving(false);
     }
@@ -238,7 +227,6 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
     const baseUrl = nas?.baseUrl || getNasBaseUrl();
     if (!baseUrl) {
       toast.error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
-      feedback('error');
       return;
     }
     setSavingPhotos(true);
@@ -256,7 +244,6 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
       }
       if (urls.length === 0) {
         toast.error('Could not save photos to the NAS.');
-        feedback('error');
         return;
       }
       const res = await fetch(`/api/serial-units/${liveUnitId}/photos`, {
@@ -268,16 +255,13 @@ export function PrepackedProductSheet({ scanned, onClose }: { scanned: string | 
       const d = await res.json().catch(() => null);
       if (!res.ok || !d?.success) {
         toast.error(d?.error || `Save failed (${res.status})`);
-        feedback('error');
         return;
       }
       const n = d.inserted ?? urls.length;
       toast.success(`Saved ${n} photo${n === 1 ? '' : 's'}`);
-      feedback('success');
       await refetch();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error saving photos');
-      feedback('error');
     } finally {
       setSavingPhotos(false);
       shots.forEach((s) => { try { URL.revokeObjectURL(s.previewUrl); } catch { /* ignore */ } });

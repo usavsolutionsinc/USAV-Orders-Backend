@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -46,14 +46,18 @@ export const GET = withAuth(
     const staffFilter =
       staffParam === 'all' ? null : staffParam ? Number(staffParam) : ctx.staffId ?? null;
 
-    const params: unknown[] = [limit];
+    // Tenant ownership filter — $2 is the org id; referenced by the primary
+    // WHERE and by every joined tenant table so a shared integer surrogate id
+    // can never pull in another org's row.
+    const params: unknown[] = [limit, ctx.organizationId];
     let staffClause = '';
     if (staffFilter != null && Number.isFinite(staffFilter)) {
       params.push(staffFilter);
       staffClause = `AND sal.staff_id = $${params.length}`;
     }
 
-    const result = await pool.query<RecentRow>(
+    const result = await tenantQuery<RecentRow>(
+      ctx.organizationId,
       `
       SELECT
         sal.id,
@@ -76,16 +80,21 @@ export const GET = withAuth(
       FROM station_activity_logs sal
       LEFT JOIN sku_catalog sc
         ON sc.id = NULLIF(sal.metadata->>'sku_catalog_id','')::int
+        AND sc.organization_id = sal.organization_id
       LEFT JOIN LATERAL (
         SELECT serial_unit_id, serial_number
         FROM tech_serial_numbers
         WHERE context_station_activity_log_id = sal.id
+          AND organization_id = sal.organization_id
         ORDER BY id ASC
         LIMIT 1
       ) tsn ON true
       LEFT JOIN serial_units su ON su.id = tsn.serial_unit_id
+        AND su.organization_id = sal.organization_id
       LEFT JOIN staff st ON st.id = sal.staff_id
+        AND st.organization_id = sal.organization_id
       WHERE sal.activity_type = 'LABEL_PRINTED'
+        AND sal.organization_id = $2
         ${staffClause}
       ORDER BY sal.created_at DESC, sal.id DESC
       LIMIT $1

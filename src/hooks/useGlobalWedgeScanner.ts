@@ -4,7 +4,6 @@ import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useWedgeScanner } from '@/hooks/useWedgeScanner';
 import { routeScan } from '@/lib/barcode-routing';
-import { scanFeedback } from '@/lib/feedback/confirm';
 
 /**
  * Mount once at the app root. Every wedge scan is classified via
@@ -22,7 +21,6 @@ export function useGlobalWedgeScanner(): void {
   const onScan = useCallback(
     (value: string) => {
       const route = routeScan(value);
-      scanFeedback();
 
       // Either dispatch the global event for page handlers OR navigate when
       // the scanned value is a printed-label URL.

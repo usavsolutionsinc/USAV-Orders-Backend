@@ -11,8 +11,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -24,11 +24,15 @@ function idFromUrl(req: NextRequest): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
+  const orgId = ctx.organizationId;
   const id = idFromUrl(req);
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
 
-  const staffQ = pool.query(
+  // staff is tenant-owned: gate the [id] lookup on the caller's org so a
+  // cross-tenant staff id yields no row and 404s below (never 403).
+  const staffQ = tenantQuery(
+    orgId,
     `SELECT id, name, role, status, active, employee_id, employee_code,
             permissions_added, permissions_removed,
             mobile_display_config,
@@ -37,35 +41,50 @@ export const GET = withAuth(async (req: NextRequest) => {
             (pin_hash IS NOT NULL) AS has_pin,
             pin_set_at, pin_locked_until,
             last_login_at, created_at
-       FROM staff WHERE id = $1 LIMIT 1`,
-    [id],
+       FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
   );
-  const passkeysQ = pool.query(
+  // staff_passkeys has no organization_id; scope it via its parent staff row
+  // in this org so another tenant's passkeys can never surface for a colliding
+  // id (staff.id is globally unique so this is belt-and-suspenders with the
+  // staff precheck).
+  const passkeysQ = tenantQuery(
+    orgId,
     `SELECT id,
             encode(credential_id, 'base64') AS credential_id,
             transports, aaguid::text, device_label, last_used_at, created_at
        FROM staff_passkeys
       WHERE staff_id = $1
+        AND staff_id IN (SELECT id FROM staff WHERE id = $1 AND organization_id = $2)
       ORDER BY created_at DESC`,
-    [id],
+    [id, orgId],
   );
-  const sessionsQ = pool.query(
+  // staff_sessions is tenant-owned: filter on its own organization_id.
+  const sessionsQ = tenantQuery(
+    orgId,
     `SELECT sid, device_kind, device_label, ip::text AS ip,
             created_at, last_seen_at, expires_at
        FROM staff_sessions
-      WHERE staff_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
+      WHERE staff_id = $1 AND organization_id = $2
+        AND revoked_at IS NULL AND expires_at > NOW()
       ORDER BY last_seen_at DESC`,
-    [id],
+    [id, orgId],
   );
-  const auditQ = pool.query(
+  // auth_audit has no organization_id; scope it via its parent staff row.
+  const auditQ = tenantQuery(
+    orgId,
     `SELECT id, event, result, ip::text AS ip, sid, user_agent, detail, created_at
        FROM auth_audit
       WHERE staff_id = $1
+        AND staff_id IN (SELECT id FROM staff WHERE id = $1 AND organization_id = $2)
       ORDER BY created_at DESC
       LIMIT 20`,
-    [id],
+    [id, orgId],
   );
-  const rolesQ = pool.query(
+  // roles and staff_roles are system-global (no organization_id column); they
+  // are intentionally shared across tenants, so no org predicate is added.
+  const rolesQ = tenantQuery(
+    orgId,
     `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
             r.mobile_defaults,
             sr.granted_at, sr.granted_by
@@ -75,7 +94,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       ORDER BY r.position ASC, r.id ASC`,
     [id],
   );
-  const allRolesQ = pool.query(
+  const allRolesQ = tenantQuery(
+    orgId,
     `SELECT id, key, label, color, position, permissions, is_system, mobile_defaults
        FROM roles
       ORDER BY position ASC, id ASC`,

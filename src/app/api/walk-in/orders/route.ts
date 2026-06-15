@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSquareConfig, squareFetch, formatSquareErrors } from '@/lib/square/client';
+import { formatSquareErrors } from '@/lib/square/client';
+import { resolveSquareConfig, squareFetchForOrg } from '@/lib/square/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -23,7 +24,7 @@ interface CreateOrderBody {
  * POST /api/walk-in/orders
  * Create a Square order for walk-in sale.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -35,7 +36,10 @@ export const POST = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: 'line_items is required' }, { status: 400 });
     }
 
-    const cfg = getSquareConfig();
+    // Resolve the caller-org's Square config (Nango-connected token when the
+    // org has one; env fallback otherwise) so the location/currency used for
+    // this chargeable order belong to the right tenant.
+    const cfg = await resolveSquareConfig(ctx.organizationId);
 
     // Catalog lines charge by catalog_object_id (Square's price is
     // authoritative); manual lines come through as ad-hoc name + base_price_money
@@ -62,9 +66,10 @@ export const POST = withAuth(async (req: NextRequest) => {
       },
     };
 
-    const result = await squareFetch<{ order?: Record<string, unknown> }>(
+    const result = await squareFetchForOrg<{ order?: Record<string, unknown> }>(
+      ctx.organizationId,
       '/orders',
-      { method: 'POST', body: orderBody, config: cfg },
+      { method: 'POST', body: orderBody },
     );
 
     if (!result.ok) {

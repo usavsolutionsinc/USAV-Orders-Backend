@@ -14,18 +14,26 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
 
         const insertedOrders = await db.insert(ordersTable).values(
-            data.map((item: any) => ({
-                organizationId: ctx.organizationId,
-                orderId: item.orderNumber || '',
-                productTitle: item.itemTitle || '',
-                sku: item.usavSku || '',
-                condition: item.condition || '',
-                shippingTrackingNumber: item.tracking || '',
-                notes: item.note || '',
-                status: 'unassigned',
-                statusHistory: [],
-                isShipped: false,
-            }))
+            data.map((item: any) => {
+                const parsedSaleAmount =
+                    item.saleAmount != null && Number.isFinite(Number(item.saleAmount))
+                        ? String(Number(item.saleAmount))
+                        : null;
+                return {
+                    organizationId: ctx.organizationId,
+                    orderId: item.orderNumber || '',
+                    productTitle: item.itemTitle || '',
+                    sku: item.usavSku || '',
+                    condition: item.condition || '',
+                    shippingTrackingNumber: item.tracking || '',
+                    notes: item.note || '',
+                    status: 'unassigned',
+                    statusHistory: [],
+                    isShipped: false,
+                    saleAmount: parsedSaleAmount,
+                    currency: (typeof item.currency === 'string' && item.currency.trim()) || 'USD',
+                };
+            })
         ).returning({ id: ordersTable.id });
 
         for (let i = 0; i < insertedOrders.length; i += 1) {

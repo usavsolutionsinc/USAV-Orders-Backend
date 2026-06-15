@@ -1,4 +1,6 @@
 import pool from '../db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import {
   findByNormalizedSerial,
   findByUnitUid,
@@ -77,7 +79,27 @@ const MEMBER_COLS = `id, serial_number, unit_uid, sku, sku_catalog_id,
 export async function getHandlingUnitById(
   id: number,
   executor: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<HandlingUnitRow | null> {
+  // Tenant-aware: org-scope the read. When the caller passed an executor we set
+  // the GUC on it (transaction-scoped) and run on it; otherwise run via
+  // tenantQuery so checkout/GUC/release are handled for us.
+  if (orgId) {
+    if (executor !== pool) {
+      await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+      const r = await executor.query<HandlingUnitRow>(
+        `SELECT ${HU_COLS} FROM handling_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [id, orgId],
+      );
+      return r.rows[0] ?? null;
+    }
+    const r = await tenantQuery<HandlingUnitRow>(
+      orgId,
+      `SELECT ${HU_COLS} FROM handling_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [id, orgId],
+    );
+    return r.rows[0] ?? null;
+  }
   const r = await executor.query<HandlingUnitRow>(
     `SELECT ${HU_COLS} FROM handling_units WHERE id = $1 LIMIT 1`,
     [id],
@@ -88,9 +110,28 @@ export async function getHandlingUnitById(
 export async function getHandlingUnitByCode(
   code: string,
   executor: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<HandlingUnitRow | null> {
   const trimmed = String(code || '').trim();
   if (!trimmed) return null;
+  // Tenant-aware: `code` is a string key that collides across tenants, so the
+  // lookup MUST be org-scoped when an orgId is threaded.
+  if (orgId) {
+    if (executor !== pool) {
+      await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+      const r = await executor.query<HandlingUnitRow>(
+        `SELECT ${HU_COLS} FROM handling_units WHERE code = $1 AND organization_id = $2 LIMIT 1`,
+        [trimmed, orgId],
+      );
+      return r.rows[0] ?? null;
+    }
+    const r = await tenantQuery<HandlingUnitRow>(
+      orgId,
+      `SELECT ${HU_COLS} FROM handling_units WHERE code = $1 AND organization_id = $2 LIMIT 1`,
+      [trimmed, orgId],
+    );
+    return r.rows[0] ?? null;
+  }
   const r = await executor.query<HandlingUnitRow>(
     `SELECT ${HU_COLS} FROM handling_units WHERE code = $1 LIMIT 1`,
     [trimmed],
@@ -101,7 +142,33 @@ export async function getHandlingUnitByCode(
 export async function listMembers(
   handlingUnitId: number,
   executor: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<HandlingUnitMember[]> {
+  // Tenant-aware: org-scope membership reads. handling_unit_id is an integer
+  // surrogate FK so it's safe bare, but we still add the explicit org predicate
+  // (and GUC) as a backstop so a box id can't read another tenant's units.
+  if (orgId) {
+    if (executor !== pool) {
+      await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+      const r = await executor.query<HandlingUnitMember>(
+        `SELECT ${MEMBER_COLS}
+           FROM serial_units
+          WHERE handling_unit_id = $1 AND organization_id = $2
+          ORDER BY created_at ASC, id ASC`,
+        [handlingUnitId, orgId],
+      );
+      return r.rows;
+    }
+    const r = await tenantQuery<HandlingUnitMember>(
+      orgId,
+      `SELECT ${MEMBER_COLS}
+         FROM serial_units
+        WHERE handling_unit_id = $1 AND organization_id = $2
+        ORDER BY created_at ASC, id ASC`,
+      [handlingUnitId, orgId],
+    );
+    return r.rows;
+  }
   const r = await executor.query<HandlingUnitMember>(
     `SELECT ${MEMBER_COLS}
        FROM serial_units
@@ -133,24 +200,39 @@ export function rollupMembers(members: HandlingUnitMember[]): HandlingUnitRollup
 /** Full detail for the box page + the testing resolver (receiving_line_ids). */
 export async function getHandlingUnitDetail(
   id: number,
+  orgId?: OrgId,
 ): Promise<HandlingUnitDetail | null> {
-  const head = await pool.query<
-    HandlingUnitRow & { location_name: string | null; created_by_name: string | null }
-  >(
-    `SELECT ${HU_COLS.split(',').map((c) => `hu.${c.trim()}`).join(', ')},
+  const headSelect = `SELECT ${HU_COLS.split(',').map((c) => `hu.${c.trim()}`).join(', ')},
             l.name AS location_name,
             s.name AS created_by_name
        FROM handling_units hu
        LEFT JOIN locations l ON l.id = hu.location_id
-       LEFT JOIN staff s ON s.id = hu.created_by
+       LEFT JOIN staff s ON s.id = hu.created_by`;
+  // Tenant-aware: org-scope the head + thread orgId into the member read. The
+  // LEFT JOINs are on integer surrogate PKs (l.id / s.id) so they're safe bare;
+  // we anchor on hu.organization_id = $2.
+  const head = orgId
+    ? await tenantQuery<
+        HandlingUnitRow & { location_name: string | null; created_by_name: string | null }
+      >(
+        orgId,
+        `${headSelect}
+      WHERE hu.id = $1 AND hu.organization_id = $2
+      LIMIT 1`,
+        [id, orgId],
+      )
+    : await pool.query<
+        HandlingUnitRow & { location_name: string | null; created_by_name: string | null }
+      >(
+        `${headSelect}
       WHERE hu.id = $1
       LIMIT 1`,
-    [id],
-  );
+        [id],
+      );
   const row = head.rows[0];
   if (!row) return null;
 
-  const units = await listMembers(id);
+  const units = await listMembers(id, pool, orgId);
   const receiving_line_ids = Array.from(
     new Set(
       units
@@ -182,6 +264,7 @@ export interface HandlingUnitListItem extends HandlingUnitRow {
 /** Staging-board list with member counts. */
 export async function listHandlingUnits(
   params: ListHandlingUnitsParams = {},
+  orgId?: OrgId,
 ): Promise<{ items: HandlingUnitListItem[]; total: number }> {
   const conds: string[] = [];
   const vals: unknown[] = [];
@@ -194,28 +277,43 @@ export async function listHandlingUnits(
     conds.push(`hu.location_id = $${i++}`);
     vals.push(params.locationId);
   }
+  // Tenant-aware: when an orgId is threaded, add the explicit org predicate on
+  // handling_units. The member-count subquery is keyed on the integer surrogate
+  // su.handling_unit_id = hu.id (safe bare); we also add su.organization_id = $n
+  // as a backstop. The locations LEFT JOIN is on l.id (integer PK, safe bare).
+  const huOrgIdx = orgId ? i++ : 0;
+  if (orgId) {
+    conds.push(`hu.organization_id = $${huOrgIdx}`);
+    vals.push(orgId);
+  }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
   const limit = Math.min(Math.max(Number(params.limit ?? 100), 1), 500);
   const offset = Math.max(Number(params.offset ?? 0), 0);
+  const unitCountSub = orgId
+    ? `(SELECT COUNT(*)::int FROM serial_units su WHERE su.handling_unit_id = hu.id AND su.organization_id = $${huOrgIdx}) AS unit_count`
+    : `(SELECT COUNT(*)::int FROM serial_units su WHERE su.handling_unit_id = hu.id) AS unit_count`;
 
-  const [rowsRes, countRes] = await Promise.all([
-    pool.query<HandlingUnitListItem>(
-      `SELECT hu.id, hu.code, hu.status, hu.location_id, hu.created_by,
+  const rowsSql = `SELECT hu.id, hu.code, hu.status, hu.location_id, hu.created_by,
               hu.created_at::text AS created_at, hu.closed_at::text AS closed_at, hu.notes,
               l.name AS location_name,
-              (SELECT COUNT(*)::int FROM serial_units su WHERE su.handling_unit_id = hu.id) AS unit_count
+              ${unitCountSub}
          FROM handling_units hu
          LEFT JOIN locations l ON l.id = hu.location_id
          ${where}
          ORDER BY hu.created_at DESC, hu.id DESC
-         LIMIT $${i} OFFSET $${i + 1}`,
-      [...vals, limit, offset],
-    ),
-    pool.query<{ total: string }>(
-      `SELECT COUNT(*) AS total FROM handling_units hu ${where}`,
-      vals,
-    ),
-  ]);
+         LIMIT $${i} OFFSET $${i + 1}`;
+  const countSql = `SELECT COUNT(*) AS total FROM handling_units hu ${where}`;
+  const rowsParams = [...vals, limit, offset];
+
+  const [rowsRes, countRes] = orgId
+    ? await Promise.all([
+        tenantQuery<HandlingUnitListItem>(orgId, rowsSql, rowsParams),
+        tenantQuery<{ total: string }>(orgId, countSql, vals),
+      ])
+    : await Promise.all([
+        pool.query<HandlingUnitListItem>(rowsSql, rowsParams),
+        pool.query<{ total: string }>(countSql, vals),
+      ]);
 
   return {
     items: rowsRes.rows,
@@ -238,13 +336,29 @@ export interface CreateHandlingUnitInput {
 export async function createHandlingUnit(
   input: CreateHandlingUnitInput,
   executor: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<HandlingUnitRow> {
-  const r = await executor.query<HandlingUnitRow>(
-    `INSERT INTO handling_units (code, location_id, created_by, notes, organization_id)
+  // The INSERT already stamps input.organizationId. The trailing orgId only
+  // governs how the statement is RUN — via the GUC-wrapping tenant txn (or by
+  // setting the GUC on a caller-owned executor) so the RLS/loud-fail default
+  // sees the right tenant. orgId, when present, also wins as the stamped org.
+  const stampedOrg = orgId ?? input.organizationId;
+  const sql = `INSERT INTO handling_units (code, location_id, created_by, notes, organization_id)
      VALUES (NULLIF(btrim($1), ''), $2, $3, $4, $5)
-     RETURNING ${HU_COLS}`,
-    [input.code ?? null, input.locationId ?? null, input.createdBy ?? null, input.notes ?? null, input.organizationId],
-  );
+     RETURNING ${HU_COLS}`;
+  const vals = [input.code ?? null, input.locationId ?? null, input.createdBy ?? null, input.notes ?? null, stampedOrg];
+  if (orgId) {
+    if (executor !== pool) {
+      await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+      const r = await executor.query<HandlingUnitRow>(sql, vals);
+      return r.rows[0];
+    }
+    const r = await withTenantTransaction(orgId, (client) =>
+      client.query<HandlingUnitRow>(sql, vals),
+    );
+    return r.rows[0];
+  }
+  const r = await executor.query<HandlingUnitRow>(sql, vals);
   return r.rows[0];
 }
 
@@ -255,6 +369,7 @@ export async function createHandlingUnit(
  */
 export async function resolveUnitRefs(
   refs: string[],
+  orgId?: OrgId,
 ): Promise<{ ids: number[]; unresolved: string[] }> {
   const ids: number[] = [];
   const unresolved: string[] = [];
@@ -264,15 +379,25 @@ export async function resolveUnitRefs(
     const uHandle = /^U-(\d+)$/i.exec(ref);
     const numeric = uHandle ? uHandle[1] : /^\d+$/.test(ref) ? ref : null;
     if (numeric) {
-      const r = await pool.query<{ id: number }>(
-        `SELECT id FROM serial_units WHERE id = $1 LIMIT 1`,
-        [Number(numeric)],
-      );
+      // The id lookup is on the integer PK (safe bare), but we org-scope it so a
+      // numeric ref can't resolve to another tenant's unit.
+      const r = orgId
+        ? await tenantQuery<{ id: number }>(
+            orgId,
+            `SELECT id FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [Number(numeric), orgId],
+          )
+        : await pool.query<{ id: number }>(
+            `SELECT id FROM serial_units WHERE id = $1 LIMIT 1`,
+            [Number(numeric)],
+          );
       if (r.rows[0]) { ids.push(Number(r.rows[0].id)); continue; }
     }
-    const byUid = await findByUnitUid(ref);
+    // Thread orgId into the sibling string-key lookups (unit_uid / normalized
+    // serial collide across tenants); they accept the trailing orgId.
+    const byUid = await findByUnitUid(ref, orgId);
     if (byUid) { ids.push(byUid.id); continue; }
-    const bySerial = await findByNormalizedSerial(ref);
+    const bySerial = await findByNormalizedSerial(ref, orgId);
     if (bySerial) { ids.push(bySerial.id); continue; }
     unresolved.push(ref);
   }
@@ -288,8 +413,48 @@ export async function resolveUnitRefs(
 export async function assignUnitsToHandlingUnit(
   handlingUnitId: number,
   unitIds: number[],
+  orgId?: OrgId,
 ): Promise<{ moved: number; previous: { id: number; from: number | null }[] }> {
   if (unitIds.length === 0) return { moved: 0, previous: [] };
+
+  // Tenant-aware path: run the read + reassign + rollups inside ONE GUC-wrapped
+  // transaction so the org context is consistent across every statement, and
+  // add the explicit org predicate so a unit id can't be moved across tenants.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const before = await client.query<{ id: number; handling_unit_id: number | null }>(
+        `SELECT id, handling_unit_id FROM serial_units
+          WHERE id = ANY($1::bigint[]) AND organization_id = $2`,
+        [unitIds, orgId],
+      );
+      const previous = before.rows
+        .filter((r) => r.handling_unit_id !== handlingUnitId)
+        .map((r) => ({ id: Number(r.id), from: r.handling_unit_id }));
+
+      const upd = await client.query(
+        `UPDATE serial_units
+            SET handling_unit_id = $1, updated_at = NOW()
+          WHERE id = ANY($2::bigint[])
+            AND organization_id = $3
+            AND (handling_unit_id IS DISTINCT FROM $1)`,
+        [handlingUnitId, unitIds, orgId],
+      );
+
+      // Pass the txn client so the rollup reads the uncommitted reassignment
+      // (matches legacy autocommit-pool semantics). Run sources sequentially —
+      // they share the single transaction client (no concurrent statements).
+      await refreshHandlingUnitStatus(handlingUnitId, orgId, client);
+      const sources = Array.from(
+        new Set(previous.map((p) => p.from).filter((v): v is number => v != null)),
+      );
+      for (const src of sources) {
+        await refreshHandlingUnitStatus(src, orgId, client);
+      }
+
+      return { moved: upd.rowCount ?? 0, previous };
+    });
+  }
+
   const before = await pool.query<{ id: number; handling_unit_id: number | null }>(
     `SELECT id, handling_unit_id FROM serial_units WHERE id = ANY($1::bigint[])`,
     [unitIds],
@@ -319,8 +484,35 @@ export async function assignUnitsToHandlingUnit(
 /** Remove units from their box (handling_unit_id → NULL). */
 export async function unassignUnits(
   unitIds: number[],
+  orgId?: OrgId,
 ): Promise<{ removed: number; affectedBoxes: number[] }> {
   if (unitIds.length === 0) return { removed: 0, affectedBoxes: [] };
+
+  // Tenant-aware path: read + clear + rollups in ONE GUC-wrapped transaction,
+  // with the explicit org predicate so a unit id can't be cleared across orgs.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const before = await client.query<{ id: number; handling_unit_id: number | null }>(
+        `SELECT id, handling_unit_id FROM serial_units
+          WHERE id = ANY($1::bigint[]) AND organization_id = $2 AND handling_unit_id IS NOT NULL`,
+        [unitIds, orgId],
+      );
+      const affectedBoxes = Array.from(
+        new Set(before.rows.map((r) => r.handling_unit_id).filter((v): v is number => v != null)),
+      );
+      const upd = await client.query(
+        `UPDATE serial_units
+            SET handling_unit_id = NULL, updated_at = NOW()
+          WHERE id = ANY($1::bigint[]) AND organization_id = $2 AND handling_unit_id IS NOT NULL`,
+        [unitIds, orgId],
+      );
+      for (const id of affectedBoxes) {
+        await refreshHandlingUnitStatus(id, orgId, client);
+      }
+      return { removed: upd.rowCount ?? 0, affectedBoxes };
+    });
+  }
+
   const before = await pool.query<{ id: number; handling_unit_id: number | null }>(
     `SELECT id, handling_unit_id FROM serial_units
       WHERE id = ANY($1::bigint[]) AND handling_unit_id IS NOT NULL`,
@@ -348,8 +540,44 @@ export async function unassignUnits(
  */
 export async function refreshHandlingUnitStatus(
   handlingUnitId: number,
+  orgId?: OrgId,
+  /**
+   * Optional already-open, GUC'd client. The org-scoped write paths in this
+   * module thread their transaction client here so the rollup reads the
+   * uncommitted membership change in the SAME transaction (matching the legacy
+   * autocommit-pool behavior where each statement committed independently).
+   */
+  client?: Queryable,
 ): Promise<HandlingUnitStatus | null> {
   try {
+    // ── Tenant-aware path ─────────────────────────────────────────────────
+    if (orgId) {
+      const exec = client ?? pool;
+      const hu = await getHandlingUnitById(handlingUnitId, exec, orgId);
+      if (!hu) return null;
+      const members = await listMembers(handlingUnitId, exec, orgId);
+      const { derived_status } = rollupMembers(members);
+      if (derived_status == null) return hu.status;
+      if (hu.status === 'STAGED' && derived_status !== 'CLOSED') return hu.status;
+      if (derived_status === hu.status) return hu.status;
+      const runUpdate = async (c: Queryable) => {
+        await c.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+        await c.query(
+          `UPDATE handling_units
+              SET status = $2,
+                  closed_at = CASE WHEN $2 = 'CLOSED' THEN COALESCE(closed_at, NOW()) ELSE NULL END
+            WHERE id = $1 AND organization_id = $3`,
+          [handlingUnitId, derived_status, orgId],
+        );
+      };
+      if (client) {
+        await runUpdate(client);
+      } else {
+        await withTenantTransaction(orgId, runUpdate);
+      }
+      return derived_status;
+    }
+
     const hu = await getHandlingUnitById(handlingUnitId);
     if (!hu) return null;
     const members = await listMembers(handlingUnitId);
@@ -386,7 +614,28 @@ export async function refreshHandlingUnitStatus(
  */
 export async function dissolveHandlingUnit(
   id: number,
+  orgId?: OrgId,
 ): Promise<{ dissolved: HandlingUnitRow; unassigned: number } | null> {
+  // Tenant-aware path: ownership-scope the lookup (returns null = org-ownership
+  // 404 for a box in another tenant) then run unassign→delete in ONE GUC-wrapped
+  // transaction, each statement org-predicated.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const hu = await getHandlingUnitById(id, client, orgId);
+      if (!hu) return null;
+      const upd = await client.query(
+        `UPDATE serial_units SET handling_unit_id = NULL, updated_at = NOW()
+          WHERE handling_unit_id = $1 AND organization_id = $2`,
+        [id, orgId],
+      );
+      await client.query(
+        `DELETE FROM handling_units WHERE id = $1 AND organization_id = $2`,
+        [id, orgId],
+      );
+      return { dissolved: hu, unassigned: upd.rowCount ?? 0 };
+    });
+  }
+
   const hu = await getHandlingUnitById(id);
   if (!hu) return null;
   const upd = await pool.query(

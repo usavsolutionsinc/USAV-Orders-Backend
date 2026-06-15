@@ -3,7 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { isWarrantyLogger } from '@/lib/feature-flags';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
-import { getClaim } from '@/lib/warranty/claims';
+import { getClaim, getClaimTicketRef } from '@/lib/warranty/claims';
 import { softDeleteClaims, updateClaimMeta } from '@/lib/warranty/mutations';
 import { claimIdFromPath, idempotentJson, warrantyFlagOff } from '@/lib/warranty/route-helpers';
 import { WarrantyClaimUpdateBody } from '@/lib/schemas/warranty';
@@ -14,7 +14,7 @@ import { WarrantyClaimUpdateBody } from '@/lib/schemas/warranty';
  * Fetch a single warranty claim with its event timeline + repair attempts.
  * Gated by WARRANTY_LOGGER.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   if (!isWarrantyLogger()) {
     return NextResponse.json(
       { ok: false, error: 'WARRANTY_LOGGER flag is OFF', flag: 'WARRANTY_LOGGER' },
@@ -29,7 +29,7 @@ export const GET = withAuth(async (request) => {
   }
 
   try {
-    const claim = await getClaim(id);
+    const claim = await getClaim(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
     return NextResponse.json({ ok: true, claim });
   } catch (err) {
@@ -49,6 +49,9 @@ export const PATCH = withAuth(async (request, ctx) => {
   if (!isWarrantyLogger()) return warrantyFlagOff();
   const id = claimIdFromPath(request, 1);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
+
+  const owns = await getClaimTicketRef(id, ctx.organizationId);
+  if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
   const body = await request.json().catch(() => ({}));
   const parsed = WarrantyClaimUpdateBody.safeParse(body);
@@ -92,6 +95,9 @@ export const DELETE = withAuth(async (request, ctx) => {
   if (!isWarrantyLogger()) return warrantyFlagOff();
   const id = claimIdFromPath(request, 1);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
+
+  const owns = await getClaimTicketRef(id, ctx.organizationId);
+  if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
   try {
     const result = await softDeleteClaims([id], ctx.staffId ?? null);

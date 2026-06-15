@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { detectCarrier } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import {
   normalizeAllocations,
   refreshShipmentAggregateCounts,
@@ -31,7 +31,6 @@ type LinePayload = { shipment_item_id: number; quantity?: number };
  * }
  */
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
     const sourceShipmentId = Number(body?.source_shipment_id);
@@ -71,151 +70,167 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       lines.map((l) => ({ shipment_item_id: l.shipment_item_id, quantity: l.quantity ?? 1 })),
     );
 
-    await client.query('BEGIN');
+    type SplitResult =
+      | { kind: 'source_not_found' }
+      | { kind: 'already_shipped' }
+      | { kind: 'lines_not_on_source' }
+      | { kind: 'ok'; newShipmentId: number; linkId: number; newRef: string };
 
-    const srcRes = await client.query(
-      `SELECT id, status FROM fba_shipments WHERE id = $1 FOR UPDATE`,
-      [sourceShipmentId],
-    );
-    if (!srcRes.rows[0]) {
-      await client.query('ROLLBACK');
+    const outcome = await withTenantTransaction<SplitResult>(ctx.organizationId, async (client) => {
+      const srcRes = await client.query(
+        `SELECT id, status FROM fba_shipments WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+        [sourceShipmentId, ctx.organizationId],
+      );
+      if (!srcRes.rows[0]) {
+        return { kind: 'source_not_found' };
+      }
+      if (String(srcRes.rows[0].status) === 'SHIPPED') {
+        return { kind: 'already_shipped' };
+      }
+
+      const itemIds = lines.map((l) => l.shipment_item_id);
+      const itemCheck = await client.query(
+        `SELECT id FROM fba_shipment_items WHERE shipment_id = $1 AND id = ANY($2::int[]) AND organization_id = $3`,
+        [sourceShipmentId, itemIds, ctx.organizationId],
+      );
+      if (itemCheck.rows.length !== itemIds.length) {
+        return { kind: 'lines_not_on_source' };
+      }
+
+      for (const l of lines) {
+        const qty = Math.max(1, l.quantity ?? 1);
+        await client.query(
+          `UPDATE fba_shipment_items SET expected_qty = $1, updated_at = NOW() WHERE id = $2 AND shipment_id = $3 AND organization_id = $4`,
+          [qty, l.shipment_item_id, sourceShipmentId, ctx.organizationId],
+        );
+      }
+
+      await client.query(
+        `DELETE FROM fba_tracking_item_allocations WHERE shipment_item_id = ANY($1::int[]) AND organization_id = $2`,
+        [itemIds, ctx.organizationId],
+      );
+
+      await client.query(
+        `UPDATE fba_shipment_items fsi
+         SET status = 'PLANNED',
+             labeled_at = NULL,
+             labeled_by_staff_id = NULL,
+             updated_at = NOW()
+         WHERE fsi.shipment_id = $1
+           AND fsi.id = ANY($2::int[])
+           AND fsi.status = 'LABEL_ASSIGNED'
+           AND fsi.organization_id = $3
+           AND NOT EXISTS (
+             SELECT 1 FROM fba_tracking_item_allocations ftia
+             WHERE ftia.shipment_item_id = fsi.id
+               AND ftia.organization_id = fsi.organization_id
+           )`,
+        [sourceShipmentId, itemIds, ctx.organizationId],
+      );
+
+      const newRef = `split-${sourceShipmentId}-${Date.now()}`;
+
+      const insertRes = await client.query(
+        `INSERT INTO fba_shipments (
+           shipment_ref, destination_fc, due_date, notes,
+           amazon_shipment_id,
+           assigned_tech_id, assigned_packer_id, created_by_staff_id,
+           status, organization_id
+         )
+         SELECT
+           $1,
+           destination_fc,
+           due_date,
+           notes,
+           $2,
+           assigned_tech_id,
+           assigned_packer_id,
+           created_by_staff_id,
+           'PLANNED'::fba_shipment_status_enum,
+           organization_id
+         FROM fba_shipments WHERE id = $3 AND organization_id = $4
+         RETURNING id`,
+        [newRef, newAmazonRaw, sourceShipmentId, ctx.organizationId],
+      );
+      const newShipmentId = Number(insertRes.rows[0]?.id);
+      if (!Number.isFinite(newShipmentId)) {
+        throw new Error('Failed to create split shipment');
+      }
+
+      await client.query(
+        `UPDATE fba_shipment_items SET shipment_id = $1, updated_at = NOW() WHERE id = ANY($2::int[]) AND shipment_id = $3 AND organization_id = $4`,
+        [newShipmentId, itemIds, sourceShipmentId, ctx.organizationId],
+      );
+
+      await refreshShipmentAggregateCounts(client, sourceShipmentId);
+      await refreshShipmentAggregateCounts(client, newShipmentId);
+
+      const trackRes = await client.query(
+        `INSERT INTO shipping_tracking_numbers
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
+         VALUES ($1, $2, $3, 'fba')
+         ON CONFLICT (tracking_number_normalized) DO UPDATE
+           SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
+               updated_at    = NOW()
+         RETURNING id, tracking_number_raw, carrier`,
+        [raw, raw, carrier],
+      );
+      const trackingId = Number(trackRes.rows[0].id);
+
+      const linkRes = await client.query(
+        `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label, organization_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (shipment_id, tracking_id) DO UPDATE
+           SET label = COALESCE(EXCLUDED.label, fba_shipment_tracking.label),
+               created_at = fba_shipment_tracking.created_at
+         RETURNING id, label, created_at`,
+        [newShipmentId, trackingId, label, ctx.organizationId],
+      );
+
+      await replaceTrackingAllocations(client, {
+        orgId: ctx.organizationId,
+        shipmentId: newShipmentId,
+        trackingId,
+        allocations,
+        staffId,
+        station,
+      });
+
+      return { kind: 'ok', newShipmentId, linkId: Number(linkRes.rows[0].id), newRef };
+    });
+
+    if (outcome.kind === 'source_not_found') {
       return NextResponse.json({ success: false, error: 'Source shipment not found' }, { status: 404 });
     }
-    if (String(srcRes.rows[0].status) === 'SHIPPED') {
-      await client.query('ROLLBACK');
+    if (outcome.kind === 'already_shipped') {
       return NextResponse.json({ success: false, error: 'Cannot split a shipped shipment' }, { status: 409 });
     }
-
-    const itemIds = lines.map((l) => l.shipment_item_id);
-    const itemCheck = await client.query(
-      `SELECT id FROM fba_shipment_items WHERE shipment_id = $1 AND id = ANY($2::int[])`,
-      [sourceShipmentId, itemIds],
-    );
-    if (itemCheck.rows.length !== itemIds.length) {
-      await client.query('ROLLBACK');
+    if (outcome.kind === 'lines_not_on_source') {
       return NextResponse.json(
         { success: false, error: 'One or more lines are not on the source shipment' },
         { status: 400 },
       );
     }
 
-    for (const l of lines) {
-      const qty = Math.max(1, l.quantity ?? 1);
-      await client.query(
-        `UPDATE fba_shipment_items SET expected_qty = $1, updated_at = NOW() WHERE id = $2 AND shipment_id = $3`,
-        [qty, l.shipment_item_id, sourceShipmentId],
-      );
-    }
-
-    await client.query(`DELETE FROM fba_tracking_item_allocations WHERE shipment_item_id = ANY($1::int[])`, [
-      itemIds,
-    ]);
-
-    await client.query(
-      `UPDATE fba_shipment_items fsi
-       SET status = 'PLANNED',
-           labeled_at = NULL,
-           labeled_by_staff_id = NULL,
-           updated_at = NOW()
-       WHERE fsi.shipment_id = $1
-         AND fsi.id = ANY($2::int[])
-         AND fsi.status = 'LABEL_ASSIGNED'
-         AND NOT EXISTS (
-           SELECT 1 FROM fba_tracking_item_allocations ftia WHERE ftia.shipment_item_id = fsi.id
-         )`,
-      [sourceShipmentId, itemIds],
-    );
-
-    const newRef = `split-${sourceShipmentId}-${Date.now()}`;
-
-    const insertRes = await client.query(
-      `INSERT INTO fba_shipments (
-         shipment_ref, destination_fc, due_date, notes,
-         amazon_shipment_id,
-         assigned_tech_id, assigned_packer_id, created_by_staff_id,
-         status
-       )
-       SELECT
-         $1,
-         destination_fc,
-         due_date,
-         notes,
-         $2,
-         assigned_tech_id,
-         assigned_packer_id,
-         created_by_staff_id,
-         'PLANNED'::fba_shipment_status_enum
-       FROM fba_shipments WHERE id = $3
-       RETURNING id`,
-      [newRef, newAmazonRaw, sourceShipmentId],
-    );
-    const newShipmentId = Number(insertRes.rows[0]?.id);
-    if (!Number.isFinite(newShipmentId)) {
-      throw new Error('Failed to create split shipment');
-    }
-
-    await client.query(
-      `UPDATE fba_shipment_items SET shipment_id = $1, updated_at = NOW() WHERE id = ANY($2::int[]) AND shipment_id = $3`,
-      [newShipmentId, itemIds, sourceShipmentId],
-    );
-
-    await refreshShipmentAggregateCounts(client, sourceShipmentId);
-    await refreshShipmentAggregateCounts(client, newShipmentId);
-
-    const trackRes = await client.query(
-      `INSERT INTO shipping_tracking_numbers
-         (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-       VALUES ($1, $2, $3, 'fba')
-       ON CONFLICT (tracking_number_normalized) DO UPDATE
-         SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
-             updated_at    = NOW()
-       RETURNING id, tracking_number_raw, carrier`,
-      [raw, raw, carrier],
-    );
-    const trackingId = Number(trackRes.rows[0].id);
-
-    const linkRes = await client.query(
-      `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (shipment_id, tracking_id) DO UPDATE
-         SET label = COALESCE(EXCLUDED.label, fba_shipment_tracking.label),
-             created_at = fba_shipment_tracking.created_at
-       RETURNING id, label, created_at`,
-      [newShipmentId, trackingId, label],
-    );
-
-    await replaceTrackingAllocations(client, {
-      shipmentId: newShipmentId,
-      trackingId,
-      allocations,
-      staffId,
-      station,
-    });
-
-    await client.query('COMMIT');
-
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'updated', shipmentId: sourceShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
-    await publishFbaShipmentChanged({ action: 'created', shipmentId: newShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
+    await publishFbaShipmentChanged({ action: 'created', shipmentId: outcome.newShipmentId, source: 'fba.split-for-paired', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,
       source_shipment_id: sourceShipmentId,
-      new_shipment_id: newShipmentId,
-      shipment_ref: newRef,
+      new_shipment_id: outcome.newShipmentId,
+      shipment_ref: outcome.newRef,
       amazon_shipment_id: newAmazonRaw,
-      link_id: Number(linkRes.rows[0].id),
+      link_id: outcome.linkId,
       tracking_number: raw,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK').catch(() => {});
     console.error('[POST /api/fba/shipments/split-for-paired-review]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to split shipment' },
       { status: 500 },
     );
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

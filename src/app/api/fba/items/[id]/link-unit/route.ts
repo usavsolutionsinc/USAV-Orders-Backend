@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { transaction } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2FbaSerialLink } from '@/lib/feature-flags';
 import { parseScannedUrl } from '@/lib/scan-resolver';
+import { transition } from '@/lib/inventory/state-machine';
 
 /**
  * POST /api/fba/items/[id]/link-unit
@@ -23,17 +23,9 @@ import { parseScannedUrl } from '@/lib/scan-resolver';
  *
  * The `scan` field accepts a raw serial OR a GS1 Digital Link URL.
  *
- * Gated by INVENTORY_V2_FBA_SERIAL_LINK; off-flag returns 503.
  * Permission: fba.stage_shipments.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2FbaSerialLink()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_FBA_SERIAL_LINK flag is OFF', flag: 'INVENTORY_V2_FBA_SERIAL_LINK' },
-      { status: 503 },
-    );
-  }
-
   // /api/fba/items/[id]/link-unit
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const idStr = segments[segments.length - 2];
@@ -66,15 +58,15 @@ export const POST = withAuth(async (request, ctx) => {
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
 
   try {
-    const result = await transaction(async (client) => {
+    const result = await withTenantTransaction(ctx.organizationId, async (client) => {
       // 1. Confirm the FBA shipment item exists and grab its fnsku/sku.
       const itemQ = await client.query<{ id: number; fnsku: string | null; sku: string | null; status: string | null }>(
         `SELECT i.id, i.fnsku, f.sku, i.status::text AS status
            FROM fba_shipment_items i
-           LEFT JOIN fba_fnskus f ON f.fnsku = i.fnsku
-          WHERE i.id = $1
+           LEFT JOIN fba_fnskus f ON f.fnsku = i.fnsku AND f.organization_id = $2
+          WHERE i.id = $1 AND i.organization_id = $2
           LIMIT 1`,
-        [fbaShipmentItemId],
+        [fbaShipmentItemId, ctx.organizationId],
       );
       const item = itemQ.rows[0];
       if (!item) return { ok: false as const, status: 404, error: 'fba_shipment_item not found' };
@@ -106,49 +98,37 @@ export const POST = withAuth(async (request, ctx) => {
       );
       const created = link.rows.length > 0;
 
-      // 4. Transition unit → ALLOCATED if it's currently STOCKED. Don't
-      //    downgrade an already-PACKED/LABELED unit (defensive).
+      // 4+5. Transition unit → ALLOCATED if it's currently STOCKED, which also
+      //    emits the ALLOCATED event atomically (guarded, replacing the former
+      //    raw status UPDATE + manual event INSERT). Don't downgrade an
+      //    already-PACKED/LABELED unit (defensive) — only STOCKED units move.
       const prevStatus = unit.current_status;
       let nextStatus = prevStatus;
-      if (prevStatus === 'STOCKED') {
-        await client.query(
-          `UPDATE serial_units
-              SET current_status = 'ALLOCATED'::serial_status_enum,
-                  updated_at = NOW()
-            WHERE id = $1`,
-          [unit.id],
-        );
-        nextStatus = 'ALLOCATED';
-      }
-
-      // 5. Emit ALLOCATED event (only when status actually changed —
-      //    idempotent inserts are fine via clientEventId anyway).
       let eventId: number | null = null;
-      if (nextStatus !== prevStatus) {
+      if (prevStatus === 'STOCKED') {
         const key = clientEventId ? `${clientEventId}:fba-alloc:${unit.id}` : null;
-        const ev = await client.query<{ id: number }>(
-          `INSERT INTO inventory_events (
-             event_type, actor_staff_id, station,
-             serial_unit_id, sku,
-             prev_status, next_status,
-             client_event_id, payload
-           )
-           VALUES ('ALLOCATED', $1, 'PACK',
-                   $2, $3,
-                   $4, $5,
-                   $6, $7::jsonb)
-           ON CONFLICT (client_event_id) DO NOTHING
-           RETURNING id`,
-          [
-            actorStaffId, unit.id, unit.sku ?? item.sku, prevStatus, nextStatus, key,
-            JSON.stringify({
-              source: 'fba.link-unit',
-              fba_shipment_item_id: fbaShipmentItemId,
-              fnsku: item.fnsku,
-            }),
-          ],
-        );
-        eventId = ev.rows[0]?.id ?? null;
+        const t = await transition({
+          unitId: unit.id,
+          to: 'ALLOCATED',
+          eventType: 'ALLOCATED',
+          actorStaffId,
+          station: 'PACK',
+          clientEventId: key,
+          expectedFrom: 'STOCKED',
+          payload: {
+            source: 'fba.link-unit',
+            fba_shipment_item_id: fbaShipmentItemId,
+            fnsku: item.fnsku,
+          },
+        }, client);
+        // Throw (don't return) so a transition failure rolls back the
+        // fba_shipment_item_units link inserted above — never commit a link
+        // with the unit left un-allocated. Unreachable in practice (STOCKED→
+        // ALLOCATED is a valid edge and the row is locked), but keeps the txn
+        // all-or-nothing, symmetric with allocate.ts.
+        if (!t.ok) throw new Error(`fba.link-unit: STOCKED→ALLOCATED failed for unit ${unit.id}: ${t.error}`);
+        nextStatus = 'ALLOCATED';
+        eventId = t.eventId;
       }
 
       return {

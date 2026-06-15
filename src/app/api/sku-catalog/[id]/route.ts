@@ -9,6 +9,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { parseBody } from '@/lib/schemas/parse';
 import { SkuCatalogUpdateBody } from '@/lib/schemas/sku-catalog';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { tenantQuery } from '@/lib/tenancy/db';
 import pool from '@/lib/db';
 
 /**
@@ -27,7 +28,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const detail = await getSkuCatalogDetail(id);
+    const detail = await getSkuCatalogDetail(id, gate.ctx.organizationId);
     if (!detail) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
@@ -65,7 +66,7 @@ export async function PATCH(
     const parsed = parseBody(SkuCatalogUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getSkuCatalogById(id);
+    const before = await getSkuCatalogById(id, gate.ctx.organizationId);
     if (!before) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
@@ -83,7 +84,7 @@ export async function PATCH(
       lastKnownCostCents: parsed.lastKnownCostCents !== undefined ? parsed.lastKnownCostCents : before.last_known_cost_cents,
       sourcingNotes: parsed.sourcingNotes !== undefined ? parsed.sourcingNotes : before.sourcing_notes,
       replenishTargetCents: parsed.replenishTargetCents !== undefined ? parsed.replenishTargetCents : before.replenish_target_cents,
-    });
+    }, gate.ctx.organizationId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'sku-catalog-api',
@@ -124,7 +125,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const before = await getSkuCatalogById(id);
+    const before = await getSkuCatalogById(id, gate.ctx.organizationId);
     if (!before || !before.is_active) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
@@ -132,10 +133,11 @@ export async function DELETE(
     // Guard: don't hide a SKU that's physically in bins — it would vanish from
     // active pick/replenish lists while stock still sits on the shelf. Empty or
     // move it first. (bin_contents.sku is the natural text key, not an FK.)
-    const stock = await pool.query<{ qty: number }>(
-      `SELECT COALESCE(SUM(qty), 0)::int AS qty FROM bin_contents WHERE sku = $1`,
-      [before.sku],
-    );
+    const orgId = gate.ctx.organizationId;
+    const stockSql = `SELECT COALESCE(SUM(qty), 0)::int AS qty FROM bin_contents WHERE sku = $1${orgId ? ' AND organization_id = $2' : ''}`;
+    const stock = orgId
+      ? await tenantQuery<{ qty: number }>(orgId, stockSql, [before.sku, orgId])
+      : await pool.query<{ qty: number }>(stockSql, [before.sku]);
     const onHand = stock.rows[0]?.qty ?? 0;
     if (onHand > 0) {
       return NextResponse.json(
@@ -147,7 +149,7 @@ export async function DELETE(
       );
     }
 
-    const deleted = await softDeleteSkuCatalog(id);
+    const deleted = await softDeleteSkuCatalog(id, gate.ctx.organizationId);
     if (!deleted) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }

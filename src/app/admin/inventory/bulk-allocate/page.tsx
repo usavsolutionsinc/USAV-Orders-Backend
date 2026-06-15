@@ -1,6 +1,5 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
-import { isInventoryV2Allocation } from '@/lib/feature-flags';
 import { allocateOrder } from '@/lib/inventory/allocate';
 import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
@@ -16,11 +15,6 @@ export const dynamic = 'force-dynamic';
  * serial_units exist for the same SKU. A per-row server action calls
  * allocateOrder() (the same helper /api/orders/[id]/allocate uses) and
  * revalidates the page so the result lands in the same render cycle.
- *
- * Gated by INVENTORY_V2_ALLOCATION at render time — off-flag the page
- * still renders the candidate list but the action returns a banner
- * rather than mutating. Useful for previewing the allocation set before
- * flipping the flag.
  *
  * Permission gate: orders.view (matches the API).
  */
@@ -87,7 +81,6 @@ async function loadCandidates(page: number): Promise<{ rows: CandidateRow[]; tot
 /** Server action: allocate one order. Revalidates the page after. */
 async function allocateOne(formData: FormData): Promise<void> {
   'use server';
-  if (!isInventoryV2Allocation()) return;
   const id = Number(formData.get('orderId'));
   if (!Number.isFinite(id) || id <= 0) return;
   try {
@@ -107,7 +100,6 @@ export default async function BulkAllocatePage({
 
   const params = await searchParams;
   const page = Math.max(0, Number(params.page ?? 0) || 0);
-  const flagOn = isInventoryV2Allocation();
   const { rows, total } = await loadCandidates(page);
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -118,14 +110,6 @@ export default async function BulkAllocatePage({
         <p className="text-sm text-gray-600">
           Orders with a SKU and no open allocation. Click <em>Allocate</em> to reserve STOCKED units FIFO.
         </p>
-
-        {!flagOn ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Preview mode.</strong>{' '}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">INVENTORY_V2_ALLOCATION</code> is OFF.
-            The list below shows what <em>would</em> allocate. Clicking <em>Allocate</em> is a no-op until the flag flips.
-          </div>
-        ) : null}
 
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
           <header className="flex items-center justify-between border-b border-gray-100 px-6 py-3">
@@ -192,14 +176,13 @@ export default async function BulkAllocatePage({
                             <input type="hidden" name="orderId" value={r.order_id} />
                             <button
                               type="submit"
-                              disabled={!eligible || !flagOn}
+                              disabled={!eligible}
                               className={`rounded-md px-3 py-1 text-xs font-medium ${
-                                !eligible || !flagOn
+                                !eligible
                                   ? 'cursor-not-allowed bg-gray-100 text-gray-400'
                                   : 'bg-blue-600 text-white hover:bg-blue-700'
                               }`}
                               title={
-                                !flagOn ? 'INVENTORY_V2_ALLOCATION flag is OFF' :
                                 !eligible ? `Need ${qty} stocked, only ${r.available_stocked} available` :
                                 'Allocate this order'
                               }

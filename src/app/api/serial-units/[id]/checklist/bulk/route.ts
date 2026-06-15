@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { parseBody } from '@/lib/schemas/parse';
 import { QcBulkBody } from '@/lib/schemas/qc-checks';
@@ -51,14 +52,18 @@ export const POST = withAuth(async (request, ctx) => {
     return NextResponse.json({ ok: false, error: 'no staff identity on request' }, { status: 401 });
   }
 
-  const client = await pool.connect();
+  const orgId = ctx.organizationId;
+
   try {
-    const unit = await client.query<{ sku_catalog_id: number | null; category: string | null }>(
+    const unit = await tenantQuery<{ sku_catalog_id: number | null; category: string | null }>(
+      orgId,
       `SELECT su.sku_catalog_id, sc.category
          FROM serial_units su
     LEFT JOIN sku_catalog sc ON sc.id = su.sku_catalog_id
-        WHERE su.id = $1`,
-      [serialUnitId],
+                            AND sc.organization_id = su.organization_id
+        WHERE su.id = $1
+          AND su.organization_id = $2`,
+      [serialUnitId, orgId],
     );
     if (unit.rows.length === 0) {
       return NextResponse.json({ ok: false, error: 'unit not found' }, { status: 404 });
@@ -82,60 +87,66 @@ export const POST = withAuth(async (request, ctx) => {
     // (percent/number/enum/text) need a real recorded value, so bulk skips them.
     const PASSABLE = `(qc.value_kind IS NULL OR qc.value_kind = 'BOOLEAN')`;
 
-    await client.query('BEGIN');
-
-    let affected = 0;
-    if (action === 'clear') {
-      const del = await client.query(
-        `DELETE FROM tech_verifications tv
-           USING qc_check_templates qc
-          WHERE tv.source_kind   = '${SOURCE_KIND}'
-            AND tv.step_type     = '${STEP_TYPE}'
-            AND tv.source_row_id = $1
-            AND tv.step_id       = qc.id
-            AND ${STEP_SCOPE}`,
-        [serialUnitId, skuCatalogId, category],
-      );
-      affected = del.rowCount ?? 0;
-    } else {
-      // pass — update existing rows, then insert the missing ones. Two
-      // set-based statements avoid depending on a specific unique-index name
-      // for ON CONFLICT (mirrors the upsert seam in upsertVerification).
-      const upd = await client.query(
-        `UPDATE tech_verifications tv
-            SET passed = true, verified_by = $4, verified_at = NOW()
-           FROM qc_check_templates qc
-          WHERE tv.source_kind   = '${SOURCE_KIND}'
-            AND tv.step_type     = '${STEP_TYPE}'
-            AND tv.source_row_id = $1
-            AND tv.step_id       = qc.id
-            AND ${STEP_SCOPE}
-            AND ${PASSABLE}`,
-        [serialUnitId, skuCatalogId, category, verifiedBy],
-      );
-      const ins = await client.query(
-        `INSERT INTO tech_verifications
-           (source_kind, source_row_id, sku_catalog_id, step_type, step_id, passed, verified_by)
-         SELECT '${SOURCE_KIND}', $1, $2, '${STEP_TYPE}', qc.id, true, $4
-           FROM qc_check_templates qc
-          WHERE ${STEP_SCOPE}
-            AND ${PASSABLE}
-            AND NOT EXISTS (
-              SELECT 1 FROM tech_verifications tv
-               WHERE tv.source_kind   = '${SOURCE_KIND}'
-                 AND tv.step_type     = '${STEP_TYPE}'
-                 AND tv.source_row_id = $1
-                 AND tv.step_id       = qc.id
-            )`,
-        [serialUnitId, skuCatalogId, category, verifiedBy],
-      );
-      affected = (upd.rowCount ?? 0) + (ins.rowCount ?? 0);
-    }
-
-    await client.query('COMMIT');
+    const affected = await withTenantTransaction(orgId, async (client) => {
+      let count = 0;
+      if (action === 'clear') {
+        const del = await client.query(
+          `DELETE FROM tech_verifications tv
+             USING qc_check_templates qc
+            WHERE tv.source_kind   = '${SOURCE_KIND}'
+              AND tv.step_type     = '${STEP_TYPE}'
+              AND tv.source_row_id = $1
+              AND tv.step_id       = qc.id
+              AND tv.organization_id = qc.organization_id
+              AND qc.organization_id = $4
+              AND ${STEP_SCOPE}`,
+          [serialUnitId, skuCatalogId, category, orgId],
+        );
+        count = del.rowCount ?? 0;
+      } else {
+        // pass — update existing rows, then insert the missing ones. Two
+        // set-based statements avoid depending on a specific unique-index name
+        // for ON CONFLICT (mirrors the upsert seam in upsertVerification).
+        const upd = await client.query(
+          `UPDATE tech_verifications tv
+              SET passed = true, verified_by = $4, verified_at = NOW()
+             FROM qc_check_templates qc
+            WHERE tv.source_kind   = '${SOURCE_KIND}'
+              AND tv.step_type     = '${STEP_TYPE}'
+              AND tv.source_row_id = $1
+              AND tv.step_id       = qc.id
+              AND tv.organization_id = qc.organization_id
+              AND qc.organization_id = $5
+              AND ${STEP_SCOPE}
+              AND ${PASSABLE}`,
+          [serialUnitId, skuCatalogId, category, verifiedBy, orgId],
+        );
+        const ins = await client.query(
+          `INSERT INTO tech_verifications
+             (source_kind, source_row_id, sku_catalog_id, step_type, step_id, passed, verified_by, organization_id)
+           SELECT '${SOURCE_KIND}', $1, $2, '${STEP_TYPE}', qc.id, true, $4, $5
+             FROM qc_check_templates qc
+            WHERE qc.organization_id = $5
+              AND ${STEP_SCOPE}
+              AND ${PASSABLE}
+              AND NOT EXISTS (
+                SELECT 1 FROM tech_verifications tv
+                 WHERE tv.source_kind   = '${SOURCE_KIND}'
+                   AND tv.step_type     = '${STEP_TYPE}'
+                   AND tv.source_row_id = $1
+                   AND tv.step_id       = qc.id
+                   AND tv.organization_id = qc.organization_id
+              )`,
+          [serialUnitId, skuCatalogId, category, verifiedBy, orgId],
+        );
+        count = (upd.rowCount ?? 0) + (ins.rowCount ?? 0);
+      }
+      return count;
+    });
 
     // Refreshed progress tally, same shape as the per-step route's GET.
-    const tally = await client.query<{ completed: string; total: string }>(
+    const tally = await tenantQuery<{ completed: string; total: string }>(
+      orgId,
       `SELECT COUNT(tv.passed)::text AS completed, COUNT(qc.id)::text AS total
          FROM qc_check_templates qc
     LEFT JOIN tech_verifications tv
@@ -143,8 +154,10 @@ export const POST = withAuth(async (request, ctx) => {
           AND tv.step_type     = '${STEP_TYPE}'
           AND tv.source_kind   = '${SOURCE_KIND}'
           AND tv.source_row_id = $1
-        WHERE ${STEP_SCOPE}`,
-      [serialUnitId, skuCatalogId, category],
+          AND tv.organization_id = qc.organization_id
+        WHERE qc.organization_id = $4
+          AND ${STEP_SCOPE}`,
+      [serialUnitId, skuCatalogId, category, orgId],
     );
     const completed = Number(tally.rows[0]?.completed ?? 0);
     const total = Number(tally.rows[0]?.total ?? 0);
@@ -166,11 +179,9 @@ export const POST = withAuth(async (request, ctx) => {
       progress: { completed, total },
     });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    // withTenantTransaction already rolled back the mutation transaction on throw.
     const message = err instanceof Error ? err.message : 'bulk checklist update failed';
     console.error('[POST /api/serial-units/[id]/checklist/bulk] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
-  } finally {
-    client.release();
   }
 }, { permission: 'tech.qc_pass' });

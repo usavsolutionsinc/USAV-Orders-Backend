@@ -121,6 +121,16 @@ test('regression: studio.manage gates the draft/publish lifecycle (ST4)', () => 
   );
 });
 
+test('regression: integrations.amazon gates the Amazon connection routes', () => {
+  // Amazon SP-API order import (docs/amazon-sp-api-order-import-plan.md). The
+  // OAuth callback is intentionally ungated (state-validated public redirect,
+  // like the eBay callback) and is not asserted here.
+  const paths = routesGatedBy('integrations.amazon').map((r) => r.path);
+  assert.ok(paths.includes('/api/amazon/accounts/route.ts'), 'integrations.amazon should gate amazon accounts');
+  assert.ok(paths.includes('/api/amazon/health/route.ts'), 'integrations.amazon should gate amazon health');
+  assert.ok(paths.includes('/api/amazon/connect/route.ts'), 'integrations.amazon should gate amazon connect');
+});
+
 test('regression: handling_unit.manage gates the assign/unassign mutations', () => {
   const paths = routesGatedBy('handling_unit.manage').map((r) => r.path);
   assert.ok(

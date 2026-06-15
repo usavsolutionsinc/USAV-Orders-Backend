@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { listNeedToOrder } from '@/lib/replenishment';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const statuses = (searchParams.get('status') || '')
@@ -14,7 +14,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     const skuSearch = searchParams.get('sku') || null;
     const sort = searchParams.get('sort') === 'newest' ? 'newest' as const : 'fifo' as const;
 
-    const payload = await listNeedToOrder({ statuses, page, limit, skuSearch, sort });
+    // Tenant isolation: thread the caller's org so listNeedToOrder gates
+    // replenishment_requests by rr.organization_id and aligns the
+    // item_stock_cache string-key JOIN on org (Phase A shared-module path).
+    const payload = await listNeedToOrder({ statuses, page, limit, skuSearch, sort }, ctx.organizationId);
     return NextResponse.json(payload);
   } catch (error: any) {
     return NextResponse.json(

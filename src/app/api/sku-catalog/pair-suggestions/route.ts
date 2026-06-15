@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/sku-catalog/pair-suggestions?ecwidId=N&limit=5
@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Ecwid row's display_name. Used by the pairing UI to offer click-to-pair
  * suggestions without typing a search.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const ecwidId = Number(searchParams.get('ecwidId'));
@@ -22,10 +22,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       );
     }
 
-    // Look up the ecwid row's display_name
-    const ecwid = await pool.query(
-      `SELECT display_name FROM sku_platform_ids WHERE id = $1 AND platform = 'ecwid' LIMIT 1`,
-      [ecwidId],
+    // Look up the ecwid row's display_name — scope to this org so a cross-tenant
+    // platform id never leaks a name.
+    const ecwid = await tenantQuery(
+      ctx.organizationId,
+      `SELECT display_name FROM sku_platform_ids
+        WHERE id = $1 AND platform = 'ecwid' AND organization_id = $2 LIMIT 1`,
+      [ecwidId, ctx.organizationId],
     );
     if (ecwid.rowCount === 0 || !ecwid.rows[0].display_name) {
       return NextResponse.json({ success: true, items: [] });
@@ -34,14 +37,17 @@ export const GET = withAuth(async (req: NextRequest) => {
     const displayName: string = ecwid.rows[0].display_name;
 
     // Trigram ranking via GIN index. Only return rows with meaningful similarity.
-    const result = await pool.query(
+    // Restrict candidates to this org's catalog.
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT id, sku, product_title, category, image_url,
               ROUND(similarity(product_title, $1)::numeric, 3) AS similarity
          FROM sku_catalog
         WHERE product_title % $1
+          AND organization_id = $3
         ORDER BY similarity(product_title, $1) DESC
         LIMIT $2`,
-      [displayName, limit],
+      [displayName, limit, ctx.organizationId],
     );
 
     return NextResponse.json({

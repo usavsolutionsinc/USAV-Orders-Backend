@@ -1,40 +1,60 @@
 import { eBayApi } from 'ebay-api';
 import pool from '@/lib/db';
 import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from './token-refresh';
+import { getEbayAppCreds, type EbayAppCreds } from './credentials';
+import { isEbaySandbox } from './oauth-config';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * eBay API Client
  * Handles authentication, token management, and API calls for a specific eBay account
+ *
+ * App credentials (appId/certId/ruName/environment) are resolved lazily per the
+ * account's organization via getEbayAppCreds() — no process.env reads here — so
+ * each tenant's sandbox/production setting and (future) BYO app are honored.
  */
 export class EbayClient {
-  private api: eBayApi;
+  private api: eBayApi | null = null;
   private accountName: string;
-  private sandbox: boolean;
+  private sandbox = false;
   private orgId: string | null = null;
+  private creds: EbayAppCreds | null = null;
 
-  constructor(accountName: string) {
+  constructor(accountName: string, orgId?: string) {
     this.accountName = accountName;
-    
-    const sandbox = process.env.EBAY_ENVIRONMENT !== 'PRODUCTION';
-    this.sandbox = sandbox;
-    
+    // Prefer an explicit org — account_name is only unique PER ORG now, so a
+    // name-only lookup (getOrganizationId fallback) is ambiguous across tenants.
+    this.orgId = orgId ?? null;
+  }
+
+  /** Resolve + cache this account's org and eBay app credentials. */
+  private async ensureCreds(): Promise<EbayAppCreds> {
+    if (this.creds) return this.creds;
+    const orgId = await this.getOrganizationId();
+    const creds = await getEbayAppCreds(orgId);
+    if (!creds) {
+      throw new Error(`No eBay app credentials configured for organization ${orgId}`);
+    }
+    this.creds = creds;
+    this.sandbox = isEbaySandbox(creds.environment);
+    return creds;
+  }
+
+  /** Lazily build the ebay-api client from the resolved credentials. */
+  private async ensureApi(): Promise<eBayApi> {
+    if (this.api) return this.api;
+    const creds = await this.ensureCreds();
     this.api = new eBayApi({
-      appId: process.env.EBAY_APP_ID!,
-      certId: process.env.EBAY_CERT_ID!,
-      sandbox: sandbox,
+      appId: creds.appId,
+      certId: creds.certId,
+      sandbox: this.sandbox,
       siteId: 0, // EBAY_US
       marketplaceId: 'EBAY_US',
       acceptLanguage: 'en-US',
       contentLanguage: 'en-US',
-      ruName: process.env.EBAY_RU_NAME,
+      ruName: creds.ruName,
     });
-    
-    console.log(`[${accountName}] eBay API initialized:`, {
-      appId: process.env.EBAY_APP_ID?.substring(0, 20) + '...',
-      sandbox,
-      ruName: process.env.EBAY_RU_NAME,
-    });
+    return this.api;
   }
 
   private async getOrganizationId(): Promise<string> {
@@ -102,10 +122,11 @@ export class EbayClient {
     }
   }
 
-  private async withOAuthCredentials<T>(callback: () => Promise<T>): Promise<T> {
+  private async withOAuthCredentials<T>(callback: (api: eBayApi) => Promise<T>): Promise<T> {
+    const api = await this.ensureApi();
     const { accessToken, refreshToken } = await this.getValidAccessToken();
 
-    this.api.oAuth2.setCredentials({
+    api.oAuth2.setCredentials({
       access_token: accessToken,
       refresh_token: refreshToken,
       expires_in: 7200,
@@ -113,7 +134,7 @@ export class EbayClient {
       token_type: 'User Access Token'
     });
 
-    return callback();
+    return callback(api);
   }
 
   private getArrayCandidate(payload: any, keys: string[]): any[] {
@@ -152,8 +173,8 @@ export class EbayClient {
     // Query database for current token using tenantQuery for GUC/RLS context
     const result = await tenantQuery(
       orgId,
-      'SELECT access_token, token_expires_at, refresh_token FROM ebay_accounts WHERE account_name = $1',
-      [this.accountName]
+      'SELECT access_token, token_expires_at, refresh_token FROM ebay_accounts WHERE account_name = $1 AND organization_id = $2',
+      [this.accountName, orgId]
     );
 
     if (!result.rows[0]) {
@@ -187,12 +208,15 @@ export class EbayClient {
   async refreshAccessToken(refreshToken: string): Promise<string> {
     try {
       console.log(`[${this.accountName}] Refreshing access token...`);
-      
-      // Use direct HTTP call instead of ebay-api library (more reliable)
+
+      // Resolve this account's app credentials (per-org / shared env app) and
+      // refresh against the matching environment's token endpoint.
+      const creds = await this.ensureCreds();
       const { accessToken, expiresIn } = await refreshEbayAccessToken(
-        process.env.EBAY_APP_ID!,
-        process.env.EBAY_CERT_ID!,
-        refreshToken
+        creds.appId,
+        creds.certId,
+        refreshToken,
+        creds.environment
       );
       
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
@@ -202,10 +226,10 @@ export class EbayClient {
       // Update database with new token using tenantQuery
       await tenantQuery(
         orgId,
-        `UPDATE ebay_accounts 
-         SET access_token = $1, token_expires_at = $2, updated_at = NOW() 
-         WHERE account_name = $3`,
-        [encryptedAccessToken, newExpiresAt, this.accountName]
+        `UPDATE ebay_accounts
+         SET access_token = $1, token_expires_at = $2, updated_at = NOW()
+         WHERE account_name = $3 AND organization_id = $4`,
+        [encryptedAccessToken, newExpiresAt, this.accountName, orgId]
       );
 
       console.log(`[${this.accountName}] Access token refreshed successfully (expires in ${expiresIn}s)`);
@@ -225,7 +249,7 @@ export class EbayClient {
     offset?: number;
   } = {}): Promise<any[]> {
     try {
-      return this.withOAuthCredentials(async () => {
+      return this.withOAuthCredentials(async (api) => {
         const params: any = {
           limit: options.limit || 100,
         };
@@ -242,7 +266,7 @@ export class EbayClient {
         console.log(`[${this.accountName}] Fetching orders with params:`, params);
 
         return this.auditCall('GET', '/sell/fulfillment/v1/order', async () => {
-          const response = await this.api.sell.fulfillment.getOrders(params);
+          const response = await api.sell.fulfillment.getOrders(params);
           const orders = response.orders || [];
           console.log(`[${this.accountName}] Fetched ${orders.length} orders`);
           return orders;
@@ -259,9 +283,9 @@ export class EbayClient {
    */
   async getOrderDetails(orderId: string): Promise<any> {
     try {
-      return this.withOAuthCredentials(async () => 
-        this.auditCall('GET', `/sell/fulfillment/v1/order/${orderId}`, async () => 
-          this.api.sell.fulfillment.getOrder(orderId)
+      return this.withOAuthCredentials(async (api) =>
+        this.auditCall('GET', `/sell/fulfillment/v1/order/${orderId}`, async () =>
+          api.sell.fulfillment.getOrder(orderId)
         )
       );
     } catch (error: any) {
@@ -272,9 +296,9 @@ export class EbayClient {
 
   async fetchUnreadMessages(limit = 10): Promise<any[]> {
     try {
-      return this.withOAuthCredentials(async () => {
+      return this.withOAuthCredentials(async (api) => {
         return this.auditCall('GET', '/commerce/message/v1/conversation', async () => {
-          const response = await this.api.commerce.message.getConversations({
+          const response = await api.commerce.message.getConversations({
             limit: Math.max(1, Math.min(limit, 50)),
             offset: 0,
           });
@@ -319,9 +343,9 @@ export class EbayClient {
 
   async fetchOpenReturns(limit = 10): Promise<any[]> {
     try {
-      return this.withOAuthCredentials(async () => {
+      return this.withOAuthCredentials(async (api) => {
         return this.auditCall('GET', '/post-order/v2/return/search', async () => {
-          const response = await this.api.postOrder.return.search({
+          const response = await api.postOrder.return.search({
             limit: Math.max(1, Math.min(limit * 3, 50)),
             offset: 0,
             role: 'SELLER',
@@ -376,6 +400,7 @@ export class EbayClient {
    */
   async getOrderShippingFulfillments(orderId: string): Promise<any[]> {
     try {
+      await this.ensureCreds(); // resolves this.sandbox for the apiBase below
       const { accessToken } = await this.getValidAccessToken();
       const apiBase = this.sandbox ? 'https://api.sandbox.ebay.com' : 'https://api.ebay.com';
       const url = `${apiBase}/sell/fulfillment/v1/order/${encodeURIComponent(orderId)}/shipping_fulfillment`;

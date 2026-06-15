@@ -29,7 +29,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const reasonCode = await getReasonCodeById(id);
+    const reasonCode = await getReasonCodeById(id, gate.ctx.organizationId);
     if (!reasonCode) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
@@ -61,12 +61,12 @@ export async function PATCH(
     const parsed = parseBody(ReasonCodeUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getReasonCodeById(id);
+    const before = await getReasonCodeById(id, gate.ctx.organizationId);
     if (!before) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    const updated = await updateReasonCode(id, parsed);
+    const updated = await updateReasonCode(id, parsed, gate.ctx.organizationId);
     if (!updated) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
@@ -104,12 +104,12 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const before = await getReasonCodeById(id);
+    const before = await getReasonCodeById(id, gate.ctx.organizationId);
     if (!before || !before.is_active) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    const deleted = await softDeleteReasonCode(id);
+    const deleted = await softDeleteReasonCode(id, gate.ctx.organizationId);
     if (!deleted) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }

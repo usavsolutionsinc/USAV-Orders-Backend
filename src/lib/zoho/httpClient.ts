@@ -1,4 +1,6 @@
-import { buildZohoUrl, getAccessToken, invalidateAccessToken } from '@/lib/zoho/core';
+import { buildZohoUrl, getAccessToken, invalidateAccessToken, loadZohoCredentials } from '@/lib/zoho/core';
+import { currentZohoOrgId } from '@/lib/zoho/tenant-context';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const RATE_LIMIT_CONFIG = {
   reservoir: 80,
@@ -218,6 +220,7 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
 }
 
 async function performZohoRequest<T>(
+  orgId: OrgId,
   method: HttpMethod,
   path: string,
   body?: unknown,
@@ -225,9 +228,15 @@ async function performZohoRequest<T>(
 ): Promise<T> {
   const retryableHttpStatuses = new Set([429, 500, 502, 503, 504]);
 
+  // Resolve the tenant's credentials once per attempt loop. getIntegrationCredentials
+  // caches in-process for 5 min, so this is a cheap map hit on the hot path; it gives
+  // us both the access token (minted from creds.refreshToken) and the tenant's Zoho
+  // org id + data center used to build the URL.
+  const creds = await loadZohoCredentials(orgId);
+
   for (let attempt = 0; attempt <= RATE_LIMIT_CONFIG.maxRetries; attempt++) {
-    const token = await getAccessToken();
-    const url = buildZohoUrl(path, query);
+    const token = await getAccessToken(orgId, creds);
+    const url = buildZohoUrl(path, query, creds);
 
     let response: Response;
     try {
@@ -246,7 +255,7 @@ async function performZohoRequest<T>(
     }
 
     if (response.status === 401 && attempt === 0) {
-      await invalidateAccessToken();
+      invalidateAccessToken(orgId);
       continue;
     }
 
@@ -293,6 +302,7 @@ async function performZohoRequest<T>(
 }
 
 async function scheduleRequest<T>(
+  orgId: OrgId,
   method: HttpMethod,
   path: string,
   body?: unknown,
@@ -300,7 +310,7 @@ async function scheduleRequest<T>(
 ): Promise<T> {
   circuitBreaker.assertClosed();
   try {
-    const result = await limiter.schedule(() => performZohoRequest<T>(method, path, body, query));
+    const result = await limiter.schedule(() => performZohoRequest<T>(orgId, method, path, body, query));
     circuitBreaker.recordSuccess();
     return result;
   } catch (error) {
@@ -309,26 +319,30 @@ async function scheduleRequest<T>(
   }
 }
 
-export async function zohoGet<T>(path: string, query: ZohoQuery = {}): Promise<T> {
-  return scheduleRequest<T>('GET', path, undefined, query);
+// The `orgId` default is evaluated synchronously when the verb is called, i.e.
+// inside the caller's withZohoOrg(...) context — BEFORE the request is queued.
+// This is the only safe place to read the ambient tenant; see tenant-context.ts.
+export async function zohoGet<T>(path: string, query: ZohoQuery = {}, orgId: OrgId = currentZohoOrgId()): Promise<T> {
+  return scheduleRequest<T>(orgId, 'GET', path, undefined, query);
 }
 
-export async function zohoPost<T>(path: string, body: unknown, query: ZohoQuery = {}): Promise<T> {
-  return scheduleRequest<T>('POST', path, body, query);
+export async function zohoPost<T>(path: string, body: unknown, query: ZohoQuery = {}, orgId: OrgId = currentZohoOrgId()): Promise<T> {
+  return scheduleRequest<T>(orgId, 'POST', path, body, query);
 }
 
-export async function zohoPut<T>(path: string, body: unknown, query: ZohoQuery = {}): Promise<T> {
-  return scheduleRequest<T>('PUT', path, body, query);
+export async function zohoPut<T>(path: string, body: unknown, query: ZohoQuery = {}, orgId: OrgId = currentZohoOrgId()): Promise<T> {
+  return scheduleRequest<T>(orgId, 'PUT', path, body, query);
 }
 
-export async function zohoDelete<T>(path: string, query: ZohoQuery = {}): Promise<T> {
-  return scheduleRequest<T>('DELETE', path, undefined, query);
+export async function zohoDelete<T>(path: string, query: ZohoQuery = {}, orgId: OrgId = currentZohoOrgId()): Promise<T> {
+  return scheduleRequest<T>(orgId, 'DELETE', path, undefined, query);
 }
 
 export async function* paginateZohoList<T>(
   path: string,
   resourceKey: string,
-  params: ZohoQuery = {}
+  params: ZohoQuery = {},
+  orgId: OrgId = currentZohoOrgId()
 ): AsyncGenerator<T[]> {
   let page = 1;
   while (true) {
@@ -338,7 +352,7 @@ export async function* paginateZohoList<T>(
       ...params,
       page,
       per_page: 200,
-    });
+    }, orgId);
 
     const pageRows = Array.isArray(response[resourceKey]) ? (response[resourceKey] as T[]) : [];
     yield pageRows;

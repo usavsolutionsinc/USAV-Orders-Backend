@@ -13,6 +13,7 @@
  */
 
 import pool from '@/lib/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
@@ -35,6 +36,34 @@ export class PoGmailNotConnectedError extends Error {
   constructor(message: string, public readonly needsReconnect: boolean) {
     super(message);
     this.name = 'PoGmailNotConnectedError';
+  }
+}
+
+/**
+ * Thrown when a tenant OTHER than USAV tries to read or refresh the PO
+ * mailbox token. The `google_oauth_tokens` row is a global singleton
+ * (provider='po_gmail', no organization_id column) belonging to USAV's
+ * connected mailbox — there is intentionally one mailbox, not one per org.
+ * This guard makes that ownership explicit so a non-USAV tenant can never
+ * touch USAV's credentials, even though the table itself can't isolate rows
+ * by org.
+ */
+export class PoGmailWrongTenantError extends Error {
+  constructor() {
+    super('PO mailbox belongs to USAV; other tenants cannot access it.');
+    this.name = 'PoGmailWrongTenantError';
+  }
+}
+
+/**
+ * Singleton-mailbox tenant guard. The PO Gmail token has no organization_id
+ * column, so RLS can't fence it — instead every token accessor takes an
+ * `orgId` (defaulting to USAV's) and asserts it through here. Any non-USAV
+ * org throws before a single byte of the token is read or refreshed.
+ */
+export function assertUsavMailbox(orgId: string): void {
+  if (orgId !== USAV_ORG_ID) {
+    throw new PoGmailWrongTenantError();
   }
 }
 
@@ -124,7 +153,8 @@ async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: 
   };
 }
 
-export async function getAccessToken(): Promise<string> {
+export async function getAccessToken(orgId: string = USAV_ORG_ID): Promise<string> {
+  assertUsavMailbox(orgId);
   const row = await loadActiveToken();
   const now = Date.now();
   if (row.access_token && row.expires_at && new Date(row.expires_at).getTime() > now + 30_000) {
@@ -141,14 +171,22 @@ export async function getAccessToken(): Promise<string> {
   return accessToken;
 }
 
-export async function poGmailFetch(url: string, init: RequestInit = {}): Promise<Response> {
-  const token = await getAccessToken();
+export async function poGmailFetch(
+  url: string,
+  init: RequestInit = {},
+  orgId: string = USAV_ORG_ID,
+): Promise<Response> {
+  assertUsavMailbox(orgId);
+  const token = await getAccessToken(orgId);
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${token}`);
   return fetch(url, { ...init, headers });
 }
 
-export async function getConnectedEmail(): Promise<string | null> {
+export async function getConnectedEmail(orgId: string = USAV_ORG_ID): Promise<string | null> {
+  // Non-USAV tenants must not learn anything about USAV's mailbox — return
+  // empty rather than throwing so connection-status reads degrade quietly.
+  if (orgId !== USAV_ORG_ID) return null;
   const { rows } = await pool.query<{ account_email: string | null }>(
     `SELECT account_email FROM google_oauth_tokens WHERE provider = $1 LIMIT 1`,
     [PROVIDER],

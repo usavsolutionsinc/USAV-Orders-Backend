@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Dashboard / queue / receiving order-row title + meta subrow.
@@ -52,6 +53,7 @@ export const META_COL = {
 export function RowTitle({
   dot,
   dotTitle,
+  dotTooltip,
   title,
   dotTrack = META_COL.dotTrack,
   /** Smaller title (text-[12px]) instead of the default text-[13px]. */
@@ -64,6 +66,8 @@ export function RowTitle({
   dot: string;
   /** Hover/a11y label for the dot. */
   dotTitle?: string;
+  /** When true, render `dotTitle` via the styled HoverTooltip instead of the native title attr. */
+  dotTooltip?: boolean;
   title: ReactNode;
   dotTrack?: string;
   small?: boolean;
@@ -77,7 +81,13 @@ export function RowTitle({
       ) : null}
       {/* Dot centered inside the dot-track so the title text starts at a known x. */}
       <span className={cn('flex shrink-0 items-center justify-center', dotTrack)}>
-        <span className={cn('h-2 w-2 rounded-full', dot)} title={dotTitle} />
+        {dotTooltip && dotTitle ? (
+          <HoverTooltip label={dotTitle} className="flex items-center">
+            <span className={cn('h-2 w-2 rounded-full', dot)} />
+          </HoverTooltip>
+        ) : (
+          <span className={cn('h-2 w-2 rounded-full', dot)} title={dotTitle} />
+        )}
       </span>
       <div
         className={cn(

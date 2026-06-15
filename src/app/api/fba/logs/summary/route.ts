@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -16,8 +16,9 @@ export const GET = withAuth(async (request: NextRequest) => {
     const limitRaw = Number(searchParams.get('limit') || 200);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(Math.floor(limitRaw), 500) : 200;
 
-    const params: unknown[] = [];
-    let idx = 1;
+    // Tenant ownership filter — $1 is the org id, referenced inside the fba_* CTEs below.
+    const params: unknown[] = [ctx.organizationId];
+    let idx = 2;
     const whereClauses: string[] = [];
 
     if (q) {
@@ -42,7 +43,8 @@ export const GET = withAuth(async (request: NextRequest) => {
     params.push(limit);
     const limitIdx = idx;
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `
         WITH log_totals AS (
           SELECT
@@ -53,6 +55,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             MAX(l.created_at) AS last_event_at
           FROM fba_fnsku_logs l
           WHERE l.event_type != 'VOID'
+            AND l.organization_id = $1
           GROUP BY l.fnsku
         ),
         latest_serial AS (
@@ -62,6 +65,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           FROM tech_serial_numbers tsn
           WHERE tsn.fnsku IS NOT NULL
             AND COALESCE(BTRIM(tsn.serial_number), '') <> ''
+            AND tsn.organization_id = $1
           ORDER BY tsn.fnsku, tsn.created_at DESC NULLS LAST, tsn.id DESC
         ),
         open_items AS (
@@ -78,6 +82,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           JOIN fba_shipments fs ON fs.id = fsi.shipment_id
           WHERE fs.status != 'SHIPPED'
             AND fsi.status != 'SHIPPED'
+            AND fsi.organization_id = $1
           ORDER BY
             fsi.fnsku,
             CASE fsi.status
@@ -119,7 +124,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             oi.expected_qty,
             oi.actual_qty
           FROM log_totals lt
-          JOIN fba_fnskus ff ON ff.fnsku = lt.fnsku
+          JOIN fba_fnskus ff ON ff.fnsku = lt.fnsku AND ff.organization_id = $1
           LEFT JOIN latest_serial ls ON ls.fnsku = lt.fnsku
           LEFT JOIN open_items oi ON oi.fnsku = lt.fnsku
         )

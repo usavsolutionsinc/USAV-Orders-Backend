@@ -32,7 +32,8 @@
  * here — cycle count is an always-available admin tool.
  */
 
-import { transaction } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // ─── Campaign creation ──────────────────────────────────────────────────────
 
@@ -41,6 +42,8 @@ export interface CreateCampaignInput {
   /** Auto-approve threshold. 0.05 = 5%. Range 0..1 (validated). */
   varianceTol: number;
   createdByStaffId: number | null;
+  /** Owning org — scopes the bin_contents snapshot and stamps every row. */
+  organizationId: OrgId;
 }
 
 export interface CreateCampaignResult {
@@ -55,29 +58,32 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Create
   if (!Number.isFinite(tol) || tol < 0 || tol > 1) {
     throw new Error(`varianceTol must be in [0,1], got ${input.varianceTol}`);
   }
+  const orgId = input.organizationId;
 
-  return transaction<CreateCampaignResult>(async (client) => {
+  return withTenantTransaction<CreateCampaignResult>(orgId, async (client) => {
     const campaignQ = await client.query<{ id: number }>(
-      `INSERT INTO cycle_count_campaigns (name, variance_tol, status, created_by)
-       VALUES ($1, $2, 'open', $3)
+      `INSERT INTO cycle_count_campaigns (name, variance_tol, status, created_by, organization_id)
+       VALUES ($1, $2, 'open', $3, $4)
        RETURNING id`,
-      [name, tol.toFixed(4), input.createdByStaffId],
+      [name, tol.toFixed(4), input.createdByStaffId, orgId],
     );
     const campaignId = campaignQ.rows[0]?.id;
     if (!campaignId) throw new Error('campaign insert returned no id');
 
+    // Snapshot only THIS org's bins; stamp each line with the org so the
+    // campaign + its lines are isolated end-to-end.
     const linesQ = await client.query<{ n: number }>(
       `WITH ins AS (
-         INSERT INTO cycle_count_lines (campaign_id, bin_id, sku, expected_qty, status)
-         SELECT $1, bc.location_id, bc.sku, bc.qty, 'pending'
+         INSERT INTO cycle_count_lines (campaign_id, bin_id, sku, expected_qty, status, organization_id)
+         SELECT $1, bc.location_id, bc.sku, bc.qty, 'pending', $2
            FROM bin_contents bc
-          WHERE bc.qty > 0
-            OR bc.last_counted IS NULL
+          WHERE bc.organization_id = $2
+            AND (bc.qty > 0 OR bc.last_counted IS NULL)
          ON CONFLICT (campaign_id, bin_id, sku) DO NOTHING
          RETURNING 1
        )
        SELECT COUNT(*)::int AS n FROM ins`,
-      [campaignId],
+      [campaignId, orgId],
     );
 
     return { campaignId, lineCount: linesQ.rows[0]?.n ?? 0 };
@@ -90,6 +96,7 @@ export interface SubmitCountInput {
   lineId: number;
   countedQty: number;
   countedByStaffId: number | null;
+  organizationId: OrgId;
 }
 
 export interface SubmitCountResult {
@@ -106,7 +113,8 @@ export async function submitCount(input: SubmitCountInput): Promise<SubmitCountR
     throw new Error(`countedQty must be a non-negative integer, got ${input.countedQty}`);
   }
 
-  return transaction<SubmitCountResult>(async (client) => {
+  const orgId = input.organizationId;
+  return withTenantTransaction<SubmitCountResult>(orgId, async (client) => {
     const lineQ = await client.query<{
       id: number;
       campaign_id: number;
@@ -116,10 +124,10 @@ export async function submitCount(input: SubmitCountInput): Promise<SubmitCountR
       `SELECT l.id, l.campaign_id, l.expected_qty,
               c.variance_tol::text AS variance_tol
          FROM cycle_count_lines l
-         JOIN cycle_count_campaigns c ON c.id = l.campaign_id
-        WHERE l.id = $1
+         JOIN cycle_count_campaigns c ON c.id = l.campaign_id AND c.organization_id = l.organization_id
+        WHERE l.id = $1 AND l.organization_id = $2
         FOR UPDATE OF l`,
-      [input.lineId],
+      [input.lineId, orgId],
     );
     const line = lineQ.rows[0];
     if (!line) throw new Error(`cycle_count_lines id ${input.lineId} not found`);
@@ -138,8 +146,8 @@ export async function submitCount(input: SubmitCountInput): Promise<SubmitCountR
               counted_at = NOW(),
               status = $3,
               updated_at = NOW()
-        WHERE id = $4`,
-      [input.countedQty, input.countedByStaffId, status, input.lineId],
+        WHERE id = $4 AND organization_id = $5`,
+      [input.countedQty, input.countedByStaffId, status, input.lineId, orgId],
     );
 
     return {
@@ -158,6 +166,7 @@ export async function submitCount(input: SubmitCountInput): Promise<SubmitCountR
 export interface ApproveLineInput {
   lineId: number;
   approvedByStaffId: number | null;
+  organizationId: OrgId;
 }
 
 export interface ApproveLineResult {
@@ -167,7 +176,8 @@ export interface ApproveLineResult {
 }
 
 export async function approveLine(input: ApproveLineInput): Promise<ApproveLineResult> {
-  return transaction<ApproveLineResult>(async (client) => {
+  const orgId = input.organizationId;
+  return withTenantTransaction<ApproveLineResult>(orgId, async (client) => {
     const lineQ = await client.query<{
       id: number;
       bin_id: number;
@@ -178,9 +188,9 @@ export async function approveLine(input: ApproveLineInput): Promise<ApproveLineR
     }>(
       `SELECT id, bin_id, sku, expected_qty, counted_qty, status::text AS status
          FROM cycle_count_lines
-        WHERE id = $1
+        WHERE id = $1 AND organization_id = $2
         FOR UPDATE`,
-      [input.lineId],
+      [input.lineId, orgId],
     );
     const line = lineQ.rows[0];
     if (!line) throw new Error(`cycle_count_lines id ${input.lineId} not found`);
@@ -194,15 +204,16 @@ export async function approveLine(input: ApproveLineInput): Promise<ApproveLineR
     if (variance !== 0) {
       const ledgerQ = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger (
-           sku, delta, reason, dimension, staff_id, notes
+           sku, delta, reason, dimension, staff_id, notes, organization_id
          )
-         VALUES ($1, $2, 'CYCLE_COUNT_ADJ', 'WAREHOUSE', $3, $4)
+         VALUES ($1, $2, 'CYCLE_COUNT_ADJ', 'WAREHOUSE', $3, $4, $5)
          RETURNING id`,
         [
           line.sku,
           variance,
           input.approvedByStaffId,
           `cycle_count line=${line.id} bin=${line.bin_id} expected=${line.expected_qty} counted=${line.counted_qty}`,
+          orgId,
         ],
       );
       ledgerId = ledgerQ.rows[0]?.id ?? null;
@@ -215,8 +226,8 @@ export async function approveLine(input: ApproveLineInput): Promise<ApproveLineR
           SET qty = $1,
               last_counted = NOW(),
               updated_at = NOW()
-        WHERE location_id = $2 AND sku = $3`,
-      [line.counted_qty, line.bin_id, line.sku],
+        WHERE location_id = $2 AND sku = $3 AND organization_id = $4`,
+      [line.counted_qty, line.bin_id, line.sku, orgId],
     );
 
     await client.query(
@@ -225,8 +236,8 @@ export async function approveLine(input: ApproveLineInput): Promise<ApproveLineR
               approved_by = $1,
               approved_at = NOW(),
               updated_at = NOW()
-        WHERE id = $2`,
-      [input.approvedByStaffId, input.lineId],
+        WHERE id = $2 AND organization_id = $3`,
+      [input.approvedByStaffId, input.lineId, orgId],
     );
 
     return { lineId: input.lineId, variance, ledgerId };
@@ -235,8 +246,9 @@ export async function approveLine(input: ApproveLineInput): Promise<ApproveLineR
 
 // ─── Reject a line (no stock changes) ───────────────────────────────────────
 
-export async function rejectLine(input: { lineId: number; approvedByStaffId: number | null }): Promise<void> {
-  await transaction(async (client) => {
+export async function rejectLine(input: { lineId: number; approvedByStaffId: number | null; organizationId: OrgId }): Promise<void> {
+  const orgId = input.organizationId;
+  await withTenantTransaction(orgId, async (client) => {
     const r = await client.query(
       `UPDATE cycle_count_lines
           SET status = 'rejected',
@@ -244,8 +256,9 @@ export async function rejectLine(input: { lineId: number; approvedByStaffId: num
               approved_at = NOW(),
               updated_at = NOW()
         WHERE id = $2
+          AND organization_id = $3
           AND status IN ('counted', 'pending_review', 'pending')`,
-      [input.approvedByStaffId, input.lineId],
+      [input.approvedByStaffId, input.lineId, orgId],
     );
     if (r.rowCount === 0) {
       throw new Error('line not found or already finalized');
@@ -258,6 +271,7 @@ export async function rejectLine(input: { lineId: number; approvedByStaffId: num
 export interface CloseCampaignInput {
   campaignId: number;
   approvedByStaffId: number | null;
+  organizationId: OrgId;
 }
 
 export interface CloseCampaignResult {
@@ -267,15 +281,16 @@ export interface CloseCampaignResult {
 }
 
 export async function closeCampaign(input: CloseCampaignInput): Promise<CloseCampaignResult> {
-  return transaction<CloseCampaignResult>(async (client) => {
+  const orgId = input.organizationId;
+  return withTenantTransaction<CloseCampaignResult>(orgId, async (client) => {
     // Find every 'counted' line — those are within tolerance and ready for
     // auto-approval. Process one at a time so each gets its own ledger
     // row + bin_contents update.
     const countedQ = await client.query<{ id: number }>(
       `SELECT id FROM cycle_count_lines
-        WHERE campaign_id = $1 AND status = 'counted'
+        WHERE campaign_id = $1 AND organization_id = $2 AND status = 'counted'
         ORDER BY id ASC`,
-      [input.campaignId],
+      [input.campaignId, orgId],
     );
 
     let autoApproved = 0;
@@ -291,8 +306,8 @@ export async function closeCampaign(input: CloseCampaignInput): Promise<CloseCam
         counted_qty: number | null;
       }>(
         `SELECT id, bin_id, sku, expected_qty, counted_qty
-           FROM cycle_count_lines WHERE id = $1 FOR UPDATE`,
-        [row.id],
+           FROM cycle_count_lines WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+        [row.id, orgId],
       );
       const l = lineQ.rows[0];
       if (!l || l.counted_qty == null) continue;
@@ -300,26 +315,27 @@ export async function closeCampaign(input: CloseCampaignInput): Promise<CloseCam
       if (variance !== 0) {
         await client.query(
           `INSERT INTO sku_stock_ledger (
-             sku, delta, reason, dimension, staff_id, notes
+             sku, delta, reason, dimension, staff_id, notes, organization_id
            )
-           VALUES ($1, $2, 'CYCLE_COUNT_ADJ', 'WAREHOUSE', $3, $4)`,
+           VALUES ($1, $2, 'CYCLE_COUNT_ADJ', 'WAREHOUSE', $3, $4, $5)`,
           [
             l.sku, variance, input.approvedByStaffId,
             `cycle_count close campaign=${input.campaignId} line=${l.id} expected=${l.expected_qty} counted=${l.counted_qty}`,
+            orgId,
           ],
         );
       }
       await client.query(
         `UPDATE bin_contents
             SET qty = $1, last_counted = NOW(), updated_at = NOW()
-          WHERE location_id = $2 AND sku = $3`,
-        [l.counted_qty, l.bin_id, l.sku],
+          WHERE location_id = $2 AND sku = $3 AND organization_id = $4`,
+        [l.counted_qty, l.bin_id, l.sku, orgId],
       );
       await client.query(
         `UPDATE cycle_count_lines
             SET status = 'approved', approved_by = $1, approved_at = NOW(), updated_at = NOW()
-          WHERE id = $2`,
-        [input.approvedByStaffId, l.id],
+          WHERE id = $2 AND organization_id = $3`,
+        [input.approvedByStaffId, l.id, orgId],
       );
       autoApproved += 1;
     }
@@ -328,15 +344,15 @@ export async function closeCampaign(input: CloseCampaignInput): Promise<CloseCam
     // and stay in the campaign for an admin to manually resolve later.
     const pendingQ = await client.query<{ n: number }>(
       `SELECT COUNT(*)::int AS n FROM cycle_count_lines
-        WHERE campaign_id = $1 AND status = 'pending_review'`,
-      [input.campaignId],
+        WHERE campaign_id = $1 AND organization_id = $2 AND status = 'pending_review'`,
+      [input.campaignId, orgId],
     );
 
     await client.query(
       `UPDATE cycle_count_campaigns
           SET status = 'closed', closed_at = NOW()
-        WHERE id = $1`,
-      [input.campaignId],
+        WHERE id = $1 AND organization_id = $2`,
+      [input.campaignId, orgId],
     );
 
     return {

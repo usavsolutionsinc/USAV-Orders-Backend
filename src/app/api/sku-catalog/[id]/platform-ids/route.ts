@@ -34,7 +34,7 @@ export async function POST(
       platformSku,
       platformItemId,
       accountName,
-    });
+    }, gate.ctx.organizationId);
 
     return NextResponse.json({ success: true, platformId: row });
   } catch (error: any) {
@@ -69,7 +69,7 @@ export async function PUT(
       platformSku,
       platformItemId,
       accountName,
-    });
+    }, gate.ctx.organizationId);
 
     if (!updated) {
       return NextResponse.json({ success: false, error: 'No changes or not found' }, { status: 404 });
@@ -103,7 +103,7 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'platformIdRowId is required' }, { status: 400 });
     }
 
-    const deleted = await deleteSkuPlatformId(Number(platformIdRowId));
+    const deleted = await deleteSkuPlatformId(Number(platformIdRowId), gate.ctx.organizationId);
     return NextResponse.json({ success: true, deleted });
   } catch (error: any) {
     console.error('Error in DELETE /api/sku-catalog/[id]/platform-ids:', error);

@@ -68,6 +68,9 @@ interface StickyActionBarProps {
   /** When true, the primary CTA stretches to the full inner width (e.g. sidebar
    *  receiving workspace). Hints/leading sit above when present. */
   primaryFullWidth?: boolean;
+  /** Pin `leading` / hints on their own row above the action buttons — for narrow
+   *  sidebar panels where a side-by-side layout clips the count label. */
+  stackLeading?: boolean;
   /** Floating variant — instead of a full-bleed bar, render just the CTA
    *  hovering above the scroll surface with no background/border/backdrop,
    *  aligned to `maxWidth` + gutter and stretched full-width.
@@ -129,6 +132,7 @@ export function StickyActionBar({
   density = 'comfortable',
   maxWidth = 'max-w-3xl',
   primaryFullWidth = false,
+  stackLeading = false,
   floating = false,
   className,
   actionRowClassName,
@@ -172,7 +176,8 @@ export function StickyActionBar({
 
   const hasLeadingContent = (hints?.length ?? 0) > 0 || leading != null;
   /** One wide CTA only — skips an empty leading flex column eating half the bar. */
-  const soloWideCta = primaryFullWidth && !secondary && !hasLeadingContent;
+  const soloWideCta = primaryFullWidth && !secondary && !hasLeadingContent && !stackLeading;
+  const stackLeadingLayout = stackLeading && hasLeadingContent;
 
   // Floating mode spans the same max-width as the panel body and stretches the
   // CTA full-width — just the button, no bar chrome behind it.
@@ -181,8 +186,8 @@ export function StickyActionBar({
 
   const clusterClass = floating
     ? 'flex w-full min-w-0 items-stretch gap-2'
-    : soloWideCta
-      ? 'flex min-w-0 flex-1 flex-row items-stretch gap-2'
+    : stackLeadingLayout || soloWideCta
+      ? 'flex min-w-0 w-full flex-1 flex-row items-stretch gap-2'
       : primaryFullWidth
         ? 'flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:flex-1 sm:flex-row sm:items-stretch sm:justify-end'
         : 'flex flex-1 items-center justify-end gap-2 sm:flex-initial';
@@ -333,19 +338,23 @@ export function StickyActionBar({
 
         <div
           className={`${
-            soloWideCta
-              ? 'flex w-full min-w-0 items-stretch gap-2'
-              : primaryFullWidth
-                ? 'flex w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4'
-                : 'flex w-full items-center justify-between gap-4'
+            stackLeadingLayout
+              ? 'flex w-full min-w-0 flex-col gap-2'
+              : soloWideCta
+                ? 'flex w-full min-w-0 items-stretch gap-2'
+                : primaryFullWidth
+                  ? 'flex w-full flex-col gap-3 sm:flex-row sm:items-stretch sm:justify-between sm:gap-4'
+                  : 'flex w-full items-center justify-between gap-4'
           } ${actionRowClassName ?? ''}`}
         >
-          {!soloWideCta ? (
+          {!soloWideCta && hasLeadingContent ? (
             <div
               className={
-                primaryFullWidth
-                  ? 'min-w-0 flex flex-wrap items-center gap-3 text-xs text-gray-500 sm:flex-1'
-                  : 'hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex'
+                stackLeadingLayout
+                  ? 'min-w-0 w-full text-xs text-gray-500'
+                  : primaryFullWidth
+                    ? 'min-w-0 flex flex-wrap items-center gap-3 text-xs text-gray-500 sm:flex-1'
+                    : 'hidden min-w-0 flex-1 items-center gap-3 text-xs text-gray-500 sm:flex'
               }
             >
               {leading ?? (

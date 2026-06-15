@@ -4,6 +4,7 @@ import { parseUnitId } from '@/lib/inventory/unit-id';
 import { resolveSkuCatalogRow } from '@/lib/inventory/resolve-sku-catalog';
 import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
 import { findByUnitUid, findByNormalizedSerial } from '@/lib/neon/serial-units-queries';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,8 @@ export const dynamic = 'force-dynamic';
  * The products label encodes the bare unit id (no GS1 link), so no qrUrl is
  * returned. Authentication: `print.label` permission.
  */
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, ctx) => {
+  const orgId = ctx.organizationId as OrgId;
   const body = await request.json().catch(() => ({}));
   const unitId = String(body?.unitId || '').trim();
   if (!unitId) {
@@ -39,7 +41,12 @@ export const POST = withAuth(async (request) => {
   try {
     // 1+2. Direct unit lookup — by minted uid, then by manufacturer serial.
     //      Either resolves the canonical stored uid (the reprint guarantee).
-    const unitRow = (await findByUnitUid(unitId)) ?? (await findByNormalizedSerial(unitId));
+    //      unit_uid / normalized_serial are string keys that collide across
+    //      tenants, so thread the caller's org into the (already org-aware)
+    //      serial-units helpers: they add an explicit organization_id predicate
+    //      and run GUC-wrapped, so a scan can't resolve another tenant's unit.
+    const unitRow =
+      (await findByUnitUid(unitId, orgId)) ?? (await findByNormalizedSerial(unitId, orgId));
     const canonicalUid = unitRow?.unit_uid ?? null;
 
     // 3. Resolve the catalog for title + gtin. Prefer the unit's own sku; else
@@ -50,7 +57,11 @@ export const POST = withAuth(async (request) => {
       parseUnitId(unitId)?.baseSku ||
       unitId;
 
-    const resolved = await resolveSkuCatalogRow(baseSku);
+    // Org-scoped: baseSku falls back to attacker-controlled body.sku /
+    // parseUnitId(unitId).baseSku, so the sku/platform_sku string-key match
+    // MUST be constrained to this tenant — otherwise an org-B caller could
+    // probe org A's catalog (sku/product_title/gtin) by supplying its SKU.
+    const resolved = await resolveSkuCatalogRow(baseSku, null, orgId);
     if (!resolved) {
       return NextResponse.json(
         { ok: false, error: `sku_catalog row not found for "${baseSku}"` },
@@ -58,10 +69,12 @@ export const POST = withAuth(async (request) => {
       );
     }
 
+    // Org-scoped: the lazy gtin-minting UPDATE is gated by organization_id,
+    // so we can never persist a gtin onto another tenant's sku_catalog row.
     const gtin =
       resolved.gtin && resolved.gtin.trim()
         ? resolved.gtin.trim()
-        : await getOrCreateInternalGtin(resolved.id);
+        : await getOrCreateInternalGtin(resolved.id, orgId);
 
     return NextResponse.json({
       ok: true,

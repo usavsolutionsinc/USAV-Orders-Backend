@@ -14,8 +14,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { checkRateLimit } from '@/lib/api-guard';
 import { syncShipmentsByIdsStreaming } from '@/lib/shipping/scheduler';
 import { NOT_ZOHO_RECEIVED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
@@ -31,7 +31,7 @@ export const maxDuration = 120;
 const BATCH_CAP = 250;        // hard ceiling on shipments polled per refresh
 const COOLDOWN_SECONDS = 25;  // collapse rapid re-clicks across operators
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'incoming-tracking-refresh',
@@ -54,8 +54,11 @@ export const POST = withAuth(async (req: NextRequest) => {
     try {
       // Cross-operator cooldown: if someone just refreshed, stream that result
       // (so the popover still shows "just refreshed") and stop — don't re-hit
-      // the carrier APIs.
-      const cached = await getCachedJson<CarrierSyncResult>('incoming-refresh', 'last');
+      // the carrier APIs. Per-org key (shared with the non-streaming twin so the
+      // popover can't bypass the cooldown) so one tenant's summary can't be
+      // streamed to — or suppress the cooldown of — another tenant.
+      const cooldownKey = `last:${ctx.organizationId}`;
+      const cached = await getCachedJson<CarrierSyncResult>('incoming-refresh', cooldownKey);
       if (cached) {
         stream.emit({ type: 'result', result: { ...cached, throttled: true } });
         return;
@@ -70,12 +73,20 @@ export const POST = withAuth(async (req: NextRequest) => {
       // receiving join the table uses (direct FK, else PO#-based fallback), so
       // the synced set matches the displayed set. Polling priority is
       // unchanged: out-for-delivery first, then never-polled, then in transit.
-      const { rows } = await pool.query<{
+      // Tenant scope: receiving_lines and receiving are tenant-owned, so we
+      // filter rl by org and align the receiving LATERAL's string-key PO#
+      // fallback join on organization_id (a bare PO#-string match would collide
+      // across tenants). zoho_po_mirror and shipping_tracking_numbers have no
+      // organization_id column yet (NEEDS-COL) — they're reached only through
+      // the org-scoped rl/r rows above, and the whole query is GUC-wrapped via
+      // tenantQuery so a future RLS FORCE backstops them.
+      const { rows } = await tenantQuery<{
         id: number;
         carrier: string;
         tracking_number_normalized: string | null;
         latest_status_category: NormalizedShipmentStatus | null;
       }>(
+        ctx.organizationId,
         `WITH incoming_shipments AS (
            SELECT DISTINCT ON (stn.id)
                   stn.id,
@@ -91,10 +102,11 @@ export const POST = withAuth(async (req: NextRequest) => {
                ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
              JOIN LATERAL (
                SELECT r.* FROM receiving r
-                WHERE r.id = rl.receiving_id
+                WHERE (r.id = rl.receiving_id
                    OR (rl.receiving_id IS NULL
                        AND r.source = 'zoho_po'
-                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+                       AND r.organization_id = rl.organization_id))
                 ORDER BY (r.id = rl.receiving_id) DESC,
                          (r.shipment_id IS NOT NULL) DESC,
                          r.id DESC
@@ -104,6 +116,7 @@ export const POST = withAuth(async (req: NextRequest) => {
             WHERE rl.workflow_status = 'EXPECTED'
               AND COALESCE(rl.quantity_received, 0) = 0
               AND rl.zoho_purchaseorder_id IS NOT NULL
+              AND rl.organization_id = $1
               AND ${NOT_ZOHO_RECEIVED_PREDICATE}
               AND stn.carrier IN ('UPS','USPS','FEDEX')
               AND COALESCE(stn.is_terminal, false) = false
@@ -119,6 +132,7 @@ export const POST = withAuth(async (req: NextRequest) => {
                         ELSE 4 END,
                    next_check_at ASC NULLS FIRST
           LIMIT ${BATCH_CAP + 1}`,
+        [ctx.organizationId],
       );
 
       const capped = rows.length > BATCH_CAP;
@@ -170,7 +184,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         capped,
       };
 
-      await setCachedJson('incoming-refresh', 'last', summary, COOLDOWN_SECONDS);
+      await setCachedJson('incoming-refresh', cooldownKey, summary, COOLDOWN_SECONDS);
       stream.emit({ type: 'result', result: summary });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Refresh failed';

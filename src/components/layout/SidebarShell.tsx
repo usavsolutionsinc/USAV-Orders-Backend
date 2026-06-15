@@ -77,6 +77,10 @@ export interface SidebarShellProps {
   /** Extra classes for the scroll body (e.g. `space-y-4`, `scrollbar-hide`, `pb-6`). */
   bodyClassName?: string;
 
+  /** Pinned block BELOW the scroll body, at the very bottom of the sidebar and
+   *  OUTSIDE the scroll — e.g. an always-available dock scan bar. */
+  footer?: ReactNode;
+
   /** Outer container element. Pass a framer `motion.div` for stagger panels;
    *  `containerProps` (initial/animate/variants) spread onto it. */
   as?: React.ElementType;
@@ -93,6 +97,7 @@ export function SidebarShell({
   headerBelow,
   children,
   bodyClassName,
+  footer,
   as: Container = 'div',
   containerProps,
   className,
@@ -131,6 +136,8 @@ export function SidebarShell({
           {children}
         </div>
       ) : null}
+
+      {footer ? <div className="shrink-0">{footer}</div> : null}
     </Container>
   );
 }

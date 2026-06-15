@@ -1,5 +1,20 @@
+import type { QueryResultRow } from 'pg';
 import pool from '../db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { upsertEbaySupplier, type SupplierRow } from './suppliers-queries';
+
+// ─── Tenancy note ────────────────────────────────────────────────────────────
+// None of sourcing_alerts / sourcing_candidates / part_acquisitions carry an
+// `organization_id` column yet (all child-scoped in
+// docs/tenancy/org-id-coverage.generated.md). They are scoped via their
+// `sku_catalog` parent (sku_id → sku_catalog.organization_id) where a SKU is
+// present, and otherwise rely on the per-request `app.current_org` GUC set by
+// tenantQuery/withTenantTransaction (the RLS backstop). Free-text demand rows
+// (sku_id NULL) have no SKU anchor, so the GUC is their only isolation today.
+// Functions reachable from out-of-fileset callers (jobs, the [id] candidate
+// route) take an OPTIONAL orgId and keep byte-identical raw-pool behavior when
+// it is omitted, so those callers do not break.
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -68,11 +83,14 @@ export interface SourcingCandidateRow {
 export async function getSourcingAlerts(params: {
   status?: string | null;
   skuId?: number | null;
-}): Promise<SourcingAlertListRow[]> {
+}, orgId: OrgId): Promise<SourcingAlertListRow[]> {
   const status = (params.status || '').trim();
   const skuId = params.skuId ?? null;
 
-  const result = await pool.query<SourcingAlertListRow>(
+  // Scope to this org's SKUs (sku_catalog carries the org). SKU-less free-text
+  // demand rows have no SKU anchor, so they pass through and rely on the GUC.
+  const result = await tenantQuery<SourcingAlertListRow>(
+    orgId,
     `SELECT
        sa.*,
        sc.sku,
@@ -89,18 +107,24 @@ export async function getSourcingAlerts(params: {
         OR ($1 <> '' AND sa.status = $1)
      )
        AND ($2::int IS NULL OR sa.sku_id = $2)
+       AND (sa.sku_id IS NULL OR sc.organization_id = $3)
      ORDER BY
        CASE sa.severity WHEN 'critical' THEN 0 WHEN 'warn' THEN 1 ELSE 2 END,
        sa.opened_at DESC`,
-    [status, skuId],
+    [status, skuId, orgId],
   );
   return result.rows;
 }
 
-export async function getSourcingAlertById(id: number): Promise<SourcingAlertRow | null> {
-  const result = await pool.query<SourcingAlertRow>(
-    `SELECT * FROM sourcing_alerts WHERE id = $1 LIMIT 1`,
-    [id],
+export async function getSourcingAlertById(id: number, orgId: OrgId): Promise<SourcingAlertRow | null> {
+  const result = await tenantQuery<SourcingAlertRow>(
+    orgId,
+    `SELECT sa.* FROM sourcing_alerts sa
+       LEFT JOIN sku_catalog sc ON sc.id = sa.sku_id
+      WHERE sa.id = $1
+        AND (sa.sku_id IS NULL OR sc.organization_id = $2)
+      LIMIT 1`,
+    [id, orgId],
   );
   return result.rows[0] ?? null;
 }
@@ -114,18 +138,25 @@ export async function updateSourcingAlertStatus(params: {
   status: 'open' | 'sourcing' | 'resolved' | 'dismissed';
   reason?: string | null;
   resolvedBy?: number | null;
-}): Promise<SourcingAlertRow | null> {
+}, orgId: OrgId): Promise<SourcingAlertRow | null> {
   const isClosing = params.status === 'resolved' || params.status === 'dismissed';
-  const result = await pool.query<SourcingAlertRow>(
-    `UPDATE sourcing_alerts
+  // Only transition alerts whose SKU belongs to this org (or SKU-less rows,
+  // gated by the GUC); a cross-tenant id never matches.
+  const result = await tenantQuery<SourcingAlertRow>(
+    orgId,
+    `UPDATE sourcing_alerts sa
         SET status      = $2,
             reason      = COALESCE($3, reason),
             resolved_at = CASE WHEN $4 THEN NOW() ELSE NULL END,
             resolved_by = CASE WHEN $4 THEN $5 ELSE NULL END,
             updated_at  = NOW()
-      WHERE id = $1
-      RETURNING *`,
-    [params.id, params.status, params.reason?.trim() || null, isClosing, params.resolvedBy ?? null],
+      WHERE sa.id = $1
+        AND (
+          sa.sku_id IS NULL
+          OR EXISTS (SELECT 1 FROM sku_catalog sc WHERE sc.id = sa.sku_id AND sc.organization_id = $6)
+        )
+      RETURNING sa.*`,
+    [params.id, params.status, params.reason?.trim() || null, isClosing, params.resolvedBy ?? null, orgId],
   );
   return result.rows[0] ?? null;
 }
@@ -152,42 +183,45 @@ export interface CreateDemandAlertInput {
  */
 export async function createDemandAlert(
   input: CreateDemandAlertInput,
+  orgId: OrgId,
 ): Promise<{ row: SourcingAlertRow; created: boolean }> {
   const alertType = (input.alertType || 'manual').trim();
   const demandSource = (input.demandSource || 'manual').trim();
   const skuId = input.skuId ?? null;
 
-  const ins = await pool.query<SourcingAlertRow>(
-    `INSERT INTO sourcing_alerts
-       (sku_id, bose_model_id, alert_type, severity, status, reason,
-        demand_source, demand_ref_type, demand_ref_id, target_qty, search_query)
-     VALUES ($1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10)
-     ON CONFLICT (sku_id, alert_type) WHERE status IN ('open','sourcing')
-     DO NOTHING
-     RETURNING *`,
-    [
-      skuId,
-      input.boseModelId ?? null,
-      alertType,
-      (input.severity || 'warn').trim(),
-      input.reason?.trim() || null,
-      demandSource,
-      input.demandRefType ?? null,
-      input.demandRefId ?? null,
-      input.targetQty ?? null,
-      input.searchQuery?.trim() || null,
-    ],
-  );
-  if (ins.rows[0]) return { row: ins.rows[0], created: true };
+  return withTenantTransaction(orgId, async (client) => {
+    const ins = await client.query<SourcingAlertRow>(
+      `INSERT INTO sourcing_alerts
+         (sku_id, bose_model_id, alert_type, severity, status, reason,
+          demand_source, demand_ref_type, demand_ref_id, target_qty, search_query)
+       VALUES ($1,$2,$3,$4,'open',$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (sku_id, alert_type) WHERE status IN ('open','sourcing')
+       DO NOTHING
+       RETURNING *`,
+      [
+        skuId,
+        input.boseModelId ?? null,
+        alertType,
+        (input.severity || 'warn').trim(),
+        input.reason?.trim() || null,
+        demandSource,
+        input.demandRefType ?? null,
+        input.demandRefId ?? null,
+        input.targetQty ?? null,
+        input.searchQuery?.trim() || null,
+      ],
+    );
+    if (ins.rows[0]) return { row: ins.rows[0], created: true };
 
-  // Conflict on the live (sku_id, alert_type) index — return the existing row.
-  const existing = await pool.query<SourcingAlertRow>(
-    `SELECT * FROM sourcing_alerts
-      WHERE sku_id = $1 AND alert_type = $2 AND status IN ('open','sourcing')
-      ORDER BY opened_at DESC LIMIT 1`,
-    [skuId, alertType],
-  );
-  return { row: existing.rows[0], created: false };
+    // Conflict on the live (sku_id, alert_type) index — return the existing row.
+    const existing = await client.query<SourcingAlertRow>(
+      `SELECT * FROM sourcing_alerts
+        WHERE sku_id = $1 AND alert_type = $2 AND status IN ('open','sourcing')
+        ORDER BY opened_at DESC LIMIT 1`,
+      [skuId, alertType],
+    );
+    return { row: existing.rows[0], created: false };
+  });
 }
 
 // ─── Candidates ──────────────────────────────────────────────────────────────
@@ -199,7 +233,7 @@ export async function getSourcingCandidates(params: {
   status?: string | null;
   limit?: number;
   offset?: number;
-}): Promise<{ items: SourcingCandidateRow[]; total: number }> {
+}, orgId: OrgId): Promise<{ items: SourcingCandidateRow[]; total: number }> {
   const skuId = params.skuId ?? null;
   const boseModelId = params.boseModelId ?? null;
   const alertId = params.sourcingAlertId ?? null;
@@ -207,26 +241,50 @@ export async function getSourcingCandidates(params: {
   const limit = Math.min(params.limit || 100, 500);
   const offset = params.offset || 0;
 
+  // Scope to this org's SKUs (sku_catalog carries the org); SKU-less manual
+  // candidates have no SKU anchor and rely on the GUC.
   const where = `
-    WHERE ($1::int IS NULL OR sku_id = $1)
-      AND ($2::int IS NULL OR bose_model_id = $2)
-      AND ($3::int IS NULL OR sourcing_alert_id = $3)
-      AND ($4 = '' OR status = $4)`;
+    FROM sourcing_candidates cnd
+    WHERE ($1::int IS NULL OR cnd.sku_id = $1)
+      AND ($2::int IS NULL OR cnd.bose_model_id = $2)
+      AND ($3::int IS NULL OR cnd.sourcing_alert_id = $3)
+      AND ($4 = '' OR cnd.status = $4)
+      AND (
+        cnd.sku_id IS NULL
+        OR EXISTS (SELECT 1 FROM sku_catalog sc WHERE sc.id = cnd.sku_id AND sc.organization_id = $5)
+      )`;
 
-  const result = await pool.query<SourcingCandidateRow>(
-    `SELECT * FROM sourcing_candidates ${where}
-      ORDER BY captured_at DESC
-      LIMIT $5 OFFSET $6`,
-    [skuId, boseModelId, alertId, status, limit, offset],
+  const result = await tenantQuery<SourcingCandidateRow>(
+    orgId,
+    `SELECT cnd.* ${where}
+      ORDER BY cnd.captured_at DESC
+      LIMIT $6 OFFSET $7`,
+    [skuId, boseModelId, alertId, status, orgId, limit, offset],
   );
-  const countResult = await pool.query<{ total: number }>(
-    `SELECT COUNT(*)::int AS total FROM sourcing_candidates ${where}`,
-    [skuId, boseModelId, alertId, status],
+  const countResult = await tenantQuery<{ total: number }>(
+    orgId,
+    `SELECT COUNT(*)::int AS total ${where}`,
+    [skuId, boseModelId, alertId, status, orgId],
   );
   return { items: result.rows, total: countResult.rows[0]?.total || 0 };
 }
 
-export async function getSourcingCandidateById(id: number): Promise<SourcingCandidateRow | null> {
+export async function getSourcingCandidateById(id: number, orgId?: OrgId): Promise<SourcingCandidateRow | null> {
+  // Optional orgId: candidates/[id]/route.ts (out of fileset) still calls this
+  // without one. With orgId we org-scope via sku_catalog under the GUC; without
+  // it we keep the original raw-pool behavior byte-identical.
+  if (orgId) {
+    const result = await tenantQuery<SourcingCandidateRow>(
+      orgId,
+      `SELECT cnd.* FROM sourcing_candidates cnd
+         LEFT JOIN sku_catalog sc ON sc.id = cnd.sku_id
+        WHERE cnd.id = $1
+          AND (cnd.sku_id IS NULL OR sc.organization_id = $2)
+        LIMIT 1`,
+      [id, orgId],
+    );
+    return result.rows[0] ?? null;
+  }
   const result = await pool.query<SourcingCandidateRow>(
     `SELECT * FROM sourcing_candidates WHERE id = $1 LIMIT 1`,
     [id],
@@ -260,13 +318,20 @@ export interface SaveCandidateInput {
  */
 export async function saveCandidate(
   input: SaveCandidateInput,
+  orgId?: OrgId,
 ): Promise<{ row: SourcingCandidateRow; created: boolean }> {
   const source = (input.source || 'ebay').trim();
   const externalId = input.externalId?.trim() || null;
 
+  // Optional orgId: the scour/replenishment jobs (out of fileset) call this
+  // without one. With orgId the INSERTs run under the GUC (the RLS backstop);
+  // without it we keep the original raw-pool path byte-identical.
+  const exec = <T extends QueryResultRow>(sql: string, p: unknown[]) =>
+    orgId ? tenantQuery<T>(orgId, sql, p) : pool.query<T>(sql, p);
+
   // eBay hit with an externalId: upsert on the unique index.
   if (externalId) {
-    const result = await pool.query<SourcingCandidateRow & { inserted: boolean }>(
+    const result = await exec<SourcingCandidateRow & { inserted: boolean }>(
       `INSERT INTO sourcing_candidates
          (source, external_id, title, url, image_url, condition, price_cents, shipping_cents,
           currency, seller_name, sku_id, bose_model_id, sourcing_alert_id, supplier_id, status, raw)
@@ -301,7 +366,7 @@ export async function saveCandidate(
   }
 
   // Manual candidate — always insert.
-  const result = await pool.query<SourcingCandidateRow>(
+  const result = await exec<SourcingCandidateRow>(
     `INSERT INTO sourcing_candidates
        (source, title, url, image_url, condition, price_cents, shipping_cents, currency,
         seller_name, sku_id, bose_model_id, sourcing_alert_id, supplier_id, status, raw)
@@ -328,6 +393,7 @@ export async function updateCandidate(
     supplierId?: number | null;
     sourcingAlertId?: number | null;
   },
+  orgId?: OrgId,
 ): Promise<SourcingCandidateRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -343,12 +409,32 @@ export async function updateCandidate(
   if (updates.supplierId !== undefined) push('supplier_id', updates.supplierId ?? null);
   if (updates.sourcingAlertId !== undefined) push('sourcing_alert_id', updates.sourcingAlertId ?? null);
 
-  if (sets.length === 0) return getSourcingCandidateById(id);
+  if (sets.length === 0) return getSourcingCandidateById(id, orgId);
   sets.push(`updated_at = NOW()`);
   values.push(id);
+  const idIdx = idx;
+
+  // Optional orgId: candidates/[id]/route.ts (out of fileset) calls without one
+  // (byte-identical raw-pool path). With orgId, scope the UPDATE to this org's
+  // SKUs (or SKU-less rows under the GUC) so a cross-tenant id never matches.
+  if (orgId) {
+    values.push(orgId);
+    const result = await tenantQuery<SourcingCandidateRow>(
+      orgId,
+      `UPDATE sourcing_candidates cnd SET ${sets.join(', ')}
+        WHERE cnd.id = $${idIdx}
+          AND (
+            cnd.sku_id IS NULL
+            OR EXISTS (SELECT 1 FROM sku_catalog sc WHERE sc.id = cnd.sku_id AND sc.organization_id = $${idIdx + 1})
+          )
+        RETURNING cnd.*`,
+      values,
+    );
+    return result.rows[0] ?? null;
+  }
 
   const result = await pool.query<SourcingCandidateRow>(
-    `UPDATE sourcing_candidates SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
+    `UPDATE sourcing_candidates SET ${sets.join(', ')} WHERE id = $${idIdx} RETURNING *`,
     values,
   );
   return result.rows[0] ?? null;
@@ -385,12 +471,18 @@ export interface ImportCandidateResult {
  */
 export async function getAcquisitionByCandidateId(
   candidateId: number,
+  orgId: OrgId,
 ): Promise<PartAcquisitionRow | null> {
-  const result = await pool.query<PartAcquisitionRow>(
-    `SELECT * FROM part_acquisitions
-      WHERE sourcing_candidate_id = $1 AND receiving_id IS NOT NULL
-      ORDER BY id ASC LIMIT 1`,
-    [candidateId],
+  // part_acquisitions has no org column; scope via its sku_catalog parent
+  // (sku_id is NOT NULL on this table) so a cross-tenant candidate id can't
+  // surface another org's acquisition. Runs under the GUC.
+  const result = await tenantQuery<PartAcquisitionRow>(
+    orgId,
+    `SELECT pa.* FROM part_acquisitions pa
+       JOIN sku_catalog sc ON sc.id = pa.sku_id AND sc.organization_id = $2
+      WHERE pa.sourcing_candidate_id = $1 AND pa.receiving_id IS NOT NULL
+      ORDER BY pa.id ASC LIMIT 1`,
+    [candidateId, orgId],
   );
   return result.rows[0] ?? null;
 }
@@ -415,13 +507,14 @@ export async function importCandidate(params: {
   carrier?: string | null;
   supplierId?: number | null;
   staffId?: number | null;
-}): Promise<ImportCandidateResult> {
+}, orgId: OrgId): Promise<ImportCandidateResult> {
   const { candidate } = params;
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  // One tenant transaction: the GUC is set for the whole import so every write
+  // (incl. the org-bearing `receiving` header) is attributed to this org.
+  return withTenantTransaction<ImportCandidateResult>(orgId, async (client) => {
     // 1. Supplier — explicit override, existing link, or auto-create from seller.
+    //    upsertEbaySupplier runs its own tenant-scoped statement (separate
+    //    connection, as before) so thread the orgId through.
     let supplier: SupplierRow | null = null;
     let supplierId = params.supplierId ?? candidate.supplier_id ?? null;
     if (!supplierId && candidate.seller_name) {
@@ -430,7 +523,7 @@ export async function importCandidate(params: {
           ? `seller:${candidate.seller_name.trim()}`
           : candidate.seller_name.trim(),
         name: candidate.seller_name,
-      });
+      }, orgId);
       supplier = s;
       supplierId = s.id;
     } else if (supplierId) {
@@ -439,19 +532,23 @@ export async function importCandidate(params: {
     }
 
     // 2. Receiving header (placeholder package for the inbound unbox).
+    //    receiving carries organization_id — stamp it so the inbound row is
+    //    owned by this org (was a NULL-org write bug before).
     const recv = await client.query<{ id: number }>(
       `INSERT INTO receiving
-         (source, source_platform, carrier, needs_test, notes, updated_at)
-       VALUES ('sourcing_import', 'ebay', $1, true, $2, NOW())
+         (source, source_platform, carrier, needs_test, notes, organization_id, updated_at)
+       VALUES ('sourcing_import', 'ebay', $1, true, $2, $3, NOW())
        RETURNING id`,
       [
         params.carrier?.trim() || null,
         `Sourcing import: ${candidate.title}${candidate.url ? ` (${candidate.url})` : ''}`,
+        orgId,
       ],
     );
     const receivingId = Number(recv.rows[0].id);
 
-    // 3. Acquisition ledger row.
+    // 3. Acquisition ledger row (no org column; scoped via its sku_catalog
+    //    parent + the GUC).
     const acq = await client.query<PartAcquisitionRow>(
       `INSERT INTO part_acquisitions
          (sourcing_candidate_id, supplier_id, sku_id, receiving_id,
@@ -469,16 +566,18 @@ export async function importCandidate(params: {
       ],
     );
 
-    // 4. Stamp rolling acquisition cost as the margin baseline.
+    // 4. Stamp rolling acquisition cost as the margin baseline — only on THIS
+    //    org's SKU (sku_catalog carries the org).
     const costCents = params.acquisitionCostCents ?? candidate.price_cents ?? null;
     if (costCents != null) {
       await client.query(
-        `UPDATE sku_catalog SET last_known_cost_cents = $1, updated_at = NOW() WHERE id = $2`,
-        [costCents, params.skuId],
+        `UPDATE sku_catalog SET last_known_cost_cents = $1, updated_at = NOW()
+          WHERE id = $2 AND organization_id = $3`,
+        [costCents, params.skuId, orgId],
       );
     }
 
-    // 5. Mark candidate ordered + link supplier/sku.
+    // 5. Mark candidate ordered + link supplier/sku (under the GUC).
     const cand = await client.query<SourcingCandidateRow>(
       `UPDATE sourcing_candidates
           SET status = 'ordered',
@@ -490,17 +589,11 @@ export async function importCandidate(params: {
       [candidate.id, supplierId, params.skuId],
     );
 
-    await client.query('COMMIT');
     return {
       receivingId,
       acquisition: acq.rows[0],
       supplier,
       candidate: cand.rows[0],
     };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }

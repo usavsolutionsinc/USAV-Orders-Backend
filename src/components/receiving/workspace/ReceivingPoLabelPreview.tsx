@@ -1,105 +1,24 @@
 'use client';
 
-import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix';
-import {
-  receivingLabelPlatformDisplay,
-  receivingLabelPoCornerDisplay,
-} from '@/lib/print/printReceivingLabel';
-import {
-  ConditionHeaderDisplay,
-  resolveReceivingLabelQrValue,
-  type ReceivingLabelPayload,
-} from './receiving-label-helpers';
+import { LabelFacePreview } from '@/components/labels/LabelFacePreview';
+import { receivingPayloadToFace, type ReceivingLabelPayload } from '@/lib/print/printReceivingLabel';
 
 /**
- * On-screen render of the printed PO / carton label. Mirrors
- * `printReceivingLabel`'s output so techs can verify before printing.
+ * On-screen render of the printed PO / carton label. A thin adapter over the
+ * shared {@link LabelFacePreview}: maps the carton payload onto the common
+ * {@link LabelFaceModel} via `receivingPayloadToFace` — the exact same model the
+ * print paths use — so the preview and the printed sticker can't drift.
  * `embedded` strips the outer card chrome for use inside the print menu.
  */
 export function ReceivingPoLabelPreview({
-  receivingId,
-  scanValue,
-  platform,
-  notes,
-  zendeskTicket,
-  trackingNumber,
-  conditionCode,
-  receivingType,
-  receivingTypeLabel,
-  date,
   embedded,
+  ...payload
 }: ReceivingLabelPayload & { embedded?: boolean }) {
-  const safe = scanValue.trim();
-  const qrPayload = resolveReceivingLabelQrValue({
-    receivingId,
-    scanValue,
-    platform,
-    notes,
-    zendeskTicket,
-    trackingNumber,
-    conditionCode,
-    date,
-  });
-  if (!qrPayload) return null;
-  // HRI caption under the matrix — mirrors the printed label (see
-  // receiving-label-helpers printReceivingLabel). Shows the typeable `R-{id}`.
-  const handleHri = /^(?:R|RCV)-\d+$/i.test(qrPayload) ? qrPayload.toUpperCase() : '';
-  const innerShell = embedded
-    ? 'w-full bg-white'
-    : 'w-full rounded-lg border border-gray-200/80 bg-white px-3 py-3 shadow-sm';
-  const inner = (
-    <div className={innerShell}>
-      {/* Row height is pinned to the 96px (6rem) data matrix so the text
-          column spans the exact same box. With no vertical padding, the
-          `justify-between` top row (platform · date) sits flush with the
-          matrix's top edge and the bottom row (condition · PO#) with its
-          bottom edge — the numbers line up with the QR code's edges. */}
-      <div className="flex min-h-[6rem] flex-nowrap items-stretch gap-4">
-        <div className="min-w-0 flex flex-1 flex-col justify-between">
-          <div className="flex items-baseline justify-between gap-2 text-sm leading-none">
-            <span className="truncate font-bold text-gray-700">
-              {receivingLabelPlatformDisplay({ platform, receivingType, receivingTypeLabel })}
-            </span>
-            <span className="shrink-0 tabular-nums font-semibold text-gray-600">{date}</span>
-          </div>
-          <div className="flex min-h-0 flex-1 min-w-0 items-center justify-center px-0.5">
-            <span className="line-clamp-3 w-full text-center text-caption font-semibold leading-tight tracking-normal text-gray-900 normal-case">
-              {notes.trim()}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-2 text-base leading-none">
-            <ConditionHeaderDisplay code={conditionCode} />
-            <span className="shrink-0 tabular-nums font-black text-gray-900">
-              {receivingLabelPoCornerDisplay({
-                receivingId,
-                scanValue: safe,
-                platform,
-                notes,
-                zendeskTicket,
-                trackingNumber,
-                conditionCode,
-                date,
-              })}
-            </span>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-center justify-center gap-0.5 [&_svg]:block">
-          {/* quietZone=0 makes the ink fill the box edge-to-edge so the
-              top (date) and bottom (PO#) rows line up with the matrix's
-              visible top/bottom edges. This is a preview, not the scanned
-              symbol — the printed label keeps its scanner-safe quiet zone. */}
-          <Gs1DataMatrix value={qrPayload} size={84} symbology="datamatrix" quietZone={0} />
-          {handleHri ? (
-            <span className="font-mono text-[7px] font-extrabold leading-none tracking-wide text-gray-900">
-              {handleHri}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
+  const face = receivingPayloadToFace(payload);
+  if (!face.matrix.value) return null;
+
   if (embedded) {
-    return inner;
+    return <LabelFacePreview model={face} embedded />;
   }
   return (
     <div className="border-t border-gray-200 bg-gray-50">
@@ -109,7 +28,9 @@ export function ReceivingPoLabelPreview({
           Review &amp; print
         </span>
       </div>
-      <div className="px-3 pb-3">{inner}</div>
+      <div className="px-3 pb-3">
+        <LabelFacePreview model={face} />
+      </div>
     </div>
   );
 }

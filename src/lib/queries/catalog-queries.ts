@@ -1,5 +1,14 @@
 import { queryOptions } from '@tanstack/react-query';
-import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
+import type { PlatformRow, PlatformAccountRow, TypeRow } from '@/lib/neon/catalog-queries';
+
+/** One bindable workflow-graph node (from /api/catalog/workflow-nodes). */
+export interface WorkflowNodeOption {
+  id: string;
+  type: string;
+  label: string;
+  definitionId: number;
+  definitionName: string | null;
+}
 
 /**
  * React Query factory for the org platform / type catalog. Keys + queryOptions
@@ -17,6 +26,9 @@ export const catalogKeys = {
   all: ['catalog'] as const,
   platforms: (includeInactive = false) => ['catalog', 'platforms', includeInactive] as const,
   types: (includeInactive = false) => ['catalog', 'types', includeInactive] as const,
+  accounts: (includeInactive = false, platformId?: number) =>
+    ['catalog', 'platform-accounts', includeInactive, platformId ?? null] as const,
+  workflowNodes: () => ['catalog', 'workflow-nodes'] as const,
 };
 
 export function platformsQuery(opts: { includeInactive?: boolean } = {}) {
@@ -42,5 +54,31 @@ export function typesQuery(opts: { includeInactive?: boolean } = {}) {
       ),
     staleTime: 5 * 60_000,
     select: (d) => d.types ?? [],
+  });
+}
+
+export function platformAccountsQuery(opts: { includeInactive?: boolean; platformId?: number } = {}) {
+  const inc = opts.includeInactive ?? false;
+  const params = new URLSearchParams();
+  if (inc) params.set('includeInactive', 'true');
+  if (opts.platformId) params.set('platformId', String(opts.platformId));
+  const qs = params.toString();
+  return queryOptions({
+    queryKey: catalogKeys.accounts(inc, opts.platformId),
+    queryFn: () =>
+      fetchJson<{ success: boolean; accounts: PlatformAccountRow[] }>(
+        `/api/catalog/platform-accounts${qs ? `?${qs}` : ''}`,
+      ),
+    staleTime: 5 * 60_000,
+    select: (d) => d.accounts ?? [],
+  });
+}
+
+export function workflowNodesQuery() {
+  return queryOptions({
+    queryKey: catalogKeys.workflowNodes(),
+    queryFn: () => fetchJson<{ success: boolean; nodes: WorkflowNodeOption[] }>('/api/catalog/workflow-nodes'),
+    staleTime: 5 * 60_000,
+    select: (d) => d.nodes ?? [],
   });
 }

@@ -92,6 +92,12 @@ async function createOrUpdateOrderFromEbayTracking(params: {
   const orderDateRaw = params.ebayOrder?.creationDate ? new Date(params.ebayOrder.creationDate) : null;
   const orderDate = orderDateRaw && !Number.isNaN(orderDateRaw.getTime()) ? orderDateRaw : null;
 
+  // Realized order total from the eBay Fulfillment order's pricingSummary.total (Amount: { value, currency }).
+  const rawAmount = params.ebayOrder?.pricingSummary?.total?.value;
+  const parsedAmount = rawAmount != null ? Number(rawAmount) : null;
+  const saleAmount = parsedAmount != null && !Number.isNaN(parsedAmount) ? parsedAmount : null;
+  const currency = String(params.ebayOrder?.pricingSummary?.total?.currency || '').trim() || 'USD';
+
   const trackingKey18 = normalizeTrackingKey18(params.trackingNumber);
   if (!trackingKey18) return 'updated';
 
@@ -171,9 +177,11 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       out_of_stock,
       account_source,
       order_date,
-      sku_catalog_id
+      sku_catalog_id,
+      sale_amount,
+      currency
     ) VALUES (
-      $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12
+      $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14
     )
     ON CONFLICT ON CONSTRAINT idx_orders_unique_account_order DO UPDATE
       SET product_title = COALESCE(NULLIF(EXCLUDED.product_title, 'No title'), orders.product_title),
@@ -199,6 +207,8 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       params.accountName,
       orderDate,
       skuCatalogId,
+      saleAmount,
+      currency,
     ]
   );
 

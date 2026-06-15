@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Returns } from '@/lib/feature-flags';
 import { parseScannedUrl } from '@/lib/scan-resolver';
 import { processReturnsIntake } from '@/lib/inventory/returns';
 
@@ -26,17 +25,9 @@ import { processReturnsIntake } from '@/lib/inventory/returns';
  * Shared transaction in src/lib/inventory/returns.ts (used by the
  * /admin/inventory/returns admin page too).
  *
- * Gated by INVENTORY_V2_RETURNS; off-flag returns 503.
  * Permission: receiving.mark_received.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Returns()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_RETURNS flag is OFF', flag: 'INVENTORY_V2_RETURNS' },
-      { status: 503 },
-    );
-  }
-
   const body = await request.json().catch(() => ({}));
 
   const rawSerials: string[] = Array.isArray(body?.serials)

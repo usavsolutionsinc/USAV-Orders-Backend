@@ -59,8 +59,12 @@ export async function notifyWarrantyTransition(args: {
     });
 
     await pool.query(
-      `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
-       VALUES ($1, 'NOTIFICATION_SENT', $2::jsonb, $3)`,
+      // organization_id is derived from the parent claim so the row is org-stamped
+      // even on the raw (non-GUC) pool — warranty_claim_events.organization_id is
+      // NOT NULL with a loud-fail GUC default.
+      `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+       VALUES ($1, 'NOTIFICATION_SENT', $2::jsonb, $3,
+         (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
       [args.claim.id, JSON.stringify({ event: args.event, recipients: [creator], channel: 'inbox' }), args.actorStaffId],
     );
   } catch (err) {
@@ -91,8 +95,12 @@ export async function notifyWarrantyExpired(
           source: 'warranty-logger.cron',
         });
         await pool.query(
-          `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
-           VALUES ($1, 'NOTIFICATION_SENT', $2::jsonb, NULL)`,
+          // organization_id is derived from the parent claim so the row is org-stamped
+          // even on the raw (non-GUC) pool — warranty_claim_events.organization_id is
+          // NOT NULL with a loud-fail GUC default.
+          `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+           VALUES ($1, 'NOTIFICATION_SENT', $2::jsonb, NULL,
+             (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
           [c.id, JSON.stringify({ event: 'expired', recipients: [c.createdByStaffId], channel: 'inbox' })],
         );
       } catch (err) {

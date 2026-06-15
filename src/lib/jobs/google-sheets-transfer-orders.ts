@@ -2,14 +2,16 @@ import { sheets as googleSheets } from '@googleapis/sheets';
 import { db } from '@/lib/drizzle/db';
 import pool from '@/lib/db';
 import { customers as customersTable, orders as ordersTable } from '@/lib/drizzle/schema';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { transitionalUsavOrgId, tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { fetchEcwidTransferRows } from '@/lib/ecwid/fetch-transfer-rows';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
 
@@ -86,6 +88,8 @@ const FIXED_COL_INDICES_DEFAULT = {
   tracking: 7,
   note: 8,
   platform: 9,
+  salePrice: -1,
+  currency: -1,
 };
 
 /** Sheet row 1 headers mapped to ingestion fields (same candidates as findHeaderIndex uses). */
@@ -100,6 +104,16 @@ const SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; ca
   { field: 'tracking', candidates: ['Tracking', 'Shipment - Tracking Number'] },
   { field: 'note', candidates: ['Note', 'Notes'] },
   { field: 'platform', candidates: ['Platform', 'Account Source', 'Channel'] },
+];
+
+/**
+ * Optional header bindings — resolved like SHEET_HEADER_BINDINGS but NOT
+ * required: a missing column here leaves the index at -1 (treated as absent)
+ * instead of failing the whole sync. Used for sale price + currency.
+ */
+const OPTIONAL_SHEET_HEADER_BINDINGS: { field: keyof typeof FIXED_COL_INDICES_DEFAULT; candidates: string[] }[] = [
+  { field: 'salePrice', candidates: ['Sale Price', 'Price', 'Amount', 'Order Total', 'Item Total', 'Sale Amount'] },
+  { field: 'currency', candidates: ['Currency', 'Currency Code'] },
 ];
 
 function findHeaderIndex(headers: any[], candidates: string[]) {
@@ -134,7 +148,48 @@ function getTodayDate() {
   return today;
 }
 
-async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null) {
+async function upsertOrderDeadline(orderId: number, deadlineAt: Date | null, orgId?: OrgId) {
+  // Tenant path: GUC-wrap + scope reads/writes to the supplied org so the
+  // upsert can't touch a different tenant's work_assignments row.
+  if (orgId) {
+    await withTenantTransaction(orgId, async (client) => {
+      const existing = await client.query(
+        `SELECT id
+         FROM work_assignments
+         WHERE entity_type = 'ORDER'
+           AND entity_id   = $1
+           AND work_type   = 'TEST'
+           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+           AND organization_id = $2
+         ORDER BY
+           CASE status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 END,
+           id DESC
+         LIMIT 1`,
+        [orderId, orgId]
+      );
+
+      if (existing.rows.length > 0) {
+        await client.query(
+          `UPDATE work_assignments
+           SET deadline_at = $1, updated_at = NOW()
+           WHERE id = $2
+             AND organization_id = $3`,
+          [deadlineAt, existing.rows[0].id, orgId]
+        );
+        return;
+      }
+
+      await client.query(
+        `INSERT INTO work_assignments
+           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at)
+         VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3)
+         ON CONFLICT DO NOTHING`,
+        [orgId, orderId, deadlineAt]
+      );
+    });
+    return;
+  }
+
   const existing = await pool.query(
     `SELECT id
      FROM work_assignments
@@ -173,6 +228,7 @@ async function upsertOrderShipmentLinks(
   shipmentIds: number[],
   primaryShipmentId: number | null,
   source: string,
+  orgId?: OrgId,
 ) {
   const uniqueIds = Array.from(
     new Set(
@@ -182,6 +238,34 @@ async function upsertOrderShipmentLinks(
     ),
   );
   if (uniqueIds.length === 0) return;
+
+  // Tenant path: GUC-wrap + scope the clear-primary UPDATE to this org and
+  // stamp organization_id on every inserted link row. order_shipment_links is
+  // org-bearing in the DB (parent = orders.order_row_id), so the stamp keeps a
+  // tenant from attaching links onto another tenant's order row.
+  if (orgId) {
+    await withTenantTransaction(orgId, async (client) => {
+      await client.query(
+        `UPDATE order_shipment_links
+         SET is_primary = false
+         WHERE order_row_id = $1
+           AND organization_id = $2`,
+        [orderRowId, orgId],
+      );
+
+      await client.query(
+        `INSERT INTO order_shipment_links (organization_id, order_row_id, shipment_id, is_primary, source)
+         SELECT $5::uuid, $1::int, s.shipment_id, (s.shipment_id = $2::bigint), $3::text
+         FROM UNNEST($4::bigint[]) AS s(shipment_id)
+         ON CONFLICT (order_row_id, shipment_id) DO UPDATE
+           SET is_primary = EXCLUDED.is_primary,
+               source = EXCLUDED.source,
+               updated_at = NOW()`,
+        [orderRowId, primaryShipmentId, source, uniqueIds, orgId],
+      );
+    });
+    return;
+  }
 
   await pool.query(
     `UPDATE order_shipment_links
@@ -221,8 +305,16 @@ export async function runGoogleSheetsTransferOrders(
   manualSheetName?: string,
   source: TransferOrdersSource = 'all',
   progress: SyncProgress = noopProgress,
+  orgId?: OrgId,
 ): Promise<GoogleSheetsTransferOrdersJobResult> {
   const startedAt = Date.now();
+
+  // When orgId is omitted we keep EXACTLY today's behavior (raw pool + neon-http
+  // Drizzle `db` + transitionalUsavOrgId() stamping). When orgId is supplied we
+  // route every tenant-table read/write through the GUC-carrying helpers
+  // (tenantQuery / withTenantDrizzle) and scope/stamp by org. The `effectiveOrgId`
+  // is what gets stamped on writes either way.
+  const effectiveOrgId: OrgId = orgId ?? transitionalUsavOrgId();
 
   progress({ type: 'phase', phase: 'starting' });
 
@@ -283,6 +375,10 @@ export async function runGoogleSheetsTransferOrders(
       const headerRow = sourceRows[0];
       colIndices = { ...FIXED_COL_INDICES_DEFAULT };
       for (const { field, candidates } of SHEET_HEADER_BINDINGS) {
+        colIndices[field] = findHeaderIndex(headerRow, candidates);
+      }
+      // Optional columns: resolve but never treat as missing (default -1).
+      for (const { field, candidates } of OPTIONAL_SHEET_HEADER_BINDINGS) {
         colIndices[field] = findHeaderIndex(headerRow, candidates);
       }
 
@@ -382,13 +478,25 @@ export async function runGoogleSheetsTransferOrders(
       new Set(sourceTrackings.map((tracking) => normalizeTrackingNumber(tracking)).filter(Boolean))
     );
 
+    // shipping_tracking_numbers has NO organization_id column (NEEDS-COL) and
+    // these standalone lookups have no org-bearing parent to JOIN, so when an
+    // orgId is supplied we GUC-wrap only (tenantQuery) and leave the predicate
+    // unchanged; until the column lands this is the strongest scoping available.
     const existingShipmentsResult = sourceTrackingNormalized.length > 0
-      ? await pool.query(
-          `SELECT id, tracking_number_raw, tracking_number_normalized
-           FROM shipping_tracking_numbers
-           WHERE tracking_number_normalized = ANY($1::text[])`,
-          [sourceTrackingNormalized]
-        )
+      ? (orgId
+          ? await tenantQuery(
+              orgId,
+              `SELECT id, tracking_number_raw, tracking_number_normalized
+               FROM shipping_tracking_numbers
+               WHERE tracking_number_normalized = ANY($1::text[])`,
+              [sourceTrackingNormalized]
+            )
+          : await pool.query(
+              `SELECT id, tracking_number_raw, tracking_number_normalized
+               FROM shipping_tracking_numbers
+               WHERE tracking_number_normalized = ANY($1::text[])`,
+              [sourceTrackingNormalized]
+            ))
       : { rows: [] as Array<{ id: number; tracking_number_raw: string | null; tracking_number_normalized: string }> };
 
     const shipmentByNormalized = new Map<string, { id: number; tracking: string }>();
@@ -435,12 +543,21 @@ export async function runGoogleSheetsTransferOrders(
 
     const missingShipmentIds = resolvedShipmentIds.filter((id) => !shipmentTrackingById.has(id));
     if (missingShipmentIds.length > 0) {
-      const resolvedShipmentsResult = await pool.query(
-        `SELECT id, tracking_number_raw, tracking_number_normalized
-         FROM shipping_tracking_numbers
-         WHERE id = ANY($1::bigint[])`,
-        [missingShipmentIds]
-      );
+      // shipping_tracking_numbers: NEEDS-COL, no org-bearing parent here → GUC-wrap only.
+      const resolvedShipmentsResult = orgId
+        ? await tenantQuery(
+            orgId,
+            `SELECT id, tracking_number_raw, tracking_number_normalized
+             FROM shipping_tracking_numbers
+             WHERE id = ANY($1::bigint[])`,
+            [missingShipmentIds]
+          )
+        : await pool.query(
+            `SELECT id, tracking_number_raw, tracking_number_normalized
+             FROM shipping_tracking_numbers
+             WHERE id = ANY($1::bigint[])`,
+            [missingShipmentIds]
+          );
       resolvedShipmentsResult.rows.forEach((row: any) => {
         const normalized = String(row.tracking_number_normalized || '').trim();
         const id = Number(row.id);
@@ -455,61 +572,85 @@ export async function runGoogleSheetsTransferOrders(
 
     const sourceShipmentIds = resolvedShipmentIds;
 
-    const sourceOrdersByOrderId = sourceOrderIds.length > 0
-      ? await db
-          .select({
-            orderId: ordersTable.orderId,
-            id: ordersTable.id,
-            itemNumber: ordersTable.itemNumber,
-            productTitle: ordersTable.productTitle,
-            quantity: ordersTable.quantity,
-            sku: ordersTable.sku,
-            condition: ordersTable.condition,
-            notes: ordersTable.notes,
-            customerId: ordersTable.customerId,
-            shipmentId: ordersTable.shipmentId,
-            accountSource: ordersTable.accountSource,
-            createdAt: ordersTable.createdAt,
-          })
-          .from(ordersTable)
-          .where(inArray(ordersTable.orderId, sourceOrderIds))
-          .orderBy(desc(ordersTable.createdAt))
-      : [];
+    const orderProjectionCols = {
+      orderId: ordersTable.orderId,
+      id: ordersTable.id,
+      itemNumber: ordersTable.itemNumber,
+      productTitle: ordersTable.productTitle,
+      quantity: ordersTable.quantity,
+      sku: ordersTable.sku,
+      condition: ordersTable.condition,
+      notes: ordersTable.notes,
+      customerId: ordersTable.customerId,
+      shipmentId: ordersTable.shipmentId,
+      accountSource: ordersTable.accountSource,
+      createdAt: ordersTable.createdAt,
+    } as const;
 
-    const sourceOrdersByShipmentId = sourceShipmentIds.length > 0
-      ? await db
-          .select({
-            orderId: ordersTable.orderId,
-            id: ordersTable.id,
-            itemNumber: ordersTable.itemNumber,
-            productTitle: ordersTable.productTitle,
-            quantity: ordersTable.quantity,
-            sku: ordersTable.sku,
-            condition: ordersTable.condition,
-            notes: ordersTable.notes,
-            customerId: ordersTable.customerId,
-            shipmentId: ordersTable.shipmentId,
-            accountSource: ordersTable.accountSource,
-            createdAt: ordersTable.createdAt,
-          })
-          .from(ordersTable)
-          .where(inArray(ordersTable.shipmentId, sourceShipmentIds))
-          .orderBy(desc(ordersTable.createdAt))
-      : [];
+    const sourceOrdersByOrderId = sourceOrderIds.length === 0
+      ? []
+      : orgId
+        ? await withTenantDrizzle(orgId, (tx) =>
+            tx
+              .select(orderProjectionCols)
+              .from(ordersTable)
+              .where(and(
+                inArray(ordersTable.orderId, sourceOrderIds),
+                eq(ordersTable.organizationId, orgId),
+              ))
+              .orderBy(desc(ordersTable.createdAt))
+          )
+        : await db
+            .select(orderProjectionCols)
+            .from(ordersTable)
+            .where(inArray(ordersTable.orderId, sourceOrderIds))
+            .orderBy(desc(ordersTable.createdAt));
+
+    const sourceOrdersByShipmentId = sourceShipmentIds.length === 0
+      ? []
+      : orgId
+        ? await withTenantDrizzle(orgId, (tx) =>
+            tx
+              .select(orderProjectionCols)
+              .from(ordersTable)
+              .where(and(
+                inArray(ordersTable.shipmentId, sourceShipmentIds),
+                eq(ordersTable.organizationId, orgId),
+              ))
+              .orderBy(desc(ordersTable.createdAt))
+          )
+        : await db
+            .select(orderProjectionCols)
+            .from(ordersTable)
+            .where(inArray(ordersTable.shipmentId, sourceShipmentIds))
+            .orderBy(desc(ordersTable.createdAt));
 
     const sourceLegacyOrdersByTracking: OrderProjection[] = [];
 
-    const sourceCustomers = sourceOrderIds.length > 0
-      ? await db
-          .select({
-            id: customersTable.id,
-            orderId: customersTable.orderId,
-            createdAt: customersTable.createdAt,
-          })
-          .from(customersTable)
-          .where(inArray(customersTable.orderId, sourceOrderIds))
-          .orderBy(desc(customersTable.createdAt))
-      : [];
+    const customerProjectionCols = {
+      id: customersTable.id,
+      orderId: customersTable.orderId,
+      createdAt: customersTable.createdAt,
+    } as const;
+
+    const sourceCustomers = sourceOrderIds.length === 0
+      ? []
+      : orgId
+        ? await withTenantDrizzle(orgId, (tx) =>
+            tx
+              .select(customerProjectionCols)
+              .from(customersTable)
+              .where(and(
+                inArray(customersTable.orderId, sourceOrderIds),
+                eq(customersTable.organizationId, orgId),
+              ))
+              .orderBy(desc(customersTable.createdAt))
+          )
+        : await db
+            .select(customerProjectionCols)
+            .from(customersTable)
+            .where(inArray(customersTable.orderId, sourceOrderIds))
+            .orderBy(desc(customersTable.createdAt));
 
     const latestOrderByOrderId = new Map<string, OrderProjection>();
     sourceOrdersByOrderId.forEach((order) => {
@@ -588,12 +729,22 @@ export async function runGoogleSheetsTransferOrders(
       });
 
       if (lookupSkus.size > 0) {
-        const result = await pool.query(
-          `SELECT sku, product_title
-             FROM sku_catalog
-            WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''`,
-          [Array.from(lookupSkus)],
-        );
+        // sku_catalog is org-bearing → add AND organization_id = $2 when scoped.
+        const result = orgId
+          ? await tenantQuery(
+              orgId,
+              `SELECT sku, product_title
+                 FROM sku_catalog
+                WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''
+                  AND organization_id = $2`,
+              [Array.from(lookupSkus), orgId],
+            )
+          : await pool.query(
+              `SELECT sku, product_title
+                 FROM sku_catalog
+                WHERE sku = ANY($1::text[]) AND product_title IS NOT NULL AND product_title <> ''`,
+              [Array.from(lookupSkus)],
+            );
         for (const row of result.rows) {
           const sku = String(row.sku || '').trim();
           const title = String(row.product_title || '').trim();
@@ -602,14 +753,29 @@ export async function runGoogleSheetsTransferOrders(
       }
 
       if (lookupItemNumbers.size > 0) {
-        const result = await pool.query(
-          `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
-             FROM sku_platform_ids spi
-             JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
-            WHERE (spi.platform_sku = ANY($1::text[]) OR spi.platform_item_id = ANY($1::text[]))
-              AND sc.product_title IS NOT NULL AND sc.product_title <> ''`,
-          [Array.from(lookupItemNumbers)],
-        );
+        // sku_platform_ids + sku_catalog both org-bearing. The join is on the
+        // integer surrogate FK (sc.id = spi.sku_catalog_id) so it's safe bare;
+        // we still scope both sides to the org and align their org keys.
+        const result = orgId
+          ? await tenantQuery(
+              orgId,
+              `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
+                 FROM sku_platform_ids spi
+                 JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
+                  AND sc.organization_id = spi.organization_id
+                WHERE (spi.platform_sku = ANY($1::text[]) OR spi.platform_item_id = ANY($1::text[]))
+                  AND sc.product_title IS NOT NULL AND sc.product_title <> ''
+                  AND spi.organization_id = $2`,
+              [Array.from(lookupItemNumbers), orgId],
+            )
+          : await pool.query(
+              `SELECT spi.platform_sku, spi.platform_item_id, sc.product_title, sc.sku
+                 FROM sku_platform_ids spi
+                 JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
+                WHERE (spi.platform_sku = ANY($1::text[]) OR spi.platform_item_id = ANY($1::text[]))
+                  AND sc.product_title IS NOT NULL AND sc.product_title <> ''`,
+              [Array.from(lookupItemNumbers)],
+            );
         for (const row of result.rows) {
           const title = String(row.product_title || '').trim();
           if (!title) continue;
@@ -672,6 +838,17 @@ export async function runGoogleSheetsTransferOrders(
       const sheetCondition = String(row[colIndices.condition] || '').trim();
       const sheetNotes = String(row[colIndices.note] || '').trim();
       const sheetPlatform = String(row[colIndices.platform] || '').trim();
+      // Optional sale price + currency (columns may be absent → index -1).
+      const rawSalePrice =
+        colIndices.salePrice >= 0 ? String(row[colIndices.salePrice] || '').trim() : '';
+      // Strip currency symbols / thousands separators before parsing.
+      const parsedSalePrice = rawSalePrice
+        ? Number(rawSalePrice.replace(/[^0-9.-]/g, ''))
+        : NaN;
+      const sheetSaleAmount =
+        Number.isFinite(parsedSalePrice) ? String(parsedSalePrice) : null;
+      const sheetCurrency =
+        (colIndices.currency >= 0 ? String(row[colIndices.currency] || '').trim() : '') || 'USD';
       const primaryTracking = Array.from(group.trackings.values())[0] || '';
       const existing = latestOrderByOrderId.get(orderId);
       const detailRow: TransferOrderDetail = {
@@ -780,6 +957,10 @@ export async function runGoogleSheetsTransferOrders(
         }
         if (orderToKeep.customerId == null && customerId) updateValues.customerId = customerId;
         if (isBlank((orderToKeep as any).accountSource) && sheetPlatform) updateValues.accountSource = sheetPlatform;
+        // sale_amount/currency aren't in the OrderProjection select, so backfill
+        // only when the sheet actually carries a price (additive, never clobbers).
+        if (sheetSaleAmount != null) updateValues.saleAmount = sheetSaleAmount;
+        if (colIndices.currency >= 0 && sheetCurrency) updateValues.currency = sheetCurrency;
 
         const compactedUpdateValues = compactUpdateValues(updateValues);
         if (Object.keys(compactedUpdateValues).length > 0) {
@@ -801,13 +982,13 @@ export async function runGoogleSheetsTransferOrders(
           shipmentIds: shipmentIdList,
           detail: detailRow,
           values: {
-            // Tenant scope: this is a cron-triggered job with no user
-            // session, so we stamp the canonical USAV org explicitly. When
-            // this job becomes multi-tenant it'll receive the org as a
-            // parameter and pass it through to here. Without this stamp
-            // the row would fail the NOT NULL on orders.organization_id
-            // because Drizzle's neon-http client can't carry the GUC.
-            organizationId: transitionalUsavOrgId(),
+            // Tenant scope: stamp the effective org. When called WITHOUT an
+            // orgId (un-migrated cron callers) effectiveOrgId falls back to
+            // transitionalUsavOrgId() — byte-identical to the prior behavior.
+            // When an orgId IS supplied it stamps that tenant. The explicit
+            // stamp is required because Drizzle's neon-http client can't carry
+            // the GUC, so orders.organization_id (NOT NULL) must be set here.
+            organizationId: effectiveOrgId,
             orderId,
             itemNumber: sheetItemNumber || '',
             productTitle: sheetProductTitle || '',
@@ -821,6 +1002,8 @@ export async function runGoogleSheetsTransferOrders(
             statusHistory: [],
             customerId,
             accountSource: sheetPlatform || '',
+            saleAmount: sheetSaleAmount,
+            currency: sheetCurrency,
           },
         });
       }
@@ -828,29 +1011,67 @@ export async function runGoogleSheetsTransferOrders(
 
     if (ordersToDelete.length > 0) {
       progress({ type: 'phase', phase: 'updating', count: ordersToDelete.length });
-      await db.delete(ordersTable).where(inArray(ordersTable.id, ordersToDelete.map((e) => e.id)));
+      const deleteIds = ordersToDelete.map((e) => e.id);
+      if (orgId) {
+        // Org-ownership scoped delete: a row id that belongs to another tenant
+        // simply won't match (no cross-tenant deletes).
+        await withTenantDrizzle(orgId, (tx) =>
+          tx.delete(ordersTable).where(and(
+            inArray(ordersTable.id, deleteIds),
+            eq(ordersTable.organizationId, orgId),
+          ))
+        );
+      } else {
+        await db.delete(ordersTable).where(inArray(ordersTable.id, deleteIds));
+      }
       for (const entry of ordersToDelete) progress({ type: 'detail', kind: 'deleted', row: entry.detail });
     }
 
     if (ordersToBackfill.length > 0) {
       progress({ type: 'phase', phase: 'updating', count: ordersToBackfill.length });
-      await Promise.all(
-        ordersToBackfill.map((entry) => {
-          const compacted = compactUpdateValues(entry.values);
-          if (Object.keys(compacted).length === 0) return Promise.resolve();
-          return db.update(ordersTable).set(compacted).where(eq(ordersTable.id, entry.id));
-        })
-      );
+      if (orgId) {
+        // Run all backfills inside one GUC-carrying transaction; each UPDATE is
+        // scoped by AND organization_id = orgId so it can never touch another
+        // tenant's row even if an id collision were possible.
+        await withTenantDrizzle(orgId, (tx) =>
+          Promise.all(
+            ordersToBackfill.map((entry) => {
+              const compacted = compactUpdateValues(entry.values);
+              if (Object.keys(compacted).length === 0) return Promise.resolve();
+              return tx.update(ordersTable).set(compacted).where(and(
+                eq(ordersTable.id, entry.id),
+                eq(ordersTable.organizationId, orgId),
+              ));
+            })
+          )
+        );
+      } else {
+        await Promise.all(
+          ordersToBackfill.map((entry) => {
+            const compacted = compactUpdateValues(entry.values);
+            if (Object.keys(compacted).length === 0) return Promise.resolve();
+            return db.update(ordersTable).set(compacted).where(eq(ordersTable.id, entry.id));
+          })
+        );
+      }
       for (const entry of ordersToBackfill) progress({ type: 'detail', kind: 'updated', row: entry.detail });
     }
 
     let insertedOrderIds: number[] = [];
     if (ordersToInsert.length > 0) {
       progress({ type: 'phase', phase: 'inserting', count: ordersToInsert.length });
-      const insertedOrders = await db
-        .insert(ordersTable)
-        .values(ordersToInsert.map((entry) => entry.values))
-        .returning({ id: ordersTable.id });
+      // Values already carry organizationId = effectiveOrgId. When orgId is
+      // supplied we also run the INSERT through the GUC-carrying connection so
+      // app.current_org is live (defense in depth + future per-table FORCE).
+      const insertValues = ordersToInsert.map((entry) => entry.values);
+      const insertedOrders = orgId
+        ? await withTenantDrizzle(orgId, (tx) =>
+            tx.insert(ordersTable).values(insertValues).returning({ id: ordersTable.id })
+          )
+        : await db
+            .insert(ordersTable)
+            .values(insertValues)
+            .returning({ id: ordersTable.id });
       for (const entry of ordersToInsert) progress({ type: 'detail', kind: 'inserted', row: entry.detail });
 
       insertedOrderIds = insertedOrders.map((o) => o.id);
@@ -875,6 +1096,7 @@ export async function runGoogleSheetsTransferOrders(
             linkEntry.shipmentIds,
             linkEntry.primaryShipmentId,
             'google-sheets-transfer-orders',
+            orgId,
           )
         )
       );
@@ -882,7 +1104,7 @@ export async function runGoogleSheetsTransferOrders(
 
     if (orderDeadlinesToUpsert.length > 0) {
       await Promise.all(
-        orderDeadlinesToUpsert.map((entry) => upsertOrderDeadline(entry.id, entry.shipByDate))
+        orderDeadlinesToUpsert.map((entry) => upsertOrderDeadline(entry.id, entry.shipByDate, orgId))
       );
     }
 
@@ -912,7 +1134,9 @@ export async function runGoogleSheetsTransferOrders(
     progress({ type: 'phase', phase: 'publishing' });
     if (uniqueProcessedIds.length > 0) {
       await publishOrderChanged({
-        organizationId: transitionalUsavOrgId(),
+        // effectiveOrgId === transitionalUsavOrgId() when no orgId was supplied
+        // (byte-identical to prior behavior); targets the supplied tenant when present.
+        organizationId: effectiveOrgId,
         orderIds: uniqueProcessedIds,
         source: 'google-sheets-transfer-orders',
       });

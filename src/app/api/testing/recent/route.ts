@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/testing/recent
@@ -16,7 +16,7 @@ import pool from '@/lib/db';
  *   sku     — filter to a single SKU (exact, matched against serial_units.sku)
  *   verdict — PASS | TEST_AGAIN | TESTING_FAILED
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   const { searchParams } = new URL(request.url);
   const limit = Math.max(1, Math.min(200, Number(searchParams.get('limit') || 50)));
   const tester = Number(searchParams.get('tester'));
@@ -25,6 +25,9 @@ export const GET = withAuth(async (request) => {
 
   const where: string[] = [];
   const params: unknown[] = [];
+  // Tenant ownership filter — never return another org's testing feed.
+  params.push(ctx.organizationId);
+  where.push(`tr.organization_id = $${params.length}`);
   if (Number.isFinite(tester) && tester > 0) {
     params.push(tester);
     where.push(`tr.tested_by = $${params.length}`);
@@ -40,7 +43,8 @@ export const GET = withAuth(async (request) => {
   params.push(limit);
 
   try {
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT tr.id,
               tr.serial_unit_id,
               tr.receiving_line_id,
@@ -55,7 +59,7 @@ export const GET = withAuth(async (request) => {
               tr.notes,
               tr.created_at
          FROM testing_results tr
-    LEFT JOIN serial_units su ON su.id = tr.serial_unit_id
+    LEFT JOIN serial_units su ON su.id = tr.serial_unit_id AND su.organization_id = tr.organization_id
     LEFT JOIN staff s         ON s.id  = tr.tested_by
         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY tr.created_at DESC, tr.id DESC

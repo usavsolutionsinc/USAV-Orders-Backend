@@ -147,7 +147,7 @@ export const Unlink = ({ className = "w-6 h-6" }: { className?: string }) => (
 
 export const Printer = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
     </svg>
 );
 
@@ -278,6 +278,18 @@ export const PackageCheck = ({ className = "w-6 h-6" }: { className?: string }) 
     </svg>
 );
 
+// Packing-station nav glyph — closed isometric box + diagonal tape stripe.
+// We don't use lucide `package-plus` here: that icon omits the box's lower-right
+// edges so the corner "+" fits, which reads as broken/malformed at 18px nav size.
+// Reserved for /packer + mobile Pack tab only; distinct from Package (inventory),
+// PackageOpen (unbox), PackageCheck (shipped), Boxes (FBA), Archive (bins), Box.
+export const Packer = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        <path d="M6.5 13.5 12 16.5 17.5 13.5" />
+    </svg>
+);
+
 // Single spanner — repair / Testing glyph (lucide wrench). Previously a copy of
 // the Settings gear, which made the Testing nav row indistinguishable from
 // Settings; this is the real wrench so the two no longer collide.
@@ -304,10 +316,31 @@ export const Box = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Stacked product tags — the Products catalog master-nav glyph (lucide tags).
+// Distinct from the box/package family so Products ≠ Inventory at a glance.
+export const Tags = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="m15 5 6.3 6.3a2.4 2.4 0 0 1 0 3.4L17 19" />
+        <path d="M9.586 5.586A2 2 0 0 0 8.172 5H3a1 1 0 0 0-1 1v5.172a2 2 0 0 0 .586 1.414L8.29 18.29a2.426 2.426 0 0 0 3.42 0l3.58-3.58a2.426 2.426 0 0 0 0-3.42z" />
+        <circle cx="6.5" cy="9.5" r=".5" fill="currentColor" />
+    </svg>
+);
+
+// Open door — the Warehouse "Rooms" glyph (lucide door-open). A door reads as a
+// physical room/space, distinct from the box/bin cubes used by Bins/Inventory.
+export const DoorOpen = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <path d="M13 4h3a2 2 0 0 1 2 2v14" />
+        <path d="M2 20h3" />
+        <path d="M13 20h9" />
+        <path d="M10 12v.01" />
+        <path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z" />
+    </svg>
+);
+
 /** 3D package — physical unbox / prepacked-product scans (not the Products master-nav CMS icon). */
-// Lidded storage box — "pack/archive" glyph (lucide archive). Renamed from the
-// misleading `Cms` export, which was a duplicate of the Box cube; this is a
-// distinct box-with-lid used for the mobile Packing tab.
+// Lidded storage box — warehouse Bins tab (lucide archive). Not used for Packing;
+// that station uses the dedicated {@link Packer} glyph.
 export const Archive = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <rect width="20" height="5" x="2" y="3" rx="1" />

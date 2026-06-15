@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { db } from '@/lib/drizzle/db';
-import { photos } from '@/lib/drizzle/schema';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * POST /api/inventory-photos
@@ -60,32 +58,31 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // storage so they aren't lost; the audit linkage is just missing.
     let inserted: { id: number } | null = null;
     if (ledgerId != null) {
-      const rows = await db
-        .insert(photos)
-        .values({
-          entityType: 'BIN_ADJUSTMENT',
-          entityId: ledgerId,
-          url: blob.url,
-          takenByStaffId: staffId,
-          photoType,
-        })
-        .returning({ id: photos.id });
-      inserted = rows[0] ?? null;
-    }
-
-    // Best-effort: stamp the photo url into an adjacent inventory_events
-    // payload so the audit timeline shows the link without an extra join.
-    if (ledgerId) {
-      try {
-        await pool.query(
-          `UPDATE inventory_events
-           SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('photo_url', $1::text, 'photo_id', $2::int)
-           WHERE stock_ledger_id = $3`,
-          [blob.url, inserted?.id ?? null, ledgerId],
+      inserted = await withTenantTransaction(ctx.organizationId, async (client) => {
+        const rows = await client.query<{ id: number }>(
+          `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type, organization_id)
+           VALUES ('BIN_ADJUSTMENT', $1, $2, $3, $4, $5)
+           RETURNING id`,
+          [ledgerId, blob.url, staffId, photoType, ctx.organizationId],
         );
-      } catch {
-        /* non-fatal */
-      }
+        const row = rows.rows[0] ?? null;
+
+        // Best-effort: stamp the photo url into an adjacent inventory_events
+        // payload so the audit timeline shows the link without an extra join.
+        try {
+          await client.query(
+            `UPDATE inventory_events
+             SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('photo_url', $1::text, 'photo_id', $2::int)
+             WHERE stock_ledger_id = $3
+               AND organization_id = $4`,
+            [blob.url, row?.id ?? null, ledgerId, ctx.organizationId],
+          );
+        } catch {
+          /* non-fatal */
+        }
+
+        return row;
+      });
     }
 
     return NextResponse.json({

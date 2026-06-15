@@ -11,6 +11,7 @@ import { PackerDetailsStack } from './stacks/PackerDetailsStack';
 import { DetailsStackDurationData } from './stacks/types';
 import { ShippedDetailsPanelContent, type ShippedActiveSection } from './ShippedDetailsPanelContent';
 import { OrderTimelineSection } from './OrderTimelineSection';
+import { OrderLabelsSection } from './OrderLabelsSection';
 import { QtyBadge } from '@/components/ui/QtyBadge';
 import { useDeleteOrderRow } from '@/hooks';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
@@ -386,9 +387,15 @@ export function ShippedDetailsPanel({
           <>
             <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
               <QtyBadge quantity={(shipped as any).quantity} />
-              <PaneHeaderStatusPill tone={statusTone} pulse>
-                {statusLabel}
-              </PaneHeaderStatusPill>
+              {/* Only surface a status pill when it carries real signal (tested /
+                  out-of-stock). The bare "Pending" placeholder was misleading —
+                  the shipped/packer record doesn't carry has_tech_scan, so it
+                  false-negatived to Pending even for tech-scanned orders. */}
+              {(hasTechScan || hasOutOfStock) && (
+                <PaneHeaderStatusPill tone={statusTone} pulse>
+                  {statusLabel}
+                </PaneHeaderStatusPill>
+              )}
             </div>
             <div className="px-6 py-2">
               <PaneHeaderActionBar
@@ -408,6 +415,12 @@ export function ShippedDetailsPanel({
                   : []),
                 { value: 'shipping' as const, label: 'Shipping' },
                 { value: 'product' as const, label: 'Product' },
+                ...(context === 'dashboard' || context === 'queue' || context === 'shipped'
+                  ? [{ value: 'timeline' as const, label: 'Timeline' }]
+                  : []),
+                ...(context === 'dashboard' || context === 'queue'
+                  ? [{ value: 'customer' as const, label: 'Customer' }]
+                  : []),
               ]}
               value={activeSection}
               onChange={setActiveSection}
@@ -418,7 +431,14 @@ export function ShippedDetailsPanel({
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
-          {context === 'dashboard' || context === 'queue' ? (
+          {activeSection === 'timeline' && shipped?.id ? (
+            // Timeline tab — swaps the stack body to the order activity trail
+            // (label → tech verdict → packed → scanned out), same pattern as the
+            // Customer tab. Only reachable in contexts where the tab is shown.
+            <div className="flex min-h-full flex-col pb-8 pt-2">
+              <OrderTimelineSection orderId={Number(shipped.id)} />
+            </div>
+          ) : context === 'dashboard' || context === 'queue' ? (
             <DashboardDetailsStack
               shipped={shipped}
               durationData={durationData}
@@ -508,8 +528,11 @@ export function ShippedDetailsPanel({
             </div>
           )}
 
-          {(context === 'dashboard' || context === 'queue' || context === 'shipped') && shipped?.id ? (
-            <OrderTimelineSection orderId={Number(shipped.id)} />
+          {/* Shipping-label drop-zone is UNSHIPPED-only (`queue`): a shipped order
+              has already left with its label printed, so the shipped/dashboard
+              stacks don't repeat it (the label still lives under its own tab). */}
+          {context === 'queue' && shipped?.id && activeSection !== 'timeline' ? (
+            <OrderLabelsSection orderId={Number(shipped.id)} orderRef={shipped.order_id || `order-${shipped.id}`} />
           ) : null}
       </div>
 

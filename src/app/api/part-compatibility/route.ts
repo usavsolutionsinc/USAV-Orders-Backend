@@ -17,16 +17,21 @@ const ROUTE_PART_COMPAT_POST = 'part-compatibility.post';
  * GET /api/part-compatibility?boseModelId=… | ?skuId=…
  * Lists compatibility edges, filtered by model and/or part.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const boseModelId = searchParams.get('boseModelId');
     const skuId = searchParams.get('skuId');
 
+    // Tenant-scope the read: part_compatibility has no organization_id, so the
+    // shared query aligns the join through the org-bearing parent sku_catalog
+    // (sc.organization_id = $orgId). Without this the JOIN onto the tenant-owned
+    // sku_catalog leaks every org's parts/compatibility edges to any caller
+    // with sourcing.view.
     const rows = await listCompatibility({
       boseModelId: boseModelId ? Number(boseModelId) : null,
       skuId: skuId ? Number(skuId) : null,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ success: true, items: rows, total: rows.length });
   } catch (error: any) {
     console.error('Error in GET /api/part-compatibility:', error);
@@ -55,6 +60,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
     }
 
+    // Tenant-scope the write: the shared upsert verifies the target skuId
+    // resolves under this org (INSERT ... WHERE EXISTS against the org-bearing
+    // sku_catalog parent) before creating/refreshing the edge. Without the
+    // threaded org, an org-A user with sourcing.manage could point a
+    // compatibility edge at org-B's sku_catalog.id (FK checks existence, not
+    // tenant). A cross-tenant skuId now surfaces as the same 23503 → 400 path.
     const { row, created } = await upsertCompatibility({
       boseModelId: parsed.boseModelId,
       skuId: parsed.skuId,
@@ -64,7 +75,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       confidence: parsed.confidence,
       source: parsed.source,
       notes: parsed.notes ?? null,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'part-compatibility-api',

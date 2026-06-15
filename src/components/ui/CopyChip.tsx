@@ -495,6 +495,12 @@ export const SerialCountChip = ({ count, dense }: { count: number; dense?: boole
   <GroupCountChip count={count} tone="serial" dense={dense} />
 );
 
+/** Tracking column count for a collapsed group — blue pin + "×N", blue underline.
+ *  Used when a grouped order's lines carry several distinct tracking numbers. */
+export const TrackingCountChip = ({ count, dense }: { count: number; dense?: boolean }) => (
+  <GroupCountChip count={count} tone="tracking" dense={dense} />
+);
+
 export const TicketChip = ({ value, display }: { value: string; display: string }) => (
   <CopyChip value={value} display={display} tone="ticket" />
 );

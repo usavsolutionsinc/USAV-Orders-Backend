@@ -20,8 +20,8 @@ import {
   Barcode,
   ClipboardList,
   LayoutDashboard,
+  Packer,
   ShoppingCart,
-  User,
   Wrench,
 } from '@/components/Icons';
 import type { SidebarIconComponent } from '@/lib/sidebar-navigation';
@@ -50,7 +50,7 @@ export const MOBILE_NAV_ITEMS: ReadonlyArray<MobileNavItem> = [
   { id: 'home',      href: '/m/home',    label: 'Home',    icon: LayoutDashboard },
   // Station entries — gated by the same permissions the sidebar uses.
   { id: 'receiving', href: '/receiving', label: 'Receive', icon: ClipboardList, requires: 'receiving.view' },
-  { id: 'packing',   href: '/packer',    label: 'Pack',    icon: User,          requires: 'packing.view' },
+  { id: 'packing',   href: '/packer',    label: 'Pack',    icon: Packer,        requires: 'packing.view' },
   { id: 'tech',      href: '/tech',      label: 'Test',    icon: Wrench,        requires: 'tech.view' },
   // Headline action — raised centre treatment.
   { id: 'scan',      href: '/m/scan',    label: 'Scan',    icon: Barcode,       raised: true },

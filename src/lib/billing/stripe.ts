@@ -57,6 +57,12 @@ async function stripeRequest<T>(
     headers: {
       Authorization: `Bearer ${creds.secretKey}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      // Pin the API version so a freshly-created live account doesn't default
+      // to a newer version that moves current_period_start/end off the
+      // subscription root (2025-03-31+ relocated them onto items.data[]).
+      // The webhook reads them from the root, so an unpinned account would
+      // persist NULL periods and the billing page would render "—".
+      'Stripe-Version': '2024-06-20',
       // Idempotency-Key is per-request; callers should set it via the
       // body.idempotency_key key when retries matter (we add it
       // automatically on checkout session creation).

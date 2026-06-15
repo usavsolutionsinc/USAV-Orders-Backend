@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -24,6 +24,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const techIdParam = parseInt(searchParams.get('techId') || '0', 10);
     const isAdminFilter = techIdParam > 0 && ctx.permissions.has('admin.view_logs');
     const techId = isAdminFilter ? techIdParam : ctx.staffId;
+    const orgId = ctx.organizationId;
     const days = Math.min(
       Math.max(parseInt(searchParams.get('days') || '365', 10), 1),
       730
@@ -33,7 +34,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ error: 'techId is required' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `
       SELECT *
       FROM (
@@ -71,6 +73,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           SELECT product_title
           FROM fba_fnskus
           WHERE UPPER(TRIM(COALESCE(fnsku, ''))) = UPPER(TRIM(COALESCE(tsn.scan_ref, tsn.fnsku, '')))
+            AND organization_id = tsn.organization_id
           LIMIT 1
         ) fba ON tsn.scan_ref IS NOT NULL AND UPPER(TRIM(COALESCE(tsn.scan_ref, ''))) LIKE 'X00%'
         LEFT JOIN LATERAL (
@@ -79,7 +82,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             o_match.shipment_id
           FROM orders o_match
           LEFT JOIN shipping_tracking_numbers o_match_stn ON o_match_stn.id = o_match.shipment_id
-          WHERE (
+          WHERE o_match.organization_id = tsn.organization_id AND ((
             tsn.shipment_id IS NOT NULL
             AND o_match.shipment_id = tsn.shipment_id
           ) OR (
@@ -88,7 +91,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             AND o_match_stn.tracking_number_raw != ''
             AND RIGHT(regexp_replace(UPPER(o_match_stn.tracking_number_raw), '[^A-Z0-9]', '', 'g'), 18) =
                 RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_raw, '')), '[^A-Z0-9]', '', 'g'), 18)
-          )
+          ))
           ORDER BY
             CASE WHEN tsn.shipment_id IS NOT NULL AND o_match.shipment_id = tsn.shipment_id THEN 0 ELSE 1 END,
             o_match.created_at DESC NULLS LAST,
@@ -122,6 +125,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         ) o ON true
         LEFT JOIN shipping_tracking_numbers o_stn ON o_stn.id = o.shipment_id
         WHERE tsn.tested_by = $1
+          AND tsn.organization_id = $3
           AND tsn.created_at IS NOT NULL
           AND tsn.created_at >= NOW() - ($2 * INTERVAL '1 day')
           AND COALESCE(
@@ -139,6 +143,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 o.product_title,
                 ''
               )) <> ''
+          -- NEEDS-COL: product_manuals has NO organization_id column
+          -- (coverage.generated has_org:false; classification child-scoped(sku_catalog)).
+          -- This NOT EXISTS matches pm to o.item_number by a normalized string key
+          -- with no org alignment, so a manual belonging to another tenant whose
+          -- item_number normalizes to the same value can suppress THIS org's order
+          -- from the gap list (residual cross-tenant read). It cannot be aligned
+          -- today without the column; the real fix is the pending product_manuals
+          -- org-column migration (or aligning the join through its sku_catalog FK
+          -- parent). Left as-is pending that migration.
           AND NOT EXISTS (
             SELECT 1
             FROM product_manuals pm
@@ -157,7 +170,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ) sub
       ORDER BY sub.test_date_time DESC NULLS LAST
       `,
-      [techId, days]
+      [techId, days, orgId]
     );
 
     const orders = result.rows.map((row) => ({

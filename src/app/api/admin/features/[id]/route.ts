@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 function idFromUrl(req: NextRequest): number | null {
@@ -47,14 +47,16 @@ function mapRow(row: any) {
   };
 }
 
-async function handleGet(req: NextRequest) {
+async function handleGet(req: NextRequest, orgId: string) {
   try {
     const id = idFromUrl(req);
     if (id == null) {
       return NextResponse.json({ error: 'Invalid feature id' }, { status: 400 });
     }
 
-    const result = await pool.query('SELECT * FROM admin_features WHERE id = $1', [id]);
+    // admin_features is system-global (no organization_id column) — GUC-wrap
+    // only; no explicit org filter is possible (NEEDS-COL).
+    const result = await tenantQuery(orgId, 'SELECT * FROM admin_features WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Feature not found' }, { status: 404 });
     }
@@ -69,7 +71,7 @@ async function handleGet(req: NextRequest) {
   }
 }
 
-async function handlePatch(req: NextRequest) {
+async function handlePatch(req: NextRequest, orgId: string) {
   try {
     const id = idFromUrl(req);
     if (id == null) {
@@ -167,7 +169,9 @@ async function handlePatch(req: NextRequest) {
     updateParts.push('updated_at = NOW()');
     values.push(id);
 
-    const result = await pool.query(
+    // admin_features is system-global (no organization_id column) — GUC-wrap
+    // the write; no org column to add to the WHERE (NEEDS-COL).
+    const result = await withTenantTransaction(orgId, (client) => client.query(
       `
         UPDATE admin_features
         SET ${updateParts.join(', ')}
@@ -175,7 +179,7 @@ async function handlePatch(req: NextRequest) {
         RETURNING *
       `,
       values,
-    );
+    ));
 
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Feature not found' }, { status: 404 });
@@ -191,14 +195,16 @@ async function handlePatch(req: NextRequest) {
   }
 }
 
-async function handleDelete(req: NextRequest) {
+async function handleDelete(req: NextRequest, orgId: string) {
   try {
     const id = idFromUrl(req);
     if (id == null) {
       return NextResponse.json({ error: 'Invalid feature id' }, { status: 400 });
     }
 
-    const result = await pool.query('DELETE FROM admin_features WHERE id = $1 RETURNING id', [id]);
+    // admin_features is system-global (no organization_id column) — GUC-wrap
+    // the delete; no org column to add to the WHERE (NEEDS-COL).
+    const result = await withTenantTransaction(orgId, (client) => client.query('DELETE FROM admin_features WHERE id = $1 RETURNING id', [id]));
     if (result.rows.length === 0) {
       return NextResponse.json({ error: 'Feature not found' }, { status: 404 });
     }
@@ -214,6 +220,6 @@ async function handleDelete(req: NextRequest) {
 }
 
 // Phase 2d: feature board mutations require admin.manage_features.
-export const GET = withAuth(handleGet, { permission: 'admin.view' });
-export const PATCH = withAuth(handlePatch, { permission: 'admin.manage_features' });
-export const DELETE = withAuth(handleDelete, { permission: 'admin.manage_features' });
+export const GET = withAuth((req, ctx) => handleGet(req, ctx.organizationId), { permission: 'admin.view' });
+export const PATCH = withAuth((req, ctx) => handlePatch(req, ctx.organizationId), { permission: 'admin.manage_features' });
+export const DELETE = withAuth((req, ctx) => handleDelete(req, ctx.organizationId), { permission: 'admin.manage_features' });

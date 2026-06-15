@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const DEFAULT_LIMIT = 100;
@@ -63,7 +63,7 @@ async function fetchEcwidOrders(storeId: string, token: string, maxPages: number
   return items;
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
@@ -113,13 +113,17 @@ export const POST = withAuth(async (req: NextRequest) => {
         let existingRows: any[] = [];
 
         if (orderId) {
-          const byOrderId = await pool.query(
+          // orders is tenant-owned; order_id is a marketplace string key that can
+          // collide across tenants, so it MUST be org-scoped.
+          const byOrderId = await tenantQuery(
+            ctx.organizationId,
             `SELECT id, order_id, account_source, order_date, sku, item_number, product_title, quantity
              FROM orders
              WHERE order_id = $1
+               AND organization_id = $2
              ORDER BY created_at DESC NULLS LAST, id DESC
              LIMIT 1`,
-            [orderId]
+            [orderId, ctx.organizationId]
           );
           existingRows = byOrderId.rows;
         }
@@ -127,14 +131,19 @@ export const POST = withAuth(async (req: NextRequest) => {
         if (existingRows.length === 0 && trackingNumber) {
           const last8 = getLastEightDigits(trackingNumber);
           if (last8) {
-            const byTracking = await pool.query(
+            // The stn join is on the integer surrogate PK (stn.id = o.shipment_id)
+            // so it's safe bare; shipping_tracking_numbers has no organization_id
+            // column (NEEDS-COL) — the org gate lives on the orders row (o).
+            const byTracking = await tenantQuery(
+              ctx.organizationId,
               `SELECT o.id, o.order_id, o.account_source, o.order_date, o.sku, o.item_number, o.product_title, o.quantity
                FROM orders o
                JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
                WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
+                 AND o.organization_id = $2
                ORDER BY o.created_at DESC NULLS LAST, o.id DESC
                LIMIT 1`,
-              [last8]
+              [last8, ctx.organizationId]
             );
             existingRows = byTracking.rows;
           }
@@ -186,8 +195,10 @@ export const POST = withAuth(async (req: NextRequest) => {
         }
 
         values.push(current.id);
-        await pool.query(
-          `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
+        values.push(ctx.organizationId);
+        await tenantQuery(
+          ctx.organizationId,
+          `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx} AND organization_id = $${idx + 1}`,
           values
         );
         updated++;

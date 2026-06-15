@@ -448,6 +448,9 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
             const parsed = Number(unboxedByRaw);
             updates.push(`unboxed_by = $${idx++}`);
             values.push(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+        } else if (availableColumns.has('unboxed_by') && unboxedAtRaw !== undefined && unboxedAtRaw) {
+            updates.push(`unboxed_by = COALESCE(unboxed_by, $${idx++})`);
+            values.push(ctx.staffId);
         }
         if (availableColumns.has('unboxed_at') && unboxedAtRaw !== undefined) {
             updates.push(`unboxed_at = $${idx++}`);

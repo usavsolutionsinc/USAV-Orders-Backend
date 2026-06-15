@@ -778,6 +778,16 @@ export function ReceivingSidebarPanel() {
             );
             if (localRows.length > 0) {
               const receivingId = localRows[0].receiving_id as number;
+              // Client short-circuit skips lookup-po — still stamp scanned_by
+              // for the signed-in operator via the lightweight touch-scan route.
+              void fetch('/api/receiving/touch-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  receiving_id: receivingId,
+                  tracking_number: trackingNumber,
+                }),
+              }).catch(() => {});
               const poIds = [
                 ...new Set(
                   localRows

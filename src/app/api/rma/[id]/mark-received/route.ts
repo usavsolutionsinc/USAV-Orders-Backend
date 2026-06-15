@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Rma } from '@/lib/feature-flags';
 import { markReceived } from '@/lib/rma/authorizations';
 
 /**
  * POST /api/rma/[id]/mark-received
  *
  * AUTHORIZED → RECEIVED. Returns 409 if the RMA is not in AUTHORIZED.
- * Gated by INVENTORY_V2_RMA.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Rma()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_RMA flag is OFF', flag: 'INVENTORY_V2_RMA' },
-      { status: 503 },
-    );
-  }
   if (typeof ctx.staffId !== 'number' || ctx.staffId <= 0) {
     return NextResponse.json({ ok: false, error: 'authenticated staff required' }, { status: 401 });
   }
@@ -28,7 +20,7 @@ export const POST = withAuth(async (request, ctx) => {
   }
 
   try {
-    const result = await markReceived({ rmaId });
+    const result = await markReceived({ rmaId }, ctx.organizationId);
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result);
   } catch (err) {

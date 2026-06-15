@@ -217,11 +217,10 @@ npm run dev
 
 ### Realtime / Ably
 
-- `ABLY_API_KEY` (server-only)
+- `ABLY_API_KEY` (server-only — the sole Ably credential; clients use token auth and never receive a key)
 - `NEXT_PUBLIC_ABLY_AUTH_PATH` (usually `/api/realtime/token`)
-- `ABLY_CHANNEL_ORDERS_CHANGES` (optional override)
-- `ABLY_CHANNEL_REPAIR_CHANGES` (optional override)
-- `ABLY_CHANNEL_AI_ASSIST` (optional override, default `ai:assist`)
+
+Channel names are fixed in code (`src/lib/realtime/channels.ts` `DEFAULT_*` constants); there are no `ABLY_CHANNEL_*` env overrides. Tenant isolation is the `org:{orgId}` channel prefix, not an env var.
 
 ### AI (Ollama + Cloudflare Tunnel)
 

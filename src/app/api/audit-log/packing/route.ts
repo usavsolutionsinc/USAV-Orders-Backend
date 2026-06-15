@@ -15,14 +15,15 @@ import {
  * Gate: admin.view_logs.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const filters = parseFilters(searchParams);
     const tracking = searchParams.get('tracking')?.trim() || null;
 
     try {
       if (tracking) {
-        const detail = await getPackingTrackingDetail(tracking, filters);
+        const detail = await getPackingTrackingDetail(tracking, filters, orgId);
         if (!detail) {
           return NextResponse.json(
             { success: false, error: 'Tracking not found' },
@@ -32,10 +33,13 @@ export const GET = withAuth(
         return NextResponse.json({ success: true, ...detail });
       }
 
-      const items = await listPackingTrackings({
-        filters,
-        search: filters.q,
-      });
+      const items = await listPackingTrackings(
+        {
+          filters,
+          search: filters.q,
+        },
+        orgId,
+      );
       return NextResponse.json({ success: true, items });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'audit-log/packing read failed';

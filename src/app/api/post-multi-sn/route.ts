@@ -115,8 +115,8 @@ export const POST = withAuth(
     try {
       const logRes = await pool.query<{ id: number }>(
         `INSERT INTO station_activity_logs
-           (station, activity_type, staff_id, scan_ref, notes, metadata)
-         VALUES ('LABELS', 'LABEL_PRINTED', $1, $2, $3, $4::jsonb)
+           (station, activity_type, staff_id, scan_ref, notes, metadata, organization_id)
+         VALUES ('LABELS', 'LABEL_PRINTED', $1, $2, $3, $4::jsonb, $5)
          RETURNING id`,
         [
           actorId,
@@ -132,6 +132,7 @@ export const POST = withAuth(
             serial_count: serialNumbers.length,
             condition,
           }),
+          ctx.organizationId,
         ],
       );
       stationActivityLogId = logRes.rows[0]?.id ?? null;

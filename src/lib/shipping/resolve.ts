@@ -1,4 +1,5 @@
 import { looksLikeFnsku } from '@/lib/scan-resolver';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { detectCarrier, normalizeTrackingNumber } from './normalize';
 import { getShipmentByTracking } from './repository';
 import { registerAndSyncShipment } from './sync-shipment';
@@ -13,7 +14,16 @@ import { registerAndSyncShipment } from './sync-shipment';
  * (which may have created the row via a different code path) are found even
  * when the live carrier API cannot be used for syncing.
  */
-export async function resolveShipmentId(rawInput: string): Promise<{
+export async function resolveShipmentId(
+  rawInput: string,
+  // OPTIONAL tenant scope. When present, the shipping_tracking_numbers /
+  // shipment_tracking_events lookups + register/sync run under the org GUC by
+  // threading orgId through to the sibling helpers (both tables are
+  // tenant-owned-NEEDS-COL → GUC-scoped, no inline org column to filter on).
+  // When omitted, behavior is byte-identical to before (raw pool path) so the
+  // many un-migrated callers keep working unchanged.
+  orgId?: OrgId,
+): Promise<{
   shipmentId: number | null;
   scanRef: string | null;
 }> {
@@ -32,7 +42,10 @@ export async function resolveShipmentId(rawInput: string): Promise<{
   if (!carrier) {
     // Unknown carrier — still try a DB lookup so that existing rows are found
     try {
-      const existing = await getShipmentByTracking(normalized);
+      const existing =
+        orgId != null
+          ? await getShipmentByTracking(normalized, orgId)
+          : await getShipmentByTracking(normalized);
       if (existing) return { shipmentId: existing.id, scanRef: null };
     } catch {
       // ignore lookup error; fall through to scanRef
@@ -41,16 +54,29 @@ export async function resolveShipmentId(rawInput: string): Promise<{
   }
 
   try {
-    const shipment = await registerAndSyncShipment({
-      trackingNumber: trimmed,
-      carrier,
-      sourceSystem: 'scan',
-    });
+    const shipment =
+      orgId != null
+        ? await registerAndSyncShipment(
+            {
+              trackingNumber: trimmed,
+              carrier,
+              sourceSystem: 'scan',
+            },
+            orgId,
+          )
+        : await registerAndSyncShipment({
+            trackingNumber: trimmed,
+            carrier,
+            sourceSystem: 'scan',
+          });
     return { shipmentId: shipment.id, scanRef: null };
   } catch {
     // Registration/sync failed — try a plain DB lookup as fallback
     try {
-      const existing = await getShipmentByTracking(normalized);
+      const existing =
+        orgId != null
+          ? await getShipmentByTracking(normalized, orgId)
+          : await getShipmentByTracking(normalized);
       if (existing) return { shipmentId: existing.id, scanRef: null };
     } catch {
       // ignore

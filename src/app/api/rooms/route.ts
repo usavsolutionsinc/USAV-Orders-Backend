@@ -3,9 +3,11 @@ import { createLocation, getRooms, setRoomZoneLetter } from '@/lib/neon/location
 import { withAuth } from '@/lib/auth/withAuth';
 
 /** GET /api/rooms — list active rooms (parent rows with no row/col). */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
-    const rooms = await getRooms();
+    // Tenant-scoped read: getRooms threads organization_id into the SELECT
+    // (locations is tenant-owned) and runs through tenantQuery so the GUC is set.
+    const rooms = await getRooms(ctx.organizationId);
     return NextResponse.json({ rooms });
   } catch (err: any) {
     console.error('[GET /api/rooms] error:', err);
@@ -18,7 +20,7 @@ export const GET = withAuth(async () => {
  * Body: { name: string, description?: string, sortOrder?: number }
  * Creates a room-level location entry (no row/col).
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const name = String(body?.name ?? '').trim();
@@ -28,13 +30,15 @@ export const POST = withAuth(async (req: NextRequest) => {
     const zoneLetter =
       typeof body?.zoneLetter === 'string' ? body.zoneLetter : null;
     try {
+      // Tenant-scoped write: createLocation stamps organization_id on the
+      // INSERT and runs inside withTenantTransaction when an orgId is threaded.
       const room = await createLocation({
         name,
         room: name,
         description: body?.description?.trim() || null,
         sortOrder: typeof body?.sortOrder === 'number' ? body.sortOrder : 0,
         zoneLetter,
-      });
+      }, ctx.organizationId);
       return NextResponse.json({ success: true, room }, { status: 201 });
     } catch (err: any) {
       // Duplicate zone_letter — partial unique index violation.

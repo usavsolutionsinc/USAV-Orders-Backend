@@ -22,7 +22,7 @@ const ROUTE_ALERT_CREATE = 'sourcing-alert.create';
  * GET /api/sourcing/alerts?status=&skuId= — the auto-flag queue.
  * Defaults to live (open + sourcing) alerts, ordered critical → warn → info.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
@@ -31,7 +31,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const items = await getSourcingAlerts({
       status,
       skuId: skuId ? Number(skuId) : null,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ success: true, items, total: items.length });
   } catch (error: any) {
     console.error('Error in GET /api/sourcing/alerts:', error);
@@ -71,7 +71,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       severity: parsed.severity ?? 'warn',
       reason: parsed.reason ?? null,
       targetQty: parsed.targetQty ?? null,
-    });
+    }, ctx.organizationId);
 
     if (created) {
       await recordAudit(pool, ctx, req, {
@@ -127,7 +127,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
       );
     }
 
-    const before = await getSourcingAlertById(parsed.id);
+    const before = await getSourcingAlertById(parsed.id, ctx.organizationId);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     const updated = await updateSourcingAlertStatus({
@@ -135,7 +135,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
       status: parsed.status,
       reason: parsed.reason ?? null,
       resolvedBy: ctx.staffId,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'sourcing-alerts-api',

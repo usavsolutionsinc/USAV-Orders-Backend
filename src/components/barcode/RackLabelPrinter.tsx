@@ -20,7 +20,6 @@ import { toast } from 'sonner';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
 import { Check, ChevronDown, ChevronLeft, ChevronUp, Printer, Settings } from '@/components/Icons';
-import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { useLocations } from '@/hooks/useLocations';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import {
@@ -154,7 +153,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   }, [rooms, roomNames]);
 
   const pickRoom = useCallback((name: string) => {
-    successFeedback();
     if (selectedRoom !== name) {
       patchRackPrinterState({ room: name, aisle: undefined, bay: undefined, level: undefined });
     } else {
@@ -164,7 +162,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   }, [selectedRoom]);
 
   const pickAisle = useCallback((n: number) => {
-    scanFeedback();
     if (aisle !== n) {
       patchRackPrinterState({ aisle: n, bay: undefined, level: undefined });
     } else {
@@ -174,7 +171,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   }, [aisle]);
 
   const pickBay = useCallback((n: number) => {
-    scanFeedback();
     if (bay !== n) {
       patchRackPrinterState({ bay: n, level: undefined });
     } else {
@@ -184,13 +180,11 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   }, [bay]);
 
   const pickLevel = useCallback((n: number) => {
-    scanFeedback();
     patchRackPrinterState({ level: n });
     setOverrideStep(null);
   }, []);
 
   const resetAll = useCallback(() => {
-    scanFeedback();
     resetRackPrinterState();
     setOverrideStep(null);
   }, []);
@@ -213,7 +207,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
     };
     if (!done[step] && step !== computedStep) return;
     if (step === activeStep) return;
-    scanFeedback();
     setOverrideStep(step);
   }, [selectedRoom, aisle, bay, level, computedStep, activeStep]);
 
@@ -250,7 +243,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
       }
     } catch (err: any) {
       setIsPrinting(false);
-      errorFeedback();
       toast.error(err?.message || 'Could not register rack for printing');
       return;
     }
@@ -262,7 +254,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
         setTimeout(() => {
           setBulkLabels(null);
           setIsPrinting(false);
-          successFeedback();
           toast.success(`Printed ${labels.length} rack label${labels.length === 1 ? '' : 's'}`);
         }, 250);
       });
@@ -287,7 +278,6 @@ export function RackLabelPrinter({ variant = 'main' }: RackLabelPrinterProps) {
   const handleConfigSave = useCallback((next: PrinterConfig) => {
     setConfig(next);
     saveConfig(next);
-    successFeedback();
     toast.success('Configuration saved');
     setConfigOpen(false);
   }, []);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -7,17 +7,19 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Shows which SKUs are depleting fastest based on recent shipments,
  * cross-referenced with existing replenishment requests and Zoho stock.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const days = Math.min(Number(searchParams.get('days') || '30'), 90);
     const sku = searchParams.get('sku') || null;
     const limit = Math.min(Number(searchParams.get('limit') || '100'), 500);
 
+    // $1=days, $2=limit, $3=orgId, $4=sku (optional)
     const skuClause = sku
-      ? `AND o.sku ILIKE '%' || $3 || '%'`
+      ? `AND o.sku ILIKE '%' || $4 || '%'`
       : '';
-    const params: unknown[] = [days, limit];
+    const params: unknown[] = [days, limit, orgId];
     if (sku) params.push(sku);
 
     const sql = `
@@ -33,9 +35,12 @@ export const GET = withAuth(async (req: NextRequest) => {
         FROM orders o
         JOIN station_activity_logs sal
           ON sal.shipment_id = o.shipment_id
+          AND sal.organization_id = o.organization_id
           AND sal.station = 'PACK'
           AND sal.activity_type = 'PACK_COMPLETED'
         WHERE sal.created_at >= NOW() - make_interval(days => $1)
+          AND o.organization_id = $3
+          AND sal.organization_id = $3
           AND o.sku IS NOT NULL
           AND BTRIM(o.sku) <> ''
           AND o.shipment_id IS NOT NULL
@@ -55,12 +60,13 @@ export const GET = withAuth(async (req: NextRequest) => {
         rr.quantity_needed AS replenishment_qty_needed,
         rr.zoho_po_number
       FROM shipped_agg sa
-      LEFT JOIN items i ON i.sku = sa.sku AND i.status = 'active'
-      LEFT JOIN item_stock_cache isc ON isc.zoho_item_id = i.zoho_item_id
+      LEFT JOIN items i ON i.sku = sa.sku AND i.status = 'active' AND i.organization_id = $3
+      LEFT JOIN item_stock_cache isc ON isc.zoho_item_id = i.zoho_item_id AND isc.organization_id = $3
       LEFT JOIN LATERAL (
         SELECT id, status, quantity_needed, zoho_po_number
         FROM replenishment_requests
         WHERE sku = sa.sku
+          AND organization_id = $3
           AND status NOT IN ('fulfilled', 'cancelled')
         ORDER BY created_at DESC
         LIMIT 1
@@ -69,7 +75,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       LIMIT $2
     `;
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(orgId, sql, params);
 
     return NextResponse.json({
       skus: result.rows,

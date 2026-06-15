@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import {
   assertPermission,
   PermissionDeniedError,
   permissionDeniedResponse,
 } from '@/lib/auth/permissions';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/cycle-counts/campaigns/[id]?bin_id=
@@ -25,6 +25,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(request, 'cycle_count.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id: idRaw } = await params;
     const campaignId = Number(idRaw);
     if (!Number.isFinite(campaignId) || campaignId <= 0) {
@@ -34,23 +35,27 @@ export async function GET(
     const binIdRaw = Number(searchParams.get('bin_id'));
     const binId = Number.isFinite(binIdRaw) && binIdRaw > 0 ? Math.floor(binIdRaw) : null;
 
-    const c = await pool.query(
+    const c = await tenantQuery(
+      orgId,
       `SELECT id, name, scope, variance_tol, status, created_by, created_at, closed_at
-       FROM cycle_count_campaigns WHERE id = $1 LIMIT 1`,
-      [campaignId],
+       FROM cycle_count_campaigns WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [campaignId, orgId],
     );
     if (c.rows.length === 0) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const lineParams: unknown[] = [campaignId];
+    const lineParams: unknown[] = [campaignId, orgId];
     let binFilter = '';
     if (binId) {
       lineParams.push(binId);
       binFilter = `AND ccl.bin_id = $${lineParams.length}`;
     }
 
-    const linesRes = await pool.query(
+    // sku_stock is joined on the SKU string (collides across tenants) so it is
+    // org-aligned to the line's own org.
+    const linesRes = await tenantQuery(
+      orgId,
       `SELECT ccl.id, ccl.bin_id, ccl.sku, ccl.expected_qty, ccl.counted_qty,
               ccl.variance, ccl.status, ccl.counted_by, ccl.counted_at,
               ccl.approved_by, ccl.approved_at, ccl.notes, ccl.updated_at,
@@ -62,8 +67,8 @@ export async function GET(
               ) AS product_title
        FROM cycle_count_lines ccl
        JOIN locations l ON l.id = ccl.bin_id
-       LEFT JOIN sku_stock ss ON ss.sku = ccl.sku
-       WHERE ccl.campaign_id = $1 ${binFilter}
+       LEFT JOIN sku_stock ss ON ss.sku = ccl.sku AND ss.organization_id = ccl.organization_id
+       WHERE ccl.campaign_id = $1 AND ccl.organization_id = $2 ${binFilter}
        ORDER BY l.room NULLS LAST, l.row_label NULLS LAST, l.col_label NULLS LAST, ccl.sku`,
       lineParams,
     );
@@ -91,6 +96,7 @@ export async function PATCH(
     // campaign requires a fresh step-up grant via requireRoutePerm.
     const gate = await requireRoutePerm(request, 'cycle_count.approve');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id: idRaw } = await params;
     const campaignId = Number(idRaw);
     const body = await request.json().catch(() => ({}));
@@ -116,12 +122,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unsupported action' }, { status: 400 });
     }
     if (action === 'close') {
-      const r = await pool.query<{ id: number }>(
+      const r = await tenantQuery<{ id: number }>(
+        orgId,
         `UPDATE cycle_count_campaigns
          SET status = 'closed', closed_at = NOW()
-         WHERE id = $1 AND status = 'open'
+         WHERE id = $1 AND organization_id = $2 AND status = 'open'
          RETURNING id`,
-        [campaignId],
+        [campaignId, orgId],
       );
       if (r.rows.length === 0) {
         return NextResponse.json({ error: 'Already closed or not found' }, { status: 409 });
@@ -130,12 +137,13 @@ export async function PATCH(
       // reopen — the inverse of close (closed → open, clear closed_at) so a
       // campaign closed by mistake can take counts again. Guarded on status so a
       // double-reopen is a clean 409, mirroring close.
-      const r = await pool.query<{ id: number }>(
+      const r = await tenantQuery<{ id: number }>(
+        orgId,
         `UPDATE cycle_count_campaigns
          SET status = 'open', closed_at = NULL
-         WHERE id = $1 AND status = 'closed'
+         WHERE id = $1 AND organization_id = $2 AND status = 'closed'
          RETURNING id`,
-        [campaignId],
+        [campaignId, orgId],
       );
       if (r.rows.length === 0) {
         return NextResponse.json({ error: 'Not closed or not found' }, { status: 409 });

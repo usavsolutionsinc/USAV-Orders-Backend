@@ -1,4 +1,6 @@
 import pool from '../db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { shortSku, isoWeekParts, formatUnitId } from '@/lib/inventory/unit-id-format';
 
 /**
@@ -136,9 +138,24 @@ function resolveTransition(
 
 export async function findByNormalizedSerial(
   serial: string,
+  orgId?: OrgId,
 ): Promise<SerialUnitRow | null> {
   const normalized = normalizeSerial(serial);
   if (!normalized) return null;
+
+  // Tenant-scoped path: explicit org predicate + GUC-wrapped connection so a
+  // serial can't resolve another tenant's unit (normalized_serial is a string
+  // key that collides across orgs).
+  if (orgId) {
+    const scoped = await tenantQuery<SerialUnitRow>(
+      orgId,
+      `SELECT * FROM serial_units
+       WHERE normalized_serial = $1 AND organization_id = $2
+       LIMIT 1`,
+      [normalized, orgId],
+    );
+    return scoped.rows[0] ?? null;
+  }
 
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units WHERE normalized_serial = $1 LIMIT 1`,
@@ -155,9 +172,23 @@ export async function findByNormalizedSerial(
  */
 export async function findByUnitUid(
   unitUid: string,
+  orgId?: OrgId,
 ): Promise<SerialUnitRow | null> {
   const trimmed = String(unitUid || '').trim();
   if (!trimmed) return null;
+
+  // Tenant-scoped path: unit_uid is a minted string key, unique only WITHIN an
+  // org, so add the explicit org predicate + GUC-wrapped connection.
+  if (orgId) {
+    const scoped = await tenantQuery<SerialUnitRow>(
+      orgId,
+      `SELECT * FROM serial_units
+       WHERE unit_uid = $1 AND organization_id = $2
+       LIMIT 1`,
+      [trimmed, orgId],
+    );
+    return scoped.rows[0] ?? null;
+  }
 
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units WHERE unit_uid = $1 LIMIT 1`,
@@ -194,12 +225,13 @@ export interface MatchedOrderForSerial {
 export async function findShippedOrderForSerialUnit(
   serialUnitId: number,
   options?: { organizationId?: string | null; executor?: Queryable },
+  orgId?: OrgId,
 ): Promise<MatchedOrderForSerial | null> {
   if (!Number.isFinite(serialUnitId)) return null;
-  const orgId = options?.organizationId ?? null;
-  const executor = options?.executor ?? pool;
-  const result = await executor.query<MatchedOrderForSerial>(
-    `SELECT o.id                    AS order_pk,
+  // The trailing `orgId` (threaded by the route sweep) takes precedence over
+  // the legacy `options.organizationId`; either feeds the existing org predicate.
+  const effectiveOrg = orgId ?? options?.organizationId ?? null;
+  const sql = `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
             o.product_title         AS product_title,
             o.sku                   AS sku,
@@ -216,9 +248,17 @@ export async function findShippedOrderForSerialUnit(
       -- o.id ASC tiebreak mirrors findShippedOrderByTsnSerial: equal-timestamp
       -- allocations must resolve to the same (first) sales order on re-scan.
       ORDER BY (oua.state = 'SHIPPED') DESC, oua.allocated_at DESC, o.id ASC
-      LIMIT 1`,
-    [serialUnitId, orgId],
-  );
+      LIMIT 1`;
+  const params = [serialUnitId, effectiveOrg];
+  // When a trailing orgId is threaded and the caller didn't pass its own
+  // executor, run inside a GUC-wrapped tenant connection. With an explicit
+  // executor we honor it byte-identically (the txn already carries the GUC).
+  if (orgId && !options?.executor) {
+    const scoped = await tenantQuery<MatchedOrderForSerial>(orgId, sql, params);
+    return scoped.rows[0] ?? null;
+  }
+  const executor = options?.executor ?? pool;
+  const result = await executor.query<MatchedOrderForSerial>(sql, params);
   return result.rows[0] ?? null;
 }
 
@@ -234,10 +274,47 @@ export async function findShippedOrderForSerialUnit(
 export async function findShippedOrderByTsnSerial(
   serial: string,
   options?: { organizationId?: string | null; executor?: Queryable },
+  orgId?: OrgId,
 ): Promise<(MatchedOrderForSerial & { serial_number: string }) | null> {
   const normalized = normalizeSerial(serial);
   if (!normalized) return null;
-  const orgId = options?.organizationId ?? null;
+  // The trailing `orgId` (route sweep) takes precedence over the legacy
+  // `options.organizationId`; either feeds the existing org predicate on orders.
+  const effectiveOrg = orgId ?? options?.organizationId ?? null;
+  const params = [normalized, effectiveOrg];
+
+  // Tenant-scoped path: t.serial_number is a string key that collides across
+  // tenants, so we pin t to the same org as the order it joins (Rule 3) AND
+  // wrap the read in a GUC-bound connection. Used only when the route sweep
+  // threads orgId without supplying its own (already-GUC'd) executor.
+  if (orgId && !options?.executor) {
+    const scoped = await tenantQuery<MatchedOrderForSerial & { serial_number: string }>(
+      orgId,
+      `SELECT o.id                    AS order_pk,
+            o.order_id              AS order_id,
+            o.product_title         AS product_title,
+            o.sku                   AS sku,
+            o.condition             AS condition,
+            o.quantity              AS quantity,
+            stn.tracking_number_raw AS tracking_number,
+            'SHIPPED'               AS allocation_state,
+            t.created_at            AS allocated_at,
+            t.serial_number         AS serial_number
+       FROM tech_serial_numbers t
+       JOIN orders o ON o.shipment_id = t.shipment_id
+                    AND t.organization_id = o.organization_id
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+      WHERE UPPER(t.serial_number) = $1
+        AND t.shipment_id IS NOT NULL
+        AND t.organization_id = $2::uuid
+        AND ($2::uuid IS NULL OR o.organization_id = $2::uuid)
+      ORDER BY t.created_at DESC, o.id ASC
+      LIMIT 1`,
+      params,
+    );
+    return scoped.rows[0] ?? null;
+  }
+
   const executor = options?.executor ?? pool;
   const result = await executor.query<MatchedOrderForSerial & { serial_number: string }>(
     `SELECT o.id                    AS order_pk,
@@ -263,7 +340,7 @@ export async function findShippedOrderByTsnSerial(
       -- return always pairs with the same order.
       ORDER BY t.created_at DESC, o.id ASC
       LIMIT 1`,
-    [normalized, orgId],
+    params,
   );
   return result.rows[0] ?? null;
 }
@@ -290,11 +367,15 @@ export interface PriorOutbound {
 export async function resolvePriorOutbound(
   unit: { id: number; normalized_serial: string },
   options?: { executor?: Queryable; organizationId?: string | null },
+  orgId?: OrgId,
 ): Promise<PriorOutbound | null> {
   const executor = options?.executor ?? pool;
   const organizationId = options?.organizationId ?? null;
 
-  const viaAlloc = await findShippedOrderForSerialUnit(unit.id, { executor, organizationId });
+  // Thread the trailing orgId (route sweep) into both lookups; it takes
+  // precedence over options.organizationId and, when no executor is supplied,
+  // makes each delegated read run in a GUC-bound tenant connection.
+  const viaAlloc = await findShippedOrderForSerialUnit(unit.id, { executor, organizationId }, orgId);
   if (viaAlloc) {
     return {
       orderPk: viaAlloc.order_pk,
@@ -305,7 +386,7 @@ export async function resolvePriorOutbound(
     };
   }
 
-  const viaTsn = await findShippedOrderByTsnSerial(unit.normalized_serial, { executor, organizationId });
+  const viaTsn = await findShippedOrderByTsnSerial(unit.normalized_serial, { executor, organizationId }, orgId);
   if (viaTsn) {
     return {
       orderPk: viaTsn.order_pk,
@@ -321,7 +402,18 @@ export async function resolvePriorOutbound(
 
 export async function listByReceivingLine(
   receivingLineId: number,
+  orgId?: OrgId,
 ): Promise<SerialUnitRow[]> {
+  if (orgId) {
+    const scoped = await tenantQuery<SerialUnitRow>(
+      orgId,
+      `SELECT * FROM serial_units
+       WHERE origin_receiving_line_id = $1 AND organization_id = $2
+       ORDER BY created_at ASC, id ASC`,
+      [receivingLineId, orgId],
+    );
+    return scoped.rows;
+  }
   const result = await pool.query<SerialUnitRow>(
     `SELECT * FROM serial_units
      WHERE origin_receiving_line_id = $1
@@ -333,7 +425,18 @@ export async function listByReceivingLine(
 
 export async function countByReceivingLine(
   receivingLineId: number,
+  orgId?: OrgId,
 ): Promise<number> {
+  if (orgId) {
+    const scoped = await tenantQuery<{ count: number }>(
+      orgId,
+      `SELECT COUNT(*)::int AS count
+       FROM serial_units
+       WHERE origin_receiving_line_id = $1 AND organization_id = $2`,
+      [receivingLineId, orgId],
+    );
+    return scoped.rows[0]?.count ?? 0;
+  }
   const result = await pool.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count
      FROM serial_units
@@ -368,6 +471,7 @@ export interface UpsertSerialUnitOptions {
 export async function upsertSerialUnit(
   input: UpsertSerialUnitInput,
   options?: UpsertSerialUnitOptions,
+  orgId?: OrgId,
 ): Promise<UpsertSerialUnitResult | null> {
   const normalized = normalizeSerial(input.serial_number);
   if (!normalized) return null;
@@ -384,20 +488,34 @@ export async function upsertSerialUnit(
   const nowIso = new Date().toISOString();
   const isReceivingTouch = input.origin_source === 'receiving';
 
-  const externalClient = options?.dbClient;
-  const ownsTxn = externalClient == null;
-  const client = externalClient ?? (await pool.connect());
-  try {
-    if (ownsTxn) {
-      await client.query('BEGIN');
-    }
-
-    const existing = await client.query<SerialUnitRow>(
-      `SELECT * FROM serial_units
-       WHERE normalized_serial = $1
-       FOR UPDATE`,
-      [normalized],
-    );
+  /**
+   * The SQL body of the upsert, parametrized so it can run on any open client.
+   * When `scoped` is true (a trailing `orgId` was threaded) it ALSO:
+   *   - pins the FOR UPDATE lookup to the org (normalized_serial is a string
+   *     key that collides across tenants),
+   *   - stamps organization_id on the INSERT,
+   *   - constrains the UPDATE WHERE to the org.
+   * When `scoped` is false the SQL is byte-identical to the pre-tenancy code,
+   * so every existing caller that doesn't pass orgId behaves exactly as before.
+   * BEGIN/COMMIT/ROLLBACK/release are owned by the dispatcher below, never here.
+   */
+  const runUpsert = async (
+    client: Queryable,
+    scoped: boolean,
+  ): Promise<UpsertSerialUnitResult> => {
+    const existing = scoped
+      ? await client.query<SerialUnitRow>(
+          `SELECT * FROM serial_units
+           WHERE normalized_serial = $1 AND organization_id = $2
+           FOR UPDATE`,
+          [normalized, orgId],
+        )
+      : await client.query<SerialUnitRow>(
+          `SELECT * FROM serial_units
+           WHERE normalized_serial = $1
+           FOR UPDATE`,
+          [normalized],
+        );
     const existingRow = existing.rows[0] ?? null;
 
     // Mint a unit_uid at birth (Phase 2) when the caller didn't supply one and
@@ -440,42 +558,73 @@ export async function upsertSerialUnit(
         created_at_iso: nowIso,
       };
 
-      const inserted = await client.query<SerialUnitRow>(
-        `INSERT INTO serial_units (
-           serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
-           current_status, current_location, condition_grade,
-           origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
-           received_at, received_by, metadata, unit_uid
-         ) VALUES (
-           $1, $2, $3, $4, $5,
-           $6, $7, $8::condition_grade_enum,
-           $9, $10, $11, $12,
-           $13, $14, $15::jsonb, $16
-         )
-         RETURNING *`,
-        [
-          trimmedSerial,
-          normalized,
-          trimmedSku,
-          input.sku_catalog_id ?? null,
-          trimmedZohoItem,
-          targetStatus,
-          trimmedLocation,
-          trimmedGrade,
-          input.origin_source,
-          input.origin_receiving_line_id ?? null,
-          input.origin_tsn_id ?? null,
-          input.origin_sku_id ?? null,
-          isReceivingTouch ? nowIso : null,
-          isReceivingTouch ? input.actor_id ?? null : null,
-          JSON.stringify(insertMetadata),
-          resolvedUnitUid,
-        ],
-      );
+      const inserted = scoped
+        ? await client.query<SerialUnitRow>(
+            `INSERT INTO serial_units (
+               serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
+               current_status, current_location, condition_grade,
+               origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
+               received_at, received_by, metadata, unit_uid, organization_id
+             ) VALUES (
+               $1, $2, $3, $4, $5,
+               $6, $7, $8::condition_grade_enum,
+               $9, $10, $11, $12,
+               $13, $14, $15::jsonb, $16, $17
+             )
+             RETURNING *`,
+            [
+              trimmedSerial,
+              normalized,
+              trimmedSku,
+              input.sku_catalog_id ?? null,
+              trimmedZohoItem,
+              targetStatus,
+              trimmedLocation,
+              trimmedGrade,
+              input.origin_source,
+              input.origin_receiving_line_id ?? null,
+              input.origin_tsn_id ?? null,
+              input.origin_sku_id ?? null,
+              isReceivingTouch ? nowIso : null,
+              isReceivingTouch ? input.actor_id ?? null : null,
+              JSON.stringify(insertMetadata),
+              resolvedUnitUid,
+              orgId,
+            ],
+          )
+        : await client.query<SerialUnitRow>(
+            `INSERT INTO serial_units (
+               serial_number, normalized_serial, sku, sku_catalog_id, zoho_item_id,
+               current_status, current_location, condition_grade,
+               origin_source, origin_receiving_line_id, origin_tsn_id, origin_sku_id,
+               received_at, received_by, metadata, unit_uid
+             ) VALUES (
+               $1, $2, $3, $4, $5,
+               $6, $7, $8::condition_grade_enum,
+               $9, $10, $11, $12,
+               $13, $14, $15::jsonb, $16
+             )
+             RETURNING *`,
+            [
+              trimmedSerial,
+              normalized,
+              trimmedSku,
+              input.sku_catalog_id ?? null,
+              trimmedZohoItem,
+              targetStatus,
+              trimmedLocation,
+              trimmedGrade,
+              input.origin_source,
+              input.origin_receiving_line_id ?? null,
+              input.origin_tsn_id ?? null,
+              input.origin_sku_id ?? null,
+              isReceivingTouch ? nowIso : null,
+              isReceivingTouch ? input.actor_id ?? null : null,
+              JSON.stringify(insertMetadata),
+              resolvedUnitUid,
+            ],
+          );
 
-      if (ownsTxn) {
-        await client.query('COMMIT');
-      }
       return {
         unit: inserted.rows[0],
         is_new: true,
@@ -503,8 +652,7 @@ export async function upsertSerialUnit(
     if (warnings.length > 0) metadataPatch.warnings = warnings;
     if (is_return) metadataPatch.return_detected_at = nowIso;
 
-    const updated = await client.query<SerialUnitRow>(
-      `UPDATE serial_units SET
+    const updateSet = `UPDATE serial_units SET
          sku = COALESCE(sku, $2),
          sku_catalog_id = COALESCE(sku_catalog_id, $3),
          zoho_item_id = COALESCE(zoho_item_id, $4),
@@ -519,31 +667,38 @@ export async function upsertSerialUnit(
          received_by = COALESCE(received_by, $13),
          metadata = metadata || $14::jsonb,
          unit_uid = COALESCE(unit_uid, $15),
-         updated_at = NOW()
+         updated_at = NOW()`;
+    const updateParams = [
+      prior.id,
+      trimmedSku,
+      input.sku_catalog_id ?? null,
+      trimmedZohoItem,
+      next,
+      trimmedLocation,
+      trimmedGrade,
+      input.origin_source,
+      input.origin_receiving_line_id ?? null,
+      input.origin_tsn_id ?? null,
+      input.origin_sku_id ?? null,
+      isReceivingTouch && !prior.received_at ? nowIso : null,
+      isReceivingTouch && !prior.received_by ? input.actor_id ?? null : null,
+      JSON.stringify(metadataPatch),
+      resolvedUnitUid,
+    ];
+    const updated = scoped
+      ? await client.query<SerialUnitRow>(
+          `${updateSet}
+       WHERE id = $1 AND organization_id = $16
+       RETURNING *`,
+          [...updateParams, orgId],
+        )
+      : await client.query<SerialUnitRow>(
+          `${updateSet}
        WHERE id = $1
        RETURNING *`,
-      [
-        prior.id,
-        trimmedSku,
-        input.sku_catalog_id ?? null,
-        trimmedZohoItem,
-        next,
-        trimmedLocation,
-        trimmedGrade,
-        input.origin_source,
-        input.origin_receiving_line_id ?? null,
-        input.origin_tsn_id ?? null,
-        input.origin_sku_id ?? null,
-        isReceivingTouch && !prior.received_at ? nowIso : null,
-        isReceivingTouch && !prior.received_by ? input.actor_id ?? null : null,
-        JSON.stringify(metadataPatch),
-        resolvedUnitUid,
-      ],
-    );
+          updateParams,
+        );
 
-    if (ownsTxn) {
-      await client.query('COMMIT');
-    }
     return {
       unit: updated.rows[0],
       is_new: false,
@@ -551,6 +706,39 @@ export async function upsertSerialUnit(
       is_return,
       warnings,
     };
+  };
+
+  const externalClient = options?.dbClient;
+
+  // ── Tenant-aware path ──────────────────────────────────────────────────────
+  // A trailing orgId was threaded. Stamp/scope every statement on the org.
+  if (orgId) {
+    if (externalClient) {
+      // Executor pattern: the caller owns the transaction. Set the org GUC on
+      // THIS client (transaction-scoped via is_local=true) so RLS/loud-fail
+      // defaults see the right tenant, then run the org-scoped SQL on it.
+      await externalClient.query(
+        "SELECT set_config('app.current_org', $1, true)",
+        [orgId],
+      );
+      return runUpsert(externalClient, true);
+    }
+    // No external client: own the txn via the GUC-wrapping tenant transaction.
+    return withTenantTransaction(orgId, (client) => runUpsert(client, true));
+  }
+
+  // ── Legacy raw-pool path (byte-identical to pre-tenancy behavior) ──────────
+  const ownsTxn = externalClient == null;
+  const client = externalClient ?? (await pool.connect());
+  try {
+    if (ownsTxn) {
+      await client.query('BEGIN');
+    }
+    const result = await runUpsert(client, false);
+    if (ownsTxn) {
+      await client.query('COMMIT');
+    }
+    return result;
   } catch (err) {
     if (ownsTxn) {
       await client.query('ROLLBACK').catch(() => {});
@@ -598,6 +786,7 @@ export async function syncTsnToSerialUnit(
     zoho_item_id?: string | null;
     override_status?: SerialStatus;
   },
+  orgId?: OrgId,
 ): Promise<number | null> {
   try {
     const isReceiving = tsnRow.station_source === 'RECEIVING';
@@ -618,16 +807,28 @@ export async function syncTsnToSerialUnit(
       origin_tsn_id: tsnRow.id,
       actor_id: tsnRow.tested_by ?? null,
       target_status,
-    });
+    }, undefined, orgId);
 
     if (!result) return null;
 
-    await pool.query(
-      `UPDATE tech_serial_numbers
-       SET serial_unit_id = $1
-       WHERE id = $2 AND serial_unit_id IS NULL`,
-      [result.unit.id, tsnRow.id],
-    );
+    // Stamp the FK back onto the TSN row. tech_serial_numbers is tenant-owned,
+    // so when org is threaded we scope the UPDATE and run it GUC-wrapped.
+    if (orgId) {
+      await tenantQuery(
+        orgId,
+        `UPDATE tech_serial_numbers
+         SET serial_unit_id = $1
+         WHERE id = $2 AND serial_unit_id IS NULL AND organization_id = $3`,
+        [result.unit.id, tsnRow.id, orgId],
+      );
+    } else {
+      await pool.query(
+        `UPDATE tech_serial_numbers
+         SET serial_unit_id = $1
+         WHERE id = $2 AND serial_unit_id IS NULL`,
+        [result.unit.id, tsnRow.id],
+      );
+    }
 
     return result.unit.id;
   } catch (err) {
@@ -646,7 +847,23 @@ export async function stampReceivingTsnSerialUnitId(params: {
   serial_unit_id: number;
   serial_number: string;
   receiving_line_id: number;
-}): Promise<number> {
+}, orgId?: OrgId): Promise<number> {
+  // serial_number is a string key that collides across tenants; when org is
+  // threaded, scope the UPDATE to the org and run it GUC-wrapped.
+  if (orgId) {
+    const scoped = await tenantQuery(
+      orgId,
+      `UPDATE tech_serial_numbers
+       SET serial_unit_id = $1
+       WHERE UPPER(TRIM(serial_number)) = UPPER(TRIM($2))
+         AND receiving_line_id = $3
+         AND station_source = 'RECEIVING'
+         AND serial_unit_id IS NULL
+         AND organization_id = $4`,
+      [params.serial_unit_id, params.serial_number, params.receiving_line_id, orgId],
+    );
+    return scoped.rowCount ?? 0;
+  }
   const result = await pool.query(
     `UPDATE tech_serial_numbers
      SET serial_unit_id = $1
@@ -672,6 +889,7 @@ export interface SkuRowForSync {
  */
 export async function syncSkuToSerialUnit(
   skuRow: SkuRowForSync,
+  orgId?: OrgId,
 ): Promise<number | null> {
   const serial = skuRow.serial_number?.trim();
   if (!serial) return null;
@@ -679,7 +897,7 @@ export async function syncSkuToSerialUnit(
   try {
     const { getSkuCatalogBySku } = await import('./sku-catalog-queries');
     const catalog = skuRow.static_sku
-      ? await getSkuCatalogBySku(skuRow.static_sku)
+      ? await getSkuCatalogBySku(skuRow.static_sku, orgId)
       : null;
 
     const result = await upsertSerialUnit({
@@ -690,16 +908,28 @@ export async function syncSkuToSerialUnit(
       origin_sku_id: skuRow.id,
       location: skuRow.location ?? null,
       target_status: skuRow.location ? 'STOCKED' : 'UNKNOWN',
-    });
+    }, undefined, orgId);
 
     if (!result) return null;
 
-    await pool.query(
-      `UPDATE sku
-       SET serial_unit_id = $1
-       WHERE id = $2 AND serial_unit_id IS NULL`,
-      [result.unit.id, skuRow.id],
-    );
+    // Stamp the FK back onto the sku row. sku is tenant-owned; scope + GUC-wrap
+    // the UPDATE when org is threaded.
+    if (orgId) {
+      await tenantQuery(
+        orgId,
+        `UPDATE sku
+         SET serial_unit_id = $1
+         WHERE id = $2 AND serial_unit_id IS NULL AND organization_id = $3`,
+        [result.unit.id, skuRow.id, orgId],
+      );
+    } else {
+      await pool.query(
+        `UPDATE sku
+         SET serial_unit_id = $1
+         WHERE id = $2 AND serial_unit_id IS NULL`,
+        [result.unit.id, skuRow.id],
+      );
+    }
 
     return result.unit.id;
   } catch (err) {
@@ -720,12 +950,22 @@ export async function enrichSerialUnitCatalog(params: {
   sku?: string | null;
   zoho_item_id?: string | null;
   zoho_purchaseorder_id?: string | null;
-}): Promise<void> {
+}, orgId?: OrgId): Promise<void> {
   try {
-    const current = await pool.query<{ sku_catalog_id: number | null }>(
-      `SELECT sku_catalog_id FROM serial_units WHERE id = $1 LIMIT 1`,
-      [params.serial_unit_id],
-    );
+    // serial_units is tenant-owned; when org is threaded, scope both the read
+    // and the write to the org and run them GUC-wrapped. ensureSkuCatalogEntry
+    // is not yet org-aware (Phase 1 pending there), so we leave that call as-is.
+    const current = orgId
+      ? await tenantQuery<{ sku_catalog_id: number | null }>(
+          orgId,
+          `SELECT sku_catalog_id FROM serial_units
+           WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [params.serial_unit_id, orgId],
+        )
+      : await pool.query<{ sku_catalog_id: number | null }>(
+          `SELECT sku_catalog_id FROM serial_units WHERE id = $1 LIMIT 1`,
+          [params.serial_unit_id],
+        );
     if (current.rows.length === 0) return;
     if (current.rows[0].sku_catalog_id != null) return;
 
@@ -737,12 +977,22 @@ export async function enrichSerialUnitCatalog(params: {
     });
     if (!catalog) return;
 
-    await pool.query(
-      `UPDATE serial_units
-       SET sku_catalog_id = $1, updated_at = NOW()
-       WHERE id = $2 AND sku_catalog_id IS NULL`,
-      [catalog.id, params.serial_unit_id],
-    );
+    if (orgId) {
+      await tenantQuery(
+        orgId,
+        `UPDATE serial_units
+         SET sku_catalog_id = $1, updated_at = NOW()
+         WHERE id = $2 AND sku_catalog_id IS NULL AND organization_id = $3`,
+        [catalog.id, params.serial_unit_id, orgId],
+      );
+    } else {
+      await pool.query(
+        `UPDATE serial_units
+         SET sku_catalog_id = $1, updated_at = NOW()
+         WHERE id = $2 AND sku_catalog_id IS NULL`,
+        [catalog.id, params.serial_unit_id],
+      );
+    }
   } catch (err) {
     console.warn('enrichSerialUnitCatalog failed:', err);
   }

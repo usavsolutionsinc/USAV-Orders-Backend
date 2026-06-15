@@ -38,9 +38,17 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 
   const stream = createNdjsonStream();
+  // Thread the caller's org into the sweep so it reads + mutates ONLY this
+  // tenant's open exceptions / orders / packer_logs. Without this the backbone
+  // call runs a global cross-tenant sweep (any authenticated tenant could flip
+  // another org's orders to shipped and resolve their exception rows). The
+  // shared module accepts an optional trailing orgId (Phase A) and switches to
+  // tenantQuery + an org-scoped tracking match + org-predicated UPDATEs when it
+  // is supplied.
+  const orgId = ctx.organizationId;
   (async () => {
     try {
-      const result = await syncOrderExceptionsToOrders(stream.emit);
+      const result = await syncOrderExceptionsToOrders(stream.emit, orgId);
       if (result.matched > 0) {
         await invalidateAllOrdersApiCaches();
       }

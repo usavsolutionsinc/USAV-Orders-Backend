@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server';
-import { listWarehouses } from '@/lib/warehouses';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { Warehouse } from '@/lib/warehouses';
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_request, ctx) => {
   try {
-    const rows = await listWarehouses();
-    return NextResponse.json({ success: true, warehouses: rows });
+    // `warehouses` has no organization_id column (tenant-owned-NEEDS-COL), so
+    // there is no explicit org filter to add — run the read GUC-wrapped via
+    // tenantQuery so it is RLS-subject once per-table FORCE is enabled. SQL +
+    // response shape are identical to the prior listWarehouses() passthrough.
+    const result = await tenantQuery<Warehouse>(
+      ctx.organizationId,
+      `SELECT id, code, name, timezone, is_active, is_default
+       FROM warehouses
+       WHERE is_active = true
+       ORDER BY is_default DESC, code ASC`,
+    );
+    return NextResponse.json({ success: true, warehouses: result.rows });
   } catch (err: any) {
     console.error('[GET /api/warehouses] error:', err);
     return NextResponse.json(

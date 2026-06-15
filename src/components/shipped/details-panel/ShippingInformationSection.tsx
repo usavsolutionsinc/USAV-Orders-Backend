@@ -5,13 +5,15 @@ import { getAccountSourceLabel, getOrderIdUrl } from '@/utils/order-links';
 import { ShipmentStatusBadge } from '@/components/shipping/ShipmentStatusBadge';
 import { formatDateTimePST, getDaysLateNumber } from '@/utils/date';
 import { getStaffName } from '@/utils/staff';
-import { Pencil } from '@/components/Icons';
+import { Pencil, Copy, Check } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { DateTimeValue } from '@/design-system/components/DateTimeValue';
+import { CopyActionIcon } from '@/design-system/components/CopyActionIcon';
 import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
 
+import { SerialNumbersRow } from './SerialNumbersRow';
 import { buildAllTrackingRows, serialNumberRowsFromShipped } from './shipping-information/helpers';
 import { ShippingEditableRow } from './shipping-information/ShippingEditableRow';
-import { ShippingSerialNumberRow } from './shipping-information/ShippingSerialNumberRow';
 import { ShippingInfoEditModal } from './shipping-information/ShippingInfoEditModal';
 import { PrepackedSkuRow } from './shipping-information/PrepackedSkuRow';
 import { useEditableShippingFields } from './shipping-information/hooks/useEditableShippingFields';
@@ -44,8 +46,8 @@ interface ShippingInformationSectionProps {
 
 export function ShippingInformationSection({
   shipped,
-  copiedAll: _copiedAll,
-  onCopyAll: _onCopyAll,
+  copiedAll,
+  onCopyAll,
   onUpdate,
   showSerialNumber = true,
   showReturnInformation = true,
@@ -92,6 +94,18 @@ export function ShippingInformationSection({
   const testedAtDateTimeDisplay = shipped.test_date_time
     ? formatDateTimePST(shipped.test_date_time)
     : 'N/A';
+  const isScannedOut = Boolean(shipped.ship_confirmed_at && shipped.ship_confirmed_at !== '1');
+  const scannedOutDisplay = isScannedOut
+    ? formatDateTimePST(shipped.ship_confirmed_at as string)
+    : 'N/A';
+  // Who scanned it out at the dock — SAL SHIP_CONFIRM staff, surfaced for parity
+  // with the Packed / Tested By rows (and for staff reporting).
+  const scannedOutByDisplay = isScannedOut
+    ? (String(
+        (shipped as any).shipped_out_by_name
+        || getStaffName((shipped as any).shipped_out_by ?? null)
+      ).trim() || 'Not specified')
+    : null;
   // Packer from actual SAL/packer_logs scan data only — not from work_assignment packer_id
   const packerNameDisplay = String(
     (shipped as any).packed_by_name
@@ -103,6 +117,16 @@ export function ShippingInformationSection({
     || (shipped as any).tested_by_name
     || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
   ).trim() || 'Not specified';
+
+  // Everything the Return Info block shows, as one clipboard payload for the
+  // header copy icon.
+  const returnsCopyText = [
+    `Order ID: ${shipped.order_id || 'N/A'}`,
+    `Serials: ${serialNumberRows.length ? serialNumberRows.join(', ') : 'N/A'}`,
+    `Tested By: ${techNameDisplay} ${testedAtDateTimeDisplay}`,
+    `Packed By: ${packerNameDisplay} ${shippedAtDisplay}`,
+    `Scanned Out: ${scannedOutByDisplay ?? 'N/A'} ${scannedOutDisplay}`,
+  ].join('\n');
 
   return (
     <section className="space-y-6">
@@ -118,28 +142,47 @@ export function ShippingInformationSection({
       />
       {showReturnInformation && shipped.packed_at && shipped.packed_at !== '1' ? (
         <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Return Info</h3>
+            <CopyActionIcon
+              value={returnsCopyText}
+              ariaLabel="Copy all return details"
+              title="Copy all return details"
+            />
+          </div>
           <div className="space-y-0">
-            <DetailsPanelRow label="Packed">
-              <div className="flex items-center justify-between gap-3">
-                <p className="truncate text-sm font-bold text-gray-900">{packerNameDisplay}</p>
-                <p className="shrink-0 text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
-              </div>
-            </DetailsPanelRow>
+            <ShippingEditableRow
+              label="Order ID"
+              value={shipped.order_id || ''}
+              placeholder="N/A"
+              onChange={() => {}}
+              onBlur={() => {}}
+              externalUrl={getOrderIdUrl(shipped.order_id || '')}
+              headerAccessory={accountSourceLabel || undefined}
+              headerAccessoryClassName="text-micro font-black tracking-wide text-blue-600"
+              allowEdit={false}
+            />
+            <SerialNumbersRow serials={serialNumberRows} />
             <DetailsPanelRow label="Tested By">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-bold text-gray-900">{techNameDisplay}</p>
-                <p className="shrink-0 text-sm font-bold text-gray-900">{testedAtDateTimeDisplay}</p>
+                <DateTimeValue value={shipped.test_date_time} />
               </div>
             </DetailsPanelRow>
-            <DetailsPanelRow label="Serial Numbers" className="last:border-b-0">
-              {serialNumberRows.length > 0 ? (
-                <div className="divide-y divide-gray-100">
-                  {serialNumberRows.map((serial, idx) => (
-                    <p key={idx} className="truncate py-1 last:pb-0 font-mono text-sm font-bold text-gray-900">{serial}</p>
-                  ))}
+            <DetailsPanelRow label="Packed By">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-gray-900">{packerNameDisplay}</p>
+                <DateTimeValue value={packedAtSource} />
+              </div>
+            </DetailsPanelRow>
+            <DetailsPanelRow label="Scanned Out">
+              {isScannedOut ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-bold text-gray-900">{scannedOutByDisplay}</p>
+                  <DateTimeValue value={shipped.ship_confirmed_at} />
                 </div>
               ) : (
-                <p className="py-0.5 text-sm font-bold text-gray-400">N/A</p>
+                <p className="text-sm font-bold text-gray-400">N/A</p>
               )}
             </DetailsPanelRow>
           </div>
@@ -150,15 +193,30 @@ export function ShippingInformationSection({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Edit Details</h3>
-          <button
-            type="button"
-            onClick={modal.openEditModal}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Edit shipping information"
-            title="Edit shipping information"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onCopyAll ? (
+              <button
+                type="button"
+                onClick={onCopyAll}
+                className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-gray-100 ${
+                  copiedAll ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-700'
+                }`}
+                aria-label="Copy all shipped details"
+                title="Copy all shipped details"
+              >
+                {copiedAll ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={modal.openEditModal}
+              className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Edit shipping information"
+              title="Edit shipping information"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-0">
@@ -243,7 +301,7 @@ export function ShippingInformationSection({
                 <DetailsPanelRow label="Packed By">
                   <div className="flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-bold text-gray-900">{metaFields.packedByName}</p>
-                    <p className="shrink-0 text-sm font-bold text-gray-900">{shippedAtDisplay}</p>
+                    <DateTimeValue value={packedAtSource} />
                   </div>
                 </DetailsPanelRow>
               ) : null}
@@ -251,7 +309,7 @@ export function ShippingInformationSection({
                 <DetailsPanelRow label="Tested By">
                   <div className="flex items-center justify-between gap-3">
                     <p className="truncate text-sm font-bold text-gray-900">{metaFields.testedByName}</p>
-                    <p className="shrink-0 text-sm font-bold text-gray-900">{testedAtDateTimeDisplay}</p>
+                    <DateTimeValue value={shipped.test_date_time} />
                   </div>
                 </DetailsPanelRow>
               ) : null}
@@ -259,16 +317,7 @@ export function ShippingInformationSection({
           ) : null}
 
           {showSerialNumber ? (
-            <ShippingSerialNumberRow
-              rowId={shipped.id}
-              trackingNumber={shipped.shipping_tracking_number}
-              serialNumber={shipped.serial_number}
-              techId={shipped.tested_by ?? shipped.tester_id ?? null}
-              fnskuLogId={shipped.fnsku_log_id ?? null}
-              salId={shipped.sal_id ?? null}
-              onUpdate={onUpdate}
-              allowEdit={false}
-            />
+            <SerialNumbersRow serials={serialNumberRows} />
           ) : null}
 
           {ef.isSaving ? (

@@ -16,6 +16,7 @@
 
 import DOMPurify from 'isomorphic-dompurify';
 import { poGmailFetch } from './client';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -192,13 +193,14 @@ export async function listMessageIds(
   query: string,
   maxResults = 25,
   pageToken?: string,
+  orgId: string = USAV_ORG_ID,
 ): Promise<{ ids: string[]; nextPageToken?: string }> {
   const url = new URL(`${GMAIL_API}/messages`);
   url.searchParams.set('q', query);
   url.searchParams.set('maxResults', String(Math.min(Math.max(maxResults, 1), 500)));
   if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-  const res = await poGmailFetch(url.toString());
+  const res = await poGmailFetch(url.toString(), {}, orgId);
   if (!res.ok) {
     throw new Error(`Gmail messages.list failed (${res.status}): ${await res.text()}`);
   }
@@ -209,11 +211,14 @@ export async function listMessageIds(
   };
 }
 
-export async function fetchMessage(id: string): Promise<GmailMessageEnvelope> {
+export async function fetchMessage(
+  id: string,
+  orgId: string = USAV_ORG_ID,
+): Promise<GmailMessageEnvelope> {
   const url = new URL(`${GMAIL_API}/messages/${encodeURIComponent(id)}`);
   url.searchParams.set('format', 'full');
 
-  const res = await poGmailFetch(url.toString());
+  const res = await poGmailFetch(url.toString(), {}, orgId);
   if (!res.ok) {
     throw new Error(`Gmail messages.get failed for ${id} (${res.status}): ${await res.text()}`);
   }
@@ -236,7 +241,10 @@ export async function fetchMessage(id: string): Promise<GmailMessageEnvelope> {
   };
 }
 
-export async function fetchMessagesByIds(ids: string[]): Promise<GmailMessageEnvelope[]> {
+export async function fetchMessagesByIds(
+  ids: string[],
+  orgId: string = USAV_ORG_ID,
+): Promise<GmailMessageEnvelope[]> {
   // Small concurrent fan-out. Gmail's per-user concurrency limits are
   // generous and individual GETs are cheap; we stay under 5 in flight
   // to be polite and avoid 429s when scanning a fresh mailbox.
@@ -244,7 +252,7 @@ export async function fetchMessagesByIds(ids: string[]): Promise<GmailMessageEnv
   const chunkSize = 5;
   for (let i = 0; i < ids.length; i += chunkSize) {
     const slice = ids.slice(i, i + chunkSize);
-    const results = await Promise.all(slice.map(fetchMessage));
+    const results = await Promise.all(slice.map((id) => fetchMessage(id, orgId)));
     out.push(...results);
   }
   return out;
@@ -254,13 +262,18 @@ export async function modifyLabels(
   messageId: string,
   addLabelIds: string[] = [],
   removeLabelIds: string[] = [],
+  orgId: string = USAV_ORG_ID,
 ): Promise<void> {
   if (addLabelIds.length === 0 && removeLabelIds.length === 0) return;
-  const res = await poGmailFetch(`${GMAIL_API}/messages/${encodeURIComponent(messageId)}/modify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ addLabelIds, removeLabelIds }),
-  });
+  const res = await poGmailFetch(
+    `${GMAIL_API}/messages/${encodeURIComponent(messageId)}/modify`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addLabelIds, removeLabelIds }),
+    },
+    orgId,
+  );
   if (!res.ok) {
     throw new Error(`Gmail messages.modify failed for ${messageId} (${res.status}): ${await res.text()}`);
   }
@@ -271,8 +284,11 @@ export async function modifyLabels(
  * suitable for passing to modifyLabels(). Caches nothing — callers should
  * resolve once and pass the id around.
  */
-export async function getOrCreateLabel(name: string): Promise<string> {
-  const listRes = await poGmailFetch(`${GMAIL_API}/labels`);
+export async function getOrCreateLabel(
+  name: string,
+  orgId: string = USAV_ORG_ID,
+): Promise<string> {
+  const listRes = await poGmailFetch(`${GMAIL_API}/labels`, {}, orgId);
   if (!listRes.ok) {
     throw new Error(`Gmail labels.list failed (${listRes.status}): ${await listRes.text()}`);
   }
@@ -280,15 +296,19 @@ export async function getOrCreateLabel(name: string): Promise<string> {
   const existing = list.labels?.find((l) => l.name === name);
   if (existing) return existing.id;
 
-  const createRes = await poGmailFetch(`${GMAIL_API}/labels`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name,
-      labelListVisibility: 'labelShow',
-      messageListVisibility: 'show',
-    }),
-  });
+  const createRes = await poGmailFetch(
+    `${GMAIL_API}/labels`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        labelListVisibility: 'labelShow',
+        messageListVisibility: 'show',
+      }),
+    },
+    orgId,
+  );
   if (!createRes.ok) {
     throw new Error(`Gmail labels.create failed (${createRes.status}): ${await createRes.text()}`);
   }

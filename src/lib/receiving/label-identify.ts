@@ -15,6 +15,8 @@
  */
 import pool from '@/lib/db';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface LabelMatch {
   /** Canonical model the OCR produced, echoed back. */
@@ -60,13 +62,20 @@ function codeToken(model: string): string | null {
   return codes.sort((a, b) => b.length - a.length)[0] ?? null;
 }
 
-const SELECT = `
+// The sku → sku_catalog join is on a string key (sku), so when we scope to a
+// tenant we MUST also align organization_id across the join (rule 3) — otherwise
+// a same-SKU catalog row from another org could attach to this org's item. The
+// join condition is parameterized by callers: `joinAnd` is '' (raw-pool path) or
+// ' AND sc.organization_id = i.organization_id' (tenant path).
+function selectClause(joinAnd: string): string {
+  return `
   SELECT i.zoho_item_id, i.name, i.sku,
          sc.id AS sku_catalog_id, sc.product_title, sc.image_url,
          i.quantity_on_hand
   FROM items i
-  LEFT JOIN sku_catalog sc ON sc.sku = i.sku
+  LEFT JOIN sku_catalog sc ON sc.sku = i.sku${joinAnd}
 `;
+}
 // Prefer items that have a catalog row, then ones in stock, then active.
 const ORDER = `
   ORDER BY (sc.id IS NOT NULL) DESC,
@@ -75,15 +84,29 @@ const ORDER = `
   LIMIT 5
 `;
 
-async function queryByWords(words: string[]): Promise<ItemRow[]> {
+async function queryByWords(words: string[], orgId?: OrgId): Promise<ItemRow[]> {
   if (words.length === 0) return [];
   const conds = words.map((_, k) => `i.name ILIKE '%' || $${k + 1} || '%'`).join(' AND ');
-  const res = await pool.query<ItemRow>(`${SELECT} WHERE ${conds} ${ORDER}`, words);
+  // When orgId is present, scope the items read to the tenant ($N after the word
+  // params) and align org across the string-key (sku) join; when omitted, keep
+  // the exact prior raw-pool SQL/params.
+  if (orgId) {
+    const orgIdx = words.length + 1;
+    const sql = `${selectClause(' AND sc.organization_id = i.organization_id')} WHERE ${conds} AND i.organization_id = $${orgIdx} ${ORDER}`;
+    const res = await tenantQuery<ItemRow>(orgId, sql, [...words, orgId]);
+    return res.rows;
+  }
+  const res = await pool.query<ItemRow>(`${selectClause('')} WHERE ${conds} ${ORDER}`, words);
   return res.rows;
 }
 
-async function queryByCode(code: string): Promise<ItemRow[]> {
-  const res = await pool.query<ItemRow>(`${SELECT} WHERE i.name ILIKE '%' || $1 || '%' ${ORDER}`, [code]);
+async function queryByCode(code: string, orgId?: OrgId): Promise<ItemRow[]> {
+  if (orgId) {
+    const sql = `${selectClause(' AND sc.organization_id = i.organization_id')} WHERE i.name ILIKE '%' || $1 || '%' AND i.organization_id = $2 ${ORDER}`;
+    const res = await tenantQuery<ItemRow>(orgId, sql, [code, orgId]);
+    return res.rows;
+  }
+  const res = await pool.query<ItemRow>(`${selectClause('')} WHERE i.name ILIKE '%' || $1 || '%' ${ORDER}`, [code]);
   return res.rows;
 }
 
@@ -92,7 +115,7 @@ async function queryByCode(code: string): Promise<ItemRow[]> {
  * (with the model echoed) when nothing matches — the caller can then offer
  * "create new catalog entry" via resolveOrCreateSkuCatalogId.
  */
-export async function resolveModelToCatalog(model: string): Promise<LabelMatch> {
+export async function resolveModelToCatalog(model: string, orgId?: OrgId): Promise<LabelMatch> {
   const empty: LabelMatch = {
     model, zoho_item_id: null, sku: null, item_name: null,
     sku_catalog_id: null, product_title: null, image_url: null, resolved: false, via: null,
@@ -102,13 +125,13 @@ export async function resolveModelToCatalog(model: string): Promise<LabelMatch> 
 
   // 1) all significant words must appear in the item name (most precise).
   let via: LabelMatch['via'] = 'words';
-  let rows = await queryByWords(significantWords(trimmed));
+  let rows = await queryByWords(significantWords(trimmed), orgId);
 
   // 2) fall back to the distinctive model code alone (handles odd item titles).
   if (rows.length === 0) {
     const code = codeToken(trimmed);
     if (code) {
-      rows = await queryByCode(code);
+      rows = await queryByCode(code, orgId);
       via = 'code';
     }
   }
@@ -116,9 +139,11 @@ export async function resolveModelToCatalog(model: string): Promise<LabelMatch> 
 
   const best = rows[0];
   // Belt-and-suspenders: resolve catalog id via the full crosswalk (sku OR the
-  // zoho_item_id platform mapping) in case the direct sku join missed it.
+  // zoho_item_id platform mapping) in case the direct sku join missed it. orgId
+  // is the 4th positional arg (expectedTitle left undefined) so the resolver
+  // scopes its own reads to this tenant when present.
   const skuCatalogId =
-    best.sku_catalog_id ?? (await resolveSkuCatalogId(best.sku, best.zoho_item_id));
+    best.sku_catalog_id ?? (await resolveSkuCatalogId(best.sku, best.zoho_item_id, undefined, orgId));
 
   return {
     model: trimmed,
@@ -134,7 +159,9 @@ export async function resolveModelToCatalog(model: string): Promise<LabelMatch> 
 }
 
 /** Resolve several candidate model strings, de-duped, order preserved. */
-export async function resolveModels(models: string[]): Promise<LabelMatch[]> {
+export async function resolveModels(models: string[], orgId?: OrgId): Promise<LabelMatch[]> {
   const distinct = [...new Set(models.map((m) => (m || '').trim()).filter(Boolean))].slice(0, 8);
-  return Promise.all(distinct.map(resolveModelToCatalog));
+  // Explicit arrow so Array.map's index isn't passed as orgId; threads the
+  // optional tenant scope through to each resolve. orgId omitted = prior behavior.
+  return Promise.all(distinct.map((m) => resolveModelToCatalog(m, orgId)));
 }

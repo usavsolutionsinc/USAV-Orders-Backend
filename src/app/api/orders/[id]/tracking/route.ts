@@ -123,6 +123,7 @@ export async function PATCH(
   if (parsed instanceof NextResponse) return parsed;
 
   return runTrackingOps(req, id, gate.ctx, {
+    setTrackingNumbers: parsed.setTrackingNumbers,
     primaryTrackingNumber: parsed.primaryTrackingNumber,
     edits: parsed.edits,
     creates: parsed.creates,

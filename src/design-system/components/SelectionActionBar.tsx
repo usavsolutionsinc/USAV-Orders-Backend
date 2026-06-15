@@ -88,6 +88,8 @@ export function SelectionActionBar<T>({
         >
           <StickyActionBar
             maxWidth="max-w-none"
+            stackLeading
+            primaryFullWidth
             leading={
               leading ?? (
                 <span className="text-micro font-black uppercase tracking-widest tabular-nums text-gray-500">

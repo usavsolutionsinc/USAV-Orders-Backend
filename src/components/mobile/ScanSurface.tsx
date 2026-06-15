@@ -13,16 +13,12 @@
  * The hook is owned by the caller — pass it in so the parent decides scanner
  * lifecycle (start, stop, accept). This keeps multiple screens from each
  * acquiring camera permission independently.
- *
- * Triggers `useFeedback('scanAccepted')` automatically on each decode and
- * `useFeedback('error')` on a hard camera failure.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine } from 'lucide-react';
 import type { UseBarcodeScanner } from '@/hooks/useBarcodeScanner';
-import { useFeedback } from '@/hooks/useFeedback';
 
 interface ScanSurfaceProps {
   /** Scanner hook instance from `useBarcodeScanner()`. */
@@ -50,7 +46,6 @@ export function ScanSurface({
   bracketTone = 'blue',
   aspectRatio = '4 / 3',
 }: ScanSurfaceProps) {
-  const feedback = useFeedback();
   const [manualOpen, setManualOpen] = useState(false);
   const [manualValue, setManualValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,18 +54,12 @@ export function ScanSurface({
   useEffect(() => {
     const value = scanner.lastScannedValue;
     if (!value) return;
-    feedback('scanAccepted');
     onDecode(value);
     scanner.acceptScan();
     // Brief delay so the corner brackets pulse before clearing.
     const t = window.setTimeout(() => scanner.resetLastScan(), 600);
     return () => window.clearTimeout(t);
-  }, [scanner.lastScannedValue, onDecode, scanner, feedback]);
-
-  // Surface a one-shot haptic when camera goes into the error state.
-  useEffect(() => {
-    if (scanner.scanStatus === 'error') feedback('error');
-  }, [scanner.scanStatus, feedback]);
+  }, [scanner.lastScannedValue, onDecode, scanner]);
 
   // Focus the input when the manual entry expands.
   useEffect(() => {
@@ -84,7 +73,6 @@ export function ScanSurface({
     e.preventDefault();
     const trimmed = manualValue.trim();
     if (!trimmed) return;
-    feedback('confirm');
     onDecode(trimmed);
     setManualValue('');
     setManualOpen(false);

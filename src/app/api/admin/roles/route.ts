@@ -10,11 +10,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache } from '@/lib/auth/role-store';
 import { ALL_PERMISSIONS } from '@/lib/auth/permissions-shared';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -43,16 +43,25 @@ function partitionPermissions(raw: unknown): { valid: string[]; unknown: string[
   return { valid, unknown };
 }
 
-export const GET = withAuth(async () => {
-  const r = await pool.query(
+export const GET = withAuth(async (_req: NextRequest, ctx) => {
+  // `roles` is a GLOBAL system table (no organization_id) — it is not org-scoped.
+  // Member counts, however, MUST only count staff in THIS org: staff_roles is a
+  // global junction, so we scope through the org-owned `staff` parent.
+  const r = await tenantQuery(
+    ctx.organizationId,
     `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
             r.created_at, r.updated_at,
             COALESCE(c.cnt, 0)::INT AS member_count
        FROM roles r
        LEFT JOIN (
-         SELECT role_id, COUNT(*)::INT AS cnt FROM staff_roles GROUP BY role_id
+         SELECT sr.role_id, COUNT(*)::INT AS cnt
+           FROM staff_roles sr
+           JOIN staff s ON s.id = sr.staff_id
+          WHERE s.organization_id = $1
+          GROUP BY sr.role_id
        ) c ON c.role_id = r.id
       ORDER BY r.position ASC, r.id ASC`,
+    [ctx.organizationId],
   );
   return NextResponse.json({ roles: r.rows });
 }, { permission: 'admin.manage_roles' });
@@ -82,7 +91,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const position = Number.isFinite(Number(positionRaw)) ? Math.max(0, Math.floor(Number(positionRaw))) : 500;
 
   try {
-    const r = await pool.query(
+    // `roles` is a GLOBAL system table (no organization_id) — do NOT stamp an
+    // org on the row. Routed through the tenant connection only for GUC parity.
+    const r = await tenantQuery(
+      ctx.organizationId,
       `INSERT INTO roles (key, label, color, position, permissions, is_system)
        VALUES ($1, $2, $3, $4, $5::TEXT[], FALSE)
        RETURNING id, key, label, color, position, permissions, is_system, created_at, updated_at`,

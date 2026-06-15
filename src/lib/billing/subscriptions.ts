@@ -121,9 +121,16 @@ export async function upsertSubscription(input: UpsertSubscriptionInput): Promis
 }
 
 /**
- * Idempotent webhook ack — returns true on first delivery, false on dupes.
- * Stripe guarantees at-least-once; the unique constraint on event_id is
- * the dedupe key.
+ * Idempotent webhook gate. Returns true when the caller SHOULD process this
+ * delivery: a brand-new event, OR a previously-recorded event whose handler
+ * never completed (processed_at IS NULL → a prior attempt failed and Stripe
+ * redelivered). Returns false only for an already-successfully-handled
+ * duplicate. The handler must call markStripeEventProcessed() after success.
+ *
+ * Safe before/after the processed_at-nullable migration: the INSERT does not
+ * set processed_at, so pre-migration it defaults to now() (a redelivery then
+ * resolves to "already processed" = the old skip-dupes behavior), and
+ * post-migration it is NULL until markStripeEventProcessed sets it.
  */
 export async function recordStripeEvent(
   eventId: string,
@@ -131,11 +138,21 @@ export async function recordStripeEvent(
   orgId: OrgId | null,
   payload: unknown,
 ): Promise<boolean> {
-  const r = await pool.query(
+  const ins = await pool.query(
     `INSERT INTO stripe_events (event_id, event_type, organization_id, payload)
      VALUES ($1, $2, $3, $4::jsonb)
      ON CONFLICT (event_id) DO NOTHING`,
     [eventId, eventType, orgId, JSON.stringify(payload)],
   );
-  return (r.rowCount ?? 0) > 0;
+  if ((ins.rowCount ?? 0) > 0) return true; // brand-new event
+  const seen = await pool.query<{ processed_at: string | null }>(
+    `SELECT processed_at FROM stripe_events WHERE event_id = $1`,
+    [eventId],
+  );
+  return seen.rows[0]?.processed_at == null; // reprocess if a prior attempt didn't finish
+}
+
+/** Mark an event handled — call only after the webhook handler fully succeeds. */
+export async function markStripeEventProcessed(eventId: string): Promise<void> {
+  await pool.query(`UPDATE stripe_events SET processed_at = now() WHERE event_id = $1`, [eventId]);
 }

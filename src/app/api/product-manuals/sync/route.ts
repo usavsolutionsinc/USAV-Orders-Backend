@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 import {
   fetchManualServerAssignedItems,
   fetchManualServerUnassigned,
@@ -20,8 +20,14 @@ function deriveDisplayName(fileName: string) {
     .trim();
 }
 
-async function handlePost(_req: NextRequest) {
+async function handlePost(_req: NextRequest, ctx: AuthContext) {
   try {
+    // Thread orgId so every upsert/update/list GUC-wraps and scopes to this
+    // org. NEEDS-COL: product_manuals has no organization_id column and no RLS
+    // policy yet, so getAllProductManuals here can't hard-filter by parent
+    // (most synced rows are unpaired/NULL-parent) — the archive sweep below
+    // still sees cross-org rows until the column/policy lands. See stillOpen.
+    const orgId = ctx.organizationId ?? undefined;
     if (!isManualServerConfigured()) {
       return NextResponse.json(
         { success: false, error: 'Manual server is not configured' },
@@ -47,7 +53,7 @@ async function handlePost(_req: NextRequest) {
         folderPath: unassigned.folderPath,
         fileName: manual.name,
         status: 'unassigned',
-      });
+      }, orgId);
       createdOrUpdated += 1;
     }
 
@@ -61,12 +67,12 @@ async function handlePost(_req: NextRequest) {
           folderPath: item.folderPath,
           fileName: manual.name,
           status: 'assigned',
-        });
+        }, orgId);
         createdOrUpdated += 1;
       }
     }
 
-    const existing = await getAllProductManuals({ limit: 10000, offset: 0 });
+    const existing = await getAllProductManuals({ limit: 10000, offset: 0 }, orgId);
     for (const record of existing) {
       const relativePath = String(record.relative_path || '').trim();
       if (!relativePath) continue;
@@ -76,7 +82,7 @@ async function handlePost(_req: NextRequest) {
       await updateProductManual({
         id: Number(record.id),
         status: 'archived',
-      });
+      }, orgId);
       archived += 1;
     }
 

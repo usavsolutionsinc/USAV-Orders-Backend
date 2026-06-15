@@ -17,8 +17,8 @@ import {
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
-import { isInventoryV2ReceivingPutaway } from '@/lib/feature-flags';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { transition } from '@/lib/inventory/state-machine';
 
 // Default putaway bin (cached per Function instance). When the receive
 // caller doesn't supply destination_bin_id, mark-received falls back to
@@ -79,9 +79,12 @@ async function suggestPutawayBinIdForSku(sku: string | null): Promise<number | n
 }
 
 /**
- * Phase 2 helper: emit inventory_events + sku_stock_ledger for the receive
- * event. Replaces the standalone serial_units upsert in the flagged path
- * so that a single transaction holds the full set of writes.
+ * Receive-event overlay: emit inventory_events (RECEIVED + optional PUTAWAY)
+ * and append a sku_stock_ledger row, all in one transaction. The serial_units
+ * row itself is created by the caller via the canonical upsertSerialUnit and
+ * its id is passed in as `serialUnitId` (we reuse it; the raw upsert here is
+ * only a defensive fallback). Runs as a best-effort overlay after the serial
+ * and line writes have committed.
  *
  * Inputs already validated by the caller (qtyReceived > 0, receivingLineId
  * exists, dispositionCode in the enum). Returns the inserted event/ledger
@@ -93,6 +96,20 @@ async function applyInventoryV2Effects(input: {
   sku: string | null;
   qtyReceived: number;
   serialNumber: string | null;
+  /**
+   * Pre-resolved serial_units.id from the caller's canonical upsertSerialUnit
+   * (unit_uid mint + return-detection + metadata). When set, we reuse it and
+   * skip the raw upsert below so the canonical row isn't clobbered back to
+   * RECEIVED (which would erase a detected return). Null only for qty-only
+   * receives with no serial.
+   */
+  serialUnitId: number | null;
+  /**
+   * True when the canonical writer detected this serial as a return (it was
+   * previously SHIPPED). Suppresses the sellable +qty ledger row and the
+   * auto-putaway-to-STOCKED transition so the unit stays RETURNED for QC.
+   */
+  isReturn: boolean;
   zohoItemId: string | null;
   conditionGrade: string;
   dispositionCode: string;
@@ -103,11 +120,13 @@ async function applyInventoryV2Effects(input: {
   nowPst: string;
 }): Promise<{ ledgerId: number | null; receivedEventId: number; putawayEventId: number | null; serialUnitId: number | null }> {
   return transaction(async (client) => {
-    // 1. Serial_units upsert (Tier 3). Mirrors the off-flag SQL but
-    //    additionally updates current_location when a destination bin
-    //    is provided.
-    let serialUnitId: number | null = null;
-    if (input.serialNumber) {
+    // 1. Serial unit. Normally the caller already created it via the canonical
+    //    upsertSerialUnit and passed the id in — reuse it. The raw upsert below
+    //    is a defensive fallback for a serial that somehow arrived without a
+    //    pre-resolved id; it mirrors the legacy SQL and additionally sets
+    //    current_location when a destination bin is provided.
+    let serialUnitId: number | null = input.serialUnitId ?? null;
+    if (serialUnitId == null && input.serialNumber) {
       const upsert = await client.query<{ id: number }>(
         `INSERT INTO serial_units (
           serial_number, normalized_serial, sku, zoho_item_id,
@@ -141,12 +160,14 @@ async function applyInventoryV2Effects(input: {
 
     // 2. sku_stock_ledger row — only for ACCEPT disposition with qty.
     //    The trg_sku_stock_from_ledger trigger will project the new
-    //    on-hand count back onto sku_stock.stock automatically.
+    //    on-hand count back onto sku_stock.stock automatically. Skipped for
+    //    returns: a returned unit isn't fresh sellable stock until it's graded.
     let ledgerId: number | null = null;
     if (
       input.sku &&
       input.qtyReceived > 0 &&
-      input.dispositionCode === 'ACCEPT'
+      input.dispositionCode === 'ACCEPT' &&
+      !input.isReturn
     ) {
       const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger (
@@ -218,52 +239,77 @@ async function applyInventoryV2Effects(input: {
 
     // 4. inventory_events PUTAWAY — only when a destination bin is
     //    provided AND the unit is accepted. Skipped for SCRAP/RTV so
-    //    those events don't imply the unit reached stock.
+    //    those events don't imply the unit reached stock, and skipped for
+    //    returns so a detected return stays RETURNED (QC queue) instead of
+    //    being force-transitioned to STOCKED.
     let putawayEventId: number | null = null;
-    if (input.destinationBinId != null && input.dispositionCode === 'ACCEPT') {
+    if (input.destinationBinId != null && input.dispositionCode === 'ACCEPT' && !input.isReturn) {
       const putawayClientEventId = input.clientEventId
         ? `${input.clientEventId}:PUTAWAY`
         : null;
-      const putawayEvent = await client.query<{ id: number }>(
-        `INSERT INTO inventory_events (
-          event_type, actor_staff_id, station,
-          receiving_id, receiving_line_id, serial_unit_id, sku,
-          bin_id, prev_status, next_status, stock_ledger_id,
-          client_event_id, payload
-        )
-        VALUES ('PUTAWAY', $1, 'RECEIVING',
-                $2, $3, $4, $5,
-                $6, 'RECEIVED', 'STOCKED', $7,
-                $8, $9::jsonb)
-        ON CONFLICT (client_event_id) DO NOTHING
-        RETURNING id`,
-        [
-          input.staffId > 0 ? input.staffId : null,
-          input.receivingId,
-          input.receivingLineId,
-          serialUnitId,
-          input.sku,
-          input.destinationBinId,
-          ledgerId,
-          putawayClientEventId,
-          JSON.stringify({
-            qty: input.qtyReceived,
-            condition_grade: input.conditionGrade,
-          }),
-        ],
-      );
-      putawayEventId = putawayEvent.rows[0]?.id ?? null;
-
-      // Also transition the serial unit to STOCKED if we have one.
       if (serialUnitId) {
-        await client.query(
-          `UPDATE serial_units
-              SET current_status = 'STOCKED'::serial_status_enum,
-                  current_location = $1,
-                  updated_at = NOW()
-            WHERE id = $2`,
-          [String(input.destinationBinId), serialUnitId],
+        // Serialized putaway: route the RECEIVED→STOCKED change through the
+        // guarded transition(), which emits the PUTAWAY event (with receiving /
+        // bin / stock-ledger linkage carried via the passthrough fields) atomic
+        // with the status write. transition() writes status only, so the bin
+        // location is set in a follow-up UPDATE. Best-effort: a guard rejection
+        // (unit not RECEIVED — e.g. an already-stocked re-scan) leaves the unit
+        // as-is rather than force-stocking it.
+        const t = await transition({
+          unitId: serialUnitId,
+          to: 'STOCKED',
+          eventType: 'PUTAWAY',
+          actorStaffId: input.staffId > 0 ? input.staffId : null,
+          station: 'RECEIVING',
+          clientEventId: putawayClientEventId,
+          expectedFrom: 'RECEIVED',
+          receivingId: input.receivingId,
+          receivingLineId: input.receivingLineId,
+          stockLedgerId: ledgerId,
+          binId: input.destinationBinId,
+          payload: { qty: input.qtyReceived, condition_grade: input.conditionGrade },
+        }, client);
+        if (t.ok) {
+          putawayEventId = t.eventId;
+          await client.query(
+            `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2`,
+            [String(input.destinationBinId), serialUnitId],
+          );
+        } else {
+          console.warn(`mark-received putaway: STOCKED transition skipped for unit ${serialUnitId}: ${t.error}`);
+        }
+      } else {
+        // Qty-only putaway (no serialized unit): emit the informational PUTAWAY
+        // event directly — there is no unit to transition.
+        const putawayEvent = await client.query<{ id: number }>(
+          `INSERT INTO inventory_events (
+            event_type, actor_staff_id, station,
+            receiving_id, receiving_line_id, serial_unit_id, sku,
+            bin_id, prev_status, next_status, stock_ledger_id,
+            client_event_id, payload
+          )
+          VALUES ('PUTAWAY', $1, 'RECEIVING',
+                  $2, $3, $4, $5,
+                  $6, 'RECEIVED', 'STOCKED', $7,
+                  $8, $9::jsonb)
+          ON CONFLICT (client_event_id) DO NOTHING
+          RETURNING id`,
+          [
+            input.staffId > 0 ? input.staffId : null,
+            input.receivingId,
+            input.receivingLineId,
+            serialUnitId,
+            input.sku,
+            input.destinationBinId,
+            ledgerId,
+            putawayClientEventId,
+            JSON.stringify({
+              qty: input.qtyReceived,
+              condition_grade: input.conditionGrade,
+            }),
+          ],
         );
+        putawayEventId = putawayEvent.rows[0]?.id ?? null;
       }
     }
 
@@ -285,7 +331,7 @@ export const POST = withAuth(async (request, ctx) => {
     const serialNumber = String(body?.serial_number || '').trim() || null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
-    // Phase 2 (INVENTORY_V2_RECEIVING_PUTAWAY): optional destination bin
+    // Optional destination bin
     // scanned at the same time as the receive action. Triggers a PUTAWAY
     // event + serial_units.current_location update inside the same txn.
     // When the caller omits destination_bin_id on an ACCEPT receive, fall
@@ -303,8 +349,7 @@ export const POST = withAuth(async (request, ctx) => {
       : null;
     if (
       destinationBinId == null &&
-      String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT' &&
-      isInventoryV2ReceivingPutaway()
+      String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT'
     ) {
       destinationBinId = await resolveDefaultPutawayBinId();
       putawayBinSource = 'default';
@@ -412,7 +457,6 @@ export const POST = withAuth(async (request, ctx) => {
     // and we'd otherwise dump the unit in UNSORTED, send it to the bin this SKU
     // was last put away in (consolidates like stock). Only on ACCEPT + flag on.
     if (
-      isInventoryV2ReceivingPutaway() &&
       !binExplicit &&
       dispositionCode === 'ACCEPT' &&
       (line.sku ?? null)
@@ -426,40 +470,27 @@ export const POST = withAuth(async (request, ctx) => {
 
     // 2. Serial/stock/event writes.
     //
-    // OFF-FLAG (legacy path): upsert serial_units only, exactly as before.
-    // ON-FLAG (Phase 2):     emit RECEIVED + optional PUTAWAY inventory_events
-    //                        and append a sku_stock_ledger row in one txn.
-    //                        See applyInventoryV2Effects() above for details.
-    let v2Effects: Awaited<ReturnType<typeof applyInventoryV2Effects>> | null = null;
-    if (isInventoryV2ReceivingPutaway()) {
-      try {
-        v2Effects = await applyInventoryV2Effects({
-          receivingId,
-          receivingLineId,
-          sku: line.sku ?? null,
-          qtyReceived,
-          serialNumber,
-          zohoItemId: zohoItemId || null,
-          conditionGrade,
-          dispositionCode,
-          destinationBinId,
-          staffId: staffId ?? 0,
-          clientEventId,
-          notes,
-          nowPst: now,
-        });
-      } catch (err) {
-        // Phase 2 is best-effort overlay. If the events txn fails the line
-        // update has already committed, so we log and continue rather than
-        // crashing the receive. An admin can replay via /api/inventory-events.
-        console.warn('mark-received: applyInventoryV2Effects failed', err);
-      }
-    } else if (serialNumber) {
-      // OFF-flag legacy path — route through the canonical writer (was a raw
-      // INSERT bypass) so it gets status-transition/return detection, metadata,
-      // and a minted unit_uid at birth (when the SKU is cataloged), exactly like
-      // every other serial_units creation. upsertSerialUnit owns its own txn.
-      await upsertSerialUnit({
+    //  a) When a serial was scanned, create/advance the serial_units row through
+    //     the CANONICAL writer first. This owns its own txn and is the single
+    //     source of status-transition/return-detection, metadata, and unit_uid
+    //     minting (when the SKU is cataloged) — identical to every other
+    //     serial_units birth in the system. A failure here crashes the receive
+    //     (500), exactly as the legacy path did, rather than silently dropping
+    //     the unit. We hand the resolved id to the overlay below so it links its
+    //     events/ledger to this row instead of re-inserting and clobbering a
+    //     detected return back to RECEIVED.
+    //  b) Then emit RECEIVED + optional PUTAWAY inventory_events and append a
+    //     sku_stock_ledger row in one txn (best-effort overlay). See
+    //     applyInventoryV2Effects() above.
+    let serialUnitId: number | null = null;
+    // A previously-SHIPPED serial coming back through the receiving door is a
+    // RETURN, not a fresh intake. The canonical writer detects this and lands
+    // the unit in RETURNED. We must NOT then auto-putaway it to STOCKED or add
+    // a sellable +qty ledger row — it belongs in the returns/QC queue until a
+    // human grades it. isReturn carries that signal into the overlay below.
+    let isReturn = false;
+    if (serialNumber) {
+      const serialResult = await upsertSerialUnit({
         serial_number: serialNumber,
         sku: line.sku ?? null,
         zoho_item_id: zohoItemId || null,
@@ -468,7 +499,36 @@ export const POST = withAuth(async (request, ctx) => {
         actor_id: staffId != null && staffId > 0 ? staffId : null,
         condition_grade: conditionGrade,
         target_status: 'RECEIVED',
+        location: destinationBinId != null ? String(destinationBinId) : null,
       });
+      serialUnitId = serialResult?.unit.id ?? null;
+      isReturn = serialResult?.is_return ?? false;
+    }
+
+    let v2Effects: Awaited<ReturnType<typeof applyInventoryV2Effects>> | null = null;
+    try {
+      v2Effects = await applyInventoryV2Effects({
+        receivingId,
+        receivingLineId,
+        sku: line.sku ?? null,
+        qtyReceived,
+        serialNumber,
+        serialUnitId,
+        isReturn,
+        zohoItemId: zohoItemId || null,
+        conditionGrade,
+        dispositionCode,
+        destinationBinId,
+        staffId: staffId ?? 0,
+        clientEventId,
+        notes,
+        nowPst: now,
+      });
+    } catch (err) {
+      // Best-effort overlay. The serial row (a) and the line update have already
+      // committed, so we log and continue rather than crashing the receive. An
+      // admin can replay via /api/inventory-events.
+      console.warn('mark-received: applyInventoryV2Effects failed', err);
     }
 
     // 3. Update receiving row unboxed_at if set. Capture whether THIS call is the
@@ -477,12 +537,14 @@ export const POST = withAuth(async (request, ctx) => {
     if (receivingId) {
       const cartonUpd = await pool
         .query<{ is_return: boolean | null; is_priority: boolean | null; just_unboxed: boolean; tracking: string | null }>(
-          `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1
-            WHERE id = $2
+          `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
+                                unboxed_by = COALESCE(unboxed_by, $2),
+                                updated_at = $1
+            WHERE id = $3
             RETURNING is_return, is_priority,
                       (unboxed_at = $1) AS just_unboxed,
                       receiving_tracking_number AS tracking`,
-          [now, receivingId],
+          [now, staffId, receivingId],
         )
         .catch(() => null);
       const carton = cartonUpd?.rows?.[0];

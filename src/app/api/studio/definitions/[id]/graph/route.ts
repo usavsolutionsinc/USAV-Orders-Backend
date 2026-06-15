@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { errorResponse } from '@/lib/api/errors';
 import { parseBody } from '@/lib/schemas/parse';
 import { StudioGraphSaveBody } from '@/lib/schemas/studio';
@@ -46,65 +47,67 @@ export const PUT = withAuth(async (request, ctx) => {
     );
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    const def = await client.query<{ id: number; is_active: boolean; version: number }>(
-      `SELECT id, is_active, version FROM workflow_definitions
-        WHERE organization_id = $1 AND id = $2 FOR UPDATE`,
-      [ctx.organizationId, definitionId],
-    );
-    if (!def.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ ok: false, error: 'definition not found' }, { status: 404 });
-    }
-    if (def.rows[0].is_active) {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { ok: false, error: 'the active version is read-only — edit a draft and publish it' },
-        { status: 409 },
+    const outcome = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const def = await client.query<{ id: number; is_active: boolean; version: number }>(
+        `SELECT id, is_active, version FROM workflow_definitions
+          WHERE organization_id = $1 AND id = $2 FOR UPDATE`,
+        [ctx.organizationId, definitionId],
       );
-    }
+      if (!def.rows[0]) {
+        return { status: 404 as const, body: { ok: false, error: 'definition not found' } };
+      }
+      if (def.rows[0].is_active) {
+        return {
+          status: 409 as const,
+          body: { ok: false, error: 'the active version is read-only — edit a draft and publish it' },
+        };
+      }
 
-    await client.query(`DELETE FROM workflow_edges WHERE workflow_definition_id = $1`, [definitionId]);
-    await client.query(`DELETE FROM workflow_nodes WHERE workflow_definition_id = $1`, [definitionId]);
-    for (const n of parsed.nodes) {
+      // workflow_edges / workflow_nodes have no org column — the parent
+      // workflow_definition_id (just org-verified above) is their tenant scope.
+      await client.query(`DELETE FROM workflow_edges WHERE workflow_definition_id = $1`, [definitionId]);
+      await client.query(`DELETE FROM workflow_nodes WHERE workflow_definition_id = $1`, [definitionId]);
+      for (const n of parsed.nodes) {
+        await client.query(
+          `INSERT INTO workflow_nodes (id, workflow_definition_id, type, position_x, position_y, config)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [n.id, definitionId, n.type, n.x, n.y, JSON.stringify(n.config ?? {})],
+        );
+      }
+      for (const e of parsed.edges) {
+        await client.query(
+          `INSERT INTO workflow_edges (id, workflow_definition_id, source_node, source_port, target_node)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [e.id, definitionId, e.source, e.sourcePort, e.target],
+        );
+      }
       await client.query(
-        `INSERT INTO workflow_nodes (id, workflow_definition_id, type, position_x, position_y, config)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [n.id, definitionId, n.type, n.x, n.y, JSON.stringify(n.config ?? {})],
+        `UPDATE workflow_definitions SET updated_at = NOW() WHERE id = $1 AND organization_id = $2`,
+        [definitionId, ctx.organizationId],
       );
-    }
-    for (const e of parsed.edges) {
-      await client.query(
-        `INSERT INTO workflow_edges (id, workflow_definition_id, source_node, source_port, target_node)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [e.id, definitionId, e.source, e.sourcePort, e.target],
-      );
-    }
-    await client.query(
-      `UPDATE workflow_definitions SET updated_at = NOW() WHERE id = $1`,
-      [definitionId],
-    );
 
-    await client.query('COMMIT');
-
-    await recordAudit(pool, ctx, request, {
-      source: 'studio.draft',
-      action: AUDIT_ACTION.WORKFLOW_DRAFT_SAVE,
-      entityType: AUDIT_ENTITY.WORKFLOW_DEFINITION,
-      entityId: definitionId,
-      method: 'manual',
-      extra: { nodes: parsed.nodes.length, edges: parsed.edges.length, version: def.rows[0].version },
+      return {
+        status: 200 as const,
+        body: { ok: true, id: definitionId, nodes: parsed.nodes.length, edges: parsed.edges.length },
+        audit: { version: def.rows[0].version },
+      };
     });
 
-    return NextResponse.json({ ok: true, id: definitionId, nodes: parsed.nodes.length, edges: parsed.edges.length });
+    if (outcome.status === 200 && 'audit' in outcome) {
+      await recordAudit(pool, ctx, request, {
+        source: 'studio.draft',
+        action: AUDIT_ACTION.WORKFLOW_DRAFT_SAVE,
+        entityType: AUDIT_ENTITY.WORKFLOW_DEFINITION,
+        entityId: definitionId,
+        method: 'manual',
+        extra: { nodes: parsed.nodes.length, edges: parsed.edges.length, version: outcome.audit.version },
+      });
+    }
+
+    return NextResponse.json(outcome.body, { status: outcome.status });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     console.error('[PUT /api/studio/definitions/[id]/graph] error:', err);
     return errorResponse(err, 'studio.draft.save');
-  } finally {
-    client.release();
   }
 }, { permission: 'studio.manage' });

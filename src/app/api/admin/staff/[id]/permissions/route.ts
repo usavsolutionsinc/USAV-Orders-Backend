@@ -9,10 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { ALL_PERMISSIONS, isAdminRoleKey } from '@/lib/auth/permissions-shared';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -76,7 +76,13 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
 
   // Refuse to mutate admin's overrides — admin role grants everything; the
   // override columns are meaningless and the UI shouldn't be sending them.
-  const roleR = await pool.query(`SELECT role FROM staff WHERE id = $1`, [id]);
+  // Org-ownership gate: a staff row in another org reads as NOT_FOUND so the
+  // override is never inspected or mutated cross-tenant.
+  const roleR = await tenantQuery(
+    ctx.organizationId,
+    `SELECT role FROM staff WHERE id = $1 AND organization_id = $2`,
+    [id, ctx.organizationId],
+  );
   const row = roleR.rows[0] as { role: string } | undefined;
   if (!row) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
   if (isAdminRoleKey(row.role)) {
@@ -93,8 +99,10 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     params.push(remove);
     sets.push(`permissions_removed = $${params.length}::TEXT[]`);
   }
-  const r = await pool.query(
-    `UPDATE staff SET ${sets.join(', ')} WHERE id = $1
+  params.push(ctx.organizationId);
+  const r = await tenantQuery(
+    ctx.organizationId,
+    `UPDATE staff SET ${sets.join(', ')} WHERE id = $1 AND organization_id = $${params.length}
      RETURNING id, permissions_added, permissions_removed`,
     params,
   );

@@ -58,7 +58,7 @@ function parseStation(value: string | null): string | NextResponse {
 export const GET = withAuth(async (req, ctx) => {
   const station = parseStation(req.nextUrl.searchParams.get('station'));
   if (station instanceof NextResponse) return station;
-  const items = await listStaffTodos(ctx.staffId, station);
+  const items = await listStaffTodos(ctx.staffId, station, ctx.organizationId);
   return NextResponse.json({ items });
 });
 
@@ -79,7 +79,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     kind: parsed.kind,
     text: parsed.text,
     intervalMs: parsed.intervalMs ?? null,
-  });
+  }, ctx.organizationId);
 
   await recordAudit(pool, ctx, req, {
     source: AUDIT_SOURCE,
@@ -109,7 +109,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if (parsed instanceof NextResponse) return parsed;
 
   if (parsed.action === 'toggle') {
-    const item = await setStaffTodoDone(ctx.staffId, parsed.id, parsed.done);
+    const item = await setStaffTodoDone(ctx.staffId, parsed.id, parsed.done, ctx.organizationId);
     if (!item) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
     // Check/uncheck is high-frequency and fully reconstructable from
     // staff_todo_completions — no audit row for plain toggles.
@@ -119,9 +119,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if (parsed.action === 'unarchive') {
     // Reverse of DELETE/archive — restore a task to the live list. Scoped to the
     // owner; a foreign/already-live id is a clean NOT_FOUND.
-    const restored = await unarchiveStaffTodo(ctx.staffId, parsed.id);
+    const restored = await unarchiveStaffTodo(ctx.staffId, parsed.id, ctx.organizationId);
     if (!restored) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
-    const item = await getStaffTodo(ctx.staffId, parsed.id);
+    const item = await getStaffTodo(ctx.staffId, parsed.id, ctx.organizationId);
     await recordAudit(pool, ctx, req, {
       source: AUDIT_SOURCE,
       action: AUDIT_ACTION.STAFF_TODO_UNARCHIVE,
@@ -138,8 +138,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     ctx.staffId,
     parsed.station,
     parsed.intervalMs,
+    ctx.organizationId,
   );
-  const items = await listStaffTodos(ctx.staffId, parsed.station);
+  const items = await listStaffTodos(ctx.staffId, parsed.station, ctx.organizationId);
   await recordAudit(pool, ctx, req, {
     source: AUDIT_SOURCE,
     action: AUDIT_ACTION.STAFF_TODO_SET_INTERVAL,
@@ -156,8 +157,8 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   if (!Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
   }
-  const before = await getStaffTodo(ctx.staffId, id);
-  const archived = await archiveStaffTodo(ctx.staffId, id);
+  const before = await getStaffTodo(ctx.staffId, id, ctx.organizationId);
+  const archived = await archiveStaffTodo(ctx.staffId, id, ctx.organizationId);
   if (!archived) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   await recordAudit(pool, ctx, req, {

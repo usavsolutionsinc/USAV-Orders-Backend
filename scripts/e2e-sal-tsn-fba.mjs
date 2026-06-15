@@ -65,10 +65,10 @@ async function testTrackingScan() {
   console.log(`\n── 1  Tracking scan → SAL insert`);
   console.log(`     tracking: ${TEST_TRACKING}  techId: ${TECH_ID}`);
 
-  // /api/tech/scan-tracking is a thin wrapper around POST /api/tech/scan { type:'TRACKING' }
-  const { ok, status, data } = await api('/api/tech/scan-tracking', {
-    tracking: TEST_TRACKING,
-    techId:   TECH_ID,
+  const { ok, status, data } = await api('/api/tech/scan', {
+    type:   'TRACKING',
+    value:  TEST_TRACKING,
+    techId: TECH_ID,
   });
 
   assert(ok,                                    `HTTP ${status}`,                         JSON.stringify(data?.error ?? data));

@@ -8,22 +8,30 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { canonicalRole, ALL_ROLES, type StaffRole } from '@/lib/auth/permissions';
 import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
 export const GET = withAuth(async (_req, ctx) => {
-  const r = await pool.query(
+  const orgId = ctx.organizationId;
+  // staff is tenant-owned: only list staff in the caller's org. The
+  // passkey_count subquery anchors on the parent staff row (s.id), which is
+  // already org-filtered, so it cannot count another tenant's passkeys
+  // (staff_passkeys itself has no organization_id).
+  const r = await tenantQuery(
+    orgId,
     `SELECT id, name, role, status, active, employee_id, employee_code, sort_order,
             (pin_hash IS NOT NULL) AS has_pin,
             (SELECT COUNT(*)::INT FROM staff_passkeys p WHERE p.staff_id = s.id) AS passkey_count,
             last_login_at, created_at
        FROM staff s
+      WHERE s.organization_id = $1
       ORDER BY sort_order ASC NULLS LAST, name ASC`,
+    [orgId],
   );
   return NextResponse.json({
     staff: r.rows,
@@ -49,30 +57,28 @@ export const POST = withAuth(async (req, ctx) => {
   // fallback. Inserting the staff row alone leaves the new hire with an empty
   // permission set, so every gated route 403s even though the UI shows their
   // role. Roles can still be edited afterward via PUT /api/admin/staff/[id]/roles.
-  const client = await pool.connect();
-  let created: { id: number; name: string; role: string; status: string };
-  try {
-    await client.query('BEGIN');
+  //
+  // staff is tenant-owned: stamp the new row with the caller's org so an admin
+  // can never create staff into another tenant. The staff_roles assignment is
+  // gated by this freshly-created (org-stamped) staff parent; `roles` is a
+  // system-global table so it carries no org predicate of its own.
+  const orgId = ctx.organizationId;
+  const created = await withTenantTransaction(orgId, async (client) => {
     const r = await client.query(
-      `INSERT INTO staff (name, role, status, employee_code, active)
-       VALUES ($1, $2, 'invited', $3, true)
+      `INSERT INTO staff (name, role, status, employee_code, active, organization_id)
+       VALUES ($1, $2, 'invited', $3, true, $4)
        RETURNING id, name, role, status, employee_code`,
-      [name, canonical, employeeCode],
+      [name, canonical, employeeCode, orgId],
     );
-    created = r.rows[0] as { id: number; name: string; role: string; status: string };
+    const row = r.rows[0] as { id: number; name: string; role: string; status: string };
     await client.query(
       `INSERT INTO staff_roles (staff_id, role_id, granted_at, granted_by)
        SELECT $1, r.id, NOW(), $3 FROM roles r WHERE r.key = $2
        ON CONFLICT (staff_id, role_id) DO NOTHING`,
-      [created.id, canonical, ctx.staffId ?? null],
+      [row.id, canonical, ctx.staffId ?? null],
     );
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+    return row;
+  });
   invalidateStaffRolesCache(created.id);
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,

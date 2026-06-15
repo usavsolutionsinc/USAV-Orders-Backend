@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 const FEATURE_TYPES = ['feature', 'bug_fix'] as const;
@@ -49,7 +49,7 @@ function mapRow(row: any) {
   };
 }
 
-async function handleGet(req: NextRequest) {
+async function handleGet(req: NextRequest, orgId: string) {
   try {
     const { searchParams } = new URL(req.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -90,7 +90,10 @@ async function handleGet(req: NextRequest) {
     params.push(limit);
 
     const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const result = await pool.query(
+    // admin_features is system-global (no organization_id column) — GUC-wrap
+    // only for consistency; no explicit org filter is possible (NEEDS-COL).
+    const result = await tenantQuery(
+      orgId,
       `
         SELECT
           af.*,
@@ -128,7 +131,7 @@ async function handleGet(req: NextRequest) {
   }
 }
 
-async function handlePost(req: NextRequest) {
+async function handlePost(req: NextRequest, orgId: string) {
   try {
     const body = await req.json();
     const title = String(body?.title || '').trim();
@@ -162,7 +165,9 @@ async function handlePost(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid assigned staff id' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    // admin_features is system-global (no organization_id column) — GUC-wrap
+    // the write; there is no org column to stamp (NEEDS-COL).
+    const result = await withTenantTransaction(orgId, (client) => client.query(
       `
         INSERT INTO admin_features (
           title,
@@ -193,7 +198,7 @@ async function handlePost(req: NextRequest) {
         assignedToStaffId,
         staffId,
       ],
-    );
+    ));
 
     return NextResponse.json({ success: true, feature: mapRow(result.rows[0]) }, { status: 201 });
   } catch (error: any) {
@@ -207,5 +212,5 @@ async function handlePost(req: NextRequest) {
 
 // Phase 2d: GET requires admin.view (any admin can read the feature board);
 // POST requires admin.manage_features (only feature admins can create rows).
-export const GET = withAuth(handleGet, { permission: 'admin.view' });
-export const POST = withAuth(handlePost, { permission: 'admin.manage_features' });
+export const GET = withAuth((req, ctx) => handleGet(req, ctx.organizationId), { permission: 'admin.view' });
+export const POST = withAuth((req, ctx) => handlePost(req, ctx.organizationId), { permission: 'admin.manage_features' });

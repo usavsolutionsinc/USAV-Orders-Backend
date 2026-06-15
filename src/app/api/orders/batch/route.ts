@@ -6,12 +6,12 @@
  * POST { orderIds: string[] }  ->  { orders: AiOrderRow[] }
  */
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const body = (await req.json().catch(() => ({}))) as { orderIds?: unknown };
   const raw = Array.isArray(body.orderIds) ? body.orderIds : [];
   const ids = Array.from(
@@ -25,7 +25,15 @@ export const POST = withAuth(async (req: NextRequest) => {
 
   if (ids.length === 0) return NextResponse.json({ orders: [] });
 
-  const { rows } = await pool.query(
+  // orders is tenant-owned and o.order_id is a marketplace string key that
+  // collides across tenants — it MUST be org-scoped. Integer surrogate-PK joins
+  // (stn.id = o.shipment_id, ts.id/ps.id = staff PKs) are safe bare;
+  // shipping_tracking_numbers has no organization_id column (NEEDS-COL) and is
+  // reached only through the org-scoped orders row. The tech_serial_numbers /
+  // packer_logs LATERAL subqueries join on the integer shipment_id surrogate FK
+  // (safe bare) and get an explicit org filter as defence-in-depth.
+  const { rows } = await tenantQuery(
+    ctx.organizationId,
     `
       SELECT
         o.id,
@@ -52,20 +60,23 @@ export const POST = withAuth(async (req: NextRequest) => {
       LEFT JOIN LATERAL (
         SELECT tested_by FROM tech_serial_numbers
         WHERE shipment_id = o.shipment_id AND tested_by IS NOT NULL
+          AND organization_id = $2
         ORDER BY created_at DESC LIMIT 1
       ) tt ON TRUE
       LEFT JOIN staff ts ON ts.id = tt.tested_by
       LEFT JOIN LATERAL (
         SELECT packed_by FROM packer_logs
         WHERE shipment_id = o.shipment_id AND packed_by IS NOT NULL
+          AND organization_id = $2
         ORDER BY created_at DESC LIMIT 1
       ) pp ON TRUE
       LEFT JOIN staff ps ON ps.id = pp.packed_by
       WHERE o.order_id = ANY($1::text[])
+        AND o.organization_id = $2
       ORDER BY array_position($1::text[], o.order_id)
       LIMIT 50
     `,
-    [ids],
+    [ids, ctx.organizationId],
   );
 
   const orders = rows.map((r) => ({

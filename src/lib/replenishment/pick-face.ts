@@ -20,6 +20,8 @@
 
 import pool from '@/lib/db';
 import type { PoolClient } from 'pg';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,7 +58,89 @@ export interface DetectionResult {
  *
  * Target qty = max_qty if set, else min_qty * 2 (sensible default cap).
  */
-export async function detectReplenishmentNeeds(): Promise<DetectionResult> {
+export async function detectReplenishmentNeeds(orgId?: OrgId): Promise<DetectionResult> {
+  // Tenant-scoped path: GUC-wrapped transaction. `replenishment_tasks` has no
+  // organization_id column (child-scoped via locations); we scope its reads and
+  // the bin_contents/locations joins through the org-bearing `locations` parent
+  // and the org-aligned bin_contents rows. The INSERT can't stamp org (no
+  // column), but it runs inside the GUC transaction and its source data is org-
+  // filtered, so an open task can only be created from this tenant's own bins.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      // 1. Find low PICK_FACE positions (this org only).
+      const lowQ = await client.query<{
+        to_bin_id: number;
+        sku: string;
+        current_qty: number;
+        min_qty: number;
+        max_qty: number | null;
+      }>(`
+        SELECT bc.location_id AS to_bin_id,
+               bc.sku,
+               bc.qty         AS current_qty,
+               bc.min_qty,
+               bc.max_qty
+          FROM bin_contents bc
+          JOIN locations    loc ON loc.id = bc.location_id
+                                AND loc.organization_id = bc.organization_id
+         WHERE loc.bin_role = 'PICK_FACE'
+           AND loc.is_active = true
+           AND loc.locked_for_count = false
+           AND bc.min_qty IS NOT NULL
+           AND bc.qty < bc.min_qty
+           AND bc.organization_id = $1
+      `, [orgId]);
+
+      const result: DetectionResult = {
+        scannedPickFaces: lowQ.rowCount ?? 0,
+        proposed: 0,
+        inserted: 0,
+        skippedExisting: 0,
+      };
+
+      // 2. For each low spot, propose qty + best source bin (this org only).
+      for (const row of lowQ.rows) {
+        const targetQty = row.max_qty ?? row.min_qty * 2;
+        const moveQty = Math.max(1, targetQty - row.current_qty);
+
+        const sourceQ = await client.query<{ id: number; qty: number }>(`
+          SELECT bc.location_id AS id, bc.qty
+            FROM bin_contents bc
+            JOIN locations    loc ON loc.id = bc.location_id
+                                  AND loc.organization_id = bc.organization_id
+           WHERE bc.sku = $1
+             AND loc.bin_role = 'RESERVE'
+             AND loc.is_active = true
+             AND loc.locked_for_count = false
+             AND bc.qty > 0
+             AND bc.organization_id = $2
+           ORDER BY bc.qty DESC
+           LIMIT 1
+        `, [row.sku, orgId]);
+        const fromBinId = sourceQ.rows[0]?.id ?? null;
+        const actualQty = sourceQ.rows[0] ? Math.min(moveQty, sourceQ.rows[0].qty) : moveQty;
+
+        result.proposed += 1;
+
+        // 3. Insert. The partial UNIQUE silently rejects duplicates of open tasks.
+        const insertQ = await client.query<{ id: number }>(`
+          INSERT INTO replenishment_tasks (sku, from_bin_id, to_bin_id, qty)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (sku, to_bin_id) WHERE status IN ('REQUESTED','IN_PROGRESS')
+            DO NOTHING
+          RETURNING id
+        `, [row.sku, fromBinId, row.to_bin_id, actualQty]);
+        if (insertQ.rowCount && insertQ.rowCount > 0) {
+          result.inserted += 1;
+        } else {
+          result.skippedExisting += 1;
+        }
+      }
+
+      return result;
+    });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -146,7 +230,41 @@ export type ClaimTaskResult =
 export async function claimTask(input: {
   taskId: number;
   staffId: number;
-}): Promise<ClaimTaskResult> {
+}, orgId?: OrgId): Promise<ClaimTaskResult> {
+  // Tenant-scoped path: `replenishment_tasks` has no organization_id column, so
+  // ownership is derived from its `to_bin_id → locations.organization_id` parent.
+  // A task owned by another org reads as 404 (not 403) for both the disambiguating
+  // check and the UPDATE.
+  if (orgId) {
+    const { rowCount } = await tenantQuery(
+      orgId,
+      `UPDATE replenishment_tasks rt
+          SET status = 'IN_PROGRESS',
+              assigned_staff_id = $2,
+              started_at = NOW()
+        FROM locations loc
+        WHERE rt.id = $1
+          AND loc.id = rt.to_bin_id
+          AND loc.organization_id = $3
+          AND rt.status = 'REQUESTED'`,
+      [input.taskId, input.staffId, orgId],
+    );
+    if (rowCount === 0) {
+      const checkQ = await tenantQuery<{ status: ReplenishmentTaskStatus }>(
+        orgId,
+        `SELECT rt.status
+           FROM replenishment_tasks rt
+           JOIN locations loc ON loc.id = rt.to_bin_id
+                             AND loc.organization_id = $2
+          WHERE rt.id = $1`,
+        [input.taskId, orgId],
+      );
+      if (checkQ.rowCount === 0) return { ok: false, status: 404, error: 'task not found' };
+      return { ok: false, status: 409, error: `task already ${checkQ.rows[0].status}` };
+    }
+    return { ok: true };
+  }
+
   const { rowCount } = await pool.query(
     `UPDATE replenishment_tasks
         SET status = 'IN_PROGRESS',
@@ -180,10 +298,89 @@ export async function completeTask(input: {
   taskId: number;
   qtyMoved: number;
   actorStaffId: number;
-}): Promise<CompleteTaskResult> {
+}, orgId?: OrgId): Promise<CompleteTaskResult> {
   if (input.qtyMoved <= 0) {
     return { ok: false, status: 409, error: 'qtyMoved must be > 0' };
   }
+
+  // Tenant-scoped path: GUC-wrapped transaction. `replenishment_tasks` ownership
+  // is derived from `to_bin_id → locations.organization_id`; bin_contents and
+  // inventory_events are tenant-owned (org predicate / stamp). A cross-org task
+  // reads as 404.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const taskQ = await client.query<{
+        id: number;
+        sku: string;
+        from_bin_id: number | null;
+        to_bin_id: number;
+        status: ReplenishmentTaskStatus;
+      }>(
+        `SELECT rt.id, rt.sku, rt.from_bin_id, rt.to_bin_id, rt.status
+           FROM replenishment_tasks rt
+           JOIN locations loc ON loc.id = rt.to_bin_id
+                             AND loc.organization_id = $2
+          WHERE rt.id = $1
+          FOR UPDATE OF rt`,
+        [input.taskId, orgId],
+      );
+      const task = taskQ.rows[0];
+      if (!task) {
+        return { ok: false, status: 404, error: 'task not found' };
+      }
+      if (task.status !== 'IN_PROGRESS') {
+        return { ok: false, status: 409, error: `task is ${task.status}, expected IN_PROGRESS` };
+      }
+
+      let fromBinQty: number | null = null;
+      if (task.from_bin_id) {
+        const fromQ = await client.query<{ qty: number }>(
+          `UPDATE bin_contents
+              SET qty = qty - $3
+            WHERE location_id = $1 AND sku = $2 AND qty >= $3
+              AND organization_id = $4
+          RETURNING qty`,
+          [task.from_bin_id, task.sku, input.qtyMoved, orgId],
+        );
+        if (fromQ.rowCount === 0) {
+          return { ok: false, status: 409, error: 'insufficient qty in source bin' };
+        }
+        fromBinQty = fromQ.rows[0].qty;
+      }
+
+      const toQ = await client.query<{ qty: number }>(
+        `INSERT INTO bin_contents (location_id, sku, qty, organization_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (location_id, sku) DO UPDATE
+           SET qty = bin_contents.qty + EXCLUDED.qty
+         RETURNING qty`,
+        [task.to_bin_id, task.sku, input.qtyMoved, orgId],
+      );
+
+      await client.query(
+        `UPDATE replenishment_tasks
+            SET status = 'COMPLETE',
+                completed_at = NOW(),
+                qty_moved = $2
+          WHERE id = $1`,
+        [task.id, input.qtyMoved],
+      );
+
+      // Use the inventory_events log to record the location move. This keeps
+      // the timeline coherent with picks/packs that flow through the same log.
+      await recordReplenishmentEvent(client, {
+        taskId: task.id,
+        sku: task.sku,
+        fromBinId: task.from_bin_id,
+        toBinId: task.to_bin_id,
+        qty: input.qtyMoved,
+        actorStaffId: input.actorStaffId,
+      }, orgId);
+
+      return { ok: true, fromBinQty, toBinQty: toQ.rows[0].qty };
+    });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -271,7 +468,39 @@ export async function cancelTask(input: {
   taskId: number;
   reason: string;
   actorStaffId: number;
-}): Promise<CancelTaskResult> {
+}, orgId?: OrgId): Promise<CancelTaskResult> {
+  // Tenant-scoped path: ownership via `to_bin_id → locations.organization_id`.
+  // Cross-org task reads as 404.
+  if (orgId) {
+    const { rowCount } = await tenantQuery(
+      orgId,
+      `UPDATE replenishment_tasks rt
+          SET status = 'CANCELED',
+              canceled_at = NOW(),
+              cancel_reason = $2
+        FROM locations loc
+        WHERE rt.id = $1
+          AND loc.id = rt.to_bin_id
+          AND loc.organization_id = $3
+          AND rt.status IN ('REQUESTED','IN_PROGRESS')`,
+      [input.taskId, input.reason, orgId],
+    );
+    if (rowCount === 0) {
+      const checkQ = await tenantQuery<{ status: ReplenishmentTaskStatus }>(
+        orgId,
+        `SELECT rt.status
+           FROM replenishment_tasks rt
+           JOIN locations loc ON loc.id = rt.to_bin_id
+                             AND loc.organization_id = $2
+          WHERE rt.id = $1`,
+        [input.taskId, orgId],
+      );
+      if (checkQ.rowCount === 0) return { ok: false, status: 404, error: 'task not found' };
+      return { ok: false, status: 409, error: `task already ${checkQ.rows[0].status}` };
+    }
+    return { ok: true };
+  }
+
   const { rowCount } = await pool.query(
     `UPDATE replenishment_tasks
         SET status = 'CANCELED',
@@ -304,7 +533,39 @@ async function recordReplenishmentEvent(
     qty: number;
     actorStaffId: number;
   },
+  orgId?: OrgId,
 ) {
+  // Tenant-scoped path: stamp organization_id on the event row. inventory_events
+  // is tenant-owned. The passed client is already inside the GUC transaction, but
+  // we re-assert app.current_org on it defensively before the write.
+  if (orgId) {
+    await client.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+    await client.query(
+      `INSERT INTO inventory_events (
+         event_type, actor_staff_id, station,
+         sku, bin_id, prev_bin_id,
+         payload, organization_id
+       ) VALUES (
+         'MOVED', $1, 'SYSTEM',
+         $2, $3, $4,
+         $5::jsonb, $6
+       )`,
+      [
+        input.actorStaffId,
+        input.sku,
+        input.toBinId,
+        input.fromBinId,
+        JSON.stringify({
+          source: 'replenishment.complete',
+          taskId: input.taskId,
+          qty: input.qty,
+        }),
+        orgId,
+      ],
+    );
+    return;
+  }
+
   await client.query(
     `INSERT INTO inventory_events (
        event_type, actor_staff_id, station,
@@ -331,30 +592,60 @@ async function recordReplenishmentEvent(
 
 // ─── Reads ───────────────────────────────────────────────────────────────────
 
-export async function listOpenTasks(): Promise<ReplenishmentTaskRow[]> {
-  const { rows } = await pool.query<{
-    id: number;
-    sku: string;
-    from_bin_id: number | null;
-    to_bin_id: number;
-    qty: number;
-    status: ReplenishmentTaskStatus;
-    detected_at: string;
-    assigned_staff_id: number | null;
-    started_at: string | null;
-    completed_at: string | null;
-    qty_moved: number | null;
-  }>(
-    `SELECT id, sku, from_bin_id, to_bin_id, qty, status,
-            detected_at::text,
-            assigned_staff_id,
-            started_at::text,
-            completed_at::text,
-            qty_moved
-       FROM replenishment_tasks
-      WHERE status IN ('REQUESTED','IN_PROGRESS')
-      ORDER BY detected_at ASC`,
-  );
+export async function listOpenTasks(orgId?: OrgId): Promise<ReplenishmentTaskRow[]> {
+  // Tenant-scoped path: `replenishment_tasks` has no organization_id column;
+  // scope via its `to_bin_id → locations.organization_id` parent.
+  const { rows } = orgId
+    ? await tenantQuery<{
+        id: number;
+        sku: string;
+        from_bin_id: number | null;
+        to_bin_id: number;
+        qty: number;
+        status: ReplenishmentTaskStatus;
+        detected_at: string;
+        assigned_staff_id: number | null;
+        started_at: string | null;
+        completed_at: string | null;
+        qty_moved: number | null;
+      }>(
+        orgId,
+        `SELECT rt.id, rt.sku, rt.from_bin_id, rt.to_bin_id, rt.qty, rt.status,
+                rt.detected_at::text,
+                rt.assigned_staff_id,
+                rt.started_at::text,
+                rt.completed_at::text,
+                rt.qty_moved
+           FROM replenishment_tasks rt
+           JOIN locations loc ON loc.id = rt.to_bin_id
+                             AND loc.organization_id = $1
+          WHERE rt.status IN ('REQUESTED','IN_PROGRESS')
+          ORDER BY rt.detected_at ASC`,
+        [orgId],
+      )
+    : await pool.query<{
+        id: number;
+        sku: string;
+        from_bin_id: number | null;
+        to_bin_id: number;
+        qty: number;
+        status: ReplenishmentTaskStatus;
+        detected_at: string;
+        assigned_staff_id: number | null;
+        started_at: string | null;
+        completed_at: string | null;
+        qty_moved: number | null;
+      }>(
+        `SELECT id, sku, from_bin_id, to_bin_id, qty, status,
+                detected_at::text,
+                assigned_staff_id,
+                started_at::text,
+                completed_at::text,
+                qty_moved
+           FROM replenishment_tasks
+          WHERE status IN ('REQUESTED','IN_PROGRESS')
+          ORDER BY detected_at ASC`,
+      );
   return rows.map((r) => ({
     id: r.id,
     sku: r.sku,

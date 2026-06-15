@@ -19,7 +19,6 @@ import { LocationDataMatrix } from './LocationDataMatrix';
 import { toast } from 'sonner';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
 import { ChevronLeft, Printer, Settings } from '@/components/Icons';
-import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { useLocations } from '@/hooks/useLocations';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 import { LabelRoomSidebar } from './LabelRoomSidebar';
@@ -132,7 +131,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
 
   // ─── Selection handlers ─────────────────────────────────────────────────
   const pickRoom = useCallback((name: string) => {
-    successFeedback();
     if (selectedRoom !== name) {
       patchLabelPrinterState({ room: name, aisle: undefined, bay: undefined, level: undefined, position: 1 });
     } else {
@@ -142,7 +140,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   }, [selectedRoom]);
 
   const pickAisle = useCallback((n: number) => {
-    scanFeedback();
     if (aisle !== n) {
       patchLabelPrinterState({ aisle: n, bay: undefined, level: undefined, position: 1 });
     } else {
@@ -152,7 +149,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   }, [aisle]);
 
   const pickBay = useCallback((n: number) => {
-    scanFeedback();
     if (bay !== n) {
       patchLabelPrinterState({ bay: n, level: undefined, position: 1 });
     } else {
@@ -162,7 +158,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   }, [bay]);
 
   const pickLevel = useCallback((n: number) => {
-    scanFeedback();
     if (level !== n) {
       patchLabelPrinterState({ level: n, position: 1 });
     } else {
@@ -172,13 +167,11 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   }, [level]);
 
   const pickPosition = useCallback((n: number) => {
-    scanFeedback();
     patchLabelPrinterState({ position: n });
     setOverrideStep(null);
   }, []);
 
   const resetAll = useCallback(() => {
-    scanFeedback();
     resetLabelPrinterState();
     setOverrideStep(null);
   }, []);
@@ -203,7 +196,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
     };
     if (!done[step] && step !== computedStep) return;
     if (step === activeStep) return;
-    scanFeedback();
     setOverrideStep(step);
   }, [selectedRoom, aisle, bay, level, position, computedStep, activeStep]);
 
@@ -240,7 +232,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
       }
     } catch (err: any) {
       setIsPrinting(false);
-      errorFeedback();
       toast.error(err?.message || 'Could not register location for printing');
       return;
     }
@@ -252,7 +243,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
         setTimeout(() => {
           setBulkLabels(null);
           setIsPrinting(false);
-          successFeedback();
           toast.success(`Printed ${labels.length} label${labels.length === 1 ? '' : 's'}`);
         }, 250);
       });
@@ -276,7 +266,6 @@ export function BinLabelPrinter({ variant = 'main' }: BinLabelPrinterProps) {
   const handleConfigSave = useCallback((next: PrinterConfig) => {
     setConfig(next);
     saveConfig(next);
-    successFeedback();
     toast.success('Configuration saved');
     setConfigOpen(false);
   }, []);

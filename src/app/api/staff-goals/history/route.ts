@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const rawDays = Number(searchParams.get('days') || 14);
@@ -18,7 +18,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       stationFilter = `AND h.station = $2`;
     }
 
-    const result = await pool.query(
+    // staff_goal_history has no own organization_id — scope via the parent
+    // staff row (joined on the global staff.id PK).
+    params.push(ctx.organizationId);
+    const orgIdx = params.length;
+
+    const result = await tenantQuery(
+      ctx.organizationId,
       `
         SELECT
           h.staff_id,
@@ -33,6 +39,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         WHERE h.logged_date >= (
           (timezone('America/Los_Angeles', now()))::date - ($1::int - 1)
         )
+        AND s.organization_id = $${orgIdx}
         ${stationFilter}
         ORDER BY h.logged_date DESC, s.name ASC, h.station ASC
       `,

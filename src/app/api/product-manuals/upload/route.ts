@@ -45,7 +45,11 @@ export const maxDuration = 120;
  *   status        optional — defaults to 'unassigned'
  */
 export const POST = withAuth(
-  async (request) => {
+  async (request, ctx) => {
+    // Thread orgId so the by-id replace read (ownership gate), upsert/update
+    // writes all GUC-wrap and scope to this org once RLS is enforced
+    // (NEEDS-COL — product_manuals has no organization_id column yet).
+    const orgId = ctx.organizationId ?? undefined;
     let form: FormData;
     try {
       form = await request.formData();
@@ -129,7 +133,9 @@ export const POST = withAuth(
       // Replace flow: load the existing row first so we can clean up its blob.
       let previousSourceUrl: string | null = null;
       if (id) {
-        const existing = await getProductManualById(id);
+        // Org-ownership gate on the replace flow — GUC-wrapped by-id read so a
+        // caller can't swap the blob on another org's manual (404 not 403).
+        const existing = await getProductManualById(id, orgId);
         if (!existing) {
           return NextResponse.json({ success: false, error: 'manual not found' }, { status: 404 });
         }
@@ -170,7 +176,7 @@ export const POST = withAuth(
             ...(sku ? { sku } : {}),
             ...(itemNumber ? { itemNumber } : {}),
             ...(thumbnailUrl ? { thumbnailUrl } : {}),
-          })
+          }, orgId)
         : await upsertProductManual({
             sourceUrl: uploaded.url,
             displayName,
@@ -183,10 +189,10 @@ export const POST = withAuth(
             // against it — for converted Word docs that's the .pdf, not the
             // transient .docx the operator dropped in.
             fileName: isWordDoc ? file.name.replace(/\.docx?$/i, '') + '.pdf' : file.name,
-          });
+          }, orgId);
 
       if (!id && sku) {
-        row = await updateProductManual({ id: row.id, sku });
+        row = await updateProductManual({ id: row.id, sku }, orgId);
       }
 
       // Best-effort delete of the old blob — never throw, since the DB row

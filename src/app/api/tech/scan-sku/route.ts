@@ -155,7 +155,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         error: 'salId is required for SKU scan context',
       }, { status: 400 });
     }
-    const salCtxResult = await resolveTechSerialSalContext(client, salIdNum);
+    const salCtxResult = await resolveTechSerialSalContext(client, salIdNum, ctx.organizationId);
     if (!salCtxResult.ok) {
       return NextResponse.json({ success: false, error: salCtxResult.error }, { status: salCtxResult.status });
     }

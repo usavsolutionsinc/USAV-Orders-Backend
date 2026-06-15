@@ -160,8 +160,12 @@ export async function recomputeProvisionalClocks(limit = RECOMPUTE_LIMIT): Promi
     );
     if (flipIds.length > 0) {
       await client.query(
-        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
-         SELECT id, 'CLOCK_RECOMPUTED', payload::jsonb, NULL
+        // organization_id is derived from the parent claim — warranty_claim_events
+        // .organization_id is NOT NULL with a loud-fail GUC default and this runs on
+        // the raw (non-GUC) pool, so omitting it NULL-violates the constraint.
+        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+         SELECT t.id, 'CLOCK_RECOMPUTED', t.payload::jsonb, NULL,
+                (SELECT organization_id FROM warranty_claims wc WHERE wc.id = t.id)
            FROM unnest($1::bigint[], $2::text[]) AS t(id, payload)`,
         [flipIds, flipPayloads],
       );
@@ -225,8 +229,12 @@ export async function expireLapsedClaims(limit = EXPIRE_LIMIT): Promise<ExpireRe
       [ids],
     );
     await client.query(
-      `INSERT INTO warranty_claim_events (claim_id, event_type, from_status, to_status, payload, actor_staff_id)
-       SELECT id, 'STATUS_CHANGE', from_status, 'EXPIRED', '{"via":"cron"}'::jsonb, NULL
+      // organization_id is derived from the parent claim — warranty_claim_events
+      // .organization_id is NOT NULL with a loud-fail GUC default and this runs on
+      // the raw (non-GUC) pool, so omitting it NULL-violates the constraint.
+      `INSERT INTO warranty_claim_events (claim_id, event_type, from_status, to_status, payload, actor_staff_id, organization_id)
+       SELECT t.id, 'STATUS_CHANGE', t.from_status, 'EXPIRED', '{"via":"cron"}'::jsonb, NULL,
+              (SELECT organization_id FROM warranty_claims wc WHERE wc.id = t.id)
          FROM unnest($1::bigint[], $2::text[]) AS t(id, from_status)`,
       [ids, statuses],
     );

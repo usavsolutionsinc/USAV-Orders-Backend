@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { POST as unifiedSerial } from '@/app/api/tech/serial/route';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -12,14 +12,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   if (!body) return NextResponse.json({ success: false, error: 'Invalid JSON' }, { status: 400 });
 
   const techId = ctx.staffId;
+  const orgId = ctx.organizationId;
 
-  const r = await pool.query(
+  const r = await tenantQuery(
+    orgId,
     `SELECT id FROM station_activity_logs
      WHERE station = 'TECH'
        AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')
        AND staff_id = $1
+       AND organization_id = $2
      ORDER BY created_at DESC LIMIT 1`,
-    [techId],
+    [techId, orgId],
   );
   const salId = r.rows[0]?.id ?? null;
 

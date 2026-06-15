@@ -23,6 +23,8 @@
  */
 
 import { queryOne } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /** GS1-internal indicator + prefix. Real GS1 prefixes start at 03+, so
  *  values starting with `02` cannot collide with real public GTINs. */
@@ -72,8 +74,59 @@ export function isValidGtin14(gtin: string): boolean {
  *
  * Caller MUST pass a valid sku_catalog.id. We don't take the SKU text
  * because that adds an extra round trip and the mapping is 1:1.
+ *
+ * Tenant-awareness (backward-compatible): pass an optional trailing
+ * `orgId` to run the read + write inside a tenant transaction with the
+ * `app.current_org` GUC set and an explicit `organization_id = $n`
+ * predicate on both the SELECT and the UPDATE (org-ownership 404 if the
+ * row doesn't belong to the org). When `orgId` is omitted the original
+ * raw-pool (`queryOne`) path runs byte-for-byte as before, so existing
+ * un-migrated callers keep compiling and behaving identically.
+ *
+ * `sku_catalog` is tenant-owned and carries `organization_id`
+ * (docs/tenancy/org-id-coverage.generated.md), so the scoping is a
+ * direct predicate on the row — no parent join needed.
  */
-export async function getOrCreateInternalGtin(skuCatalogId: number): Promise<string> {
+export async function getOrCreateInternalGtin(
+  skuCatalogId: number,
+  orgId?: OrgId,
+): Promise<string> {
+  if (orgId) {
+    // Tenant-scoped path: read + write inside one transaction with the
+    // org GUC set, and explicit organization_id predicates for defense
+    // in depth (matches the future FORCE-RLS posture).
+    return withTenantTransaction(orgId, async (client) => {
+      // Fast path: read existing (org-scoped).
+      const existingRes = await client.query<{ gtin: string | null }>(
+        'SELECT gtin FROM sku_catalog WHERE id = $1 AND organization_id = $2 LIMIT 1',
+        [skuCatalogId, orgId],
+      );
+      const existing = existingRes.rows[0];
+      if (!existing) {
+        // Org-ownership 404: either the id doesn't exist or isn't this org's.
+        throw new Error(`getOrCreateInternalGtin: sku_catalog id ${skuCatalogId} not found`);
+      }
+      if (existing.gtin && existing.gtin.trim()) return existing.gtin.trim();
+
+      // Generate + persist. COALESCE so a concurrent writer's value wins
+      // and we return the final stored value, not our newly-computed one.
+      const candidate = generateInternalGtin(skuCatalogId);
+      const updatedRes = await client.query<{ gtin: string }>(
+        `UPDATE sku_catalog
+            SET gtin = COALESCE(NULLIF(gtin, ''), $1),
+                updated_at = NOW()
+          WHERE id = $2 AND organization_id = $3
+          RETURNING gtin`,
+        [candidate, skuCatalogId, orgId],
+      );
+      const updated = updatedRes.rows[0];
+      if (!updated?.gtin) {
+        throw new Error(`getOrCreateInternalGtin: UPDATE returned no row for id ${skuCatalogId}`);
+      }
+      return updated.gtin;
+    });
+  }
+
   // Fast path: read existing.
   const existing = await queryOne<{ gtin: string | null }>`
     SELECT gtin FROM sku_catalog WHERE id = ${skuCatalogId} LIMIT 1

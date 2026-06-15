@@ -61,16 +61,20 @@ export function LineLabelPreviewCard({
           ) : undefined
         }
       >
-        {scanValue ? (
-          <ReceivingPoLabelPreview {...labelPayload} embedded />
-        ) : sku ? (
-          <ReceivingProductLabelPreview
-            sku={sku}
-            title={itemName ?? ''}
-            serialNumber={serialNumber}
-            embedded
-          />
-        ) : null}
+        {/* Bordered box matches the testing/products LabelPreviewCard so all
+            label previews read identically. */}
+        <div className="rounded border border-gray-200 bg-white px-2 py-2 shadow-sm">
+          {scanValue ? (
+            <ReceivingPoLabelPreview {...labelPayload} embedded />
+          ) : sku ? (
+            <ReceivingProductLabelPreview
+              sku={sku}
+              title={itemName ?? ''}
+              serialNumber={serialNumber}
+              embedded
+            />
+          ) : null}
+        </div>
       </WorkspaceCard>
 
       {scanValue ? (

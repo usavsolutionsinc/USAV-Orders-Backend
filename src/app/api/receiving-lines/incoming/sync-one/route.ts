@@ -15,8 +15,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { errorResponse } from '@/lib/api';
 import { syncOnePoMirror } from '@/lib/zoho/po-mirror-sync';
 import { syncShipment } from '@/lib/shipping/sync-shipment';
@@ -25,7 +25,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   try {
     const body = (await req.json().catch(() => ({}))) as { po_id?: string };
@@ -38,13 +38,17 @@ export const POST = withAuth(async (req: NextRequest) => {
     const mirror = await syncOnePoMirror(poId);
 
     // 2. Shipment re-poll, if this PO's receiving row has one linked.
-    const recvRes = await pool.query<{ shipment_id: number | null }>(
+    //    receiving is tenant-owned — scope to this org so a PO id from another
+    //    tenant can't resolve a foreign shipment to re-poll.
+    const recvRes = await tenantQuery<{ shipment_id: number | null }>(
+      ctx.organizationId,
       `SELECT r.shipment_id
          FROM receiving r
         WHERE r.source = 'zoho_po'
           AND r.zoho_purchaseorder_id = $1
+          AND r.organization_id = $2
         LIMIT 1`,
-      [poId],
+      [poId, ctx.organizationId],
     );
     const shipmentId = recvRes.rows[0]?.shipment_id ?? null;
 

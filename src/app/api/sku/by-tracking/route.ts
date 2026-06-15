@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -10,7 +10,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * all associated integrity photos from the unified photos table
  * (entity_type = 'SKU', entity_id = sku.id).
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
   const tracking = searchParams.get('tracking')?.trim();
 
@@ -20,7 +20,11 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   try {
     const resolved = await resolveShipmentId(tracking);
-    const result = await pool.query<{
+    // v_sku is a read-only VIEW without organization_id, so the `s` rows ride on
+    // the GUC (RLS on the underlying serial_units). The sku_stock string-key
+    // join and the photos subquery hit base tables that DO carry
+    // organization_id, so each gets an explicit tenant filter.
+    const result = await tenantQuery<{
       id: number;
       static_sku: string | null;
       serial_number: string | null;
@@ -33,6 +37,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       product_title: string | null;
       photos: Array<{ id: number; url: string }>;
     }>(
+      ctx.organizationId,
       // `s` is the v_sku VIEW, so Postgres can't treat s.id as a unique key for
       // GROUP BY functional-dependency. Rather than enumerate every column, the
       // photos are aggregated in a correlated subquery — no GROUP BY, and it also
@@ -57,6 +62,7 @@ export const GET = withAuth(async (req: NextRequest) => {
              FROM photos p
              WHERE p.entity_type = 'SKU'
                AND p.entity_id = s.id
+               AND p.organization_id = $3
                AND p.url IS NOT NULL
            ),
            '[]'::jsonb
@@ -65,6 +71,7 @@ export const GET = withAuth(async (req: NextRequest) => {
        LEFT JOIN sku_stock ss
          ON regexp_replace(UPPER(TRIM(COALESCE(ss.sku, ''))), '^0+', '') =
             regexp_replace(UPPER(TRIM(split_part(COALESCE(s.static_sku, ''), ':', 1))), '^0+', '')
+        AND ss.organization_id = $3
        WHERE ($1::bigint IS NOT NULL AND s.shipment_id = $1)
           OR BTRIM(COALESCE(s.shipping_tracking_number, '')) = BTRIM($2)
        ORDER BY
@@ -76,7 +83,7 @@ export const GET = withAuth(async (req: NextRequest) => {
          s.updated_at DESC NULLS LAST,
          s.id DESC
        LIMIT 1`,
-      [resolved.shipmentId ?? null, tracking],
+      [resolved.shipmentId ?? null, tracking, ctx.organizationId],
     );
 
     if (result.rows.length === 0) {
@@ -134,7 +141,7 @@ const POST_RETIREMENT_ID_OFFSET = 1_000_000_000;
  * entity_id = id), which the serial_units delete trigger does NOT reach (it
  * only cascades SERIAL_UNIT photos), so they're cleared in the same transaction.
  */
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   const { searchParams } = new URL(req.url);
   const idRaw = searchParams.get('id');
   const id = Number(idRaw);
@@ -143,42 +150,40 @@ export const DELETE = withAuth(async (req: NextRequest) => {
     return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
   }
 
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    // withTenantTransaction sets the org GUC and wraps the whole delete in a
+    // single transaction. serial_units and photos both carry organization_id,
+    // so each DELETE is org-scoped — a cross-tenant id deletes nothing and
+    // falls through to the 404 below (never 403).
+    return await withTenantTransaction(ctx.organizationId, async (client) => {
+      const unitDelete = id >= POST_RETIREMENT_ID_OFFSET
+        ? await client.query(
+            `DELETE FROM serial_units WHERE id = $1 AND organization_id = $2 RETURNING id`,
+            [id - POST_RETIREMENT_ID_OFFSET, ctx.organizationId],
+          )
+        : await client.query(
+            `DELETE FROM serial_units WHERE origin_sku_id = $1 AND organization_id = $2 RETURNING id`,
+            [id, ctx.organizationId],
+          );
 
-    const unitDelete = id >= POST_RETIREMENT_ID_OFFSET
-      ? await client.query(
-          `DELETE FROM serial_units WHERE id = $1 RETURNING id`,
-          [id - POST_RETIREMENT_ID_OFFSET],
-        )
-      : await client.query(
-          `DELETE FROM serial_units WHERE origin_sku_id = $1 RETURNING id`,
-          [id],
-        );
+      if (unitDelete.rowCount === 0) {
+        return NextResponse.json({ error: 'SKU not found' }, { status: 404 });
+      }
 
-    if (unitDelete.rowCount === 0) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'SKU not found' }, { status: 404 });
-    }
+      const photoDelete = await client.query(
+        `DELETE FROM photos WHERE entity_type = 'SKU' AND entity_id = $1 AND organization_id = $2 RETURNING id`,
+        [id, ctx.organizationId],
+      );
 
-    const photoDelete = await client.query(
-      `DELETE FROM photos WHERE entity_type = 'SKU' AND entity_id = $1 RETURNING id`,
-      [id],
-    );
-
-    await client.query('COMMIT');
-    return NextResponse.json({
-      success: true,
-      id,
-      deletedUnits: unitDelete.rowCount ?? 0,
-      deletedPhotos: photoDelete.rowCount ?? 0,
+      return NextResponse.json({
+        success: true,
+        id,
+        deletedUnits: unitDelete.rowCount ?? 0,
+        deletedPhotos: photoDelete.rowCount ?? 0,
+      });
     });
   } catch (err: any) {
-    await client.query('ROLLBACK').catch(() => {});
     console.error('[sku/by-tracking] delete error:', err);
     return NextResponse.json({ error: 'Failed to delete SKU' }, { status: 500 });
-  } finally {
-    client.release();
   }
 }, { permission: 'sku_stock.manage' });

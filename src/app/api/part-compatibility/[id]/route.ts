@@ -30,10 +30,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const parsed = parseBody(PartCompatibilityUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getCompatibilityById(id);
+    const before = await getCompatibilityById(id, gate.ctx.organizationId);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
-    const updated = await updateCompatibility(id, parsed);
+    const updated = await updateCompatibility(id, parsed, gate.ctx.organizationId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'part-compatibility-api',
@@ -66,10 +66,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const id = parseId(rawId);
     if (id === null) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const before = await getCompatibilityById(id);
+    const before = await getCompatibilityById(id, gate.ctx.organizationId);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
-    const ok = await deleteCompatibility(id);
+    const ok = await deleteCompatibility(id, gate.ctx.organizationId);
     if (!ok) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     await recordAudit(pool, gate.ctx, req, {

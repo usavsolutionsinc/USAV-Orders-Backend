@@ -5,7 +5,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 // Creates draft Zoho POs from staged replenishment requests. Approval-level
 // action — wired to replenish.approve_po which is in STEP_UP_PERMISSIONS so
 // the wrapper also requires a fresh step-up grant.
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const ids = body.replenishment_request_ids;
@@ -24,7 +24,11 @@ export const POST = withAuth(async (req: NextRequest) => {
       );
     }
 
-    const created = await createDraftPurchaseOrders(ids);
+    // Thread the caller's active tenant so the shared module filters out any
+    // cross-tenant replenishment_request_ids (org-scoped SELECT/UPDATE) and
+    // stamps the true organization_id on status-log writes. Without this,
+    // org A could read/Zoho-create-against/mutate org B's rows.
+    const created = await createDraftPurchaseOrders(ids, ctx.organizationId);
 
     return NextResponse.json({
       success: true,

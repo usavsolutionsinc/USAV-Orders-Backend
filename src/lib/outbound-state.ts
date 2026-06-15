@@ -63,9 +63,12 @@ export function deriveOutboundState(input: OutboundStateInput): OutboundState {
   const delivered = cat === 'DELIVERED' || (input.isTerminal === true && cat !== 'RETURNED');
   const custody = carrierHasCustody(input);
 
+  // Delivered is terminal and always the last word — it overrides scanned-out,
+  // process-gap, exception, everything. A delivered package shows the delivered
+  // dot no matter what its internal scan history looks like.
+  if (delivered) return 'DELIVERED';
   // Scanned out with no pack record at all → a process gap worth surfacing.
   if (hasShipOut && !hasPack) return 'PROCESS_GAP';
-  if (delivered) return 'DELIVERED';
   if (input.hasException || input.stalled) return 'EXCEPTION';
   if (custody && hasShipOut) return 'IN_CUSTODY';
   // Carrier has it, but it was never scanned out internally — left outside the flow.
@@ -76,20 +79,24 @@ export function deriveOutboundState(input: OutboundStateInput): OutboundState {
 
 export interface OutboundStateMeta {
   label: string;
+  /** One-line plain-English meaning — surfaced as the hover tooltip on dots + legend chips. */
+  description: string;
   /** Tailwind classes for a compact pill (bg + text + ring). */
   pill: string;
   /** Tailwind bg class for a status dot. */
   dot: string;
 }
 
+// Dot colors are mutually distinct hues: In Custody (indigo) and Orphan (pink)
+// are deliberately far apart on the wheel so they never read as the same state.
 export const OUTBOUND_STATE_META: Record<OutboundState, OutboundStateMeta> = {
-  PACKED_STAGED: { label: 'In Staging', pill: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-400' },
-  SCANNED_OUT: { label: 'Scanned Out', pill: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500' },
-  IN_CUSTODY: { label: 'In Custody', pill: 'bg-indigo-50 text-indigo-700 ring-indigo-200', dot: 'bg-indigo-500' },
-  DELIVERED: { label: 'Delivered', pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
-  EXCEPTION: { label: 'Exception', pill: 'bg-rose-50 text-rose-700 ring-rose-200', dot: 'bg-rose-500' },
-  PROCESS_GAP: { label: 'Process Gap', pill: 'bg-orange-50 text-orange-700 ring-orange-200', dot: 'bg-orange-500' },
-  ORPHAN: { label: 'Orphan', pill: 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200', dot: 'bg-fuchsia-500' },
+  PACKED_STAGED: { label: 'In Staging',  description: 'Packed and waiting at the dock — not scanned out yet.',                            pill: 'bg-amber-50 text-amber-700 ring-amber-200',       dot: 'bg-amber-400' },
+  SCANNED_OUT:   { label: 'Scanned Out', description: 'Scanned out at the dock — left the building; carrier hasn’t confirmed custody.',   pill: 'bg-blue-50 text-blue-700 ring-blue-200',          dot: 'bg-blue-500' },
+  IN_CUSTODY:    { label: 'In Custody',  description: 'Carrier has it — accepted, in transit, or out for delivery.',                      pill: 'bg-indigo-50 text-indigo-700 ring-indigo-200',    dot: 'bg-indigo-500' },
+  DELIVERED:     { label: 'Delivered',   description: 'Carrier confirmed delivery (terminal).',                                          pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
+  EXCEPTION:     { label: 'Exception',   description: 'Carrier exception or stalled — no movement.',                                     pill: 'bg-rose-50 text-rose-700 ring-rose-200',          dot: 'bg-rose-500' },
+  PROCESS_GAP:   { label: 'Process Gap', description: 'Scanned out but no pack record — needs backfill / coaching.',                      pill: 'bg-orange-50 text-orange-700 ring-orange-200',    dot: 'bg-orange-500' },
+  ORPHAN:        { label: 'Orphan',      description: 'Carrier took custody, but it was never scanned out internally.',                   pill: 'bg-pink-50 text-pink-700 ring-pink-200',          dot: 'bg-pink-500' },
 };
 
 /** Fields the table/scan-out view attach to each record after derivation. */

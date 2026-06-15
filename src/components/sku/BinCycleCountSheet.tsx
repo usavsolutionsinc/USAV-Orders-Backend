@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2 } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
@@ -96,7 +95,6 @@ export function BinCycleCountSheet({
       const qty = Number(raw);
       if (!Number.isFinite(qty) || qty < 0) {
         setError('Enter a count');
-        errorFeedback();
         return;
       }
       setBusyLineId(line.id);
@@ -120,7 +118,6 @@ export function BinCycleCountSheet({
         if (!res.ok || data?.success === false) {
           throw new Error(data?.error || `HTTP ${res.status}`);
         }
-        successFeedback();
         const needsReview = data?.needs_review === true;
         setFlash(
           needsReview
@@ -130,7 +127,6 @@ export function BinCycleCountSheet({
         await load();
         await queryClient.invalidateQueries({ queryKey: invalidateKey });
       } catch (err) {
-        errorFeedback();
         setError(err instanceof Error ? err.message : 'Submit failed');
       } finally {
         setBusyLineId(null);

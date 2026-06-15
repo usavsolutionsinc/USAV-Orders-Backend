@@ -8,12 +8,12 @@ import { classifyInput, looksLikeFnskuPrefix } from '../src/lib/scan-resolver';
 import { detectStationScanType, getStationInputMode } from '../src/lib/station-scan-routing';
 
 const endpointForType: Record<string, string> = {
-  TRACKING: '/api/tech/scan-tracking',
+  TRACKING: '/api/tech/scan',
   SERIAL: '/api/tech/add-serial',
-  FNSKU: '/api/tech/scan-fnsku',
+  FNSKU: '/api/tech/scan',
   SKU: '/api/tech/scan-sku',
   REPAIR: '/api/repair-service',
-  COMMAND: '/api/tech/scan-tracking',
+  COMMAND: '/api/tech/scan',
 };
 
 const sampleTracking = [

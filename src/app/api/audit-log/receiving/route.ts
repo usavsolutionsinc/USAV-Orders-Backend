@@ -15,13 +15,14 @@ import {
  * Gate: admin.view_logs.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const po = searchParams.get('po')?.trim() || null;
 
     try {
       if (po) {
-        const detail = await getReceivingAuditPO(po);
+        const detail = await getReceivingAuditPO(po, orgId);
         if (!detail) {
           return NextResponse.json(
             { success: false, error: 'PO not found' },
@@ -35,11 +36,14 @@ export const GET = withAuth(
       const offsetRaw = parseInt(searchParams.get('offset') || '0', 10);
       const search = searchParams.get('q')?.trim() || null;
 
-      const items = await listReceivingAuditPOs({
-        limit: Number.isFinite(limitRaw) ? limitRaw : 25,
-        offset: Number.isFinite(offsetRaw) ? offsetRaw : 0,
-        search,
-      });
+      const items = await listReceivingAuditPOs(
+        {
+          limit: Number.isFinite(limitRaw) ? limitRaw : 25,
+          offset: Number.isFinite(offsetRaw) ? offsetRaw : 0,
+          search,
+        },
+        orgId,
+      );
       return NextResponse.json({ success: true, items });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'audit-log read failed';

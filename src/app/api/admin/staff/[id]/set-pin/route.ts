@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { isObviousPin, PinError, setStaffPin } from '@/lib/auth/pin';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -39,11 +39,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'WEAK_PIN', message: 'PIN is too predictable (sequential or repeating digits).' }, { status: 400 });
   }
 
-  const probe = await pool.query(`SELECT id FROM staff WHERE id = $1`, [id]);
+  // Org-ownership gate: a staffId in another org reads as NOT_FOUND, never
+  // mutated. setStaffPin is also passed the org so its UPDATE re-asserts the
+  // org predicate (defense in depth — a cross-org id is a no-op there too).
+  const probe = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [id, ctx.organizationId],
+  );
   if (!probe.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   try {
-    await setStaffPin(id, pin);
+    await setStaffPin(id, pin, ctx.organizationId);
   } catch (err) {
     if (err instanceof PinError) {
       return NextResponse.json({ error: err.code }, { status: 400 });

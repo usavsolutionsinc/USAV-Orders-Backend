@@ -1,16 +1,8 @@
 import { getLast4 } from '@/components/ui/CopyChip';
 import { receivingHandle } from '@/lib/barcode-routing';
-import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { printLabel } from '@/lib/print/printLabel';
+import { buildFaceInfoHtml, type LabelFaceModel } from '@/lib/print/labelFace';
 import { conditionLabel } from '@/lib/conditions';
-
-// Carton metadata laid out top/middle/bottom in the shared label's info column.
-const RECEIVING_INFO_CSS = `
-  .row{display:flex;justify-content:space-between;align-items:baseline;gap:4px;line-height:1}
-  .platform{font-size:11px;font-weight:700;color:#374151;text-transform:capitalize;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .notes{flex:1 1 auto;min-height:0;font-size:10px;font-weight:600;color:#111;text-transform:none;letter-spacing:0;text-align:center;line-height:1.12;overflow:hidden;padding:0 1px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow-wrap:anywhere;word-break:break-word;align-self:stretch;-webkit-hyphens:auto;hyphens:auto}
-  .cond{font-size:13px;font-weight:900;color:#111;white-space:nowrap}
-  .po{font-size:12px;font-weight:900;letter-spacing:0.3px;line-height:1.05;color:#111;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .date{font-size:11px;font-weight:700;color:#4b5563;white-space:nowrap;font-variant-numeric:tabular-nums}`;
 
 export interface ReceivingLabelPayload {
   /** Numeric receiving id — used to build the QR URL when qrValue is not provided. */
@@ -113,10 +105,6 @@ export function receivingLabelPoCornerDisplay(payload: ReceivingLabelPayload): s
   return getLast4(sv);
 }
 
-function conditionShort(code: string | null | undefined): string {
-  return conditionLabel(code, 'label');
-}
-
 /**
  * The string actually encoded in the carton DataMatrix. Prefers an
  * explicit qrValue override (legacy callsites still pass a full URL),
@@ -136,32 +124,46 @@ export function resolveReceivingQrValue(payload: ReceivingLabelPayload): string 
 }
 
 /**
- * Generate a 2×1" label with info on the left and a pre-rendered QR SVG on
- * the right. The QR encodes a URL into the mobile carton page so phones
- * scanning it open the right screen without needing the app installed.
+ * Map a carton payload onto the shared {@link LabelFaceModel}. The single
+ * source of truth for the carton label's slot layout — consumed by both the
+ * on-screen `ReceivingPoLabelPreview` and every print path, so they can't drift.
+ */
+export function receivingPayloadToFace(payload: ReceivingLabelPayload): LabelFaceModel {
+  const qrValue = resolveReceivingQrValue(payload);
+  // HRI = the typeable `R-{id}` handle, shown under the matrix the way a barcode
+  // prints its digits. Only for the internal receiving handle, not arbitrary URLs.
+  const hri = /^(?:R|RCV)-\d+$/i.test(qrValue) ? qrValue.toUpperCase() : undefined;
+  return {
+    topLeft: receivingLabelPlatformDisplay(payload),
+    topRight: payload.date,
+    center: (payload.notes || '').trim(),
+    bottomLeft: conditionLabel(payload.conditionCode, 'label'),
+    bottomRight: receivingLabelPoCornerDisplay(payload),
+    matrix: { value: qrValue, symbology: 'datamatrix', scale: 4 },
+    hri,
+  };
+}
+
+/**
+ * Generate a 2×1" carton label via the shared `printLabel` shell. The plain
+ * DataMatrix carries the `R-{id}` handle — `routeScan()` parses the prefix and
+ * navigates to /m/r/{id}. No URL on the wire.
+ *
+ * NOTE: this shell-based path (Electron silent → browser dialog) is used by
+ * non-unbox callers (e.g. local pickup). The unbox flow prints through
+ * `receiving-label-helpers.printReceivingLabel`, which adds the WebUSB/Web
+ * Serial raw-TSPL path for paired thermal printers — both now render the
+ * identical face via {@link receivingPayloadToFace}.
  */
 export function printReceivingLabel(payload: ReceivingLabelPayload): void {
   if (typeof window === 'undefined') return;
-  const qrValue = resolveReceivingQrValue(payload);
-  if (!qrValue) return;
+  const face = receivingPayloadToFace(payload);
+  if (!face.matrix.value) return;
 
-  const infoHtml = `
-    <div class="row">
-      <span class="platform">${escapeLabelHtml(receivingLabelPlatformDisplay(payload))}</span>
-      <span class="date">${escapeLabelHtml(payload.date)}</span>
-    </div>
-    <div class="notes">${escapeLabelHtml((payload.notes || '').trim())}</div>
-    <div class="row">
-      <span class="cond">${escapeLabelHtml(conditionShort(payload.conditionCode))}</span>
-      <span class="po">${escapeLabelHtml(receivingLabelPoCornerDisplay(payload))}</span>
-    </div>`;
-
-  // Plain DataMatrix carrying the `R-{id}` handle — `routeScan()` parses
-  // the prefix and navigates to /m/r/{id}. No URL on the wire.
   printLabel({
     name: 'Label',
-    infoHtml,
-    infoCss: RECEIVING_INFO_CSS,
-    dataMatrix: { value: qrValue, symbology: 'datamatrix', scale: 4 },
+    ...buildFaceInfoHtml(face),
+    dataMatrix: face.matrix,
+    hri: face.hri,
   });
 }

@@ -5,6 +5,8 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AuditLogFilters } from './filters';
 
 export interface StaffEvent {
@@ -32,10 +34,27 @@ export interface StaffDetail {
 export async function getStaffDetail(
   staffId: number,
   filters: AuditLogFilters,
+  orgId?: OrgId,
 ): Promise<StaffDetail | null> {
-  const staffRes = await pool.query(
-    `SELECT id, name, role FROM staff WHERE id = $1 LIMIT 1`,
-    [staffId],
+  // When an orgId is supplied, every query runs through the tenant-scoped
+  // connection (GUC-wrapped) AND carries an explicit org predicate. When it is
+  // omitted, the legacy raw-pool path is preserved byte-identically so the many
+  // un-migrated callers keep behaving as today.
+  const run = orgId
+    ? <T extends Record<string, unknown> = Record<string, unknown>>(
+        text: string,
+        params: unknown[],
+      ) => tenantQuery<T>(orgId, text, params)
+    : <T extends Record<string, unknown> = Record<string, unknown>>(
+        text: string,
+        params: unknown[],
+      ) => pool.query(text, params) as unknown as Promise<{ rows: T[] }>;
+
+  const staffRes = await run<{ id: number; name: string | null; role: string | null }>(
+    orgId
+      ? `SELECT id, name, role FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`
+      : `SELECT id, name, role FROM staff WHERE id = $1 LIMIT 1`,
+    orgId ? [staffId, orgId] : [staffId],
   );
   if (staffRes.rows.length === 0) return null;
   const staff = staffRes.rows[0] as { id: number; name: string | null; role: string | null };
@@ -54,8 +73,16 @@ export async function getStaffDetail(
   const buildClauses = (col: string) =>
     dateClauses.length ? ' AND ' + dateClauses.map((c) => c.replace('{COL}', col)).join(' AND ') : '';
 
+  // When tenant-scoped, append the org id as a trailing positional param and
+  // add an explicit predicate on the org-bearing root table of each query.
+  // (Integer surrogate-PK joins — pl.id, rl.id, stn.id, o.shipment_id — are
+  // safe bare; shipping_tracking_numbers has no organization_id column and is
+  // scoped via its already-org-filtered parent rows.)
+  const queryParams = orgId ? [...baseParams, orgId] : baseParams;
+  const orgPred = (alias: string) => (orgId ? ` AND ${alias}.organization_id = $${queryParams.length}` : '');
+
   // Packer events.
-  const packerRes = await pool.query(
+  const packerRes = await run(
     `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
@@ -67,14 +94,14 @@ export async function getStaffDetail(
        JOIN packer_logs pl ON pl.id = sal.packer_log_id
        LEFT JOIN orders o ON o.shipment_id = pl.shipment_id
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
-      WHERE sal.staff_id = $1${buildClauses('sal.created_at')}
+      WHERE sal.staff_id = $1${buildClauses('sal.created_at')}${orgPred('sal')}
       ORDER BY sal.created_at DESC
       LIMIT 500`,
-    baseParams,
+    queryParams,
   );
 
   // Tech events.
-  const techRes = await pool.query(
+  const techRes = await run(
     `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
@@ -87,14 +114,14 @@ export async function getStaffDetail(
        JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
        LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = COALESCE(sal.shipment_id, tsn.shipment_id)
-      WHERE sal.staff_id = $1${buildClauses('sal.created_at')}
+      WHERE sal.staff_id = $1${buildClauses('sal.created_at')}${orgPred('sal')}
       ORDER BY sal.created_at DESC
       LIMIT 500`,
-    baseParams,
+    queryParams,
   );
 
   // Receiving lifecycle.
-  const recRes = await pool.query(
+  const recRes = await run(
     `SELECT ie.id,
             ie.occurred_at,
             ie.event_type,
@@ -103,10 +130,10 @@ export async function getStaffDetail(
             rl.zoho_purchaseorder_id
        FROM inventory_events ie
        JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
-      WHERE ie.actor_staff_id = $1${buildClauses('ie.occurred_at')}
+      WHERE ie.actor_staff_id = $1${buildClauses('ie.occurred_at')}${orgPred('ie')}
       ORDER BY ie.occurred_at DESC
       LIMIT 500`,
-    baseParams,
+    queryParams,
   );
 
   const events: StaffEvent[] = [];

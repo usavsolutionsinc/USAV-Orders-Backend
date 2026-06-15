@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { POST as unifiedSerial } from '@/app/api/tech/serial/route';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -15,26 +15,33 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const tracking = String(body.tracking || '').trim();
   const fnskuLogId = body.fnskuLogId ? Number(body.fnskuLogId) : null;
   const techId = ctx.staffId;
+  const orgId = ctx.organizationId;
   const serialNumbers: string[] = Array.isArray(body.serialNumbers) ? body.serialNumbers : [];
 
   // Resolve salId from fnskuLogId or tracking
   let salId: number | null = null;
 
   if (fnskuLogId) {
-    const r = await pool.query(
-      `SELECT station_activity_log_id FROM fba_fnsku_logs WHERE id = $1 LIMIT 1`,
-      [fnskuLogId],
+    const r = await tenantQuery(
+      orgId,
+      `SELECT station_activity_log_id FROM fba_fnsku_logs WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [fnskuLogId, orgId],
     );
     salId = r.rows[0]?.station_activity_log_id ?? null;
   }
 
   if (!salId && tracking) {
-    // Find most recent TECH SAL for this tracking
-    const r = await pool.query(
+    // Find most recent TECH SAL for this tracking.
+    // shipping_tracking_numbers has no organization_id column (NEEDS-COL); it is
+    // scoped here via the tenant-owned parent `sal` (sal.organization_id). The
+    // stn join is on the integer surrogate PK (stn.id = sal.shipment_id), safe bare.
+    const r = await tenantQuery(
+      orgId,
       `SELECT sal.id FROM station_activity_logs sal
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
        WHERE sal.station = 'TECH'
          AND sal.activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')
+         AND sal.organization_id = $2
          AND (
            sal.scan_ref = $1
            OR sal.fnsku = $1
@@ -42,7 +49,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
            OR UPPER(TRIM(stn.tracking_number_normalized)) = UPPER(TRIM($1))
          )
        ORDER BY sal.created_at DESC LIMIT 1`,
-      [tracking],
+      [tracking, orgId],
     );
     salId = r.rows[0]?.id ?? null;
   }

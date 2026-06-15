@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { findByNormalizedSerial } from '@/lib/neon/serial-units-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
-import {
-  findLocationByBarcode,
-  findLocationByName,
-  getLocationById,
-} from '@/lib/repositories/inventory/locations';
 
 /**
  * POST /api/serial-units/[id]/move — move a unit into a bin/zone.
@@ -63,11 +59,17 @@ export const POST = withAuth(
       );
     }
 
-    // 1. Resolve target location.
+    const orgId = ctx.organizationId;
+
+    // 1. Resolve target location — org-scoped so a caller can't reference (or
+    //    probe the existence of) another org's bin by barcode/name/id. locations
+    //    is tenant-owned; the shared repo lookups run unscoped on the bypass
+    //    pool, so we resolve through the tenant pool with an explicit
+    //    organization_id predicate instead.
     let target =
-      binBarcode != null ? await findLocationByBarcode(binBarcode) : null;
-    if (!target && binName != null) target = await findLocationByName(binName);
-    if (!target && binIdRaw != null) target = await getLocationById(binIdRaw);
+      binBarcode != null ? await findLocationByBarcodeOrg(binBarcode, orgId) : null;
+    if (!target && binName != null) target = await findLocationByNameOrg(binName, orgId);
+    if (!target && binIdRaw != null) target = await getLocationByIdOrg(binIdRaw, orgId);
     if (!target) {
       return NextResponse.json(
         { error: `Location not found (${binBarcode || binName || binIdRaw})` },
@@ -76,7 +78,7 @@ export const POST = withAuth(
     }
 
     // 2. Resolve the unit + its current location for the prev_bin_id field.
-    const unit = await resolveUnit(idParam);
+    const unit = await resolveUnit(idParam, orgId);
     if (!unit) {
       return NextResponse.json({ error: 'Serial unit not found' }, { status: 404 });
     }
@@ -85,8 +87,8 @@ export const POST = withAuth(
     let prevBinId: number | null = null;
     if (prevLocationName) {
       const prevLoc =
-        (await findLocationByName(prevLocationName)) ??
-        (await findLocationByBarcode(prevLocationName));
+        (await findLocationByNameOrg(prevLocationName, orgId)) ??
+        (await findLocationByBarcodeOrg(prevLocationName, orgId));
       prevBinId = prevLoc?.id ?? null;
     }
 
@@ -103,12 +105,14 @@ export const POST = withAuth(
     // 3. Update current_location. Storing the canonical name keeps
     //    serial_units self-describing without forcing a join for read paths.
     try {
-      await pool.query(
+      await tenantQuery(
+        orgId,
         `UPDATE serial_units
            SET current_location = $1,
                updated_at = NOW()
-         WHERE id = $2`,
-        [target.name, unit.id],
+         WHERE id = $2
+           AND organization_id = $3`,
+        [target.name, unit.id, orgId],
       );
     } catch (err) {
       console.error('[move] update serial_units.current_location failed', err);
@@ -133,7 +137,7 @@ export const POST = withAuth(
           from: prevLocationName,
           to: target.name,
         },
-      });
+      }, undefined, orgId);
     } catch (err) {
       console.warn('[move] MOVED event failed (non-fatal)', err);
     }
@@ -161,19 +165,59 @@ interface UnitLite {
   current_location: string | null;
 }
 
-async function resolveUnit(raw: string): Promise<UnitLite | null> {
+async function resolveUnit(raw: string, orgId: OrgId): Promise<UnitLite | null> {
   if (/^\d+$/.test(raw)) {
-    const r = await pool.query<UnitLite>(
-      `SELECT id, sku, current_location FROM serial_units WHERE id = $1 LIMIT 1`,
-      [Number(raw)],
+    const r = await tenantQuery<UnitLite>(
+      orgId,
+      `SELECT id, sku, current_location FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [Number(raw), orgId],
     );
     if (r.rows[0]) return r.rows[0];
   }
-  const fallback = await findByNormalizedSerial(raw);
+  const fallback = await findByNormalizedSerial(raw, orgId);
   if (!fallback) return null;
   return {
     id: fallback.id,
     sku: fallback.sku ?? null,
     current_location: fallback.current_location ?? null,
   };
+}
+
+// ─── locations: org-scoped lookups ───────────────────────────────────────────
+// locations is tenant-owned (has organization_id). The shared repo helpers read
+// it bare on the bypass pool, which lets a caller resolve another org's bin by
+// barcode/name/id. We re-resolve through the tenant pool with an explicit
+// organization_id predicate so a cross-tenant bin is invisible (404).
+
+interface LocationLite {
+  id: number;
+  name: string;
+  barcode: string | null;
+}
+
+async function findLocationByBarcodeOrg(barcode: string, orgId: OrgId): Promise<LocationLite | null> {
+  const r = await tenantQuery<LocationLite>(
+    orgId,
+    `SELECT id, name, barcode FROM locations WHERE barcode = $1 AND organization_id = $2 LIMIT 1`,
+    [barcode, orgId],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function findLocationByNameOrg(name: string, orgId: OrgId): Promise<LocationLite | null> {
+  const r = await tenantQuery<LocationLite>(
+    orgId,
+    `SELECT id, name, barcode FROM locations WHERE name = $1 AND organization_id = $2 LIMIT 1`,
+    [name, orgId],
+  );
+  return r.rows[0] ?? null;
+}
+
+async function getLocationByIdOrg(id: number, orgId: OrgId): Promise<LocationLite | null> {
+  const r = await tenantQuery<LocationLite>(
+    orgId,
+    `SELECT id, name, barcode FROM locations WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
+  );
+  return r.rows[0] ?? null;
 }

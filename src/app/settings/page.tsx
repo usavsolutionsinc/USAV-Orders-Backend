@@ -12,6 +12,7 @@ import { StaffSection } from '@/components/settings/sections/StaffSection';
 import { SessionsSection } from '@/components/settings/sections/SessionsSection';
 import { AuditSection } from '@/components/settings/sections/AuditSection';
 import { OperationsLogSection } from '@/components/settings/sections/OperationsLogSection';
+import { CatalogSection } from '@/components/settings/sections/CatalogSection';
 import { getActiveSettingsSection } from '@/components/sidebar/SettingsSidebarPanel';
 
 export default function SettingsPage() {
@@ -37,6 +38,7 @@ export default function SettingsPage() {
           {active === 'sessions' && <SessionsSection />}
           {active === 'audit' && <AuditSection />}
           {active === 'operations-log' && <OperationsLogSection />}
+          {active === 'catalog' && <CatalogSection />}
           {active === 'about' && <AboutSection />}
         </div>
       </main>

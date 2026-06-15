@@ -1,6 +1,6 @@
 'use client';
 
-import { getStaffName } from '@/utils/staff';
+import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { formatDateTimePST } from '@/utils/date';
 import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
 import { ReceivingPhotosSection } from './ReceivingPhotosSection';
@@ -9,20 +9,33 @@ interface ReceivingOverviewCardProps {
   log: ReceivingDetailsLog;
 }
 
+function resolveStaffLabel(
+  nameFromApi: string | null | undefined,
+  staffId: number | null | undefined,
+  getStaffName: (id: number | null | undefined) => string,
+): string {
+  const trimmed = String(nameFromApi ?? '').trim();
+  if (trimmed) return trimmed;
+  if (staffId) return getStaffName(staffId);
+  return '';
+}
+
 /** Top-of-panel context: tracking scan, unboxing, receiving photos — matches shipped packing photos viewer. */
 export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
-  // Tracking-scan row shows the timestamp only — operator attribution lives
-  // on the unboxing row below where it carries more meaning.
-  const scanTime = log.tracking_scanned_at ? formatDateTimePST(log.tracking_scanned_at) : '';
+  const { getStaffName } = useStaffNameMap();
 
-  // Unboxed row carries the staff name + timestamp. Fall back to scan-time
-  // attribution when unboxed_at / unboxed_by are missing — most often the
-  // same operator handled both, and showing a name with no time (or vice
-  // versa) reads as broken data.
-  const unboxAt = log.unboxed_at ?? log.tracking_scanned_at ?? null;
+  const scanTime = log.tracking_scanned_at ? formatDateTimePST(log.tracking_scanned_at) : '';
+  const scanName = resolveStaffLabel(
+    log.tracking_scanned_by_name,
+    log.tracking_scanned_by,
+    getStaffName,
+  );
+  const scanPart =
+    scanName && scanTime ? `${scanTime} · ${scanName}` : scanTime || scanName;
+
+  const unboxAt = log.unboxed_at ?? null;
   const unboxTime = unboxAt ? formatDateTimePST(unboxAt) : '';
-  const unboxStaffId = log.unboxed_by ?? log.tracking_scanned_by ?? null;
-  const unboxName = unboxStaffId ? getStaffName(unboxStaffId) : '';
+  const unboxName = resolveStaffLabel(log.unboxed_by_name, log.unboxed_by, getStaffName);
   const unboxPart =
     unboxName && unboxTime ? `${unboxTime} · ${unboxName}` : unboxTime || unboxName;
 
@@ -34,7 +47,7 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
             Tracking scanned
           </p>
           <p className="text-sm font-bold text-gray-900 leading-snug">
-            {scanTime || <span className="text-gray-400 font-semibold">Not recorded</span>}
+            {scanPart || <span className="text-gray-400 font-semibold">Not recorded</span>}
           </p>
         </div>
 

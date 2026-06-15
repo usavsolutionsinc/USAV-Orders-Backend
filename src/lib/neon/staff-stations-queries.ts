@@ -12,6 +12,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const VALID_STATIONS = ['TECH', 'PACK', 'UNBOX', 'SALES', 'FBA'] as const;
 export type StationKey = (typeof VALID_STATIONS)[number];
@@ -31,14 +33,26 @@ export interface StaffStationRow {
 }
 
 /** Raw assignment rows for one staff (primary first). Empty if none assigned. */
-export async function getStaffStations(staffId: number): Promise<StaffStationRow[]> {
-  const r = await pool.query(
-    `SELECT station, is_primary
-       FROM staff_stations
-      WHERE staff_id = $1
-      ORDER BY is_primary DESC, station ASC`,
-    [staffId],
-  );
+export async function getStaffStations(staffId: number, orgId?: OrgId): Promise<StaffStationRow[]> {
+  // `staff_stations` has no organization_id column → scope via its `staff` parent.
+  const r = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT ss.station, ss.is_primary
+           FROM staff_stations ss
+           JOIN staff s ON s.id = ss.staff_id
+          WHERE ss.staff_id = $1
+            AND s.organization_id = $2
+          ORDER BY ss.is_primary DESC, ss.station ASC`,
+        [staffId, orgId],
+      )
+    : await pool.query(
+        `SELECT station, is_primary
+           FROM staff_stations
+          WHERE staff_id = $1
+          ORDER BY is_primary DESC, station ASC`,
+        [staffId],
+      );
   return r.rows.map((row) => ({ station: row.station as StationKey, is_primary: Boolean(row.is_primary) }));
 }
 
@@ -52,7 +66,10 @@ export async function getStaffStations(staffId: number): Promise<StaffStationRow
  * enumerated into this org's fan-out.
  */
 export async function getPrimaryTechStaffIds(orgId: string): Promise<number[]> {
-  const r = await pool.query(
+  // orgId is always present here → route through the tenant executor (RLS-subject)
+  // while keeping the explicit parent-org JOIN predicate. Signature unchanged.
+  const r = await tenantQuery(
+    orgId as OrgId,
     `SELECT ss.staff_id
        FROM staff_stations ss
        JOIN staff s ON s.id = ss.staff_id
@@ -66,24 +83,25 @@ export async function getPrimaryTechStaffIds(orgId: string): Promise<number[]> {
 }
 
 /** True when this staffer's primary station is TECH (gates the tech-queue inbox feed). */
-export async function isPrimaryTechStaff(staffId: number): Promise<boolean> {
-  const stations = await getStaffStations(staffId);
+export async function isPrimaryTechStaff(staffId: number, orgId?: OrgId): Promise<boolean> {
+  const stations = await getStaffStations(staffId, orgId);
   return stations.some((s) => s.station === 'TECH' && s.is_primary);
 }
 
 /** Derive the fallback station from the employee_id prefix (same rule as /api/staff-goals). */
-async function deriveDefaultStation(staffId: number): Promise<StationKey> {
-  const r = await pool.query(
-    `SELECT CASE
+async function deriveDefaultStation(staffId: number, orgId?: OrgId): Promise<StationKey> {
+  const sql = `SELECT CASE
               WHEN UPPER(employee_id) LIKE 'PACK%' THEN 'PACK'
               WHEN UPPER(employee_id) LIKE 'UNBOX%' THEN 'UNBOX'
               WHEN UPPER(employee_id) LIKE 'SALES%' THEN 'SALES'
               WHEN UPPER(employee_id) LIKE 'FBA%' THEN 'FBA'
               ELSE 'TECH'
             END AS station
-       FROM staff WHERE id = $1 LIMIT 1`,
-    [staffId],
-  );
+       FROM staff WHERE id = $1`;
+  // `staff` HAS organization_id → add the explicit predicate when scoped.
+  const r = orgId
+    ? await tenantQuery(orgId, `${sql} AND organization_id = $2 LIMIT 1`, [staffId, orgId])
+    : await pool.query(`${sql} LIMIT 1`, [staffId]);
   return (r.rows[0]?.station as StationKey) ?? 'TECH';
 }
 
@@ -101,21 +119,32 @@ export interface MyStationGoal {
  * assignments yet, returns a single derived station marked primary — so the
  * chip shows one goal with no Switch control.
  */
-export async function getMyStationGoals(staffId: number): Promise<MyStationGoal[]> {
-  let assigned = await getStaffStations(staffId);
+export async function getMyStationGoals(staffId: number, orgId?: OrgId): Promise<MyStationGoal[]> {
+  let assigned = await getStaffStations(staffId, orgId);
   if (assigned.length === 0) {
-    const fallback = await deriveDefaultStation(staffId);
+    const fallback = await deriveDefaultStation(staffId, orgId);
     assigned = [{ station: fallback, is_primary: true }];
   }
   const stations = assigned.map((a) => a.station);
 
   // Daily targets per station (default 50 where no staff_goals row exists).
-  const goalsRes = await pool.query(
-    `SELECT station, daily_goal
-       FROM staff_goals
-      WHERE staff_id = $1 AND station = ANY($2::text[])`,
-    [staffId, stations],
-  );
+  // `staff_goals` has no organization_id column → scope via its `staff` parent.
+  const goalsRes = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT sg.station, sg.daily_goal
+           FROM staff_goals sg
+           JOIN staff s ON s.id = sg.staff_id
+          WHERE sg.staff_id = $1 AND sg.station = ANY($2::text[])
+            AND s.organization_id = $3`,
+        [staffId, stations, orgId],
+      )
+    : await pool.query(
+        `SELECT station, daily_goal
+           FROM staff_goals
+          WHERE staff_id = $1 AND station = ANY($2::text[])`,
+        [staffId, stations],
+      );
   const goalByStation = new Map<string, number>();
   for (const row of goalsRes.rows) {
     const g = Number(row.daily_goal);
@@ -123,17 +152,32 @@ export async function getMyStationGoals(staffId: number): Promise<MyStationGoal[
   }
 
   // Live deduped scan counts per station for today (PST), this staffer only.
-  const countsRes = await pool.query(
-    `SELECT station,
-            COUNT(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int AS today_count
-       FROM station_activity_logs
-      WHERE staff_id = $1
-        AND activity_type = ANY($2::text[])
-        AND (timezone('America/Los_Angeles', created_at))::date
-          = (timezone('America/Los_Angeles', now()))::date
-      GROUP BY station`,
-    [staffId, SCAN_ACTIVITY_TYPES],
-  );
+  // `station_activity_logs` HAS organization_id → add the explicit predicate.
+  const countsRes = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT station,
+                COUNT(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int AS today_count
+           FROM station_activity_logs
+          WHERE staff_id = $1
+            AND activity_type = ANY($2::text[])
+            AND organization_id = $3
+            AND (timezone('America/Los_Angeles', created_at))::date
+              = (timezone('America/Los_Angeles', now()))::date
+          GROUP BY station`,
+        [staffId, SCAN_ACTIVITY_TYPES, orgId],
+      )
+    : await pool.query(
+        `SELECT station,
+                COUNT(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int AS today_count
+           FROM station_activity_logs
+          WHERE staff_id = $1
+            AND activity_type = ANY($2::text[])
+            AND (timezone('America/Los_Angeles', created_at))::date
+              = (timezone('America/Los_Angeles', now()))::date
+          GROUP BY station`,
+        [staffId, SCAN_ACTIVITY_TYPES],
+      );
   const countByStation = new Map<string, number>();
   for (const row of countsRes.rows) {
     countByStation.set(String(row.station), Number(row.today_count) || 0);
@@ -158,6 +202,7 @@ export async function setStaffStations(
   primary: StationKey | null,
   secondary: StationKey[],
   assignedBy: number | null,
+  orgId?: OrgId,
 ): Promise<{ primary: StationKey | null; secondary: StationKey[] }> {
   // Normalize: dedupe secondaries, drop the primary if it slipped in.
   const secSet = new Set<StationKey>();
@@ -167,14 +212,55 @@ export async function setStaffStations(
   }
   const secondaries = Array.from(secSet);
 
+  const rows: Array<[StationKey, boolean]> = [];
+  if (primary) rows.push([primary, true]);
+  for (const s of secondaries) rows.push([s, false]);
+
+  if (orgId) {
+    // Tenant-scoped path. `staff_stations` has no organization_id column, so we
+    // gate both the DELETE and the INSERT on the `staff` parent belonging to
+    // this org (cross-tenant staffId becomes a no-op → org-ownership 404 at the
+    // route layer, never a wrong-tenant mutation).
+    await withTenantTransaction(orgId, async (client) => {
+      await client.query(
+        `DELETE FROM staff_stations
+          WHERE staff_id = $1
+            AND EXISTS (SELECT 1 FROM staff s WHERE s.id = $1 AND s.organization_id = $2)`,
+        [staffId, orgId],
+      );
+
+      if (rows.length > 0) {
+        // INSERT ... SELECT so each row is only written when the parent staff
+        // belongs to this org (derives the guard from the parent, no blind write).
+        // Cast the first VALUES row's columns so the derived table has concrete
+        // types (nullable `assigned_by` would otherwise be ambiguous).
+        const values = rows
+          .map((_r, i) =>
+            i === 0
+              ? `($1::int, $3::text, $4::boolean, NOW(), $2::int)`
+              : `($1, $${i * 2 + 3}, $${i * 2 + 4}, NOW(), $2)`,
+          )
+          .join(', ');
+        const params: unknown[] = [staffId, assignedBy];
+        for (const [station, isPrimary] of rows) {
+          params.push(station, isPrimary);
+        }
+        await client.query(
+          `INSERT INTO staff_stations (staff_id, station, is_primary, assigned_at, assigned_by)
+           SELECT v.staff_id, v.station, v.is_primary, v.assigned_at, v.assigned_by
+             FROM (VALUES ${values}) AS v(staff_id, station, is_primary, assigned_at, assigned_by)
+            WHERE EXISTS (SELECT 1 FROM staff s WHERE s.id = $1 AND s.organization_id = $2)`,
+          params,
+        );
+      }
+    });
+    return { primary, secondary: secondaries };
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(`DELETE FROM staff_stations WHERE staff_id = $1`, [staffId]);
-
-    const rows: Array<[StationKey, boolean]> = [];
-    if (primary) rows.push([primary, true]);
-    for (const s of secondaries) rows.push([s, false]);
 
     if (rows.length > 0) {
       const values = rows

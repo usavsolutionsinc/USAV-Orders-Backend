@@ -14,14 +14,15 @@ import {
  * Gate: admin.view_logs.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const filters = parseFilters(searchParams);
     const session = searchParams.get('session')?.trim() || null;
 
     try {
       if (session) {
-        const detail = await getTechSessionDetail(session, filters);
+        const detail = await getTechSessionDetail(session, filters, orgId);
         if (!detail) {
           return NextResponse.json(
             { success: false, error: 'Session not found' },
@@ -31,10 +32,13 @@ export const GET = withAuth(
         return NextResponse.json({ success: true, ...detail });
       }
 
-      const items = await listTechSessions({
-        filters,
-        search: filters.q,
-      });
+      const items = await listTechSessions(
+        {
+          filters,
+          search: filters.q,
+        },
+        orgId,
+      );
       return NextResponse.json({ success: true, items });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'audit-log/tech read failed';

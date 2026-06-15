@@ -28,8 +28,13 @@ export async function recordClaimZendeskEvent(args: {
   actorStaffId: number | null;
 }): Promise<void> {
   await pool.query(
-    `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
-     VALUES ($1, $2, $3::jsonb, $4)`,
+    // organization_id is derived from the parent claim so the row is org-stamped
+    // even on the raw (non-GUC) pool — warranty_claim_events.organization_id is
+    // NOT NULL with a loud-fail GUC default, so omitting it here previously
+    // inserted NULL and violated the constraint on every write.
+    `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+     VALUES ($1, $2, $3::jsonb, $4,
+       (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
     [args.claimId, args.eventType, JSON.stringify(args.payload ?? {}), args.actorStaffId],
   );
 }

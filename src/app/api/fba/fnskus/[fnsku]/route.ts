@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
@@ -48,9 +48,12 @@ export async function PATCH(
 
     sets.push(`updated_at = NOW()`);
     vals.push(fnsku);
+    const fnskuIdx = idx++;
+    vals.push(gate.ctx.organizationId);
 
-    const result = await pool.query(
-      `UPDATE fba_fnskus SET ${sets.join(', ')} WHERE fnsku = $${idx} RETURNING fnsku, product_title, asin, sku`,
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
+      `UPDATE fba_fnskus SET ${sets.join(', ')} WHERE fnsku = $${fnskuIdx} AND organization_id = $${idx} RETURNING fnsku, product_title, asin, sku`,
       vals,
     );
 
@@ -93,9 +96,10 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'fnsku is required' }, { status: 400 });
     }
 
-    const result = await pool.query(
-      `SELECT fnsku, product_title, asin, sku, is_active, created_at, updated_at FROM fba_fnskus WHERE fnsku = $1`,
-      [fnsku],
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
+      `SELECT fnsku, product_title, asin, sku, is_active, created_at, updated_at FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2`,
+      [fnsku, gate.ctx.organizationId],
     );
 
     if (result.rowCount === 0) {

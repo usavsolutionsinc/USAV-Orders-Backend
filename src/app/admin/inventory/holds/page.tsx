@@ -1,6 +1,5 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
-import { isInventoryV2Returns } from '@/lib/feature-flags';
 import { holdUnit, releaseUnit } from '@/lib/inventory/hold';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -21,9 +20,7 @@ export const dynamic = 'force-dynamic';
  *     Submits to releaseUnit().
  *
  * Both server actions use the same code path as
- * /api/serial-units/[id]/{hold,release}. The page renders in preview
- * mode when INVENTORY_V2_RETURNS is off (table still loads, actions
- * are disabled).
+ * /api/serial-units/[id]/{hold,release}.
  *
  * Permission gate: admin.view at render time; underlying API permission
  * is sku_stock.adjust which the action enforces implicitly by being
@@ -75,9 +72,6 @@ async function loadHeldUnits(): Promise<HeldUnitRow[]> {
 
 async function holdAction(formData: FormData): Promise<void> {
   'use server';
-  if (!isInventoryV2Returns()) {
-    redirect('/admin/inventory/holds?error=flag_off');
-  }
   const refRaw = String(formData.get('ref') ?? '').trim();
   const reason = String(formData.get('reason') ?? '').trim();
   if (!refRaw || !reason) {
@@ -111,9 +105,6 @@ async function holdAction(formData: FormData): Promise<void> {
 
 async function releaseAction(formData: FormData): Promise<void> {
   'use server';
-  if (!isInventoryV2Returns()) {
-    redirect('/admin/inventory/holds?error=flag_off');
-  }
   const id = Number(formData.get('serialUnitId'));
   const forceStatus = String(formData.get('forceStatus') ?? '').trim() || null;
   const reason = String(formData.get('reason') ?? '').trim() || null;
@@ -147,7 +138,6 @@ export default async function HoldsAdminPage({
 
   const params = await searchParams;
   const errorCode = params.error ?? null;
-  const flagOn = isInventoryV2Returns();
   const held = await loadHeldUnits();
 
   return (
@@ -158,20 +148,11 @@ export default async function HoldsAdminPage({
           Quarantine units mid-flow. Held units keep their previous lifecycle state in the HELD event payload so a release rolls back automatically.
         </p>
 
-        {!flagOn ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Preview mode.</strong>{' '}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">INVENTORY_V2_RETURNS</code> is OFF.
-            The table renders but hold/release actions are disabled.
-          </div>
-        ) : null}
-
         {errorCode ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-            {errorCode === 'flag_off' && 'INVENTORY_V2_RETURNS flag is off.'}
             {errorCode === 'missing_input' && 'Both unit ref and reason are required.'}
             {errorCode === 'not_found' && 'No serial_units row matched that ref.'}
-            {!['flag_off', 'missing_input', 'not_found'].includes(errorCode) && 'Action failed.'}
+            {!['missing_input', 'not_found'].includes(errorCode) && 'Action failed.'}
           </div>
         ) : null}
 
@@ -202,10 +183,7 @@ export default async function HoldsAdminPage({
             <div className="flex items-end">
               <button
                 type="submit"
-                disabled={!flagOn}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium ${
-                  flagOn ? 'bg-red-600 text-white hover:bg-red-700' : 'cursor-not-allowed bg-gray-100 text-gray-400'
-                }`}
+                className="rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700"
               >
                 Place on hold
               </button>
@@ -263,10 +241,7 @@ export default async function HoldsAdminPage({
                           </select>
                           <button
                             type="submit"
-                            disabled={!flagOn}
-                            className={`rounded-md px-3 py-1 text-xs font-medium ${
-                              flagOn ? 'bg-green-600 text-white hover:bg-green-700' : 'cursor-not-allowed bg-gray-100 text-gray-400'
-                            }`}
+                            className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"
                           >
                             Release
                           </button>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * POST /api/product-manuals/rename-folder
@@ -24,7 +24,8 @@ import pool from '@/lib/db';
  * Returns the number of rows touched so the UI can show a toast.
  */
 export const POST = withAuth(
-  async (request) => {
+  async (request, ctx) => {
+    const orgId = ctx.organizationId;
     let body: { oldPath?: string; newPath?: string };
     try {
       body = await request.json();
@@ -53,31 +54,44 @@ export const POST = withAuth(
       );
     }
 
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      // product_manuals has NO organization_id column and NO RLS policy, so a
+      // bare GUC wrap provides ZERO isolation — folder_path strings are not
+      // org-namespaced, so org A renaming 'Sound/Touch' would rewrite EVERY
+      // tenant's matching rows. Scope both UPDATEs through the org-bearing
+      // sku_catalog parent (sku_catalog_id → sku_catalog.organization_id).
+      // NEEDS-COL: NULL-parent (unpaired) manuals are unattributable to any
+      // org and are intentionally excluded until product_manuals gains its
+      // own organization_id column.
+      const { exact, descendants } = await withTenantTransaction(orgId, async (client) => {
+        const exact = await client.query(
+          `UPDATE product_manuals
+              SET folder_path = $2, updated_at = NOW()
+            WHERE is_active = TRUE
+              AND folder_path = $1
+              AND sku_catalog_id IN (
+                SELECT id FROM sku_catalog WHERE organization_id = $3
+              )`,
+          [oldPath, newPath, orgId],
+        );
 
-      const exact = await client.query(
-        `UPDATE product_manuals
-            SET folder_path = $2, updated_at = NOW()
-          WHERE is_active = TRUE
-            AND folder_path = $1`,
-        [oldPath, newPath],
-      );
+        // Substring trick: keep everything after the matched prefix length.
+        // PostgreSQL SUBSTRING is 1-indexed, so we start at LENGTH(oldPath)+1
+        // to skip the prefix itself (not the trailing slash).
+        const descendants = await client.query(
+          `UPDATE product_manuals
+              SET folder_path = $2 || SUBSTRING(folder_path FROM ${oldPath.length + 1}),
+                  updated_at = NOW()
+            WHERE is_active = TRUE
+              AND folder_path LIKE $1 || '/%'
+              AND sku_catalog_id IN (
+                SELECT id FROM sku_catalog WHERE organization_id = $3
+              )`,
+          [oldPath, newPath, orgId],
+        );
 
-      // Substring trick: keep everything after the matched prefix length.
-      // PostgreSQL SUBSTRING is 1-indexed, so we start at LENGTH(oldPath)+1
-      // to skip the prefix itself (not the trailing slash).
-      const descendants = await client.query(
-        `UPDATE product_manuals
-            SET folder_path = $2 || SUBSTRING(folder_path FROM ${oldPath.length + 1}),
-                updated_at = NOW()
-          WHERE is_active = TRUE
-            AND folder_path LIKE $1 || '/%'`,
-        [oldPath, newPath],
-      );
-
-      await client.query('COMMIT');
+        return { exact, descendants };
+      });
 
       return NextResponse.json({
         success: true,
@@ -86,12 +100,9 @@ export const POST = withAuth(
         updated: (exact.rowCount ?? 0) + (descendants.rowCount ?? 0),
       });
     } catch (err: unknown) {
-      await client.query('ROLLBACK').catch(() => {});
       const message = err instanceof Error ? err.message : 'rename failed';
       console.error('[product-manuals/rename-folder] error:', err);
       return NextResponse.json({ success: false, error: message }, { status: 500 });
-    } finally {
-      client.release();
     }
   },
   { permission: 'product_manuals.manage' },

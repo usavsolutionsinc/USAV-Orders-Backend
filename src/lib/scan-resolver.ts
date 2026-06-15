@@ -67,7 +67,7 @@ export function looksLikeFnsku(value: string): boolean {
 
 /**
  * True while input could still become a valid 10-char FNSKU (X00...) or ASIN (B0...).
- * For station UI mode only — routing to `/api/tech/scan-fnsku` must use {@link looksLikeFnsku} (complete).
+ * For station UI mode only — routing to `/api/tech/scan` must use {@link looksLikeFnsku} (complete).
  */
 export function looksLikeFnskuPrefix(value: string): boolean {
   if (looksLikeFnsku(value)) return true;

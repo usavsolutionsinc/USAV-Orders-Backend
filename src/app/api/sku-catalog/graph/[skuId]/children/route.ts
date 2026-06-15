@@ -22,12 +22,15 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Invalid skuId' }, { status: 400 });
     }
 
-    const sku = await getSkuCatalogById(skuId);
+    // Org-scope the catalog lookup: a SKU owned by another org reads as
+    // "not found" here (404), which gates the child read below — the
+    // relationship reads themselves are constrained to this org's SKU set.
+    const sku = await getSkuCatalogById(skuId, gate.ctx.organizationId);
     if (!sku) {
       return NextResponse.json({ success: false, error: 'SKU not found' }, { status: 404 });
     }
 
-    const children = await getChildren(skuId);
+    const children = await getChildren(skuId, gate.ctx.organizationId);
     return NextResponse.json({ success: true, skuId, children });
   } catch (error: any) {
     console.error('Error in GET /api/sku-catalog/graph/[skuId]/children:', error);

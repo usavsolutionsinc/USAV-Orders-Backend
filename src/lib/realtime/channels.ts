@@ -64,70 +64,44 @@ export function safeChannelName(build: () => string): string {
   }
 }
 
-const envOrDefault = (envKeys: Array<string | undefined>, fallback: string) =>
-  normalizeChannelName(envKeys.find((v) => v && v.trim()) ?? '', fallback);
-
 // ─── Shared (per-org broadcast) channels ──────────────────────────────────
+// Channel suffixes are fixed in-code — the DEFAULT_* constants above are the
+// single source of truth. Tenant isolation is the `org:{orgId}` prefix
+// (enforced by the token endpoint + orgChannelPrefix()); there is no
+// per-deployment env override of channel names.
 
 export const getOrdersChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_ORDERS_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_ORDERS_CHANGES],
-    DEFAULT_ORDERS_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_ORDERS_CHANNEL}`;
 
 export const getRepairsChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_REPAIR_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_REPAIR_CHANGES],
-    DEFAULT_REPAIRS_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_REPAIRS_CHANNEL}`;
 
 export const getAiAssistChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_AI_ASSIST, process.env.NEXT_PUBLIC_ABLY_CHANNEL_AI_ASSIST],
-    DEFAULT_AI_ASSIST_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_AI_ASSIST_CHANNEL}`;
 
 export const getAiAssistSessionChannelName = (orgId: string, sessionId: string) =>
   `${getAiAssistChannelName(orgId)}:${normalizeChannelName(sessionId, 'session')}`;
 
 /** Single channel for all station-level row changes (tech logs, packer logs, receiving). */
 export const getStationChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_STATION_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_STATION_CHANGES],
-    DEFAULT_STATION_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_STATION_CHANNEL}`;
 
 export const getStaffChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_STAFF_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_STAFF_CHANGES],
-    DEFAULT_STAFF_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_STAFF_CHANNEL}`;
 
 export const getFbaChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_FBA_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_FBA_CHANGES],
-    DEFAULT_FBA_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_FBA_CHANNEL}`;
 
 export const getDashboardChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_DASHBOARD, process.env.NEXT_PUBLIC_ABLY_CHANNEL_DASHBOARD],
-    DEFAULT_DASHBOARD_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_DASHBOARD_CHANNEL}`;
 
 export const getWalkInChannelName = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_WALKIN_CHANGES, process.env.NEXT_PUBLIC_ABLY_CHANNEL_WALKIN_CHANGES],
-    DEFAULT_WALKIN_CHANNEL,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_WALKIN_CHANNEL}`;
 
 // ─── DB-row change channels ────────────────────────────────────────────────
 
 export const getDbChannelPrefix = (orgId: string) =>
-  `${orgChannelPrefix(orgId)}:${envOrDefault(
-    [process.env.ABLY_CHANNEL_DB_PREFIX, process.env.NEXT_PUBLIC_ABLY_CHANNEL_DB_PREFIX],
-    DEFAULT_DB_CHANNEL_PREFIX,
-  )}`;
+  `${orgChannelPrefix(orgId)}:${DEFAULT_DB_CHANNEL_PREFIX}`;
 
 export const getDbTableChannelName = (orgId: string, schema: string, table: string) =>
   `${getDbChannelPrefix(orgId)}:${schema}:${table}`;

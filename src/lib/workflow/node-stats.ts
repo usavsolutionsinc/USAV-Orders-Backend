@@ -13,13 +13,25 @@
 
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/drizzle/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface NodeStatsSnapshotResult {
   success: boolean;
   rowsWritten: number;
 }
 
-export async function runWorkflowNodeStatsSnapshot(): Promise<NodeStatsSnapshotResult> {
+/**
+ * Snapshot per-(definition, node) queue depth into workflow_node_stats.
+ *
+ * Tenancy: this is an org-spanning daily cron aggregate — it groups by
+ * `s.organization_id` and stamps each output row with the source org, so no
+ * cross-tenant data ever crosses (every row stays attributed to its owner).
+ * Passing `orgId` narrows the snapshot to a single tenant; OMITTING it keeps
+ * the byte-identical all-orgs behaviour the cron + verify-script callers rely
+ * on. The `item_workflow_state` read is therefore the only org filter needed.
+ */
+export async function runWorkflowNodeStatsSnapshot(orgId?: OrgId): Promise<NodeStatsSnapshotResult> {
+  const orgFilter = orgId ? sql`AND s.organization_id = ${orgId}::uuid` : sql``;
   const res = await db.execute(sql`
     INSERT INTO workflow_node_stats
       (organization_id, workflow_definition_id, node_id, snapshot_date,
@@ -34,6 +46,7 @@ export async function runWorkflowNodeStatsSnapshot(): Promise<NodeStatsSnapshotR
            MIN(s.entered_node_at) FILTER (WHERE s.status IN ('active', 'blocked'))
       FROM item_workflow_state s
      WHERE s.status <> 'done'
+       ${orgFilter}
      GROUP BY s.organization_id, s.workflow_definition_id, s.current_node_id
     ON CONFLICT (workflow_definition_id, node_id, snapshot_date)
     DO UPDATE SET queue_depth       = EXCLUDED.queue_depth,

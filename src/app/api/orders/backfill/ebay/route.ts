@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { EbayClient } from '@/lib/ebay/client';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const maxDuration = 60;
 
@@ -26,13 +26,17 @@ function extractTrackingFromOrder(ebayOrder: any): string {
  *     call getOrderDetails(order_id) to retrieve the live eBay data.
  *  3. Fill in ONLY columns that are currently blank — never overwrite existing data.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const limit = Math.max(1, Math.min(1000, Number(body.limit || 500)));
 
     // ── 1. Orders needing backfill ────────────────────────────────────────────
-    const { rows: rawCandidates } = await pool.query<{
+    // orders is tenant-owned (org-filtered explicitly). The stn join is on the
+    // integer surrogate PK (stn.id = o.shipment_id) so it's safe bare;
+    // shipping_tracking_numbers has no organization_id column (NEEDS-COL) — it's
+    // reached only through the org-scoped orders row, so no stn org predicate.
+    const { rows: rawCandidates } = await tenantQuery<{
       id: number;
       order_id: string;
       shipment_id: number | null;
@@ -44,12 +48,14 @@ export const POST = withAuth(async (req: NextRequest) => {
       quantity: string | null;
       order_date: Date | null;
     }>(
+      ctx.organizationId,
       `SELECT o.id, o.order_id, o.shipment_id, o.account_source, o.sku, o.item_number, o.product_title,
               o.condition, o.quantity, o.order_date
        FROM orders o
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
        WHERE NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
                OR stn.is_out_for_delivery OR stn.is_delivered, false)
+         AND o.organization_id = $2
          AND COALESCE(o.order_id, '') != ''
          AND (
            COALESCE(o.sku, '')           = '' OR
@@ -62,7 +68,7 @@ export const POST = withAuth(async (req: NextRequest) => {
          )
        ORDER BY o.created_at DESC
        LIMIT $1`,
-      [limit]
+      [limit, ctx.organizationId]
     );
 
     // ── 1b. Dedupe: multiple orders with same order_id + same tracking → keep one, delete rest
@@ -91,7 +97,11 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     for (const id of ordersToDelete) {
-      await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+      await tenantQuery(
+        ctx.organizationId,
+        'DELETE FROM orders WHERE id = $1 AND organization_id = $2',
+        [id, ctx.organizationId],
+      );
     }
 
     if (candidates.length === 0) {
@@ -103,8 +113,11 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     // ── 2. Active eBay accounts ───────────────────────────────────────────────
-    const { rows: accountRows } = await pool.query<{ account_name: string }>(
-      'SELECT account_name FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
+    // ebay_accounts is tenant-owned; only return this org's accounts.
+    const { rows: accountRows } = await tenantQuery<{ account_name: string }>(
+      ctx.organizationId,
+      'SELECT account_name FROM ebay_accounts WHERE is_active = true AND organization_id = $1 ORDER BY account_name',
+      [ctx.organizationId]
     );
     const allAccountNames = accountRows.map((r) => r.account_name);
 
@@ -115,9 +128,11 @@ export const POST = withAuth(async (req: NextRequest) => {
       );
     }
 
-    // Pre-build EbayClient instances (one per account)
+    // Pre-build EbayClient instances (one per account). Pass the caller's org so
+    // token/credential resolution is pinned to this tenant rather than resolved
+    // by account_name alone (which can collide across orgs).
     const clients = new Map<string, EbayClient>(
-      allAccountNames.map((name) => [name, new EbayClient(name)])
+      allAccountNames.map((name) => [name, new EbayClient(name, ctx.organizationId)])
     );
 
     // Pick accounts to try for a given account_source.
@@ -175,6 +190,11 @@ export const POST = withAuth(async (req: NextRequest) => {
         const quantity = firstItem?.quantity ? String(firstItem.quantity).trim() : '';
         const orderDate = ebayOrder?.creationDate ? new Date(ebayOrder.creationDate) : null;
         const trackingNumber = extractTrackingFromOrder(ebayOrder);
+        // Realized order total from the eBay Fulfillment order's pricingSummary.total (Amount: { value, currency }).
+        const rawAmount = ebayOrder?.pricingSummary?.total?.value;
+        const parsedAmount = rawAmount != null ? Number(rawAmount) : null;
+        const saleAmount = parsedAmount != null && !Number.isNaN(parsedAmount) ? parsedAmount : null;
+        const currency = String(ebayOrder?.pricingSummary?.total?.currency || '').trim();
 
         // Build the SET clause — only patch blank columns
         const updates: string[] = [];
@@ -202,6 +222,11 @@ export const POST = withAuth(async (req: NextRequest) => {
         if (isBlank(order.account_source) && matchedAccount) {
           updates.push(`account_source = $${idx++}`); values.push(matchedAccount);
         }
+        // Fill sale_amount/currency only when still null (never overwrite an existing value).
+        if (saleAmount != null) {
+          updates.push(`sale_amount = COALESCE(sale_amount, $${idx++})`); values.push(saleAmount);
+          updates.push(`currency = COALESCE(currency, $${idx++})`); values.push(currency || 'USD');
+        }
 
         if (updates.length === 0) {
           unchanged++;
@@ -209,8 +234,10 @@ export const POST = withAuth(async (req: NextRequest) => {
         }
 
         values.push(order.id);
-        await pool.query(
-          `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx}`,
+        values.push(ctx.organizationId);
+        await tenantQuery(
+          ctx.organizationId,
+          `UPDATE orders SET ${updates.join(', ')} WHERE id = $${idx} AND organization_id = $${idx + 1}`,
           values
         );
         updated++;

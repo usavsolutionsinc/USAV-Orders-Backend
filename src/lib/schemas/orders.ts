@@ -51,6 +51,11 @@ export const OrderTrackingPostBody = z
 
 export const OrderTrackingPatchBody = z
   .object({
+    // Desired-state: the full ordered set of tracking numbers the order should
+    // have. When present, the server reconciles links to match and routes the
+    // legacy primary/edits/creates/deletes ops below. `[]` clears all tracking.
+    // This is the preferred path — no client-side primary/diff bookkeeping.
+    setTrackingNumbers: z.array(trackingNum).optional(),
     // Primary tracking (slot 0); upsert. '' / null clears it.
     primaryTrackingNumber: z.string().trim().nullable().optional(),
     edits: z
@@ -63,6 +68,7 @@ export const OrderTrackingPatchBody = z
   .strict()
   .refine(
     (b) =>
+      b.setTrackingNumbers !== undefined ||
       b.primaryTrackingNumber !== undefined ||
       b.edits !== undefined ||
       b.creates !== undefined ||

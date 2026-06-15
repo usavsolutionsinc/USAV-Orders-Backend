@@ -11,7 +11,7 @@ import { WarrantyReportQuery } from '@/lib/schemas/warranty';
  * outcome + parts/labor cost, and RMA / repair links. CSV by default (?format=json
  * for the raw rows). Filters: status, sku, from, to, outcome. Gated by WARRANTY_LOGGER.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   if (!isWarrantyLogger()) {
     return NextResponse.json(
       { ok: false, error: 'WARRANTY_LOGGER flag is OFF', flag: 'WARRANTY_LOGGER' },
@@ -30,13 +30,20 @@ export const GET = withAuth(async (request) => {
   }
 
   try {
-    const rows = await buildWarrantyReportRows({
-      status: parsed.data.status ?? null,
-      sku: parsed.data.sku ?? null,
-      from: parsed.data.from ?? null,
-      to: parsed.data.to ?? null,
-      outcome: parsed.data.outcome ?? null,
-    });
+    // Tenant isolation: thread the caller's org so the report query runs through
+    // the GUC-wrapped tenant pool with an explicit `wc.organization_id = $6`
+    // predicate (plus org-aligned reason_codes join + org-scoped repair-attempts
+    // LATERAL). Without it the CSV would leak every tenant's claims.
+    const rows = await buildWarrantyReportRows(
+      {
+        status: parsed.data.status ?? null,
+        sku: parsed.data.sku ?? null,
+        from: parsed.data.from ?? null,
+        to: parsed.data.to ?? null,
+        outcome: parsed.data.outcome ?? null,
+      },
+      ctx.organizationId,
+    );
 
     if (parsed.data.format === 'json') {
       return NextResponse.json({ ok: true, rows });

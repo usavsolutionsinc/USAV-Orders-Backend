@@ -21,12 +21,14 @@
 import pool from '@/lib/db';
 import { decryptIntegrationPayload, encryptIntegrationPayload } from './crypto';
 import { USAV_ORG_ID, type OrgId } from '../tenancy/constants';
+import { getValidatedAblyApiKey } from '@/lib/realtime/ably-key';
 
 // ─── Provider payload shapes ───────────────────────────────────────────────
 // One discriminated union so callers get type-checked credentials back.
 
 export type IntegrationProvider =
   | 'ebay'
+  | 'amazon'
   | 'zoho'
   | 'ecwid'
   | 'square'
@@ -45,6 +47,21 @@ export interface EbayCredentials {
   ruName: string;
   environment: 'PRODUCTION' | 'SANDBOX';
   refreshToken?: string;
+}
+
+/**
+ * Amazon Selling Partner API credentials. LWA-only (no AWS IAM/SigV4 since
+ * 2023-10-02). One row per seller account (scope='seller-{sellerId}'); the
+ * app-level lwaClientId/lwaClientSecret are shared across tenants but copied
+ * into each row so the payload is self-contained at runtime.
+ */
+export interface AmazonCredentials {
+  lwaClientId: string;
+  lwaClientSecret: string;
+  refreshToken?: string;
+  region: 'NA' | 'EU' | 'FE';
+  marketplaceIds: string[];
+  sellerId?: string;
 }
 
 export interface ZohoCredentials {
@@ -99,6 +116,20 @@ function envFallback(provider: IntegrationProvider): unknown | null {
       };
       return cred;
     }
+    case 'amazon': {
+      // App-level LWA creds are shared (one SP-API app); USAV's bootstrap
+      // refresh token is the only per-seller secret mirrored from env.
+      const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID, lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET;
+      if (!lwaClientId || !lwaClientSecret) return null;
+      const cred: AmazonCredentials = {
+        lwaClientId, lwaClientSecret,
+        refreshToken: process.env.AMAZON_SP_API_REFRESH_TOKEN_USAV || undefined,
+        region: (process.env.AMAZON_SP_API_REGION || 'NA') as AmazonCredentials['region'],
+        marketplaceIds: (process.env.AMAZON_MARKETPLACE_IDS || 'ATVPDKIKX0DER')
+          .split(',').map((s) => s.trim()).filter(Boolean),
+      };
+      return cred;
+    }
     case 'zoho': {
       const clientId = process.env.ZOHO_CLIENT_ID, clientSecret = process.env.ZOHO_CLIENT_SECRET,
             refreshToken = process.env.ZOHO_REFRESH_TOKEN,
@@ -149,7 +180,7 @@ function envFallback(provider: IntegrationProvider): unknown | null {
       return cred;
     }
     case 'ably': {
-      const apiKey = process.env.ABLY_API_KEY;
+      const apiKey = getValidatedAblyApiKey();
       if (!apiKey) return null;
       const cred: AblyCredentials = { apiKey };
       return cred;

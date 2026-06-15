@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/sku-catalog/[id]/similar — same-category sibling SKUs.
@@ -28,11 +29,12 @@ export async function GET(
     }
 
     const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get('limit') || 12), 1), 50);
+    const orgId = gate.ctx.organizationId;
 
-    const self = await pool.query<{ category: string | null }>(
-      `SELECT category FROM sku_catalog WHERE id = $1 LIMIT 1`,
-      [id],
-    );
+    const selfSql = `SELECT category FROM sku_catalog WHERE id = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+    const self = orgId
+      ? await tenantQuery<{ category: string | null }>(orgId, selfSql, [id, orgId])
+      : await pool.query<{ category: string | null }>(selfSql, [id]);
     if (self.rowCount === 0) {
       return NextResponse.json({ success: false, error: 'SKU not found' }, { status: 404 });
     }
@@ -41,8 +43,7 @@ export async function GET(
       return NextResponse.json({ success: true, category: null, items: [] });
     }
 
-    const result = await pool.query(
-      `SELECT sc.id        AS sku_id,
+    const siblingSql = `SELECT sc.id        AS sku_id,
               sc.sku,
               sc.product_title,
               sc.category,
@@ -50,13 +51,14 @@ export async function GET(
               COALESCE(ss.stock, 0)       AS stock,
               COALESCE(ss.boxed_stock, 0) AS boxed_stock
          FROM sku_catalog sc
-         LEFT JOIN sku_stock ss ON ss.sku = sc.sku
+         LEFT JOIN sku_stock ss ON ss.sku = sc.sku${orgId ? ' AND ss.organization_id = sc.organization_id' : ''}
         WHERE sc.category = $1
-          AND sc.id <> $2
+          AND sc.id <> $2${orgId ? '\n          AND sc.organization_id = $4' : ''}
         ORDER BY COALESCE(ss.stock, 0) DESC, sc.product_title ASC
-        LIMIT $3`,
-      [category, id, limit],
-    );
+        LIMIT $3`;
+    const result = orgId
+      ? await tenantQuery(orgId, siblingSql, [category, id, limit, orgId])
+      : await pool.query(siblingSql, [category, id, limit]);
 
     return NextResponse.json({ success: true, category, items: result.rows });
   } catch (error) {

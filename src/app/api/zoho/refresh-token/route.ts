@@ -23,9 +23,9 @@ export const GET = withAuth(async (request: NextRequest) => {
  * This endpoint does not mint a new refresh_token; use GET on this route
  * to start a new consent flow when you need one stored in the DB.
  */
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(ctx.organizationId);
     return NextResponse.json({
       success: true,
       message: 'Zoho access token refreshed successfully.',

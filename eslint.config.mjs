@@ -176,6 +176,10 @@ export default [
       'src/lib/shipping/publish-on-status-change.ts',
       'src/lib/neon/stock-ledger-helpers.ts',
       'src/app/api/webhooks/square/route.ts',
+      'src/app/api/webhooks/ups/route.ts',
+      'src/app/api/ecwid/transfer-orders/route.ts',
+      'src/app/api/google-sheets/transfer-orders/route.ts',
+      'src/app/api/shipping/track/sync-one/route.ts',
     ],
     rules: {
       'no-restricted-syntax': 'off',

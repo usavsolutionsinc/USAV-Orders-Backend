@@ -60,9 +60,10 @@ export function orderAuditToTimeline(rows: OrderAuditRow[]): TimelineItem[] {
     const tone = mapped?.tone ?? 'muted';
 
     let subtitle: string | undefined;
+    let ref: TimelineItem['ref'];
     if (r.action === 'orders.tracking.added') {
       const t = String((r.after_data?.trackingNumber as string | undefined) ?? '').trim();
-      if (t) subtitle = `…${t.slice(-6)}`;
+      if (t) ref = { value: t, kind: 'tracking' }; // last-4 CopyChip, copy-on-click
     } else if (r.action === 'ORDER_ASSIGNMENT_UPDATED' && changedKeys.length > 0) {
       subtitle = changedKeys.join(', ');
     }
@@ -73,6 +74,7 @@ export function orderAuditToTimeline(rows: OrderAuditRow[]): TimelineItem[] {
       title,
       tone,
       subtitle,
+      ref,
       actor: r.actor_name ?? undefined,
     });
   }

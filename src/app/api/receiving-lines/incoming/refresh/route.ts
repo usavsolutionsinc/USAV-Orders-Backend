@@ -37,7 +37,7 @@ interface RefreshSummary {
   throttled?: boolean;
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'incoming-tracking-refresh',
@@ -52,7 +52,10 @@ export const POST = withAuth(async (req: NextRequest) => {
   }
 
   // Cross-operator cooldown: if someone just refreshed, return that result.
-  const cached = await getCachedJson<RefreshSummary>('incoming-refresh', 'last');
+  // Per-org cooldown key so one tenant's refresh summary can't be served to —
+  // or suppress the cooldown of — another tenant.
+  const cooldownKey = `last:${ctx.organizationId}`;
+  const cached = await getCachedJson<RefreshSummary>('incoming-refresh', cooldownKey);
   if (cached) {
     return NextResponse.json({ ...cached, throttled: true });
   }
@@ -66,7 +69,11 @@ export const POST = withAuth(async (req: NextRequest) => {
     // row endpoint uses (direct FK, else PO#-based fallback), so the synced set
     // matches the displayed set. Prioritize out-for-delivery + never-polled so a
     // freshly-delivered box flips first.
-    const rows = await selectIncomingShipmentIds(BATCH_CAP);
+    // Thread the org so the shipment-selection filters receiving_lines/receiving
+    // by ctx.organizationId (matching the already-migrated streaming twin) — a
+    // tenant's "Tracking" refresh re-polls ONLY its own still-incoming
+    // shipments, not every tenant's.
+    const rows = await selectIncomingShipmentIds(BATCH_CAP, ctx.organizationId);
 
     const capped = rows.length > BATCH_CAP;
     const batch = rows.slice(0, BATCH_CAP);
@@ -89,7 +96,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       capped,
     };
 
-    await setCachedJson('incoming-refresh', 'last', summary, COOLDOWN_SECONDS);
+    await setCachedJson('incoming-refresh', cooldownKey, summary, COOLDOWN_SECONDS);
     return NextResponse.json(summary);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Refresh failed';

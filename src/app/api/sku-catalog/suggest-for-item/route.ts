@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -27,7 +27,7 @@ interface SuggestionRow {
   sim: string;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const title = (searchParams.get('title') || '').trim();
@@ -38,7 +38,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ success: true, suggestions: [] });
     }
 
-    const { rows } = await pool.query<SuggestionRow>(
+    const { rows } = await tenantQuery<SuggestionRow>(
+      ctx.organizationId,
       `SELECT id, sku, product_title, category, image_url, confidence, sim
          FROM (
            SELECT id, sku, product_title, category, image_url,
@@ -46,12 +47,13 @@ export const GET = withAuth(async (req: NextRequest) => {
                   ROUND(similarity(product_title, $1)::numeric, 2)::text AS sim
              FROM sku_catalog
             WHERE is_active = true
+              AND organization_id = $3
               AND product_title % $1
          ) s
         WHERE s.confidence >= 40
         ORDER BY s.confidence DESC, s.product_title
         LIMIT $2`,
-      [title, limit],
+      [title, limit, ctx.organizationId],
     );
 
     return NextResponse.json({

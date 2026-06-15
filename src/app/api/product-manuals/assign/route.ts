@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertProductManual } from '@/lib/product-manuals';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
-async function handlePost(request: NextRequest) {
+async function handlePost(request: NextRequest, ctx: AuthContext) {
   try {
     const body = await request.json();
 
+    // Thread orgId so the upsert (a) GUC-wraps the write, (b) constrains the
+    // existing-row lookup to this org's sku_catalog children (no cross-tenant
+    // match), and (c) resolves sku_catalog_id within this org — preventing the
+    // row from being linked to another org's catalog entry.
+    const orgId = ctx.organizationId ?? undefined;
     const manual = await upsertProductManual({
       itemNumber: String(body?.itemNumber || body?.item_number || ''),
       productTitle: String(body?.productTitle || body?.product_title || ''),
@@ -19,7 +24,7 @@ async function handlePost(request: NextRequest) {
       status: body?.status,
       assignedBy: String(body?.assignedBy || body?.assigned_by || ''),
       type: body?.type,
-    });
+    }, orgId);
 
     // Invalidate all by-category combined caches so the next page load reflects the new manual
     await invalidateCacheTags(['pm:manuals']);

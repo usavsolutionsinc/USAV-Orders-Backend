@@ -34,16 +34,38 @@ const idleTimeoutMillis = readPositiveInt(process.env.PG_IDLE_TIMEOUT_MS, 10000)
 
 const connectionString = process.env.DATABASE_URL || 'postgres://localhost:5432/postgres';
 
-// Typed as PgPool because callers use `pool.query<T>()` / `pool.connect()` generics.
-// NeonPool exposes a compatible surface for our usage; cast at construction.
-const pool: PgPool = new NeonPool({
-    connectionString,
+const basePoolOptions = {
     connectionTimeoutMillis,
     query_timeout: queryTimeoutMillis,
     idle_in_transaction_session_timeout: idleTxTimeoutMillis,
     max: poolMax,
     idleTimeoutMillis,
     options: '-c timezone=America/Los_Angeles',
+};
+
+// Default (privileged) pool — connects as the DB owner (neondb_owner today).
+// Raw `@/lib/db` importers use this; the owner BYPASSes RLS, so not-yet-migrated
+// routes keep working against ENABLE-but-not-FORCE tables during the rollout.
+// Typed as PgPool because callers use `pool.query<T>()` / `pool.connect()` generics.
+// NeonPool exposes a compatible surface for our usage; cast at construction.
+const pool: PgPool = new NeonPool({
+    connectionString,
+    ...basePoolOptions,
 }) as unknown as PgPool;
+
+// Tenant-runtime pool. Once the non-BYPASSRLS `app_tenant` role is provisioned
+// (Phase E1) and TENANT_APP_DATABASE_URL points at its DSN, the GUC wrappers
+// (withTenantConnection / tenantQuery / withTenantTransaction in
+// src/lib/tenancy/db.ts) run on THIS pool, so RLS policies actually apply to
+// those code paths and per-table FORCE can be turned on incrementally. Until the
+// env var is set it ALIASES the owner pool, so behavior is unchanged today.
+// See docs/tier0-go-live-runbook.md and the tenancy exec plan §Phase E1.
+const tenantConnectionString = process.env.TENANT_APP_DATABASE_URL || '';
+export const tenantPool: PgPool = tenantConnectionString
+    ? (new NeonPool({
+        connectionString: tenantConnectionString,
+        ...basePoolOptions,
+    }) as unknown as PgPool)
+    : pool;
 
 export default pool;

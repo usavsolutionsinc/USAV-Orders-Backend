@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { squareFetch, formatSquareErrors } from '@/lib/square/client';
+import { formatSquareErrors } from '@/lib/square/client';
+import { squareFetchForOrg } from '@/lib/square/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -16,7 +17,7 @@ interface SquareCustomer {
  * GET /api/walk-in/customers?q=
  * List last 50 Square customers. If q provided, filters client-side by name/phone/email.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -24,8 +25,10 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const query = new URL(req.url).searchParams.get('q')?.trim().toLowerCase() || '';
 
-    // Fetch last 50 customers sorted by most recent
-    const result = await squareFetch<{ customers?: SquareCustomer[] }>(
+    // Fetch last 50 customers sorted by most recent, scoped to the caller-org's
+    // Square account (Nango-connected token when present; env fallback).
+    const result = await squareFetchForOrg<{ customers?: SquareCustomer[] }>(
+      ctx.organizationId,
       '/customers/search',
       {
         method: 'POST',
@@ -76,7 +79,7 @@ export const GET = withAuth(async (req: NextRequest) => {
  * POST /api/walk-in/customers
  * Create a new Square customer.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -96,7 +99,10 @@ export const POST = withAuth(async (req: NextRequest) => {
       );
     }
 
-    const result = await squareFetch<{ customer?: SquareCustomer }>(
+    // Create the customer on the caller-org's Square account so PII never lands
+    // in the shared/wrong tenant's customer book.
+    const result = await squareFetchForOrg<{ customer?: SquareCustomer }>(
+      ctx.organizationId,
       '/customers',
       { method: 'POST', body },
     );

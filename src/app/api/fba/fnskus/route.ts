@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { publishFbaCatalogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -21,9 +21,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const sku = String(body?.sku || '').trim() || null;
     const condition = String(body?.condition || '').trim() || null;
 
-    const result = await pool.query(
-      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, is_active, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, true, NOW(), NOW())
+    const result = await tenantQuery(
+      ctx.organizationId,
+      `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, organization_id, is_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, NOW(), NOW())
        ON CONFLICT (fnsku) DO UPDATE
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
@@ -31,8 +32,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
              condition     = COALESCE(EXCLUDED.condition, fba_fnskus.condition),
              is_active     = true,
              updated_at    = NOW()
+       WHERE fba_fnskus.organization_id = $6
        RETURNING fnsku, product_title, asin, sku, condition, is_active, created_at`,
-      [fnsku, product_title, asin, sku, condition]
+      [fnsku, product_title, asin, sku, condition, ctx.organizationId]
     );
 
     await invalidateCacheTags(['fba-fnskus']);

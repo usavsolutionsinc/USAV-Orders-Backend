@@ -13,13 +13,13 @@ import { SerialCard } from '@/components/receiving/workspace/SerialCard';
 
 // Import utilities
 import { normalizeSku, getSerialLast6 } from '@/utils/sku';
-import { printProductLabel, printProductLabels, buildUnitPayload } from '@/lib/print/printProductLabel';
+import { printProductLabel, printProductLabels, buildUnitPayload, deriveColorFromTitle } from '@/lib/print/printProductLabel';
+import type { ProductLabelDraft } from '@/components/labels/ProductLabelEditPopover';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useBarcodeMode } from '@/hooks/useBarcodeMode';
 import { CONDITION_OPTIONS } from '@/components/receiving/zoho-po-types';
 import { Search, Clipboard, Check, Printer, ChevronDown } from './Icons';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
-import { successFeedback } from '@/lib/feedback/confirm';
 
 
 type ConditionGrade = (typeof CONDITION_OPTIONS)[number]['value'];
@@ -59,6 +59,10 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
     const [imageUrl, setImageUrl] = useState<string>("");
     const [skuCatalogId, setSkuCatalogId] = useState<number | null>(null);
     const [condition, setCondition] = useState<ConditionGrade>('BRAND_NEW');
+    // Product color (label bottom-right). Prefilled from the title; the Edit-label
+    // popover can override it. No DB column yet — print-time only.
+    const [colorOverride, setColorOverride] = useState<string | null>(null);
+    const color = (colorOverride ?? deriveColorFromTitle(title)).trim();
 
     const printRef = useRef<HTMLDivElement>(null);
     const skuInputRef = useRef<HTMLInputElement>(null);
@@ -463,7 +467,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
             // label: the DataMatrix encodes ONLY the bare unit id
             // ({SKU}-{YYWW}-{SEQ6}) — never a GS1 Digital Link — so a reprint
             // matches the format new products labels print.
-            printProductLabel({ sku: uniqueSku, title, qrPayload: uniqueSku });
+            printProductLabel({ sku: uniqueSku, title, qrPayload: uniqueSku, condition, color });
             pushRecent({ sku: uniqueSku || sku, sn: serialNumbers[0], title });
             setStep(1);
             setSku("");
@@ -487,6 +491,7 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                     title,
                     serialNumbers,
                     condition,
+                    color,
                     qrPayloads: serialNumbers.map((s) => uidBySerial.get(s) ?? uniqueSku),
                 });
             }
@@ -734,10 +739,25 @@ export default function MultiSkuSnBarcode({ layout = 'vertical' }: MultiSkuSnBar
                                 title={title}
                                 serialNumbers={serialNumbers}
                                 condition={condition}
+                                color={color}
                                 location={location}
                                 accent={accent}
                                 dataMatrixValue={previewPayload.value}
                                 dataMatrixSymbology={previewPayload.symbology}
+                                onApplyAndPrint={(draft: ProductLabelDraft) => {
+                                    setCondition(draft.condition as ConditionGrade);
+                                    setColorOverride(draft.color);
+                                    setTitle(draft.title);
+                                    // Custom one-off print of the current preview with the
+                                    // chosen fields — encodes the same matrix the card shows.
+                                    printProductLabel({
+                                        sku: uniqueSku || sku,
+                                        title: draft.title,
+                                        qrPayload: previewPayload.value,
+                                        condition: draft.condition,
+                                        color: draft.color,
+                                    });
+                                }}
                             />
                         ) : (
                             <PreviewPlaceholder mode={mode} sku={sku} />
@@ -854,7 +874,6 @@ function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
                                 role="option"
                                 aria-selected={false}
                                 onClick={() => {
-                                    successFeedback();
                                     onChange(id);
                                     setOpen(false);
                                 }}
@@ -1145,11 +1164,14 @@ interface PreviewCardModernProps {
     title: string;
     serialNumbers: string[];
     condition?: string | null;
+    color?: string | null;
     location: string;
     accent: ModeAccent;
     /** DataMatrix payload — same value/symbology the printed label will encode. */
     dataMatrixValue: string;
     dataMatrixSymbology: 'gs1datamatrix' | 'datamatrix';
+    /** Surfaces the Edit-label pencil + custom print on the preview card. */
+    onApplyAndPrint?: (draft: ProductLabelDraft) => void;
 }
 
 function PreviewCardModern({
@@ -1158,10 +1180,12 @@ function PreviewCardModern({
     title,
     serialNumbers,
     condition,
+    color,
     location,
     accent,
     dataMatrixValue,
     dataMatrixSymbology,
+    onApplyAndPrint,
 }: PreviewCardModernProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
 
@@ -1171,11 +1195,11 @@ function PreviewCardModern({
                 sku={uniqueSku}
                 title={title}
                 condition={mode === 'print' ? condition : null}
+                color={color}
                 serialNumber={mode === 'print' ? serialNumbers[0] : null}
                 dataMatrixValue={dataMatrixValue}
                 dataMatrixSymbology={dataMatrixSymbology}
-                showReady={mode === 'print'}
-                readyBadgeClassName={accent.chip}
+                onApplyAndPrint={onApplyAndPrint}
             />
         );
     }

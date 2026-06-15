@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-14T01:44:19Z",
-  "totalRoutes": 587,
+  "generatedAt": "2026-06-14T22:02:54Z",
+  "totalRoutes": 602,
   "summary": {
-    "permissionGated": 497,
-    "authenticatedNoPermission": 22,
-    "anonymousIntentional": 48,
+    "permissionGated": 508,
+    "authenticatedNoPermission": 24,
+    "anonymousIntentional": 50,
     "serviceToService": 3,
     "ungatedRead": 17,
     "ungatedWrite": 0
@@ -587,6 +587,61 @@
       "exemptReason": null
     },
     {
+      "path": "/api/amazon/accounts/route.ts",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.amazon",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/amazon/connect/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.amazon",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/amazon/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.amazon",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/amazon/oauth/callback/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/amazon/oauth/start/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.amazon",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/amazon/sync/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.amazon",
+      "exemptReason": null
+    },
+    {
       "path": "/api/assignments/next/route.ts",
       "methods": [
         "GET"
@@ -901,6 +956,46 @@
       "exemptReason": null
     },
     {
+      "path": "/api/catalog/platforms/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/catalog/platforms/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/catalog/types/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/catalog/types/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/check-tracking/route.ts",
       "methods": [
         "GET"
@@ -928,6 +1023,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/cron/amazon/orders-sync/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/cleanup/route.ts",
       "methods": [
         "GET"
@@ -947,6 +1051,15 @@
     },
     {
       "path": "/api/cron/google-sheets/transfer-orders/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/integrations/sync/route.ts",
       "methods": [
         "GET"
       ],
@@ -1162,6 +1275,15 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/customers/[id]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/cycle-counts/campaigns/[id]/route.ts",
       "methods": [
         "GET",
@@ -1238,6 +1360,7 @@
     {
       "path": "/api/ebay/accounts/route.ts",
       "methods": [
+        "DELETE",
         "GET",
         "PUT"
       ],
@@ -1250,12 +1373,21 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "withAuth (no permission)",
       "permission": null,
       "exemptReason": null
     },
     {
       "path": "/api/ebay/connect/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ebay/health/route.ts",
       "methods": [
         "GET"
       ],
@@ -1543,15 +1675,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/fba/scan-fnsku/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "fba.stage_shipments",
-      "exemptReason": null
-    },
-    {
       "path": "/api/fba/shipments/[id]/items/[itemId]/reassign/route.ts",
       "methods": [
         "PATCH"
@@ -1810,6 +1933,15 @@
       "path": "/api/inbox/tech-queue/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/integrations/[provider]/sync/route.ts",
+      "methods": [
+        "POST"
       ],
       "gate": "withAuth (no permission)",
       "permission": null,
@@ -2199,6 +2331,17 @@
       "exemptReason": null
     },
     {
+      "path": "/api/order-labels/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/orders-exceptions/delete/route.ts",
       "methods": [
         "POST"
@@ -2449,34 +2592,7 @@
       "exemptReason": null
     },
     {
-      "path": "/api/packing-logs/details/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "packing.view",
-      "exemptReason": null
-    },
-    {
       "path": "/api/packing-logs/history/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "packing.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/packing-logs/last-order/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "packing.view",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/packing-logs/photos/route.ts",
       "methods": [
         "GET"
       ],
@@ -2501,15 +2617,6 @@
       ],
       "gate": "withAuth",
       "permission": "packing.complete_order",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/packing-logs/start-session/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "packing.start_session",
       "exemptReason": null
     },
     {
@@ -2571,6 +2678,15 @@
     },
     {
       "path": "/api/pick/scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pick/unscan/route.ts",
       "methods": [
         "POST"
       ],
@@ -3105,6 +3221,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/lines/[id]/putaway/reverse/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.bin_assign",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/lines/[id]/putaway/route.ts",
       "methods": [
         "POST"
@@ -3606,6 +3731,15 @@
     },
     {
       "path": "/api/returns/intake/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/returns/undo/route.ts",
       "methods": [
         "POST"
       ],
@@ -4738,15 +4872,6 @@
       "exemptReason": null
     },
     {
-      "path": "/api/tech/scan-fnsku/route.ts",
-      "methods": [
-        "GET"
-      ],
-      "gate": "withAuth",
-      "permission": "tech.scan_serial",
-      "exemptReason": null
-    },
-    {
       "path": "/api/tech/scan-repair-station/route.ts",
       "methods": [
         "POST"
@@ -4757,15 +4882,6 @@
     },
     {
       "path": "/api/tech/scan-sku/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "tech.scan_serial",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/tech/scan-tracking/route.ts",
       "methods": [
         "POST"
       ],
@@ -5050,6 +5166,7 @@
     {
       "path": "/api/warranty/claims/[id]/repair-handoff/route.ts",
       "methods": [
+        "DELETE",
         "POST"
       ],
       "gate": "withAuth",
@@ -5066,8 +5183,27 @@
       "exemptReason": null
     },
     {
+      "path": "/api/warranty/claims/[id]/restore/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/[id]/revert/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
+      "exemptReason": null
+    },
+    {
       "path": "/api/warranty/claims/[id]/rma/route.ts",
       "methods": [
+        "DELETE",
         "POST"
       ],
       "gate": "withAuth",
@@ -5123,6 +5259,15 @@
       ],
       "gate": "withAuth",
       "permission": "warranty.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/warranty/claims/bulk/restore/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "warranty.manage",
       "exemptReason": null
     },
     {

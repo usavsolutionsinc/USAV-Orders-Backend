@@ -21,7 +21,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyStripeSignature } from '@/lib/billing/stripe';
-import { recordStripeEvent, upsertSubscription } from '@/lib/billing/subscriptions';
+import { recordStripeEvent, markStripeEventProcessed, upsertSubscription } from '@/lib/billing/subscriptions';
 import { setOrgStripeIds } from '@/lib/tenancy';
 import type { OrgId } from '@/lib/tenancy/constants';
 
@@ -39,7 +39,17 @@ interface StripeSubscriptionPayload {
   current_period_start: number | null;
   current_period_end: number | null;
   trial_end: number | null;
-  items: { data: Array<{ price: { id: string }; quantity?: number }> };
+  // current_period_* moved onto items in API version 2025-03-31+. We pin an
+  // older version in the REST client, but read both shapes defensively so a
+  // version drift never silently persists NULL periods.
+  items: {
+    data: Array<{
+      price: { id: string };
+      quantity?: number;
+      current_period_start?: number | null;
+      current_period_end?: number | null;
+    }>;
+  };
   metadata?: { organization_id?: string };
 }
 
@@ -82,14 +92,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'BAD_JSON' }, { status: 400 });
   }
 
+  // Idempotency gate: Stripe guarantees at-least-once delivery. Record the
+  // event id FIRST; process it on a brand-new delivery OR a prior delivery whose
+  // handler never completed (processed_at NULL). An already-handled duplicate is
+  // skipped. The handler is marked processed only after it fully succeeds.
+  const eventObject = event.data.object as { metadata?: { organization_id?: string } };
+  const orgId = orgIdFromMetadata(eventObject?.metadata);
+  const shouldProcess = await recordStripeEvent(event.id, event.type, orgId, event);
+  if (!shouldProcess) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   try {
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted': {
         const sub = event.data.object as StripeSubscriptionPayload;
-        const orgId = orgIdFromMetadata(sub.metadata);
-        await recordStripeEvent(event.id, event.type, orgId, event);
         if (!orgId) break; // Sub created outside our flow — nothing to mirror.
 
         const firstItem = sub.items.data[0];
@@ -100,8 +119,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           status: event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status,
           priceId: firstItem?.price.id ?? null,
           quantity: firstItem?.quantity ?? 1,
-          currentPeriodStart: epochToDate(sub.current_period_start),
-          currentPeriodEnd: epochToDate(sub.current_period_end),
+          currentPeriodStart: epochToDate(sub.current_period_start ?? firstItem?.current_period_start ?? null),
+          currentPeriodEnd: epochToDate(sub.current_period_end ?? firstItem?.current_period_end ?? null),
           cancelAtPeriodEnd: !!sub.cancel_at_period_end,
           trialEnd: epochToDate(sub.trial_end),
         });
@@ -111,8 +130,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       case 'checkout.session.completed': {
         const session = event.data.object as StripeCheckoutSessionPayload;
-        const orgId = orgIdFromMetadata(session.metadata);
-        await recordStripeEvent(event.id, event.type, orgId, event);
         if (orgId && session.customer && session.subscription) {
           await setOrgStripeIds(orgId, session.customer, session.subscription);
         }
@@ -120,14 +137,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
 
       default:
-        await recordStripeEvent(event.id, event.type, null, event);
         break;
     }
+    // Mark handled ONLY after the switch fully succeeded — leaves processed_at
+    // NULL on failure so Stripe's redelivery reprocesses (see recordStripeEvent).
+    await markStripeEventProcessed(event.id);
   } catch (err) {
-    // Don't surface the error to Stripe — we'll redeliver on next event.
-    // Still record so the row exists.
+    // Return non-2xx so Stripe RETRIES; the event stays unprocessed
+    // (processed_at NULL) and the redelivery re-runs the handler. Previously
+    // this returned 200, which silently dropped the event on a transient error.
     console.error('[stripe-webhook] handler error:', err);
-    return NextResponse.json({ received: true, warning: 'handler-error' });
+    return NextResponse.json({ error: 'handler-error' }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

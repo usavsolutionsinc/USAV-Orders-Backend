@@ -300,8 +300,11 @@ export const POST = withAuth(async (request, ctx) => {
         if (isUnfoundCarton && !skipZohoReceive) {
           await pool
             .query(
-              `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
-              [now, receivingId],
+              `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
+                                    unboxed_by = COALESCE(unboxed_by, $2),
+                                    updated_at = $1
+               WHERE id = $3`,
+              [now, staffId, receivingId],
             )
             .catch(() => {});
           return respond({
@@ -492,8 +495,11 @@ export const POST = withAuth(async (request, ctx) => {
 
     await pool
       .query(
-        `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1), updated_at = $1 WHERE id = $2`,
-        [now, receivingId],
+        `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
+                              unboxed_by = COALESCE(unboxed_by, $2),
+                              updated_at = $1
+         WHERE id = $3`,
+        [now, staffId, receivingId],
       )
       .catch(() => {});
 

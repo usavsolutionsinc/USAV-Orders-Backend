@@ -11,11 +11,11 @@ export const dynamic = 'force-dynamic';
  * fill / stale / low / over-capacity flags pre-computed, plus the global
  * count buckets for the filter chips.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const room = req.nextUrl.searchParams.get('room');
     const q = req.nextUrl.searchParams.get('q');
-    const data = await getBinsOverview({ room, q });
+    const data = await getBinsOverview({ room, q, orgId: ctx.organizationId });
     return NextResponse.json({ success: true, ...data });
   } catch (err: any) {
     console.error('[GET /api/inventory/bins-overview] error:', err);

@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { ApiError, errorResponse } from '@/lib/api';
 
@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic';
 
 const VALID_STATUSES = new Set(['pending', 'ignored', 'resolved']);
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const url = new URL(req.url);
     const status = url.searchParams.get('status') ?? 'pending';
@@ -25,12 +25,19 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') ?? 50), 1), 200);
 
-    const where = status === 'all' ? '' : 'WHERE status = $1';
-    const params = status === 'all' ? [] : [status];
+    // Tenant ownership filter — never return another org's worklist rows.
+    const conditions: string[] = ['organization_id = $1'];
+    const params: string[] = [ctx.organizationId];
+    if (status !== 'all') {
+      params.push(status);
+      conditions.push(`status = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
     const limitParam = `$${params.length + 1}`;
     params.push(String(limit));
 
-    const { rows } = await pool.query(
+    const { rows } = await tenantQuery(
+      ctx.organizationId,
       `SELECT id, gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
               email_subject, email_from, email_received, scanned_at,
               status, notes, resolved_at
@@ -41,10 +48,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       params,
     );
 
-    const counts = await pool.query<{ status: string; n: string }>(
+    const counts = await tenantQuery<{ status: string; n: string }>(
+      ctx.organizationId,
       `SELECT status, COUNT(*)::text AS n
          FROM email_missing_purchase_orders
+        WHERE organization_id = $1
         GROUP BY status`,
+      [ctx.organizationId],
     );
     const countMap: Record<string, number> = { pending: 0, ignored: 0, resolved: 0 };
     for (const r of counts.rows) countMap[r.status] = Number(r.n);
@@ -55,7 +65,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'admin.view' });
 
-export const PATCH = withAuth(async (req: NextRequest) => {
+export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const id = typeof body.id === 'string' ? body.id : null;
@@ -64,15 +74,18 @@ export const PATCH = withAuth(async (req: NextRequest) => {
     if (!id || !status || !VALID_STATUSES.has(status)) {
       throw ApiError.badRequest('id and status (pending|ignored|resolved) are required');
     }
-    const { rowCount, rows } = await pool.query(
+    // Org-ownership gate via the WHERE clause: a row owned by another org
+    // matches nothing → rowCount 0 → 404 (never 403).
+    const { rowCount, rows } = await withTenantTransaction(ctx.organizationId, (client) => client.query(
       `UPDATE email_missing_purchase_orders
           SET status      = $2,
               notes       = COALESCE($3, notes),
               resolved_at = CASE WHEN $2 = 'resolved' THEN NOW() ELSE resolved_at END
         WHERE id = $1
+          AND organization_id = $4
         RETURNING id, status, notes, resolved_at`,
-      [id, status, notes],
-    );
+      [id, status, notes, ctx.organizationId],
+    ));
     if (!rowCount) throw ApiError.notFound('email_missing_purchase_orders', id);
     return NextResponse.json({ ok: true, row: rows[0] });
   } catch (error) {

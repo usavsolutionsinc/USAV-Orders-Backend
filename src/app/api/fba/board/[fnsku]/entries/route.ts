@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
@@ -23,7 +23,8 @@ export async function GET(
   }
 
   try {
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT
          fsi.id            AS item_id,
          fsi.fnsku,
@@ -53,17 +54,19 @@ export async function GET(
            )
            FROM fba_shipment_tracking fst
            JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
-           WHERE fst.shipment_id = fs.id),
+           WHERE fst.shipment_id = fs.id
+             AND fst.organization_id = $2),
            '[]'::jsonb
          ) AS tracking_numbers
        FROM fba_shipment_items fsi
        JOIN fba_shipments fs ON fs.id = fsi.shipment_id
-       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = fsi.organization_id
        WHERE UPPER(TRIM(fsi.fnsku)) = $1
          AND fsi.status != 'SHIPPED'
          AND fs.status  != 'SHIPPED'
+         AND fsi.organization_id = $2
        ORDER BY fs.due_date DESC NULLS LAST, fsi.created_at DESC`,
-      [normalized],
+      [normalized, gate.ctx.organizationId],
     );
 
     return NextResponse.json({ success: true, entries: result.rows });

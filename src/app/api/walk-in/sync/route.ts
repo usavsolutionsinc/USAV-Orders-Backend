@@ -9,7 +9,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * POST /api/walk-in/sync
  * Backfill completed Square orders into square_transactions table.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -88,7 +88,7 @@ export const POST = withAuth(async (req: NextRequest) => {
           order_source: hasRepairSku ? 'repair_payment' : 'walk_in_sale',
           notes: o.source?.name || null,
           created_at: o.created_at || null,
-        });
+        }, ctx.organizationId);
         synced++;
       } catch (err: any) {
         // ON CONFLICT will update existing — count as synced

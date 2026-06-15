@@ -6,13 +6,9 @@
  * Surfaces every open `replenishment_tasks` row (REQUESTED + IN_PROGRESS).
  * Supervisors triage at the desktop; floor staff can claim/complete from
  * the same page on mobile.
- *
- * Phase A4 deliverable. Gated server-side by INVENTORY_V2_REPLENISHMENT —
- * the API returns 503 when off so this page just shows an empty state.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFeedback } from '@/hooks/useFeedback';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 
 interface TaskRow {
@@ -35,31 +31,22 @@ const STATUS_TONE: Record<TaskRow['status'], string> = {
 };
 
 export default function ReplenishmentPage() {
-  const feedback = useFeedback();
   const [tasks, setTasks] = useState<TaskRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState<number | null>(null);
-  const [flagOff, setFlagOff] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     setError(null);
     try {
       const res = await fetch('/api/replenishment/tasks', { cache: 'no-store' });
-      if (res.status === 503) {
-        setFlagOff(true);
-        setTasks([]);
-        return;
-      }
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setTasks(data.tasks);
-      setFlagOff(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'load failed';
       setError(message);
-      feedback('error');
     }
-  }, [feedback]);
+  }, []);
 
   useEffect(() => {
     void fetchTasks();
@@ -71,10 +58,8 @@ export default function ReplenishmentPage() {
       const res = await fetch(`/api/replenishment/tasks/${taskId}/claim`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('confirm');
       await fetchTasks();
     } catch (err) {
-      feedback('error');
       setError(err instanceof Error ? err.message : 'claim failed');
     } finally {
       setWorking(null);
@@ -87,7 +72,6 @@ export default function ReplenishmentPage() {
     const qty = Number(input);
     if (!Number.isFinite(qty) || qty <= 0) {
       setError('Invalid quantity');
-      feedback('error');
       return;
     }
     setWorking(taskId);
@@ -99,10 +83,8 @@ export default function ReplenishmentPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('success');
       await fetchTasks();
     } catch (err) {
-      feedback('error');
       setError(err instanceof Error ? err.message : 'complete failed');
     } finally {
       setWorking(null);
@@ -121,10 +103,8 @@ export default function ReplenishmentPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('warning');
       await fetchTasks();
     } catch (err) {
-      feedback('error');
       setError(err instanceof Error ? err.message : 'cancel failed');
     } finally {
       setWorking(null);
@@ -155,15 +135,6 @@ export default function ReplenishmentPage() {
           </button>
         </div>
       </header>
-
-      {flagOff && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">Replenishment flow is disabled.</p>
-          <p className="mt-1 text-amber-800/80">
-            Set <code className="font-mono">INVENTORY_V2_REPLENISHMENT=true</code> on the server to enable detection and task lifecycle.
-          </p>
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">

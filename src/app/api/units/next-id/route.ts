@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { peekNextUnitId } from '@/lib/inventory/unit-id';
 import { resolveSkuCatalogRow } from '@/lib/inventory/resolve-sku-catalog';
 import { getOrCreateInternalGtin } from '@/lib/inventory/internal-gtin';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,8 @@ export const dynamic = 'force-dynamic';
  * printed products label encodes the bare unit id (no GS1 link), so no qrUrl is
  * returned. Authentication: `print.label` permission.
  */
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, ctx) => {
+  const orgId = ctx.organizationId as OrgId;
   const body = await request.json().catch(() => ({}));
   const skuInput = String(body?.sku || '').trim();
   const skuCatalogIdInput = Number(body?.sku_catalog_id);
@@ -52,7 +54,12 @@ export const POST = withAuth(async (request) => {
     //    exact (case/trim) → leading-zero-stripped → platform_sku crosswalk.
     //    Without this, an input like "1103" misses a catalog row stored as
     //    "01103" and the print flow silently 404s.
-    const resolved = await resolveSkuCatalogRow(skuInput, explicitId);
+    //    Org-scoped: thread the caller's org so the lookup (direct id, sku/
+    //    platform_sku string-key match) is constrained to this tenant's rows.
+    //    sku_catalog is tenant-owned (organization_id); without this an org-B
+    //    caller could pass an org-A sku_catalog_id or a colliding sku string
+    //    and read org A's catalog row + previewed unit sequence.
+    const resolved = await resolveSkuCatalogRow(skuInput, explicitId, orgId);
 
     if (!resolved) {
       return NextResponse.json(
@@ -62,11 +69,15 @@ export const POST = withAuth(async (request) => {
     }
 
     // 2. Ensure GTIN exists (catalog data; not encoded on the products label).
-    const gtin = resolved.gtin && resolved.gtin.trim() ? resolved.gtin.trim() : await getOrCreateInternalGtin(resolved.id);
+    //    Org-scoped: the lazy UPDATE that mints a gtin is gated by
+    //    organization_id, so we can never persist a gtin onto another tenant's
+    //    sku_catalog row.
+    const gtin = resolved.gtin && resolved.gtin.trim() ? resolved.gtin.trim() : await getOrCreateInternalGtin(resolved.id, orgId);
 
     // 3. Peek the next unit serial — preview only, does NOT advance the
     //    sequence. The real per-serial allocation happens at print time.
-    const preview = await peekNextUnitId(resolved.id, resolved.sku);
+    //    Org-scoped so the unit_id_sequences read is bound to this tenant.
+    const preview = await peekNextUnitId(resolved.id, resolved.sku, undefined, orgId);
 
     return NextResponse.json({
       ok: true,

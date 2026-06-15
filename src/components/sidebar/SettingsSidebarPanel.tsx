@@ -7,7 +7,8 @@ import { SidebarSectionList, type SidebarSection } from './SidebarSectionList';
 
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
-  | 'security' | 'staff' | 'sessions' | 'audit' | 'operations-log' | 'billing';
+  | 'security' | 'staff' | 'sessions' | 'audit' | 'operations-log' | 'billing' | 'integrations'
+  | 'catalog';
 
 const ICON_CLS = 'h-4 w-4 shrink-0';
 
@@ -134,6 +135,30 @@ const SECTIONS: Array<SidebarSection<SettingsSection>> = [
     ),
   },
   {
+    id: 'integrations',
+    label: 'Integrations',
+    description: 'Connect Amazon, eBay, Zoho, Stripe & more',
+    requires: 'admin.view',
+    icon: (
+      <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    ),
+  },
+  {
+    id: 'catalog',
+    label: 'Platforms & Types',
+    description: 'Edit your sales channels & receiving flow types',
+    requires: 'admin.manage_features',
+    icon: (
+      <svg className={ICON_CLS} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+        <line x1="7" y1="7" x2="7.01" y2="7" />
+      </svg>
+    ),
+  },
+  {
     id: 'about',
     label: 'About',
     description: 'Version & diagnostics',
@@ -159,13 +184,19 @@ export function SettingsSidebarPanel(): ReactNode {
   // Billing is a dedicated sub-route (/settings/billing), not an inline
   // ?section= view — derive its active state from the path.
   const active: SettingsSection =
-    pathname === '/settings/billing' ? 'billing' : getActiveSettingsSection(searchParams?.get('section'));
+    pathname === '/settings/billing' ? 'billing'
+    : pathname === '/settings/integrations' ? 'integrations'
+    : getActiveSettingsSection(searchParams?.get('section'));
   const { has, isLoaded, user } = useAuth();
 
   const setSection = useCallback(
     (section: SettingsSection) => {
       if (section === 'billing') {
         router.replace('/settings/billing');
+        return;
+      }
+      if (section === 'integrations') {
+        router.replace('/settings/integrations');
         return;
       }
       const params = new URLSearchParams(searchParams?.toString());
@@ -188,6 +219,8 @@ export function SettingsSidebarPanel(): ReactNode {
       active={active}
       onSelect={setSection}
       ariaLabel="Settings sections"
+      // px-3 lines the rows' icons up with the MasterNavHeader gear above.
+      gutterClassName="px-3"
     />
   );
 }

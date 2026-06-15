@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -12,7 +12,6 @@ import { withAuth } from '@/lib/auth/withAuth';
 //
 // Body: { shipment_id, label_barcode, fnskus: string[], station? } — actor from session.
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
     const { shipment_id, label_barcode, fnskus = [], station } = body;
@@ -38,27 +37,23 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'At least one valid fnsku is required' }, { status: 400 });
     }
 
-    await client.query('BEGIN');
-
+    const outcome = await withTenantTransaction(ctx.organizationId, async (client) => {
     // Verify staff
     const staffCheck = await client.query('SELECT id, name FROM staff WHERE id = $1', [staff_id]);
     if (!staffCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
+      return { error: { status: 404, message: 'Staff not found' } } as const;
     }
 
     // Verify shipment
     const shipmentCheck = await client.query(
-      `SELECT id, status FROM fba_shipments WHERE id = $1`,
-      [shipment_id]
+      `SELECT id, status FROM fba_shipments WHERE id = $1 AND organization_id = $2`,
+      [shipment_id, ctx.organizationId]
     );
     if (!shipmentCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
+      return { error: { status: 404, message: 'Shipment not found' } } as const;
     }
     if (shipmentCheck.rows[0].status === 'SHIPPED') {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Shipment is already closed' }, { status: 409 });
+      return { error: { status: 409, message: 'Shipment is already closed' } } as const;
     }
 
     const boundItems: Array<Record<string, unknown>> = [];
@@ -67,8 +62,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     for (const fnsku of normalizedFnskus) {
       // Find the item — must be PACKED (or already LABEL_ASSIGNED for re-bind)
       const itemRes = await client.query(
-        `SELECT * FROM fba_shipment_items WHERE shipment_id = $1 AND fnsku = $2`,
-        [shipment_id, fnsku]
+        `SELECT * FROM fba_shipment_items WHERE shipment_id = $1 AND fnsku = $2 AND organization_id = $3`,
+        [shipment_id, fnsku, ctx.organizationId]
       );
 
       if (!itemRes.rows[0]) {
@@ -97,15 +92,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
              labeled_by_staff_id = COALESCE(labeled_by_staff_id, $1),
              labeled_at        = COALESCE(labeled_at, NOW()),
              updated_at        = NOW()
-         WHERE id = $2
+         WHERE id = $2 AND organization_id = $3
          RETURNING *`,
-        [staff_id, item.id]
+        [staff_id, item.id, ctx.organizationId]
       );
 
       const logRes = await client.query(
         `INSERT INTO fba_fnsku_logs
-           (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-         VALUES ($1, 'PACK', 'ASSIGNED', $2, $3, $4, $5, $6, $7, $8::jsonb)
+           (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+         VALUES ($1, 'PACK', 'ASSIGNED', $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
          RETURNING id, created_at`,
         [
           fnsku,
@@ -120,6 +115,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             trigger: 'fba.labels.bind',
             previous_status: item.status,
           }),
+          ctx.organizationId,
         ]
       );
 
@@ -133,23 +129,31 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     await client.query(
       `UPDATE fba_shipments
        SET status = CASE
-                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
-                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
-                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PACKED')
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2)
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED' AND organization_id = $2)
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PACKED' AND organization_id = $2)
                         THEN 'LABEL_ASSIGNED'::fba_shipment_status_enum
-                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
-                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED')
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2)
+                        AND NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'TESTED' AND organization_id = $2)
                         THEN 'PACKED'::fba_shipment_status_enum
-                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED')
+                      WHEN NOT EXISTS (SELECT 1 FROM fba_shipment_items WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2)
                         THEN 'TESTED'::fba_shipment_status_enum
                       ELSE status
                     END,
            updated_at = NOW()
-       WHERE id = $1`,
-      [shipment_id]
+       WHERE id = $1 AND organization_id = $2`,
+      [shipment_id, ctx.organizationId]
     );
 
-    await client.query('COMMIT');
+    return { boundItems, errors };
+    });
+
+    if ('error' in outcome && outcome.error) {
+      return NextResponse.json(
+        { success: false, error: outcome.error.message },
+        { status: outcome.error.status }
+      );
+    }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
     await publishFbaItemChanged({ action: 'label-bind', shipmentId: Number(shipment_id || 0), source: 'fba.labels.bind', organizationId: ctx.organizationId });
@@ -158,19 +162,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       success: true,
       label_barcode: String(label_barcode).trim(),
       shipment_id: Number(shipment_id),
-      bound_items: boundItems,
-      bound_count: boundItems.length,
-      errors: errors.length > 0 ? errors : undefined,
+      bound_items: outcome.boundItems,
+      bound_count: outcome.boundItems.length,
+      errors: outcome.errors.length > 0 ? outcome.errors : undefined,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/labels/bind]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to bind label' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

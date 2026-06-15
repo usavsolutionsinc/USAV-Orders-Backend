@@ -34,12 +34,18 @@ export const POST = withAuth(async (request, ctx) => {
     typeof body?.client_event_id === 'string' && body.client_event_id.trim() ? body.client_event_id.trim() : null;
 
   try {
+    // Thread the caller's tenant id so the shared module org-gates the
+    // order_unit_allocations read/write (WHERE id=$1 AND organization_id=$2 →
+    // 404 on a foreign-org allocation, never 403), runs inside a GUC-wrapped
+    // transaction, and forwards orgId to transition() so the serial_units
+    // mutation is org-scoped and the inventory_event is stamped to the real
+    // tenant — closes the cross-tenant flip-to-PICKED leak.
     const result = await confirmPick({
       sessionId,
       allocationId,
       actorStaffId,
       clientEventId,
-    });
+    }, ctx.organizationId);
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result);
   } catch (err) {

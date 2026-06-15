@@ -34,6 +34,7 @@ export const SOURCE_PLATFORMS: SourcePlatformMeta[] = [
   // ECWID-RS (not plain ECWID): today this pill only appears when the carton
   // was paired with an Ecwid repair-service (-RS) order.
   { value: 'ecwid',      label: 'ECWID-RS',   text: 'text-blue-600',   border: 'border-blue-600' },
+  { value: 'square',     label: 'Square',     text: 'text-slate-700',  border: 'border-slate-600' },
   { value: 'other',      label: 'Other',      text: 'text-slate-500',  border: 'border-slate-400' },
 ];
 

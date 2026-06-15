@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizeSku } from '@/utils/sku';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -11,7 +11,7 @@ function getBaseSku(value: string) {
   return normalizeSku(withoutQty);
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const query = String(searchParams.get('q') || '').trim();
@@ -50,9 +50,23 @@ export const GET = withAuth(async (req: NextRequest) => {
       LIMIT $${params.length}
     `;
 
+    // `v_sku` is a read-only VIEW that does not project organization_id, so the
+    // tenant scope rides on the GUC (RLS on the underlying serial_units rows)
+    // rather than an explicit column filter. The sku_catalog query joins base
+    // tables that DO carry organization_id, so it gets an explicit filter too.
     const [skuResult, titleResult] = await Promise.all([
-      pool.query(sql, params),
-      pool.query(
+      tenantQuery<{
+        id: number;
+        static_sku: string | null;
+        serial_number: string | null;
+        shipping_tracking_number: string | null;
+        notes: string | null;
+        location: string | null;
+        created_at: string | null;
+        updated_at: string | null;
+      }>(ctx.organizationId, sql, params),
+      tenantQuery<{ sku: string | null; product_title: string | null }>(
+        ctx.organizationId,
         `SELECT
            sc.sku,
            COALESCE(sp.display_name, sc.product_title) AS product_title
@@ -61,12 +75,15 @@ export const GET = withAuth(async (req: NextRequest) => {
            SELECT e.display_name
            FROM sku_platform_ids e
            WHERE e.sku_catalog_id = sc.id
+             AND e.organization_id = sc.organization_id
              AND e.platform = 'ecwid'
              AND e.is_active = true
              AND e.display_name IS NOT NULL
            LIMIT 1
          ) sp ON TRUE
-         WHERE sc.is_active = true`
+         WHERE sc.is_active = true
+           AND sc.organization_id = $1`,
+        [ctx.organizationId],
       ),
     ]);
 
@@ -78,7 +95,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       titleByBaseSku.set(baseSku, title);
     }
 
-    let rows = skuResult.rows.map((row) => {
+    let rows: Array<Record<string, any>> = skuResult.rows.map((row) => {
       const baseSku = getBaseSku(String(row.static_sku || ''));
       return {
         ...row,

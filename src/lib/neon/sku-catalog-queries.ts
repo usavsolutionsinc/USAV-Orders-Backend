@@ -1,4 +1,6 @@
 import pool from '../db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -109,19 +111,19 @@ function normalizeId(raw: string): string {
 
 // ─── SKU Catalog CRUD ────────────────────────────────────────────────────────
 
-export async function getSkuCatalogBySku(sku: string): Promise<SkuCatalogRow | null> {
-  const result = await pool.query(
-    `SELECT * FROM sku_catalog WHERE sku = $1 LIMIT 1`,
-    [sku.trim()],
-  );
+export async function getSkuCatalogBySku(sku: string, orgId?: OrgId): Promise<SkuCatalogRow | null> {
+  const sql = `SELECT * FROM sku_catalog WHERE sku = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogRow>(orgId, sql, [sku.trim(), orgId])
+    : await pool.query<SkuCatalogRow>(sql, [sku.trim()]);
   return result.rows[0] ?? null;
 }
 
-export async function getSkuCatalogById(id: number): Promise<SkuCatalogRow | null> {
-  const result = await pool.query(
-    `SELECT * FROM sku_catalog WHERE id = $1 LIMIT 1`,
-    [id],
-  );
+export async function getSkuCatalogById(id: number, orgId?: OrgId): Promise<SkuCatalogRow | null> {
+  const sql = `SELECT * FROM sku_catalog WHERE id = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogRow>(orgId, sql, [id, orgId])
+    : await pool.query<SkuCatalogRow>(sql, [id]);
   return result.rows[0] ?? null;
 }
 
@@ -131,13 +133,13 @@ export async function getSkuCatalogById(id: number): Promise<SkuCatalogRow | nul
  * is stored as a digit string, but callers may pass URL-encoded or
  * dash-formatted variants from a scanner.
  */
-export async function getSkuCatalogByGtin(gtin: string): Promise<SkuCatalogRow | null> {
+export async function getSkuCatalogByGtin(gtin: string, orgId?: OrgId): Promise<SkuCatalogRow | null> {
   const cleaned = String(gtin || '').replace(/\D/g, '');
   if (!cleaned) return null;
-  const result = await pool.query(
-    `SELECT * FROM sku_catalog WHERE gtin = $1 LIMIT 1`,
-    [cleaned],
-  );
+  const sql = `SELECT * FROM sku_catalog WHERE gtin = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogRow>(orgId, sql, [cleaned, orgId])
+    : await pool.query<SkuCatalogRow>(sql, [cleaned]);
   return result.rows[0] ?? null;
 }
 
@@ -156,17 +158,35 @@ export async function upsertSkuCatalog(params: {
   sourcingNotes?: string | null;
   /** Per-SKU replenish target price (cents). Below this, the watcher alerts. */
   replenishTargetCents?: number | null;
-}): Promise<SkuCatalogRow> {
+}, orgId?: OrgId): Promise<SkuCatalogRow> {
   // The lifecycle params are referenced directly ($8–$11) rather than via
   // EXCLUDED so that omitting them (null) preserves the existing row on update
   // and falls back to the column default ('active') on insert — callers that
   // don't opt into lifecycle behave exactly as before.
-  const result = await pool.query(
-    `INSERT INTO sku_catalog
+  //
+  // When orgId is provided we explicitly stamp organization_id ($13) on insert
+  // and scope the upsert via tenantQuery; when omitted we keep the exact prior
+  // behavior (session-less pool.query, organization_id left to the GUC default).
+  const values: unknown[] = [
+    params.sku.trim(),
+    params.productTitle.trim(),
+    params.category?.trim() || null,
+    params.upc?.trim() || null,
+    params.ean?.trim() || null,
+    params.imageUrl?.trim() || null,
+    params.isActive ?? true,
+    params.lifecycleStatus ?? null,
+    params.reorderThreshold ?? null,
+    params.lastKnownCostCents ?? null,
+    params.sourcingNotes?.trim() || null,
+    params.replenishTargetCents ?? null,
+  ];
+  if (orgId) values.push(orgId);
+  const sql = `INSERT INTO sku_catalog
        (sku, product_title, category, upc, ean, image_url, is_active,
         lifecycle_status, reorder_threshold, last_known_cost_cents, sourcing_notes,
-        replenish_target_cents)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12)
+        replenish_target_cents${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12${orgId ? ', $13' : ''})
      ON CONFLICT (sku) DO UPDATE SET
        product_title = EXCLUDED.product_title,
        category = COALESCE(EXCLUDED.category, sku_catalog.category),
@@ -180,22 +200,10 @@ export async function upsertSkuCatalog(params: {
        sourcing_notes = COALESCE($11, sku_catalog.sourcing_notes),
        replenish_target_cents = COALESCE($12, sku_catalog.replenish_target_cents),
        updated_at = NOW()
-     RETURNING *`,
-    [
-      params.sku.trim(),
-      params.productTitle.trim(),
-      params.category?.trim() || null,
-      params.upc?.trim() || null,
-      params.ean?.trim() || null,
-      params.imageUrl?.trim() || null,
-      params.isActive ?? true,
-      params.lifecycleStatus ?? null,
-      params.reorderThreshold ?? null,
-      params.lastKnownCostCents ?? null,
-      params.sourcingNotes?.trim() || null,
-      params.replenishTargetCents ?? null,
-    ],
-  );
+     RETURNING *`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogRow>(orgId, sql, values)
+    : await pool.query<SkuCatalogRow>(sql, values);
   return result.rows[0];
 }
 
@@ -206,26 +214,26 @@ export async function upsertSkuCatalog(params: {
  * them. Returns the (now-inactive) row, or null if it doesn't exist or was
  * already inactive — callers should pre-fetch for the audit before-state.
  */
-export async function softDeleteSkuCatalog(id: number): Promise<SkuCatalogRow | null> {
-  const result = await pool.query<SkuCatalogRow>(
-    `UPDATE sku_catalog
+export async function softDeleteSkuCatalog(id: number, orgId?: OrgId): Promise<SkuCatalogRow | null> {
+  const sql = `UPDATE sku_catalog
         SET is_active = false, updated_at = NOW()
-      WHERE id = $1 AND is_active = true
-      RETURNING *`,
-    [id],
-  );
+      WHERE id = $1 AND is_active = true${orgId ? ' AND organization_id = $2' : ''}
+      RETURNING *`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogRow>(orgId, sql, [id, orgId])
+    : await pool.query<SkuCatalogRow>(sql, [id]);
   return result.rows[0] ?? null;
 }
 
 // ─── Platform ID CRUD ────────────────────────────────────────────────────────
 
-export async function getSkuPlatformIds(skuCatalogId: number): Promise<SkuPlatformIdRow[]> {
-  const result = await pool.query(
-    `SELECT * FROM sku_platform_ids
-     WHERE sku_catalog_id = $1 AND is_active = true
-     ORDER BY platform, created_at`,
-    [skuCatalogId],
-  );
+export async function getSkuPlatformIds(skuCatalogId: number, orgId?: OrgId): Promise<SkuPlatformIdRow[]> {
+  const sql = `SELECT * FROM sku_platform_ids
+     WHERE sku_catalog_id = $1 AND is_active = true${orgId ? ' AND organization_id = $2' : ''}
+     ORDER BY platform, created_at`;
+  const result = orgId
+    ? await tenantQuery<SkuPlatformIdRow>(orgId, sql, [skuCatalogId, orgId])
+    : await pool.query<SkuPlatformIdRow>(sql, [skuCatalogId]);
   return result.rows;
 }
 
@@ -235,65 +243,82 @@ export async function upsertSkuPlatformId(params: {
   platformSku?: string | null;
   platformItemId?: string | null;
   accountName?: string | null;
-}): Promise<SkuPlatformIdRow> {
+}, orgId?: OrgId): Promise<SkuPlatformIdRow> {
   const platform = params.platform.trim();
   const platformSku = params.platformSku?.trim() || null;
   const platformItemId = params.platformItemId?.trim() || null;
   const accountName = params.accountName?.trim() || null;
 
+  // When orgId is provided, every SELECT/UPDATE/INSERT runs through tenantQuery
+  // with an explicit organization_id filter (and stamp on insert); when omitted
+  // every statement keeps the exact prior session-less pool.query behavior.
+  const q = <T extends SkuPlatformIdRow = SkuPlatformIdRow>(
+    sql: string,
+    values: unknown[],
+  ) =>
+    orgId
+      ? tenantQuery<T>(orgId, sql, values)
+      : pool.query<T>(sql, values);
+
   // If a row with this (platform, sku/itemId) already exists (e.g. unpaired
   // Ecwid row from sync), claim it by setting sku_catalog_id.
   if (platformSku) {
-    const existing = await pool.query(
+    const existing = await q(
       `SELECT * FROM sku_platform_ids
        WHERE platform = $1
          AND platform_sku = $2
-         AND COALESCE(account_name, '') = COALESCE($3, '')
+         AND COALESCE(account_name, '') = COALESCE($3, '')${orgId ? '\n         AND organization_id = $4' : ''}
        LIMIT 1`,
-      [platform, platformSku, accountName],
+      orgId ? [platform, platformSku, accountName, orgId] : [platform, platformSku, accountName],
     );
     if (existing.rows.length > 0) {
-      const updated = await pool.query(
+      const updated = await q(
         `UPDATE sku_platform_ids
          SET sku_catalog_id = $1,
              platform_item_id = COALESCE(platform_item_id, $2),
              is_active = true
-         WHERE id = $3
+         WHERE id = $3${orgId ? '\n           AND organization_id = $4' : ''}
          RETURNING *`,
-        [params.skuCatalogId, platformItemId, existing.rows[0].id],
+        orgId
+          ? [params.skuCatalogId, platformItemId, existing.rows[0].id, orgId]
+          : [params.skuCatalogId, platformItemId, existing.rows[0].id],
       );
       return updated.rows[0];
     }
   }
 
   if (platformItemId) {
-    const existing = await pool.query(
+    const existing = await q(
       `SELECT * FROM sku_platform_ids
        WHERE platform = $1
          AND platform_item_id = $2
-         AND COALESCE(account_name, '') = COALESCE($3, '')
+         AND COALESCE(account_name, '') = COALESCE($3, '')${orgId ? '\n         AND organization_id = $4' : ''}
        LIMIT 1`,
-      [platform, platformItemId, accountName],
+      orgId ? [platform, platformItemId, accountName, orgId] : [platform, platformItemId, accountName],
     );
     if (existing.rows.length > 0) {
-      const updated = await pool.query(
+      const updated = await q(
         `UPDATE sku_platform_ids
          SET sku_catalog_id = $1,
              platform_sku = COALESCE(platform_sku, $2),
              is_active = true
-         WHERE id = $3
+         WHERE id = $3${orgId ? '\n           AND organization_id = $4' : ''}
          RETURNING *`,
-        [params.skuCatalogId, platformSku, existing.rows[0].id],
+        orgId
+          ? [params.skuCatalogId, platformSku, existing.rows[0].id, orgId]
+          : [params.skuCatalogId, platformSku, existing.rows[0].id],
       );
       return updated.rows[0];
     }
   }
 
-  const result = await pool.query(
-    `INSERT INTO sku_platform_ids (sku_catalog_id, platform, platform_sku, platform_item_id, account_name)
-     VALUES ($1, $2, $3, $4, $5)
+  const result = await q(
+    `INSERT INTO sku_platform_ids (sku_catalog_id, platform, platform_sku, platform_item_id, account_name${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5${orgId ? ', $6' : ''})
      RETURNING *`,
-    [params.skuCatalogId, platform, platformSku, platformItemId, accountName],
+    orgId
+      ? [params.skuCatalogId, platform, platformSku, platformItemId, accountName, orgId]
+      : [params.skuCatalogId, platform, platformSku, platformItemId, accountName],
   );
   return result.rows[0];
 }
@@ -302,50 +327,101 @@ export async function upsertSkuPlatformId(params: {
 
 export async function resolveSkuCatalogByPlatformId(
   identifier: string,
+  orgId?: OrgId,
 ): Promise<number | null> {
   const normalized = normalizeId(identifier);
   if (!normalized) return null;
 
-  const result = await pool.query(
-    `SELECT sku_catalog_id FROM sku_platform_ids
-     WHERE regexp_replace(UPPER(TRIM(COALESCE(platform_item_id, ''))), '[^A-Z0-9]', '', 'g') = $1
-        OR regexp_replace(UPPER(TRIM(COALESCE(platform_sku, ''))), '[^A-Z0-9]', '', 'g') = $1
-     LIMIT 1`,
-    [normalized],
-  );
+  // When orgId is provided we scope the lookup to that tenant's platform rows
+  // (sku_platform_ids is tenant-owned); when omitted we keep the exact prior
+  // session-less pool.query behavior.
+  const sql = `SELECT sku_catalog_id FROM sku_platform_ids
+     WHERE (regexp_replace(UPPER(TRIM(COALESCE(platform_item_id, ''))), '[^A-Z0-9]', '', 'g') = $1
+        OR regexp_replace(UPPER(TRIM(COALESCE(platform_sku, ''))), '[^A-Z0-9]', '', 'g') = $1)${orgId ? '\n       AND organization_id = $2' : ''}
+     LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [normalized, orgId])
+    : await pool.query(sql, [normalized]);
   return result.rows[0]?.sku_catalog_id ?? null;
 }
 
-/** Resolve by direct SKU text match on sku_catalog.sku */
+/**
+ * Minimum trigram similarity between a sku_catalog row's product_title and a
+ * caller-supplied expected title for a same-SKU match to be trusted.
+ *
+ * `sku_catalog` holds the MARKETPLACE SKU namespace (ecwid/ebay/amazon). Zoho
+ * `items` is a SEPARATE namespace that collides on the same zero-padded strings
+ * — e.g. Ecwid SKU 143 = "Bose UB-20 Wall Mount" vs Zoho SKU 00143 = "Bose Solo
+ * Soundbar". A bare `sku = $1` match therefore binds a Zoho line to the wrong
+ * product. When the caller knows the Zoho product name it passes it as
+ * `expectedTitle`; we only trust the same-SKU row if its title actually
+ * resembles that product. Measured separation on live data: real collisions
+ * score ~0.10, legitimate same-product matches score ≥0.25.
+ */
+export const SKU_TITLE_GUARD_MIN = 0.25;
+
+/**
+ * Resolve by direct SKU text match on sku_catalog.sku.
+ *
+ * When `expectedTitle` is provided, the matched row is returned only if its
+ * product_title is similar enough to be the same product (cross-namespace
+ * collision guard — see {@link SKU_TITLE_GUARD_MIN}). On a collision we return
+ * `null` rather than the wrong product: the caller falls back to the Zoho title
+ * and the line carries no (wrong) catalog identity until it's paired for real.
+ */
 export async function resolveSkuCatalogBySku(
   sku: string,
+  expectedTitle?: string | null,
+  orgId?: OrgId,
 ): Promise<number | null> {
   const trimmed = (sku || '').trim();
   if (!trimmed) return null;
 
-  const result = await pool.query(
-    `SELECT id FROM sku_catalog WHERE sku = $1 LIMIT 1`,
-    [trimmed],
-  );
-  return result.rows[0]?.id ?? null;
+  // When orgId is provided every SELECT is scoped to that tenant's catalog
+  // (sku_catalog is tenant-owned) via tenantQuery + an explicit
+  // organization_id predicate; when omitted behavior is byte-identical to before.
+  const want = (expectedTitle || '').trim();
+  if (!want) {
+    const sql = `SELECT id FROM sku_catalog WHERE sku = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+    const result = orgId
+      ? await tenantQuery(orgId, sql, [trimmed, orgId])
+      : await pool.query(sql, [trimmed]);
+    return result.rows[0]?.id ?? null;
+  }
+
+  // Same-SKU match must also be the same PRODUCT (guard cross-namespace SKU
+  // collisions between the marketplace catalog and Zoho's numbering).
+  const sql = `SELECT id, similarity(LOWER(product_title), LOWER($2)) AS sim
+       FROM sku_catalog WHERE sku = $1${orgId ? ' AND organization_id = $3' : ''} LIMIT 1`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [trimmed, want, orgId])
+    : await pool.query(sql, [trimmed, want]);
+  const row = result.rows[0];
+  if (row && Number(row.sim) >= SKU_TITLE_GUARD_MIN) return row.id;
+  return null;
 }
 
 /**
  * Resolve sku_catalog_id from any available identifier.
  * Tries: direct SKU match → platform_item_id / platform_sku crosswalk.
+ *
+ * Pass `expectedTitle` (the Zoho item name) when resolving for a Zoho-sourced
+ * line so a colliding marketplace SKU isn't mistaken for the same product.
  */
 export async function resolveSkuCatalogId(
   sku?: string | null,
   itemNumber?: string | null,
+  expectedTitle?: string | null,
+  orgId?: OrgId,
 ): Promise<number | null> {
-  // 1. Try direct SKU match
+  // 1. Try direct SKU match (title-guarded when an expected title is known)
   if (sku) {
-    const id = await resolveSkuCatalogBySku(sku);
+    const id = await resolveSkuCatalogBySku(sku, expectedTitle, orgId);
     if (id) return id;
   }
   // 2. Try platform crosswalk via item number
   if (itemNumber) {
-    const id = await resolveSkuCatalogByPlatformId(itemNumber);
+    const id = await resolveSkuCatalogByPlatformId(itemNumber, orgId);
     if (id) return id;
   }
   return null;
@@ -391,13 +467,26 @@ export async function resolveOrCreateSkuCatalogId(params: {
   productTitle?: string | null;
   accountSource?: string | null;
   orderId?: string | null;
-}): Promise<number | null> {
+  /**
+   * When set, treat `productTitle` as the authoritative product identity and
+   * refuse to either bind to OR overwrite a same-SKU `sku_catalog` row that is a
+   * DIFFERENT product. Used by the Zoho receiving-line path, whose SKU namespace
+   * collides with the marketplace catalog (see {@link SKU_TITLE_GUARD_MIN}).
+   * Marketplace sync callers leave this unset and keep the prior behavior.
+   */
+  guardTitle?: string | null;
+}, orgId?: OrgId): Promise<number | null> {
   const sku = (params.sku || '').trim() || null;
   const itemNumber = (params.itemNumber || '').trim() || null;
   const productTitle = (params.productTitle || '').trim() || 'Unknown Product';
+  const guardTitle = (params.guardTitle || '').trim() || null;
 
-  // 1. Try resolving from existing data
-  const existingId = await resolveSkuCatalogId(sku, itemNumber);
+  // When orgId is provided, every resolve/upsert/read below is threaded with it
+  // so the whole resolve-or-create runs inside the caller's tenant; when omitted
+  // each call keeps its existing (raw-pool / GUC-default) behavior unchanged.
+
+  // 1. Try resolving from existing data (title-guarded for Zoho-namespace lines)
+  const existingId = await resolveSkuCatalogId(sku, itemNumber, guardTitle, orgId);
   if (existingId) {
     // If we have an item number that isn't linked yet, link it
     if (itemNumber) {
@@ -407,17 +496,29 @@ export async function resolveOrCreateSkuCatalogId(params: {
         platform,
         platformItemId: itemNumber,
         accountName: params.accountSource?.trim() || null,
-      }).catch(() => {}); // ignore conflicts
+      }, orgId).catch(() => {}); // ignore conflicts
     }
     return existingId;
   }
 
   // 2. Nothing found — create new catalog entry if we have a SKU
   if (sku) {
+    // Guarded callers must never clobber a colliding marketplace row. If the
+    // SKU is already taken by a different product, upsert-by-sku would
+    // overwrite its title — bail out instead of corrupting it. (The Zoho line
+    // gets its correct catalog identity via the authoritative Ecwid/Zoho
+    // cross-check path, not by squatting on a marketplace SKU.)
+    if (guardTitle) {
+      const clashSql = `SELECT id FROM sku_catalog WHERE sku = $1${orgId ? ' AND organization_id = $2' : ''} LIMIT 1`;
+      const clash = orgId
+        ? await tenantQuery(orgId, clashSql, [sku, orgId])
+        : await pool.query(clashSql, [sku]);
+      if (clash.rows[0]) return null;
+    }
     const catalogRow = await upsertSkuCatalog({
       sku,
       productTitle,
-    });
+    }, orgId);
 
     // Also link the item number as a platform ID
     if (itemNumber) {
@@ -427,7 +528,7 @@ export async function resolveOrCreateSkuCatalogId(params: {
         platform,
         platformItemId: itemNumber,
         accountName: params.accountSource?.trim() || null,
-      }).catch(() => {});
+      }, orgId).catch(() => {});
     }
 
     return catalogRow.id;
@@ -442,14 +543,17 @@ export async function resolveOrCreateSkuCatalogId(params: {
 export async function getKitParts(
   skuCatalogId: number,
   condition?: string | null,
+  orgId?: OrgId,
 ): Promise<SkuKitPartRow[]> {
-  const result = await pool.query(
-    `SELECT * FROM sku_kit_parts
+  // sku_kit_parts is tenant-owned (organization_id added 2026-05-23). When orgId
+  // is provided we scope explicitly; when omitted behavior is byte-identical.
+  const sql = `SELECT * FROM sku_kit_parts
      WHERE sku_catalog_id = $1
-       AND ($2::text IS NULL OR required_for IS NULL OR $2 = ANY(required_for))
-     ORDER BY sort_order, id`,
-    [skuCatalogId, condition?.trim() || null],
-  );
+       AND ($2::text IS NULL OR required_for IS NULL OR $2 = ANY(required_for))${orgId ? '\n       AND organization_id = $3' : ''}
+     ORDER BY sort_order, id`;
+  const result = orgId
+    ? await tenantQuery<SkuKitPartRow>(orgId, sql, [skuCatalogId, condition?.trim() || null, orgId])
+    : await pool.query<SkuKitPartRow>(sql, [skuCatalogId, condition?.trim() || null]);
   return result.rows;
 }
 
@@ -459,18 +563,22 @@ export async function getQcChecks(
   skuCatalogId: number,
   category?: string | null,
   opts?: { publishedOnly?: boolean },
+  orgId?: OrgId,
 ): Promise<QcCheckTemplateRow[]> {
   // Execution views (testing-bundle, tech checklist) pass publishedOnly so draft
   // steps under authoring stay hidden. Authoring views omit it to see all.
   const publishedOnly = opts?.publishedOnly === true;
-  const result = await pool.query(
-    `SELECT * FROM qc_check_templates
+  // qc_check_templates is tenant-owned. When orgId is provided we scope to it
+  // (covers both the per-SKU and the category-default rows, which are themselves
+  // org-owned); when omitted behavior is byte-identical to before.
+  const sql = `SELECT * FROM qc_check_templates
      WHERE (sku_catalog_id = $1
         OR ($2::text IS NOT NULL AND category = $2 AND sku_catalog_id IS NULL))
-       AND ($3::boolean IS FALSE OR status = 'published')
-     ORDER BY sort_order, id`,
-    [skuCatalogId, category?.trim() || null, publishedOnly],
-  );
+       AND ($3::boolean IS FALSE OR status = 'published')${orgId ? '\n       AND organization_id = $4' : ''}
+     ORDER BY sort_order, id`;
+  const result = orgId
+    ? await tenantQuery<QcCheckTemplateRow>(orgId, sql, [skuCatalogId, category?.trim() || null, publishedOnly, orgId])
+    : await pool.query<QcCheckTemplateRow>(sql, [skuCatalogId, category?.trim() || null, publishedOnly]);
   return result.rows;
 }
 
@@ -479,13 +587,16 @@ export async function getQcChecks(
 export async function getVerifications(
   sourceKind: string,
   sourceRowId: number,
+  orgId?: OrgId,
 ): Promise<TechVerificationRow[]> {
-  const result = await pool.query(
-    `SELECT * FROM tech_verifications
-     WHERE source_kind = $1 AND source_row_id = $2
-     ORDER BY verified_at`,
-    [sourceKind, sourceRowId],
-  );
+  // tech_verifications is tenant-owned. When orgId is provided we scope
+  // explicitly; when omitted behavior is byte-identical to before.
+  const sql = `SELECT * FROM tech_verifications
+     WHERE source_kind = $1 AND source_row_id = $2${orgId ? '\n       AND organization_id = $3' : ''}
+     ORDER BY verified_at`;
+  const result = orgId
+    ? await tenantQuery<TechVerificationRow>(orgId, sql, [sourceKind, sourceRowId, orgId])
+    : await pool.query<TechVerificationRow>(sql, [sourceKind, sourceRowId]);
   return result.rows;
 }
 
@@ -501,15 +612,33 @@ export async function upsertVerification(params: {
   valueNum?: number | null;
   valueText?: string | null;
   failedModeId?: number | null;
-}): Promise<TechVerificationRow> {
+}, orgId?: OrgId): Promise<TechVerificationRow> {
   // One verification per (source_kind, source_row_id, step_type, step_id) —
   // enforced by ux_tech_verifications_step (2026-05-29), so a re-mark UPDATEs
   // the single row in place.
-  const result = await pool.query(
-    `INSERT INTO tech_verifications
+  //
+  // tech_verifications is tenant-owned. When orgId is provided we stamp
+  // organization_id ($12) on insert and run via withTenantTransaction (GUC set),
+  // so the row is attributed to the caller's tenant and RLS-subject; when omitted
+  // the statement is byte-identical to before (raw pool, GUC-default org stamp).
+  const values: unknown[] = [
+    params.sourceKind,
+    params.sourceRowId,
+    params.skuCatalogId,
+    params.stepType,
+    params.stepId,
+    params.passed,
+    params.verifiedBy,
+    params.notes?.trim() || null,
+    params.valueNum ?? null,
+    params.valueText?.trim() || null,
+    params.failedModeId ?? null,
+  ];
+  if (orgId) values.push(orgId);
+  const sql = `INSERT INTO tech_verifications
        (source_kind, source_row_id, sku_catalog_id, step_type, step_id,
-        passed, verified_by, notes, value_num, value_text, failed_mode_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        passed, verified_by, notes, value_num, value_text, failed_mode_id${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11${orgId ? ', $12' : ''})
      ON CONFLICT (source_kind, source_row_id, step_type, step_id) DO UPDATE
        SET passed     = EXCLUDED.passed,
            verified_by = EXCLUDED.verified_by,
@@ -518,21 +647,12 @@ export async function upsertVerification(params: {
            value_num  = EXCLUDED.value_num,
            value_text = EXCLUDED.value_text,
            failed_mode_id = EXCLUDED.failed_mode_id
-     RETURNING *`,
-    [
-      params.sourceKind,
-      params.sourceRowId,
-      params.skuCatalogId,
-      params.stepType,
-      params.stepId,
-      params.passed,
-      params.verifiedBy,
-      params.notes?.trim() || null,
-      params.valueNum ?? null,
-      params.valueText?.trim() || null,
-      params.failedModeId ?? null,
-    ],
-  );
+     RETURNING *`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) =>
+        client.query<TechVerificationRow>(sql, values),
+      )
+    : await pool.query<TechVerificationRow>(sql, values);
   return result.rows[0];
 }
 
@@ -579,12 +699,17 @@ export function deriveStepPassed(
 export async function ensureSkuCatalogEntry(
   sku: string,
   hint?: { zoho_item_id?: string; zoho_purchaseorder_id?: string },
+  orgId?: OrgId,
 ): Promise<SkuCatalogRow | null> {
   const trimmed = (sku || '').trim();
 
+  // orgId (when provided) is threaded into the cache read and the upsert so the
+  // ensured row lands in / is read from the caller's tenant; when omitted both
+  // calls keep their prior behavior.
+
   // 1. Cache
   if (trimmed) {
-    const cached = await getSkuCatalogBySku(trimmed);
+    const cached = await getSkuCatalogBySku(trimmed, orgId);
     if (cached) return cached;
   }
 
@@ -601,7 +726,7 @@ export async function ensureSkuCatalogEntry(
           upc: item.upc ?? null,
           ean: item.ean ?? null,
           isActive: item.status !== 'inactive',
-        });
+        }, orgId);
       }
     }
 
@@ -616,7 +741,7 @@ export async function ensureSkuCatalogEntry(
           upc: match.upc ?? null,
           ean: match.ean ?? null,
           isActive: match.status !== 'inactive',
-        });
+        }, orgId);
       }
     }
   } catch (err) {
@@ -637,15 +762,24 @@ export async function ensureSkuCatalogEntry(
  */
 export async function syncSkuCatalogFromItems(
   rows: Array<{ sku?: string | null; name?: string | null; upc?: string | null; ean?: string | null; image_url?: string | null; status?: string | null }>,
+  orgId?: OrgId,
 ): Promise<void> {
   const valid = rows.filter((r) => r.sku && r.sku.trim());
   if (valid.length === 0) return;
 
+  // sku_catalog is tenant-owned. When orgId is provided we append an
+  // organization_id column to every VALUES tuple (stamp on insert) and run via
+  // withTenantTransaction (GUC set); the column list and per-row placeholder
+  // width grow by one. When omitted the statement is byte-identical to before.
+  // 6 base columns; +1 (organization_id) when orgId is provided.
+  const cols = orgId ? 7 : 6;
   const values: string[] = [];
   const params: unknown[] = [];
   let idx = 1;
   for (const row of valid) {
-    values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}, $${idx + 5})`);
+    const ph = [`$${idx}`, `$${idx + 1}`, `$${idx + 2}`, `$${idx + 3}`, `$${idx + 4}`, `$${idx + 5}`];
+    if (orgId) ph.push(`$${idx + 6}`);
+    values.push(`(${ph.join(', ')})`);
     params.push(
       row.sku!.trim(),
       (row.name || 'Unknown Product').trim(),
@@ -654,11 +788,11 @@ export async function syncSkuCatalogFromItems(
       row.image_url?.trim() || null,
       row.status === 'active',
     );
-    idx += 6;
+    if (orgId) params.push(orgId);
+    idx += cols;
   }
 
-  await pool.query(
-    `INSERT INTO sku_catalog (sku, product_title, upc, ean, image_url, is_active)
+  const sql = `INSERT INTO sku_catalog (sku, product_title, upc, ean, image_url, is_active${orgId ? ', organization_id' : ''})
      VALUES ${values.join(', ')}
      ON CONFLICT (sku) DO UPDATE SET
        product_title = COALESCE(NULLIF(sku_catalog.product_title, 'Unknown Product'), EXCLUDED.product_title),
@@ -666,9 +800,12 @@ export async function syncSkuCatalogFromItems(
        ean = COALESCE(EXCLUDED.ean, sku_catalog.ean),
        image_url = COALESCE(EXCLUDED.image_url, sku_catalog.image_url),
        is_active = EXCLUDED.is_active,
-       updated_at = NOW()`,
-    params,
-  );
+       updated_at = NOW()`;
+  if (orgId) {
+    await withTenantTransaction(orgId, (client) => client.query(sql, params));
+  } else {
+    await pool.query(sql, params);
+  }
 }
 
 // ─── Unpaired Ecwid Products ────────────────────────────────────────────────
@@ -686,12 +823,13 @@ export async function getUnpairedEcwidProducts(params: {
   q?: string;
   limit?: number;
   offset?: number;
-}): Promise<{ items: UnpairedEcwidProduct[]; total: number }> {
+}, orgId: OrgId): Promise<{ items: UnpairedEcwidProduct[]; total: number }> {
   const search = (params.q || '').trim();
   const limit = Math.min(params.limit || 100, 500);
   const offset = params.offset || 0;
 
-  const result = await pool.query(
+  const result = await tenantQuery<UnpairedEcwidProduct>(
+    orgId,
     `SELECT
        sp.id,
        sp.platform_sku,
@@ -701,24 +839,28 @@ export async function getUnpairedEcwidProducts(params: {
        COUNT(DISTINCT o.id)::int AS order_count
      FROM sku_platform_ids sp
      LEFT JOIN orders o ON o.sku = sp.platform_sku AND o.sku IS NOT NULL
+       AND o.organization_id = sp.organization_id
      WHERE sp.platform = 'ecwid'
        AND sp.sku_catalog_id IS NULL
        AND sp.is_active = true
+       AND sp.organization_id = $4
        AND ($1 = '' OR sp.display_name ILIKE '%' || $1 || '%' OR sp.platform_sku ILIKE '%' || $1 || '%')
      GROUP BY sp.id
      ORDER BY order_count DESC, sp.display_name
      LIMIT $2 OFFSET $3`,
-    [search, limit, offset],
+    [search, limit, offset, orgId],
   );
 
-  const countResult = await pool.query(
+  const countResult = await tenantQuery<{ total: number }>(
+    orgId,
     `SELECT COUNT(*)::int AS total
      FROM sku_platform_ids sp
      WHERE sp.platform = 'ecwid'
        AND sp.sku_catalog_id IS NULL
        AND sp.is_active = true
+       AND sp.organization_id = $2
        AND ($1 = '' OR sp.display_name ILIKE '%' || $1 || '%' OR sp.platform_sku ILIKE '%' || $1 || '%')`,
-    [search],
+    [search, orgId],
   );
 
   return {
@@ -734,14 +876,16 @@ export async function getUnpairedEcwidProducts(params: {
 export async function pairEcwidToZoho(
   ecwidPlatformRowId: number,
   skuCatalogId: number,
+  orgId: OrgId,
 ): Promise<{ paired: boolean; imageBackfilled: boolean }> {
   // Set the sku_catalog_id on the Ecwid platform entry
-  const updateResult = await pool.query(
+  const updateResult = await tenantQuery<{ image_url: string | null }>(
+    orgId,
     `UPDATE sku_platform_ids
      SET sku_catalog_id = $1
-     WHERE id = $2 AND platform = 'ecwid'
+     WHERE id = $2 AND platform = 'ecwid' AND organization_id = $3
      RETURNING image_url`,
-    [skuCatalogId, ecwidPlatformRowId],
+    [skuCatalogId, ecwidPlatformRowId, orgId],
   );
 
   if (!updateResult.rows[0]) return { paired: false, imageBackfilled: false };
@@ -750,11 +894,12 @@ export async function pairEcwidToZoho(
   const ecwidImageUrl = updateResult.rows[0].image_url;
   let imageBackfilled = false;
   if (ecwidImageUrl) {
-    const imgResult = await pool.query(
+    const imgResult = await tenantQuery(
+      orgId,
       `UPDATE sku_catalog
        SET image_url = $1, updated_at = NOW()
-       WHERE id = $2 AND image_url IS NULL`,
-      [ecwidImageUrl, skuCatalogId],
+       WHERE id = $2 AND image_url IS NULL AND organization_id = $3`,
+      [ecwidImageUrl, skuCatalogId, orgId],
     );
     imageBackfilled = (imgResult.rowCount || 0) > 0;
   }
@@ -790,7 +935,7 @@ export async function getSkuCatalogList(params: {
   sort?: string;
   dir?: string;
   ecwidOnly?: boolean;
-}): Promise<{ items: SkuCatalogListRow[]; total: number }> {
+}, orgId?: OrgId): Promise<{ items: SkuCatalogListRow[]; total: number }> {
   const search = (params.q || '').trim();
   const limit = Math.min(params.limit || 100, 500);
   const offset = params.offset || 0;
@@ -815,8 +960,9 @@ export async function getSkuCatalogList(params: {
       break;
   }
 
-  const result = await pool.query(
-    `SELECT
+  // $4 is reserved for orgId (when provided) across both the list and count
+  // queries; when omitted, the SQL and params match the prior behavior exactly.
+  const listSql = `SELECT
        sc.id, sc.sku, sc.product_title, sc.category, sc.image_url, sc.is_active,
        sc.lifecycle_status, sc.reorder_threshold, sc.last_known_cost_cents,
        COUNT(DISTINCT sp.id)::int AS platform_count,
@@ -851,23 +997,24 @@ export async function getSkuCatalogList(params: {
        WHERE e.sku_catalog_id = sc.id AND e.platform = 'ecwid' AND e.is_active = true AND e.display_name IS NOT NULL
        LIMIT 1
      ) ecwid ON TRUE
-     WHERE sc.is_active = true
+     WHERE sc.is_active = true${orgId ? ' AND sc.organization_id = $4' : ''}
        AND ($1 = '' OR sc.sku ILIKE '%' || $1 || '%' OR sc.product_title ILIKE '%' || $1 || '%' OR sc.category ILIKE '%' || $1 || '%')
        ${params.ecwidOnly ? `AND EXISTS (SELECT 1 FROM sku_platform_ids e WHERE e.sku_catalog_id = sc.id AND e.platform = 'ecwid' AND e.is_active = true AND e.display_name IS NOT NULL)` : ''}
      GROUP BY sc.id, oc.order_count, ls.last_shipped, ecwid.display_name, ecwid.image_url, ecwid.platform_sku
      ORDER BY ${orderBy}
-     LIMIT $2 OFFSET $3`,
-    [search, limit, offset],
-  );
+     LIMIT $2 OFFSET $3`;
+  const result = orgId
+    ? await tenantQuery<SkuCatalogListRow & { last_shipped: string | null }>(orgId, listSql, [search, limit, offset, orgId])
+    : await pool.query<SkuCatalogListRow & { last_shipped: string | null }>(listSql, [search, limit, offset]);
 
-  const countResult = await pool.query(
-    `SELECT COUNT(*)::int AS total
+  const countSql = `SELECT COUNT(*)::int AS total
      FROM sku_catalog sc
-     WHERE sc.is_active = true
+     WHERE sc.is_active = true${orgId ? ' AND sc.organization_id = $2' : ''}
        AND ($1 = '' OR sc.sku ILIKE '%' || $1 || '%' OR sc.product_title ILIKE '%' || $1 || '%' OR sc.category ILIKE '%' || $1 || '%')
-       ${params.ecwidOnly ? `AND EXISTS (SELECT 1 FROM sku_platform_ids e WHERE e.sku_catalog_id = sc.id AND e.platform = 'ecwid' AND e.is_active = true AND e.display_name IS NOT NULL)` : ''}`,
-    [search],
-  );
+       ${params.ecwidOnly ? `AND EXISTS (SELECT 1 FROM sku_platform_ids e WHERE e.sku_catalog_id = sc.id AND e.platform = 'ecwid' AND e.is_active = true AND e.display_name IS NOT NULL)` : ''}`;
+  const countResult = orgId
+    ? await tenantQuery<{ total: number }>(orgId, countSql, [search, orgId])
+    : await pool.query<{ total: number }>(countSql, [search]);
 
   return {
     items: result.rows,
@@ -896,15 +1043,19 @@ export interface SkuCatalogDetailResult {
   qcChecks: QcCheckTemplateRow[];
 }
 
-export async function getSkuCatalogDetail(id: number): Promise<SkuCatalogDetailResult | null> {
-  const catalog = await getSkuCatalogById(id);
+export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<SkuCatalogDetailResult | null> {
+  const catalog = await getSkuCatalogById(id, orgId);
   if (!catalog) return null;
 
+  // Only sku_platform_ids gets an org filter here — product_manuals and
+  // qc_check_templates are out of this migration's scope (qc/manual helpers
+  // left unchanged), and the catalog row is already org-verified above. When
+  // orgId is omitted, behavior is identical to before.
+  const platformSql = `SELECT * FROM sku_platform_ids WHERE sku_catalog_id = $1 AND is_active = true${orgId ? ' AND organization_id = $2' : ''} ORDER BY platform, created_at`;
   const [platformResult, manualResult, qcResult] = await Promise.all([
-    pool.query(
-      `SELECT * FROM sku_platform_ids WHERE sku_catalog_id = $1 AND is_active = true ORDER BY platform, created_at`,
-      [id],
-    ),
+    orgId
+      ? tenantQuery<SkuPlatformIdRow>(orgId, platformSql, [id, orgId])
+      : pool.query<SkuPlatformIdRow>(platformSql, [id]),
     pool.query(
       `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, type, is_active, updated_at
        FROM product_manuals WHERE sku_catalog_id = $1 AND is_active = true ORDER BY updated_at DESC`,
@@ -931,28 +1082,36 @@ export async function createManualForCatalog(params: {
   googleFileId: string;
   displayName?: string | null;
   type?: string | null;
-}): Promise<any> {
-  const catalog = await getSkuCatalogById(params.skuCatalogId);
+}, orgId?: OrgId): Promise<any> {
+  // product_manuals has NO organization_id column (child-scoped to sku_catalog).
+  // When orgId is provided we (1) verify ownership of the parent catalog row
+  // (getSkuCatalogById scopes by org → throws "not found" for a foreign id,
+  // the 404 path) and (2) GUC-wrap the child INSERT via withTenantTransaction so
+  // any RLS policy bound to the parent's org sees the GUC. When omitted, behavior
+  // is byte-identical to before.
+  const catalog = await getSkuCatalogById(params.skuCatalogId, orgId);
   if (!catalog) throw new Error('SKU catalog entry not found');
 
-  const result = await pool.query(
-    `INSERT INTO product_manuals (sku_catalog_id, sku, google_file_id, display_name, type, is_active)
+  const sql = `INSERT INTO product_manuals (sku_catalog_id, sku, google_file_id, display_name, type, is_active)
      VALUES ($1, $2, $3, $4, $5, true)
-     RETURNING *`,
-    [
-      params.skuCatalogId,
-      catalog.sku,
-      params.googleFileId.trim(),
-      params.displayName?.trim() || null,
-      params.type?.trim() || null,
-    ],
-  );
+     RETURNING *`;
+  const values = [
+    params.skuCatalogId,
+    catalog.sku,
+    params.googleFileId.trim(),
+    params.displayName?.trim() || null,
+    params.type?.trim() || null,
+  ];
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query(sql, values))
+    : await pool.query(sql, values);
   return result.rows[0];
 }
 
 export async function updateManual(
   id: number,
   updates: { displayName?: string | null; type?: string | null; googleFileId?: string | null },
+  orgId?: OrgId,
 ): Promise<any> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -973,20 +1132,35 @@ export async function updateManual(
 
   if (sets.length === 0) return null;
   sets.push(`updated_at = NOW()`);
+  const idPlaceholder = idx++;
   values.push(id);
 
-  const result = await pool.query(
-    `UPDATE product_manuals SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values,
-  );
+  // product_manuals has NO organization_id column — scope via its org-bearing
+  // parent (sku_catalog). When orgId is provided we add an EXISTS guard on the
+  // parent catalog row's organization_id (a foreign-org row updates 0 rows → the
+  // 404 path) and GUC-wrap the write. When omitted, behavior is byte-identical.
+  let where = `id = $${idPlaceholder}`;
+  if (orgId) {
+    where += ` AND EXISTS (SELECT 1 FROM sku_catalog sc WHERE sc.id = product_manuals.sku_catalog_id AND sc.organization_id = $${idx++})`;
+    values.push(orgId);
+  }
+
+  const sql = `UPDATE product_manuals SET ${sets.join(', ')} WHERE ${where} RETURNING *`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query(sql, values))
+    : await pool.query(sql, values);
   return result.rows[0] ?? null;
 }
 
-export async function deleteManual(id: number): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE product_manuals SET is_active = false, updated_at = NOW() WHERE id = $1`,
-    [id],
-  );
+export async function deleteManual(id: number, orgId?: OrgId): Promise<boolean> {
+  // product_manuals has NO organization_id column — scope via parent sku_catalog
+  // (org-bearing) when orgId is provided; GUC-wrap the write. When omitted,
+  // behavior is byte-identical to before.
+  const sql = `UPDATE product_manuals SET is_active = false, updated_at = NOW()
+     WHERE id = $1${orgId ? ' AND EXISTS (SELECT 1 FROM sku_catalog sc WHERE sc.id = product_manuals.sku_catalog_id AND sc.organization_id = $2)' : ''}`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query(sql, [id, orgId]))
+    : await pool.query(sql, [id]);
   return (result.rowCount || 0) > 0;
 }
 
@@ -1007,40 +1181,51 @@ export async function createQcCheck(params: {
   stepType?: string;
   sortOrder?: number;
   status?: string;
-} & QcCheckValueConfig): Promise<QcCheckTemplateRow> {
+} & QcCheckValueConfig, orgId?: OrgId): Promise<QcCheckTemplateRow> {
   const status = params.status === 'draft' ? 'draft' : 'published';
   const valueEnumJson =
     params.valueEnum != null ? JSON.stringify(params.valueEnum) : null;
-  const result = await pool.query(
-    `INSERT INTO qc_check_templates
+
+  // qc_check_templates and sku_catalog are both tenant-owned. When orgId is
+  // provided we stamp organization_id ($12) on the template INSERT, scope the
+  // catalog-reactivation UPDATE to the org, and run both inside one
+  // withTenantTransaction (GUC set). When omitted, behavior is byte-identical.
+  const insertValues: unknown[] = [
+    params.skuCatalogId,
+    params.stepLabel.trim(),
+    params.stepType?.trim() || 'PASS_FAIL',
+    params.sortOrder ?? 0,
+    status,
+    params.valueKind ?? null,
+    params.valueUnit?.trim() || null,
+    valueEnumJson,
+    params.passMin ?? null,
+    params.passMax ?? null,
+    params.failureModeId ?? null,
+  ];
+  if (orgId) insertValues.push(orgId);
+  const insertSql = `INSERT INTO qc_check_templates
        (sku_catalog_id, step_label, step_type, sort_order, status,
-        value_kind, value_unit, value_enum, pass_min, pass_max, failure_mode_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
-     RETURNING *`,
-    [
-      params.skuCatalogId,
-      params.stepLabel.trim(),
-      params.stepType?.trim() || 'PASS_FAIL',
-      params.sortOrder ?? 0,
-      status,
-      params.valueKind ?? null,
-      params.valueUnit?.trim() || null,
-      valueEnumJson,
-      params.passMin ?? null,
-      params.passMax ?? null,
-      params.failureModeId ?? null,
-    ],
-  );
+        value_kind, value_unit, value_enum, pass_min, pass_max, failure_mode_id${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11${orgId ? ', $12' : ''})
+     RETURNING *`;
 
   // Attaching a checklist makes the SKU relevant again — reactivate it so it
   // surfaces in the QC view (and the rest of the catalog) even if it had been
   // retired. Guarded so we only write when the flag is actually flipping.
-  await pool.query(
-    `UPDATE sku_catalog SET is_active = true, updated_at = NOW()
-     WHERE id = $1 AND is_active = false`,
-    [params.skuCatalogId],
-  );
+  const reactivateSql = `UPDATE sku_catalog SET is_active = true, updated_at = NOW()
+     WHERE id = $1 AND is_active = false${orgId ? ' AND organization_id = $2' : ''}`;
 
+  if (orgId) {
+    return await withTenantTransaction(orgId, async (client) => {
+      const result = await client.query<QcCheckTemplateRow>(insertSql, insertValues);
+      await client.query(reactivateSql, [params.skuCatalogId, orgId]);
+      return result.rows[0];
+    });
+  }
+
+  const result = await pool.query<QcCheckTemplateRow>(insertSql, insertValues);
+  await pool.query(reactivateSql, [params.skuCatalogId]);
   return result.rows[0];
 }
 
@@ -1052,6 +1237,7 @@ export async function updateQcCheck(
     sortOrder?: number;
     status?: string;
   } & QcCheckValueConfig,
+  orgId?: OrgId,
 ): Promise<QcCheckTemplateRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -1100,20 +1286,33 @@ export async function updateQcCheck(
   }
 
   if (sets.length === 0) return null;
+  const idPlaceholder = idx++;
   values.push(id);
 
-  const result = await pool.query(
-    `UPDATE qc_check_templates SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values,
-  );
+  // qc_check_templates is tenant-owned. When orgId is provided we add an explicit
+  // organization_id predicate (foreign-org id updates 0 rows → the 404 path) and
+  // run via withTenantTransaction. When omitted, behavior is byte-identical.
+  let where = `id = $${idPlaceholder}`;
+  if (orgId) {
+    where += ` AND organization_id = $${idx++}`;
+    values.push(orgId);
+  }
+
+  const sql = `UPDATE qc_check_templates SET ${sets.join(', ')} WHERE ${where} RETURNING *`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query<QcCheckTemplateRow>(sql, values))
+    : await pool.query<QcCheckTemplateRow>(sql, values);
   return result.rows[0] ?? null;
 }
 
-export async function deleteQcCheck(id: number): Promise<boolean> {
-  const result = await pool.query(
-    `DELETE FROM qc_check_templates WHERE id = $1`,
-    [id],
-  );
+export async function deleteQcCheck(id: number, orgId?: OrgId): Promise<boolean> {
+  // qc_check_templates is tenant-owned. When orgId is provided we add an explicit
+  // organization_id predicate and run via withTenantTransaction; when omitted,
+  // behavior is byte-identical to before.
+  const sql = `DELETE FROM qc_check_templates WHERE id = $1${orgId ? ' AND organization_id = $2' : ''}`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query(sql, [id, orgId]))
+    : await pool.query(sql, [id]);
   return (result.rowCount || 0) > 0;
 }
 
@@ -1122,6 +1321,7 @@ export async function deleteQcCheck(id: number): Promise<boolean> {
 export async function updateSkuPlatformId(
   id: number,
   updates: { platform?: string; platformSku?: string | null; platformItemId?: string | null; accountName?: string | null },
+  orgId?: OrgId,
 ): Promise<SkuPlatformIdRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -1145,19 +1345,25 @@ export async function updateSkuPlatformId(
   }
 
   if (sets.length === 0) return null;
+  const idPlaceholder = idx++;
   values.push(id);
+  let where = `id = $${idPlaceholder}`;
+  if (orgId) {
+    where += ` AND organization_id = $${idx++}`;
+    values.push(orgId);
+  }
 
-  const result = await pool.query(
-    `UPDATE sku_platform_ids SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values,
-  );
+  const sql = `UPDATE sku_platform_ids SET ${sets.join(', ')} WHERE ${where} RETURNING *`;
+  const result = orgId
+    ? await tenantQuery<SkuPlatformIdRow>(orgId, sql, values)
+    : await pool.query<SkuPlatformIdRow>(sql, values);
   return result.rows[0] ?? null;
 }
 
-export async function deleteSkuPlatformId(id: number): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE sku_platform_ids SET is_active = false WHERE id = $1`,
-    [id],
-  );
+export async function deleteSkuPlatformId(id: number, orgId?: OrgId): Promise<boolean> {
+  const sql = `UPDATE sku_platform_ids SET is_active = false WHERE id = $1${orgId ? ' AND organization_id = $2' : ''}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [id, orgId])
+    : await pool.query(sql, [id]);
   return (result.rowCount || 0) > 0;
 }

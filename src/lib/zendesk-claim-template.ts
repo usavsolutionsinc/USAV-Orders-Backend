@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import { conditionLabel } from '@/components/receiving/zoho-po-types';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type ClaimType =
   | 'damage'
@@ -42,11 +44,33 @@ export interface ClaimTemplateResult {
 
 export async function buildReceivingClaimTemplate(
   input: ClaimTemplateInput,
+  orgId?: OrgId,
 ): Promise<ClaimTemplateResult> {
   const { receivingId, lineId, claimType, severity, reason, poReceivingLink } = input;
 
-  const recvResult = await pool.query(
-    `SELECT r.id,
+  // When orgId is present, scope the read to the tenant: filter the
+  // org-bearing `receiving` row and align the org-bearing `receiving_lines`
+  // join on organization_id. `shipping_tracking_numbers` has no
+  // organization_id column (NEEDS-COL) — it stays scoped via the integer
+  // surrogate-PK join `s.id = r.shipment_id` off the tenant-filtered carton.
+  // When omitted, behavior is byte-identical to the original raw-pool path.
+  const recvSql = orgId
+    ? `SELECT r.id,
+            r.source_platform,
+            s.tracking_number_raw AS tracking_number,
+            COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
+            COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id
+     FROM receiving r
+     LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
+     LEFT JOIN receiving_lines rl
+            ON rl.receiving_id = r.id
+           AND rl.organization_id = r.organization_id
+           AND ($2::int IS NULL OR rl.id = $2)
+     WHERE r.id = $1
+       AND r.organization_id = $3
+     ORDER BY rl.id NULLS LAST
+     LIMIT 1`
+    : `SELECT r.id,
             r.source_platform,
             s.tracking_number_raw AS tracking_number,
             COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
@@ -58,9 +82,10 @@ export async function buildReceivingClaimTemplate(
            AND ($2::int IS NULL OR rl.id = $2)
      WHERE r.id = $1
      ORDER BY rl.id NULLS LAST
-     LIMIT 1`,
-    [receivingId, lineId ?? null],
-  );
+     LIMIT 1`;
+  const recvResult = orgId
+    ? await tenantQuery(orgId, recvSql, [receivingId, lineId ?? null, orgId])
+    : await pool.query(recvSql, [receivingId, lineId ?? null]);
   const carton = recvResult.rows[0] as
     | {
         id: number;
@@ -74,11 +99,14 @@ export async function buildReceivingClaimTemplate(
 
   let lineSummary = '';
   if (lineId) {
-    const lineResult = await pool.query(
-      `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-       FROM receiving_lines WHERE id = $1 LIMIT 1`,
-      [lineId],
-    );
+    const lineSql = orgId
+      ? `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
+       FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`
+      : `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
+       FROM receiving_lines WHERE id = $1 LIMIT 1`;
+    const lineResult = orgId
+      ? await tenantQuery(orgId, lineSql, [lineId, orgId])
+      : await pool.query(lineSql, [lineId]);
     const line = lineResult.rows[0] as
       | {
           item_name: string | null;

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = (searchParams.get('q') || '').trim();
@@ -21,12 +23,12 @@ export const GET = withAuth(async (req: NextRequest) => {
     // (qc_check_templates.sku_catalog_id). Searches sku + title regardless of
     // searchField so the QC picker only ever shows products with a checklist.
     if (hasQc) {
-      return NextResponse.json(await searchSkusWithQcChecks(q, limit));
+      return NextResponse.json(await searchSkusWithQcChecks(q, limit, ctx.organizationId));
     }
 
     if (searchField === 'ecwid_sku' || searchField === 'title') {
       return NextResponse.json(
-        await searchFromPlatform(q, searchField, excludeSkuSuffix, limit),
+        await searchFromPlatform(q, searchField, excludeSkuSuffix, limit, ctx.organizationId),
       );
     }
 
@@ -36,12 +38,12 @@ export const GET = withAuth(async (req: NextRequest) => {
     // reference real Zoho items when creating a Zoho PO).
     if (searchField === 'zoho_catalog') {
       return NextResponse.json(
-        await searchFromZohoCatalog(q, excludeSkuSuffix, limit),
+        await searchFromZohoCatalog(q, excludeSkuSuffix, limit, ctx.organizationId),
       );
     }
 
     return NextResponse.json(
-      await searchFromCatalog(q, category, ecwidOnly, excludeSkuSuffix, limit),
+      await searchFromCatalog(q, category, ecwidOnly, excludeSkuSuffix, limit, ctx.organizationId),
     );
   } catch (error: any) {
     console.error('[sku-catalog/search] Error:', error);
@@ -57,12 +59,18 @@ async function searchFromPlatform(
   searchField: 'ecwid_sku' | 'title',
   excludeSkuSuffix: string,
   limit: number,
+  orgId?: OrgId,
 ) {
   const filterClauses: string[] = [
     "sp.platform = 'ecwid'",
     'sp.is_active = true',
   ];
   const params: unknown[] = [];
+
+  if (orgId) {
+    params.push(orgId);
+    filterClauses.push(`sp.organization_id = $${params.length}`);
+  }
 
   if (excludeSkuSuffix) {
     params.push(`%${excludeSkuSuffix}`);
@@ -95,8 +103,7 @@ async function searchFromPlatform(
     params.push(q);
   }
 
-  const result = await pool.query(
-    `SELECT
+  const sql = `SELECT
        sp.id,
        sp.platform_sku AS sku,
        sc.sku AS zoho_sku,
@@ -115,12 +122,13 @@ async function searchFromPlatform(
        ) AS platform_ids
      FROM sku_platform_ids sp
      LEFT JOIN sku_catalog sc
-       ON sc.id = sp.sku_catalog_id OR sc.sku = sp.platform_sku
+       ON (sc.id = sp.sku_catalog_id OR sc.sku = sp.platform_sku)${orgId ? ' AND sc.organization_id = sp.organization_id' : ''}
      WHERE ${filterClauses.join(' AND ')}
      ORDER BY ${orderBy}
-     LIMIT $${limitIdx}`,
-    params,
-  );
+     LIMIT $${limitIdx}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return {
     success: true,
@@ -146,6 +154,7 @@ async function searchFromZohoCatalog(
   q: string,
   excludeSkuSuffix: string,
   limit: number,
+  orgId?: OrgId,
 ) {
   // INNER JOIN sku_catalog only to borrow its numeric id (the popover keys on a
   // numeric id); titles/SKUs/item_id come from `items` (Zoho source of truth).
@@ -155,6 +164,11 @@ async function searchFromZohoCatalog(
     "BTRIM(i.sku) <> ''",
   ];
   const params: unknown[] = [];
+
+  if (orgId) {
+    params.push(orgId);
+    filterClauses.push(`sc.organization_id = $${params.length}`);
+  }
 
   if (excludeSkuSuffix) {
     params.push(`%${excludeSkuSuffix}`);
@@ -177,8 +191,7 @@ async function searchFromZohoCatalog(
     ? `CASE WHEN UPPER(MAX(BTRIM(i.sku))) = UPPER($${exactIdx}) THEN 0 ELSE 1 END, MAX(i.name) ASC`
     : 'MAX(i.name) ASC';
 
-  const result = await pool.query(
-    `SELECT
+  const sql = `SELECT
        sc.id,
        MAX(BTRIM(i.sku))      AS sku,
        MAX(BTRIM(i.sku))      AS zoho_sku,
@@ -198,13 +211,14 @@ async function searchFromZohoCatalog(
        END AS image_url,
        bool_or(sc.is_active)  AS is_active
      FROM items i
-     JOIN sku_catalog sc ON sc.sku = BTRIM(i.sku)
+     JOIN sku_catalog sc ON sc.sku = BTRIM(i.sku)${orgId ? ' AND sc.organization_id = i.organization_id' : ''}
      WHERE ${filterClauses.join(' AND ')}
      GROUP BY sc.id
      ORDER BY ${orderBy}
-     LIMIT $${limitIdx}`,
-    params,
-  );
+     LIMIT $${limitIdx}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return {
     success: true,
@@ -238,7 +252,7 @@ async function searchFromZohoCatalog(
  * means a direct link. Image/title prefer the ECWID platform row, matching
  * the rest of the catalog search.
  */
-async function searchSkusWithQcChecks(q: string, limit: number) {
+async function searchSkusWithQcChecks(q: string, limit: number, orgId?: OrgId) {
   const params: unknown[] = [];
   // No is_active filter here: a SKU that has a checklist should always be
   // manageable from the QC view, even if it's been retired from sale. The
@@ -252,6 +266,11 @@ async function searchSkusWithQcChecks(q: string, limit: number) {
   const filterClauses: string[] = [
     'EXISTS (SELECT 1 FROM qc_check_templates qc WHERE qc.sku_catalog_id = sc.id)',
   ];
+
+  if (orgId) {
+    params.push(orgId);
+    filterClauses.push(`sc.organization_id = $${params.length}`);
+  }
 
   let exactIdx: number | null = null;
   if (q) {
@@ -269,8 +288,7 @@ async function searchSkusWithQcChecks(q: string, limit: number) {
     ? `CASE WHEN UPPER(sc.sku) = UPPER($${exactIdx}) THEN 0 ELSE 1 END, sc.product_title ASC`
     : 'sc.product_title ASC';
 
-  const result = await pool.query(
-    `SELECT
+  const sql = `SELECT
        sc.id,
        sc.sku,
        sc.sku AS zoho_sku,
@@ -285,15 +303,16 @@ async function searchSkusWithQcChecks(q: string, limit: number) {
        FROM sku_platform_ids
        WHERE (sku_catalog_id = sc.id OR platform_sku = sc.sku)
          AND platform = 'ecwid'
-         AND is_active = true
+         AND is_active = true${orgId ? '\n         AND organization_id = sc.organization_id' : ''}
        ORDER BY created_at DESC NULLS LAST
        LIMIT 1
      ) sp_ecwid ON TRUE
      WHERE ${filterClauses.join(' AND ')}
      ORDER BY ${orderBy}
-     LIMIT $${limitIdx}`,
-    params,
-  );
+     LIMIT $${limitIdx}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return { success: true, items: result.rows };
 }
@@ -304,9 +323,15 @@ async function searchFromCatalog(
   ecwidOnly: boolean,
   excludeSkuSuffix: string,
   limit: number,
+  orgId?: OrgId,
 ) {
   const filterClauses: string[] = ['sc.is_active = true'];
   const params: unknown[] = [];
+
+  if (orgId) {
+    params.push(orgId);
+    filterClauses.push(`sc.organization_id = $${params.length}`);
+  }
 
   if (ecwidOnly) {
     filterClauses.push(
@@ -345,8 +370,7 @@ async function searchFromCatalog(
     ? `CASE WHEN UPPER(sc.sku) = UPPER($${exactIdx}) THEN 0 ELSE 1 END, sc.product_title ASC`
     : 'sc.product_title ASC';
 
-  const result = await pool.query(
-    `SELECT
+  const sql = `SELECT
        sc.id,
        sc.sku,
        sc.sku AS zoho_sku,
@@ -368,22 +392,23 @@ async function searchFromCatalog(
        ) AS platform_ids
      FROM sku_catalog sc
      LEFT JOIN sku_platform_ids sp
-       ON (sp.sku_catalog_id = sc.id OR sp.platform_sku = sc.sku) AND sp.is_active = true
+       ON (sp.sku_catalog_id = sc.id OR sp.platform_sku = sc.sku) AND sp.is_active = true${orgId ? '\n         AND sp.organization_id = sc.organization_id' : ''}
      LEFT JOIN LATERAL (
        SELECT image_url, display_name
        FROM sku_platform_ids
        WHERE (sku_catalog_id = sc.id OR platform_sku = sc.sku)
          AND platform = 'ecwid'
-         AND is_active = true
+         AND is_active = true${orgId ? '\n         AND organization_id = sc.organization_id' : ''}
        ORDER BY created_at DESC NULLS LAST
        LIMIT 1
      ) sp_ecwid ON TRUE
      WHERE ${filterClauses.join(' AND ')}
      GROUP BY sc.id, sp_ecwid.image_url, sp_ecwid.display_name
      ORDER BY ${orderBy}
-     LIMIT $${limitIdx}`,
-    params,
-  );
+     LIMIT $${limitIdx}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return {
     success: true,

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Allocation } from '@/lib/feature-flags';
 import { allocateOrder, isValidConditionGrade } from '@/lib/inventory/allocate';
 
 /**
@@ -20,17 +19,9 @@ import { allocateOrder, isValidConditionGrade } from '@/lib/inventory/allocate';
  * The allocation transaction itself lives in src/lib/inventory/allocate.ts
  * so the bulk-allocate admin page can call the same code path.
  *
- * Gated by INVENTORY_V2_ALLOCATION; off-flag returns 503.
  * Permission: orders.view.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Allocation()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_ALLOCATION flag is OFF', flag: 'INVENTORY_V2_ALLOCATION' },
-      { status: 503 },
-    );
-  }
-
   // Parse the [id] segment from the URL — Next 16 route params via the
   // wrapper would require a different overload of withAuth; this is fine.
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
@@ -56,13 +47,18 @@ export const POST = withAuth(async (request, ctx) => {
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
 
   try {
+    // Pass ctx.organizationId so allocateOrder runs inside a tenant-scoped
+    // transaction: the order load is org-gated (cross-tenant id → 404), the
+    // candidate serial_units selection is org-scoped (the su.sku string join
+    // can't reach another tenant's stock), and the order_unit_allocations
+    // INSERT is org-stamped.
     const result = await allocateOrder({
       orderId,
       quantity: Number.isFinite(qtyOverride) && qtyOverride > 0 ? qtyOverride : undefined,
       conditionGrade: conditionGradeInput ? (conditionGradeInput as 'BRAND_NEW') : null,
       clientEventId,
       actorStaffId,
-    });
+    }, ctx.organizationId);
 
     if (!result.ok) {
       return NextResponse.json(result, { status: result.status });

@@ -1,7 +1,97 @@
 {
-  "generatedAt": "2026-06-14T01:44:20.097Z",
+  "generatedAt": "2026-06-15T02:55:55.844Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "8adbdfb9dfb34ddbcbcab179cd14f63294ec449e",
+      "shortSha": "8adbdfb9",
+      "date": "2026-06-14T19:33:25-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs: platform/type catalog status + what's-left handoff",
+      "body": "Self-contained snapshot of the catalog initiative — what's done (commits +\napplied migrations), what's left (by phase), the two uncommitted loose ends,\nkey files, and the recommended next step. Lets a fresh session pick it up with\nzero prior context.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "platform/type catalog status + what's-left handoff"
+    },
+    {
+      "sha": "22546475b087c62b94e7ce2e3ae27ff8033113c5",
+      "shortSha": "22546475",
+      "date": "2026-06-14T16:29:46-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): arm RLS on the platform/type catalog tables",
+      "body": "ENABLE ROW LEVEL SECURITY + canonical org-isolation policy on platforms,\nplatform_accounts, types (organization_id already NOT NULL + FK from 2026-06-13g).\nArmed but NOT forced — inert under the BYPASSRLS app role today; joins the Phase E\nenforcement set later, gated on the catalog CRUD writers being GUC-wrapped.\nMirrors 2026-06-14_org_id_phase_b_domain_children.\n\nApplied to the live DB; all 3 tables RLS=ON/FORCED=no/1 policy; tenancy guard green.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "arm RLS on the platform/type catalog tables"
+    },
+    {
+      "sha": "4cdea7db810e12a7ff6c5ff6df9ce8e4f092b9d9",
+      "shortSha": "4cdea7db",
+      "date": "2026-06-14T15:46:14-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(catalog): catalog-aware receiving-type label on the printed label",
+      "body": "Phase 3 (type side) of the platform/type catalog — symmetric to the platform\nresolver. A renamed or custom receiving type now prints its catalog label on the\nreceiving label face (preview + print) instead of the hardcoded slug map.\n\n- useReceivingTypeLabel(): type code -> org-catalog label (fallback\n  receivingLabelTypeDisplay)\n- ReceivingLabelPayload.receivingTypeLabel; receivingLabelPlatformDisplay prefers\n  it over the built-in map; preview + both printReceivingLabel paths carry it\n- useUnboxLineController resolves + sets it on the built payload\n\nOrder channel display (account_source) intentionally left on constants — that\nfield's ~12-surface hybrid footprint belongs with the Phase 2 type_id migration.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "catalog-aware receiving-type label on the printed label"
+    },
+    {
+      "sha": "69cd413161e925314ba2b8acf2a99883fb8ee1ef",
+      "shortSha": "69cd4131",
+      "date": "2026-06-14T13:05:05-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(tenancy): set organization_id on Phase B child-table inserts",
+      "body": "Migration 2026-06-14_org_id_phase_b_domain_children made organization_id\nNOT NULL with a GUC default on receiving / handling-unit / testing / repair /\nlocal-pickup child tables, so inserts that don't set the app.current_org GUC\nfail. Attribute org explicitly so those writes keep working:\n\n- receiving_scans, receiving_shipments, testing_results, repair_actions,\n  local_pickup_order_items — inherit organization_id from the parent row\n  (multi-tenant correct; no GUC dependency)\n- handling_units — thread ctx.organizationId via CreateHandlingUnitInput\n- local_pickup_orders — ctx.organizationId (route) / USAV for the Zoho\n  background sync (transitional, no request ctx)\n\nunit_repairs + repair_failure_resolutions (repairs-queries.ts) are left out —\nthat file is interleaved with separate in-progress repair work; their identical\norg-inherit fix is staged in the working tree to land with that commit.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "set organization_id on Phase B child-table inserts"
+    },
+    {
+      "sha": "4d7f9ce19f0b8eda366b1ee4ba4e32d142b29ed0",
+      "shortSha": "4d7f9ce1",
+      "date": "2026-06-14T12:38:23-07:00",
+      "author": "DENSENSE8",
+      "subject": "refactor(catalog): extract CatalogManagerList; add settings CatalogSection",
+      "body": "Phase 4 (settings home) groundwork for the platform/type catalog.\n\n- CatalogManagerList: the CRUD list (add/rename/reorder/hide-restore/delete,\n  built-in protection) extracted from CatalogManagerPopover so it can be reused\n  outside the overlay\n- CatalogManagerPopover: now a thin RightPaneOverlay wrapper around the list\n- CatalogSection: a /settings \"Platforms & Types\" section rendering the list for\n  platforms + types\n\nSection registration (SettingsSidebarPanel + settings/page.tsx) is left in the\nworking tree — that panel is interleaved with separate in-progress work.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "refactor",
+      "title": "extract CatalogManagerList; add settings CatalogSection"
+    },
+    {
+      "sha": "8bb53a0d00d9e6c9ad64b7b7a0b171404900e87c",
+      "shortSha": "8bb53a0d",
+      "date": "2026-06-14T12:25:44-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(catalog): catalog-aware platform reads + server cache layer",
+      "body": "Phase 1 cache layer + Phase 3 (platform reads) of the platform/type catalog\n(docs/platform-account-type-catalog-plan.md).\n\n- src/lib/catalog/org-catalog.ts: cached server read layer (getOrgPlatforms/\n  getOrgTypes, 5-min in-process cache, invalidateCatalogCache); invalidated\n  from all 6 catalog CRUD handlers\n- usePlatformMeta(): catalog-aware tone/label resolver (catalog label/tone\n  wins, falls back to sourcePlatformMeta; custom slug -> its label, not \"Unknown\")\n- CartonContextCard: pill options now catalog-driven (rename/hide/reorder/custom\n  propagate; order = catalog sort_order); listing chip uses the resolver\n- /api/receiving/[id] PATCH: source_platform + intake_type validated against\n  the org catalog UNION the hardcoded sets (custom accepted, never narrower)\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "catalog-aware platform reads + server cache layer"
+    },
+    {
+      "sha": "c358b77a2ec500c931a3b129d1680a27c4274790",
+      "shortSha": "c358b77a",
+      "date": "2026-06-14T11:41:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(catalog): per-org editable platform/type catalog",
+      "body": "Promote the hardcoded SOURCE_PLATFORMS / RECEIVING_TYPE_OPTS lists into\norg-scoped, CRUD-able catalog tables (plan step 1, docs/platform-account-\ntype-catalog-plan.md) so each org can add / rename / reorder / hide /\ndelete its own platforms and receiving flow types without a code change.\n\n- migration 2026-06-13g: platforms / platform_accounts / types tables\n  (is_system flag; built-ins seeded per org, hide-only + immutable slug)\n- /api/catalog/{platforms,types} CRUD — withAuth + Zod + audit + idempotency,\n  soft-delete (reads receiving.view, writes admin.manage_features)\n- useCatalog hooks + query factory (built-in fallback until seeded)\n- CatalogManagerPopover: list + add/rename/reorder/hide-restore/delete,\n  opened by a pencil beside the label editor's Platform/Type dropdowns\n- carton-bar pills append custom entries\n- seedOrgCatalog() provisioning hook on org creation\n\nRead-side (catalog-aware resolvers, RLS, type_id FK) is a follow-up.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "per-org editable platform/type catalog"
+    },
+    {
+      "sha": "8af1c3c430acd5f5dde006c12cff63dfe78e393c",
+      "shortSha": "8af1c3c4",
+      "date": "2026-06-13T18:49:17-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: gitignore local scratch script artifacts (studio verify runs + screenshots)",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "gitignore local scratch script artifacts (studio verify runs + screenshots)"
+    },
+    {
+      "sha": "d3bc2d0afa2611a5a967759462d285061a7bde0c",
+      "shortSha": "d3bc2d0a",
+      "date": "2026-06-13T18:45:56-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: gitignore Playwright MCP scratch output (.playwright-mcp/)",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "gitignore Playwright MCP scratch output (.playwright-mcp/)"
+    },
     {
       "sha": "489330f89a6ca65a401ab317aad53774300774be",
       "shortSha": "489330f8",
@@ -1901,96 +1991,6 @@
       "body": "",
       "type": "other",
       "title": "udpated the receiving side bar to be more modern"
-    },
-    {
-      "sha": "b4c236d99cf9daf908cf8671a0dc292315c4d400",
-      "shortSha": "b4c236d9",
-      "date": "2026-05-11T16:07:27-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the print window sizing for the receiving side bar",
-      "body": "",
-      "type": "other",
-      "title": "updated the print window sizing for the receiving side bar"
-    },
-    {
-      "sha": "f87910d902c7ac3a084ea1fff7a3fb0aa2800f50",
-      "shortSha": "f87910d9",
-      "date": "2026-05-11T15:39:35-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the unique key bug in packer table",
-      "body": "",
-      "type": "other",
-      "title": "updated the unique key bug in packer table"
-    },
-    {
-      "sha": "c955543d918895847b32736883661d587d39caae",
-      "shortSha": "c955543d",
-      "date": "2026-05-11T15:30:54-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "udpated the packer flow to included the photos in mobile mode",
-      "body": "",
-      "type": "other",
-      "title": "udpated the packer flow to included the photos in mobile mode"
-    },
-    {
-      "sha": "dc87e8b9148a48aa36cb3c6bde9e244387890e43",
-      "shortSha": "dc87e8b9",
-      "date": "2026-05-11T14:46:56-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more",
-      "body": "",
-      "type": "other",
-      "title": "updates to websocket for packers for photo uploads and tech displaying for time and global short cuts for searching and more"
-    },
-    {
-      "sha": "cdc71016fa809430953ef82e9bab2880999681f8",
-      "shortSha": "cdc71016",
-      "date": "2026-04-15T16:55:14-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "tracking excetpions table and zoho addition",
-      "body": "",
-      "type": "other",
-      "title": "tracking excetpions table and zoho addition"
-    },
-    {
-      "sha": "ec81f15ba54763e98090c51cabc9d28e400dad5c",
-      "shortSha": "ec81f15b",
-      "date": "2026-04-15T13:31:52-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the safari qrcode check and scanning",
-      "body": "",
-      "type": "other",
-      "title": "updated the safari qrcode check and scanning"
-    },
-    {
-      "sha": "c25d2afcc6b50a97455fd5a9fc76187413f809f5",
-      "shortSha": "c25d2afc",
-      "date": "2026-04-15T13:17:13-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the receiving pipeline and the tech pipeline a lot",
-      "body": "",
-      "type": "other",
-      "title": "updated the receiving pipeline and the tech pipeline a lot"
-    },
-    {
-      "sha": "76fff128fc5a3b97ebd15ab7dbf012bd8ff28a4e",
-      "shortSha": "76fff128",
-      "date": "2026-04-14T17:02:08-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the notes display",
-      "body": "",
-      "type": "other",
-      "title": "updated the notes display"
-    },
-    {
-      "sha": "0fc12ce1c3b7ab72125d6857cab506f3124fab6f",
-      "shortSha": "0fc12ce1",
-      "date": "2026-04-14T16:52:44-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the current receiving pipeline",
-      "body": "",
-      "type": "other",
-      "title": "updated the current receiving pipeline"
     }
   ]
 }

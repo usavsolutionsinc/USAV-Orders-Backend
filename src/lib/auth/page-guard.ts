@@ -19,6 +19,7 @@ import { headers } from 'next/headers';
 import { getCurrentUser, type CurrentUser } from './current-user';
 import type { PermissionString } from './permissions';
 import { audit } from './audit';
+import { isTrialBlocked } from '@/lib/billing/trial-gate';
 
 export interface PageGuardOpts {
   /** @deprecated kept for callsite compatibility; enforcement is always on. */
@@ -52,6 +53,14 @@ export async function requirePermission(
       detail: { permission: perm, page: true },
     });
     redirect('/not-authorized');
+  }
+
+  // Trial-expiry gate — OFF by default (TRIAL_ENFORCEMENT). Send an
+  // expired-trial tenant to billing to subscribe; billing/auth paths are
+  // exempt in trial-gate.ts so there's no redirect loop.
+  const trialPath = (await headers()).get('x-pathname') || '/';
+  if (await isTrialBlocked(user.organizationId, trialPath)) {
+    redirect('/settings/billing?status=trial_expired');
   }
 
   return user;

@@ -1,0 +1,58 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- sku_catalog: swap the global UNIQUE(sku) → UNIQUE(organization_id, sku)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FORCE PREREQUISITE (see docs/tier0-resume-handoff.md §5.C / tier0-execution-
+-- checklist.md). Today `sku_catalog.sku` carries a single-column UNIQUE
+-- constraint, so two orgs cannot both hold the same SKU string. Under
+-- FORCE + the app_tenant role that becomes a hard failure: tenant B's INSERT of
+-- a SKU tenant A already owns hits a unique-violation on an RLS-INVISIBLE row
+-- (B can't see A's row, so the upsert can neither see nor conflict-resolve it).
+-- The fix is to make the SKU unique *per org*.
+--
+-- PK is unaffected: every FK references sku_catalog.id (serial), NOT sku — so
+-- dropping the sku-only UNIQUE touches no foreign key.
+--
+-- ⚠️ DO NOT APPLY STANDALONE. This migration MUST land in the same deploy as the
+-- ON CONFLICT code flip, because `ON CONFLICT (sku)` requires a unique constraint
+-- on (sku) alone — once that's gone, those upserts throw
+-- "no unique or exclusion constraint matching the ON CONFLICT specification".
+-- Code sites to flip `ON CONFLICT (sku)` → `ON CONFLICT (organization_id, sku)`
+-- (sku_catalog table only):
+--   - src/lib/neon/sku-catalog-queries.ts:190
+--   - src/lib/neon/sku-catalog-queries.ts:688
+-- (The other ON CONFLICT (sku) sites in the repo target sku_stock / bin_contents
+--  / the `sku` mirror table — different tables, different migrations.)
+--
+-- Status: WRITTEN, UNAPPLIED. Apply via `npm run db:migrate` together with the
+-- code flip, and only after sku_catalog's routes are all GUC-safe (Phase C).
+
+DO $$
+DECLARE
+  c record;
+BEGIN
+  -- Drop any UNIQUE constraint defined on exactly (sku), whatever its name
+  -- (drizzle's default is sku_catalog_sku_key). Introspection keeps this robust
+  -- + idempotent across DBs.
+  FOR c IN
+    SELECT con.conname
+    FROM pg_constraint con
+    WHERE con.conrelid = 'sku_catalog'::regclass
+      AND con.contype = 'u'
+      AND (
+        SELECT array_agg(att.attname ORDER BY att.attnum)
+        FROM unnest(con.conkey) k
+        JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = k
+      ) = ARRAY['sku']
+  LOOP
+    EXECUTE format('ALTER TABLE sku_catalog DROP CONSTRAINT %I', c.conname);
+  END LOOP;
+
+  -- Add the per-org composite UNIQUE (idempotent).
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'sku_catalog'::regclass AND conname = 'sku_catalog_org_sku_key'
+  ) THEN
+    ALTER TABLE sku_catalog
+      ADD CONSTRAINT sku_catalog_org_sku_key UNIQUE (organization_id, sku);
+  END IF;
+END $$;

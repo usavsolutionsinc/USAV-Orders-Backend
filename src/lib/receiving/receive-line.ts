@@ -4,7 +4,7 @@ import {
   upsertSerialUnit,
   type SerialUnitRow,
 } from '@/lib/neon/serial-units-queries';
-import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
+import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import {
   recordInventoryEvent,
   type InventoryEventStation,
@@ -273,7 +273,23 @@ export async function receiveLineUnits(
       priorReceivedForGuard + units > expectedForGuard;
 
     const station: InventoryEventStation = input.station ?? 'RECEIVING';
-    const catalog = line.sku ? await getSkuCatalogBySku(line.sku) : null;
+    // Title-guarded: a receiving line's SKU is a Zoho SKU, which collides with
+    // the marketplace catalog numbering. Pass the clean Zoho item name (items
+    // mirror; canonical SoT) so scanned units never get bound to a
+    // coincidentally-same-numbered marketplace product (e.g. Zoho 00143
+    // Soundbar vs Ecwid 143 UB-20 Wall Mount). Fall back to the line's
+    // listing-style name only when there's no Zoho item to key on.
+    let guardTitle = line.item_name;
+    if (line.zoho_item_id) {
+      const zi = await pool.query<{ name: string | null }>(
+        `SELECT name FROM items WHERE zoho_item_id = $1 AND status = 'active' LIMIT 1`,
+        [line.zoho_item_id],
+      );
+      guardTitle = zi.rows[0]?.name?.trim() || line.item_name;
+    }
+    const catalogId = line.sku
+      ? await resolveSkuCatalogId(line.sku, line.zoho_item_id, guardTitle)
+      : null;
 
   const serialsRecorded: ReceivedSerialResult[] = [];
   const ledgerEventIds: number[] = [];
@@ -292,7 +308,7 @@ export async function receiveLineUnits(
       {
         serial_number: serial,
         sku: line.sku,
-        sku_catalog_id: catalog?.id ?? null,
+        sku_catalog_id: catalogId,
         zoho_item_id: line.zoho_item_id,
         origin_source: 'receiving',
         origin_receiving_line_id: line.id,

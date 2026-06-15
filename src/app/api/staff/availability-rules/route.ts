@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import type { StaffAvailabilityRuleType } from '@/lib/staff-availability-rules';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 const RULE_TYPES: StaffAvailabilityRuleType[] = ['weekday_allowed', 'date_block', 'date_allow'];
 
@@ -45,7 +45,7 @@ function isValidDayOfWeek(dayOfWeek: unknown): dayOfWeek is number {
   return Number.isInteger(dayOfWeek) && Number(dayOfWeek) >= 0 && Number(dayOfWeek) <= 6;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const staffId = Number(searchParams.get('staffId'));
@@ -61,6 +61,11 @@ export const GET = withAuth(async (request: NextRequest) => {
     if (!includeDeleted) {
       where.push('deleted_at IS NULL');
     }
+
+    // staff_availability_rules has no own organization_id — scope via parent
+    // staff. The subquery is org-bound so only this org's rules are returned.
+    params.push(ctx.organizationId);
+    where.push(`staff_id IN (SELECT id FROM staff WHERE organization_id = $${params.length})`);
 
     const sql = `
       SELECT
@@ -83,7 +88,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, params),
+      () => tenantQuery(ctx.organizationId, sql, params),
       { retries: 3, delayMs: 1000 }
     );
 
@@ -122,7 +127,7 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'admin.view' });
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const staffId = Number(body?.staffId);
@@ -163,6 +168,9 @@ export const POST = withAuth(async (request: NextRequest) => {
       return NextResponse.json({ error: 'createdByStaffId must be null or a positive number' }, { status: 400 });
     }
 
+    // staff_availability_rules has no own organization_id — guard the write via
+    // the parent staff row so a rule can only be created for an in-org staff
+    // member. A foreign-org staffId yields zero rows -> treated as not found.
     const sql = `
       INSERT INTO staff_availability_rules (
         staff_id,
@@ -176,7 +184,8 @@ export const POST = withAuth(async (request: NextRequest) => {
         created_by_staff_id,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, now())
+      SELECT $1, $2, $3, $4, $5::date, $6::date, $7, $8, $9, now()
+      WHERE EXISTS (SELECT 1 FROM staff WHERE id = $1 AND organization_id = $10)
       RETURNING
         id,
         staff_id,
@@ -194,7 +203,7 @@ export const POST = withAuth(async (request: NextRequest) => {
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, [
+      () => tenantQuery(ctx.organizationId, sql, [
         staffId,
         ruleType,
         dayOfWeek,
@@ -204,9 +213,17 @@ export const POST = withAuth(async (request: NextRequest) => {
         priority,
         reason,
         createdByStaffId,
+        ctx.organizationId,
       ]),
       { retries: 3, delayMs: 1000 }
     );
+
+    if (!result.rows[0]) {
+      return NextResponse.json({
+        error: 'Invalid staff id reference',
+        details: 'staffId does not exist in this organization',
+      }, { status: 404 });
+    }
 
     await invalidateCacheTags(['staff']);
     return NextResponse.json({ success: true, rule: result.rows[0] }, { status: 201 });
@@ -240,7 +257,7 @@ export const POST = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'admin.manage_staff' });
 
-export const PUT = withAuth(async (request: NextRequest) => {
+export const PUT = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
     const id = Number(body?.id);
@@ -304,12 +321,18 @@ export const PUT = withAuth(async (request: NextRequest) => {
     }
 
     params.push(id);
+    const idIdx = params.length;
+    // staff_availability_rules has no own organization_id — scope the update via
+    // the parent staff row. A foreign-org rule id yields zero rows -> 404.
+    params.push(ctx.organizationId);
+    const orgIdx = params.length;
     const sql = `
       UPDATE staff_availability_rules
       SET
         ${updates.join(', ')},
         updated_at = now()
-      WHERE id = $${params.length}
+      WHERE id = $${idIdx}
+        AND staff_id IN (SELECT id FROM staff WHERE organization_id = $${orgIdx})
       RETURNING
         id,
         staff_id,
@@ -327,7 +350,7 @@ export const PUT = withAuth(async (request: NextRequest) => {
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, params),
+      () => tenantQuery(ctx.organizationId, sql, params),
       { retries: 3, delayMs: 1000 }
     );
     const row = result.rows[0];
@@ -367,7 +390,7 @@ export const PUT = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'admin.manage_staff' });
 
-export const DELETE = withAuth(async (request: NextRequest) => {
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const id = Number(searchParams.get('id'));
@@ -375,15 +398,19 @@ export const DELETE = withAuth(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Valid id is required' }, { status: 400 });
     }
 
+    // staff_availability_rules has no own organization_id — scope the soft
+    // delete via the parent staff row. A foreign-org rule id yields zero rows.
     const result = await queryWithRetry(
-      () => pool.query(
+      () => tenantQuery(
+        ctx.organizationId,
         `
           UPDATE staff_availability_rules
           SET deleted_at = now(), updated_at = now()
           WHERE id = $1
+            AND staff_id IN (SELECT id FROM staff WHERE organization_id = $2)
           RETURNING id
         `,
-        [id]
+        [id, ctx.organizationId]
       ),
       { retries: 3, delayMs: 1000 }
     );

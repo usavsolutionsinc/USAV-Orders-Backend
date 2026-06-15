@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { parsePositiveInt } from '@/utils/number';
 import { TECH_EMPLOYEE_IDS } from '@/utils/staff';
@@ -19,6 +19,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  */
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const techIdParam = searchParams.get('techId');
     const isAdminFilter = !!techIdParam && ctx.permissions.has('admin.view_logs');
@@ -26,7 +27,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const getAll     = searchParams.get('all') === 'true';
     const outOfStock = searchParams.get('outOfStock');
 
+    // orgId is part of the cache key — the result set is tenant-scoped, so a
+    // payload built for one org must never be served to another.
     const cacheLookup = createCacheLookupKey({
+      orgId,
       techId:     techId || '',
       all:        getAll,
       outOfStock: outOfStock || '',
@@ -48,12 +52,13 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ orders: [], order: null, all_completed: false });
     }
 
-    // Resolve station number (1–4) to actual staff.id if applicable
+    // Resolve station number (1–4) to actual staff.id if applicable.
+    // staff.employee_id is a per-tenant string key, so scope to this org.
     const employeeId = TECH_EMPLOYEE_IDS[techId];
     let resolvedStaffId: number | null = null;
     if (employeeId) {
       const staffResult = await queryWithRetry(
-        () => pool.query('SELECT id FROM staff WHERE employee_id = $1 LIMIT 1', [employeeId]),
+        () => tenantQuery(orgId, 'SELECT id FROM staff WHERE employee_id = $1 AND organization_id = $2 LIMIT 1', [employeeId, orgId]),
         { retries: 3, delayMs: 1000 },
       );
       if (staffResult.rows.length > 0) {
@@ -69,8 +74,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     // a TECH scan row matches the order's tracking via scan_ref (same idea as /api/tech-logs
     // order_match) — otherwise SAL rows with NULL shipment_id still show in TechTable but
     // would not match `sal.shipment_id = o.shipment_id`.
+    // sal.scan_ref / tracking match on normalized tracking strings, which can
+    // collide across tenants — scope the SAL row to this order's org.
     const techSalTrackingMatch = `
       sal.station = 'TECH'
+      AND sal.organization_id = o.organization_id
       AND sal.activity_type IN ('TRACKING_SCANNED', 'SERIAL_ADDED', 'FNSKU_SCANNED')
       AND stn.id IS NOT NULL
       AND stn.tracking_number_raw IS NOT NULL
@@ -90,6 +98,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         FROM station_activity_logs sal
         WHERE sal.shipment_id IS NOT NULL
           AND sal.shipment_id = o.shipment_id
+          AND sal.organization_id = o.organization_id
       )
       AND NOT EXISTS (
         SELECT 1
@@ -110,6 +119,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           AND work_type   = 'TEST'
           AND assigned_tech_id IS NOT NULL
           AND status <> 'CANCELED'
+          AND organization_id = o.organization_id
         ORDER BY updated_at DESC, id DESC
         LIMIT 1
       ) wa_t ON true
@@ -117,6 +127,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         SELECT wa.deadline_at FROM work_assignments wa
         WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
           AND wa.status <> 'CANCELED'
+          AND wa.organization_id = o.organization_id
         ORDER BY
           CASE wa.status
             WHEN 'IN_PROGRESS' THEN 1
@@ -128,7 +139,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           wa.updated_at DESC, wa.id DESC
         LIMIT 1
       ) wa_deadline ON TRUE
-      LEFT JOIN staff staff_t ON staff_t.id = wa_t.assigned_tech_id
+      LEFT JOIN staff staff_t ON staff_t.id = wa_t.assigned_tech_id AND staff_t.organization_id = o.organization_id
       LEFT JOIN LATERAL (
         SELECT EXISTS (
           SELECT 1
@@ -137,6 +148,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           WHERE (
             sal.shipment_id IS NOT NULL
             AND sal.shipment_id = o.shipment_id
+            AND sal.organization_id = o.organization_id
           )
           OR (
             ${techSalTrackingMatch}
@@ -146,7 +158,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     `;
 
     // Base WHERE — applies to both count and main query.
-    const baseConditions: string[] = [];
+    // $1 = techIdScope (always bound, used only in the outOfStock='false' arm),
+    // $2 = orgId — orders is tenant-owned, so the queue is scoped to this org.
+    const baseConditions: string[] = [`o.organization_id = $2`];
 
     const countConditions = [...baseConditions];
     if (outOfStock === 'true') {
@@ -162,7 +176,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       countConditions.push(`(wa_t.assigned_tech_id IS NULL OR wa_t.assigned_tech_id = ANY($1::int[]))`);
     }
 
-    const queryParams = outOfStock === 'false' ? [techIdScope] : [];
+    // techIdScope is bound as $1 unconditionally so the org anchor can be $2
+    // regardless of the outOfStock branch; the $1 array is only referenced when
+    // outOfStock='false'.
+    const queryParams: unknown[] = [techIdScope, orgId];
 
     // The main query below is DISTINCT ON (o.id) over the exact same FROM/WHERE,
     // so its row count equals COUNT(DISTINCT o.id). A separate COUNT pass would
@@ -203,7 +220,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(mainQuery, queryParams),
+      () => tenantQuery(orgId, mainQuery, queryParams),
       { retries: 3, delayMs: 1000 },
     );
 

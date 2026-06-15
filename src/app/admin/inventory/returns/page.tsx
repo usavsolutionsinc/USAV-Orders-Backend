@@ -1,6 +1,5 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
-import { isInventoryV2Returns } from '@/lib/feature-flags';
 import { processReturnsIntake } from '@/lib/inventory/returns';
 import { parseScannedUrl } from '@/lib/scan-resolver';
 import { revalidatePath } from 'next/cache';
@@ -21,9 +20,6 @@ export const dynamic = 'force-dynamic';
  *
  * Recent returns table: last 50 inventory_events of type='RETURNED',
  * with each unit linked through to its timeline.
- *
- * The page renders in preview mode when INVENTORY_V2_RETURNS is off
- * (table still loads; the submit button is disabled).
  */
 
 interface RecentReturnRow {
@@ -58,9 +54,6 @@ async function loadRecentReturns(): Promise<RecentReturnRow[]> {
 
 async function intakeAction(formData: FormData): Promise<void> {
   'use server';
-  if (!isInventoryV2Returns()) {
-    redirect('/admin/inventory/returns?error=flag_off');
-  }
   const serialsText = String(formData.get('serials') ?? '').trim();
   const tracking = String(formData.get('tracking') ?? '').trim() || null;
   const reason = String(formData.get('reason') ?? '').trim() || null;
@@ -123,7 +116,6 @@ export default async function ReturnsIntakeAdminPage({
   await requirePermission('admin.view', { enforce: true });
 
   const params = await searchParams;
-  const flagOn = isInventoryV2Returns();
   const okFlash = params.ok === '1';
   const errorCode = params.error ?? null;
   const missing = params.missing ?? null;
@@ -141,14 +133,6 @@ export default async function ReturnsIntakeAdminPage({
           ledger row.
         </p>
 
-        {!flagOn ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <strong>Preview mode.</strong>{' '}
-            <code className="rounded bg-amber-100 px-1 py-0.5 text-xs">INVENTORY_V2_RETURNS</code> is OFF.
-            The form is disabled; the recent-returns table still loads.
-          </div>
-        ) : null}
-
         {okFlash ? (
           <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
             Return intake recorded. See <strong>Recent returns</strong> below.
@@ -157,7 +141,6 @@ export default async function ReturnsIntakeAdminPage({
 
         {errorCode ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-            {errorCode === 'flag_off' && 'INVENTORY_V2_RETURNS flag is off.'}
             {errorCode === 'missing_serials' && 'Paste at least one serial or unit id.'}
             {errorCode === 'not_found' && (
               <>
@@ -166,7 +149,7 @@ export default async function ReturnsIntakeAdminPage({
               </>
             )}
             {errorCode === 'failed' && 'Intake failed. Check server logs.'}
-            {!['flag_off', 'missing_serials', 'not_found', 'failed'].includes(errorCode) && 'Action failed.'}
+            {!['missing_serials', 'not_found', 'failed'].includes(errorCode) && 'Action failed.'}
           </div>
         ) : null}
 
@@ -219,10 +202,7 @@ export default async function ReturnsIntakeAdminPage({
             <div className="flex items-center gap-3 pt-1">
               <button
                 type="submit"
-                disabled={!flagOn}
-                className={`rounded-md px-4 py-1.5 text-sm font-medium ${
-                  flagOn ? 'bg-orange-600 text-white hover:bg-orange-700' : 'cursor-not-allowed bg-gray-100 text-gray-400'
-                }`}
+                className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
               >
                 Record intake
               </button>

@@ -19,6 +19,8 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { readInventorySpine } from './inventory-spine';
 
 export interface AuditEvent {
@@ -256,13 +258,37 @@ export interface ListPOsOpts {
  * Return the most recently-touched POs (anchored by max(receiving_lines.updated_at)).
  * `search` matches PO id, PO number, sku, or item name (case-insensitive).
  */
-export async function listReceivingAuditPOs(opts: ListPOsOpts = {}): Promise<AuditPOSummary[]> {
+export async function listReceivingAuditPOs(
+  opts: ListPOsOpts = {},
+  orgId?: OrgId,
+): Promise<AuditPOSummary[]> {
   const limit = Math.min(Math.max(opts.limit ?? 25, 1), 100);
   const offset = Math.max(opts.offset ?? 0, 0);
   const search = opts.search?.trim() ?? '';
 
   const params: unknown[] = [];
   let searchClause = '';
+
+  // When orgId is present, allocate $1 for it and weave organization_id
+  // predicates into every read against a tenant table; string-key joins
+  // (rr.zoho_po_id = rl.zoho_purchaseorder_id) also get an org-equality
+  // guard. When omitted, the SQL/params stay byte-identical to before.
+  let orgIdx = '';
+  let orgMatchingFilter = '';
+  let orgPoAggFilter = '';
+  let orgWfFilter = '';
+  let orgSubqueryFilter = '';
+  let orgRrJoin = '';
+  if (orgId) {
+    params.push(orgId);
+    orgIdx = `$${params.length}`;
+    orgMatchingFilter = `AND rl.organization_id = ${orgIdx}
+      AND (rr.zoho_po_id IS NULL OR rr.organization_id = rl.organization_id)`;
+    orgPoAggFilter = `AND rl.organization_id = ${orgIdx}`;
+    orgWfFilter = `AND organization_id = ${orgIdx}`;
+    orgSubqueryFilter = `AND rl2.organization_id = ${orgIdx}`;
+    orgRrJoin = `AND rr.organization_id = ${orgIdx}`;
+  }
 
   if (search) {
     params.push(`%${search}%`);
@@ -283,6 +309,7 @@ export async function listReceivingAuditPOs(opts: ListPOsOpts = {}): Promise<Aud
       FROM receiving_lines rl
       LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = rl.zoho_purchaseorder_id
       WHERE rl.zoho_purchaseorder_id IS NOT NULL
+      ${orgMatchingFilter}
       ${searchClause}
     ),
     po_agg AS (
@@ -295,12 +322,14 @@ export async function listReceivingAuditPOs(opts: ListPOsOpts = {}): Promise<Aud
         MAX(rl.updated_at) AS latest_event_at
       FROM receiving_lines rl
       WHERE rl.zoho_purchaseorder_id IN (SELECT po_id FROM matching_pos)
+      ${orgPoAggFilter}
       GROUP BY rl.zoho_purchaseorder_id
     ),
     wf AS (
       SELECT zoho_purchaseorder_id, workflow_status, COUNT(*)::int AS cnt
       FROM receiving_lines
       WHERE zoho_purchaseorder_id IN (SELECT po_id FROM matching_pos)
+      ${orgWfFilter}
       GROUP BY zoho_purchaseorder_id, workflow_status
     ),
     wf_agg AS (
@@ -324,17 +353,18 @@ export async function listReceivingAuditPOs(opts: ListPOsOpts = {}): Promise<Aud
         LEFT JOIN receiving r2 ON r2.id = rl2.receiving_id
         LEFT JOIN staff s ON s.id = r2.received_by
         WHERE rl2.zoho_purchaseorder_id = po.po_id
+        ${orgSubqueryFilter}
         ORDER BY rl2.updated_at DESC NULLS LAST
         LIMIT 1
       ) AS last_actor_name
     FROM po_agg po
     LEFT JOIN wf_agg ON wf_agg.zoho_purchaseorder_id = po.po_id
-    LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = po.po_id
+    LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = po.po_id ${orgRrJoin}
     ORDER BY po.latest_event_at DESC NULLS LAST
     LIMIT ${limitIdx} OFFSET ${offsetIdx}
   `;
 
-  const r = await pool.query(sql, params);
+  const r = orgId ? await tenantQuery(orgId, sql, params) : await pool.query(sql, params);
   return r.rows.map((row: Record<string, unknown>) => ({
     po_id: String(row.po_id ?? ''),
     po_number: (row.po_number as string | null) ?? null,
@@ -353,13 +383,22 @@ export async function listReceivingAuditPOs(opts: ListPOsOpts = {}): Promise<Aud
  * Full timeline for one PO: cartons + lines + every event we can derive,
  * sorted newest-first.
  */
-export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail | null> {
+export async function getReceivingAuditPO(
+  poId: string,
+  orgId?: OrgId,
+): Promise<AuditPODetail | null> {
   if (!poId) return null;
 
-  const linesRes = await pool.query(
-    `SELECT * FROM receiving_lines WHERE zoho_purchaseorder_id = $1 ORDER BY id`,
-    [poId],
-  );
+  const linesRes = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT * FROM receiving_lines WHERE zoho_purchaseorder_id = $1 AND organization_id = $2 ORDER BY id`,
+        [poId, orgId],
+      )
+    : await pool.query(
+        `SELECT * FROM receiving_lines WHERE zoho_purchaseorder_id = $1 ORDER BY id`,
+        [poId],
+      );
   const lineRows = linesRes.rows as LineRow[];
   if (lineRows.length === 0) return null;
 
@@ -371,15 +410,26 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
   const [cartonsResRaw, eventsResRaw, auditLogsResRaw, photosResRaw, serialsResRaw, vendorResRaw] =
     await Promise.all([
       cartonIds.length > 0
-        ? pool.query(
-            `SELECT * FROM receiving WHERE id = ANY($1::int[]) ORDER BY id`,
-            [cartonIds],
-          )
+        ? orgId
+          ? tenantQuery(
+              orgId,
+              `SELECT * FROM receiving WHERE id = ANY($1::int[]) AND organization_id = $2 ORDER BY id`,
+              [cartonIds, orgId],
+            )
+          : pool.query(
+              `SELECT * FROM receiving WHERE id = ANY($1::int[]) ORDER BY id`,
+              [cartonIds],
+            )
         : Promise.resolve({ rows: [] }),
 
       // Lifecycle spine via the shared reader (Phase 0). Keyed on this PO's
       // lines + cartons; receiving does its own staff/bin/serial enrichment
       // from batched maps below, so the reader's joined fields are ignored here.
+      // NOTE: readInventorySpine does not yet accept an orgId param (object
+      // opts has no orgId field), so we cannot thread orgId through here. The
+      // lineIds/cartonIds are already org-scoped (derived from the org-filtered
+      // lineRows), so results stay within this org's rows; once the sibling
+      // gains an orgId opt this should be passed through.
       readInventorySpine({
         lineIds,
         cartonIds,
@@ -387,43 +437,82 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
         limit: 1000,
       }),
 
-      pool.query(
-        `SELECT * FROM audit_logs
-          WHERE (entity_type = 'receiving_line' AND entity_id = ANY($1::text[]))
-             OR (entity_type = 'receiving'      AND entity_id = ANY($2::text[]))
-             OR (entity_type = 'purchase_order' AND entity_id = $3)
-          ORDER BY created_at DESC, id DESC
-          LIMIT 1000`,
-        [lineIds.map(String), cartonIds.map(String), poId],
-      ),
+      orgId
+        ? tenantQuery(
+            orgId,
+            `SELECT * FROM audit_logs
+              WHERE organization_id = $4
+                AND ((entity_type = 'receiving_line' AND entity_id = ANY($1::text[]))
+                  OR (entity_type = 'receiving'      AND entity_id = ANY($2::text[]))
+                  OR (entity_type = 'purchase_order' AND entity_id = $3))
+              ORDER BY created_at DESC, id DESC
+              LIMIT 1000`,
+            [lineIds.map(String), cartonIds.map(String), poId, orgId],
+          )
+        : pool.query(
+            `SELECT * FROM audit_logs
+              WHERE (entity_type = 'receiving_line' AND entity_id = ANY($1::text[]))
+                 OR (entity_type = 'receiving'      AND entity_id = ANY($2::text[]))
+                 OR (entity_type = 'purchase_order' AND entity_id = $3)
+              ORDER BY created_at DESC, id DESC
+              LIMIT 1000`,
+            [lineIds.map(String), cartonIds.map(String), poId],
+          ),
 
       cartonIds.length > 0
-        ? pool.query(
-            `SELECT * FROM photos
-              WHERE entity_type = 'RECEIVING' AND entity_id = ANY($1::int[])
-              ORDER BY created_at DESC, id DESC`,
-            [cartonIds],
-          )
+        ? orgId
+          ? tenantQuery(
+              orgId,
+              `SELECT * FROM photos
+                WHERE entity_type = 'RECEIVING' AND entity_id = ANY($1::int[])
+                  AND organization_id = $2
+                ORDER BY created_at DESC, id DESC`,
+              [cartonIds, orgId],
+            )
+          : pool.query(
+              `SELECT * FROM photos
+                WHERE entity_type = 'RECEIVING' AND entity_id = ANY($1::int[])
+                ORDER BY created_at DESC, id DESC`,
+              [cartonIds],
+            )
         : Promise.resolve({ rows: [] }),
 
-      pool
-        .query(
-          `SELECT id, serial_number, receiving_line_id, current_status, current_location,
-                  received_at, received_by
-             FROM serial_units
-            WHERE receiving_line_id = ANY($1::int[])
-            ORDER BY id`,
-          [lineIds],
-        )
-        .catch(() => ({ rows: [] })),
+      (orgId
+        ? tenantQuery(
+            orgId,
+            `SELECT id, serial_number, receiving_line_id, current_status, current_location,
+                    received_at, received_by
+               FROM serial_units
+              WHERE receiving_line_id = ANY($1::int[]) AND organization_id = $2
+              ORDER BY id`,
+            [lineIds, orgId],
+          )
+        : pool.query(
+            `SELECT id, serial_number, receiving_line_id, current_status, current_location,
+                    received_at, received_by
+               FROM serial_units
+              WHERE receiving_line_id = ANY($1::int[])
+              ORDER BY id`,
+            [lineIds],
+          )
+      ).catch(() => ({ rows: [] })),
 
-      pool.query(
-        `SELECT zoho_po_number, vendor_name
-           FROM replenishment_requests
-          WHERE zoho_po_id = $1
-          LIMIT 1`,
-        [poId],
-      ),
+      orgId
+        ? tenantQuery(
+            orgId,
+            `SELECT zoho_po_number, vendor_name
+               FROM replenishment_requests
+              WHERE zoho_po_id = $1 AND organization_id = $2
+              LIMIT 1`,
+            [poId, orgId],
+          )
+        : pool.query(
+            `SELECT zoho_po_number, vendor_name
+               FROM replenishment_requests
+              WHERE zoho_po_id = $1
+              LIMIT 1`,
+            [poId],
+          ),
     ]);
 
   const cartonsRes = { rows: cartonsResRaw.rows as ReceivingRow[] };
@@ -464,9 +553,9 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
   for (const s of serialsRes.rows) addStaff(s.received_by);
 
   const [staffMap, binMap, extraSerialMap] = await Promise.all([
-    fetchStaffNames(Array.from(staffIds)),
-    fetchBinNames(Array.from(binIds)),
-    fetchSerialNumbers(Array.from(serialUnitIds)),
+    fetchStaffNames(Array.from(staffIds), orgId),
+    fetchBinNames(Array.from(binIds), orgId),
+    fetchSerialNumbers(Array.from(serialUnitIds), orgId),
   ]);
 
   const serialByLine = new Map<number, AuditSerial[]>();
@@ -803,25 +892,37 @@ export async function getReceivingAuditPO(poId: string): Promise<AuditPODetail |
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-async function fetchStaffNames(ids: number[]): Promise<Map<number, string>> {
+async function fetchStaffNames(ids: number[], orgId?: OrgId): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (ids.length === 0) return map;
-  const r = await pool.query(
-    `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
-    [ids],
-  );
+  const r = orgId
+    ? await tenantQuery(
+        orgId,
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [ids, orgId],
+      )
+    : await pool.query(
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
+        [ids],
+      );
   for (const row of r.rows as Array<{ id: number; name: string }>) map.set(row.id, row.name);
   return map;
 }
 
-async function fetchBinNames(ids: number[]): Promise<Map<number, string>> {
+async function fetchBinNames(ids: number[], orgId?: OrgId): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (ids.length === 0) return map;
   try {
-    const r = await pool.query(
-      `SELECT id, name FROM locations WHERE id = ANY($1::int[])`,
-      [ids],
-    );
+    const r = orgId
+      ? await tenantQuery(
+          orgId,
+          `SELECT id, name FROM locations WHERE id = ANY($1::int[]) AND organization_id = $2`,
+          [ids, orgId],
+        )
+      : await pool.query(
+          `SELECT id, name FROM locations WHERE id = ANY($1::int[])`,
+          [ids],
+        );
     for (const row of r.rows as Array<{ id: number; name: string }>) map.set(row.id, row.name);
   } catch {
     // locations table may not exist in some envs — degrade silently.
@@ -829,14 +930,20 @@ async function fetchBinNames(ids: number[]): Promise<Map<number, string>> {
   return map;
 }
 
-async function fetchSerialNumbers(ids: number[]): Promise<Map<number, string>> {
+async function fetchSerialNumbers(ids: number[], orgId?: OrgId): Promise<Map<number, string>> {
   const map = new Map<number, string>();
   if (ids.length === 0) return map;
   try {
-    const r = await pool.query(
-      `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[])`,
-      [ids],
-    );
+    const r = orgId
+      ? await tenantQuery(
+          orgId,
+          `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[]) AND organization_id = $2`,
+          [ids, orgId],
+        )
+      : await pool.query(
+          `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[])`,
+          [ids],
+        );
     for (const row of r.rows as Array<{ id: number; serial_number: string }>) {
       map.set(row.id, row.serial_number);
     }

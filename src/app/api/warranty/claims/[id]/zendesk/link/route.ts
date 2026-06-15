@@ -54,7 +54,7 @@ export const GET = withAuth(async (request, ctx) => {
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
 
   try {
-    const claim = await getClaimTicketRef(id);
+    const claim = await getClaimTicketRef(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
     const { tickets, hiddenLinked } = await listTicketLinkCandidates({
@@ -94,7 +94,7 @@ export const POST = withAuth(async (request, ctx) => {
     route: 'POST /api/warranty/claims/[id]/zendesk/link',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
-      const claim = await getClaimTicketRef(id);
+      const claim = await getClaimTicketRef(id, ctx.organizationId);
       if (!claim) return { status: 404, body: { ok: false, error: 'claim not found' } };
 
       const ticketId = parsed.data.ticketId;
@@ -186,7 +186,7 @@ export const DELETE = withAuth(async (request, ctx) => {
   }
 
   try {
-    const claim = await getClaimTicketRef(id);
+    const claim = await getClaimTicketRef(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
     const { detached } = await unlinkClaimTicket({

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { batchPair } from '@/lib/neon/pairing-queries';
 
 /**
@@ -47,6 +47,7 @@ export const POST = withAuth(
 
       const result = await batchPair({
         skuCatalogId,
+        organizationId: ctx.organizationId,
         actorId: ctx.staffId,
         actorKind: 'user',
         accept: [
@@ -79,7 +80,7 @@ export const POST = withAuth(
 );
 
 export const DELETE = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     try {
       const body = await req.json();
       const platformIdRowId = Number(body.platformIdRowId);
@@ -91,9 +92,12 @@ export const DELETE = withAuth(
         );
       }
 
-      const result = await pool.query(
-        `DELETE FROM sku_platform_ids WHERE id = $1 RETURNING *`,
-        [platformIdRowId],
+      // Tenant-scoped delete — a row owned by another org never matches,
+      // so a cross-tenant id silently no-ops (deleted: null).
+      const result = await tenantQuery(
+        ctx.organizationId,
+        `DELETE FROM sku_platform_ids WHERE id = $1 AND organization_id = $2 RETURNING *`,
+        [platformIdRowId, ctx.organizationId],
       );
 
       return NextResponse.json({

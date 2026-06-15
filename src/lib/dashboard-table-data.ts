@@ -30,6 +30,8 @@ function toOrderRecord(order: any): ShippedOrder {
     ...order,
     deadline_at: order.deadline_at || null,
     shipment_id: order.shipment_id ?? null,
+    sale_amount: order.sale_amount ?? null,
+    currency: order.currency ?? null,
     packed_at: order.packed_at || null,
     packed_by: order.packed_by ?? null,
     tested_by: order.tested_by ?? null,
@@ -58,6 +60,60 @@ function dedupeByOrderId(records: ShippedOrder[]): ShippedOrder[] {
     if (!seen.has(key)) {
       seen.set(key, record);
     }
+  }
+  return Array.from(seen.values());
+}
+
+/**
+ * Best-available product identity for a row — the discriminator that separates a
+ * genuine multi-product order (different items under one order number → keep as
+ * separate lines) from an accidental same-product dupe (collapse). `sku_catalog_id`
+ * is the strongest signal but is usually null here, so fall back to a non-empty
+ * `sku`, then the normalized `product_title`. Returns '' when nothing identifies
+ * the product (blank import) — callers must NOT merge on an empty key.
+ */
+function productKeyOf(record: ShippedOrder): string {
+  const cat = (record as { sku_catalog_id?: unknown }).sku_catalog_id;
+  if (cat != null && String(cat).trim() !== '') return `cat:${String(cat).trim()}`;
+  const sku = String(record.sku || '').trim().toLowerCase();
+  if (sku) return `sku:${sku}`;
+  const title = String(record.product_title || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return title ? `title:${title}` : '';
+}
+
+/**
+ * Collapse only TRUE duplicates — rows sharing both an order number AND a product
+ * identity. Distinct products under one order number survive as separate rows (a
+ * real multi-line order the queue table groups under one expandable header). Rows
+ * with no order number, or no resolvable product identity, fall back to a per-id
+ * key so they're never silently merged. Mirrors the dedup rule the transfer-job
+ * cleanup uses, so the display and the data converge on the same notion of "dupe".
+ */
+function dedupeByOrderProduct(records: ShippedOrder[]): ShippedOrder[] {
+  // Which order numbers carry at least one identified product? A blank-identity
+  // row (no sku/title — a missing-metadata dupe) is then dropped in favor of the
+  // real product line(s) so it never shows as a phantom "Unknown Product" line.
+  const ordersWithRealProduct = new Set<string>();
+  for (const record of records) {
+    const orderKey = String(record.order_id || '').trim();
+    if (orderKey && productKeyOf(record)) ordersWithRealProduct.add(orderKey);
+  }
+
+  const seen = new Map<string, ShippedOrder>();
+  for (const record of records) {
+    const orderKey = String(record.order_id || '').trim();
+    const pk = productKeyOf(record);
+    let key: string;
+    if (!orderKey) {
+      key = `id:${record.id}`;
+    } else if (pk) {
+      key = `${orderKey}::${pk}`; // distinct products survive; same-product dupes collapse
+    } else if (ordersWithRealProduct.has(orderKey)) {
+      continue; // blank dupe of an order that has a real product line → hide it
+    } else {
+      key = `${orderKey}::__blank__`; // all-blank order → keep a single row
+    }
+    if (!seen.has(key)) seen.set(key, record);
   }
   return Array.from(seen.values());
 }
@@ -193,7 +249,10 @@ export async function fetchUnshippedOrdersData({
   }
 
   const data = await res.json();
-  return dedupeByOrderId(
+  // Product-aware dedup: accidental same-product dupes collapse, but genuinely
+  // different products under one order number stay as separate rows so the queue
+  // table can group them under one expandable order header.
+  return dedupeByOrderProduct(
     ((data.orders || []).map(toOrderRecord) as ShippedOrder[]).filter(isNonFbaRecord)
   );
 }

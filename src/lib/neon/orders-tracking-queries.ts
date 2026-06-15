@@ -31,6 +31,29 @@ export function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
   return /order_shipment_links/i.test(message) && /does not exist|undefined table/i.test(message);
 }
 
+/**
+ * Is this shipment currently owned by any order — via `orders.shipment_id` or an
+ * `order_shipment_links` row? Used to distinguish a genuine cross-order
+ * duplicate (reject) from an orphan STN left behind by a prior delete (claim).
+ */
+async function isShipmentOwnedByAnyOrder(shipmentId: number, client: Tx): Promise<boolean> {
+  const primary = await client.query(
+    `SELECT 1 FROM orders WHERE shipment_id = $1 LIMIT 1`,
+    [shipmentId],
+  );
+  if ((primary.rowCount ?? 0) > 0) return true;
+  try {
+    const linked = await client.query(
+      `SELECT 1 FROM order_shipment_links WHERE shipment_id = $1 LIMIT 1`,
+      [shipmentId],
+    );
+    return (linked.rowCount ?? 0) > 0;
+  } catch (error) {
+    if (isMissingOrderShipmentLinksRelation(error)) return false;
+    throw error;
+  }
+}
+
 export async function upsertOrderTracking(
   orderIds: number[],
   shippingTrackingNumber: string | null | undefined,
@@ -414,10 +437,18 @@ export async function createAdditionalShipmentLink(
         [orderIds, shipmentId],
       );
       if ((ownershipCheck.rowCount ?? 0) === 0) {
-        throw new Error('Tracking number already exists on another shipment');
+        // Not linked to THIS order. Only reject if some OTHER order owns it; an
+        // orphan STN (e.g. left behind by a prior delete — we never hard-delete
+        // shipping_tracking_numbers rows) is claimable and falls through to the
+        // link insert below. This is what lets a just-deleted tracking number be
+        // re-added without a spurious "already exists on another shipment".
+        const otherOwner = await isShipmentOwnedByAnyOrder(shipmentId, client);
+        if (otherOwner) {
+          throw new Error('Tracking number already exists on another shipment');
+        }
+      } else {
+        await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client);
       }
-
-      await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client);
     }
   } else {
     const detectedCarrier = detectCarrier(normalizedTracking);
@@ -543,8 +574,14 @@ export async function deleteShipmentTrackingLink(
     );
   }
 
+  // Idempotent: if the shipment is already unlinked, the desired end-state is
+  // achieved — no-op rather than throw. This matters inside a batch: clearing
+  // the primary tracking (`upsertOrderTracking(null)`) already nulls
+  // orders.shipment_id and removes its link, so a subsequent explicit delete of
+  // that same shipment would otherwise throw and roll back the whole batch.
+  // That was the cause of "can't delete the primary / only tracking number".
   if ((primaryOrders.rowCount ?? 0) === 0 && deletedLinks === 0) {
-    throw new Error('Shipment is not linked to this order');
+    return;
   }
 }
 
@@ -552,6 +589,14 @@ export async function deleteShipmentTrackingLink(
 
 export interface ApplyOrderTrackingOps {
   orderIds: number[];
+  /**
+   * Desired-state: the full ordered set of tracking numbers the order should
+   * have. When provided, links are reconciled to match (additions linked,
+   * removals unlinked) and the legacy primary/edits/creates/deletes fields are
+   * ignored. The first entry becomes the internal representative
+   * (`orders.shipment_id`); `[]` clears all tracking.
+   */
+  setTrackingNumbers?: string[];
   /** Primary tracking (slot 0). Routed through upsertOrderTracking; '' / null clears it. */
   primaryTrackingNumber?: string | null;
   /** Edit existing linked shipments by id. */
@@ -570,6 +615,117 @@ export interface ApplyOrderTrackingResult {
 }
 
 /**
+ * Desired-state reconcile: make the order's linked tracking set exactly match
+ * `desiredRaw` (ordered). Tracking already owned is kept; new tracking is
+ * linked; owned tracking no longer in the list is unlinked. The first entry
+ * becomes the internal representative (`orders.shipment_id`) — there is no
+ * user-facing "primary"; this pointer just satisfies single-value consumers
+ * (shipped table, status dot, marketplace confirm). `[]` clears all tracking.
+ *
+ * Runs against a caller-owned transaction (no BEGIN/COMMIT of its own), like
+ * the other low-level helpers in this file.
+ */
+export async function reconcileOrderTrackingSet(
+  orderIds: number[],
+  desiredRaw: string[],
+  client: Tx,
+): Promise<{ shipmentIds: number[]; primaryShipmentId: number | null }> {
+  // Normalize + dedupe the desired list, preserving order.
+  const desired: Array<{ raw: string; key: string }> = [];
+  const seenKeys = new Set<string>();
+  for (const entry of desiredRaw) {
+    const raw = String(entry || '').trim();
+    if (!raw) continue;
+    const key = normalizeTrackingNumber(raw);
+    if (!key) throw new Error('Tracking number is invalid');
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    desired.push({ raw, key });
+  }
+
+  // Gather every shipment currently owned by the order (primary + links).
+  const ownedIds = new Set<number>();
+  let ownedRows;
+  try {
+    ownedRows = await client.query(
+      `SELECT DISTINCT sid FROM (
+         SELECT shipment_id AS sid FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL
+         UNION
+         SELECT shipment_id AS sid FROM order_shipment_links WHERE order_row_id = ANY($1::int[])
+       ) x WHERE sid IS NOT NULL`,
+      [orderIds],
+    );
+  } catch (error) {
+    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    ownedRows = await client.query(
+      `SELECT shipment_id AS sid FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL`,
+      [orderIds],
+    );
+  }
+  for (const row of ownedRows.rows) {
+    const sid = Number(row.sid);
+    if (Number.isFinite(sid) && sid > 0) ownedIds.add(sid);
+  }
+
+  // Map normalized tracking → owned shipment id, so desired entries already on
+  // the order are kept in place (not delete+recreated, preserving STN history).
+  const currentByKey = new Map<string, number>();
+  if (ownedIds.size > 0) {
+    const keyRows = await client.query(
+      `SELECT id, tracking_number_normalized FROM shipping_tracking_numbers WHERE id = ANY($1::bigint[])`,
+      [Array.from(ownedIds)],
+    );
+    for (const row of keyRows.rows) {
+      const sid = Number(row.id);
+      const key = String(row.tracking_number_normalized || '');
+      if (key && Number.isFinite(sid)) currentByKey.set(key, sid);
+    }
+  }
+
+  // Resolve desired → shipment ids, linking any that are new.
+  const shipmentIds: number[] = [];
+  for (const d of desired) {
+    const existing = currentByKey.get(d.key);
+    if (existing) {
+      shipmentIds.push(existing);
+      continue;
+    }
+    const createdId = await createAdditionalShipmentLink(orderIds, d.raw, client);
+    shipmentIds.push(createdId);
+    currentByKey.set(d.key, createdId);
+  }
+
+  // Unlink everything the order still owns that isn't in the desired set.
+  const keepIds = new Set(shipmentIds);
+  for (const sid of ownedIds) {
+    if (!keepIds.has(sid)) {
+      await deleteShipmentTrackingLink(orderIds, sid, client);
+    }
+  }
+
+  // Representative pointer = first desired entry (or NULL when cleared).
+  const primaryShipmentId = shipmentIds.length > 0 ? shipmentIds[0] : null;
+  await client.query(
+    `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
+    [primaryShipmentId, orderIds],
+  );
+  if (primaryShipmentId) {
+    try {
+      await client.query(
+        `UPDATE order_shipment_links
+         SET is_primary = (shipment_id = $1), updated_at = NOW()
+         WHERE order_row_id = ANY($2::int[])`,
+        [primaryShipmentId, orderIds],
+      );
+    } catch (error) {
+      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    }
+  }
+
+  return { shipmentIds, primaryShipmentId };
+}
+
+/**
  * Runs a batch of tracking operations inside its own transaction. Mirrors the
  * orchestration inlined in POST /api/orders/assign so the canonical
  * `/api/orders/[id]/tracking` sub-resource reuses identical reconciliation.
@@ -577,10 +733,22 @@ export interface ApplyOrderTrackingResult {
 export async function applyOrderTrackingOps(
   ops: ApplyOrderTrackingOps,
 ): Promise<ApplyOrderTrackingResult> {
-  const { orderIds, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId } = ops;
+  const { orderIds, setTrackingNumbers, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId } = ops;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Desired-state path: when the caller sends the full set, reconcile to it
+    // and skip the legacy primary/edits/creates/deletes ops entirely.
+    if (setTrackingNumbers !== undefined) {
+      const { shipmentIds, primaryShipmentId } = await reconcileOrderTrackingSet(
+        orderIds,
+        setTrackingNumbers,
+        client,
+      );
+      await client.query('COMMIT');
+      return { createdShipmentIds: shipmentIds, primaryShipmentId };
+    }
 
     if (primaryTrackingNumber !== undefined) {
       await upsertOrderTracking(orderIds, primaryTrackingNumber, client);

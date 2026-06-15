@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 type CsvRow = string[];
@@ -66,7 +66,7 @@ function getIndex(headers: string[], keys: string[]): number {
   return -1;
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const form = await req.formData();
     const file = form.get('file');
@@ -92,7 +92,7 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
 
     const seen = new Set<string>();
-    const rowsToInsert: Array<[string | null, string | null, string | null, string]> = [];
+    const rowsToInsert: Array<[string | null, string | null, string | null, string, string]> = [];
     let skipped = 0;
 
     for (const row of parsed.slice(1)) {
@@ -111,37 +111,30 @@ export const POST = withAuth(async (req: NextRequest) => {
       }
       seen.add(fnsku);
 
-      rowsToInsert.push([productTitle || null, asin || null, sku || null, fnsku]);
+      rowsToInsert.push([productTitle || null, asin || null, sku || null, fnsku, ctx.organizationId]);
     }
 
     if (rowsToInsert.length === 0) {
       return NextResponse.json({ success: true, inserted: 0, skipped });
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    await withTenantTransaction(ctx.organizationId, async (client) => {
       for (const row of rowsToInsert) {
         await client.query(
-          `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
-           VALUES ($4, $1, $2, $3, TRUE, NOW(), NOW())
+          `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, organization_id, is_active, last_seen_at, updated_at)
+           VALUES ($4, $1, $2, $3, $5, TRUE, NOW(), NOW())
            ON CONFLICT (fnsku) DO UPDATE
              SET product_title = EXCLUDED.product_title,
                  asin = EXCLUDED.asin,
                  sku = EXCLUDED.sku,
                  is_active = TRUE,
                  last_seen_at = NOW(),
-                 updated_at = NOW()`,
+                 updated_at = NOW()
+           WHERE fba_fnskus.organization_id = EXCLUDED.organization_id`,
           row
         );
       }
-      await client.query('COMMIT');
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
+    });
 
     return NextResponse.json({ success: true, inserted: rowsToInsert.length, skipped });
   } catch (error: any) {

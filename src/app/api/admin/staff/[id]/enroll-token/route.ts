@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { createEnrollment } from '@/lib/auth/enrollment';
+import { createEnrollment, type EnrollmentToken } from '@/lib/auth/enrollment';
 import { audit } from '@/lib/auth/audit';
 
 export const runtime = 'nodejs';
@@ -23,11 +23,23 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
   }
 
-  const enr = await createEnrollment({
-    staffId: id,
-    createdBy: ctx.staffId,
-    ttlHours: 24,
-  });
+  // Org-scoped enrollment: createEnrollment gates the INSERT on the staff
+  // PARENT's org (staff_enrollments has no organization_id of its own), so a
+  // staffId in another org never produces a row — surface that as NOT_FOUND
+  // rather than a 500.
+  let enr: EnrollmentToken;
+  try {
+    enr = await createEnrollment(
+      {
+        staffId: id,
+        createdBy: ctx.staffId,
+        ttlHours: 24,
+      },
+      ctx.organizationId,
+    );
+  } catch {
+    return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+  }
 
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,

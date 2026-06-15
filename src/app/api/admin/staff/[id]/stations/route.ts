@@ -12,8 +12,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { audit } from '@/lib/auth/audit';
 import { asStation, getStaffStations, setStaffStations, type StationKey } from '@/lib/neon/staff-stations-queries';
 
@@ -27,10 +27,10 @@ function staffIdFromUrl(req: NextRequest): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const staffId = staffIdFromUrl(req);
   if (!staffId) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
-  const rows = await getStaffStations(staffId);
+  const rows = await getStaffStations(staffId, ctx.organizationId);
   const primary = rows.find((r) => r.is_primary)?.station ?? null;
   const secondary = rows.filter((r) => !r.is_primary).map((r) => r.station);
   return NextResponse.json({ primary, secondary });
@@ -67,10 +67,16 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'PRIMARY_REQUIRED' }, { status: 400 });
   }
 
-  const probe = await pool.query(`SELECT id FROM staff WHERE id = $1`, [staffId]);
+  // Org-scoped existence probe → a cross-tenant staffId reads as NOT_FOUND
+  // (never a wrong-tenant station mutation).
+  const probe = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [staffId, ctx.organizationId],
+  );
   if (!probe.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
-  const result = await setStaffStations(staffId, primary, secondary, ctx.staffId ?? null);
+  const result = await setStaffStations(staffId, primary, secondary, ctx.staffId ?? null, ctx.organizationId);
 
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,

@@ -15,6 +15,8 @@ import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { createFbaLog } from '@/lib/fba/createFbaLog';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const ROUTE = 'tech.scan';
 type ScanSourceStation = 'TECH' | 'FBA';
@@ -119,35 +121,36 @@ async function getScannedSkuCodes(
 }
 
 /** Find existing FNSKU in catalog. */
-async function findFnsku(db: typeof pool, fnsku: string) {
+async function findFnsku(db: typeof pool, orgId: OrgId, fnsku: string) {
   const r = await db.query(
-    `SELECT fnsku, product_title, asin, sku FROM fba_fnskus WHERE UPPER(TRIM(fnsku)) = $1 LIMIT 1`,
-    [fnsku.toUpperCase().trim()],
+    `SELECT fnsku, product_title, asin, sku FROM fba_fnskus
+     WHERE UPPER(TRIM(fnsku)) = $1 AND organization_id = $2 LIMIT 1`,
+    [fnsku.toUpperCase().trim(), orgId],
   );
   return r.rows[0] ?? null;
 }
 
 /** Ensure FNSKU exists in catalog; creates a stub row when missing. */
-async function ensureFnskuCatalog(db: typeof pool, fnsku: string) {
+async function ensureFnskuCatalog(db: typeof pool, orgId: OrgId, fnsku: string) {
   const normalized = fnsku.toUpperCase().trim();
-  const existing = await findFnsku(db, normalized);
+  const existing = await findFnsku(db, orgId, normalized);
   if (existing) {
     await db.query(
       `UPDATE fba_fnskus
        SET is_active = TRUE, last_seen_at = NOW(), updated_at = NOW()
-       WHERE fnsku = $1`,
-      [normalized],
+       WHERE fnsku = $1 AND organization_id = $2`,
+      [normalized, orgId],
     );
     return { catalog: existing, catalogCreated: false };
   }
 
   const inserted = await db.query(
-    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
-     VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW())
+    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at, organization_id)
+     VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW(), $2)
      ON CONFLICT (fnsku) DO UPDATE
        SET is_active = TRUE, last_seen_at = NOW(), updated_at = NOW()
      RETURNING fnsku, product_title, asin, sku`,
-    [normalized],
+    [normalized, orgId],
   );
 
   return {
@@ -157,28 +160,29 @@ async function ensureFnskuCatalog(db: typeof pool, fnsku: string) {
 }
 
 /** Find open FBA shipment item for this FNSKU. */
-async function findOpenFbaItem(db: typeof pool, fnsku: string) {
+async function findOpenFbaItem(db: typeof pool, orgId: OrgId, fnsku: string) {
   const r = await db.query(
     `SELECT si.id AS item_id, si.shipment_id AS shipment_id,
             fs.shipment_ref, si.expected_qty, si.actual_qty, si.status
      FROM fba_shipment_items si
-     JOIN fba_shipments fs ON fs.id = si.shipment_id
-     WHERE si.fnsku = $1 AND fs.status IN ('PLANNED','TESTED','PACKED','LABEL_ASSIGNED')
+     JOIN fba_shipments fs ON fs.id = si.shipment_id AND fs.organization_id = $2
+     WHERE si.fnsku = $1 AND si.organization_id = $2
+       AND fs.status IN ('PLANNED','TESTED','PACKED','LABEL_ASSIGNED')
      ORDER BY fs.created_at DESC, si.id DESC LIMIT 1`,
-    [fnsku.toUpperCase().trim()],
+    [fnsku.toUpperCase().trim(), orgId],
   );
   return r.rows[0] ?? null;
 }
 
 /** Count FBA lifecycle stages for this FNSKU. */
-async function fnskuStageCounts(db: typeof pool, fnsku: string) {
+async function fnskuStageCounts(db: typeof pool, orgId: OrgId, fnsku: string) {
   const r = await db.query(
     `SELECT
        COUNT(*) FILTER (WHERE source_stage = 'TECH'  AND event_type = 'SCANNED') AS tech_scanned_qty,
        COUNT(*) FILTER (WHERE source_stage = 'PACK'  AND event_type = 'READY')   AS pack_ready_qty,
        COUNT(*) FILTER (WHERE source_stage = 'SHIP'  AND event_type = 'SHIPPED') AS shipped_qty
-     FROM fba_fnsku_logs WHERE fnsku = $1`,
-    [fnsku.toUpperCase().trim()],
+     FROM fba_fnsku_logs WHERE fnsku = $1 AND organization_id = $2`,
+    [fnsku.toUpperCase().trim(), orgId],
   );
   const row = r.rows[0] ?? {};
   const tech = Number(row.tech_scanned_qty) || 0;
@@ -251,17 +255,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (!staff) return NextResponse.json({ success: false, found: false, error: 'Staff not found' }, { status: 404 });
     const testedBy = staff.id;
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
+    // Wrap the write path in a tenant transaction so the `app.current_org`
+    // GUC is set for every fba_* read/write (mirrors src/app/api/fba/items/scan).
+    return await withTenantTransaction(ctx.organizationId, async (client) => {
       // ── FNSKU path ─────────────────────────────────────────────────────
       if (scanType === 'FNSKU') {
         const fnsku = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const { catalog, catalogCreated } = await ensureFnskuCatalog(client as any, fnsku);
+        const { catalog, catalogCreated } = await ensureFnskuCatalog(client as any, ctx.organizationId, fnsku);
 
         const testDateTime = formatPSTTimestamp();
-        let fbaItem = await findOpenFbaItem(client as any, fnsku);
+        let fbaItem = await findOpenFbaItem(client as any, ctx.organizationId, fnsku);
 
         // Testing station: a tech FNSKU scan means "tested". Advance an open
         // PLANNED item to TESTED, or add the FNSKU to today's plan as TESTED
@@ -275,9 +278,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                      ready_by_staff_id = COALESCE(ready_by_staff_id, $1),
                      ready_at = COALESCE(ready_at, NOW()),
                      updated_at = NOW()
-               WHERE id = $2
+               WHERE id = $2 AND organization_id = $3
                RETURNING id, shipment_id, expected_qty, actual_qty, status`,
-              [testedBy, fbaItem.item_id],
+              [testedBy, fbaItem.item_id, ctx.organizationId],
             );
             if (upd.rows[0]) {
               fbaItem = {
@@ -292,17 +295,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           } else if (!fbaItem) {
             let plan = await client.query(
               `SELECT id, shipment_ref FROM fba_shipments
-                WHERE due_date = CURRENT_DATE AND status = 'PLANNED'
+                WHERE due_date = CURRENT_DATE AND status = 'PLANNED' AND organization_id = $1
                 ORDER BY created_at DESC LIMIT 1`,
+              [ctx.organizationId],
             );
             let planId: number; let planRef: string | null;
             if (plan.rows.length === 0) {
               const d = await client.query<{ d: string }>(`SELECT CURRENT_DATE::text AS d`);
               const ref = buildFbaPlanRefFromIsoDate(String(d.rows[0]?.d || ''));
               const np = await client.query(
-                `INSERT INTO fba_shipments (shipment_ref, due_date, status)
-                 VALUES ($1, CURRENT_DATE, 'PLANNED') RETURNING id, shipment_ref`,
-                [ref],
+                `INSERT INTO fba_shipments (shipment_ref, due_date, status, organization_id)
+                 VALUES ($1, CURRENT_DATE, 'PLANNED', $2) RETURNING id, shipment_ref`,
+                [ref, ctx.organizationId],
               );
               planId = Number(np.rows[0].id); planRef = np.rows[0].shipment_ref;
             } else {
@@ -310,15 +314,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             }
             const ni = await client.query(
               `INSERT INTO fba_shipment_items
-                 (shipment_id, fnsku, product_title, asin, sku, expected_qty, actual_qty, status, ready_by_staff_id, ready_at)
-               VALUES ($1, $2, $3, $4, $5, 1, 1, 'TESTED', $6, NOW())
+                 (shipment_id, fnsku, product_title, asin, sku, expected_qty, actual_qty, status, ready_by_staff_id, ready_at, organization_id)
+               VALUES ($1, $2, $3, $4, $5, 1, 1, 'TESTED', $6, NOW(), $7)
                ON CONFLICT (shipment_id, fnsku) DO UPDATE
                  SET status = CASE WHEN fba_shipment_items.status = 'PLANNED'
                                    THEN 'TESTED'::fba_shipment_status_enum
                                    ELSE fba_shipment_items.status END,
                      updated_at = NOW()
                RETURNING id, shipment_id, expected_qty, actual_qty, status`,
-              [planId, fnsku, catalog.product_title, catalog.asin, catalog.sku, testedBy],
+              [planId, fnsku, catalog.product_title, catalog.asin, catalog.sku, testedBy, ctx.organizationId],
             );
             fbaItem = {
               item_id: Number(ni.rows[0].id),
@@ -346,7 +350,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         });
 
         // 2. fba_fnsku_logs row (FK to SAL)
-        const fnskuLogId = await createFbaLog(client, {
+        const fnskuLogId = await createFbaLog(client, ctx.organizationId, {
           fnsku,
           sourceStage: isFbaSource ? 'FBA' : 'TECH',
           eventType: 'SCANNED',
@@ -362,7 +366,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // Get existing serials for this session
         const serials = salId ? await getSerialsBySalId(client as any, salId) : [];
         const scannedSkuCodes = await getScannedSkuCodes(client as any, { trackingValue: fnsku });
-        const summary = await fnskuStageCounts(client as any, fnsku);
+        const summary = await fnskuStageCounts(client as any, ctx.organizationId, fnsku);
 
         await client.query('COMMIT');
         await invalidateCacheTags(isFbaSource ? ['fba-stage-counts'] : ['orders', 'orders-next', 'tech-logs']);
@@ -547,12 +551,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       };
       if (idemKey) await saveApiIdempotencyResponse(pool, { idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
       return NextResponse.json(out);
-    } catch (txError) {
-      await client.query('ROLLBACK');
-      throw txError;
-    } finally {
-      client.release();
-    }
+    });
   } catch (error: any) {
     console.error('Error in tech scan:', error);
     return NextResponse.json({ success: false, found: false, error: 'Scan failed', details: error.message }, { status: 500 });

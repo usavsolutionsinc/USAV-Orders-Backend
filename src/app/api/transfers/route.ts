@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import {
   adjustBinQty,
   getLocationByBarcode,
@@ -48,6 +49,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const notes = String(body?.notes || '').trim() || null;
     // Server-trusted actor — body.staffId is ignored.
     const staffId = ctx.staffId;
+    // Server-trusted tenant — every read/write below is scoped to this org.
+    const orgId = ctx.organizationId;
 
     // ─── Idempotency: replay cached response for the same key ──────────────
     const idempotencyKey = readIdempotencyKey(
@@ -93,8 +96,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const transferQty = Math.floor(qty);
 
     const [fromLoc, toLoc] = await Promise.all([
-      getLocationByBarcode(fromBarcode),
-      getLocationByBarcode(toBarcode),
+      getLocationByBarcode(fromBarcode, orgId),
+      getLocationByBarcode(toBarcode, orgId),
     ]);
     if (!fromLoc) return respond({ error: `From bin not found: ${fromBarcode}` }, 404);
     if (!toLoc) return respond({ error: `To bin not found: ${toBarcode}` }, 404);
@@ -102,9 +105,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // Confirm the source has enough on hand. Negative results would be
     // floored by adjustBinQty but the user expectation is that a short
     // transfer fails up front.
-    const sourceQtyRes = await pool.query<{ qty: number }>(
-      `SELECT qty FROM bin_contents WHERE location_id = $1 AND sku = $2 LIMIT 1`,
-      [fromLoc.id, sku],
+    const sourceQtyRes = await tenantQuery<{ qty: number }>(
+      orgId,
+      `SELECT qty FROM bin_contents
+         WHERE location_id = $1 AND sku = $2 AND organization_id = $3
+         LIMIT 1`,
+      [fromLoc.id, sku, orgId],
     );
     const sourceQty = Number(sourceQtyRes.rows[0]?.qty ?? 0);
     if (sourceQty < transferQty) {
@@ -128,7 +134,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       reason: 'TRANSFER_OUT',
       reasonCodeId,
       notes,
-    });
+    }, orgId);
 
     // 2. Put into destination bin.
     await adjustBinQty({
@@ -139,7 +145,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       reason: 'TRANSFER_IN',
       reasonCodeId,
       notes,
-    });
+    }, orgId);
 
     // 3. Single lifecycle event linking the two legs.
     try {
@@ -157,7 +163,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           to_bin: toLoc.barcode ?? toBarcode,
           qty: transferQty,
         },
-      });
+      }, undefined, orgId);
     } catch (err) {
       console.warn('transfers: inventory_events insert failed (non-fatal)', err);
     }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * `id` from `request.nextUrl.pathname` instead, matching the pattern used
  * by /api/serial-units/[id]/hold.
  */
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, ctx) => {
     try {
         const segments = request.nextUrl.pathname.split('/').filter(Boolean);
         // .../api/inventory/alerts/[id]/ack → id is segments[-2]
@@ -35,13 +35,14 @@ export const POST = withAuth(async (request) => {
             /* empty body is fine */
         }
 
-        const result = await pool.query(
+        const result = await tenantQuery(
+            ctx.organizationId,
             `UPDATE stock_alerts
              SET resolved_at = COALESCE(resolved_at, NOW()),
                  notes = COALESCE($2, notes)
-             WHERE id = $1
+             WHERE id = $1 AND organization_id = $3
              RETURNING id, sku, bin_id, alert_type, triggered_at, resolved_at, notes`,
-            [alertId, note],
+            [alertId, note, ctx.organizationId],
         );
 
         if (result.rows.length === 0) {

@@ -25,6 +25,16 @@ interface EbayAccount {
   token_expires_at: string;
 }
 
+interface AmazonAccountRow {
+  id: number;
+  account_name: string;
+  seller_id: string | null;
+  region: string;
+  status: string;
+  last_sync_at: string | null;
+  last_error: string | null;
+}
+
 function emitConnectionsLog(entry: ConnectionLogEntryInput) {
   window.dispatchEvent(new CustomEvent('admin-connections-log', { detail: entry }));
 }
@@ -128,7 +138,11 @@ export function ConnectionsSidebarPanel() {
   const [showBackfill, setShowBackfill] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showShipping, setShowShipping] = useState(true);
+  const [showAmazon, setShowAmazon] = useState(false);
   const [purchaseReceiveId, setPurchaseReceiveId] = useState('');
+  const [amazonRefreshToken, setAmazonRefreshToken] = useState('');
+  const [amazonSellerId, setAmazonSellerId] = useState('');
+  const [amazonRegion, setAmazonRegion] = useState<'NA' | 'EU' | 'FE'>('NA');
   const shipStationFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: accountsData } = useQuery({
@@ -139,6 +153,16 @@ export function ConnectionsSidebarPanel() {
       return res.json();
     },
   });
+
+  const { data: amazonAccountsData } = useQuery({
+    queryKey: qk.amazonAccounts,
+    queryFn: async () => {
+      const res = await fetch('/api/amazon/accounts');
+      if (!res.ok) throw new Error('Failed to fetch Amazon accounts');
+      return res.json();
+    },
+  });
+  const amazonAccounts: AmazonAccountRow[] = amazonAccountsData?.accounts || [];
 
   const now = useMemo(() => new Date(), []);
   const tokenAccounts: EbayAccount[] = (accountsData?.accounts || []).filter((account: EbayAccount) => {
@@ -320,6 +344,81 @@ export function ConnectionsSidebarPanel() {
     onError: (error: any, carrier) => logError('Shipping', `${carrier} Sync`, error?.message || 'Carrier sync failed'),
   });
 
+  const amazonHealthMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/amazon/health');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Health check failed (HTTP ${res.status})`);
+      return data;
+    },
+    onSuccess: (data) => {
+      const accounts = data?.accounts || [];
+      if (accounts.length === 0) {
+        logSuccess('Amazon', 'Connection Check', 'No Amazon accounts connected yet.');
+      } else if (data?.ok) {
+        logSuccess('Amazon', 'Connection Check', `All ${accounts.length} account(s) healthy.`);
+      } else {
+        const okCount = accounts.filter((a: any) => a.ok).length;
+        const firstErr = accounts.find((a: any) => !a.ok)?.error || '';
+        logError('Amazon', 'Connection Check', `${okCount}/${accounts.length} healthy. ${firstErr}`);
+      }
+    },
+    onError: (error: any) => logError('Amazon', 'Connection Check', error?.message || 'Health check failed'),
+  });
+
+  const amazonSyncMutation = useMutation({
+    mutationFn: async (all: boolean) => {
+      const res = await fetch(`/api/amazon/sync${all ? '?all=1' : ''}`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `Sync failed (HTTP ${res.status})`);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: qk.amazonAccounts });
+      const t = data?.totals || {};
+      logSuccess('Amazon', 'Order Sync', `Imported ${t.imported || 0}, updated ${t.updated || 0}, FBA ${t.fbaReadOnly || 0}, skipped-untracked ${t.skippedUntracked || 0}.`);
+    },
+    onError: (error: any) => logError('Amazon', 'Order Sync', error?.message || 'Order sync failed'),
+  });
+
+  const amazonConnectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/amazon/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refreshToken: amazonRefreshToken.trim(),
+          sellerId: amazonSellerId.trim() || undefined,
+          region: amazonRegion,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || data?.detail || `Connect failed (HTTP ${res.status})`);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: qk.amazonAccounts });
+      setAmazonRefreshToken('');
+      setAmazonSellerId('');
+      logSuccess('Amazon', 'Connect', `Connected ${data?.accountName || 'account'} (${(data?.marketplaces || []).length} marketplace(s)).`);
+    },
+    onError: (error: any) => logError('Amazon', 'Connect', error?.message || 'Connect failed'),
+  });
+
+  const amazonDisconnectMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/amazon/accounts?id=${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `Disconnect failed (HTTP ${res.status})`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qk.amazonAccounts });
+      logSuccess('Amazon', 'Disconnect', 'Account disconnected.');
+    },
+    onError: (error: any) => logError('Amazon', 'Disconnect', error?.message || 'Disconnect failed'),
+  });
+
   const handleShipStationFileChange = async (file: File | null) => {
     if (!file) return;
     try {
@@ -420,6 +519,92 @@ export function ConnectionsSidebarPanel() {
               />
             );
           })}
+        </SidebarSection>
+
+        <SidebarSection title="Amazon" expanded={showAmazon} onToggle={() => setShowAmazon((v) => !v)}>
+          <LineItem
+            label="Connect via OAuth"
+            detail="Authorize Amazon for this organization (multi-tenant)"
+            right={
+              <a
+                href="/api/amazon/oauth/start"
+                className={`inline-flex h-full w-12 items-center justify-center border-l border-indigo-300 bg-indigo-50 ${sectionLabel} text-indigo-700 hover:bg-indigo-100`}
+                title="Connect Amazon via OAuth"
+              >
+                Go
+              </a>
+            }
+          />
+          <LineItem
+            label="Check Connection"
+            detail="Verify stored Amazon credentials reach SP-API"
+            right={<ActionButton onClick={() => amazonHealthMutation.mutate()} loading={amazonHealthMutation.isPending} title="Check Amazon connection" tone="green" />}
+          />
+          <LineItem
+            label="Sync Orders"
+            detail="Import tracked Amazon orders (by SKU / FBA item)"
+            right={<ActionButton onClick={() => amazonSyncMutation.mutate(false)} loading={amazonSyncMutation.isPending && amazonSyncMutation.variables === false} title="Sync Amazon orders" tone="blue" />}
+          />
+          <LineItem
+            label="Sync All Orders"
+            detail="Import every order, including untracked SKUs"
+            right={<ActionButton onClick={() => amazonSyncMutation.mutate(true)} loading={amazonSyncMutation.isPending && amazonSyncMutation.variables === true} title="Sync all Amazon orders" tone="indigo" />}
+          />
+          <div className="border-b border-gray-200 bg-white px-4 py-3">
+            <p className={dataValue}>Connect with Refresh Token</p>
+            <p className={`mt-0.5 ${fieldLabel} text-gray-500`}>Self-authorized private app (bootstrap)</p>
+            <div className="mt-2 space-y-2">
+              <input
+                value={amazonRefreshToken}
+                onChange={(e) => setAmazonRefreshToken(e.target.value)}
+                placeholder="Paste LWA refresh token (Atzr|…)"
+                className={`w-full border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+              />
+              <div className="flex items-stretch gap-2">
+                <input
+                  value={amazonSellerId}
+                  onChange={(e) => setAmazonSellerId(e.target.value)}
+                  placeholder="Seller ID (optional)"
+                  className={`min-w-0 flex-1 border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+                />
+                <select
+                  value={amazonRegion}
+                  onChange={(e) => setAmazonRegion(e.target.value as 'NA' | 'EU' | 'FE')}
+                  className={`border border-gray-200 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
+                >
+                  <option value="NA">NA</option>
+                  <option value="EU">EU</option>
+                  <option value="FE">FE</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => amazonConnectMutation.mutate()}
+                disabled={!amazonRefreshToken.trim() || amazonConnectMutation.isPending}
+                className={`w-full border border-blue-300 bg-blue-50 px-2 py-2 ${sectionLabel} text-blue-700 disabled:opacity-50`}
+              >
+                {amazonConnectMutation.isPending ? 'Verifying…' : 'Verify & Connect'}
+              </button>
+            </div>
+          </div>
+          {amazonAccounts.map((acc) => (
+            <LineItem
+              key={acc.id}
+              label={acc.account_name}
+              detail={acc.last_error ? `Error: ${acc.last_error}` : `${acc.region} · ${acc.status}`}
+              right={
+                <button
+                  type="button"
+                  onClick={() => amazonDisconnectMutation.mutate(acc.id)}
+                  disabled={amazonDisconnectMutation.isPending && amazonDisconnectMutation.variables === acc.id}
+                  className={`h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-600 hover:bg-gray-100 disabled:opacity-50`}
+                  title={`Disconnect ${acc.account_name}`}
+                >
+                  Off
+                </button>
+              }
+            />
+          ))}
         </SidebarSection>
       </div>
     </div>

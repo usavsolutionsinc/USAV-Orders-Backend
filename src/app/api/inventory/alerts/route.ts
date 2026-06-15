@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  * Returns:
  *   { success, items: AlertRow[], counts: { low_stock, stale_count, never_counted, drift, unresolved, total } }
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     try {
         const sp = req.nextUrl.searchParams;
         const q = (sp.get('q') ?? '').trim();
@@ -28,6 +28,10 @@ export const GET = withAuth(async (req: NextRequest) => {
 
         const where: string[] = [];
         const params: unknown[] = [];
+
+        // Tenant ownership filter — never return another org's alerts.
+        params.push(ctx.organizationId);
+        where.push(`a.organization_id = $${params.length}`);
 
         if (q) {
             params.push(`%${q}%`);
@@ -95,11 +99,12 @@ export const GET = withAuth(async (req: NextRequest) => {
                 COUNT(*) FILTER (WHERE a.alert_type = 'DRIFT')::int AS drift,
                 COUNT(*) FILTER (WHERE a.resolved_at IS NULL)::int AS unresolved
             FROM stock_alerts a
+            WHERE a.organization_id = $1
         `;
 
         const [listResult, countsResult] = await Promise.all([
-            pool.query(listSql, params),
-            pool.query(countsSql),
+            tenantQuery(ctx.organizationId, listSql, params),
+            tenantQuery(ctx.organizationId, countsSql, [ctx.organizationId]),
         ]);
 
         return NextResponse.json({

@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const query = String(searchParams.get('q') || '').trim();
     const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '250', 10) || 250, 1), 1000);
 
-    const params: any[] = [];
+    // Tenant filter on sku_stock — $1 is always the org id, so user-supplied
+    // ILIKE params start at $2.
+    const params: any[] = [orgId];
     const fuzzyQuery = query.replace(/\s+/g, '%');
     const normalizedQuery = query.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    // The sku_catalog join is on the `sku` string (collides across tenants) so
+    // it is org-aligned; the sku_platform_ids LATERAL joins on the integer
+    // surrogate PK sc.id (safe bare).
     let sql = `
       SELECT
         ss.id,
@@ -24,7 +30,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         ) AS product_title,
         ss.display_name_override
       FROM sku_stock ss
-      LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
+      LEFT JOIN sku_catalog sc ON sc.sku = ss.sku AND sc.organization_id = ss.organization_id
       LEFT JOIN LATERAL (
         SELECT e.display_name
         FROM sku_platform_ids e
@@ -34,6 +40,7 @@ export const GET = withAuth(async (req: NextRequest) => {
           AND e.display_name IS NOT NULL
         LIMIT 1
       ) sp ON TRUE
+      WHERE ss.organization_id = $1
     `;
 
     if (query) {
@@ -41,11 +48,13 @@ export const GET = withAuth(async (req: NextRequest) => {
       params.push(`%${fuzzyQuery}%`);
       params.push(`%${normalizedQuery}%`);
       sql += `
-        WHERE COALESCE(ss.sku, '') ILIKE $1
-           OR COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ILIKE $1
+        AND (
+          COALESCE(ss.sku, '') ILIKE $2
            OR COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ILIKE $2
-           OR regexp_replace(lower(COALESCE(sp.display_name, sc.product_title, ss.product_title, '')), '[^a-z0-9]+', '', 'g') ILIKE $3
-           OR COALESCE(ss.stock::text, '') ILIKE $1
+           OR COALESCE(sp.display_name, sc.product_title, ss.product_title, '') ILIKE $3
+           OR regexp_replace(lower(COALESCE(sp.display_name, sc.product_title, ss.product_title, '')), '[^a-z0-9]+', '', 'g') ILIKE $4
+           OR COALESCE(ss.stock::text, '') ILIKE $2
+        )
       `;
     }
 
@@ -58,7 +67,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       LIMIT $${params.length}
     `;
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(orgId, sql, params);
 
     return NextResponse.json({
       rows: result.rows,

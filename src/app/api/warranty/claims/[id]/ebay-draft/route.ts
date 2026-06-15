@@ -19,7 +19,7 @@ export const POST = withAuth(async (request, ctx) => {
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
 
   try {
-    const claim = await getClaim(id);
+    const claim = await getClaim(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
     const draft = buildEbayRefurbDraft(claim);

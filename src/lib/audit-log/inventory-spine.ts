@@ -16,6 +16,8 @@
 
 import 'server-only';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface InventoryEventRecord {
   id: number;
@@ -62,6 +64,7 @@ export interface ReadInventorySpineOpts {
  */
 export async function readInventorySpine(
   opts: ReadInventorySpineOpts,
+  orgId?: OrgId,
 ): Promise<InventoryEventRecord[]> {
   const lineIds = (opts.lineIds ?? []).filter((n) => Number.isFinite(n));
   const serialUnitIds = (opts.serialUnitIds ?? []).filter((n) => Number.isFinite(n));
@@ -95,6 +98,22 @@ export async function readInventorySpine(
     where.push(`ie.event_type = ANY($${params.length}::text[])`);
   }
 
+  // Tenant scope: when an orgId is threaded through, restrict the spine to the
+  // caller's org and keep the LEFT JOINs from reaching across tenants. When
+  // omitted, the SQL/params/executor are byte-identical to the legacy path so
+  // the many un-migrated callers behave exactly as before.
+  let staffJoin = 'LEFT JOIN staff s ON s.id = ie.actor_staff_id';
+  let serialJoin = 'LEFT JOIN serial_units su ON su.id = ie.serial_unit_id';
+  if (orgId) {
+    params.push(orgId);
+    where.push(`ie.organization_id = $${params.length}`);
+    // Integer surrogate-PK joins are safe bare, but both joined tables are
+    // tenant-owned; align org so a cross-tenant LEFT-JOIN row can't surface a
+    // foreign actor_name / serial_number.
+    staffJoin = 'LEFT JOIN staff s ON s.id = ie.actor_staff_id AND s.organization_id = ie.organization_id';
+    serialJoin = 'LEFT JOIN serial_units su ON su.id = ie.serial_unit_id AND su.organization_id = ie.organization_id';
+  }
+
   const order = opts.order === 'desc' ? 'DESC' : 'ASC';
   let limitSql = '';
   if (opts.limit != null) {
@@ -102,8 +121,7 @@ export async function readInventorySpine(
     limitSql = `LIMIT $${params.length}`;
   }
 
-  const { rows } = await pool.query(
-    `SELECT ie.id,
+  const sql = `SELECT ie.id,
             ie.occurred_at,
             ie.event_type,
             ie.actor_staff_id,
@@ -121,13 +139,15 @@ export async function readInventorySpine(
             ie.notes,
             ie.payload
        FROM inventory_events ie
-       LEFT JOIN staff s ON s.id = ie.actor_staff_id
-       LEFT JOIN serial_units su ON su.id = ie.serial_unit_id
+       ${staffJoin}
+       ${serialJoin}
       WHERE ${where.join(' AND ')}
       ORDER BY ie.occurred_at ${order}, ie.id ${order}
-      ${limitSql}`,
-    params,
-  );
+      ${limitSql}`;
+
+  const { rows } = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
 
   return rows as InventoryEventRecord[];
 }

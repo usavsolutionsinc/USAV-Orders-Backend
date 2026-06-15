@@ -10,10 +10,14 @@ import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils
 import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
+import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
+import { deriveUnshippedState } from '@/lib/unshipped-state';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
   testedBy?: number;
+  /** Pencil multi-select: rows render checkboxes; the page owns the action bar. */
+  selectMode?: boolean;
 }
 
 function patchOrderRecordFromAssignmentEvent(row: any, detail: any) {
@@ -59,6 +63,7 @@ export function UnshippedTable({
   searchEmptyTitle = 'No orders found',
   searchResultLabel = 'unshipped orders',
   clearSearchLabel = 'Show All Unshipped Orders',
+  selectMode = false,
 }: UnshippedTableProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
@@ -80,6 +85,9 @@ export function UnshippedTable({
   // Sort order from the sidebar Sort control (`?sort`); default keeps priority.
   const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
   const sortOrder: 'priority' | 'newest' = sortParam === 'newest' ? 'newest' : 'priority';
+  // Click-to-filter from the status legend (`?ustatus`) — exact derived pre-dock
+  // state. Composes on top of the coarse `?stage` facet.
+  const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase();
   const query = useQuery({
     ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
     placeholderData: (previousData) => previousData,
@@ -218,7 +226,7 @@ export function UnshippedTable({
   };
 
   const allRecords = query.data || [];
-  const records = (() => {
+  const stageRecords = (() => {
     switch (stageFilter) {
       case 'awaiting':
         return allRecords.filter((r) => r.shipment_id == null);
@@ -233,11 +241,25 @@ export function UnshippedTable({
         return allRecords;
     }
   })();
+  // Legend chip filter: keep only rows whose exact derived state matches.
+  const records = statusFilter
+    ? stageRecords.filter((r) => {
+        const row = r as { shipment_id?: number | string | null; has_tech_scan?: boolean; packed_at?: string | null; out_of_stock?: string | null };
+        return deriveUnshippedState({
+          shipmentId: row.shipment_id,
+          hasTechScan: Boolean(row.has_tech_scan),
+          packedAt: row.packed_at,
+          outOfStock: row.out_of_stock,
+        }) === statusFilter;
+      })
+    : stageRecords;
 
   return (
     <OrdersQueueTable
       records={records}
       sort={sortOrder}
+      selectMode={selectMode}
+      selectionScope={DASHBOARD_ORDERS_SELECTION_SCOPE}
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}

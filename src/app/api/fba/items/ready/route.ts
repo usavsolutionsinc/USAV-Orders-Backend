@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { createStationActivityLog } from '@/lib/station-activity';
 import { publishFbaItemChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -12,7 +12,6 @@ import { withAuth } from '@/lib/auth/withAuth';
 //
 // Body: { shipment_id, fnsku, station? } — actor is from the verified session.
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
     const { shipment_id, fnsku, station } = body;
@@ -26,34 +25,30 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     }
     const normalizedFnsku = String(fnsku).trim().toUpperCase();
 
-    await client.query('BEGIN');
+    const outcome = await withTenantTransaction(ctx.organizationId, async (client) => {
+      // Verify staff exists
+      const staffCheck = await client.query('SELECT id, name FROM staff WHERE id = $1', [staff_id]);
+      if (!staffCheck.rows[0]) {
+        return { error: { status: 404, message: 'Staff not found' } } as const;
+      }
 
-    // Verify staff exists
-    const staffCheck = await client.query('SELECT id, name FROM staff WHERE id = $1', [staff_id]);
-    if (!staffCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Staff not found' }, { status: 404 });
-    }
+      // Verify shipment exists and is not already SHIPPED
+      const shipmentCheck = await client.query(
+        `SELECT id, status FROM fba_shipments WHERE id = $1 AND organization_id = $2`,
+        [shipment_id, ctx.organizationId]
+      );
+      if (!shipmentCheck.rows[0]) {
+        return { error: { status: 404, message: 'Shipment not found' } } as const;
+      }
+      if (shipmentCheck.rows[0].status === 'SHIPPED') {
+        return { error: { status: 409, message: 'Shipment is already closed' } } as const;
+      }
 
-    // Verify shipment exists and is not already SHIPPED
-    const shipmentCheck = await client.query(
-      `SELECT id, status FROM fba_shipments WHERE id = $1`,
-      [shipment_id]
-    );
-    if (!shipmentCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
-    }
-    if (shipmentCheck.rows[0].status === 'SHIPPED') {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Shipment is already closed' }, { status: 409 });
-    }
-
-    // Upsert the item (create if first scan, update if already exists)
-    // Increment actual_qty and promote to TESTED
-    const itemRes = await client.query(
-      `INSERT INTO fba_shipment_items (shipment_id, fnsku, status, actual_qty, ready_by_staff_id, ready_at)
-       VALUES ($1, $2, 'TESTED', 1, $3, NOW())
+      // Upsert the item (create if first scan, update if already exists)
+      // Increment actual_qty and promote to TESTED
+      const itemRes = await client.query(
+        `INSERT INTO fba_shipment_items (shipment_id, fnsku, status, actual_qty, ready_by_staff_id, ready_at, organization_id)
+       VALUES ($1, $2, 'TESTED', 1, $3, NOW(), $4)
        ON CONFLICT (shipment_id, fnsku) DO UPDATE
          SET actual_qty         = fba_shipment_items.actual_qty + 1,
              status             = CASE
@@ -64,15 +59,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
              ready_at           = COALESCE(fba_shipment_items.ready_at, NOW()),
              updated_at         = NOW()
        RETURNING *`,
-      [shipment_id, normalizedFnsku, staff_id]
+      [shipment_id, normalizedFnsku, staff_id, ctx.organizationId]
     );
 
-    const item = itemRes.rows[0];
+      const item = itemRes.rows[0];
 
-    const logRes = await client.query(
+      const logRes = await client.query(
       `INSERT INTO fba_fnsku_logs
-         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-       VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb)
+         (fnsku, source_stage, event_type, staff_id, fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+       VALUES ($1, 'PACK', 'READY', $2, $3, $4, 1, $5, $6, $7::jsonb, $8)
        RETURNING id, created_at`,
       [
         normalizedFnsku,
@@ -85,10 +80,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           trigger: 'fba.items.ready',
           previous_status: item.status,
         }),
+        ctx.organizationId,
       ]
     );
 
-    await createStationActivityLog(client, {
+      await createStationActivityLog(client, {
       organizationId: ctx.organizationId,
       station: 'PACK',
       activityType: 'FBA_READY',
@@ -104,45 +100,54 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       },
     });
 
-    // Auto-advance shipment PLANNED→TESTED when no planned items remain.
-    await client.query(
+      // Auto-advance shipment PLANNED→TESTED when no planned items remain.
+      await client.query(
       `UPDATE fba_shipments
        SET status = CASE
                       WHEN status = 'PLANNED' AND NOT EXISTS (
                         SELECT 1 FROM fba_shipment_items
-                        WHERE shipment_id = $1 AND status = 'PLANNED'
+                        WHERE shipment_id = $1 AND status = 'PLANNED' AND organization_id = $2
                       ) THEN 'TESTED'::fba_shipment_status_enum
                       ELSE status
                     END,
            updated_at = NOW()
-       WHERE id = $1`,
-      [shipment_id]
+       WHERE id = $1 AND organization_id = $2`,
+      [shipment_id, ctx.organizationId]
     );
 
-    await client.query('COMMIT');
+      return {
+        item,
+        event: {
+          id: Number(logRes.rows[0].id),
+          created_at: logRes.rows[0].created_at,
+          type: 'FBA_LOG' as const,
+        },
+        staff_name: staffCheck.rows[0].name,
+      };
+    });
+
+    if ('error' in outcome && outcome.error) {
+      return NextResponse.json(
+        { success: false, error: outcome.error.message },
+        { status: outcome.error.status }
+      );
+    }
 
     await invalidateCacheTags(['fba-board', 'fba-stage-counts']);
-    await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready', organizationId: ctx.organizationId });
+    await publishFbaItemChanged({ action: 'ready', shipmentId: Number(shipment_id || 0), itemId: Number(outcome.item?.id || 0), fnsku: normalizedFnsku || '', source: 'fba.items.ready', organizationId: ctx.organizationId });
 
     return NextResponse.json({
       success: true,
-      item,
-      event: {
-        id: Number(logRes.rows[0].id),
-        created_at: logRes.rows[0].created_at,
-        type: 'FBA_LOG',
-      },
-      staff_name: staffCheck.rows[0].name,
+      item: outcome.item,
+      event: outcome.event,
+      staff_name: outcome.staff_name,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/items/ready]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to mark item ready' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

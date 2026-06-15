@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Replenishment } from '@/lib/feature-flags';
 import { cancelTask } from '@/lib/replenishment/pick-face';
 
 /**
@@ -10,15 +9,8 @@ import { cancelTask } from '@/lib/replenishment/pick-face';
  * return 409.
  *
  * Body: { reason: string }
- * Gated by INVENTORY_V2_REPLENISHMENT.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Replenishment()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_REPLENISHMENT flag is OFF', flag: 'INVENTORY_V2_REPLENISHMENT' },
-      { status: 503 },
-    );
-  }
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
   if (actorStaffId == null) {
@@ -39,7 +31,7 @@ export const POST = withAuth(async (request, ctx) => {
   }
 
   try {
-    const result = await cancelTask({ taskId, reason, actorStaffId });
+    const result = await cancelTask({ taskId, reason, actorStaffId }, ctx.organizationId);
     if (!result.ok) return NextResponse.json(result, { status: result.status });
     return NextResponse.json(result);
   } catch (err) {

@@ -14,6 +14,8 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const scrypt = promisify(scryptCb) as (
   password: string | Buffer,
@@ -88,9 +90,30 @@ async function verifyHash(pin: string, stored: string): Promise<boolean> {
 /**
  * Set or change a staff member's PIN. Caller is responsible for authz
  * (admin reset vs self-change). Clears lockout state on success.
+ *
+ * Tenant scope: when `orgId` is supplied (admin CRUD under
+ * `admin.manage_staff`), the UPDATE is scoped to that org via `tenantQuery`,
+ * so an admin can only set the PIN of a staff member in their OWN org — a
+ * cross-org id is a no-op. When omitted (sign-in / enrollment / self-change
+ * flows that have already resolved the staff id), the path is byte-identical
+ * to before. `staff` is tenant-owned and carries `organization_id`.
  */
-export async function setStaffPin(staffId: number, pin: string): Promise<void> {
+export async function setStaffPin(staffId: number, pin: string, orgId?: OrgId): Promise<void> {
   const pinHash = await hashPin(pin);
+  if (orgId) {
+    await tenantQuery(
+      orgId,
+      `UPDATE staff
+         SET pin_hash = $2,
+             pin_set_at = NOW(),
+             pin_failed_count = 0,
+             pin_locked_until = NULL
+       WHERE id = $1
+         AND organization_id = $3`,
+      [staffId, pinHash, orgId],
+    );
+    return;
+  }
   await pool.query(
     `UPDATE staff
        SET pin_hash = $2,
@@ -115,9 +138,48 @@ interface StaffPinRow {
 /**
  * Look up by ID and verify PIN. Returns the staff row on success.
  * Throws PinError on every failure path; callers map to HTTP codes.
+ *
+ * Tenant scope: when `orgId` is supplied (an admin-context caller verifying a
+ * staff member known to be in their own org), the row lookup and the
+ * last_login bump are scoped to that org via `withTenantTransaction`, so a
+ * cross-org id reads as NOT_FOUND and is never mutated. When omitted — the
+ * normal /api/auth/* sign-in, step-up and switch flows that resolve a staff
+ * by id without org context — the path is byte-identical to before.
+ *
+ * Credential-matching (assertPinShape / verifyHash / timingSafeEqual) is
+ * IDENTICAL in both branches; only the row read + last_login UPDATE gain the
+ * org predicate. `staff` is tenant-owned and carries `organization_id`.
  */
-export async function verifyStaffPin(staffId: number, pin: string): Promise<StaffPinRow> {
+export async function verifyStaffPin(staffId: number, pin: string, orgId?: OrgId): Promise<StaffPinRow> {
   assertPinShape(pin);
+
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const result = await client.query(
+        `SELECT id, name, role, status, pin_hash,
+                default_home_path, default_home_path_mobile
+           FROM staff
+          WHERE id = $1
+            AND organization_id = $2
+          LIMIT 1`,
+        [staffId, orgId],
+      );
+      const row = result.rows[0] as StaffPinRow | undefined;
+      if (!row) throw new PinError('NOT_FOUND');
+      if (!row.pin_hash) throw new PinError('NO_PIN');
+
+      const ok = await verifyHash(pin, row.pin_hash);
+      if (!ok) throw new PinError('WRONG');
+
+      // Success → bump last_login_at
+      await client.query(
+        `UPDATE staff SET last_login_at = NOW() WHERE id = $1 AND organization_id = $2`,
+        [staffId, orgId],
+      );
+      return row;
+    });
+  }
+
   const result = await pool.query(
     `SELECT id, name, role, status, pin_hash,
             default_home_path, default_home_path_mobile

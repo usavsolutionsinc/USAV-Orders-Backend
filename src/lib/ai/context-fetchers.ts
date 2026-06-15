@@ -1,4 +1,6 @@
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntentDomain, IntentParams } from '@/lib/ai/intent-router';
 import { normalizeTrackingCanonical } from '@/lib/tracking-format';
 
@@ -397,16 +399,21 @@ export async function fetchReceivingContext(): Promise<string> {
   ].join('\n');
 }
 
-export async function fetchFbaContext(params: IntentParams): Promise<string> {
+export async function fetchFbaContext(params: IntentParams, orgId: OrgId): Promise<string> {
   const values: string[] = [];
   let whereClause = `WHERE COALESCE(fs.status, 'PLANNED') != 'SHIPPED'`;
 
   if (params.orderId) {
     values.push(normalizeLookupLike(params.orderId));
-    whereClause += ` AND fs.shipment_ref ILIKE $1`;
+    whereClause += ` AND fs.shipment_ref ILIKE $${values.length}`;
   }
 
-  const result = await pool.query(
+  // Tenant ownership filter — never surface another org's FBA shipments.
+  values.push(orgId);
+  whereClause += ` AND fs.organization_id = $${values.length}`;
+
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         fs.status,
@@ -557,7 +564,8 @@ export async function fetchShippedContext(params: IntentParams): Promise<string>
 
 export async function buildContextBlock(
   intents: IntentDomain[],
-  params: IntentParams
+  params: IntentParams,
+  orgId: OrgId
 ): Promise<string> {
   const selected = intents.slice(0, 3);
   const tasks = selected.map(async (intent) => {
@@ -571,7 +579,7 @@ export async function buildContextBlock(
       case 'receiving':
         return fetchReceivingContext();
       case 'fba':
-        return fetchFbaContext(params);
+        return fetchFbaContext(params, orgId);
       case 'inventory':
         return fetchInventoryContext(params);
       case 'exceptions':

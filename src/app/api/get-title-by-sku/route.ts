@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/get-title-by-sku?sku=<value>
@@ -24,8 +24,9 @@ import { withAuth } from '@/lib/auth/withAuth';
  * All matches are case-insensitive, whitespace-trimmed, and leading-zero
  * tolerant in both directions (e.g. '1103' ↔ '01103').
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId;
         const { searchParams } = new URL(request.url);
         const sku = searchParams.get('sku');
 
@@ -41,10 +42,12 @@ export const GET = withAuth(async (request: NextRequest) => {
         // Four independent lookups, all tolerant of case/whitespace/leading
         // zeros. Run in parallel for one round-trip.
         const [zohoItem, ecwid, catalogDirect, stock] = await Promise.all([
-            pool.query(
+            tenantQuery(
+                orgId,
                 `SELECT name, image_url, image_document_id, zoho_item_id
                    FROM items
                   WHERE status = 'active'
+                    AND organization_id = $2
                     AND (
                       UPPER(TRIM(sku)) = UPPER(TRIM($1))
                       OR regexp_replace(UPPER(TRIM(COALESCE(sku,''))), '^0+', '')
@@ -53,13 +56,15 @@ export const GET = withAuth(async (request: NextRequest) => {
                   ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC,
                            (name IS NOT NULL AND name <> '') DESC
                   LIMIT 1`,
-                [trimmedSku],
+                [trimmedSku, orgId],
             ),
-            pool.query(
+            tenantQuery(
+                orgId,
                 `SELECT id, sku_catalog_id, platform_sku, display_name, image_url
                    FROM sku_platform_ids
                   WHERE platform = 'ecwid'
                     AND is_active = true
+                    AND organization_id = $2
                     AND (
                       UPPER(TRIM(platform_sku)) = UPPER(TRIM($1))
                       OR regexp_replace(UPPER(TRIM(COALESCE(platform_sku,''))), '^0+', '')
@@ -70,27 +75,35 @@ export const GET = withAuth(async (request: NextRequest) => {
                            (display_name IS NOT NULL AND display_name <> '') DESC,
                            id DESC
                   LIMIT 1`,
-                [trimmedSku],
+                [trimmedSku, orgId],
             ),
-            pool.query(
+            tenantQuery(
+                orgId,
                 `SELECT id, sku, product_title, image_url, gtin
                    FROM sku_catalog
-                  WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1))
-                     OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
-                        = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                  WHERE organization_id = $2
+                    AND (
+                      UPPER(TRIM(sku)) = UPPER(TRIM($1))
+                      OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
+                         = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                    )
                   ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC
                   LIMIT 1`,
-                [trimmedSku],
+                [trimmedSku, orgId],
             ),
-            pool.query(
+            tenantQuery(
+                orgId,
                 `SELECT sku, stock, location, product_title
                    FROM sku_stock
-                  WHERE UPPER(TRIM(sku)) = UPPER(TRIM($1))
-                     OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
-                        = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                  WHERE organization_id = $2
+                    AND (
+                      UPPER(TRIM(sku)) = UPPER(TRIM($1))
+                      OR regexp_replace(UPPER(TRIM(sku)), '^0+', '')
+                         = regexp_replace(UPPER(TRIM($1)), '^0+', '')
+                    )
                   ORDER BY (UPPER(TRIM(sku)) = UPPER(TRIM($1))) DESC
                   LIMIT 1`,
-                [trimmedSku],
+                [trimmedSku, orgId],
             ),
         ]);
 
@@ -102,10 +115,11 @@ export const GET = withAuth(async (request: NextRequest) => {
         // If the Ecwid row links to a catalog row we missed by SKU text
         // (because the catalog SKU isn't the Ecwid platform_sku), fetch it.
         if (!catalogRow && ecwidRow?.sku_catalog_id) {
-            const linked = await pool.query(
+            const linked = await tenantQuery(
+                orgId,
                 `SELECT id, sku, product_title, image_url, gtin
-                   FROM sku_catalog WHERE id = $1 LIMIT 1`,
-                [ecwidRow.sku_catalog_id],
+                   FROM sku_catalog WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+                [ecwidRow.sku_catalog_id, orgId],
             );
             catalogRow = linked.rows[0] ?? null;
         }

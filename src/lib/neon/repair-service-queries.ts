@@ -1,5 +1,7 @@
 import pool from '../db';
 import { formatPSTTimestamp, normalizePSTTimestamp } from '@/utils/date';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface RepairStatusHistoryEntry {
   status: string;
@@ -194,9 +196,21 @@ function buildRepairSearchWhere(idx: number, tab?: RepairTab) {
           AND ${base}`;
 }
 
-export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: RepairTab }): Promise<RSRecord[]> {
+export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: RepairTab }, orgId?: OrgId): Promise<RSRecord[]> {
   try {
     const where = buildRepairTabWhere(options?.tab || 'active');
+    if (orgId) {
+      const result = await tenantQuery(
+        orgId,
+        `SELECT ${REPAIR_SELECT_COLUMNS}
+         ${REPAIR_FROM}
+         ${where} AND rs.organization_id = $3
+         ORDER BY rs.created_at DESC NULLS LAST, rs.id DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset, orgId],
+      );
+      return result.rows.map(mapRepairRow);
+    }
     const result = await pool.query(
       `SELECT ${REPAIR_SELECT_COLUMNS}
        ${REPAIR_FROM}
@@ -213,14 +227,22 @@ export async function getAllRepairs(limit = 100, offset = 0, options?: { tab?: R
   }
 }
 
-export async function getRepairById(id: number): Promise<RSRecord | null> {
+export async function getRepairById(id: number, orgId?: OrgId): Promise<RSRecord | null> {
   try {
-    const result = await pool.query(
-      `SELECT ${REPAIR_SELECT_COLUMNS}
-       ${REPAIR_FROM}
-       WHERE rs.id = $1`,
-      [id],
-    );
+    const result = orgId
+      ? await tenantQuery(
+          orgId,
+          `SELECT ${REPAIR_SELECT_COLUMNS}
+           ${REPAIR_FROM}
+           WHERE rs.id = $1 AND rs.organization_id = $2`,
+          [id, orgId],
+        )
+      : await pool.query(
+          `SELECT ${REPAIR_SELECT_COLUMNS}
+           ${REPAIR_FROM}
+           WHERE rs.id = $1`,
+          [id],
+        );
 
     if (result.rows.length === 0) return null;
     return mapRepairRow(result.rows[0]);
@@ -240,8 +262,8 @@ export type CancelRepairResult =
  * are finished, not cancellable). Idempotent: cancelling a cancelled repair
  * is a no-op success.
  */
-export async function cancelRepair(id: number, reason?: string | null): Promise<CancelRepairResult> {
-  const existing = await getRepairById(id);
+export async function cancelRepair(id: number, reason?: string | null, orgId?: OrgId): Promise<CancelRepairResult> {
+  const existing = await getRepairById(id, orgId);
   if (!existing) return { ok: false, status: 404, error: 'Repair not found' };
   if (existing.status === REPAIR_CANCELLED_STATUS) {
     return { ok: true, repair: existing, alreadyCancelled: true };
@@ -250,16 +272,16 @@ export async function cancelRepair(id: number, reason?: string | null): Promise<
     return { ok: false, status: 409, error: `Repair is ${existing.status} and cannot be cancelled` };
   }
 
-  await updateRepairStatus(id, REPAIR_CANCELLED_STATUS);
+  await updateRepairStatus(id, REPAIR_CANCELLED_STATUS, orgId);
   if (reason && reason.trim()) {
     await appendRepairStatusHistory(id, {
       status: REPAIR_CANCELLED_STATUS,
       previous_status: existing.status,
       source: 'repair-service.cancel',
       metadata: { reason: reason.trim() },
-    });
+    }, orgId);
   }
-  const repair = await getRepairById(id);
+  const repair = await getRepairById(id, orgId);
   return { ok: true, repair: repair!, alreadyCancelled: false };
 }
 
@@ -275,17 +297,23 @@ export type UnopenRepairResult =
  * fixed status. Refuses when the repair isn't Cancelled, or when no prior
  * status can be recovered from history.
  */
-export async function unopenRepair(id: number, reason?: string | null): Promise<UnopenRepairResult> {
-  const existing = await getRepairById(id);
+export async function unopenRepair(id: number, reason?: string | null, orgId?: OrgId): Promise<UnopenRepairResult> {
+  const existing = await getRepairById(id, orgId);
   if (!existing) return { ok: false, status: 404, error: 'Repair not found' };
   if (existing.status !== REPAIR_CANCELLED_STATUS) {
     return { ok: false, status: 409, error: `Repair is ${existing.status}, not Cancelled — nothing to reopen` };
   }
 
-  const histRes = await pool.query<{ status_history: RepairStatusHistoryEntry[] | null }>(
-    `SELECT status_history FROM repair_service WHERE id = $1`,
-    [id],
-  );
+  const histRes = orgId
+    ? await tenantQuery<{ status_history: RepairStatusHistoryEntry[] | null }>(
+        orgId,
+        `SELECT status_history FROM repair_service WHERE id = $1 AND organization_id = $2`,
+        [id, orgId],
+      )
+    : await pool.query<{ status_history: RepairStatusHistoryEntry[] | null }>(
+        `SELECT status_history FROM repair_service WHERE id = $1`,
+        [id],
+      );
   const history = (histRes.rows[0]?.status_history ?? []) as RepairStatusHistoryEntry[];
   let priorStatus: string | null = null;
   // 1. Cleanest source: the most recent Cancelled entry records the pre-cancel
@@ -313,24 +341,21 @@ export async function unopenRepair(id: number, reason?: string | null): Promise<
     return { ok: false, status: 409, error: 'Cannot determine the prior status to reopen to' };
   }
 
-  await updateRepairStatus(id, priorStatus);
+  await updateRepairStatus(id, priorStatus, orgId);
   await appendRepairStatusHistory(id, {
     status: priorStatus,
     previous_status: REPAIR_CANCELLED_STATUS,
     source: 'repair-service.reopen',
     ...(reason && reason.trim() ? { metadata: { reason: reason.trim() } } : {}),
-  });
-  const repair = await getRepairById(id);
+  }, orgId);
+  const repair = await getRepairById(id, orgId);
   return { ok: true, repair: repair!, alreadyOpen: false };
 }
 
-export async function updateRepairStatus(id: number, newStatus: string): Promise<void> {
+export async function updateRepairStatus(id: number, newStatus: string, orgId?: OrgId): Promise<void> {
   try {
     const timestamp = formatPSTTimestamp();
-    const result = await pool.query(
-      `UPDATE repair_service
-          SET status = $1,
-              status_history = CASE
+    const statusHistoryExpr = `status_history = CASE
                 WHEN COALESCE(status, '') IS DISTINCT FROM $1 THEN
                   COALESCE(status_history, '[]'::jsonb) || jsonb_build_array(
                     jsonb_strip_nulls(
@@ -343,11 +368,26 @@ export async function updateRepairStatus(id: number, newStatus: string): Promise
                     )
                   )
                 ELSE COALESCE(status_history, '[]'::jsonb)
-              END,
-              updated_at = NOW()
-        WHERE id = $3`,
-      [newStatus, timestamp, id],
-    );
+              END`;
+    const result = orgId
+      ? await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE repair_service
+                SET status = $1,
+                    ${statusHistoryExpr},
+                    updated_at = NOW()
+              WHERE id = $3 AND organization_id = $4`,
+            [newStatus, timestamp, id, orgId],
+          ),
+        )
+      : await pool.query(
+          `UPDATE repair_service
+              SET status = $1,
+                  ${statusHistoryExpr},
+                  updated_at = NOW()
+            WHERE id = $3`,
+          [newStatus, timestamp, id],
+        );
     if ((result.rowCount ?? 0) === 0) throw new Error('Repair not found');
   } catch (error) {
     console.error('Error updating repair status:', error);
@@ -355,8 +395,17 @@ export async function updateRepairStatus(id: number, newStatus: string): Promise
   }
 }
 
-export async function updateRepairNotes(id: number, notes: string): Promise<void> {
+export async function updateRepairNotes(id: number, notes: string, orgId?: OrgId): Promise<void> {
   try {
+    if (orgId) {
+      await withTenantTransaction(orgId, (client) =>
+        client.query(
+          'UPDATE repair_service SET notes = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3',
+          [notes, id, orgId],
+        ),
+      );
+      return;
+    }
     await pool.query(
       'UPDATE repair_service SET notes = $1, updated_at = NOW() WHERE id = $2',
       [notes, id],
@@ -369,7 +418,8 @@ export async function updateRepairNotes(id: number, notes: string): Promise<void
 
 export async function appendRepairStatusHistory(
   id: number,
-  entry: Omit<RepairStatusHistoryEntry, 'timestamp'> & { timestamp?: string }
+  entry: Omit<RepairStatusHistoryEntry, 'timestamp'> & { timestamp?: string },
+  orgId?: OrgId,
 ): Promise<void> {
   try {
     const payload = {
@@ -377,13 +427,23 @@ export async function appendRepairStatusHistory(
       timestamp: entry.timestamp ?? formatPSTTimestamp(),
     };
 
-    const result = await pool.query(
-      `UPDATE repair_service
-          SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb,
-              updated_at = NOW()
-        WHERE id = $2`,
-      [JSON.stringify([payload]), id],
-    );
+    const result = orgId
+      ? await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE repair_service
+                SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb,
+                    updated_at = NOW()
+              WHERE id = $2 AND organization_id = $3`,
+            [JSON.stringify([payload]), id, orgId],
+          ),
+        )
+      : await pool.query(
+          `UPDATE repair_service
+              SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb,
+                  updated_at = NOW()
+            WHERE id = $2`,
+          [JSON.stringify([payload]), id],
+        );
 
     if ((result.rowCount ?? 0) === 0) throw new Error('Repair not found');
   } catch (error) {
@@ -392,7 +452,7 @@ export async function appendRepairStatusHistory(
   }
 }
 
-export async function updateRepairField(id: number, field: string, value: any): Promise<void> {
+export async function updateRepairField(id: number, field: string, value: any, orgId?: OrgId): Promise<void> {
   try {
     const validFields = [
       'ticket_number',
@@ -417,6 +477,15 @@ export async function updateRepairField(id: number, field: string, value: any): 
 
     if (!validFields.includes(field)) throw new Error(`Invalid field: ${field}`);
 
+    if (orgId) {
+      await withTenantTransaction(orgId, (client) =>
+        client.query(
+          `UPDATE repair_service SET ${field} = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3`,
+          [value, id, orgId],
+        ),
+      );
+      return;
+    }
     await pool.query(
       `UPDATE repair_service SET ${field} = $1, updated_at = NOW() WHERE id = $2`,
       [value, id],
@@ -449,64 +518,101 @@ export interface CreateRepairParams {
   customerId?: number | null;
 }
 
-export async function createRepair(params: CreateRepairParams): Promise<RSRecord> {
+export async function createRepair(params: CreateRepairParams, orgId?: OrgId): Promise<RSRecord> {
   const createdAt = normalizePSTTimestamp(params.createdAt, { fallbackToNow: true })!;
   const intakeChannel = params.intakeChannel ?? 'pickup';
   const receivedAt = params.receivedAt ?? (intakeChannel === 'pickup' ? createdAt : null);
   const intakeConfirmedAt = params.intakeConfirmedAt ?? (intakeChannel === 'pickup' ? createdAt : null);
 
-  const result = await pool.query(
-    `INSERT INTO repair_service
-       (
-         created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
-         source_system, source_order_id, source_tracking_number, source_sku, intake_channel,
-         delivered_at, received_at, intake_confirmed_at, received_by_staff_id, customer_id
-       )
-     VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-     RETURNING id, ticket_number`,
-    [
-      createdAt,
-      params.ticketNumber ?? null,
-      params.contactInfo,
-      params.productTitle,
-      params.price,
-      params.issue,
-      params.serialNumber,
-      params.notes ?? null,
-      params.status ?? 'Pending Repair',
-      params.sourceSystem ?? null,
-      params.sourceOrderId ?? null,
-      params.sourceTrackingNumber ?? null,
-      params.sourceSku ?? null,
-      intakeChannel,
-      params.deliveredAt ?? null,
-      receivedAt,
-      intakeConfirmedAt,
-      params.receivedByStaffId ?? null,
-      params.customerId ?? null,
-    ],
-  );
+  const insertValues = [
+    createdAt,
+    params.ticketNumber ?? null,
+    params.contactInfo,
+    params.productTitle,
+    params.price,
+    params.issue,
+    params.serialNumber,
+    params.notes ?? null,
+    params.status ?? 'Pending Repair',
+    params.sourceSystem ?? null,
+    params.sourceOrderId ?? null,
+    params.sourceTrackingNumber ?? null,
+    params.sourceSku ?? null,
+    intakeChannel,
+    params.deliveredAt ?? null,
+    receivedAt,
+    intakeConfirmedAt,
+    params.receivedByStaffId ?? null,
+    params.customerId ?? null,
+  ];
+
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) =>
+        client.query(
+          `INSERT INTO repair_service
+             (
+               created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
+               source_system, source_order_id, source_tracking_number, source_sku, intake_channel,
+               delivered_at, received_at, intake_confirmed_at, received_by_staff_id, customer_id, organization_id
+             )
+           VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+           RETURNING id, ticket_number`,
+          [...insertValues, orgId],
+        ),
+      )
+    : await pool.query(
+        `INSERT INTO repair_service
+           (
+             created_at, updated_at, ticket_number, contact_info, product_title, price, issue, serial_number, notes, status,
+             source_system, source_order_id, source_tracking_number, source_sku, intake_channel,
+             delivered_at, received_at, intake_confirmed_at, received_by_staff_id, customer_id
+           )
+         VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         RETURNING id, ticket_number`,
+        insertValues,
+      );
 
   const { id } = result.rows[0];
   let ticketNumber = result.rows[0].ticket_number;
 
   if (!ticketNumber) {
     const fallback = `RS-${String(id).padStart(4, '0')}`;
-    await pool.query(
-      'UPDATE repair_service SET ticket_number = $1, updated_at = NOW() WHERE id = $2',
-      [fallback, id],
-    );
+    if (orgId) {
+      await withTenantTransaction(orgId, (client) =>
+        client.query(
+          'UPDATE repair_service SET ticket_number = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3',
+          [fallback, id, orgId],
+        ),
+      );
+    } else {
+      await pool.query(
+        'UPDATE repair_service SET ticket_number = $1, updated_at = NOW() WHERE id = $2',
+        [fallback, id],
+      );
+    }
     ticketNumber = fallback;
   }
 
-  const record = await getRepairById(id);
+  const record = await getRepairById(id, orgId);
   return record!;
 }
 
-export async function searchRepairs(query: string, options?: { tab?: RepairTab }): Promise<RSRecord[]> {
+export async function searchRepairs(query: string, options?: { tab?: RepairTab }, orgId?: OrgId): Promise<RSRecord[]> {
   try {
     const searchTerm = `%${query}%`;
     const where = buildRepairSearchWhere(1, options?.tab);
+    if (orgId) {
+      const result = await tenantQuery(
+        orgId,
+        `SELECT ${REPAIR_SELECT_COLUMNS}
+         ${REPAIR_FROM}
+         ${where} AND rs.organization_id = $2
+         ORDER BY rs.created_at DESC NULLS LAST, rs.id DESC
+         LIMIT 20`,
+        [searchTerm, orgId],
+      );
+      return result.rows.map(mapRepairRow);
+    }
     const result = await pool.query(
       `SELECT ${REPAIR_SELECT_COLUMNS}
        ${REPAIR_FROM}
@@ -550,31 +656,57 @@ export async function upsertEcwidIncomingRepair(params: {
   contactInfo: string | null;
   orderDate?: string | null;
   notes?: string | null;
-}): Promise<RSRecord> {
+}, orgId?: OrgId): Promise<RSRecord> {
   try {
-    const existing = await pool.query(
-      `SELECT id
-       FROM repair_service
-       WHERE source_system = 'ecwid'
-         AND (
-           (
-             source_order_id IS NOT NULL
-             AND source_order_id = $1
+    const existing = orgId
+      ? await tenantQuery(
+          orgId,
+          `SELECT id
+           FROM repair_service
+           WHERE source_system = 'ecwid'
+             AND organization_id = $4
              AND (
-               COALESCE(NULLIF($3, ''), '') = ''
-               OR COALESCE(source_sku, '') = COALESCE($3, '')
+               (
+                 source_order_id IS NOT NULL
+                 AND source_order_id = $1
+                 AND (
+                   COALESCE(NULLIF($3, ''), '') = ''
+                   OR COALESCE(source_sku, '') = COALESCE($3, '')
+                 )
+               )
+               OR (
+                 source_tracking_number IS NOT NULL
+                 AND source_tracking_number = $2
+                 AND COALESCE(source_sku, '') = COALESCE($3, '')
+               )
              )
-           )
-           OR (
-             source_tracking_number IS NOT NULL
-             AND source_tracking_number = $2
-             AND COALESCE(source_sku, '') = COALESCE($3, '')
-           )
-         )
-       ORDER BY id DESC
-       LIMIT 1`,
-      [params.orderId, params.trackingNumber, params.sku]
-    );
+           ORDER BY id DESC
+           LIMIT 1`,
+          [params.orderId, params.trackingNumber, params.sku, orgId]
+        )
+      : await pool.query(
+          `SELECT id
+           FROM repair_service
+           WHERE source_system = 'ecwid'
+             AND (
+               (
+                 source_order_id IS NOT NULL
+                 AND source_order_id = $1
+                 AND (
+                   COALESCE(NULLIF($3, ''), '') = ''
+                   OR COALESCE(source_sku, '') = COALESCE($3, '')
+                 )
+               )
+               OR (
+                 source_tracking_number IS NOT NULL
+                 AND source_tracking_number = $2
+                 AND COALESCE(source_sku, '') = COALESCE($3, '')
+               )
+             )
+           ORDER BY id DESC
+           LIMIT 1`,
+          [params.orderId, params.trackingNumber, params.sku]
+        );
 
     const notes = buildEcwidRepairNotes({
       existingNotes: params.notes,
@@ -585,37 +717,64 @@ export async function upsertEcwidIncomingRepair(params: {
 
     if (existing.rows.length > 0) {
       const repairId = Number(existing.rows[0].id);
-      await pool.query(
-        `UPDATE repair_service
-         SET contact_info = COALESCE(NULLIF(contact_info, ''), $1),
-             product_title = COALESCE(NULLIF(product_title, ''), $2),
-             notes = COALESCE(NULLIF(notes, ''), $3),
-             source_order_id = COALESCE(NULLIF(source_order_id, ''), $4),
-             source_tracking_number = COALESCE(NULLIF(source_tracking_number, ''), $5),
-             source_sku = COALESCE(NULLIF(source_sku, ''), $6),
-             intake_channel = COALESCE(NULLIF(intake_channel, ''), 'shipment'),
-             status = CASE
-               WHEN received_at IS NULL
-                    AND COALESCE(status, '') NOT IN ('Done', 'Picked Up', 'Shipped')
-                    AND COALESCE(status, '') IN ('Pending Repair', ${sqlIncomingTabStatus()})
-                 THEN ${sqlIncomingTabStatus()}
-               ELSE status
-             END,
-             delivered_at = COALESCE(delivered_at, $7),
-             updated_at = NOW()
-         WHERE id = $8`,
-        [
-          params.contactInfo ?? null,
-          params.productTitle ?? null,
-          notes,
-          params.orderId ?? null,
-          params.trackingNumber ?? null,
-          params.sku ?? null,
-          params.orderDate ?? null,
-          repairId,
-        ]
-      );
-      const record = await getRepairById(repairId);
+      const updateValues = [
+        params.contactInfo ?? null,
+        params.productTitle ?? null,
+        notes,
+        params.orderId ?? null,
+        params.trackingNumber ?? null,
+        params.sku ?? null,
+        params.orderDate ?? null,
+        repairId,
+      ];
+      if (orgId) {
+        await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE repair_service
+             SET contact_info = COALESCE(NULLIF(contact_info, ''), $1),
+                 product_title = COALESCE(NULLIF(product_title, ''), $2),
+                 notes = COALESCE(NULLIF(notes, ''), $3),
+                 source_order_id = COALESCE(NULLIF(source_order_id, ''), $4),
+                 source_tracking_number = COALESCE(NULLIF(source_tracking_number, ''), $5),
+                 source_sku = COALESCE(NULLIF(source_sku, ''), $6),
+                 intake_channel = COALESCE(NULLIF(intake_channel, ''), 'shipment'),
+                 status = CASE
+                   WHEN received_at IS NULL
+                        AND COALESCE(status, '') NOT IN ('Done', 'Picked Up', 'Shipped')
+                        AND COALESCE(status, '') IN ('Pending Repair', ${sqlIncomingTabStatus()})
+                     THEN ${sqlIncomingTabStatus()}
+                   ELSE status
+                 END,
+                 delivered_at = COALESCE(delivered_at, $7),
+                 updated_at = NOW()
+             WHERE id = $8 AND organization_id = $9`,
+            [...updateValues, orgId]
+          )
+        );
+      } else {
+        await pool.query(
+          `UPDATE repair_service
+           SET contact_info = COALESCE(NULLIF(contact_info, ''), $1),
+               product_title = COALESCE(NULLIF(product_title, ''), $2),
+               notes = COALESCE(NULLIF(notes, ''), $3),
+               source_order_id = COALESCE(NULLIF(source_order_id, ''), $4),
+               source_tracking_number = COALESCE(NULLIF(source_tracking_number, ''), $5),
+               source_sku = COALESCE(NULLIF(source_sku, ''), $6),
+               intake_channel = COALESCE(NULLIF(intake_channel, ''), 'shipment'),
+               status = CASE
+                 WHEN received_at IS NULL
+                      AND COALESCE(status, '') NOT IN ('Done', 'Picked Up', 'Shipped')
+                      AND COALESCE(status, '') IN ('Pending Repair', ${sqlIncomingTabStatus()})
+                   THEN ${sqlIncomingTabStatus()}
+                 ELSE status
+               END,
+               delivered_at = COALESCE(delivered_at, $7),
+               updated_at = NOW()
+           WHERE id = $8`,
+          updateValues
+        );
+      }
+      const record = await getRepairById(repairId, orgId);
       return record!;
     }
 
@@ -637,7 +796,7 @@ export async function upsertEcwidIncomingRepair(params: {
       deliveredAt: params.orderDate ?? null,
       receivedAt: null,
       intakeConfirmedAt: null,
-    });
+    }, orgId);
   } catch (error) {
     console.error('Error upserting Ecwid incoming repair:', error);
     throw new Error('Failed to upsert incoming repair');

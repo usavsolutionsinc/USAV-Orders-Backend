@@ -6,7 +6,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * POST /api/rooms/reorder
  * Body: { order: string[] }   — room names, in the new display order.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const order = Array.isArray(body?.order) ? body.order.map(String) : null;
@@ -16,7 +16,10 @@ export const POST = withAuth(async (req: NextRequest) => {
     if (order.length > 200) {
       return NextResponse.json({ error: 'Too many rooms (max 200)' }, { status: 400 });
     }
-    const result = await reorderRooms(order);
+    // Tenant-scoped write: reorderRooms org-gates each sort_order UPDATE on
+    // organization_id so a tenant submitting room names can only reorder its
+    // OWN rooms, never another org's rooms with matching name strings.
+    const result = await reorderRooms(order, ctx.organizationId);
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
     console.error('[POST /api/rooms/reorder] error:', err);

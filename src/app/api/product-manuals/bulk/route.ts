@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * POST /api/product-manuals/bulk
@@ -52,7 +52,8 @@ function parseIds(raw: unknown): number[] {
 }
 
 export const POST = withAuth(
-  async (request) => {
+  async (request, ctx) => {
+    const orgId = ctx.organizationId;
     let body: BulkBody;
     try {
       body = await request.json();
@@ -73,12 +74,25 @@ export const POST = withAuth(
       if (action === 'move') {
         const folderPath = String(body.folderPath || '').trim().replace(/^\/+|\/+$/g, '');
         // Empty string is meaningful — moves the selection to the root.
-        const result = await pool.query(
-          `UPDATE product_manuals
-              SET folder_path = $1, updated_at = NOW()
-            WHERE id = ANY($2::bigint[])
-              AND is_active = TRUE`,
-          [folderPath || null, ids],
+        // product_manuals has NO organization_id column and NO RLS policy, so a
+        // bare GUC wrap provides ZERO isolation — org A could move org B's
+        // manuals by guessing ids. Scope the mutation through the org-bearing
+        // sku_catalog parent (sku_catalog_id → sku_catalog.organization_id),
+        // matching the upsert lookup pattern in lib/product-manuals.ts.
+        // NEEDS-COL: NULL-parent (unpaired) manuals are unattributable to any
+        // org and are intentionally excluded until product_manuals gains its
+        // own organization_id column.
+        const result = await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE product_manuals
+                SET folder_path = $1, updated_at = NOW()
+              WHERE id = ANY($2::bigint[])
+                AND is_active = TRUE
+                AND sku_catalog_id IN (
+                  SELECT id FROM sku_catalog WHERE organization_id = $3
+                )`,
+            [folderPath || null, ids, orgId],
+          ),
         );
         return NextResponse.json({
           success: true,
@@ -117,12 +131,23 @@ export const POST = withAuth(
 
         params.push(ids);
         const idsParam = params.length;
-        const result = await pool.query(
-          `UPDATE product_manuals
-              SET ${sets.join(', ')}, updated_at = NOW()
-            WHERE id = ANY($${idsParam}::bigint[])
-              AND is_active = TRUE`,
-          params,
+        params.push(orgId);
+        const orgParam = params.length;
+        // product_manuals has NO organization_id column and NO RLS policy — a
+        // bare GUC wrap provides ZERO isolation. Scope through the org-bearing
+        // sku_catalog parent so org A can't retag org B's manuals by id.
+        // NEEDS-COL: NULL-parent manuals are excluded (see 'move' above).
+        const result = await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE product_manuals
+                SET ${sets.join(', ')}, updated_at = NOW()
+              WHERE id = ANY($${idsParam}::bigint[])
+                AND is_active = TRUE
+                AND sku_catalog_id IN (
+                  SELECT id FROM sku_catalog WHERE organization_id = $${orgParam}
+                )`,
+            params,
+          ),
         );
         return NextResponse.json({
           success: true,
@@ -135,12 +160,21 @@ export const POST = withAuth(
         // Soft-delete by default — the operator's bulk-undo toast restores
         // via PATCH isActive=true on each id. Blob bytes stay on disk so
         // the toast can revert without re-uploading.
-        const result = await pool.query(
-          `UPDATE product_manuals
-              SET is_active = FALSE, updated_at = NOW()
-            WHERE id = ANY($1::bigint[])
-              AND is_active = TRUE`,
-          [ids],
+        // product_manuals has NO organization_id column and NO RLS policy — a
+        // bare GUC wrap provides ZERO isolation. Scope through the org-bearing
+        // sku_catalog parent so org A can't soft-delete org B's manuals by id.
+        // NEEDS-COL: NULL-parent manuals are excluded (see 'move' above).
+        const result = await withTenantTransaction(orgId, (client) =>
+          client.query(
+            `UPDATE product_manuals
+                SET is_active = FALSE, updated_at = NOW()
+              WHERE id = ANY($1::bigint[])
+                AND is_active = TRUE
+                AND sku_catalog_id IN (
+                  SELECT id FROM sku_catalog WHERE organization_id = $2
+                )`,
+            [ids, orgId],
+          ),
         );
         return NextResponse.json({
           success: true,

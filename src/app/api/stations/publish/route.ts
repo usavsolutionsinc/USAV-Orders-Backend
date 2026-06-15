@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 import { parseBody } from '@/lib/schemas/parse';
@@ -31,7 +32,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const parsed = parseBody(StationPublishBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const target = await pool.query<{
+    const target = await tenantQuery<{
       id: number;
       page_key: string;
       mode_key: string;
@@ -39,6 +40,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       is_active: boolean;
       config: StationConfig;
     }>(
+      ctx.organizationId,
       `SELECT id, page_key, mode_key, version, is_active, config
          FROM station_definitions
         WHERE id = $1 AND organization_id = $2`,
@@ -64,7 +66,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // Single atomic statement: deactivate siblings, activate the target.
-    const { rows: published } = await pool.query<{ id: number; version: number }>(
+    const { rows: published } = await tenantQuery<{ id: number; version: number }>(
+      ctx.organizationId,
       `WITH deactivated AS (
          UPDATE station_definitions
             SET is_active = FALSE, updated_at = NOW()

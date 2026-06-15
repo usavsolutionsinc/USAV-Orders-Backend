@@ -7,6 +7,25 @@ import {
 } from '@/lib/neon/handling-unit-queries';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+
+/**
+ * Org-ownership precheck for a resolved handling_units.id.
+ *
+ * `handling_units` is tenant-owned (carries organization_id), but the
+ * handling-unit-queries helpers this route delegates to are not org-aware, so
+ * we gate at the route boundary: GUC-wrap + explicit `organization_id = $2`
+ * filter. Returns true only when the box exists AND belongs to the caller's
+ * org; a cross-tenant id therefore reads as "not found" (404), never 403.
+ */
+async function ownsHandlingUnit(orgId: string, id: number): Promise<boolean> {
+  const r = await tenantQuery<{ id: number }>(
+    orgId,
+    `SELECT id FROM handling_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, orgId],
+  );
+  return r.rows.length > 0;
+}
 
 /**
  * GET /api/handling-units/:id — box + contents + rollup status.
@@ -16,7 +35,7 @@ import pool from '@/lib/db';
  * the testing resolver fans out to), and a `rollup` { total, tested, untested }.
  */
 export const GET = withAuth(
-  async (request: NextRequest) => {
+  async (request: NextRequest, ctx) => {
     const raw = extractIdSegment(request.nextUrl.pathname);
     if (!raw) {
       return NextResponse.json({ success: false, error: 'handling unit id required' }, { status: 400 });
@@ -33,6 +52,12 @@ export const GET = withAuth(
       }
     }
     if (id == null || !Number.isFinite(id)) {
+      return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
+    }
+
+    // Org-ownership gate: the queries below aren't org-aware, so a cross-tenant
+    // box id reads as "not found" rather than leaking another org's contents.
+    if (!(await ownsHandlingUnit(ctx.organizationId, id))) {
       return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
     }
 
@@ -74,6 +99,12 @@ export const DELETE = withAuth(
       }
     }
     if (id == null || !Number.isFinite(id)) {
+      return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
+    }
+
+    // Org-ownership precheck before the (non-org-aware) dissolve write — a
+    // cross-tenant box id 404s instead of dissolving another org's box.
+    if (!(await ownsHandlingUnit(ctx.organizationId, id))) {
       return NextResponse.json({ success: false, error: 'Handling unit not found' }, { status: 404 });
     }
 

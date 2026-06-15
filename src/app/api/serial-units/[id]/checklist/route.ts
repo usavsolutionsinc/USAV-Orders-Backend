@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { upsertVerification, deriveStepPassed } from '@/lib/neon/sku-catalog-queries';
 import { tagUnitFailure } from '@/lib/neon/failure-modes-queries';
 import { recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
@@ -34,19 +35,24 @@ function unitIdFromPath(pathname: string): number {
  * GET — the unit's checklist: every template step merged with this unit's
  * recorded result (passed / who / when), plus a completion tally.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   const serialUnitId = unitIdFromPath(request.nextUrl.pathname);
   if (!Number.isFinite(serialUnitId) || serialUnitId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid serial_unit id' }, { status: 400 });
   }
 
+  const orgId = ctx.organizationId;
+
   try {
-    const unit = await pool.query<{ sku_catalog_id: number | null; category: string | null }>(
+    const unit = await tenantQuery<{ sku_catalog_id: number | null; category: string | null }>(
+      orgId,
       `SELECT su.sku_catalog_id, sc.category
          FROM serial_units su
     LEFT JOIN sku_catalog sc ON sc.id = su.sku_catalog_id
-        WHERE su.id = $1`,
-      [serialUnitId],
+                            AND sc.organization_id = su.organization_id
+        WHERE su.id = $1
+          AND su.organization_id = $2`,
+      [serialUnitId, orgId],
     );
     if (unit.rows.length === 0) {
       return NextResponse.json({ ok: false, error: 'unit not found' }, { status: 404 });
@@ -58,7 +64,8 @@ export const GET = withAuth(async (request) => {
       return NextResponse.json({ ok: true, steps: [], progress: { completed: 0, total: 0 } });
     }
 
-    const steps = await pool.query(
+    const steps = await tenantQuery(
+      orgId,
       `SELECT qc.id            AS step_id,
               qc.step_label,
               qc.step_type,
@@ -81,12 +88,14 @@ export const GET = withAuth(async (request) => {
           AND tv.step_type     = $2
           AND tv.source_kind   = $3
           AND tv.source_row_id = $1
+          AND tv.organization_id = qc.organization_id
     LEFT JOIN staff s ON s.id = tv.verified_by
         WHERE (qc.sku_catalog_id = $4
            OR ($5::text IS NOT NULL AND qc.category = $5 AND qc.sku_catalog_id IS NULL))
           AND qc.status = 'published'
+          AND qc.organization_id = $6
      ORDER BY qc.sort_order, qc.id`,
-      [serialUnitId, STEP_TYPE, SOURCE_KIND, sku_catalog_id, category],
+      [serialUnitId, STEP_TYPE, SOURCE_KIND, sku_catalog_id, category, orgId],
     );
 
     const completed = steps.rows.filter((r) => r.passed != null).length;
@@ -125,11 +134,14 @@ export const POST = withAuth(async (request, ctx) => {
     return NextResponse.json({ ok: false, error: 'no staff identity on request' }, { status: 401 });
   }
 
+  const orgId = ctx.organizationId;
+
   try {
     // tech_verifications.sku_catalog_id is NOT NULL — resolve it from the unit.
-    const unit = await pool.query<{ sku_catalog_id: number | null }>(
-      `SELECT sku_catalog_id FROM serial_units WHERE id = $1`,
-      [serialUnitId],
+    const unit = await tenantQuery<{ sku_catalog_id: number | null }>(
+      orgId,
+      `SELECT sku_catalog_id FROM serial_units WHERE id = $1 AND organization_id = $2`,
+      [serialUnitId, orgId],
     );
     if (unit.rows.length === 0) {
       return NextResponse.json({ ok: false, error: 'unit not found' }, { status: 404 });
@@ -144,13 +156,14 @@ export const POST = withAuth(async (request, ctx) => {
 
     // Load the step's pass band + linked failure mode so the server (not the
     // client) decides pass/fail for value-kind steps and knows what to auto-tag.
-    const stepRow = await pool.query<{
+    const stepRow = await tenantQuery<{
       pass_min: string | null;
       pass_max: string | null;
       failure_mode_id: number | null;
     }>(
-      `SELECT pass_min, pass_max, failure_mode_id FROM qc_check_templates WHERE id = $1`,
-      [parsed.stepId],
+      orgId,
+      `SELECT pass_min, pass_max, failure_mode_id FROM qc_check_templates WHERE id = $1 AND organization_id = $2`,
+      [parsed.stepId, orgId],
     );
     if (stepRow.rows.length === 0) {
       return NextResponse.json({ ok: false, error: 'step not found' }, { status: 404 });
@@ -162,6 +175,9 @@ export const POST = withAuth(async (request, ctx) => {
       valueNum: parsed.valueNum ?? null,
     });
 
+    // Thread orgId so tech_verifications (tenant-owned, NOT NULL organization_id
+    // with a GUC-reading default) is stamped + GUC-scoped — otherwise the
+    // drizzle/raw default would resolve org=NULL.
     const verification = await upsertVerification({
       sourceKind: SOURCE_KIND,
       sourceRowId: serialUnitId,
@@ -174,7 +190,7 @@ export const POST = withAuth(async (request, ctx) => {
       valueNum: parsed.valueNum ?? null,
       valueText: parsed.valueText ?? null,
       failedModeId: passed === false ? failureModeId : null,
-    });
+    }, orgId);
 
     // Auto-tag-on-fail: a failed step that names a failure mode opens a tag on
     // the unit (idempotent per open mode). Best-effort — never fails the record.
@@ -187,7 +203,7 @@ export const POST = withAuth(async (request, ctx) => {
           detectedByStaffId: verifiedBy,
           source: 'qc',
           notes: `auto-tagged from failed QC step #${parsed.stepId}`,
-        });
+        }, orgId);
       } catch (tagErr) {
         console.warn('[checklist] auto-tag-on-fail failed (non-fatal)', tagErr);
       }

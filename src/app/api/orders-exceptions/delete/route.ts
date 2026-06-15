@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * POST /api/orders-exceptions/delete - Delete one or more exception rows
@@ -9,8 +9,9 @@ import { withAuth } from '@/lib/auth/withAuth';
  *
  * Destructive — gated to orders.void + stepUp.
  */
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const body = await req.json();
     const { exceptionId, exceptionIds } = body;
 
@@ -23,10 +24,15 @@ export const POST = withAuth(async (req: NextRequest) => {
 
     const idsToDelete: number[] = exceptionId ? [exceptionId] : exceptionIds;
     const placeholders = idsToDelete.map((_, idx) => `$${idx + 1}`).join(', ');
+    // Org-scope the delete so a tenant can only remove its own exception rows
+    // (rows are addressed by surrogate id; without this an id from another org
+    // would be deletable). orgParam is the last positional after the id list.
+    const orgParam = `$${idsToDelete.length + 1}`;
 
-    const result = await pool.query(
-      `DELETE FROM orders_exceptions WHERE id IN (${placeholders})`,
-      idsToDelete
+    const result = await tenantQuery(
+      orgId,
+      `DELETE FROM orders_exceptions WHERE id IN (${placeholders}) AND organization_id = ${orgParam}`,
+      [...idsToDelete, orgId]
     );
 
     await invalidateCacheTags(['orders', 'shipped']);

@@ -287,10 +287,11 @@ async function buildMutationChecks() {
       validate: (data) => validateObjectWithKeys(data, ['found']),
     }),
     createCheck({
-      endpoint: '/api/tech/scan-tracking',
+      endpoint: '/api/tech/scan',
       method: 'POST',
       body: {
-        tracking: `INTEGRITY-NOT-FOUND-${Date.now()}`,
+        type: 'TRACKING',
+        value: `INTEGRITY-NOT-FOUND-${Date.now()}`,
         techId: '1',
       },
       validate: (data) => validateObjectWithKeys(data, ['found']),

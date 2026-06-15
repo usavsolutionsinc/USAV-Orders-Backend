@@ -47,7 +47,12 @@ export const TESTING_PRINT_QTY_OPTIONS = [1, 2, 3, 4, 5] as const;
  * mutations by dispatching that event (via core / dispatchTestingLineUpdated)
  * rather than holding a private row copy.
  */
-export function useTestingLineController(row: ReceivingLineRow, staffId: string) {
+export function useTestingLineController(
+  row: ReceivingLineRow,
+  staffId: string,
+  opts?: { labelColor?: string },
+) {
+  const labelColor = opts?.labelColor ?? '';
   const core = useReceivingLineCore(row, staffId, { dispatchLine: dispatchTestingLineUpdated });
   const queryClient = useQueryClient();
 
@@ -459,6 +464,8 @@ export function useTestingLineController(row: ReceivingLineRow, staffId: string)
             serialNumber: activeSerial.serial_number,
             gtin: allocation!.gtin ?? undefined,
             qrPayload: allocation!.qrUrl ?? undefined,
+            condition: row.condition_grade || 'USED_A',
+            color: labelColor || undefined,
           });
         }, i * stagger);
       }
@@ -469,7 +476,7 @@ export function useTestingLineController(row: ReceivingLineRow, staffId: string)
       });
       return true;
     },
-    [row.sku, row.condition_grade, row.catalog_product_title, row.item_name, activeSerial, previewBySerialUnit, allocateUnitId, notes],
+    [row.sku, row.condition_grade, row.catalog_product_title, row.item_name, activeSerial, previewBySerialUnit, allocateUnitId, notes, labelColor],
   );
 
   const findNextOpenSibling = useCallback(

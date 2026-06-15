@@ -1,17 +1,55 @@
 import { gs1UnitAi, serialUnitHandle } from '@/lib/barcode-routing';
-import { escapeLabelHtml, printLabel } from '@/lib/print/printLabel';
+import { printLabel } from '@/lib/print/printLabel';
+import { buildFaceInfoHtml, type LabelFaceModel } from '@/lib/print/labelFace';
 import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
 
-// Product/testing labels print the product title (the unit id lives in the
-// DataMatrix). The title is small and top-aligned next to the code so longer
-// names get room to wrap. `.sku` is the monospace fallback when no title.
-// `.meta` carries the condition grade chip + the human serial under the title.
-const PRODUCT_INFO_CSS =
-  '.title{font-weight:700;font-size:11px;line-height:1.15;color:#111;text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}' +
-  '.sku{font-family:monospace;font-weight:700;font-size:12px;line-height:1.15;color:#111;word-break:break-all;text-align:left}' +
-  '.meta{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px}' +
-  '.cond{font-weight:800;font-size:8px;line-height:1.3;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:#111;border-radius:3px;padding:1px 5px}' +
-  '.sn{font-family:monospace;font-weight:700;font-size:9px;line-height:1.2;color:#111;word-break:break-all}';
+// Best-effort product colors recognised in a SKU title, longest-first so
+// "space gray" wins over "gray". Used to pre-fill the testing label's
+// bottom-right color slot; the operator can override it.
+const COLOR_WORDS = [
+  'space gray',
+  'space grey',
+  'rose gold',
+  'starlight',
+  'midnight',
+  'graphite',
+  'champagne',
+  'platinum',
+  'silver',
+  'black',
+  'white',
+  'titanium',
+  'purple',
+  'yellow',
+  'orange',
+  'green',
+  'beige',
+  'brown',
+  'coral',
+  'gold',
+  'gray',
+  'grey',
+  'blue',
+  'pink',
+  'red',
+  'tan',
+];
+
+/**
+ * Pull a product color out of a SKU/product title for the testing label's
+ * bottom-right slot. First/longest keyword match wins; returns '' when none is
+ * found so the slot is simply left blank. Manual override happens upstream.
+ */
+export function deriveColorFromTitle(title: string | null | undefined): string {
+  const t = String(title ?? '').toLowerCase();
+  if (!t) return '';
+  for (const word of COLOR_WORDS) {
+    if (t.includes(word)) {
+      return word.replace(/\b\w/g, (ch) => ch.toUpperCase());
+    }
+  }
+  return '';
+}
 
 /**
  * Condition label for the tiny 2×1" sticker, from the shared `label` variant
@@ -78,17 +116,44 @@ export type PrintProductLabelInput = {
   qrPayload?: string;
   /** SKU's internal GTIN. When present alongside serialNumber, the QR encodes a GS1 Digital Link URL. */
   gtin?: string;
-  /** Condition grade (BRAND_NEW / USED_A… / PARTS). Rendered as a chip under the title. */
+  /** Condition grade (BRAND_NEW / USED_A… / PARTS). Rendered bottom-left. */
   condition?: string | null;
+  /** Product color (e.g. "Black"). Rendered bottom-right. Manual / title-derived. */
+  color?: string | null;
 };
 
 /**
+ * Map a unit/testing/product label onto the shared {@link LabelFaceModel}.
+ * Product labels use the `product` face: the title fills a full top row,
+ * condition sits bottom-left and color bottom-right (the unit id lives in the
+ * DataMatrix). The caller supplies the already-built `matrix` (preview and print
+ * pass the identical value) so this adapter stays pure.
+ */
+export function unitLabelToFace(input: {
+  sku: string;
+  title?: string | null;
+  serialNumber?: string | null;
+  condition?: string | null;
+  color?: string | null;
+  matrix: LabelFaceModel['matrix'];
+}): LabelFaceModel {
+  const title = (input.title ?? '').trim();
+  return {
+    kind: 'product',
+    topLeft: title || input.sku,
+    topRight: '',
+    center: '',
+    bottomLeft: conditionChipLabel(input.condition),
+    bottomRight: (input.color ?? '').trim(),
+    matrix: input.matrix,
+  };
+}
+
+/**
  * Print a product/testing unit label via the shared {@link printLabel} shell —
- * the same 2×1" sticker the receiving label uses, just with a single readable
- * line instead of carton metadata. DataMatrix-only layout: product title on the
- * left (unit id when no title is available), DataMatrix on the right (matches
- * the on-screen live preview). The encoded value is built by
- * {@link buildUnitPayload}; no consumer-readable URL.
+ * the same 2×1" face the receiving carton label uses (product title center,
+ * condition bottom-left, color bottom-right, DataMatrix right). The encoded
+ * value is built by {@link buildUnitPayload}; no consumer-readable URL.
  */
 export function printProductLabel(input: PrintProductLabelInput): void {
   if (typeof window === 'undefined') return;
@@ -96,38 +161,29 @@ export function printProductLabel(input: PrintProductLabelInput): void {
   const sku = input.sku?.trim();
   if (!sku) return;
 
-  const { value, symbology } = buildUnitPayload({
+  const matrix = {
+    ...buildUnitPayload({
+      sku,
+      serialNumber: input.serialNumber?.trim() || null,
+      qrPayload: input.qrPayload?.trim() || null,
+      gtin: input.gtin?.trim() || null,
+    }),
+    scale: 4,
+  };
+
+  const face = unitLabelToFace({
     sku,
-    serialNumber: input.serialNumber?.trim() || null,
-    qrPayload: input.qrPayload?.trim() || null,
-    gtin: input.gtin?.trim() || null,
+    title: input.title,
+    serialNumber: input.serialNumber,
+    condition: input.condition,
+    color: input.color,
+    matrix,
   });
-
-  // Readable line = product title; the unit id is encoded in the DataMatrix.
-  // Fall back to the unit id when no title is available so the label is never
-  // blank.
-  const title = input.title?.trim();
-  const headHtml = title
-    ? `<div class="title">${escapeLabelHtml(title)}</div>`
-    : `<div class="sku">${escapeLabelHtml(sku)}</div>`;
-
-  // Condition chip + human serial sit on a meta row under the title. Each
-  // piece is independent — omit whichever isn't provided.
-  const condChip = conditionChipLabel(input.condition);
-  const serialText = input.serialNumber?.trim();
-  const metaParts: string[] = [];
-  if (condChip) metaParts.push(`<span class="cond">${escapeLabelHtml(condChip)}</span>`);
-  if (serialText) metaParts.push(`<span class="sn">${escapeLabelHtml(serialText)}</span>`);
-  const metaHtml = metaParts.length ? `<div class="meta">${metaParts.join('')}</div>` : '';
-
-  const infoHtml = `${headHtml}${metaHtml}`;
 
   printLabel({
     name: `Label ${sku}`,
-    infoHtml,
-    infoCss: PRODUCT_INFO_CSS,
-    infoAlign: 'flex-start',
-    dataMatrix: { value, symbology, scale: 4 },
+    ...buildFaceInfoHtml(face),
+    dataMatrix: face.matrix,
   });
 }
 
@@ -140,8 +196,10 @@ export type PrintProductLabelsInput = {
   gtin?: string;
   /** Optional per-serial QR payload override (rare; allows mixed sources). Index-aligned with serialNumbers. */
   qrPayloads?: Array<string | null | undefined>;
-  /** Condition grade shared by every label in the batch. Rendered as a chip under the title. */
+  /** Condition grade shared by every label in the batch. Rendered bottom-left. */
   condition?: string | null;
+  /** Product color shared by every label in the batch. Rendered bottom-right. */
+  color?: string | null;
   staggerMs?: number;
 };
 
@@ -168,6 +226,7 @@ export function printProductLabels(input: PrintProductLabelsInput): void {
         gtin: input.gtin,
         qrPayload: payloads[i] ?? undefined,
         condition: input.condition,
+        color: input.color,
       });
     }, i * stagger);
   });

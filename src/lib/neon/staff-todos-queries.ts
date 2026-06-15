@@ -13,6 +13,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type StaffTodoKind = 'general' | 'recurring';
 
@@ -68,10 +70,42 @@ function mapRow(row: Record<string, unknown>): StaffTodoRow {
 }
 
 /** All live (non-archived) todos for one staff + station, list order. */
-export async function listStaffTodos(staffId: number, station: string): Promise<StaffTodoRow[]> {
+export async function listStaffTodos(
+  staffId: number,
+  station: string,
+  orgId?: OrgId,
+): Promise<StaffTodoRow[]> {
   // Lateral top-1 probe on idx_staff_todo_completions_todo_time instead of
   // SELECT_ROW's correlated subquery — this is the hot path (the header chip
   // fetches it on every page).
+  // staff_todos has no organization_id column; its org-bearing parent is
+  // `staff`, so when orgId is present we add an EXISTS gate on the staff row.
+  if (orgId) {
+    const r = await tenantQuery(
+      orgId,
+      `SELECT t.id::int,
+              t.kind,
+              t.text,
+              t.sort_order,
+              t.recur_interval_ms::bigint AS recur_interval_ms,
+              (EXTRACT(EPOCH FROM t.recur_anchor) * 1000)::bigint AS recur_anchor_ms,
+              (EXTRACT(EPOCH FROM t.completed_at) * 1000)::bigint AS completed_at_ms,
+              (EXTRACT(EPOCH FROM lc.last_completed_at) * 1000)::bigint AS last_completed_at_ms
+         FROM staff_todos t
+         LEFT JOIN LATERAL (
+           SELECT c.completed_at AS last_completed_at
+             FROM staff_todo_completions c
+            WHERE c.todo_id = t.id
+            ORDER BY c.completed_at DESC
+            LIMIT 1
+         ) lc ON true
+        WHERE t.staff_id = $1 AND t.station = $2 AND t.archived_at IS NULL
+          AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)
+        ORDER BY t.sort_order ASC, t.id ASC`,
+      [staffId, station, orgId],
+    );
+    return r.rows.map(mapRow);
+  }
   const r = await pool.query(
     `SELECT t.id::int,
             t.kind,
@@ -108,8 +142,51 @@ export async function createStaffTodo(args: {
   kind: StaffTodoKind;
   text: string;
   intervalMs?: number | null;
-}): Promise<StaffTodoRow> {
+}, orgId?: OrgId): Promise<StaffTodoRow> {
   const { staffId, station, kind, text } = args;
+
+  // staff_todos has no organization_id column → the sibling-probe + sort_order
+  // subquery are gated via the `staff` parent's org, and the whole write runs
+  // inside withTenantTransaction (GUC-scoped) when orgId is present.
+  if (orgId) {
+    const newId = await withTenantTransaction(orgId, async (client) => {
+      let intervalMs: number | null = null;
+      let anchorMs: number | null = null;
+      if (kind === 'recurring') {
+        const sib = await client.query(
+          `SELECT t.recur_interval_ms::bigint AS interval_ms,
+                  (EXTRACT(EPOCH FROM t.recur_anchor) * 1000)::bigint AS anchor_ms
+             FROM staff_todos t
+            WHERE t.staff_id = $1 AND t.station = $2 AND t.kind = 'recurring' AND t.archived_at IS NULL
+              AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)
+            ORDER BY t.id ASC LIMIT 1`,
+          [staffId, station, orgId],
+        );
+        if (sib.rows[0]) {
+          intervalMs = Number(sib.rows[0].interval_ms);
+          anchorMs = Number(sib.rows[0].anchor_ms);
+        } else {
+          intervalMs = args.intervalMs && args.intervalMs > 0 ? args.intervalMs : DEFAULT_RECUR_INTERVAL_MS;
+          anchorMs = Date.now();
+        }
+      }
+      const r = await client.query(
+        `INSERT INTO staff_todos (staff_id, station, kind, text, sort_order, recur_interval_ms, recur_anchor)
+         SELECT $1, $2, $3, $4,
+                COALESCE((SELECT MAX(t.sort_order) + 1 FROM staff_todos t
+                           WHERE t.staff_id = $1 AND t.station = $2 AND t.kind = $3 AND t.archived_at IS NULL), 0),
+                $5, to_timestamp($6 / 1000.0)
+          WHERE EXISTS (SELECT 1 FROM staff s WHERE s.id = $1 AND s.organization_id = $7)
+         RETURNING id`,
+        [staffId, station, kind, text, intervalMs, anchorMs, orgId],
+      );
+      if (!r.rows[0]) throw new Error('staff_todos insert did not return a readable row');
+      return Number(r.rows[0].id);
+    });
+    const row = await getStaffTodo(staffId, newId, orgId);
+    if (!row) throw new Error('staff_todos insert did not return a readable row');
+    return row;
+  }
 
   let intervalMs: number | null = null;
   let anchorMs: number | null = null;
@@ -145,7 +222,21 @@ export async function createStaffTodo(args: {
   return row;
 }
 
-export async function getStaffTodo(staffId: number, id: number): Promise<StaffTodoRow | null> {
+export async function getStaffTodo(
+  staffId: number,
+  id: number,
+  orgId?: OrgId,
+): Promise<StaffTodoRow | null> {
+  // staff_todos has no organization_id column → gate via the `staff` parent.
+  if (orgId) {
+    const r = await tenantQuery(
+      orgId,
+      `${SELECT_ROW} WHERE t.id = $2 AND t.staff_id = $1 AND t.archived_at IS NULL
+        AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)`,
+      [staffId, id, orgId],
+    );
+    return r.rows[0] ? mapRow(r.rows[0]) : null;
+  }
   const r = await pool.query(
     `${SELECT_ROW} WHERE t.id = $2 AND t.staff_id = $1 AND t.archived_at IS NULL`,
     [staffId, id],
@@ -162,8 +253,9 @@ export async function setStaffTodoDone(
   staffId: number,
   id: number,
   done: boolean,
+  orgId?: OrgId,
 ): Promise<StaffTodoRow | null> {
-  const row = await getStaffTodo(staffId, id);
+  const row = await getStaffTodo(staffId, id, orgId);
   if (!row) return null;
 
   // The post-write state is derived from `row` instead of re-fetching — this
@@ -171,6 +263,56 @@ export async function setStaffTodoDone(
   // reported as null even when prior-cycle history exists; done-ness math
   // treats both identically and the next GET restores the true value.
   const nowMs = Date.now();
+
+  // Neither staff_todos nor staff_todo_completions carries organization_id;
+  // both are gated via the `staff` parent. The completions INSERT derives the
+  // org through todo_id → staff_todos → staff so a cross-tenant todo_id can't
+  // be written against.
+  if (orgId) {
+    const periodStart =
+      row.kind === 'general'
+        ? 0
+        : cyclePeriodStartMs(row.recur_anchor_ms!, row.recur_interval_ms!, nowMs);
+    return withTenantTransaction(orgId, async (client) => {
+      if (row.kind === 'general') {
+        await client.query(
+          `UPDATE staff_todos t
+              SET completed_at = CASE WHEN $3 THEN now() ELSE NULL END,
+                  updated_at = now()
+            WHERE t.id = $2 AND t.staff_id = $1
+              AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $4)`,
+          [staffId, id, done, orgId],
+        );
+        return { ...row, completed_at_ms: done ? nowMs : null };
+      }
+      if (done) {
+        // Skip the insert when already checked this cycle (idempotent retry).
+        const already = row.last_completed_at_ms != null && row.last_completed_at_ms >= periodStart;
+        if (already) return row;
+        await client.query(
+          `INSERT INTO staff_todo_completions (todo_id, staff_id)
+           SELECT $1, $2
+            WHERE EXISTS (
+              SELECT 1 FROM staff_todos t
+               JOIN staff s ON s.id = t.staff_id
+               WHERE t.id = $1 AND t.staff_id = $2 AND s.organization_id = $3)`,
+          [id, staffId, orgId],
+        );
+        return { ...row, last_completed_at_ms: nowMs };
+      }
+      await client.query(
+        `DELETE FROM staff_todo_completions c
+          WHERE c.todo_id = $1 AND c.staff_id = $2 AND c.completed_at >= to_timestamp($3 / 1000.0)
+            AND EXISTS (
+              SELECT 1 FROM staff_todos t
+               JOIN staff s ON s.id = t.staff_id
+               WHERE t.id = c.todo_id AND s.organization_id = $4)`,
+        [id, staffId, periodStart, orgId],
+      );
+      return { ...row, last_completed_at_ms: null };
+    });
+  }
+
   if (row.kind === 'general') {
     await pool.query(
       `UPDATE staff_todos
@@ -212,7 +354,52 @@ export async function setStaffTodoInterval(
   staffId: number,
   station: string,
   intervalMs: number,
+  orgId?: OrgId,
 ): Promise<{ previousIntervalMs: number | null }> {
+  // staff_todos / staff_todo_completions have no organization_id column → all
+  // statements are gated via the `staff` parent. withTenantTransaction supplies
+  // BEGIN + SET LOCAL app.current_org and the COMMIT/ROLLBACK lifecycle.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      // Tasks checked under the OLD cycle, before the anchor moves.
+      const checked = await client.query(
+        `SELECT t.id, t.recur_interval_ms::bigint AS interval_ms,
+                EXISTS (
+                  SELECT 1 FROM staff_todo_completions c
+                   WHERE c.todo_id = t.id
+                     AND c.completed_at >= t.recur_anchor
+                       + (floor(EXTRACT(EPOCH FROM (now() - t.recur_anchor)) * 1000 / t.recur_interval_ms)
+                          * t.recur_interval_ms / 1000.0) * interval '1 second'
+                ) AS is_done
+           FROM staff_todos t
+          WHERE t.staff_id = $1 AND t.station = $2 AND t.kind = 'recurring' AND t.archived_at IS NULL
+            AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)`,
+        [staffId, station, orgId],
+      );
+      const previousIntervalMs = checked.rows[0] ? Number(checked.rows[0].interval_ms) : null;
+      await client.query(
+        `UPDATE staff_todos t
+            SET recur_interval_ms = $3, recur_anchor = now(), updated_at = now()
+          WHERE t.staff_id = $1 AND t.station = $2 AND t.kind = 'recurring' AND t.archived_at IS NULL
+            AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $4)`,
+        [staffId, station, intervalMs, orgId],
+      );
+      const doneIds = checked.rows.filter((r) => r.is_done).map((r) => Number(r.id));
+      if (doneIds.length > 0) {
+        await client.query(
+          `INSERT INTO staff_todo_completions (todo_id, staff_id)
+           SELECT t.id, $2
+             FROM unnest($1::bigint[]) AS t(id)
+             JOIN staff_todos td ON td.id = t.id
+             JOIN staff s ON s.id = td.staff_id
+            WHERE s.organization_id = $3`,
+          [doneIds, staffId, orgId],
+        );
+      }
+      return { previousIntervalMs };
+    });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -256,7 +443,22 @@ export async function setStaffTodoInterval(
 }
 
 /** Soft-delete (archive) a task. Returns false when no live row matched. */
-export async function archiveStaffTodo(staffId: number, id: number): Promise<boolean> {
+export async function archiveStaffTodo(
+  staffId: number,
+  id: number,
+  orgId?: OrgId,
+): Promise<boolean> {
+  // No organization_id column → gate via the `staff` parent.
+  if (orgId) {
+    const r = await tenantQuery(
+      orgId,
+      `UPDATE staff_todos t SET archived_at = now(), updated_at = now()
+        WHERE t.id = $2 AND t.staff_id = $1 AND t.archived_at IS NULL
+          AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)`,
+      [staffId, id, orgId],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
   const r = await pool.query(
     `UPDATE staff_todos SET archived_at = now(), updated_at = now()
       WHERE id = $2 AND staff_id = $1 AND archived_at IS NULL`,
@@ -273,7 +475,22 @@ export async function archiveStaffTodo(staffId: number, id: number): Promise<boo
  * math reads recur_anchor + completions, not archived_at, so a restored
  * recurring task resumes its prior cycle without drift.
  */
-export async function unarchiveStaffTodo(staffId: number, id: number): Promise<boolean> {
+export async function unarchiveStaffTodo(
+  staffId: number,
+  id: number,
+  orgId?: OrgId,
+): Promise<boolean> {
+  // No organization_id column → gate via the `staff` parent.
+  if (orgId) {
+    const r = await tenantQuery(
+      orgId,
+      `UPDATE staff_todos t SET archived_at = NULL, updated_at = now()
+        WHERE t.id = $2 AND t.staff_id = $1 AND t.archived_at IS NOT NULL
+          AND EXISTS (SELECT 1 FROM staff s WHERE s.id = t.staff_id AND s.organization_id = $3)`,
+      [staffId, id, orgId],
+    );
+    return (r.rowCount ?? 0) > 0;
+  }
   const r = await pool.query(
     `UPDATE staff_todos SET archived_at = NULL, updated_at = now()
       WHERE id = $2 AND staff_id = $1 AND archived_at IS NOT NULL`,

@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 import { createClaim, softDeleteClaims } from '@/lib/warranty/mutations';
+import { getClaimTicketRef } from '@/lib/warranty/claims';
 import { idempotentJson, warrantyFlagEnabled, warrantyFlagOff } from '@/lib/warranty/route-helpers';
 import { WarrantyClaimBulkCreateBody, WarrantyClaimBulkDeleteBody } from '@/lib/schemas/warranty';
 
@@ -148,13 +149,26 @@ export const DELETE = withAuth(async (request, ctx) => {
     route: 'DELETE /api/warranty/claims/bulk',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
-      const { deleted, notFound } = await softDeleteClaims(parsed.data.ids, ctx.staffId ?? null);
+      // Org-ownership pre-check: only delete claims that belong to the caller's
+      // org. Cross-tenant ids are bucketed as not-found, identical in shape to
+      // the mutation's own notFound result.
+      const ownedIds: number[] = [];
+      const foreignIds: number[] = [];
+      for (const id of parsed.data.ids) {
+        const owns = await getClaimTicketRef(id, ctx.organizationId);
+        if (owns) ownedIds.push(id);
+        else foreignIds.push(id);
+      }
+
+      const { deleted, notFound } = await softDeleteClaims(ownedIds, ctx.staffId ?? null);
 
       const results = [
         ...deleted.map((d) => ({ id: d.id, ok: true as const, claimNumber: d.claimNumber })),
         ...notFound.map((id) => ({ id, ok: false as const, error: 'claim not found' })),
+        ...foreignIds.map((id) => ({ id, ok: false as const, error: 'claim not found' })),
       ];
 
+      const notFoundCount = notFound.length + foreignIds.length;
       if (deleted.length > 0) {
         await recordAudit(pool, ctx, request, {
           source: 'warranty-logger',
@@ -164,7 +178,7 @@ export const DELETE = withAuth(async (request, ctx) => {
           after: {
             requested: parsed.data.ids.length,
             deleted: deleted.length,
-            notFound: notFound.length,
+            notFound: notFoundCount,
             claimNumbers: deleted.map((d) => d.claimNumber),
           },
         });
@@ -172,7 +186,7 @@ export const DELETE = withAuth(async (request, ctx) => {
 
       return {
         status: 200,
-        body: { ok: true, deleted: deleted.length, notFound: notFound.length, results },
+        body: { ok: true, deleted: deleted.length, notFound: notFoundCount, results },
       };
     },
   });

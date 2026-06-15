@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 
 function randomId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -192,10 +191,8 @@ export function BinAddSkuSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await queryClient.invalidateQueries({ queryKey: invalidateKey });
-      successFeedback();
       onClose();
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Failed to add');
     } finally {
       setBusy(false);

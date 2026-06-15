@@ -8,7 +8,8 @@
  * body is never trusted for org/identity.
  */
 
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { StaffMessageKind } from '@/lib/schemas/staff-messages';
 
 export interface StaffMessageRow {
@@ -56,10 +57,11 @@ const SELECT_ROW = `
 
 /** A live staffer in `organizationId`, or null. Guards who a message can be sent to. */
 export async function resolveRecipient(
-  organizationId: string,
+  organizationId: OrgId,
   recipientId: number,
 ): Promise<{ id: number; name: string } | null> {
-  const r = await pool.query(
+  const r = await tenantQuery(
+    organizationId,
     `SELECT id::int, name
        FROM staff
       WHERE id = $1
@@ -72,77 +74,114 @@ export async function resolveRecipient(
 }
 
 export async function createStaffMessage(args: {
-  organizationId: string;
+  organizationId: OrgId;
   senderId: number;
   recipientId: number;
   body: string;
   kind: StaffMessageKind;
   context?: Record<string, unknown> | null;
 }): Promise<StaffMessageRow> {
-  const r = await pool.query(
-    `INSERT INTO staff_messages (organization_id, sender_id, recipient_id, body, kind, context)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb)
-     RETURNING id`,
-    [
-      args.organizationId,
-      args.senderId,
-      args.recipientId,
-      args.body,
-      args.kind,
-      args.context ? JSON.stringify(args.context) : null,
-    ],
-  );
-  const row = await getStaffMessage(args.recipientId, Number(r.rows[0].id));
+  // Insert + read-back in one tenant transaction so both run under the org GUC
+  // and the stamped organization_id is enforced end-to-end.
+  const row = await withTenantTransaction(args.organizationId, async (client) => {
+    const r = await client.query(
+      `INSERT INTO staff_messages (organization_id, sender_id, recipient_id, body, kind, context)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+       RETURNING id`,
+      [
+        args.organizationId,
+        args.senderId,
+        args.recipientId,
+        args.body,
+        args.kind,
+        args.context ? JSON.stringify(args.context) : null,
+      ],
+    );
+    const read = await client.query(
+      `${SELECT_ROW}
+        WHERE m.id = $2
+          AND m.recipient_id = $1
+          AND m.organization_id = $3
+          AND m.archived_at IS NULL`,
+      [args.recipientId, Number(r.rows[0].id), args.organizationId],
+    );
+    return read.rows[0] ?? null;
+  });
   if (!row) throw new Error('staff_messages insert did not return a readable row');
-  return row;
+  return mapRow(row);
 }
 
 /** One message, scoped to its recipient (the only person allowed to read it). */
 export async function getStaffMessage(
+  organizationId: OrgId,
   recipientId: number,
   id: number,
 ): Promise<StaffMessageRow | null> {
-  const r = await pool.query(
-    `${SELECT_ROW} WHERE m.id = $2 AND m.recipient_id = $1 AND m.archived_at IS NULL`,
-    [recipientId, id],
+  const r = await tenantQuery(
+    organizationId,
+    `${SELECT_ROW}
+      WHERE m.id = $2
+        AND m.recipient_id = $1
+        AND m.organization_id = $3
+        AND m.archived_at IS NULL`,
+    [recipientId, id, organizationId],
   );
   return r.rows[0] ? mapRow(r.rows[0]) : null;
 }
 
 /** The recipient's inbox, newest first. `unreadOnly` powers the bell badge. */
 export async function listInboxMessages(
+  organizationId: OrgId,
   recipientId: number,
   opts: { unreadOnly?: boolean; limit?: number } = {},
 ): Promise<StaffMessageRow[]> {
   const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
-  const r = await pool.query(
+  const r = await tenantQuery(
+    organizationId,
     `${SELECT_ROW}
       WHERE m.recipient_id = $1
+        AND m.organization_id = $2
         AND m.archived_at IS NULL
         ${opts.unreadOnly ? 'AND m.read_at IS NULL' : ''}
       ORDER BY m.created_at DESC
       LIMIT ${limit}`,
-    [recipientId],
+    [recipientId, organizationId],
   );
   return r.rows.map(mapRow);
 }
 
 /** Mark one received message read (idempotent). False when nothing matched. */
-export async function markStaffMessageRead(recipientId: number, id: number): Promise<boolean> {
-  const r = await pool.query(
+export async function markStaffMessageRead(
+  organizationId: OrgId,
+  recipientId: number,
+  id: number,
+): Promise<boolean> {
+  const r = await tenantQuery(
+    organizationId,
     `UPDATE staff_messages SET read_at = now()
-      WHERE id = $2 AND recipient_id = $1 AND archived_at IS NULL AND read_at IS NULL`,
-    [recipientId, id],
+      WHERE id = $2
+        AND recipient_id = $1
+        AND organization_id = $3
+        AND archived_at IS NULL
+        AND read_at IS NULL`,
+    [recipientId, id, organizationId],
   );
   return (r.rowCount ?? 0) > 0;
 }
 
 /** Mark the recipient's whole inbox read. Returns how many flipped. */
-export async function markAllStaffMessagesRead(recipientId: number): Promise<number> {
-  const r = await pool.query(
+export async function markAllStaffMessagesRead(
+  organizationId: OrgId,
+  recipientId: number,
+): Promise<number> {
+  const r = await tenantQuery(
+    organizationId,
     `UPDATE staff_messages SET read_at = now()
-      WHERE recipient_id = $1 AND archived_at IS NULL AND read_at IS NULL`,
-    [recipientId],
+      WHERE recipient_id = $1
+        AND organization_id = $2
+        AND archived_at IS NULL
+        AND read_at IS NULL`,
+    [recipientId, organizationId],
   );
   return r.rowCount ?? 0;
 }

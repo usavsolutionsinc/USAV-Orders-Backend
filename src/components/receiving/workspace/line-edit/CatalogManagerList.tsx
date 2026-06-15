@@ -19,11 +19,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { Check, ChevronDown, ChevronUp, Loader2, Pencil, Plus, Trash2, X } from '@/components/Icons';
+import { Check, ChevronDown, ChevronUp, Loader2, Pencil, Plus, Settings, Trash2, X } from '@/components/Icons';
 import { platformsQuery, typesQuery } from '@/lib/queries/catalog-queries';
 import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
 import { useInvalidateCatalog } from '@/hooks/useCatalog';
 import { SOURCE_PLATFORM_OPTS, RECEIVING_TYPE_OPTS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { TypeBindingsEditor } from './TypeBindingsEditor';
 
 export type CatalogKind = 'platform' | 'type';
 
@@ -43,7 +44,16 @@ interface Entry {
   isSystem: boolean;
 }
 
-export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind; enabled?: boolean }) {
+export function CatalogManagerList({
+  kind,
+  enabled = true,
+  enableTypeBindings = false,
+}: {
+  kind: CatalogKind;
+  enabled?: boolean;
+  /** Show the per-type account + workflow-node binding editor (settings page). */
+  enableTypeBindings?: boolean;
+}) {
   const invalidate = useInvalidateCatalog();
   const base = API_BASE[kind];
 
@@ -52,6 +62,12 @@ export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind
   const platformQ = useQuery({ ...platformsQuery({ includeInactive: true }), enabled: enabled && kind === 'platform' });
   const typeQ = useQuery({ ...typesQuery({ includeInactive: true }), enabled: enabled && kind === 'type' });
   const rawRows: Array<PlatformRow | TypeRow> = kind === 'platform' ? platformQ.data ?? [] : typeQ.data ?? [];
+  // Full type rows (with platform_account_id / workflow_node_id) for the binding
+  // editor — `entries` below intentionally narrows to the shared shape.
+  const typeRowById = new Map<number, TypeRow>(
+    kind === 'type' ? (rawRows as TypeRow[]).map((r) => [r.id, r]) : [],
+  );
+  const bindingsOn = enableTypeBindings && kind === 'type';
 
   const entries: Entry[] = rawRows.map((r) => ({
     id: r.id,
@@ -70,6 +86,7 @@ export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [busyId, setBusyId] = useState<number | 'new' | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   async function call(method: string, path: string, body?: unknown): Promise<boolean> {
     const res = await fetch(`${base}${path}`, {
@@ -144,8 +161,10 @@ export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind
           {active.map((e, i) => {
             const rowBusy = busyId === e.id;
             const isEditing = editingId === e.id;
+            const expanded = bindingsOn && expandedId === e.id;
             return (
-              <li key={e.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+              <li key={e.id} className="rounded-lg border border-gray-200 bg-white">
+              <div className="flex items-center gap-2 px-2.5 py-1.5">
                 <div className="flex flex-col">
                   <button
                     type="button"
@@ -212,6 +231,18 @@ export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind
                   </>
                 ) : (
                   <>
+                    {bindingsOn ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(expanded ? null : e.id)}
+                        aria-label={`${expanded ? 'Hide' : 'Edit'} bindings for ${e.label}`}
+                        aria-expanded={expanded}
+                        title="Account & workflow bindings"
+                        className={`rounded p-1 hover:bg-gray-100 ${expanded ? 'text-blue-600' : 'text-gray-400 hover:text-gray-700'}`}
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => {
@@ -234,6 +265,12 @@ export function CatalogManagerList({ kind, enabled = true }: { kind: CatalogKind
                     </button>
                   </>
                 )}
+              </div>
+              {expanded && typeRowById.get(e.id) ? (
+                <div className="px-2.5 pb-2.5">
+                  <TypeBindingsEditor type={typeRowById.get(e.id)!} onChanged={invalidate} />
+                </div>
+              ) : null}
               </li>
             );
           })}

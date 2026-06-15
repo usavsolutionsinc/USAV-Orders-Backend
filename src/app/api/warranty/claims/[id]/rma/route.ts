@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
-import { issueRmaForClaim, linkRmaByNumber } from '@/lib/warranty/linkage';
+import { issueRmaForClaim, linkRmaByNumber, unlinkRma } from '@/lib/warranty/linkage';
+import { getClaimTicketRef } from '@/lib/warranty/claims';
 import { claimIdFromPath, idempotentJson, warrantyFlagEnabled, warrantyFlagOff } from '@/lib/warranty/route-helpers';
 import { WarrantyRmaBody } from '@/lib/schemas/warranty';
 
@@ -21,6 +22,9 @@ export const POST = withAuth(async (request, ctx) => {
   const id = claimIdFromPath(request, 2);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
 
+  const owns = await getClaimTicketRef(id, ctx.organizationId);
+  if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
+
   const body = await request.json().catch(() => ({}));
   const parsed = WarrantyRmaBody.safeParse(body);
   if (!parsed.success) {
@@ -37,13 +41,17 @@ export const POST = withAuth(async (request, ctx) => {
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
       const result = parsed.data.rmaNumber
-        ? await linkRmaByNumber(id, parsed.data.rmaNumber, ctx.staffId)
-        : await issueRmaForClaim(id, {
-            createdByStaffId: ctx.staffId,
-            expectedCarrier: parsed.data.expectedCarrier ?? null,
-            expiresAt: parsed.data.expiresAt ?? null,
-            notes: parsed.data.notes ?? null,
-          });
+        ? await linkRmaByNumber(id, parsed.data.rmaNumber, ctx.staffId, ctx.organizationId)
+        : await issueRmaForClaim(
+            id,
+            {
+              createdByStaffId: ctx.staffId,
+              expectedCarrier: parsed.data.expectedCarrier ?? null,
+              expiresAt: parsed.data.expiresAt ?? null,
+              notes: parsed.data.notes ?? null,
+            },
+            ctx.organizationId,
+          );
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {
         source: 'warranty-logger',
@@ -55,4 +63,31 @@ export const POST = withAuth(async (request, ctx) => {
       return { status: 200, body: { ok: true, claim: result.claim, rma: result.rma } };
     },
   });
+}, { permission: 'warranty.manage' });
+
+/**
+ * DELETE /api/warranty/claims/[id]/rma — detach the linked RMA (reverse of POST).
+ *
+ * Clears warranty_claims.rma_id; the rma_authorizations row is left intact.
+ * Refuses (409) when no RMA is linked. Gated by WARRANTY_LOGGER. warranty.manage.
+ */
+export const DELETE = withAuth(async (request, ctx) => {
+  if (!warrantyFlagEnabled()) return warrantyFlagOff();
+  const id = claimIdFromPath(request, 2);
+  if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
+
+  const owns = await getClaimTicketRef(id, ctx.organizationId);
+  if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
+
+  const result = await unlinkRma(id, ctx.staffId ?? null, ctx.organizationId);
+  if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+
+  await recordAudit(pool, ctx, request, {
+    source: 'warranty-logger',
+    action: 'warranty.rma_unlink',
+    entityType: 'warranty_claim',
+    entityId: id,
+    after: { rmaId: null },
+  });
+  return NextResponse.json({ ok: true, claim: result.claim });
 }, { permission: 'warranty.manage' });

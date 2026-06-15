@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -20,14 +20,19 @@ import { withAuth } from '@/lib/auth/withAuth';
  *   }
  * }
  */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_request, ctx) => {
   try {
-    const result = await pool.query(`
+    const result = await tenantQuery(
+      ctx.organizationId,
+      `
       SELECT status, COUNT(*) AS cnt
       FROM fba_shipment_items
       WHERE status IN ('PLANNED', 'TESTED', 'PACKED', 'OUT_OF_STOCK', 'LABEL_ASSIGNED')
+        AND organization_id = $1
       GROUP BY status
-    `);
+    `,
+      [ctx.organizationId]
+    );
 
     const counts: Record<string, number> = {
       PLANNED:        0,

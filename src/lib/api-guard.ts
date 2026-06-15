@@ -25,6 +25,16 @@ function isRedisConfigured(): boolean {
   return Boolean(REDIS_URL && REDIS_TOKEN);
 }
 
+// Loud boot warning: in production, an unconfigured Redis means the limiter
+// silently falls back to a per-instance in-memory Map — effectively OFF under
+// Vercel autoscale (the real limit becomes limit × instances). Surface it so a
+// missing UPSTASH_REDIS_* in prod is caught instead of silently failing open.
+if (!isRedisConfigured() && (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production')) {
+  console.warn(
+    '[api-guard] UPSTASH_REDIS_REST_URL/_TOKEN are not set in production — rate limiting is falling back to per-instance in-memory and is INEFFECTIVE under autoscale. Configure Upstash Redis.',
+  );
+}
+
 type RateLimitEntry = {
   count: number;
   resetAt: number;
@@ -133,4 +143,17 @@ export async function checkRateLimitAsync(opts: RateLimitOptions): Promise<RateL
     console.warn('[api-guard] redis call failed:', err instanceof Error ? err.message : err);
     return checkRateLimit(opts);
   }
+}
+
+/**
+ * Org-scoped rate limit for authed routes. Combines the IP dimension (within-
+ * tenant abuse) with the tenant org so one noisy tenant can't exhaust another
+ * tenant's budget on a shared routeKey. Prefer this on withAuth routes — pass
+ * `ctx.organizationId`. Public / pre-auth routes (e.g. auth/signup) stay
+ * IP-only via `checkRateLimitAsync`. See tenancy exec plan §D5.
+ */
+export function checkRateLimitForOrg(
+  opts: Omit<RateLimitOptions, 'scope'> & { organizationId: string },
+): Promise<RateLimitResult> {
+  return checkRateLimitAsync({ ...opts, scope: opts.organizationId });
 }

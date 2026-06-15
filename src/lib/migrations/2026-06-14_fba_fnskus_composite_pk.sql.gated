@@ -1,0 +1,109 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- fba_fnskus: change PRIMARY KEY (fnsku) → PRIMARY KEY (organization_id, fnsku)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FORCE PREREQUISITE (see docs/tier0-resume-handoff.md §5.C). `fba_fnskus.fnsku`
+-- is the bare global PK, so two orgs cannot both hold the same FNSKU. Under
+-- FORCE + app_tenant, tenant B's INSERT of an FNSKU tenant A owns hits a
+-- unique-violation on an RLS-invisible row. Make the FNSKU unique per org.
+--
+-- Unlike sku_catalog (whose FKs hang off the serial id), fba_fnskus is FK'd
+-- BY FNSKU from 4 child tables, so the PK swap cascades:
+--   - station_activity_logs.fnsku   ON DELETE SET NULL   (org NOT NULL → set-null on fnsku only)
+--   - tech_serial_numbers.fnsku     ON DELETE SET NULL   (org NOT NULL → set-null on fnsku only)
+--   - fba_shipment_items.fnsku      ON DELETE RESTRICT
+--   - fba_fnsku_logs.fnsku          ON DELETE RESTRICT
+-- All 4 children already carry a NOT-NULL organization_id, so we recreate the
+-- FKs as composite (organization_id, fnsku). For the two SET NULL children we
+-- use the PG15+ column-list form `ON DELETE SET NULL (fnsku)` so only fnsku is
+-- nulled (a plain composite SET NULL would try to null organization_id and
+-- violate its NOT NULL). Neon runs PG15+, so this is supported.
+--
+-- ⚠️ DO NOT APPLY STANDALONE. Land in the same deploy as the ON CONFLICT flip:
+-- once the PK is composite, `ON CONFLICT (fnsku)` throws "no unique or exclusion
+-- constraint matching the ON CONFLICT specification". Flip these 8 sites to
+-- `ON CONFLICT (organization_id, fnsku)` (and ensure organization_id is in the
+-- INSERT column list at each):
+--   - src/app/api/admin/fba-fnskus/route.ts:85
+--   - src/app/api/admin/fba-fnskus/upload/route.ts:126
+--   - src/app/api/sync-sheets/route.ts:642
+--   - src/app/api/fba/fnskus/route.ts:28
+--   - src/app/api/fba/fnskus/validate/route.ts:62
+--   - src/app/api/fba/fnskus/bulk/route.ts:117
+--   - src/app/api/tech/scan/route.ts:150
+--   - src/lib/fba/upsert-fnsku-catalog.ts:76
+--
+-- PRE-FLIGHT DATA CHECK (run first; must return 0 rows — proves every child
+-- (org, fnsku) pair will satisfy the new composite FK before we enforce it):
+--   SELECT 'station_activity_logs' t, c.organization_id, c.fnsku
+--     FROM station_activity_logs c LEFT JOIN fba_fnskus p
+--       ON p.organization_id = c.organization_id AND p.fnsku = c.fnsku
+--    WHERE c.fnsku IS NOT NULL AND p.fnsku IS NULL
+--   UNION ALL SELECT 'tech_serial_numbers', c.organization_id, c.fnsku
+--     FROM tech_serial_numbers c LEFT JOIN fba_fnskus p
+--       ON p.organization_id = c.organization_id AND p.fnsku = c.fnsku
+--    WHERE c.fnsku IS NOT NULL AND p.fnsku IS NULL
+--   UNION ALL SELECT 'fba_shipment_items', c.organization_id, c.fnsku
+--     FROM fba_shipment_items c LEFT JOIN fba_fnskus p
+--       ON p.organization_id = c.organization_id AND p.fnsku = c.fnsku
+--    WHERE p.fnsku IS NULL
+--   UNION ALL SELECT 'fba_fnsku_logs', c.organization_id, c.fnsku
+--     FROM fba_fnsku_logs c LEFT JOIN fba_fnskus p
+--       ON p.organization_id = c.organization_id AND p.fnsku = c.fnsku
+--    WHERE p.fnsku IS NULL;
+--
+-- Status: WRITTEN, UNAPPLIED. Apply via `npm run db:migrate` together with the
+-- code flip, after the fba tables' routes are all GUC-safe (Phase C).
+
+DO $$
+DECLARE
+  r record;
+  pk_name text;
+BEGIN
+  -- 1. Drop every FK that references fba_fnskus (whatever its name).
+  FOR r IN
+    SELECT conrelid::regclass AS child, conname
+    FROM pg_constraint
+    WHERE confrelid = 'fba_fnskus'::regclass AND contype = 'f'
+  LOOP
+    EXECUTE format('ALTER TABLE %s DROP CONSTRAINT %I', r.child, r.conname);
+  END LOOP;
+
+  -- 2. Swap the primary key fnsku → (organization_id, fnsku).
+  SELECT conname INTO pk_name
+  FROM pg_constraint
+  WHERE conrelid = 'fba_fnskus'::regclass AND contype = 'p';
+  IF pk_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE fba_fnskus DROP CONSTRAINT %I', pk_name);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'fba_fnskus'::regclass AND contype = 'p'
+  ) THEN
+    ALTER TABLE fba_fnskus ADD PRIMARY KEY (organization_id, fnsku);
+  END IF;
+
+  -- 3. Recreate the 4 FKs as composite (idempotent per name).
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'station_activity_logs_org_fnsku_fk') THEN
+    ALTER TABLE station_activity_logs
+      ADD CONSTRAINT station_activity_logs_org_fnsku_fk
+      FOREIGN KEY (organization_id, fnsku) REFERENCES fba_fnskus (organization_id, fnsku)
+      ON DELETE SET NULL (fnsku);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tech_serial_numbers_org_fnsku_fk') THEN
+    ALTER TABLE tech_serial_numbers
+      ADD CONSTRAINT tech_serial_numbers_org_fnsku_fk
+      FOREIGN KEY (organization_id, fnsku) REFERENCES fba_fnskus (organization_id, fnsku)
+      ON DELETE SET NULL (fnsku);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fba_shipment_items_org_fnsku_fk') THEN
+    ALTER TABLE fba_shipment_items
+      ADD CONSTRAINT fba_shipment_items_org_fnsku_fk
+      FOREIGN KEY (organization_id, fnsku) REFERENCES fba_fnskus (organization_id, fnsku)
+      ON DELETE RESTRICT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fba_fnsku_logs_org_fnsku_fk') THEN
+    ALTER TABLE fba_fnsku_logs
+      ADD CONSTRAINT fba_fnsku_logs_org_fnsku_fk
+      FOREIGN KEY (organization_id, fnsku) REFERENCES fba_fnskus (organization_id, fnsku)
+      ON DELETE RESTRICT;
+  END IF;
+END $$;

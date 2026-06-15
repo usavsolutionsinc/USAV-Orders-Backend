@@ -22,7 +22,6 @@ import { BottomSheet, ConfirmSheet } from '@/components/ui/BottomSheet';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
 import { FillBar } from './FillBar';
 import { Check, GripVertical, Pencil, Plus, Trash2 } from '@/components/Icons';
-import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
@@ -185,10 +184,8 @@ export function RoomsBoard() {
       try {
         const result = await createRoom(name, letter);
         if (!result) throw new Error('Create failed');
-        successFeedback();
         toast.success(`Room "${name}" added (Zone ${letter})`);
       } catch (err: any) {
-        errorFeedback();
         setLocalOrder((cur) => (cur ?? next).filter((n) => n !== name));
         toast.error(err?.message || 'Could not add room');
       }
@@ -213,14 +210,12 @@ export function RoomsBoard() {
             return arr;
           });
         }
-        successFeedback();
         toast.success(
           isRename
             ? `Renamed to "${newName}" (Zone ${upperLetter})`
             : `Zone letter updated to ${upperLetter}`,
         );
       } catch (err: any) {
-        errorFeedback();
         toast.error(err?.message || 'Could not save');
       }
     },
@@ -235,10 +230,8 @@ export function RoomsBoard() {
       const result = await removeRoom(name);
       if (!result) throw new Error('Delete failed');
       setLocalOrder((cur) => cur?.filter((n) => n !== name) ?? cur);
-      successFeedback();
       toast.success(`Room "${name}" deleted`);
     } catch (err: any) {
-      errorFeedback();
       setPendingDeletes((s) => {
         const next = new Set(s);
         next.delete(name);
@@ -253,7 +246,6 @@ export function RoomsBoard() {
   }, []);
 
   const exitEdit = useCallback(() => {
-    successFeedback();
     if (localOrder) {
       const order = localOrder.filter((n) => !pendingDeletes.has(n));
       reorderRooms(order)
@@ -262,7 +254,6 @@ export function RoomsBoard() {
           setLocalOrder(null);
         })
         .catch((err) => {
-          errorFeedback();
           toast.error(err?.message || 'Could not save order');
         });
     }
@@ -294,7 +285,7 @@ export function RoomsBoard() {
           {!editMode && (
             <button
               type="button"
-              onClick={() => { successFeedback(); setAddingRoom(true); }}
+              onClick={() => setAddingRoom(true)}
               className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.97]"
             >
               <Plus className="h-4 w-4" />
@@ -305,7 +296,7 @@ export function RoomsBoard() {
             type="button"
             onClick={() => {
               if (editMode) exitEdit();
-              else { successFeedback(); setEditMode(true); }
+              else setEditMode(true);
             }}
             aria-pressed={editMode}
             className={`flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-95 ${
@@ -477,7 +468,6 @@ function RoomCard({ summary, editMode, mutating, onOpen, onStartEdit, onRequestD
     longPressedRef.current = false;
     pressTimer.current = window.setTimeout(() => {
       longPressedRef.current = true;
-      successFeedback();
       onStartEdit();
     }, 420);
   };
@@ -673,7 +663,7 @@ function RoomEditSheet({
               key={l}
               type="button"
               disabled={isLocked && !isSelected}
-              onClick={() => { scanFeedback(); setLetter(l); }}
+              onClick={() => setLetter(l)}
               className={`relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
                 isSelected
                   ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'

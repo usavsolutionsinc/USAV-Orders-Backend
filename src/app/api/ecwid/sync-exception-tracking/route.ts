@@ -110,6 +110,11 @@ async function upsertEcwidOrder(params: {
   const productTitle = String(firstItem?.name || '').trim();
   const quantity = firstItem?.quantity ? String(firstItem.quantity).trim() : '1';
 
+  // Realized order total from the Ecwid order (order-level `total` number + `currency` code).
+  const rawAmount = params.order?.total != null ? Number(params.order.total) : null;
+  const saleAmount = rawAmount != null && !Number.isNaN(rawAmount) ? rawAmount : null;
+  const currency = String(params.order?.currency || '').trim() || 'USD';
+
   let existingRows: any[] = [];
 
   if (orderId) {
@@ -163,9 +168,11 @@ async function upsertEcwidOrder(params: {
         out_of_stock,
         account_source,
         order_date,
-        sku_catalog_id
+        sku_catalog_id,
+        sale_amount,
+        currency
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
       )`,
       [
         orderId || null,
@@ -181,6 +188,8 @@ async function upsertEcwidOrder(params: {
         'ecwid',
         orderDate,
         skuCatalogId,
+        saleAmount,
+        currency,
       ]
     );
 

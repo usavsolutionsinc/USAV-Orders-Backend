@@ -16,8 +16,6 @@
  * (already configured in next.config.ts).
  */
 
-import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
-
 // ─── IndexedDB shim (tiny, deps-free) ──────────────────────────────────────
 
 const DB_NAME = 'usav-offline-queue';
@@ -197,7 +195,6 @@ async function drainOnce(): Promise<{ flushed: number; remaining: number }> {
         // contains the same response.
         await deleteRecord(record.id);
         flushed += 1;
-        successFeedback();
       } else {
         // 5xx → leave queued, bump attempts.
         await putRecord({
@@ -205,7 +202,6 @@ async function drainOnce(): Promise<{ flushed: number; remaining: number }> {
           attempts: record.attempts + 1,
           lastError: `HTTP ${res.status}`,
         });
-        errorFeedback();
       }
     } catch (err) {
       await putRecord({

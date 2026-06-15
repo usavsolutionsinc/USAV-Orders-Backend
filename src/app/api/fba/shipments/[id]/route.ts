@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 type Params = Promise<{ id: string }>;
@@ -24,7 +24,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT
          fs.id,
          fs.shipment_ref,
@@ -70,12 +71,12 @@ export async function GET(
        LEFT JOIN staff creator ON creator.id = fs.created_by_staff_id
        LEFT JOIN staff tech    ON tech.id    = fs.assigned_tech_id
        LEFT JOIN staff packer  ON packer.id  = fs.assigned_packer_id
-       LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id
-       LEFT JOIN fba_shipment_tracking fst ON fst.shipment_id = fs.id
+       LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id AND fsi.organization_id = fs.organization_id
+       LEFT JOIN fba_shipment_tracking fst ON fst.shipment_id = fs.id AND fst.organization_id = fs.organization_id
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
-       WHERE fs.id = $1
+       WHERE fs.id = $1 AND fs.organization_id = $2
        GROUP BY fs.id, creator.name, tech.name, packer.name`,
-      [planId]
+      [planId, gate.ctx.organizationId]
     );
 
     if (!result.rows[0]) {
@@ -108,15 +109,6 @@ export async function PATCH(
     if (planId == null) {
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
-
-    // Snapshot the row before update for audit diff.
-    const beforeRow = await pool.query(
-      `SELECT id, shipment_ref, amazon_shipment_id, destination_fc, due_date,
-              status, notes, assigned_tech_id, assigned_packer_id
-       FROM fba_shipments WHERE id = $1 LIMIT 1`,
-      [planId],
-    );
-    const before = beforeRow.rows[0] ?? null;
 
     const body = await request.json();
 
@@ -161,15 +153,33 @@ export async function PATCH(
     }
 
     fields.push(`updated_at = NOW()`);
+    // id placeholder
     values.push(planId);
+    const idPlaceholder = idx++;
+    // org placeholder
+    values.push(gate.ctx.organizationId);
+    const orgPlaceholder = idx;
 
-    const result = await pool.query(
-      `UPDATE fba_shipments
-       SET ${fields.join(', ')}
-       WHERE id = $${idx}
-       RETURNING *`,
-      values
-    );
+    const { before, result } = await withTenantTransaction(gate.ctx.organizationId, async (client) => {
+      // Snapshot the row before update for audit diff.
+      const beforeRow = await client.query(
+        `SELECT id, shipment_ref, amazon_shipment_id, destination_fc, due_date,
+                status, notes, assigned_tech_id, assigned_packer_id
+         FROM fba_shipments WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [planId, gate.ctx.organizationId],
+      );
+      const before = beforeRow.rows[0] ?? null;
+
+      const result = await client.query(
+        `UPDATE fba_shipments
+         SET ${fields.join(', ')}
+         WHERE id = $${idPlaceholder} AND organization_id = $${orgPlaceholder}
+         RETURNING *`,
+        values
+      );
+
+      return { before, result };
+    });
 
     if (!result.rows[0]) {
       return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
@@ -216,10 +226,11 @@ export async function DELETE(
     }
 
     // Snapshot for audit before destructive op.
-    const check = await pool.query(
+    const check = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT id, shipment_ref, status, amazon_shipment_id, destination_fc, due_date, notes
-       FROM fba_shipments WHERE id = $1`,
-      [planId]
+       FROM fba_shipments WHERE id = $1 AND organization_id = $2`,
+      [planId, gate.ctx.organizationId]
     );
     if (!check.rows[0]) {
       return NextResponse.json({ success: false, error: 'Shipment not found' }, { status: 404 });
@@ -232,14 +243,21 @@ export async function DELETE(
     }
     const before = check.rows[0];
 
-    // Count items for the audit extra payload.
-    const itemCountRow = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM fba_shipment_items WHERE shipment_id = $1`,
-      [planId],
-    );
-    const itemCount = Number(itemCountRow.rows[0]?.n ?? 0);
+    const itemCount = await withTenantTransaction(gate.ctx.organizationId, async (client) => {
+      // Count items for the audit extra payload.
+      const itemCountRow = await client.query(
+        `SELECT COUNT(*)::int AS n FROM fba_shipment_items WHERE shipment_id = $1 AND organization_id = $2`,
+        [planId, gate.ctx.organizationId],
+      );
+      const itemCount = Number(itemCountRow.rows[0]?.n ?? 0);
 
-    await pool.query(`DELETE FROM fba_shipments WHERE id = $1`, [planId]);
+      await client.query(
+        `DELETE FROM fba_shipments WHERE id = $1 AND organization_id = $2`,
+        [planId, gate.ctx.organizationId],
+      );
+
+      return itemCount;
+    });
 
     await invalidateCacheTags(['fba-board', 'fba-shipments', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'deleted', shipmentId: Number(id), source: 'fba.shipments.delete', organizationId: gate.ctx.organizationId });

@@ -14,7 +14,7 @@ function parseWorkspaceKey(value: string | null): FavoriteWorkspaceKey | null {
     : null;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const workspaceKey = parseWorkspaceKey(searchParams.get('workspace'));
@@ -23,7 +23,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: 'workspace is required' }, { status: 400 });
     }
 
-    const favorites = await listFavoriteSkus(workspaceKey);
+    const favorites = await listFavoriteSkus(workspaceKey, false, ctx.organizationId ?? undefined);
     return NextResponse.json({ favorites, count: favorites.length, workspaceKey });
   } catch (error: any) {
     console.error('GET /api/favorites error:', error);
@@ -55,7 +55,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       sortOrder: body?.sortOrder,
       isActive: body?.isActive,
       staffId: ctx.staffId,
-    });
+    }, ctx.organizationId ?? undefined);
 
     return NextResponse.json({ success: true, favorite });
   } catch (error: any) {

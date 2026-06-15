@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { addFnskuToPlan } from '@/domain/fba/condense-fnsku';
 import { publishFbaItemChanged, publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 // â”€â”€ GET /api/fba/shipments/[id]/items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns all items for a specific FBA shipment with staff names joined.
@@ -20,7 +20,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT
          fsi.id,
          fsi.fnsku,
@@ -45,14 +46,15 @@ export async function GET(
          l.name  AS labeled_by_name,
          sh.name AS shipped_by_name
        FROM fba_shipment_items fsi
-       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = fsi.organization_id
        LEFT JOIN staff r  ON r.id  = fsi.ready_by_staff_id
        LEFT JOIN staff v  ON v.id  = fsi.verified_by_staff_id
        LEFT JOIN staff l  ON l.id  = fsi.labeled_by_staff_id
        LEFT JOIN staff sh ON sh.id = fsi.shipped_by_staff_id
        WHERE fsi.shipment_id = $1
+         AND fsi.organization_id = $2
        ORDER BY fsi.status DESC, fsi.fnsku`,
-      [shipmentId]
+      [shipmentId, gate.ctx.organizationId]
     );
 
     return NextResponse.json({ success: true, items: result.rows });
@@ -75,10 +77,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const client = await pool.connect();
   try {
     const gate = await requireRoutePerm(request, 'fba.stage_shipments');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -94,36 +96,36 @@ export async function POST(
     const expectedQty = Math.max(1, Number(body?.expected_qty) || 1);
     const staffId = gate.ctx.staffId;
 
-    await client.query('BEGIN');
-
-    // Verify the target plan exists and is not shipped.
-    const planCheck = await client.query(
-      `SELECT id, status FROM fba_shipments WHERE id = $1`,
-      [planId],
-    );
-    if (!planCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Plan not found' }, { status: 404 });
-    }
-    if (planCheck.rows[0].status === 'SHIPPED') {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { success: false, error: 'Cannot add items to a shipped plan' },
-        { status: 409 },
+    const outcome = await withTenantTransaction(orgId, async (client) => {
+      // Verify the target plan exists and is not shipped.
+      const planCheck = await client.query(
+        `SELECT id, status FROM fba_shipments WHERE id = $1 AND organization_id = $2`,
+        [planId, orgId],
       );
-    }
+      if (!planCheck.rows[0]) {
+        return { error: 'Plan not found', status: 404 as const };
+      }
+      if (planCheck.rows[0].status === 'SHIPPED') {
+        return { error: 'Cannot add items to a shipped plan', status: 409 as const };
+      }
 
-    const result = await addFnskuToPlan(client, {
-      targetPlanId: planId,
-      fnsku,
-      expectedQty,
-      staffId,
-      productTitle: body?.product_title,
-      asin: body?.asin,
-      sku: body?.sku,
+      const result = await addFnskuToPlan(client, orgId, {
+        targetPlanId: planId,
+        fnsku,
+        expectedQty,
+        staffId,
+        productTitle: body?.product_title,
+        asin: body?.asin,
+        sku: body?.sku,
+      });
+
+      return { result };
     });
 
-    await client.query('COMMIT');
+    if ('error' in outcome) {
+      return NextResponse.json({ success: false, error: outcome.error }, { status: outcome.status });
+    }
+    const result = outcome.result;
 
     // Fire realtime events so the board refreshes.
     publishFbaItemChanged({
@@ -160,13 +162,10 @@ export async function POST(
     });
     return response;
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments/[id]/items]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to add item to plan' },
       { status: 500 },
     );
-  } finally {
-    client.release();
   }
 }

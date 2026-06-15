@@ -33,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const gate = await requireRoutePerm(req, 'sourcing.import');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const id = Number((await params).id);
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
@@ -49,11 +50,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
     }
 
-    const candidate = await getSourcingCandidateById(id);
+    const candidate = await getSourcingCandidateById(id, orgId);
     if (!candidate) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     // 2. Already imported — replay the existing receiving id (no second row).
-    const existing = await getAcquisitionByCandidateId(id);
+    const existing = await getAcquisitionByCandidateId(id, orgId);
     if (existing) {
       return NextResponse.json(
         {
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       carrier: parsed.carrier ?? null,
       supplierId: parsed.supplierId ?? null,
       staffId: gate.ctx.staffId,
-    });
+    }, orgId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'sourcing-import-api',

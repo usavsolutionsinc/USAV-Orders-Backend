@@ -11,10 +11,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache } from '@/lib/auth/role-store';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -44,7 +44,10 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     params.push(id, i + 1);
     valueParts.push(`($${params.length - 1}::INT, $${params.length}::INT)`);
   });
-  await pool.query(
+  // `roles` is GLOBAL (no organization_id) — position is a system-wide ordering;
+  // no org predicate. Routed through the tenant connection for GUC parity.
+  await tenantQuery(
+    ctx.organizationId,
     `UPDATE roles r
         SET position = v.position,
             updated_at = NOW()

@@ -1,83 +1,123 @@
+/**
+ * Zoho Inventory client core — credential resolution, URL building, and access
+ * token minting, all scoped to a tenant `orgId`.
+ *
+ * Source of truth for credentials is `organization_integrations` (provider
+ * 'zoho'), read through `getIntegrationCredentials`. For the USAV org that
+ * lookup transparently falls back to the ZOHO_* env vars (see
+ * src/lib/integrations/credentials.ts → envFallback), so this module needs no
+ * env vars of its own and the cutover is invisible to the single live tenant.
+ *
+ * The durable secret (refresh token + client id/secret + Zoho org id + data
+ * center) lives ONLY in the vault. The short-lived access token (~1h) is cached
+ * in-process per org; it is a cache, not a system of record — a cold start just
+ * re-mints it from the refresh token.
+ */
+
+import pool from '@/lib/db';
 import {
-  clearZohoTokens,
-  getCachedZohoAccessToken,
-  getZohoRefreshTokenFromKv,
-  setZohoTokens,
-} from '@/lib/zoho-kv';
-import { normalizeEnvValue } from '@/lib/env-utils';
+  getIntegrationCredentials,
+  type ZohoCredentials,
+} from '@/lib/integrations/credentials';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import { accountsDomain, buildZohoUrl, getInventoryBaseUrl } from '@/lib/zoho/url';
 
-const ZOHO_ORG_ID =
-  normalizeEnvValue(process.env.ZOHO_ORG_ID) || normalizeEnvValue(process.env.ZOHO_ORGANIZATION_ID);
-const ZOHO_DOMAIN = normalizeEnvValue(process.env.ZOHO_DOMAIN) || 'accounts.zoho.com';
-const ZOHO_CLIENT_ID = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
-const ZOHO_CLIENT_SECRET = normalizeEnvValue(process.env.ZOHO_CLIENT_SECRET);
+export type { ZohoCredentials };
+// Re-exported so existing importers of '@/lib/zoho/core' (and the '@/lib/zoho'
+// barrel) keep their import paths; the pure logic now lives in ./url.
+export { buildZohoUrl, getInventoryBaseUrl };
 
-export function requireOrgId(): string {
-  if (!ZOHO_ORG_ID) throw new Error('ZOHO_ORG_ID or ZOHO_ORGANIZATION_ID missing');
-  return ZOHO_ORG_ID;
+/** Thrown when an org has no usable Zoho connection (not connected / revoked). */
+export class ZohoNotConnectedError extends Error {
+  constructor(public readonly orgId: OrgId) {
+    super(
+      `No active Zoho connection for org ${orgId}. ` +
+        'Connect via Settings → Integrations (/api/zoho/oauth/authorize).',
+    );
+    this.name = 'ZohoNotConnectedError';
+  }
+}
+
+// ─── Per-org access-token cache (in-process; short-lived) ───────────────────
+interface CachedAccessToken { token: string; expiresAt: number; }
+const accessTokenCache = new Map<OrgId, CachedAccessToken>();
+// Refresh a little before the real expiry so an in-flight request never races
+// the boundary.
+const ACCESS_TOKEN_SKEW_MS = 5 * 60 * 1000;
+
+function isComplete(creds: ZohoCredentials | null | undefined): creds is ZohoCredentials {
+  return Boolean(creds && creds.refreshToken && creds.clientId && creds.clientSecret && creds.orgId);
 }
 
 /**
- * Inventory API root per region. Docs use:
- * `https://www.zohoapis.com/inventory/v1/...` (US) and
- * `https://www.zohoapis.eu/inventory/v1/...` (EU), i.e. `/inventory/v1` — not
- * `/inventory/api/v1` and not the legacy `inventory.zohoapis.*` host.
- * Paths passed to buildZohoUrl may be `/api/v1/...`; that prefix is stripped
- * before appending here.
+ * Transitional legacy bridge (USAV only) — mirrors the pre-vault runtime so
+ * USAV keeps working off its CURRENT config while the vault is the SoT:
+ *   - client id/secret + Zoho org id/data center from the ZOHO_* env vars
+ *   - refresh token from ZOHO_REFRESH_TOKEN env, else the legacy
+ *     `ebay_accounts.ZOHO_MAIN` row (where prod's token actually lives)
+ *
+ * This is the reason a plain env fallback was insufficient: the durable refresh
+ * token is stored in the DB, not in env. Removed in Phase 5 once the vault row
+ * is populated from a real (prod) connect/migration.
  */
-export function getInventoryBaseUrl() {
-  if (ZOHO_DOMAIN.includes('.eu')) return 'https://www.zohoapis.eu/inventory/v1';
-  if (ZOHO_DOMAIN.includes('.in')) return 'https://www.zohoapis.in/inventory/v1';
-  if (ZOHO_DOMAIN.includes('.com.au')) return 'https://www.zohoapis.com.au/inventory/v1';
-  if (ZOHO_DOMAIN.includes('.ca')) return 'https://www.zohoapis.ca/inventory/v1';
-  if (ZOHO_DOMAIN.includes('.jp')) return 'https://www.zohoapis.jp/inventory/v1';
-  return 'https://www.zohoapis.com/inventory/v1';
-}
+async function loadLegacyZohoCredentials(orgId: OrgId): Promise<ZohoCredentials | null> {
+  if (orgId !== USAV_ORG_ID) return null;
 
-export function buildZohoUrl(
-  path: string,
-  query: Record<string, string | number | boolean | null | undefined> = {}
-): string {
-  const params = new URLSearchParams({ organization_id: requireOrgId() });
+  const clientId = (process.env.ZOHO_CLIENT_ID ?? '').trim();
+  const clientSecret = (process.env.ZOHO_CLIENT_SECRET ?? '').trim();
+  const zohoOrgId = (process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID || '').trim();
+  const domain = (process.env.ZOHO_DOMAIN ?? '').trim() || 'accounts.zoho.com';
+  if (!clientId || !clientSecret || !zohoOrgId) return null;
 
-  Object.entries(query).forEach(([key, value]) => {
-    if (value === undefined || value === null || value === '') return;
-    params.set(key, String(value));
-  });
-
-  let normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  if (normalizedPath.startsWith('/api/v1')) {
-    normalizedPath = normalizedPath.slice('/api/v1'.length) || '/';
-  }
-
-  return `${getInventoryBaseUrl()}${normalizedPath}?${params.toString()}`;
-}
-
-export async function getAccessToken(): Promise<string> {
-  const cached = await getCachedZohoAccessToken();
-  if (cached) return cached;
-
-  if (!ZOHO_CLIENT_ID || !ZOHO_CLIENT_SECRET) {
-    throw new Error(
-      'ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET must be set. Visit /api/zoho/oauth/authorize to connect your Zoho account.'
-    );
-  }
-
-  const refreshToken =
-    normalizeEnvValue(process.env.ZOHO_REFRESH_TOKEN) ||
-    normalizeEnvValue(await getZohoRefreshTokenFromKv());
-
+  let refreshToken = (process.env.ZOHO_REFRESH_TOKEN ?? '').trim();
   if (!refreshToken) {
-    throw new Error(
-      'No Zoho refresh token available. Visit /api/zoho/oauth/authorize to complete OAuth setup.'
-    );
+    try {
+      const { rows } = await pool.query<{ refresh_token: string | null }>(
+        `SELECT refresh_token FROM ebay_accounts WHERE account_name = 'ZOHO_MAIN' LIMIT 1`,
+      );
+      refreshToken = (rows[0]?.refresh_token ?? '').trim();
+    } catch {
+      /* table/row may not exist — fall through to "not connected" */
+    }
   }
+  if (!refreshToken) return null;
 
-  const tokenUrl = `https://${ZOHO_DOMAIN}/oauth/v2/token`;
+  return { clientId, clientSecret, refreshToken, orgId: zohoOrgId, domain };
+}
+
+/**
+ * Load the tenant's Zoho credentials. Resolution order — USAV can use BOTH:
+ *   1. the per-tenant vault (organization_integrations, provider 'zoho') — SoT
+ *   2. the legacy env + `ebay_accounts.ZOHO_MAIN` bridge (USAV transitional)
+ * Throws ZohoNotConnectedError when neither yields a usable connection so
+ * callers surface a connect prompt instead of a generic 500.
+ */
+export async function loadZohoCredentials(orgId: OrgId): Promise<ZohoCredentials> {
+  const vault = await getIntegrationCredentials<ZohoCredentials>(orgId, 'zoho');
+  if (isComplete(vault)) return vault;
+
+  const legacy = await loadLegacyZohoCredentials(orgId);
+  if (isComplete(legacy)) return legacy;
+
+  throw new ZohoNotConnectedError(orgId);
+}
+
+/**
+ * A valid short-lived access token for the tenant. Returns the cached token
+ * when it still has > 5 min of life; otherwise mints a fresh one from the
+ * refresh token and caches it. Pass `creds` to avoid a second vault read when
+ * the caller already loaded them.
+ */
+export async function getAccessToken(orgId: OrgId, creds?: ZohoCredentials): Promise<string> {
+  const cached = accessTokenCache.get(orgId);
+  if (cached && cached.expiresAt > Date.now() + ACCESS_TOKEN_SKEW_MS) return cached.token;
+
+  const c = creds ?? (await loadZohoCredentials(orgId));
+  const tokenUrl = `https://${accountsDomain(c)}/oauth/v2/token`;
   const params = new URLSearchParams({
-    refresh_token: refreshToken,
-    client_id: ZOHO_CLIENT_ID,
-    client_secret: ZOHO_CLIENT_SECRET,
+    refresh_token: c.refreshToken,
+    client_id: c.clientId,
+    client_secret: c.clientSecret,
     grant_type: 'refresh_token',
   });
 
@@ -92,17 +132,18 @@ export async function getAccessToken(): Promise<string> {
     throw new Error(`Zoho token refresh failed: ${response.status}`);
   }
 
-  const data = await response.json() as Record<string, unknown>;
+  const data = (await response.json()) as Record<string, unknown>;
   if (data.error) {
     throw new Error(`Zoho token refresh error: ${data.error}`);
   }
 
   const accessToken = String(data.access_token || '');
   const expiresIn = Number(data.expires_in_sec || data.expires_in || 3600);
-  await setZohoTokens({ accessToken, expiresIn });
+  accessTokenCache.set(orgId, { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 });
   return accessToken;
 }
 
-export async function invalidateAccessToken(): Promise<void> {
-  await clearZohoTokens();
+/** Drop the cached access token for an org (e.g. after a 401), forcing a mint. */
+export function invalidateAccessToken(orgId: OrgId): void {
+  accessTokenCache.delete(orgId);
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/quality/dashboard — aggregate quality/risk analytics for the admin
@@ -9,35 +9,62 @@ import pool from '@/lib/db';
  *
  * All read-only aggregates; the high-risk list rides the
  * (risk_level, quality_score) index on unit_quality_scores.
+ *
+ * Tenant scoping: unit_quality_scores / unit_failure_tags / failure_modes have
+ * no organization_id column, so they are scoped through their serial_units
+ * parent (JOIN + su.organization_id filter). unit_repairs carries its own
+ * organization_id. Every read also runs GUC-wrapped via tenantQuery.
  */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const [risk, failures, repairs, highRisk] = await Promise.all([
-      pool.query<{ risk_level: string; n: number; avg: number }>(
-        `SELECT risk_level, COUNT(*)::int AS n, ROUND(AVG(quality_score))::int AS avg
-           FROM unit_quality_scores GROUP BY risk_level`,
+      // unit_quality_scores has no org column → scope via serial_units parent.
+      tenantQuery<{ risk_level: string; n: number; avg: number }>(
+        orgId,
+        `SELECT q.risk_level, COUNT(*)::int AS n, ROUND(AVG(q.quality_score))::int AS avg
+           FROM unit_quality_scores q
+           JOIN serial_units su ON su.id = q.serial_unit_id
+          WHERE su.organization_id = $1
+          GROUP BY q.risk_level`,
+        [orgId],
       ),
-      pool.query(
+      // unit_failure_tags / failure_modes have no org column → scope via the
+      // serial_units parent of the failure tag.
+      tenantQuery(
+        orgId,
         `SELECT fm.id, fm.code, fm.label, fm.severity, COUNT(*)::int AS open_count
            FROM unit_failure_tags t
+           JOIN serial_units su ON su.id = t.serial_unit_id
            JOIN failure_modes fm ON fm.id = t.failure_mode_id
           WHERE t.resolution_status = 'open'
+            AND su.organization_id = $1
           GROUP BY fm.id, fm.code, fm.label, fm.severity
           ORDER BY open_count DESC, fm.label
           LIMIT 12`,
+        [orgId],
       ),
-      pool.query<{ status: string; n: number; cost: string }>(
+      // unit_repairs carries organization_id directly.
+      tenantQuery<{ status: string; n: number; cost: string }>(
+        orgId,
         `SELECT status, COUNT(*)::int AS n, COALESCE(SUM(cost_cents), 0)::text AS cost
-           FROM unit_repairs GROUP BY status`,
+           FROM unit_repairs
+          WHERE organization_id = $1
+          GROUP BY status`,
+        [orgId],
       ),
-      pool.query(
+      // unit_quality_scores has no org column → scope via serial_units parent.
+      tenantQuery(
+        orgId,
         `SELECT q.serial_unit_id, su.serial_number, su.sku, su.unit_uid,
                 q.quality_score, q.risk_level, q.risk_reasons, q.grade_at_score::text AS grade
            FROM unit_quality_scores q
            JOIN serial_units su ON su.id = q.serial_unit_id
           WHERE q.risk_level = 'high'
+            AND su.organization_id = $1
           ORDER BY q.quality_score ASC, q.computed_at DESC
           LIMIT 25`,
+        [orgId],
       ),
     ]);
 

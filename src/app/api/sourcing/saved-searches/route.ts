@@ -20,7 +20,7 @@ const ROUTE_SAVED_SEARCH_CREATE = 'sourcing-saved-search.create';
  * GET /api/sourcing/saved-searches?active=&skuId= — standing searches.
  * Defaults to active only; pass active=false to include paused/archived rows.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const active = searchParams.get('active');
@@ -28,7 +28,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const items = await listSourcingSearches({
       activeOnly: active !== 'false',
       skuId: skuId ? Number(skuId) : null,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ success: true, items, total: items.length });
   } catch (error: any) {
     console.error('Error in GET /api/sourcing/saved-searches:', error);
@@ -66,7 +66,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       maxPriceCents: parsed.maxPriceCents ?? null,
       cadence: parsed.cadence ?? 'off',
       createdBy: ctx.staffId,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'sourcing-saved-searches-api',

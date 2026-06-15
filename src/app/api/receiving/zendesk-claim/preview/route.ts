@@ -20,8 +20,9 @@ interface PreviewRequest {
   reason?: string;
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const body = (await req.json().catch(() => null)) as PreviewRequest | null;
     if (!body) throw ApiError.badRequest('Missing body');
 
@@ -38,6 +39,10 @@ export const POST = withAuth(async (req: NextRequest) => {
     }
     const lineId = body.lineId != null ? Number(body.lineId) : null;
 
+    // Org-scope the template build: it reads tenant-owned receiving /
+    // receiving_lines (PO#, tracking, item_name, condition, source_platform).
+    // Passing orgId adds AND organization_id=$ to both reads and turns a
+    // cross-tenant receivingId/lineId into a 'Receiving not found' (404).
     const template = await buildReceivingClaimTemplate({
       receivingId,
       lineId,
@@ -45,7 +50,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       severity,
       reason: body.reason,
       poReceivingLink: poReceivingLink(req, receivingId),
-    });
+    }, orgId);
 
     return NextResponse.json({ success: true, ...template });
   } catch (error) {

@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 
@@ -28,24 +28,34 @@ interface WorklistRow {
   resolved: string;
 }
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const [mirror, cursor, worklist] = await Promise.all([
-      pool.query<MirrorRow>(
+      // zoho_po_mirror has no organization_id column (NEEDS-COL) — GUC-wrap
+      // only; no explicit org filter is possible until the column lands.
+      tenantQuery<MirrorRow>(
+        orgId,
         `SELECT
            COUNT(*)::text       AS total_pos,
            MAX(last_synced_at)  AS last_synced_at
          FROM zoho_po_mirror`,
       ),
-      pool.query<CursorRow>(
-        `SELECT last_synced_at FROM sync_cursors WHERE resource = 'zoho_po_mirror' LIMIT 1`,
+      tenantQuery<CursorRow>(
+        orgId,
+        `SELECT last_synced_at FROM sync_cursors
+          WHERE resource = 'zoho_po_mirror' AND organization_id = $1 LIMIT 1`,
+        [orgId],
       ),
-      pool.query<WorklistRow>(
+      tenantQuery<WorklistRow>(
+        orgId,
         `SELECT
            COUNT(*) FILTER (WHERE status='pending')::text  AS pending,
            COUNT(*) FILTER (WHERE status='ignored')::text  AS ignored,
            COUNT(*) FILTER (WHERE status='resolved')::text AS resolved
-         FROM email_missing_purchase_orders`,
+         FROM email_missing_purchase_orders
+        WHERE organization_id = $1`,
+        [orgId],
       ),
     ]);
 

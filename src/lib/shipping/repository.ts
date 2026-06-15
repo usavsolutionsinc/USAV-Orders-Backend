@@ -2,6 +2,27 @@ import pool from '../db';
 import type { CarrierCode, CarrierTrackingEvent, CarrierTrackingResult, ShipmentRow, TrackingEventRow } from './types';
 import { computeNextCheckAt, normalizeTrackingNumber } from './normalize';
 import { ENABLED_SYNC_CARRIERS } from './enabled-carriers';
+import type { PoolClient } from 'pg';
+import { withTenantConnection, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+
+// ─── Tenancy note ─────────────────────────────────────────────────────────────
+//
+// `shipping_tracking_numbers` and `shipment_tracking_events` are both classified
+// `tenant-owned-NEEDS-COL` in docs/tenancy/org-id-coverage.generated.md — neither
+// carries an `organization_id` column, and within this module there is no
+// org-bearing parent table to JOIN against (the tracking-number ↔ order linkage
+// lives in `order_shipment_links`, not reachable from these raw lookups). Per the
+// tenant-isolation pattern rule (6), these helpers can therefore only be
+// GUC-wrapped when an orgId is threaded through: we route through
+// withTenantConnection / withTenantTransaction (which set `app.current_org` via
+// SET LOCAL) so the GUC is in place for RLS once the columns exist, but we cannot
+// add explicit `organization_id = $n` predicates or stamps yet. Until the columns
+// land, the GUC-wrapped path runs byte-identical SQL to the raw-pool path; the
+// only difference is the executor (tenant pool + transaction-scoped GUC). When
+// orgId is omitted, behavior is byte-identical to the original raw-pool path so
+// the many un-migrated callers keep compiling and behaving as today.
+// → NEEDS-COL: shipping_tracking_numbers, shipment_tracking_events.
 
 // ─── Upsert shipment master record ───────────────────────────────────────────
 
@@ -11,26 +32,34 @@ export async function upsertShipment(params: {
   carrier: CarrierCode;
   sourceSystem?: string | null;
   carrierAccountRef?: string | null;
-}): Promise<ShipmentRow> {
-  const client = await pool.connect();
-  try {
-    const result = await client.query<ShipmentRow>(
-      `INSERT INTO shipping_tracking_numbers
+}, orgId?: OrgId): Promise<ShipmentRow> {
+  // shipping_tracking_numbers has no organization_id column (NEEDS-COL): when an
+  // orgId is threaded we GUC-wrap via withTenantTransaction; the SQL is identical
+  // (no stamp/predicate possible yet). Omitted → byte-identical raw-pool path.
+  const sql = `INSERT INTO shipping_tracking_numbers
          (tracking_number_raw, tracking_number_normalized, carrier, source_system, carrier_account_ref, next_check_at)
        VALUES ($1, $2, $3, $4, $5, now())
        ON CONFLICT (tracking_number_normalized) DO UPDATE
          SET carrier_account_ref = EXCLUDED.carrier_account_ref,
              source_system       = COALESCE(EXCLUDED.source_system, shipping_tracking_numbers.source_system),
              updated_at          = now()
-       RETURNING *`,
-      [
-        params.trackingNumberRaw,
-        params.trackingNumberNormalized,
-        params.carrier,
-        params.sourceSystem ?? null,
-        params.carrierAccountRef ?? null,
-      ]
-    );
+       RETURNING *`;
+  const args = [
+    params.trackingNumberRaw,
+    params.trackingNumberNormalized,
+    params.carrier,
+    params.sourceSystem ?? null,
+    params.carrierAccountRef ?? null,
+  ];
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const result = await client.query<ShipmentRow>(sql, args);
+      return result.rows[0];
+    });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await client.query<ShipmentRow>(sql, args);
     return result.rows[0];
   } finally {
     client.release();
@@ -39,13 +68,18 @@ export async function upsertShipment(params: {
 
 // ─── Lookups ──────────────────────────────────────────────────────────────────
 
-export async function getShipmentById(id: number): Promise<ShipmentRow | null> {
+export async function getShipmentById(id: number, orgId?: OrgId): Promise<ShipmentRow | null> {
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const sql = 'SELECT * FROM shipping_tracking_numbers WHERE id = $1';
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query<ShipmentRow>(sql, [id]);
+      return result.rows[0] ?? null;
+    });
+  }
   const client = await pool.connect();
   try {
-    const result = await client.query<ShipmentRow>(
-      'SELECT * FROM shipping_tracking_numbers WHERE id = $1',
-      [id]
-    );
+    const result = await client.query<ShipmentRow>(sql, [id]);
     return result.rows[0] ?? null;
   } finally {
     client.release();
@@ -53,14 +87,21 @@ export async function getShipmentById(id: number): Promise<ShipmentRow | null> {
 }
 
 export async function getShipmentByTracking(
-  trackingNumberNormalized: string
+  trackingNumberNormalized: string,
+  orgId?: OrgId,
 ): Promise<ShipmentRow | null> {
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const sql = 'SELECT * FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1';
+  const args = [normalizeTrackingNumber(trackingNumberNormalized)];
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query<ShipmentRow>(sql, args);
+      return result.rows[0] ?? null;
+    });
+  }
   const client = await pool.connect();
   try {
-    const result = await client.query<ShipmentRow>(
-      'SELECT * FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1',
-      [normalizeTrackingNumber(trackingNumberNormalized)]
-    );
+    const result = await client.query<ShipmentRow>(sql, args);
     return result.rows[0] ?? null;
   } finally {
     client.release();
@@ -69,10 +110,11 @@ export async function getShipmentByTracking(
 
 export async function getDueShipments(
   limit: number = 50,
-  carriers?: CarrierCode[]
+  carriers?: CarrierCode[],
+  orgId?: OrgId,
 ): Promise<ShipmentRow[]> {
-  const client = await pool.connect();
-  try {
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const run = async (client: PoolClient): Promise<ShipmentRow[]> => {
     const params: Array<number | string[]> = [];
     // Only carriers we actively poll (USPS is disabled pending OAuth — see
     // enabled-carriers.ts). Also excludes UNKNOWN, which has no API to call.
@@ -106,20 +148,33 @@ export async function getDueShipments(
       params
     );
     return result.rows;
+  };
+  if (orgId) {
+    return withTenantConnection(orgId, (client) => run(client));
+  }
+  const client = await pool.connect();
+  try {
+    return await run(client);
   } finally {
     client.release();
   }
 }
 
-export async function getShipmentEvents(shipmentId: number): Promise<TrackingEventRow[]> {
+export async function getShipmentEvents(shipmentId: number, orgId?: OrgId): Promise<TrackingEventRow[]> {
+  // shipment_tracking_events has no organization_id column (NEEDS-COL): GUC-wrap
+  // only when orgId present; no org predicate possible.
+  const sql = `SELECT * FROM shipment_tracking_events
+       WHERE shipment_id = $1
+       ORDER BY event_occurred_at DESC NULLS LAST, id DESC`;
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query<TrackingEventRow>(sql, [shipmentId]);
+      return result.rows;
+    });
+  }
   const client = await pool.connect();
   try {
-    const result = await client.query<TrackingEventRow>(
-      `SELECT * FROM shipment_tracking_events
-       WHERE shipment_id = $1
-       ORDER BY event_occurred_at DESC NULLS LAST, id DESC`,
-      [shipmentId]
-    );
+    const result = await client.query<TrackingEventRow>(sql, [shipmentId]);
     return result.rows;
   } finally {
     client.release();
@@ -132,12 +187,14 @@ export async function upsertTrackingEvents(
   shipmentId: number,
   carrier: CarrierCode,
   trackingNumberNormalized: string,
-  events: CarrierTrackingEvent[]
+  events: CarrierTrackingEvent[],
+  orgId?: OrgId,
 ): Promise<number> {
   if (events.length === 0) return 0;
 
-  const client = await pool.connect();
-  try {
+  // shipment_tracking_events has no organization_id column (NEEDS-COL): GUC-wrap
+  // writes when orgId present; no org stamp possible.
+  const run = async (client: PoolClient): Promise<number> => {
     let inserted = 0;
     for (const ev of events) {
       const result = await client.query(
@@ -180,6 +237,14 @@ export async function upsertTrackingEvents(
       if ((result.rowCount ?? 0) > 0) inserted++;
     }
     return inserted;
+  };
+
+  if (orgId) {
+    return withTenantTransaction(orgId, (client) => run(client));
+  }
+  const client = await pool.connect();
+  try {
+    return await run(client);
   } finally {
     client.release();
   }
@@ -189,11 +254,15 @@ export async function upsertTrackingEvents(
 
 export async function updateShipmentSummary(
   shipmentId: number,
-  result: CarrierTrackingResult
+  result: CarrierTrackingResult,
+  orgId?: OrgId,
 ): Promise<void> {
   const { emitShippedLedgerForShipment } = await import('@/lib/neon/stock-ledger-helpers');
-  const client = await pool.connect();
-  try {
+  // shipping_tracking_numbers / shipment_tracking_events have no organization_id
+  // column (NEEDS-COL): GUC-wrap when orgId present; no org predicate possible on
+  // the read/UPDATE here. We DO thread orgId through to emitShippedLedgerForShipment
+  // (sku_stock_ledger IS org-bearing) so that downstream write is tenant-scoped.
+  const run = async (client: PoolClient): Promise<void> => {
     const status = result.latestStatusCategory;
 
     // ─── A1: derive delivered from the append-only event log, not just the
@@ -311,11 +380,20 @@ export async function updateShipmentSummary(
       try {
         await emitShippedLedgerForShipment(client, shipmentId, {
           source: `carrier-sync.${status}`,
-        });
+        }, orgId);
       } catch (err) {
         console.warn('[updateShipmentSummary] SHIPPED ledger emit failed', err);
       }
     }
+  };
+
+  if (orgId) {
+    await withTenantTransaction(orgId, (client) => run(client));
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await run(client);
   } finally {
     client.release();
   }
@@ -328,22 +406,21 @@ export async function updateShipmentError(
   errorCode: string,
   errorMessage: string,
   carrier?: CarrierCode | string | null,
+  orgId?: OrgId,
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    // C1/C2: an auth/access-control rejection (USPS 403 IP-Agreement gate, or a
-    // carrier that keeps returning 401/403) is not a transient error — polling
-    // can't fix it. Record a distinct `tracking_blocked_reason` so the UI can
-    // show TRACKING_UNAVAILABLE instead of leaving the shipment silently stuck
-    // pre-delivered, and push next_check_at ~24h out so we stop burning the
-    // (e.g. USPS 60/hr) quota re-failing until access clears.
-    const isAccessBlocked = errorCode === 'ACCESS_CONTROL' || errorCode === 'AUTH_ERROR';
-    const blockedReason = isAccessBlocked
-      ? `${(carrier ?? 'CARRIER')}_ACCESS_CONTROL`
-      : null;
+  // C1/C2: an auth/access-control rejection (USPS 403 IP-Agreement gate, or a
+  // carrier that keeps returning 401/403) is not a transient error — polling
+  // can't fix it. Record a distinct `tracking_blocked_reason` so the UI can
+  // show TRACKING_UNAVAILABLE instead of leaving the shipment silently stuck
+  // pre-delivered, and push next_check_at ~24h out so we stop burning the
+  // (e.g. USPS 60/hr) quota re-failing until access clears.
+  const isAccessBlocked = errorCode === 'ACCESS_CONTROL' || errorCode === 'AUTH_ERROR';
+  const blockedReason = isAccessBlocked
+    ? `${(carrier ?? 'CARRIER')}_ACCESS_CONTROL`
+    : null;
 
-    await client.query(
-      `UPDATE shipping_tracking_numbers SET
+  // NEEDS-COL: GUC-wrap when orgId present; no org predicate possible on UPDATE.
+  const sql = `UPDATE shipping_tracking_numbers SET
          consecutive_error_count = consecutive_error_count + 1,
          check_attempt_count     = check_attempt_count + 1,
          last_checked_at         = now(),
@@ -355,9 +432,16 @@ export async function updateShipmentError(
                                      ELSE now() + (INTERVAL '1 hour' * LEAST(POWER(2, consecutive_error_count), 16))
                                    END,
          updated_at              = now()
-       WHERE id = $3`,
-      [errorCode, errorMessage.slice(0, 1000), shipmentId, isAccessBlocked, blockedReason]
-    );
+       WHERE id = $3`;
+  const args = [errorCode, errorMessage.slice(0, 1000), shipmentId, isAccessBlocked, blockedReason];
+
+  if (orgId) {
+    await withTenantTransaction(orgId, (client) => client.query(sql, args));
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(sql, args);
   } finally {
     client.release();
   }
@@ -383,25 +467,30 @@ export interface PendingSubscriptionRow {
  */
 export async function getShipmentsPendingSubscription(
   carrier: CarrierCode,
-  limit: number
+  limit: number,
+  orgId?: OrgId,
 ): Promise<PendingSubscriptionRow[]> {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(
-      `SELECT id, tracking_number_normalized
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const sql = `SELECT id, tracking_number_normalized
          FROM shipping_tracking_numbers
         WHERE carrier = $1
           AND is_terminal = false
           AND (webhook_subscription_status IS NULL
                OR webhook_subscription_status IN ('PENDING','FAILED'))
         ORDER BY next_check_at ASC NULLS FIRST
-        LIMIT $2`,
-      [carrier, limit]
-    );
-    return result.rows.map((r) => ({
-      id: r.id,
-      trackingNumberNormalized: r.tracking_number_normalized,
-    }));
+        LIMIT $2`;
+  const map = (rows: Array<{ id: number; tracking_number_normalized: string }>): PendingSubscriptionRow[] =>
+    rows.map((r) => ({ id: r.id, trackingNumberNormalized: r.tracking_number_normalized }));
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query(sql, [carrier, limit]);
+      return map(result.rows);
+    });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await client.query(sql, [carrier, limit]);
+    return map(result.rows);
   } finally {
     client.release();
   }
@@ -417,22 +506,27 @@ export async function markSubscriptionResult(
   trackingNumbers: string[],
   status: 'SUBMITTED' | 'COMPLETED' | 'FAILED',
   jobId: string | null,
-  error?: string | null
+  error?: string | null,
+  orgId?: OrgId,
 ): Promise<void> {
   if (trackingNumbers.length === 0) return;
-  const client = await pool.connect();
-  try {
-    await client.query(
-      `UPDATE shipping_tracking_numbers SET
+  // NEEDS-COL: GUC-wrap when orgId present; no org predicate possible on UPDATE.
+  const sql = `UPDATE shipping_tracking_numbers SET
          webhook_subscription_status = $3,
          webhook_subscription_job_id = $4,
          webhook_subscribed_at       = CASE WHEN $3 = 'COMPLETED' THEN now() ELSE webhook_subscribed_at END,
          webhook_subscription_error  = $5,
          updated_at                  = now()
        WHERE carrier = $1
-         AND tracking_number_normalized = ANY($2::text[])`,
-      [carrier, trackingNumbers, status, jobId, error ? error.slice(0, 1000) : null]
-    );
+         AND tracking_number_normalized = ANY($2::text[])`;
+  const args = [carrier, trackingNumbers, status, jobId, error ? error.slice(0, 1000) : null];
+  if (orgId) {
+    await withTenantTransaction(orgId, (client) => client.query(sql, args));
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(sql, args);
   } finally {
     client.release();
   }
@@ -448,13 +542,12 @@ export async function markSubscriptionResult(
 export async function getShipmentsForSubscriptionRenewal(
   carrier: CarrierCode,
   ttlDays: number,
-  limit: number
+  limit: number,
+  orgId?: OrgId,
 ): Promise<PendingSubscriptionRow[]> {
   if (!ttlDays || ttlDays <= 0) return [];
-  const client = await pool.connect();
-  try {
-    const result = await client.query(
-      `SELECT id, tracking_number_normalized
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const sql = `SELECT id, tracking_number_normalized
          FROM shipping_tracking_numbers
         WHERE carrier = $1
           AND is_terminal = false
@@ -462,13 +555,20 @@ export async function getShipmentsForSubscriptionRenewal(
           AND webhook_subscribed_at IS NOT NULL
           AND webhook_subscribed_at < now() - ($2 || ' days')::interval
         ORDER BY webhook_subscribed_at ASC
-        LIMIT $3`,
-      [carrier, String(ttlDays), limit]
-    );
-    return result.rows.map((r) => ({
-      id: r.id,
-      trackingNumberNormalized: r.tracking_number_normalized,
-    }));
+        LIMIT $3`;
+  const args = [carrier, String(ttlDays), limit];
+  const map = (rows: Array<{ id: number; tracking_number_normalized: string }>): PendingSubscriptionRow[] =>
+    rows.map((r) => ({ id: r.id, trackingNumberNormalized: r.tracking_number_normalized }));
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query(sql, args);
+      return map(result.rows);
+    });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await client.query(sql, args);
+    return map(result.rows);
   } finally {
     client.release();
   }
@@ -477,19 +577,25 @@ export async function getShipmentsForSubscriptionRenewal(
 /** Distinct jobIds still awaiting reconciliation (status SUBMITTED). FedEx-only. */
 export async function getSubmittedSubscriptionJobIds(
   carrier: CarrierCode,
-  limit: number
+  limit: number,
+  orgId?: OrgId,
 ): Promise<string[]> {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(
-      `SELECT DISTINCT webhook_subscription_job_id AS job_id
+  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
+  const sql = `SELECT DISTINCT webhook_subscription_job_id AS job_id
          FROM shipping_tracking_numbers
         WHERE carrier = $1
           AND webhook_subscription_status = 'SUBMITTED'
           AND webhook_subscription_job_id IS NOT NULL
-        LIMIT $2`,
-      [carrier, limit]
-    );
+        LIMIT $2`;
+  if (orgId) {
+    return withTenantConnection(orgId, async (client) => {
+      const result = await client.query(sql, [carrier, limit]);
+      return result.rows.map((r) => r.job_id as string);
+    });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await client.query(sql, [carrier, limit]);
     return result.rows.map((r) => r.job_id as string);
   } finally {
     client.release();
@@ -500,20 +606,25 @@ export async function getSubmittedSubscriptionJobIds(
 export async function markSubscriptionJobStatus(
   carrier: CarrierCode,
   jobId: string,
-  status: 'COMPLETED' | 'FAILED'
+  status: 'COMPLETED' | 'FAILED',
+  orgId?: OrgId,
 ): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query(
-      `UPDATE shipping_tracking_numbers SET
+  // NEEDS-COL: GUC-wrap when orgId present; no org predicate possible on UPDATE.
+  const sql = `UPDATE shipping_tracking_numbers SET
          webhook_subscription_status = $3,
          webhook_subscribed_at       = CASE WHEN $3 = 'COMPLETED' THEN now() ELSE webhook_subscribed_at END,
          updated_at                  = now()
        WHERE carrier = $1
          AND webhook_subscription_job_id = $2
-         AND webhook_subscription_status = 'SUBMITTED'`,
-      [carrier, jobId, status]
-    );
+         AND webhook_subscription_status = 'SUBMITTED'`;
+  const args = [carrier, jobId, status];
+  if (orgId) {
+    await withTenantTransaction(orgId, (client) => client.query(sql, args));
+    return;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query(sql, args);
   } finally {
     client.release();
   }

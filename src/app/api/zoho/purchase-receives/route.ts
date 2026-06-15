@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getPurchaseReceiveById, listPurchaseReceives, searchPurchaseReceivesByTracking } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
+  const orgId = ctx.organizationId;
   try {
     const { searchParams } = new URL(request.url);
     const purchaseReceiveId = String(searchParams.get('purchase_receive_id') || '').trim();
@@ -15,7 +17,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     const purchaseOrderId = String(searchParams.get('purchaseorder_id') || '').trim();
 
     if (purchaseReceiveId) {
-      const data = await getPurchaseReceiveById(purchaseReceiveId);
+      const data = await withZohoOrg(orgId, () => getPurchaseReceiveById(purchaseReceiveId));
       return NextResponse.json({
         success: true,
         mode: 'detail',
@@ -25,7 +27,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     // Tracking-based lookup: used by Mode 1 background Zoho enrichment
     if (tracking) {
-      const receives = await searchPurchaseReceivesByTracking(tracking);
+      const receives = await withZohoOrg(orgId, () => searchPurchaseReceivesByTracking(tracking));
       return NextResponse.json({
         success: true,
         mode: 'tracking-search',
@@ -34,12 +36,14 @@ export const GET = withAuth(async (request: NextRequest) => {
       });
     }
 
-    const data = await listPurchaseReceives({
-      page: Number.isFinite(page) && page > 0 ? page : 1,
-      per_page: Number.isFinite(perPage) && perPage > 0 ? Math.min(perPage, 200) : 50,
-      last_modified_time: lastModifiedTime || undefined,
-      purchaseorder_id: purchaseOrderId || undefined,
-    });
+    const data = await withZohoOrg(orgId, () =>
+      listPurchaseReceives({
+        page: Number.isFinite(page) && page > 0 ? page : 1,
+        per_page: Number.isFinite(perPage) && perPage > 0 ? Math.min(perPage, 200) : 50,
+        last_modified_time: lastModifiedTime || undefined,
+        purchaseorder_id: purchaseOrderId || undefined,
+      })
+    );
 
     return NextResponse.json({
       success: true,

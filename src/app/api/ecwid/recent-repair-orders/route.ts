@@ -30,7 +30,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
@@ -159,7 +159,7 @@ async function fetchRecentEcwidOrders(
   return orders;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   const url = new URL(request.url);
   const lookbackDays = Math.max(
     1,
@@ -266,7 +266,12 @@ export const GET = withAuth(async (request: NextRequest) => {
   // Join into the platform/catalog tables so the response carries the same
   // identifiers the add-unmatched-line endpoint needs (sku_platform_id_row,
   // sku_catalog_id, etc.).
-  const catalogRes = await pool.query(
+  // Tenant scope: GUC-wrapped via tenantQuery + explicit org filter on the
+  // base table. The catalog join's string-key branch (sc.sku = sp.platform_sku)
+  // collides across tenants, so it's aligned on organization_id too; the
+  // surrogate-PK branch (sc.id = sp.sku_catalog_id) is safe bare.
+  const catalogRes = await tenantQuery(
+    ctx.organizationId,
     `SELECT
        sp.id,
        sp.platform_sku AS sku,
@@ -283,9 +288,11 @@ export const GET = withAuth(async (request: NextRequest) => {
        ) AS platform_ids
      FROM sku_platform_ids sp
      LEFT JOIN sku_catalog sc
-       ON sc.id = sp.sku_catalog_id OR sc.sku = sp.platform_sku
-     WHERE UPPER(sp.platform_sku) = ANY($1::text[])`,
-    [skuList.map((s) => s.toUpperCase())],
+       ON (sc.id = sp.sku_catalog_id
+           OR (sc.sku = sp.platform_sku AND sc.organization_id = sp.organization_id))
+     WHERE UPPER(sp.platform_sku) = ANY($1::text[])
+       AND sp.organization_id = $2`,
+    [skuList.map((s) => s.toUpperCase()), ctx.organizationId],
   );
 
   const platformRowsBySku = new Map<string, typeof catalogRes.rows[number]>();

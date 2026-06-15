@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const limitRaw = Number(searchParams.get('limit') || 50);
     const limit = Math.min(Math.max(limitRaw, 1), 100);
     const since = searchParams.get('since') || null;
 
-    const params: any[] = [limit];
+    // $1 = limit, $2 = org (tenant scope, reused by both CTEs), $3 = since.
+    const params: any[] = [limit, orgId];
     let sinceClauseSAL = '';
     let sinceClauseLedger = '';
     if (since) {
-      sinceClauseSAL = 'AND sal.created_at > $2';
-      sinceClauseLedger = 'AND l.created_at > $2';
+      sinceClauseSAL = 'AND sal.created_at > $3';
+      sinceClauseLedger = 'AND l.created_at > $3';
       params.push(since);
     }
 
@@ -24,7 +26,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     // synthesized into the same shape; their id is negated to avoid collision
     // with real station_activity_logs ids. Client treats them as first-class
     // events and renders with reason-aware labels.
-    const result = await pool.query(
+    const result = await tenantQuery<any>(
+      orgId,
       `WITH sal_events AS (
          SELECT
            sal.id                            AS id,
@@ -42,7 +45,7 @@ export const GET = withAuth(async (req: NextRequest) => {
            NULL::text                        AS reason
          FROM station_activity_logs sal
          LEFT JOIN staff s ON s.id = sal.staff_id
-         WHERE 1=1 ${sinceClauseSAL}
+         WHERE sal.organization_id = $2 ${sinceClauseSAL}
        ),
        ledger_events AS (
          SELECT
@@ -68,7 +71,7 @@ export const GET = withAuth(async (req: NextRequest) => {
            l.reason                          AS reason
          FROM sku_stock_ledger l
          LEFT JOIN staff s ON s.id = l.staff_id
-         WHERE l.reason <> 'INITIAL_BALANCE' ${sinceClauseLedger}
+         WHERE l.organization_id = $2 AND l.reason <> 'INITIAL_BALANCE' ${sinceClauseLedger}
        )
        SELECT * FROM (
          SELECT * FROM sal_events

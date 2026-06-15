@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getBinLocationsBySku } from '@/lib/neon/location-queries';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
@@ -17,6 +17,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(request, 'sku_stock.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { sku: rawSku } = await params;
     const sku = decodeURIComponent(rawSku || '').trim();
     if (!sku) {
@@ -27,17 +28,23 @@ export async function GET(
     }
 
     const [bins, totals] = await Promise.all([
-      getBinLocationsBySku(sku),
-      pool.query<{
+      // location-queries is optional-orgId (Phase 1) — thread the route's org
+      // so the bin lookup is tenant-scoped.
+      getBinLocationsBySku(sku, orgId),
+      // `ss.sku` is a tenant-scoped string key (collides across orgs); filter
+      // on org and org-align the sku_catalog string join. The sku_platform_ids
+      // LATERAL joins on the integer surrogate PK sc.id (safe bare).
+      tenantQuery<{
         product_title: string | null;
         total_stock: number;
       }>(
+        orgId,
         `SELECT
            COALESCE(sp.display_name, sc.product_title, NULLIF(ss.product_title, ''))
              AS product_title,
            COALESCE(ss.stock, 0)::int AS total_stock
          FROM sku_stock ss
-         LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
+         LEFT JOIN sku_catalog sc ON sc.sku = ss.sku AND sc.organization_id = ss.organization_id
          LEFT JOIN LATERAL (
            SELECT e.display_name
            FROM sku_platform_ids e
@@ -47,9 +54,9 @@ export async function GET(
              AND e.display_name IS NOT NULL
            LIMIT 1
          ) sp ON TRUE
-         WHERE ss.sku = $1
+         WHERE ss.sku = $1 AND ss.organization_id = $2
          LIMIT 1`,
-        [sku],
+        [sku, orgId],
       ),
     ]);
 

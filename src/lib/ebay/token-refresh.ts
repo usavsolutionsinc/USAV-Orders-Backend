@@ -4,10 +4,17 @@
  */
 import { normalizeEnvValue } from '@/lib/env-utils';
 import {
+  assertIntegrationKmsConfigured,
   decryptIntegrationPayload,
   encryptIntegrationPayload,
   isIntegrationKmsConfigured,
 } from '@/lib/integrations/crypto';
+import {
+  ebayScopeString,
+  ebayTokenEndpoint,
+  normalizeEbayEnvironment,
+  type EbayEnvironment,
+} from './oauth-config';
 
 interface TokenResponse {
   access_token: string;
@@ -48,7 +55,11 @@ export function readEbayToken(stored: string | null | undefined): string {
  * the key is provisioned. readEbayToken() reads either form transparently.
  */
 export function writeEbayToken(plaintext: string): string {
-  return isIntegrationKmsConfigured() ? encryptIntegrationPayload(plaintext) : plaintext;
+  if (isIntegrationKmsConfigured()) return encryptIntegrationPayload(plaintext);
+  // In production this throws (encryption-at-rest is required); in dev it warns
+  // and falls back to plaintext so local work keeps going without a key.
+  assertIntegrationKmsConfigured('eBay tokens');
+  return plaintext;
 }
 
 /**
@@ -58,7 +69,8 @@ export function writeEbayToken(plaintext: string): string {
 export async function refreshEbayAccessToken(
   clientId: string,
   clientSecret: string,
-  refreshToken: string
+  refreshToken: string,
+  environment: EbayEnvironment | string = 'PRODUCTION'
 ): Promise<{ accessToken: string; expiresIn: number }> {
   const normalizedClientId = normalizeEnvValue(clientId);
   const normalizedClientSecret = normalizeEnvValue(clientSecret);
@@ -67,8 +79,10 @@ export async function refreshEbayAccessToken(
     throw new Error('Missing eBay OAuth credentials (client_id/client_secret/refresh_token)');
   }
 
-  // 1. eBay OAuth2 token endpoint
-  const url = 'https://api.ebay.com/identity/v1/oauth2/token';
+  // 1. eBay OAuth2 token endpoint — environment-aware so SANDBOX tenants don't
+  //    refresh against production (the bug this fixes).
+  const env = normalizeEbayEnvironment(environment);
+  const url = ebayTokenEndpoint(env);
 
   // 2. Create Base64 encoded credentials: <client_id>:<client_secret>
   const authString = `${normalizedClientId}:${normalizedClientSecret}`;
@@ -80,41 +94,44 @@ export async function refreshEbayAccessToken(
     'Authorization': `Basic ${base64Auth}`,
   };
 
-  // 4. Configure payload
-  // Define scopes (space-separated)
-  const scopes = 'https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.fulfillment';
-
+  // 4. Configure payload — scopes come from the single source of truth so a
+  //    refresh never requests fewer scopes than consent granted.
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: normalizedRefreshToken,
-    scope: scopes,
+    scope: ebayScopeString(),
   });
 
   // 5. Make the request
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: 'POST',
       headers,
       body: body.toString(),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
-    const tokenData = await response.json() as TokenResponse;
-    
-    console.log('✅ Successfully refreshed eBay access token!');
-    
-    return {
-      accessToken: tokenData.access_token,
-      expiresIn: tokenData.expires_in || 7200, // Default 2 hours
-    };
   } catch (error: any) {
-    console.error('❌ Error refreshing eBay access token:', error.message);
-    throw new Error(`Failed to refresh eBay access token: ${error.message}`);
+    // Network-level failure — message only, never the request body/token.
+    throw new Error(`Failed to reach eBay token endpoint: ${error?.message || error}`);
   }
+
+  if (!response.ok) {
+    // Surface the eBay error CODE only; never log the raw body (it can echo
+    // request context) or the refresh token.
+    let code = '';
+    try {
+      code = (JSON.parse(await response.text()) as { error?: string })?.error || '';
+    } catch {
+      /* non-JSON error body — intentionally ignored to avoid leaking it */
+    }
+    throw new Error(`eBay token refresh failed: HTTP ${response.status}${code ? ` (${code})` : ''}`);
+  }
+
+  const tokenData = (await response.json()) as TokenResponse;
+  return {
+    accessToken: tokenData.access_token,
+    expiresIn: tokenData.expires_in || 7200, // Default 2 hours
+  };
 }
 
 /**
@@ -127,6 +144,7 @@ if (require.main === module) {
   const CLIENT_ID = normalizeEnvValue(process.env.EBAY_APP_ID);
   const CLIENT_SECRET = normalizeEnvValue(process.env.EBAY_CERT_ID);
   const REFRESH_TOKEN = normalizeEnvValue(process.env.EBAY_REFRESH_TOKEN_USAV);
+  const ENVIRONMENT = normalizeEbayEnvironment(process.env.EBAY_ENVIRONMENT);
 
   if (!CLIENT_ID || !CLIENT_SECRET || !REFRESH_TOKEN) {
     console.error('❌ Missing required environment variables:');
@@ -134,11 +152,12 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  refreshEbayAccessToken(CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)
+  refreshEbayAccessToken(CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN, ENVIRONMENT)
     .then(({ accessToken, expiresIn }) => {
-      console.log('\n✅ Your Access Token:');
-      console.log(accessToken);
-      console.log(`\n⏰ Expires in: ${expiresIn} seconds (${expiresIn / 3600} hours)`);
+      // Never print the raw token (it's a live credential) — redact to a prefix.
+      console.log('\n✅ eBay access token refreshed (redacted for safety):');
+      console.log(`   ${accessToken.slice(0, 12)}… (${accessToken.length} chars)`);
+      console.log(`⏰ Expires in: ${expiresIn} seconds (${expiresIn / 3600} hours)`);
     })
     .catch(error => {
       console.error(error);

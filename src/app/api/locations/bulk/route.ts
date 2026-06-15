@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { bulkCreateBinRange } from '@/lib/neon/location-queries';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
 /**
  * POST /api/locations/bulk
  * Body: { room, rowLabel, colStart, colEnd, binType?, capacity? }
  * Returns: { created, bins[] } — existing bins are reused, not duplicated.
  */
-async function handlePost(req: NextRequest) {
+async function handlePost(req: NextRequest, ctx: AuthContext) {
   try {
     const body = await req.json().catch(() => ({}));
     const room = String(body?.room ?? '').trim();
@@ -41,7 +41,7 @@ async function handlePost(req: NextRequest) {
       colEnd,
       binType: body?.binType ?? null,
       capacity: typeof body?.capacity === 'number' ? body.capacity : null,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ success: true, ...result });
   } catch (err: any) {
     console.error('[POST /api/locations/bulk] error:', err);

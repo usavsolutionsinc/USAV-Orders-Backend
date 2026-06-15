@@ -23,7 +23,7 @@ const ROUTE_SUPPLIERS_POST = 'suppliers.post';
  * Pass `stats=1` for the sourcing-activity rollup (candidate/acquisition counts,
  * spend, last order) used by the sourcing-hub Suppliers mode.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q') || '';
@@ -32,8 +32,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     const offset = Math.max(0, Number(searchParams.get('offset') || 0));
 
     const { items, total } = searchParams.get('stats') === '1'
-      ? await getSupplierListWithStats({ q, type, limit, offset })
-      : await getSupplierList({ q, type, limit, offset });
+      ? await getSupplierListWithStats({ q, type, limit, offset }, ctx.organizationId)
+      : await getSupplierList({ q, type, limit, offset }, ctx.organizationId);
     return NextResponse.json({ success: true, items, total });
   } catch (error: any) {
     console.error('Error in GET /api/suppliers:', error);
@@ -65,7 +65,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     // eBay seller ids are unique — a dupe is a 409 pointing at the existing row.
     if (parsed.ebaySellerId?.trim()) {
-      const existing = await getSupplierByEbaySellerId(parsed.ebaySellerId);
+      const existing = await getSupplierByEbaySellerId(parsed.ebaySellerId, ctx.organizationId);
       if (existing) {
         return NextResponse.json(
           { success: false, error: 'A supplier with that eBay seller id already exists', id: existing.id },
@@ -85,7 +85,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       leadTimeDays: parsed.leadTimeDays ?? null,
       notes: parsed.notes ?? null,
       isActive: parsed.isActive ?? true,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'suppliers-api',

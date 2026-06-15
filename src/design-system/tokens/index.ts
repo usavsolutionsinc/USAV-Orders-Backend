@@ -7,5 +7,3 @@ export * from './borders';
 export * from './z-index';
 export * from './css-variables';
 export * from './touch';
-export * from './haptics';
-export * from './sounds';

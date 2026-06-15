@@ -11,6 +11,12 @@ interface Props {
   onClose: () => void;
   /** Canonical sku_catalog.id to pair against. */
   skuCatalogId: number | null;
+  /**
+   * Authoritative title for the panel header — the Zoho product name from the
+   * line under test. Passed through so the header shows the real product, not
+   * the marketplace catalog title (the SKU namespaces collide).
+   */
+  headerTitle?: string | null;
 }
 
 /**
@@ -22,7 +28,7 @@ interface Props {
  * centered. Portaled to body so it escapes the workspace's transformed
  * stacking context.
  */
-export function SkuPairingModal({ open, onClose, skuCatalogId }: Props) {
+export function SkuPairingModal({ open, onClose, skuCatalogId, headerTitle }: Props) {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -67,7 +73,7 @@ export function SkuPairingModal({ open, onClose, skuCatalogId }: Props) {
             </button>
           </div>
           <div className="min-h-0 flex-1">
-            <ProductHubPanel skuCatalogId={skuCatalogId} allowManualPair />
+            <ProductHubPanel skuCatalogId={skuCatalogId} allowManualPair headerTitle={headerTitle} />
           </div>
         </div>
       </div>

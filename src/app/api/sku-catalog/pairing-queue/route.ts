@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/sku-catalog/pairing-queue
@@ -64,12 +64,13 @@ function orderByClause(sort: SortKey): string {
 }
 
 export const GET = withAuth(
-  async (request) => {
+  async (request, ctx) => {
     const url = new URL(request.url);
     const q = (url.searchParams.get('q') || '').trim();
     const sort = parseSort(url.searchParams.get('sort'));
     const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 100), 1), 500);
     const offset = Math.max(Number(url.searchParams.get('offset') || 0), 0);
+    const orgId = ctx.organizationId;
 
     // ── Search semantics ──────────────────────────────────────────────────────
     // Default (no `q`): show the suggestion backlog — canonical SKUs that carry at
@@ -81,7 +82,10 @@ export const GET = withAuth(
     // even when it's already paired and has no outstanding suggestion.
     const searching = q.length > 0;
 
-    const params: unknown[] = [];
+    // $1 is always the org — every catalog/platform/orders predicate below filters
+    // on it (and string-key joins like sp.platform_sku = sc.sku align org-to-org).
+    const params: unknown[] = [orgId];
+    const orgIdx = '$1';
     let searchClause = '';
     let matchedViaSelect = ', NULL::json AS "matchedVia"';
     if (searching) {
@@ -95,6 +99,7 @@ export const GET = withAuth(
         OR EXISTS (
           SELECT 1 FROM sku_platform_ids sp
            WHERE sp.sku_catalog_id = sc.id
+             AND sp.organization_id = sc.organization_id
              AND (sp.platform_sku ILIKE ${i}
                   OR (sp.platform <> 'ecwid' AND sp.platform_item_id ILIKE ${i}))
         )
@@ -109,6 +114,7 @@ export const GET = withAuth(
         )
         FROM sku_platform_ids sp
         WHERE sp.sku_catalog_id = sc.id
+          AND sp.organization_id = sc.organization_id
           AND (sp.platform_sku ILIKE ${i}
                OR (sp.platform <> 'ecwid' AND sp.platform_item_id ILIKE ${i}))
           AND NOT (sc.sku ILIKE ${i} OR sc.product_title ILIKE ${i})
@@ -124,6 +130,10 @@ export const GET = withAuth(
     // Inactive hits are flagged in the response (`isActive`) so the UI can badge them.
     const activeGate = searching ? '' : 'AND sc.is_active = true';
 
+    // sku_pairing_suggestions has no organization_id column (child-scoped); it is
+    // tenant-isolated transitively by joining to sku_platform_ids (sp) and
+    // filtering sp.organization_id. d.sku_catalog_id then only ever references
+    // this org's catalog rows.
     const debtCte = `
       debt AS (
         SELECT
@@ -133,10 +143,12 @@ export const GET = withAuth(
           ARRAY_AGG(DISTINCT sp.platform ORDER BY sp.platform) AS platforms
         FROM sku_pairing_suggestions s
         JOIN sku_platform_ids sp ON sp.id = s.platform_id_row_id
+        WHERE sp.organization_id = ${orgIdx}
         GROUP BY s.sku_catalog_id
       )`;
 
-    const whereSql = `WHERE TRUE ${activeGate} ${searchClause} ${debtGate}`;
+    // Tenant gate first — every surfaced catalog row must belong to this org.
+    const whereSql = `WHERE sc.organization_id = ${orgIdx} ${activeGate} ${searchClause} ${debtGate}`;
 
     try {
       const listParams = [...params, limit, offset];
@@ -158,6 +170,7 @@ export const GET = withAuth(
           (
             SELECT COUNT(*)::int FROM sku_platform_ids sp
              WHERE (sp.sku_catalog_id = sc.id OR sp.platform_sku = sc.sku)
+               AND sp.organization_id = sc.organization_id
                AND sp.is_active = true
           ) AS "confirmedCount"
           ${matchedViaSelect}
@@ -167,6 +180,7 @@ export const GET = withAuth(
           SELECT sku_catalog_id, COUNT(*)::int AS order_count
             FROM orders
            WHERE sku_catalog_id IS NOT NULL
+             AND organization_id = ${orgIdx}
            GROUP BY sku_catalog_id
         ) oc ON oc.sku_catalog_id = sc.id
         ${whereSql}
@@ -183,8 +197,8 @@ export const GET = withAuth(
       `;
 
       const [listResult, countResult] = await Promise.all([
-        pool.query(listSql, listParams),
-        pool.query(countSql, params),
+        tenantQuery(orgId, listSql, listParams),
+        tenantQuery(orgId, countSql, params),
       ]);
 
       return NextResponse.json({

@@ -20,8 +20,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
 import {
   deliveredUnscannedBaseSql,
@@ -31,7 +31,7 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (_req: NextRequest) => {
+export const GET = withAuth(async (_req: NextRequest, ctx) => {
   try {
     // Phase 3: when the unified inbound model is on, a delivered shipment
     // resolves its PO + line-level SKU/order# DIRECTLY through
@@ -41,11 +41,14 @@ export const GET = withAuth(async (_req: NextRequest) => {
     // receiving row. Column-gated: only referenced when the flag is on (so an
     // unapplied migration can't error).
     const unified = isReceivingUnifiedInbound();
+    // receiving_lines is tenant-owned — scope these PO-resolution subqueries to
+    // this org ($2) so a foreign tenant's line can't supply the PO id / item agg.
     const unifiedPoIdBranch = unified
       ? `(SELECT rl.zoho_purchaseorder_id
             FROM receiving_lines rl
            WHERE rl.shipment_id = base.shipment_id
              AND rl.zoho_purchaseorder_id IS NOT NULL
+             AND rl.organization_id = $2
            ORDER BY rl.id LIMIT 1),`
       : '';
     const unifiedAggMatch = unified
@@ -59,7 +62,13 @@ export const GET = withAuth(async (_req: NextRequest) => {
     // From the PO id we pull PO#, vendor + dates (zoho_po_mirror) and the
     // product/item names (receiving_lines — the mirror's `raw` is the Zoho PO
     // *list* shape, which omits line_items, so item names live on the lines).
-    const { rows } = await pool.query<{
+    // GUC-wrapped via tenantQuery: the canonical `base` derives from
+    // shipping_tracking_numbers (NEEDS-COL — no organization_id column yet) and
+    // zoho_po_mirror (NEEDS-COL), so they can only be GUC-scoped here. The
+    // tenant-owned tables this outer query touches — receiving and
+    // receiving_lines — ARE explicitly org-filtered ($2) so a foreign tenant's
+    // PO# can't leak vendor/item context onto a shipment.
+    const { rows } = await tenantQuery<{
       shipment_id: number;
       carrier: string;
       tracking_number_raw: string;
@@ -75,6 +84,7 @@ export const GET = withAuth(async (_req: NextRequest) => {
       first_sku: string | null;
       item_count: number | null;
     }>(
+      ctx.organizationId,
       // `base` is the canonical delivered-unscanned set (Phase B) — identical to
       // the count's, so count === list length. PO context is resolved in the
       // outer query (adding columns can't change the row count): the PO id comes
@@ -91,6 +101,7 @@ export const GET = withAuth(async (_req: NextRequest) => {
                      FROM receiving r
                     WHERE r.shipment_id = base.shipment_id
                       AND r.zoho_purchaseorder_id IS NOT NULL
+                      AND r.organization_id = $2
                     ORDER BY r.id LIMIT 1),
                   (SELECT m.zoho_purchaseorder_id
                      FROM zoho_po_mirror m
@@ -108,6 +119,7 @@ export const GET = withAuth(async (_req: NextRequest) => {
                    FROM receiving r
                   WHERE r.shipment_id = enriched.shipment_id
                     AND r.zoho_purchaseorder_number IS NOT NULL
+                    AND r.organization_id = $2
                   ORDER BY r.id LIMIT 1)
               )                              AS po_number,
               m.vendor_name,
@@ -125,9 +137,10 @@ export const GET = withAuth(async (_req: NextRequest) => {
              FROM receiving_lines rl
             WHERE (rl.zoho_purchaseorder_id = enriched.zoho_purchaseorder_id
                    ${unifiedAggMatch})
+              AND rl.organization_id = $2
               AND COALESCE(rl.item_name, '') <> ''
          ) agg ON TRUE`,
-      [String(WINDOW_DAYS)],
+      [String(WINDOW_DAYS), ctx.organizationId],
     );
 
     // Most-recently-delivered first for display; cap defensively.

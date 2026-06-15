@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSquareConfig, squareFetch, formatSquareErrors } from '@/lib/square/client';
+import { formatSquareErrors, type SquareConfig } from '@/lib/square/client';
+import { resolveSquareConfig, squareFetchForOrg } from '@/lib/square/server';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * GET /api/walk-in/status
  * Ping Square API to verify connectivity, return location info, catalog count, and terminal devices.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const results: Record<string, unknown> = {
     timestamp: new Date().toISOString(),
     square_environment: process.env.SQUARE_ENVIRONMENT || 'PRODUCTION',
   };
 
+  // Resolve the caller-org's Square config (Nango-connected token when present;
+  // env fallback). All diagnostics below report on the caller-org's account,
+  // not the shared env account.
+  let cfg: SquareConfig;
   try {
-    const cfg = getSquareConfig();
+    cfg = await resolveSquareConfig(ctx.organizationId);
     results.config = {
       baseUrl: cfg.baseUrl,
       locationId: cfg.locationId,
@@ -28,10 +33,9 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   // 1. Location ping
   try {
-    const cfg = getSquareConfig();
-    const locationResult = await squareFetch<{ location?: Record<string, unknown> }>(
+    const locationResult = await squareFetchForOrg<{ location?: Record<string, unknown> }>(
+      ctx.organizationId,
       `/locations/${cfg.locationId}`,
-      { config: cfg },
     );
     if (locationResult.ok) {
       const loc = locationResult.data.location as any;
@@ -53,7 +57,8 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   // 2. Catalog count
   try {
-    const catalogResult = await squareFetch<{ objects?: unknown[]; cursor?: string }>(
+    const catalogResult = await squareFetchForOrg<{ objects?: unknown[]; cursor?: string }>(
+      ctx.organizationId,
       '/catalog/search',
       { method: 'POST', body: { object_types: ['ITEM'], limit: 1 } },
     );
@@ -72,7 +77,8 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   // 3. Terminal devices
   try {
-    const devicesResult = await squareFetch<{ devices?: Array<Record<string, unknown>> }>(
+    const devicesResult = await squareFetchForOrg<{ devices?: Array<Record<string, unknown>> }>(
+      ctx.organizationId,
       '/devices',
     );
     if (devicesResult.ok) {
@@ -92,7 +98,8 @@ export const GET = withAuth(async (req: NextRequest) => {
 
   // 4. Customers (quick test)
   try {
-    const custResult = await squareFetch<{ customers?: unknown[] }>(
+    const custResult = await squareFetchForOrg<{ customers?: unknown[] }>(
+      ctx.organizationId,
       '/customers/search',
       { method: 'POST', body: { limit: 1 } },
     );

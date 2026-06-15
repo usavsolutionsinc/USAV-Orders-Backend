@@ -11,10 +11,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { sanitizeMobileDisplayConfig } from '@/lib/auth/mobile-display-config';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -39,15 +39,23 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   // null / undefined / {} all map to "clear the override".
   const clean = raw === null ? null : sanitizeMobileDisplayConfig(raw);
 
-  const existsR = await pool.query(`SELECT id FROM staff WHERE id = $1 LIMIT 1`, [id]);
+  // Org-ownership gate: a staffId in another org reads as NOT_FOUND, never
+  // mutated. The UPDATE re-asserts the org predicate so a cross-org id is a
+  // no-op even if the probe were bypassed.
+  const existsR = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [id, ctx.organizationId],
+  );
   if (!existsR.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
-  const r = await pool.query(
+  const r = await tenantQuery(
+    ctx.organizationId,
     `UPDATE staff
         SET mobile_display_config = $2::jsonb
-      WHERE id = $1
+      WHERE id = $1 AND organization_id = $3
       RETURNING id, mobile_display_config`,
-    [id, clean ? JSON.stringify(clean) : null],
+    [id, clean ? JSON.stringify(clean) : null, ctx.organizationId],
   );
 
   await audit({

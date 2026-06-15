@@ -19,6 +19,8 @@
  */
 
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { PoolClient } from 'pg';
 
 export type TechSerialStationSource = 'RECEIVING' | 'TECH' | (string & {});
@@ -63,10 +65,23 @@ export interface AttachTechSerialInput {
  *
  * Pass `executor` to share the caller's open pg transaction; defaults to the
  * pool for standalone writes.
+ *
+ * Tenancy (backward-compatible): pass the optional trailing `orgId` to thread an
+ * explicit tenant. When provided it (a) stamps `organization_id = orgId` on the
+ * INSERT — overriding `input.organizationId` so the threaded org always wins —
+ * and (b) sets the `app.current_org` GUC for the write so RLS-subject paths
+ * resolve to the right tenant: if the caller shares their own `executor`
+ * (open transaction) the GUC is set on THAT client with the txn-local
+ * `set_config(...,true)`; with the default pool executor the write is routed
+ * through `withTenantTransaction` (which BEGINs + sets the GUC + COMMITs).
+ * When `orgId` is OMITTED the behavior is byte-identical to before: the column
+ * is bound only when `input.organizationId` is present and the raw `executor`
+ * (pool by default) runs the INSERT with no GUC.
  */
 export async function attachTechSerial(
   input: AttachTechSerialInput,
   executor: Pick<PoolClient, 'query'> = pool,
+  orgId?: OrgId,
 ): Promise<{ id: number | null }> {
   // Fixed core columns (stable param positions; tests assert on these).
   const cols = [
@@ -97,19 +112,41 @@ export async function attachTechSerial(
     cols.push('fnsku_log_id');
     vals.push(input.fnskuLogId ?? null);
   }
-  // organization_id is NOT NULL w/ session default — bind ONLY when provided.
-  if (input.organizationId !== undefined) {
+  // organization_id is NOT NULL w/ session default. Bind it when a threaded
+  // `orgId` is supplied (which always wins) OR — preserving the prior
+  // behavior — when `input.organizationId` is explicitly provided.
+  const effectiveOrgId = orgId ?? input.organizationId;
+  if (effectiveOrgId !== undefined) {
     cols.push('organization_id');
-    vals.push(input.organizationId);
+    vals.push(effectiveOrgId);
   }
 
   const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
-  const result = await executor.query<{ id: number }>(
+  const sql =
     `INSERT INTO tech_serial_numbers (${cols.join(', ')})
      VALUES (${placeholders})
      ON CONFLICT DO NOTHING
-     RETURNING id`,
-    vals,
-  );
-  return { id: result.rows[0]?.id ?? null };
+     RETURNING id`;
+
+  // No threaded org → byte-identical legacy path: raw executor, no GUC.
+  if (orgId === undefined) {
+    const result = await executor.query<{ id: number }>(sql, vals);
+    return { id: result.rows[0]?.id ?? null };
+  }
+
+  // Threaded org + a caller-supplied executor (open txn): set the GUC on that
+  // client with a txn-local set_config so we co-commit inside the caller's
+  // transaction (do NOT open a nested one), then run the stamped INSERT.
+  if (executor !== pool) {
+    await executor.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+    const result = await executor.query<{ id: number }>(sql, vals);
+    return { id: result.rows[0]?.id ?? null };
+  }
+
+  // Threaded org + default pool executor: route the standalone write through
+  // the tenant transaction so the GUC is set (BEGIN/COMMIT) around it.
+  return withTenantTransaction(orgId, async (client) => {
+    const result = await client.query<{ id: number }>(sql, vals);
+    return { id: result.rows[0]?.id ?? null };
+  });
 }

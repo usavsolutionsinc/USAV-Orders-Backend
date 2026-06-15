@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/stock-alerts?status=open|resolved&type=LOW_STOCK&limit=
@@ -8,7 +8,7 @@ import pool from '@/lib/db';
  * Lists alerts produced by /api/cron/stock-alerts. Powers the future
  * /sku-stock?view=alerts surface and any digest emails.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'open';
@@ -20,6 +20,9 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const clauses: string[] = [];
     const params: unknown[] = [];
+    // Tenant ownership filter — never return another org's alerts.
+    params.push(ctx.organizationId);
+    clauses.push(`sa.organization_id = $${params.length}`);
     if (status === 'open') {
       clauses.push('sa.resolved_at IS NULL');
     } else if (status === 'resolved') {
@@ -32,7 +35,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     params.push(limit);
     const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
 
-    const r = await pool.query(
+    const r = await tenantQuery(
+      ctx.organizationId,
       `SELECT sa.id, sa.sku, sa.bin_id, sa.alert_type, sa.threshold,
               sa.qty_at_trigger, sa.triggered_at, sa.resolved_at,
               l.name AS bin_name, l.barcode AS bin_barcode, l.room,
@@ -44,8 +48,8 @@ export const GET = withAuth(async (req: NextRequest) => {
               ) AS product_title
        FROM stock_alerts sa
        LEFT JOIN locations l ON l.id = sa.bin_id
-       LEFT JOIN bin_contents bc ON bc.location_id = sa.bin_id AND bc.sku = sa.sku
-       LEFT JOIN sku_stock ss ON ss.sku = sa.sku
+       LEFT JOIN bin_contents bc ON bc.location_id = sa.bin_id AND bc.sku = sa.sku AND bc.organization_id = sa.organization_id
+       LEFT JOIN sku_stock ss ON ss.sku = sa.sku AND ss.organization_id = sa.organization_id
        ${where}
        ORDER BY sa.triggered_at DESC
        LIMIT $${params.length}`,

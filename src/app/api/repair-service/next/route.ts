@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { parsePositiveInt } from '@/utils/number';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
@@ -43,6 +43,7 @@ const REPAIR_OUTCOME_SELECT = `wa.repair_outcome AS "repairOutcome"`;
  */
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const techIdParam = req.nextUrl.searchParams.get('techId');
     // Self-lookup defaults to ctx.staffId; admin can override via ?techId=
     const isAdminOverride = techIdParam && ctx.permissions.has('admin.view_logs');
@@ -59,6 +60,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     let params: (string | number)[];
 
     if (techId !== null) {
+      const techPlaceholder = CLOSED_STATUSES.length + 1;
+      const orgPlaceholder = CLOSED_STATUSES.length + 2;
       query = `
         SELECT
           rs.id               AS "repairId",
@@ -87,17 +90,21 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             AND work_type   = 'REPAIR'
             AND status      IN ('ASSIGNED', 'IN_PROGRESS')
             AND completed_at IS NULL
+            AND organization_id = $${orgPlaceholder}
           ORDER BY id DESC
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
+                         AND s.organization_id = $${orgPlaceholder}
         WHERE rs.status NOT IN (${closedPlaceholders})
+          AND rs.organization_id = $${orgPlaceholder}
           AND NOT EXISTS (
             SELECT 1
             FROM work_assignments wa_done
             WHERE wa_done.entity_type = 'REPAIR'
               AND wa_done.entity_id = rs.id
               AND wa_done.work_type = 'REPAIR'
+              AND wa_done.organization_id = $${orgPlaceholder}
               AND (
                 wa_done.status = 'DONE'
                 OR wa_done.completed_at IS NOT NULL
@@ -106,13 +113,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           AND (
                wa.id IS NULL
             OR wa.assigned_tech_id IS NULL
-            OR wa.assigned_tech_id = $${CLOSED_STATUSES.length + 1}
+            OR wa.assigned_tech_id = $${techPlaceholder}
           )
         ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
-      params = [...CLOSED_STATUSES, techId];
+      params = [...CLOSED_STATUSES, techId, orgId];
     } else {
       // No techId — return all unresolved repairs (assigned or not)
+      const orgPlaceholder = CLOSED_STATUSES.length + 1;
       query = `
         SELECT
           rs.id               AS "repairId",
@@ -141,17 +149,21 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             AND work_type   = 'REPAIR'
             AND status      IN ('ASSIGNED', 'IN_PROGRESS')
             AND completed_at IS NULL
+            AND organization_id = $${orgPlaceholder}
           ORDER BY id DESC
           LIMIT 1
         ) wa ON TRUE
         LEFT JOIN staff s ON s.id = wa.assigned_tech_id
+                         AND s.organization_id = $${orgPlaceholder}
         WHERE rs.status NOT IN (${closedPlaceholders})
+          AND rs.organization_id = $${orgPlaceholder}
           AND NOT EXISTS (
             SELECT 1
             FROM work_assignments wa_done
             WHERE wa_done.entity_type = 'REPAIR'
               AND wa_done.entity_id = rs.id
               AND wa_done.work_type = 'REPAIR'
+              AND wa_done.organization_id = $${orgPlaceholder}
               AND (
                 wa_done.status = 'DONE'
                 OR wa_done.completed_at IS NOT NULL
@@ -159,11 +171,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           )
         ORDER BY COALESCE(wa.deadline_at, rs.created_at) ASC NULLS LAST, wa.priority ASC NULLS LAST, rs.id ASC
       `;
-      params = [...CLOSED_STATUSES];
+      params = [...CLOSED_STATUSES, orgId];
     }
 
     const result = await queryWithRetry(
-      () => pool.query(query, params),
+      () => tenantQuery(orgId, query, params),
       { retries: 3, delayMs: 1000 },
     );
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { assertReportRange, parseFilters } from '@/lib/audit-log/filters';
 
 type Section = 'receiving' | 'packing' | 'tech' | 'sku' | 'staff';
@@ -28,11 +29,21 @@ interface ReportBuckets {
 /**
  * Returns the SQL fragment for the event-source CTE for a given section.
  * Each fragment exposes columns: occurred_at, action, staff_id, item_key, item_label.
+ *
+ * The fragment seeds `params: [orgId]` so the assembled query's `$1` is always
+ * the tenant org id (the caller spreads `source.params` first). Each fragment's
+ * driving event table (inventory_events / station_activity_logs) carries
+ * organization_id and is filtered on `$1`. Joins are all on integer surrogate
+ * PKs (rl.id / pl.id / stn.id / tsn.id / sk.id / s.id / *.shipment_id FKs), so
+ * they can't collide cross-tenant; scoping the driving table is sufficient.
+ * `shipping_tracking_numbers` has no organization_id column (NEEDS-COL) and is
+ * reached only via an integer FK, so it inherits scope from its joined parent.
  */
 function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
   // params are appended by caller; the section SQL uses placeholders relative to
   // the caller's running param count, so just return raw SQL here and let the
   // caller weave it in. Filter clauses are appended outside this fragment.
+  // `$1` is the tenant org id (seeded below via params: [orgId]).
   switch (section) {
     case 'receiving': {
       // Inventory events anchored on receiving lines.
@@ -46,6 +57,7 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
             FROM inventory_events ie
             JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
             LEFT JOIN replenishment_requests rr ON rr.zoho_po_id = rl.zoho_purchaseorder_id
+           WHERE ie.organization_id = $1
         `,
         params: [],
       };
@@ -62,6 +74,7 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
             JOIN packer_logs pl ON pl.id = sal.packer_log_id
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
            WHERE sal.packer_log_id IS NOT NULL
+             AND sal.organization_id = $1
         `,
         params: [],
       };
@@ -78,6 +91,7 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
             JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = COALESCE(sal.shipment_id, tsn.shipment_id)
            WHERE sal.tech_serial_number_id IS NOT NULL
+             AND sal.organization_id = $1
         `,
         params: [],
       };
@@ -97,6 +111,7 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
             LEFT JOIN orders o ON o.shipment_id = COALESCE(pl.shipment_id, sal.shipment_id)
             LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
            WHERE COALESCE(sk.static_sku, o.sku) IS NOT NULL
+             AND sal.organization_id = $1
         `,
         params: [],
       };
@@ -112,6 +127,7 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
             FROM station_activity_logs sal
             LEFT JOIN staff s ON s.id = sal.staff_id
            WHERE sal.staff_id IS NOT NULL
+             AND sal.organization_id = $1
         `,
         params: [],
       };
@@ -127,7 +143,8 @@ function buildSourceCTE(section: Section): { sql: string; params: unknown[] } {
  * Range capped at 31 days.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId: OrgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const sectionRaw = String(searchParams.get('section') || 'receiving').toLowerCase();
     if (!SECTIONS.has(sectionRaw as Section)) {
@@ -148,7 +165,10 @@ export const GET = withAuth(
 
     try {
       const source = buildSourceCTE(section);
-      const params: unknown[] = [...source.params];
+      // Seed $1 = tenant org id — every section's source CTE filters its driving
+      // event table on `organization_id = $1`. (source.params is currently empty
+      // but spread first to keep the original weaving contract.)
+      const params: unknown[] = [orgId, ...source.params];
       const filterClauses: string[] = [];
 
       if (filters.range.start) {
@@ -202,7 +222,7 @@ export const GET = withAuth(
         by_staff AS (
           SELECT scoped.staff_id, s.name, COUNT(*)::int AS count
             FROM scoped
-            LEFT JOIN staff s ON s.id = scoped.staff_id
+            LEFT JOIN staff s ON s.id = scoped.staff_id AND s.organization_id = $1
            WHERE scoped.staff_id IS NOT NULL
            GROUP BY scoped.staff_id, s.name
            ORDER BY count DESC
@@ -224,7 +244,7 @@ export const GET = withAuth(
           (SELECT COALESCE(json_agg(by_item.*),  '[]'::json) FROM by_item)    AS by_item
       `;
 
-      const { rows } = await pool.query(sql, params);
+      const { rows } = await tenantQuery(orgId, sql, params);
       const row = rows[0] ?? {};
 
       const totalsRow = (row.totals as ReportBuckets['totals'] | null) ?? {

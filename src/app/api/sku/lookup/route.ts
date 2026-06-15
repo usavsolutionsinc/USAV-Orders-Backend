@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizeSku } from '@/utils/sku';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -10,7 +10,16 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Returns `serial_number`, `static_sku`, and row `id` from the `sku` table for dashboards
  * and tooling that need a direct read without joining packer/tech queries.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+type SkuLookupRow = {
+  id: number;
+  static_sku: string | null;
+  serial_number: string | null;
+  shipping_tracking_number: string | null;
+  notes: string | null;
+  location: string | null;
+};
+
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const idRaw = searchParams.get('id');
@@ -21,7 +30,10 @@ export const GET = withAuth(async (req: NextRequest) => {
       if (!Number.isFinite(id) || id <= 0) {
         return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
       }
-      const r = await pool.query(
+      // v_sku is a read-only VIEW without an organization_id column, so tenant
+      // scope rides on the GUC (RLS on the underlying serial_units rows).
+      const r = await tenantQuery<SkuLookupRow>(
+        ctx.organizationId,
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
          FROM v_sku WHERE id = $1 LIMIT 1`,
         [id],
@@ -45,8 +57,9 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const normalized = normalizeSku(base);
 
-    let row = (
-      await pool.query(
+    let row: SkuLookupRow | undefined = (
+      await tenantQuery<SkuLookupRow>(
+        ctx.organizationId,
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
          FROM v_sku WHERE BTRIM(static_sku) = BTRIM($1) LIMIT 1`,
         [base],
@@ -54,11 +67,12 @@ export const GET = withAuth(async (req: NextRequest) => {
     ).rows[0];
 
     if (!row) {
-      const fuzzy = await pool.query(
+      const fuzzy = await tenantQuery<SkuLookupRow>(
+        ctx.organizationId,
         `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location
          FROM v_sku WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
-      row = fuzzy.rows.find((r: { static_sku?: string }) =>
+      row = fuzzy.rows.find((r) =>
         normalizeSku(String(r.static_sku || '')) === normalized,
       );
     }

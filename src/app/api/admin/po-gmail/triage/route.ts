@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 
@@ -45,15 +45,18 @@ interface Row {
   resolved_at: string | null;
 }
 
-export const GET = withAuth(async (_req: NextRequest) => {
+export const GET = withAuth(async (_req: NextRequest, ctx) => {
   try {
     // One query, partitioned per pile via row_number — cheaper than four
-    // round trips and stays under MAX_PER_PILE per group.
-    const { rows } = await pool.query<Row>(
+    // round trips and stays under MAX_PER_PILE per group. Tenant ownership
+    // filter inside the CTE so ranking + counts are scoped to this org.
+    const { rows } = await tenantQuery<Row>(
+      ctx.organizationId,
       `WITH ranked AS (
          SELECT *,
                 row_number() OVER (PARTITION BY pile ORDER BY scanned_at DESC) AS rn
            FROM email_missing_purchase_orders
+          WHERE organization_id = $2
        )
        SELECT id, gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
               email_subject, email_from, email_received, scanned_at,
@@ -63,13 +66,16 @@ export const GET = withAuth(async (_req: NextRequest) => {
          FROM ranked
         WHERE rn <= $1
         ORDER BY pile, scanned_at DESC`,
-      [MAX_PER_PILE],
+      [MAX_PER_PILE, ctx.organizationId],
     );
 
-    const counts = await pool.query<{ pile: Pile; n: string }>(
+    const counts = await tenantQuery<{ pile: Pile; n: string }>(
+      ctx.organizationId,
       `SELECT pile, COUNT(*)::text AS n
          FROM email_missing_purchase_orders
+        WHERE organization_id = $1
         GROUP BY pile`,
+      [ctx.organizationId],
     );
 
     const piles: Record<Pile, { items: Row[]; count: number; truncated: boolean }> = {

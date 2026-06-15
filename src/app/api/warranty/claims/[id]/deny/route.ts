@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit } from '@/lib/audit-logs';
 import pool from '@/lib/db';
 import { denyClaim } from '@/lib/warranty/mutations';
+import { getClaimTicketRef } from '@/lib/warranty/claims';
 import { notifyWarrantyTransition } from '@/lib/warranty/notify';
 import { claimIdFromPath, idempotentJson, warrantyFlagEnabled, warrantyFlagOff } from '@/lib/warranty/route-helpers';
 import { WarrantyDenyBody } from '@/lib/schemas/warranty';
@@ -15,6 +16,9 @@ export const POST = withAuth(async (request, ctx) => {
   if (!warrantyFlagEnabled()) return warrantyFlagOff();
   const id = claimIdFromPath(request, 2);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
+
+  const owns = await getClaimTicketRef(id, ctx.organizationId);
+  if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
   const body = await request.json().catch(() => ({}));
   const parsed = WarrantyDenyBody.safeParse(body);

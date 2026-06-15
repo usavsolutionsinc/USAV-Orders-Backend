@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
-import { PO_GMAIL_SCOPE } from '@/lib/po-gmail/client';
+import { PO_GMAIL_SCOPE, assertUsavMailbox, PoGmailWrongTenantError } from '@/lib/po-gmail/client';
 import { ApiError, errorResponse } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +27,7 @@ interface UserInfo {
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    assertUsavMailbox(ctx.organizationId);
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
@@ -112,6 +113,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     res.cookies.delete('po_gmail_oauth_state');
     return res;
   } catch (error) {
+    if (error instanceof PoGmailWrongTenantError) {
+      return NextResponse.json({ error: error.message }, { status: 403 });
+    }
     return errorResponse(error, 'GET /api/admin/po-gmail/oauth-callback');
   }
 }, { permission: 'admin.view' });

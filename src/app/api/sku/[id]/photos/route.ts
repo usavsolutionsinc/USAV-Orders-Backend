@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
@@ -14,6 +14,7 @@ export async function GET(
 ) {
   const gate = await requireRoutePerm(request, 'sku_stock.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   const { id } = await params;
   const skuId = Number(id);
   if (!Number.isFinite(skuId) || skuId <= 0) {
@@ -21,12 +22,14 @@ export async function GET(
   }
 
   try {
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `SELECT id, entity_id AS sku_id, url, photo_type, taken_by_staff_id, created_at
        FROM photos
        WHERE entity_type = 'SKU' AND entity_id = $1
+         AND organization_id = $2
        ORDER BY created_at ASC`,
-      [skuId],
+      [skuId, orgId],
     );
 
     return NextResponse.json({
@@ -51,6 +54,7 @@ export async function POST(
 ) {
   const gate = await requireRoutePerm(request, 'receiving.upload_photo');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   const { id } = await params;
   const skuId = Number(id);
   if (!Number.isFinite(skuId) || skuId <= 0) {
@@ -72,8 +76,13 @@ export async function POST(
       );
     }
 
-    // Verify the SKU row exists
-    const skuCheck = await pool.query('SELECT id FROM sku WHERE id = $1', [skuId]);
+    // Verify the SKU row exists AND belongs to this org — a cross-tenant id
+    // finds no row and 404s (never 403), gating the write to owned rows.
+    const skuCheck = await tenantQuery(
+      orgId,
+      'SELECT id FROM sku WHERE id = $1 AND organization_id = $2',
+      [skuId, orgId],
+    );
     if (skuCheck.rows.length === 0) {
       return NextResponse.json({ error: 'SKU not found' }, { status: 404 });
     }
@@ -94,12 +103,14 @@ export async function POST(
       return NextResponse.json({ error: 'Could not determine photo URL' }, { status: 400 });
     }
 
-    const inserted = await pool.query(
-      `INSERT INTO photos (entity_type, entity_id, url, photo_type, taken_by_staff_id)
-       VALUES ('SKU', $1, $2, $3, $4)
-       ON CONFLICT (entity_type, entity_id, url) DO NOTHING
-       RETURNING id, entity_id AS sku_id, url, photo_type, taken_by_staff_id, created_at`,
-      [skuId, finalUrl, photoType, takenByStaffId],
+    const inserted = await withTenantTransaction(orgId, (client) =>
+      client.query(
+        `INSERT INTO photos (entity_type, entity_id, url, photo_type, taken_by_staff_id, organization_id)
+         VALUES ('SKU', $1, $2, $3, $4, $5)
+         ON CONFLICT (entity_type, entity_id, url) DO NOTHING
+         RETURNING id, entity_id AS sku_id, url, photo_type, taken_by_staff_id, created_at`,
+        [skuId, finalUrl, photoType, takenByStaffId, orgId],
+      ),
     );
 
     const row = inserted.rows[0];

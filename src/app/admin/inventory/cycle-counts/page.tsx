@@ -1,5 +1,7 @@
 import { requirePermission } from '@/lib/auth/page-guard';
-import { queryRaw } from '@/lib/neon-client';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { createCampaign } from '@/lib/inventory/cycle-count';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -34,9 +36,10 @@ interface CampaignRow {
   approved_lines: number;
 }
 
-async function loadCampaigns(): Promise<CampaignRow[]> {
+async function loadCampaigns(orgId: OrgId): Promise<CampaignRow[]> {
   try {
-    return await queryRaw<CampaignRow>(
+    const r = await tenantQuery<CampaignRow>(
+      orgId,
       `SELECT c.id, c.name, c.status::text AS status,
               c.variance_tol::text AS variance_tol,
               c.created_at, c.closed_at, c.created_by, s.name AS created_by_name,
@@ -54,9 +57,12 @@ async function loadCampaigns(): Promise<CampaignRow[]> {
              COUNT(*) FILTER (WHERE l.status = 'approved')::int AS approved_lines
            FROM cycle_count_lines l WHERE l.campaign_id = c.id
          ) stats ON TRUE
+        WHERE c.organization_id = $1
         ORDER BY c.created_at DESC, c.id DESC
         LIMIT 50`,
+      [orgId],
     );
+    return r.rows;
   } catch {
     return [];
   }
@@ -70,11 +76,16 @@ async function createCampaignAction(formData: FormData): Promise<void> {
   if (!name) {
     redirect('/admin/inventory/cycle-counts?error=missing_name');
   }
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect('/admin/inventory/cycle-counts?error=failed');
+  }
   try {
     const { campaignId } = await createCampaign({
       name,
       varianceTol: tol,
-      createdByStaffId: null,
+      createdByStaffId: user.staffId,
+      organizationId: user.organizationId,
     });
     revalidatePath('/admin/inventory/cycle-counts');
     redirect(`/admin/inventory/cycle-counts/${campaignId}`);
@@ -89,11 +100,11 @@ export default async function CycleCountsAdminPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requirePermission('admin.view', { enforce: true });
+  const user = await requirePermission('admin.view', { enforce: true });
 
   const params = await searchParams;
   const errorCode = params.error ?? null;
-  const campaigns = await loadCampaigns();
+  const campaigns = await loadCampaigns(user.organizationId);
 
   return (
     <div className="min-h-screen bg-gray-50">

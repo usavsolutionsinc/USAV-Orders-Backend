@@ -7,6 +7,7 @@ import { readTimeline } from '@/lib/inventory/events';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { getOrgPlatforms, getOrgTypes } from '@/lib/catalog/org-catalog';
+import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 
 const SOURCE_PLATFORMS = new Set([
   'zoho',
@@ -89,6 +90,9 @@ export async function GET(
            'YYYY-MM-DD HH24:MI:SS'
          ) AS tracking_scanned_at,
          COALESCE(rs_first.scanned_by, r.received_by) AS tracking_scanned_by,
+         staff_scan.name AS tracking_scanned_by_name,
+         staff_unbox.name AS unboxed_by_name,
+         staff_recv.name AS received_by_name,
          to_char(r.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS created_at,
          to_char(r.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS updated_at
        FROM receiving r
@@ -103,6 +107,9 @@ export async function GET(
          ORDER BY rs.scanned_at ASC, rs.id ASC
          LIMIT 1
        ) rs_first ON TRUE
+       LEFT JOIN staff staff_scan ON staff_scan.id = COALESCE(rs_first.scanned_by, r.received_by)
+       LEFT JOIN staff staff_unbox ON staff_unbox.id = r.unboxed_by
+       LEFT JOIN staff staff_recv ON staff_recv.id = r.received_by
        WHERE r.id = $1
        LIMIT 1`,
       [id],
@@ -416,6 +423,21 @@ export async function PATCH(
       }
       updates.push(`intake_type = $${idx++}`);
       values.push(next);
+
+      // Dual-write the normalized catalog link (receiving.type_id) alongside the
+      // intake_type text cache — Phase 2, migration 2026-06-14f. Guarded by the
+      // cached column probe so this is a no-op until the migration is applied
+      // (the text column stays the cache; readers migrate to type_id later).
+      const { columns } = await getReceivingSchema();
+      if (columns.has('type_id')) {
+        let typeId: number | null = null;
+        if (next != null) {
+          const slug = next.toLowerCase();
+          typeId = (await getOrgTypes(ctx.organizationId)).find((t) => t.slug.toLowerCase() === slug)?.id ?? null;
+        }
+        updates.push(`type_id = $${idx++}`);
+        values.push(typeId);
+      }
     }
 
     // PO# linkage — writing either field with a non-null value flips

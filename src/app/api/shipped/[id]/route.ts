@@ -12,6 +12,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(req, 'shipping.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const shippedId = parseInt(id);
 
@@ -22,7 +23,9 @@ export async function GET(
       );
     }
 
-    const shipped = await getShippedOrderById(shippedId);
+    // Pass the caller's org so a row owned by another tenant resolves to null
+    // (the not-found branch below turns that into a 404, never a 403).
+    const shipped = await getShippedOrderById(shippedId, orgId);
 
     if (!shipped) {
       return NextResponse.json(

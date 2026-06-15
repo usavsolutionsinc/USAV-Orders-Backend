@@ -10,6 +10,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface PickQueueRow {
   orderId: number;
@@ -53,19 +55,72 @@ const QUEUE_SQL = `
   LIMIT 200
 `;
 
-export async function loadPickQueue(): Promise<PickQueueRow[]> {
-  const q = await pool.query<{
-    order_id: number;
-    order_label: string | null;
-    first_name: string | null;
-    last_name: string | null;
-    account_source: string | null;
-    deadline_at: string | null;
-    pending_count: number;
-    in_progress_count: number;
-    total_count: number;
-    active_picker_id: number | null;
-  }>(QUEUE_SQL);
+// Tenant-scoped variant: explicit AND <t>.organization_id = $1 on every
+// org-bearing table (oua / o / c / wa), and picking_sessions — which has no
+// organization_id column (child-scoped via orders) — gated through its parent
+// order's org. All table joins here are integer surrogate-PK joins
+// (o.id = oua.order_id, c.id = o.customer_id, wa.entity_id = o.id,
+// ps.order_id = o.id), so no string-key org alignment is required.
+const QUEUE_SQL_TENANT = `
+  SELECT
+    o.id                                          AS order_id,
+    o.order_id                                    AS order_label,
+    c.first_name                                  AS first_name,
+    c.last_name                                   AS last_name,
+    o.account_source                              AS account_source,
+    (SELECT MIN(wa.deadline_at)
+       FROM work_assignments wa
+      WHERE wa.entity_type = 'ORDER'
+        AND wa.entity_id   = o.id
+        AND wa.organization_id = $1)::text        AS deadline_at,
+    COUNT(*) FILTER (WHERE oua.state = 'ALLOCATED')::int  AS pending_count,
+    COUNT(*) FILTER (WHERE oua.state = 'PICKING')::int    AS in_progress_count,
+    COUNT(*)::int                                          AS total_count,
+    (SELECT ps.picker_staff_id
+       FROM picking_sessions ps
+       JOIN orders po ON po.id = ps.order_id
+      WHERE ps.order_id = o.id
+        AND ps.ended_at IS NULL
+        AND po.organization_id = $1
+      ORDER BY ps.started_at DESC
+      LIMIT 1)                                    AS active_picker_id
+  FROM order_unit_allocations oua
+  JOIN orders    o ON o.id = oua.order_id
+  LEFT JOIN customers c ON c.id = o.customer_id AND c.organization_id = $1
+  WHERE oua.state IN ('ALLOCATED', 'PICKING')
+    AND oua.organization_id = $1
+    AND o.organization_id = $1
+  GROUP BY o.id, o.order_id, c.first_name, c.last_name, o.account_source
+  ORDER BY deadline_at ASC NULLS LAST, o.id ASC
+  LIMIT 200
+`;
+
+export async function loadPickQueue(orgId?: OrgId): Promise<PickQueueRow[]> {
+  const q = orgId
+    ? await tenantQuery<{
+        order_id: number;
+        order_label: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        account_source: string | null;
+        deadline_at: string | null;
+        pending_count: number;
+        in_progress_count: number;
+        total_count: number;
+        active_picker_id: number | null;
+      }>(orgId, QUEUE_SQL_TENANT, [orgId])
+    : await pool.query<{
+        order_id: number;
+        order_label: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        account_source: string | null;
+        deadline_at: string | null;
+        pending_count: number;
+        in_progress_count: number;
+        total_count: number;
+        active_picker_id: number | null;
+      }>(QUEUE_SQL);
 
   return q.rows.map((r) => {
     const first = (r.first_name || '').trim();

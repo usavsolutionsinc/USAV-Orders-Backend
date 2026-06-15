@@ -57,6 +57,7 @@ export async function GET(
 ) {
   const gate = await requireRoutePerm(req, 'admin.view');
   if (gate.denied) return gate.denied;
+  const { organizationId } = gate.ctx;
 
   try {
     const { id } = await params;
@@ -81,7 +82,7 @@ export async function GET(
     // Run the Gmail fetch and Zoho compare query in parallel — they're
     // independent and the Gmail call dominates wall time.
     const [bodyResult, existingPosResult] = await Promise.allSettled([
-      row.gmail_msg_id ? fetchMessage(row.gmail_msg_id) : Promise.resolve(null),
+      row.gmail_msg_id ? fetchMessage(row.gmail_msg_id, organizationId) : Promise.resolve(null),
       row.po_numbers_norm.length > 0
         ? pool.query<ZohoMatchRow>(
             `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number,

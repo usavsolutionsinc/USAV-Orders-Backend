@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -12,9 +12,10 @@ import { withAuth } from '@/lib/auth/withAuth';
  * Legacy keys (`awaiting`, `packed`, `paired`) are still returned as empty arrays
  * so older clients do not crash during rollout.
  */
-export const GET = withAuth(async (_request: NextRequest) => {
+export const GET = withAuth(async (_request: NextRequest, ctx) => {
   try {
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `WITH pending_rows AS (
          SELECT
            fsi.id AS item_id,
@@ -38,9 +39,10 @@ export const GET = withAuth(async (_request: NextRequest) => {
            fs.updated_at AS shipment_updated_at
          FROM fba_shipment_items fsi
          JOIN fba_shipments fs ON fs.id = fsi.shipment_id
-         LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+         LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = fsi.organization_id
          WHERE fs.status != 'SHIPPED'
            AND fsi.status NOT IN ('SHIPPED', 'LABEL_ASSIGNED')
+           AND fsi.organization_id = $1
        ),
        grouped AS (
          SELECT
@@ -107,6 +109,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
              FROM fba_shipment_tracking fst
              JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
              WHERE fst.shipment_id = ANY(g.shipment_ids)
+               AND fst.organization_id = $1
            ),
            '[]'::jsonb
          ) AS tracking_numbers
@@ -120,7 +123,8 @@ export const GET = withAuth(async (_request: NextRequest) => {
            ELSE 9
          END ASC,
          g.last_activity_at DESC NULLS LAST,
-         c.fnsku ASC`
+         c.fnsku ASC`,
+      [ctx.organizationId]
     );
 
     const pending = result.rows;

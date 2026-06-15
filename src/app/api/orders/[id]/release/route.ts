@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { transaction } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Allocation } from '@/lib/feature-flags';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * POST /api/orders/[id]/release
@@ -24,17 +23,9 @@ import { isInventoryV2Allocation } from '@/lib/feature-flags';
  * Idempotent: re-running after a successful release is a no-op (no open
  * allocations remaining).
  *
- * Gated by INVENTORY_V2_ALLOCATION; off-flag returns 503.
  * Permission: orders.view.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Allocation()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_ALLOCATION flag is OFF', flag: 'INVENTORY_V2_ALLOCATION' },
-      { status: 503 },
-    );
-  }
-
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const idStr = segments[segments.length - 2];
   const orderId = Number(idStr);
@@ -50,18 +41,26 @@ export const POST = withAuth(async (request, ctx) => {
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
 
   try {
-    const result = await transaction(async (client) => {
+    // Run the whole release GUC-wrapped under the caller's org. order_unit_allocations
+    // and serial_units are both tenant-owned, so every read/UPDATE/INSERT below
+    // carries an explicit organization_id predicate (defence-in-depth alongside
+    // the SET LOCAL app.current_org GUC). A cross-tenant order id reads back zero
+    // open allocations → the idempotent no-op (same shape as a genuine re-run).
+    const result = await withTenantTransaction(ctx.organizationId, async (client) => {
       // 1. Snapshot open allocations + their current units.
+      //    su.id = a.serial_unit_id is an integer surrogate-PK join (safe bare);
+      //    the org gate lives on the allocation row (a.organization_id).
       const openQ = await client.query<{ id: number; serial_unit_id: number; state: string; unit_status: string; sku: string | null }>(
         `SELECT a.id, a.serial_unit_id, a.state::text AS state,
                 su.current_status::text AS unit_status, su.sku
            FROM order_unit_allocations a
            JOIN serial_units su ON su.id = a.serial_unit_id
           WHERE a.order_id = $1
+            AND a.organization_id = $2
             AND a.state <> 'RELEASED'
           ORDER BY a.id ASC
           FOR UPDATE`,
-        [orderId],
+        [orderId, ctx.organizationId],
       );
       if (openQ.rows.length === 0) {
         return { ok: true as const, orderId, released: 0, units: [] };
@@ -78,8 +77,9 @@ export const POST = withAuth(async (request, ctx) => {
               SET state = 'RELEASED',
                   released_at = NOW(),
                   released_reason = $2
-            WHERE id = $1`,
-          [row.id, reason],
+            WHERE id = $1
+              AND organization_id = $3`,
+          [row.id, reason, ctx.organizationId],
         );
 
         // Return the unit to STOCKED ONLY if it's still in an outbound
@@ -93,24 +93,30 @@ export const POST = withAuth(async (request, ctx) => {
             `UPDATE serial_units
                 SET current_status = 'STOCKED'::serial_status_enum,
                     updated_at = NOW()
-              WHERE id = $1`,
-            [row.serial_unit_id],
+              WHERE id = $1
+                AND organization_id = $2`,
+            [row.serial_unit_id, ctx.organizationId],
           );
           stockedReturn = true;
         }
 
         const perUnitClientEventId = clientEventId ? `${clientEventId}:${row.serial_unit_id}` : null;
+        // inventory_events is tenant-owned. The GUC set by withTenantTransaction
+        // would supply organization_id via the column default, but stamp it
+        // explicitly too so the row attributes to the right tenant regardless.
         const ev = await client.query<{ id: number }>(
           `INSERT INTO inventory_events (
             event_type, actor_staff_id, station,
             serial_unit_id, sku,
             prev_status, next_status,
-            client_event_id, notes, payload
+            client_event_id, notes, payload,
+            organization_id
           )
           VALUES ('RELEASED', $1, 'SYSTEM',
                   $2, $3,
                   $4, $5,
-                  $6, $7, $8::jsonb)
+                  $6, $7, $8::jsonb,
+                  $9)
           ON CONFLICT (client_event_id) DO NOTHING
           RETURNING id`,
           [
@@ -128,6 +134,7 @@ export const POST = withAuth(async (request, ctx) => {
               prev_alloc_state: row.state,
               ordinal: i + 1,
             }),
+            ctx.organizationId,
           ],
         );
 

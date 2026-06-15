@@ -42,7 +42,7 @@
  */
 
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import {
   getReceivingSchema,
   getReceivingLineColumns,
@@ -51,8 +51,9 @@ import {
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(request.url);
     const limitRaw = Number(searchParams.get('limit') || 100);
     const limit    = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 100;
@@ -69,7 +70,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       filterStatuses = ['ARRIVED', 'MATCHED'];
     }
 
-    const cacheLookup = createCacheLookupKey({ limit, status: statusParam || 'ARRIVED_MATCHED' });
+    const cacheLookup = createCacheLookupKey({ org: orgId, limit, status: statusParam || 'ARRIVED_MATCHED' });
     const cached = await getCachedJson<{ pending: unknown[]; total: number }>('api:pending-unboxing', cacheLookup);
     if (cached) {
       return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
@@ -94,16 +95,22 @@ export const GET = withAuth(async (request: NextRequest) => {
       : 'NULL::text AS received_at';
     const dateColumnRef = `r.${dateColumn}`;
     const receivingDateSelect = `to_char(${dateColumnRef}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at`;
+    // Tenant scope: orgId is appended as the LAST positional param so the
+    // existing $1/$2 (statuses/limit) indices stay stable. Its $-index is one
+    // past the limit param.
     const limitParamRef = hasLineColumn('workflow_status') ? '$2' : '$1';
+    const orgParamRef = hasLineColumn('workflow_status') ? '$3' : '$2';
     const workflowFilterClause = hasLineColumn('workflow_status')
       ? `EXISTS (
              SELECT 1 FROM receiving_lines rl
              WHERE rl.receiving_id = r.id
+               AND rl.organization_id = r.organization_id
                AND rl.workflow_status = ANY($1::inbound_workflow_status_enum[])
            )`
       : `EXISTS (
              SELECT 1 FROM receiving_lines rl
              WHERE rl.receiving_id = r.id
+               AND rl.organization_id = r.organization_id
            )`;
     const workflowStatusSelect = hasLineColumn('workflow_status')
       ? 'rl.workflow_status'
@@ -148,7 +155,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     // Fetch receiving rows that have at least one line in the target statuses
     // OR have no lines yet but also haven't been unboxed (newly arrived package)
-    const receivingRows = await pool.query<{
+    const receivingRows = await tenantQuery<{
       id: number;
       receiving_tracking_number: string | null;
       carrier: string | null;
@@ -160,6 +167,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       zoho_purchase_receive_id: string | null;
       zoho_purchaseorder_id: string | null;
     }>(
+      orgId,
       `SELECT DISTINCT r.id,
               COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
               COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier) AS carrier,
@@ -173,16 +181,18 @@ export const GET = withAuth(async (request: NextRequest) => {
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
        WHERE r.unboxed_at IS NULL
+         AND r.organization_id = ${orgParamRef}
          AND (
            ${workflowFilterClause}
            OR NOT EXISTS (
              SELECT 1 FROM receiving_lines rl2
              WHERE rl2.receiving_id = r.id
+               AND rl2.organization_id = r.organization_id
            )
          )
        ORDER BY r.id DESC
        LIMIT ${limitParamRef}`,
-      hasLineColumn('workflow_status') ? [filterStatuses, limit] : [limit]
+      hasLineColumn('workflow_status') ? [filterStatuses, limit, orgId] : [limit, orgId]
     );
 
     if (receivingRows.rows.length === 0) {
@@ -192,7 +202,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     const receivingIds = receivingRows.rows.map((r) => r.id);
 
     // Fetch all matching lines for these receiving rows in one query
-    const linesRes = await pool.query<{
+    const linesRes = await tenantQuery<{
       id: number;
       receiving_id: number;
       item_name: string | null;
@@ -210,6 +220,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       assigned_tech_name: string | null;
       notes: string | null;
     }>(
+      orgId,
       `SELECT rl.id,
               rl.receiving_id,
               rl.item_name,
@@ -227,10 +238,13 @@ export const GET = withAuth(async (request: NextRequest) => {
               st.name AS assigned_tech_name,
               ${notesSelect}
        FROM receiving_lines rl
-       LEFT JOIN staff st ON st.id = ${assignedTechJoin}
+       LEFT JOIN staff st
+         ON st.id = ${assignedTechJoin}
+        AND st.organization_id = rl.organization_id
        WHERE rl.receiving_id = ANY($1::int[])
+         AND rl.organization_id = $2
        ORDER BY rl.receiving_id, rl.id`,
-      [receivingIds]
+      [receivingIds, orgId]
     );
 
     // Group lines by receiving_id

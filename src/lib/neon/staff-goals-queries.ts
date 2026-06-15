@@ -1,4 +1,6 @@
 import pool from '../db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface StaffGoal {
   id: number;
@@ -60,7 +62,7 @@ function getPacificDateStamp(date: Date = new Date()): string {
   return `${year}-${month}-${day}`;
 }
 
-function buildStaffGoalHistorySnapshotQuery(loggedDate: string, filters?: { staffId?: number; station?: string }) {
+function buildStaffGoalHistorySnapshotQuery(loggedDate: string, filters?: { staffId?: number; station?: string; orgId?: OrgId }) {
   const params: any[] = [loggedDate];
   const goalConditions = ['s.active = true'];
   const actualConditions = [
@@ -84,6 +86,18 @@ function buildStaffGoalHistorySnapshotQuery(loggedDate: string, filters?: { staf
     goalConditions.push(`COALESCE(sg.station, ds.default_station) = $${nextParam}`);
     actualConditions.push(`sal.station = $${nextParam}`);
     params.push(filters.station);
+    nextParam += 1;
+  }
+
+  // Tenant scope: staff_goals/staff_goal_history have no own organization_id —
+  // scope them via the parent staff row. station_activity_logs DOES carry its
+  // own organization_id, so the actual-counts read gets an explicit predicate
+  // for defense-in-depth (the RLS GUC is the backstop). When orgId is omitted
+  // (cron-wide snapshot across all orgs) behavior is byte-identical to before.
+  if (filters?.orgId) {
+    goalConditions.push(`s.organization_id = $${nextParam}`);
+    actualConditions.push(`sal.organization_id = $${nextParam}`);
+    params.push(filters.orgId);
     nextParam += 1;
   }
 
@@ -141,8 +155,13 @@ function buildStaffGoalHistorySnapshotQuery(loggedDate: string, filters?: { staf
 export async function snapshotStaffGoalHistoryForDate(
   loggedDate: string = getPacificDateStamp(),
   queryable: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<StaffGoalHistoryRow[]> {
-  const { sql, params } = buildStaffGoalHistorySnapshotQuery(loggedDate);
+  const { sql, params } = buildStaffGoalHistorySnapshotQuery(loggedDate, orgId ? { orgId } : undefined);
+  if (orgId) {
+    const result = await tenantQuery(orgId, sql, params);
+    return result.rows as StaffGoalHistoryRow[];
+  }
   const result = await queryable.query(sql, params);
   return result.rows;
 }
@@ -152,8 +171,9 @@ export async function snapshotSingleStaffGoalHistory(
   station: string,
   loggedDate: string = getPacificDateStamp(),
   queryable: Queryable = pool,
+  orgId?: OrgId,
 ): Promise<StaffGoalHistoryRow | null> {
-  const { sql, params } = buildStaffGoalHistorySnapshotQuery(loggedDate, { staffId, station });
+  const { sql, params } = buildStaffGoalHistorySnapshotQuery(loggedDate, { staffId, station, ...(orgId ? { orgId } : {}) });
   const result = await queryable.query(sql, params);
   return result.rows[0] ?? null;
 }
@@ -162,8 +182,15 @@ export async function snapshotSingleStaffGoalHistory(
  * Get all staff goals with live today/week counts from station_activity_logs.
  * Returns all active staff (techs + packers), not just technicians.
  */
-export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]> {
-  const result = await pool.query(
+export async function getAllStaffGoalsWithStats(orgId?: OrgId): Promise<StaffGoalWithStats[]> {
+  // staff_goals has no own organization_id — scope via the parent staff row.
+  // When orgId is omitted (transitional callers) behavior is byte-identical.
+  const orgFilter = orgId ? 'AND s.organization_id = $1' : '';
+  // station_activity_logs has its own organization_id — filter the count CTEs
+  // explicitly (defense-in-depth on top of the tenantQuery GUC; the staff_id
+  // join is already org-correct but an explicit predicate is FORCE-robust).
+  const salOrgFilter = orgId ? 'AND organization_id = $1' : '';
+  const sql =
     `WITH derived_station AS (
       SELECT id,
         CASE
@@ -186,6 +213,7 @@ export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]>
       FROM station_activity_logs
       WHERE staff_id IS NOT NULL
         AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+        ${salOrgFilter}
         AND (timezone('America/Los_Angeles', created_at))::date
           = (timezone('America/Los_Angeles', now()))::date
       GROUP BY staff_id, station
@@ -196,6 +224,7 @@ export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]>
       FROM station_activity_logs
       WHERE staff_id IS NOT NULL
         AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+        ${salOrgFilter}
         AND (timezone('America/Los_Angeles', created_at))::date
           >= (timezone('America/Los_Angeles', now()))::date - INTERVAL '6 days'
       GROUP BY staff_id, station
@@ -206,6 +235,7 @@ export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]>
       FROM station_activity_logs
       WHERE staff_id IS NOT NULL
         AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+        ${salOrgFilter}
         AND timezone('America/Los_Angeles', created_at)
           >= timezone('America/Los_Angeles', now()) - INTERVAL '7 days'
       GROUP BY staff_id, station
@@ -226,19 +256,45 @@ export async function getAllStaffGoalsWithStats(): Promise<StaffGoalWithStats[]>
     LEFT JOIN week_counts wc ON wc.staff_id = s.id AND wc.station = COALESCE(spg.station, ds.default_station)
     LEFT JOIN last7_counts l7 ON l7.staff_id = s.id AND l7.station = COALESCE(spg.station, ds.default_station)
     WHERE s.active = true
-    ORDER BY s.name ASC`,
-  );
+      ${orgFilter}
+    ORDER BY s.name ASC`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, [orgId])
+    : await pool.query(sql);
   return result.rows;
 }
 
 /**
  * Get a single staff member's goal for a specific station.
  */
-export async function getGoalByStaffId(staffId: number, station?: string): Promise<StaffGoal | null> {
+export async function getGoalByStaffId(staffId: number, station?: string, orgId?: OrgId): Promise<StaffGoal | null> {
+  // staff_goals has no own organization_id — scope via the parent staff row
+  // with a subquery. Byte-identical when orgId is omitted.
   if (station) {
+    if (orgId) {
+      const result = await tenantQuery<StaffGoal>(
+        orgId,
+        `SELECT * FROM staff_goals
+          WHERE staff_id = $1 AND station = $2
+            AND staff_id IN (SELECT id FROM staff WHERE organization_id = $3)`,
+        [staffId, station, orgId],
+      );
+      return result.rows[0] ?? null;
+    }
     const result = await pool.query(
       'SELECT * FROM staff_goals WHERE staff_id = $1 AND station = $2',
       [staffId, station],
+    );
+    return result.rows[0] ?? null;
+  }
+  if (orgId) {
+    const result = await tenantQuery<StaffGoal>(
+      orgId,
+      `SELECT * FROM staff_goals
+        WHERE staff_id = $1
+          AND staff_id IN (SELECT id FROM staff WHERE organization_id = $2)
+        ORDER BY station LIMIT 1`,
+      [staffId, orgId],
     );
     return result.rows[0] ?? null;
   }
@@ -252,7 +308,18 @@ export async function getGoalByStaffId(staffId: number, station?: string): Promi
 /**
  * Get daily_goal value for a staff member + station (returns default 50 if not set).
  */
-export async function getDailyGoal(staffId: number, station: string = 'TECH'): Promise<number> {
+export async function getDailyGoal(staffId: number, station: string = 'TECH', orgId?: OrgId): Promise<number> {
+  // staff_goals has no own organization_id — scope via the parent staff row.
+  if (orgId) {
+    const result = await tenantQuery(
+      orgId,
+      `SELECT daily_goal FROM staff_goals
+        WHERE staff_id = $1 AND station = $2
+          AND staff_id IN (SELECT id FROM staff WHERE organization_id = $3)`,
+      [staffId, station, orgId],
+    );
+    return result.rows[0]?.daily_goal ?? 50;
+  }
   const result = await pool.query(
     'SELECT daily_goal FROM staff_goals WHERE staff_id = $1 AND station = $2',
     [staffId, station],
@@ -263,7 +330,23 @@ export async function getDailyGoal(staffId: number, station: string = 'TECH'): P
 /**
  * Upsert a staff goal for a specific station.
  */
-export async function upsertStaffGoal(staffId: number, dailyGoal: number, station: string = 'TECH'): Promise<StaffGoal> {
+export async function upsertStaffGoal(staffId: number, dailyGoal: number, station: string = 'TECH', orgId?: OrgId): Promise<StaffGoal> {
+  // staff_goals has no own organization_id — scope the write via the parent
+  // staff row so a goal can only be written for a staff member in this org.
+  // Byte-identical when orgId is omitted.
+  if (orgId) {
+    const result = await tenantQuery<StaffGoal>(
+      orgId,
+      `INSERT INTO staff_goals (staff_id, daily_goal, station, updated_at)
+       SELECT $1, $2, $3, NOW()
+       WHERE EXISTS (SELECT 1 FROM staff WHERE id = $1 AND organization_id = $4)
+       ON CONFLICT (staff_id, station)
+       DO UPDATE SET daily_goal = EXCLUDED.daily_goal, updated_at = NOW()
+       RETURNING *`,
+      [staffId, dailyGoal, station, orgId],
+    );
+    return result.rows[0];
+  }
   const result = await pool.query(
     `INSERT INTO staff_goals (staff_id, daily_goal, station, updated_at)
      VALUES ($1, $2, $3, NOW())
@@ -279,7 +362,30 @@ export async function upsertStaffGoalWithHistory(
   staffId: number,
   dailyGoal: number,
   station: string = 'TECH',
+  orgId?: OrgId,
 ): Promise<StaffGoal> {
+  // Tenant-scoped path: staff_goals/staff_goal_history have no own
+  // organization_id, so the write is scoped via the parent staff row. The
+  // enclosing withTenantTransaction sets the org GUC and the SQL guards the
+  // INSERT against staff in this org.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const result = await client.query(
+        `INSERT INTO staff_goals (staff_id, daily_goal, station, updated_at)
+         SELECT $1, $2, $3, NOW()
+         WHERE EXISTS (SELECT 1 FROM staff WHERE id = $1 AND organization_id = $4)
+         ON CONFLICT (staff_id, station)
+         DO UPDATE SET daily_goal = EXCLUDED.daily_goal, updated_at = NOW()
+         RETURNING *`,
+        [staffId, dailyGoal, station, orgId],
+      );
+
+      await snapshotSingleStaffGoalHistory(staffId, station, getPacificDateStamp(), client, orgId);
+
+      return result.rows[0];
+    });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -307,9 +413,31 @@ export async function upsertStaffGoalWithHistory(
 /**
  * Delete a staff goal for a specific station.
  */
-export async function deleteStaffGoal(staffId: number, station?: string): Promise<boolean> {
+export async function deleteStaffGoal(staffId: number, station?: string, orgId?: OrgId): Promise<boolean> {
+  // staff_goals has no own organization_id — scope the delete via the parent
+  // staff row. Byte-identical when orgId is omitted.
   if (station) {
+    if (orgId) {
+      const result = await tenantQuery(
+        orgId,
+        `DELETE FROM staff_goals
+          WHERE staff_id = $1 AND station = $2
+            AND staff_id IN (SELECT id FROM staff WHERE organization_id = $3)`,
+        [staffId, station, orgId],
+      );
+      return (result.rowCount ?? 0) > 0;
+    }
     const result = await pool.query('DELETE FROM staff_goals WHERE staff_id = $1 AND station = $2', [staffId, station]);
+    return (result.rowCount ?? 0) > 0;
+  }
+  if (orgId) {
+    const result = await tenantQuery(
+      orgId,
+      `DELETE FROM staff_goals
+        WHERE staff_id = $1
+          AND staff_id IN (SELECT id FROM staff WHERE organization_id = $2)`,
+      [staffId, orgId],
+    );
     return (result.rowCount ?? 0) > 0;
   }
   const result = await pool.query('DELETE FROM staff_goals WHERE staff_id = $1', [staffId]);

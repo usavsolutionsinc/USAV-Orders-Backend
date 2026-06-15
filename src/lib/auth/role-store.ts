@@ -14,6 +14,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { computeEffectivePermissions, type PermissionString } from './permissions-shared';
 
 export interface RoleRow {
@@ -122,8 +124,31 @@ const staffRolesCache = new Map<number, StaffAssignmentSnapshot>();
  * Load role ids assigned to a staff. Order: roles.position ASC (primary
  * role first). Stale entries are refreshed on next read; an explicit
  * invalidate is used after writes for instant correctness.
+ *
+ * `roles`/`staff_roles` are GLOBAL system tables (no organization_id), so the
+ * assignment rows themselves are never org-filtered. When `orgId` is supplied,
+ * the lookup is gated through the `staff` PARENT's org — the staff must belong
+ * to that org or the call resolves to an empty set (a staffId from another org
+ * reads as if it has no assignments, never leaking another tenant's roles).
+ * That org-gated path runs through `tenantQuery` and bypasses the per-staff
+ * cache (whose key is the bare staffId and is shared with the no-org sign-in
+ * path), so a security-filtered miss can never poison the unfiltered hot path.
+ * When `orgId` is omitted the behavior is byte-identical to before.
  */
-export async function loadStaffRoleIds(staffId: number): Promise<number[]> {
+export async function loadStaffRoleIds(staffId: number, orgId?: OrgId): Promise<number[]> {
+  if (orgId) {
+    const r = await tenantQuery<{ role_id: number }>(
+      orgId,
+      `SELECT sr.role_id
+         FROM staff_roles sr
+         JOIN roles r ON r.id = sr.role_id
+         JOIN staff s ON s.id = sr.staff_id
+        WHERE sr.staff_id = $1 AND s.organization_id = $2
+        ORDER BY r.position ASC, r.id ASC`,
+      [staffId, orgId],
+    );
+    return r.rows.map((row) => row.role_id);
+  }
   const cached = staffRolesCache.get(staffId);
   if (cached && cached.expiresAt > Date.now()) return cached.roleIds;
   const r = await pool.query(
@@ -139,8 +164,8 @@ export async function loadStaffRoleIds(staffId: number): Promise<number[]> {
   return roleIds;
 }
 
-export async function loadRolesForStaff(staffId: number): Promise<RoleRow[]> {
-  const [ids, snap] = await Promise.all([loadStaffRoleIds(staffId), getRolesSnapshot()]);
+export async function loadRolesForStaff(staffId: number, orgId?: OrgId): Promise<RoleRow[]> {
+  const [ids, snap] = await Promise.all([loadStaffRoleIds(staffId, orgId), getRolesSnapshot()]);
   const out: RoleRow[] = [];
   for (const id of ids) {
     const r = snap.byId.get(id);
@@ -169,8 +194,9 @@ export function invalidateStaffRolesCache(staffId?: number): void {
 export async function effectivePermissionsForStaff(
   staffId: number,
   overrides: { added?: ReadonlyArray<string>; removed?: ReadonlyArray<string> } = {},
+  orgId?: OrgId,
 ): Promise<Set<PermissionString>> {
-  const roles = await loadRolesForStaff(staffId);
+  const roles = await loadRolesForStaff(staffId, orgId);
   return computeEffectivePermissions(roles, overrides.added ?? [], overrides.removed ?? []);
 }
 
@@ -178,7 +204,7 @@ export async function effectivePermissionsForStaff(
  * Primary role for a staff (used for legacy `staff.role` consumers and the
  * avatar theme color). Returns null if the staff has no role assignments.
  */
-export async function primaryRoleForStaff(staffId: number): Promise<RoleRow | null> {
-  const roles = await loadRolesForStaff(staffId);
+export async function primaryRoleForStaff(staffId: number, orgId?: OrgId): Promise<RoleRow | null> {
+  const roles = await loadRolesForStaff(staffId, orgId);
   return roles[0] ?? null;
 }

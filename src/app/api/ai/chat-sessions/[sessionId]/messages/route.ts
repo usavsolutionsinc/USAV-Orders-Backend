@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/drizzle/db';
-import { aiChatMessages, aiChatSessions } from '@/lib/drizzle/schema';
-import { eq, asc } from 'drizzle-orm';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
+
+/**
+ * Row shape mirrors Drizzle's `aiChatMessages.$inferSelect` so the JSON
+ * response keys are unchanged after moving off the ORM onto the GUC-wrapped
+ * tenant pool. Columns are aliased to camelCase to preserve the exact shape.
+ */
+interface ChatMessageRow {
+  organizationId: string;
+  id: number;
+  sessionId: string;
+  role: string;
+  content: string;
+  mode: string | null;
+  analysis: unknown;
+  error: boolean | null;
+  createdAt: Date;
+}
 
 /**
  * GET /api/ai/chat-sessions/[sessionId]/messages — load all messages for a session
@@ -15,13 +30,30 @@ export async function GET(
 ) {
   const gate = await requireRoutePerm(req, 'dashboard.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { sessionId } = await params;
-    const messages = await db
-      .select()
-      .from(aiChatMessages)
-      .where(eq(aiChatMessages.sessionId, sessionId))
-      .orderBy(asc(aiChatMessages.createdAt));
+    // Tenant-scoped read: run through the GUC-wrapped tenant pool AND filter
+    // explicitly on organization_id so a cross-tenant sessionId can never
+    // surface another org's messages.
+    const result = await tenantQuery<ChatMessageRow>(
+      orgId,
+      `SELECT organization_id AS "organizationId",
+              id,
+              session_id      AS "sessionId",
+              role,
+              content,
+              mode,
+              analysis,
+              error,
+              created_at      AS "createdAt"
+         FROM ai_chat_messages
+        WHERE session_id = $1
+          AND organization_id = $2
+        ORDER BY created_at ASC`,
+      [sessionId, orgId],
+    );
+    const messages = result.rows;
 
     return NextResponse.json({ messages });
   } catch (err: any) {

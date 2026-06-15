@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchPurchaseOrdersByTracking } from '@/lib/zoho';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // Tracking-only PO lookup. Read-only: no local writes, no side effects.
@@ -11,7 +12,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 //
 // When multiple POs match the same reference/search, `purchase_order` is the
 // first hit and `candidates` carries the full list so the caller can disambiguate.
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json().catch(() => ({}));
     const trackingNumber = String(body?.trackingNumber || body?.tracking_number || '').trim();
@@ -23,7 +24,12 @@ export const POST = withAuth(async (request: NextRequest) => {
       );
     }
 
-    const purchaseOrders = await searchPurchaseOrdersByTracking(trackingNumber);
+    // Bind the authenticated tenant so the Zoho client reads THIS org (not the
+    // USAV_ORG_ID default that currentZohoOrgId() returns when unbound). Without
+    // this wrap, any tenant searching by tracking would hit USAV's Zoho POs.
+    const purchaseOrders = await withZohoOrg(ctx.organizationId, () =>
+      searchPurchaseOrdersByTracking(trackingNumber),
+    );
     const first = purchaseOrders[0] ?? null;
 
     return NextResponse.json({

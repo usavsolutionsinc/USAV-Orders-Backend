@@ -246,8 +246,43 @@ land first, on its own, with no dependency on the tracking/label feature.
   `OrderTimelineSection` rendering `<EventTimeline>` in `ShippedDetailsPanel` (dashboard/
   queue/shipped contexts). The tracking-added events from Phase 1 are now visible.
 
-**Remaining:** Phase 3 (NAS label upload + `documents` + `orders.label.printed`), Phase 5
-(denorm columns + TRK✓/LABEL✓ row chips), Phase 6 (timeline rollout to other panels).
+- **Phase 3** — NAS shipping-label CRUD: `buildNasLabelUrl` (flat `LABEL_<orderRef>__<file>`,
+  no subdir → no WebDAV 409) + `/api/order-labels` (GET list + NAS config, POST attach with
+  origin-allowlist + idempotency + first-label `orders.label.printed` event, DELETE) on the
+  `documents` table (`entity_type='SHIPPING_LABEL'`) + `OrderLabelsSection` drop-zone (browser-
+  direct WebDAV PUT via `putNasPhoto`, list, delete) in `ShippedDetailsPanel`.
+  **Live-tested** against `/Volumes/personal_folder/Photos` via `deploy/nas-photo-server/Caddyfile.local`
+  (caddy-webdav): PUT→201, GET→200, JSON list, OPTIONS→204 CORS, DELETE→204, GET→404. Plus
+  `tests/e2e/order-labels.spec.ts` (attach → list → 409 → delete contract).
+
+- **Phase 5 (partial)** — migration `2026-06-13_orders_tracking_label_timestamps.sql` **APPLIED**
+  (via `npm run db:migrate`; 4 columns verified on `orders`). First-time stamping **wired + tested**:
+  assign route stamps `tracking_added_at/by`, order-labels route stamps `label_printed_at/by`
+  (verified live — a label attach SET `label_printed_at` by staff 1).
+
+**E2E tested (2026-06-13, live server + applied DB):**
+- `tests/e2e/order-labels.spec.ts` — **PASS** (attach → list → 409 → delete).
+- Full chain verified + cleaned up: label attach → `orders.label.printed` audit event →
+  `label_printed_at` stamp → `GET /api/orders/5501/timeline` returns it. Allowlist correctly
+  rejects off-NAS URLs (400).
+- Live NAS WebDAV CRUD vs `/Volumes/personal_folder/Photos` via caddy-webdav: PUT 201 / GET 200 /
+  JSON list / OPTIONS 204 CORS / DELETE 204 / GET 404.
+- No regressions; the only failing specs (nas-photos receiving POST, unbox-nas-photos) fail on
+  ENVIRONMENT (org has a configured NAS base → their placeholder URLs are rejected; `/Volumes/USAV
+  Media/…` not mounted) — pre-existing, unrelated to these changes.
+
+**Remaining:** Phase 5 row chips — TRK✓/LABEL✓ dots on the Unshipped row (needs the orders list
+query to SELECT the new columns + the row to render them). Phase 6 — roll `EventTimeline` out to the
+receiving-line/tech/warranty/repair/unit panels.
+
+**To run the live NAS test locally:**
+```
+curl -fsSL "https://caddyserver.com/api/download?os=darwin&arch=arm64&p=github.com/mholt/caddy-webdav" -o ./caddy-webdav && chmod +x ./caddy-webdav
+./caddy-webdav run --config deploy/nas-photo-server/Caddyfile.local --adapter caddyfile   # serves /Volumes/personal_folder/Photos on :8088
+# point the app at it, then run the spec:
+NEXT_PUBLIC_NAS_PHOTOS_BASE_URL=http://localhost:8088 npm run dev
+PW_TEST_ORDER_ID=<id> npx playwright test order-labels
+```
 
 ## 7. Why this is the right shape
 

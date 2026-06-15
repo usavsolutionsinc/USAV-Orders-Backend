@@ -117,6 +117,16 @@ export function warrantyEventLabel(event: WarrantyClaimEventRow): string {
       return 'Details updated';
     case 'DELETED':
       return 'Claim deleted';
+    case 'RESTORED':
+      return 'Claim restored';
+    case 'RMA_LINKED':
+      return 'RMA linked';
+    case 'RMA_UNLINKED':
+      return 'RMA unlinked';
+    case 'REPAIR_HANDOFF':
+      return 'Handed off to repair';
+    case 'REPAIR_DETACH':
+      return 'Repair detached';
     case 'ZENDESK_TICKET_CREATED':
       return 'Zendesk ticket created';
     case 'ZENDESK_LINKED':

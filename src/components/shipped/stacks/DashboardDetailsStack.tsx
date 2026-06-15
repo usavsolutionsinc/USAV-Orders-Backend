@@ -13,6 +13,7 @@ import { PACKER_IDS, staffHasRole } from '@/utils/staff';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
+import { CustomerDetailsTab } from '../CustomerDetailsTab';
 
 export function DashboardDetailsStack({
   shipped,
@@ -39,6 +40,7 @@ export function DashboardDetailsStack({
   const [isUndoing, setIsUndoing] = useState(false);
   const hasOutOfStockValue = outOfStock.trim().length > 0;
   const packerIdOrder = PACKER_IDS;
+  const isCustomer = activeSection === 'customer';
 
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
@@ -161,6 +163,10 @@ export function DashboardDetailsStack({
   return (
     <div className="flex min-h-full flex-col pb-8 pt-4">
       <div className="flex-1 space-y-4">
+      {isCustomer ? (
+        <CustomerDetailsTab customerId={shipped.customer_id} />
+      ) : (
+       <>
       <section className="mx-8 space-y-2">
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
@@ -268,17 +274,21 @@ export function DashboardDetailsStack({
           activeSection={activeSection}
         />
       </div>
+       </>
+      )}
       </div>
 
-      <section className="mx-8 pt-2 space-y-2">
-        <DeleteOrderControl
-          orderId={shipped.id}
-          packerLogId={(shipped as any).packer_log_id ?? null}
-          stationActivityLogId={(shipped as any).station_activity_log_id ?? (shipped as any).sal_id ?? null}
-          trackingType={shipped.tracking_type}
-          onDeleted={() => onUpdate?.()}
-        />
-      </section>
+      {!isCustomer && (
+        <section className="mx-8 pt-2 space-y-2">
+          <DeleteOrderControl
+            orderId={shipped.id}
+            packerLogId={(shipped as any).packer_log_id ?? null}
+            stationActivityLogId={(shipped as any).station_activity_log_id ?? (shipped as any).sal_id ?? null}
+            trackingType={shipped.tracking_type}
+            onDeleted={() => onUpdate?.()}
+          />
+        </section>
+      )}
     </div>
   );
 }

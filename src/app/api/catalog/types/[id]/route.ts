@@ -28,13 +28,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const before = await getTypeById(gate.ctx.organizationId, id);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
-    const updated = await updateType(gate.ctx.organizationId, id, {
+    // platformAccountId / workflowNodeId: only forward the key when the client
+    // sent it, so updateType can tell "clear to null" from "leave unchanged".
+    const data: Parameters<typeof updateType>[2] = {
       label: parsed.label,
       kind: parsed.kind,
       isReturn: parsed.isReturn,
       sortOrder: parsed.sortOrder,
       isActive: parsed.isActive,
-    });
+    };
+    if (Object.prototype.hasOwnProperty.call(parsed, 'platformAccountId')) {
+      data.platformAccountId = parsed.platformAccountId;
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed, 'workflowNodeId')) {
+      data.workflowNodeId = parsed.workflowNodeId;
+    }
+    const updated = await updateType(gate.ctx.organizationId, id, data);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'catalog-api',

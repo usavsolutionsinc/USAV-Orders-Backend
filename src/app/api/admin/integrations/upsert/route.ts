@@ -20,6 +20,10 @@ import {
   upsertIntegrationCredentials,
   type IntegrationProvider,
 } from '@/lib/integrations/credentials';
+import {
+  wouldExceedIntegrationLimit,
+  integrationLimitStatus,
+} from '@/lib/integrations/connectors/connections';
 
 const PROVIDERS = [
   'ebay', 'zoho', 'ecwid', 'square', 'ups', 'fedex', 'usps', 'zendesk',
@@ -41,6 +45,21 @@ export const POST = withAuth(async (req, ctx) => {
     return NextResponse.json(
       { error: 'INVALID_INPUT', detail: err instanceof Error ? err.message : 'bad request' },
       { status: 400 },
+    );
+  }
+
+  // Entitlement ceiling: connecting a NEW provider can't push the org past its
+  // plan's maxIntegrations. Updating an already-connected provider is allowed.
+  if (await wouldExceedIntegrationLimit(ctx.organizationId, parsed.provider as IntegrationProvider)) {
+    const limit = await integrationLimitStatus(ctx.organizationId);
+    return NextResponse.json(
+      {
+        error: 'INTEGRATION_LIMIT',
+        used: limit.used,
+        max: limit.max,
+        hint: 'Upgrade your plan to connect more integrations.',
+      },
+      { status: 402 },
     );
   }
 

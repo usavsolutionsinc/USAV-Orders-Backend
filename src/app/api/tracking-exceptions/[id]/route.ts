@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 const ALLOWED_STATUSES = new Set(['open', 'resolved', 'discarded']);
 
@@ -14,6 +14,7 @@ export async function GET(
 ) {
   const gate = await requireRoutePerm(request, 'receiving.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);
@@ -21,7 +22,11 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'invalid id' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    // tracking_exceptions has no organization_id column (child-scoped via
+    // staff/receiving, both nullable FKs joined on integer PKs). GUC-wrap for
+    // the RLS backstop; no explicit org filter is possible. See NEEDS-COL note.
+    const result = await tenantQuery(
+      orgId,
       `SELECT te.*, s.name AS staff_display_name,
               r.source AS receiving_source,
               r.zoho_purchaseorder_id AS receiving_zoho_po_id,
@@ -59,6 +64,7 @@ export async function PATCH(
 ) {
   const gate = await requireRoutePerm(request, 'receiving.mark_received');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);
@@ -125,11 +131,14 @@ export async function PATCH(
     sets.push('updated_at = NOW()');
     params.push(id);
 
+    // tracking_exceptions has no organization_id column (child-scoped via
+    // staff/receiving, both nullable FKs). GUC-wrap the write for the RLS
+    // backstop; no org-stamping or org-ownership WHERE is possible. See NEEDS-COL.
     const sql = `UPDATE tracking_exceptions
                     SET ${sets.join(', ')}
                   WHERE id = $${params.length}
                   RETURNING *`;
-    const result = await pool.query(sql, params);
+    const result = await withTenantTransaction(orgId, (client) => client.query(sql, params));
     if (!result.rows[0]) {
       return NextResponse.json({ success: false, error: 'not found' }, { status: 404 });
     }
@@ -154,6 +163,7 @@ export async function DELETE(
 ) {
   const gate = await requireRoutePerm(request, 'admin.manage_features');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id: idParam } = await context.params;
     const id = Number.parseInt(idParam, 10);
@@ -161,9 +171,11 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: 'invalid id' }, { status: 400 });
     }
 
-    const result = await pool.query(
-      `DELETE FROM tracking_exceptions WHERE id = $1`,
-      [id],
+    // tracking_exceptions has no organization_id column (child-scoped via
+    // staff/receiving, both nullable FKs). GUC-wrap the delete for the RLS
+    // backstop; no org-ownership WHERE is possible. See NEEDS-COL note.
+    const result = await withTenantTransaction(orgId, (client) =>
+      client.query(`DELETE FROM tracking_exceptions WHERE id = $1`, [id]),
     );
 
     await invalidateCacheTags(['tracking-exceptions']);

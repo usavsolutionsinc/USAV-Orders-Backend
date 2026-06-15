@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
-import { getAccessToken, getInventoryBaseUrl, requireOrgId } from '@/lib/zoho/core';
+import { getAccessToken, getInventoryBaseUrl, loadZohoCredentials } from '@/lib/zoho/core';
+import { withZohoOrg } from '@/lib/zoho/tenant-context';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(req, 'sku_stock.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
 
     const { id: rawId } = await params;
     const zohoItemId = String(rawId || '').trim();
@@ -30,13 +33,17 @@ export async function GET(
     }
 
     // One round-trip: cached bytes (if any) + the item's current document id.
-    const { rows } = await pool.query<{
+    // Tenant-scoped: filter the parent `items` by organization_id. zoho_item_images
+    // has no org column (NEEDS-COL); it is scoped through the parent join + the
+    // org GUC set by tenantQuery, so a cross-tenant zoho_item_id can never leak.
+    const { rows } = await tenantQuery<{
       content_type: string | null;
       bytes: Buffer | null;
       cached_doc: string | null;
       cur_doc: string | null;
       item_exists: boolean;
     }>(
+      orgId,
       `SELECT zii.content_type,
               zii.bytes,
               zii.document_id          AS cached_doc,
@@ -45,8 +52,9 @@ export async function GET(
          FROM items i
          LEFT JOIN zoho_item_images zii ON zii.zoho_item_id = i.zoho_item_id
         WHERE i.zoho_item_id = $1
+          AND i.organization_id = $2
         LIMIT 1`,
-      [zohoItemId],
+      [zohoItemId, orgId],
     );
 
     const row = rows[0];
@@ -67,13 +75,20 @@ export async function GET(
       return NextResponse.json({ error: 'No image' }, { status: 404 });
     }
 
-    // Fetch the bytes from Zoho, cache them, and serve.
-    const fetched = await fetchZohoItemImage(zohoItemId);
+    // Fetch the bytes from Zoho, cache them, and serve. The byte source MUST be
+    // bound to the authenticated tenant: fetchZohoItemImage resolves credentials
+    // and the Zoho org from the passed-in orgId (the gate org), so a non-USAV
+    // tenant never fetches from — nor caches — USAV's Zoho org.
+    const fetched = await fetchZohoItemImage(zohoItemId, orgId);
     if (!fetched) {
       return NextResponse.json({ error: 'Upstream image unavailable' }, { status: 404 });
     }
 
-    await pool.query(
+    // zoho_item_images has no organization_id column (NEEDS-COL): GUC-wrap the
+    // write via tenantQuery so it runs under the org GUC; isolation rides on the
+    // parent `items` precheck above that gated reaching this cache write.
+    await tenantQuery(
+      orgId,
       `INSERT INTO zoho_item_images (zoho_item_id, document_id, content_type, bytes, fetched_at)
        VALUES ($1, $2, $3, $4, now())
        ON CONFLICT (zoho_item_id) DO UPDATE SET
@@ -106,28 +121,35 @@ function imageResponse(bytes: Buffer, contentType: string | null) {
 
 async function fetchZohoItemImage(
   zohoItemId: string,
+  orgId: OrgId,
 ): Promise<{ bytes: Buffer; contentType: string } | null> {
-  const token = await getAccessToken();
-  const url = `${getInventoryBaseUrl()}/items/${encodeURIComponent(zohoItemId)}/image?organization_id=${encodeURIComponent(requireOrgId())}`;
+  // Resolve credentials and the Zoho org from the authenticated tenant. Wrap in
+  // withZohoOrg so any client entry point reached below the queue boundary also
+  // binds this org rather than falling back to the USAV_ORG_ID default.
+  return withZohoOrg(orgId, async () => {
+    const creds = await loadZohoCredentials(orgId);
+    const token = await getAccessToken(orgId, creds);
+    const url = `${getInventoryBaseUrl(creds)}/items/${encodeURIComponent(zohoItemId)}/image?organization_id=${encodeURIComponent(creds.orgId)}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Zoho-oauthtoken ${token}` },
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    const contentType = res.headers.get('content-type') || 'image/png';
-    // A JSON body here means Zoho returned an error envelope, not an image.
-    if (contentType.includes('application/json')) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length === 0) return null;
-    return { bytes: buf, contentType: contentType.split(';')[0].trim() };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const contentType = res.headers.get('content-type') || 'image/png';
+      // A JSON body here means Zoho returned an error envelope, not an image.
+      if (contentType.includes('application/json')) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length === 0) return null;
+      return { bytes: buf, contentType: contentType.split(';')[0].trim() };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
 }

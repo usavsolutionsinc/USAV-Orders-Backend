@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * POST /api/local-pickup-orders/[id]/reopen — reverse of void.
@@ -18,6 +18,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRoutePerm(req, 'orders.void');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -25,12 +26,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `UPDATE local_pickup_orders
        SET status = 'DRAFT', voided_by = NULL, voided_at = NULL, updated_at = NOW()
-       WHERE id = $1 AND status = 'VOIDED' AND completed_at IS NULL
+       WHERE id = $1 AND organization_id = $2 AND status = 'VOIDED' AND completed_at IS NULL
        RETURNING *`,
-      [orderId],
+      [orderId, orgId],
     );
 
     if (result.rows.length === 0) {

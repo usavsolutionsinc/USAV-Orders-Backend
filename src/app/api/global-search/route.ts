@@ -1,5 +1,6 @@
 import { createCrudHandler, ApiError } from '@/lib/api';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
@@ -21,17 +22,19 @@ interface SearchResult {
   matchField: string;
 }
 
-async function searchOrders(query: string, limit: number): Promise<SearchResult[]> {
-  const result = await pool.query(
+async function searchOrders(orgId: OrgId, query: string, limit: number): Promise<SearchResult[]> {
+  const result = await tenantQuery(
+    orgId,
     `SELECT id, order_id, product_title, sku, account_source, shipment_id
      FROM orders
-     WHERE order_id ILIKE $1
+     WHERE organization_id = $4
+       AND (order_id ILIKE $1
         OR product_title ILIKE $1
         OR sku ILIKE $1
-        OR CAST(id AS TEXT) = $2
+        OR CAST(id AS TEXT) = $2)
      ORDER BY created_at DESC NULLS LAST
      LIMIT $3`,
-    [`%${query}%`, query, limit],
+    [`%${query}%`, query, limit, orgId],
   );
 
   return result.rows.map((row: any) => ({
@@ -44,17 +47,19 @@ async function searchOrders(query: string, limit: number): Promise<SearchResult[
   }));
 }
 
-async function searchRepairs(query: string, limit: number): Promise<SearchResult[]> {
-  const result = await pool.query(
+async function searchRepairs(orgId: OrgId, query: string, limit: number): Promise<SearchResult[]> {
+  const result = await tenantQuery(
+    orgId,
     `SELECT id, ticket_number, product_title, serial_number, status
      FROM repair_service
-     WHERE ticket_number ILIKE $1
+     WHERE organization_id = $4
+       AND (ticket_number ILIKE $1
         OR product_title ILIKE $1
         OR serial_number ILIKE $1
-        OR CAST(id AS TEXT) = $2
+        OR CAST(id AS TEXT) = $2)
      ORDER BY created_at DESC NULLS LAST
      LIMIT $3`,
-    [`%${query}%`, query, limit],
+    [`%${query}%`, query, limit, orgId],
   );
 
   return result.rows.map((row: any) => ({
@@ -67,15 +72,17 @@ async function searchRepairs(query: string, limit: number): Promise<SearchResult
   }));
 }
 
-async function searchFba(query: string, limit: number): Promise<SearchResult[]> {
-  const result = await pool.query(
+async function searchFba(orgId: OrgId, query: string, limit: number): Promise<SearchResult[]> {
+  const result = await tenantQuery(
+    orgId,
     `SELECT id, shipment_ref, status
      FROM fba_shipments
-     WHERE shipment_ref ILIKE $1
-        OR CAST(id AS TEXT) = $2
+     WHERE organization_id = $3
+       AND (shipment_ref ILIKE $1
+        OR CAST(id AS TEXT) = $2)
      ORDER BY created_at DESC NULLS LAST
-     LIMIT $3`,
-    [`%${query}%`, query, limit],
+     LIMIT $4`,
+    [`%${query}%`, query, orgId, limit],
   );
 
   return result.rows.map((row: any) => ({
@@ -88,26 +95,32 @@ async function searchFba(query: string, limit: number): Promise<SearchResult[]> 
   }));
 }
 
-async function searchReceiving(query: string, limit: number): Promise<SearchResult[]> {
+async function searchReceiving(orgId: OrgId, query: string, limit: number): Promise<SearchResult[]> {
   // Join shipping_tracking_numbers so search matches rows reachable only via
   // receiving.shipment_id (post inbound-tracking unification). Falls back to
   // the legacy receiving_tracking_number text column during the deprecation
   // window. A normalized-tracking match catches queries typed without the
   // hyphens/spaces carriers sometimes include.
+  // Tenant scope: receiving carries organization_id, so filter on it. The
+  // shipping_tracking_numbers join (`stn`) has NO organization_id column yet
+  // (NEEDS-COL) — it is reachable only through this org-scoped receiving row,
+  // so the GUC-wrapped tenantQuery is the isolation backstop for it.
   const normalizedQuery = query.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `SELECT r.id,
             COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking_number,
             COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-     WHERE r.receiving_tracking_number ILIKE $1
+     WHERE r.organization_id = $5
+       AND (r.receiving_tracking_number ILIKE $1
         OR stn.tracking_number_raw     ILIKE $1
         OR stn.tracking_number_normalized = $3
-        OR CAST(r.id AS TEXT) = $2
+        OR CAST(r.id AS TEXT) = $2)
      ORDER BY r.id DESC
      LIMIT $4`,
-    [`%${query}%`, query, normalizedQuery, limit],
+    [`%${query}%`, query, normalizedQuery, limit, orgId],
   );
 
   return result.rows.map((row: any) => ({
@@ -120,43 +133,52 @@ async function searchReceiving(query: string, limit: number): Promise<SearchResu
   }));
 }
 
-const handler = createCrudHandler<SearchResult>({
-  name: 'global-search',
-  cacheNamespace: 'api:global-search',
-  cacheTTL: 60,
-  cacheTags: ['global-search', 'orders', 'repair-service', 'fba', 'receiving-logs'],
+/**
+ * Build the CRUD handler bound to a single tenant. Constructed per-request so
+ * the org id from the verified session is threaded into every search helper,
+ * and so the Upstash cache namespace is partitioned by org (a shared namespace
+ * would serve one tenant's results to another).
+ */
+function buildHandler(orgId: OrgId) {
+  return createCrudHandler<SearchResult>({
+    name: 'global-search',
+    cacheNamespace: `api:global-search:${orgId}`,
+    cacheTTL: 60,
+    cacheTags: ['global-search', 'orders', 'repair-service', 'fba', 'receiving-logs'],
 
-  list: async (params) => {
-    if (!params.search) {
-      return { rows: [] };
-    }
+    list: async (params) => {
+      if (!params.search) {
+        return { rows: [] };
+      }
 
-    const perEntity = Math.ceil(params.limit / 4);
-    const [orders, repairs, fba, receiving] = await Promise.all([
-      searchOrders(params.search, perEntity).catch(() => []),
-      searchRepairs(params.search, perEntity).catch(() => []),
-      searchFba(params.search, perEntity).catch(() => []),
-      searchReceiving(params.search, perEntity).catch(() => []),
-    ]);
+      const perEntity = Math.ceil(params.limit / 4);
+      const [orders, repairs, fba, receiving] = await Promise.all([
+        searchOrders(orgId, params.search, perEntity).catch(() => []),
+        searchRepairs(orgId, params.search, perEntity).catch(() => []),
+        searchFba(orgId, params.search, perEntity).catch(() => []),
+        searchReceiving(orgId, params.search, perEntity).catch(() => []),
+      ]);
 
-    const rows = [...orders, ...repairs, ...fba, ...receiving].slice(0, params.limit);
-    return { rows, total: rows.length };
-  },
+      const rows = [...orders, ...repairs, ...fba, ...receiving].slice(0, params.limit);
+      return { rows, total: rows.length };
+    },
 
-  search: async (query, params) => {
-    const perEntity = Math.ceil(params.limit / 4);
-    const [orders, repairs, fba, receiving] = await Promise.all([
-      searchOrders(query, perEntity).catch(() => []),
-      searchRepairs(query, perEntity).catch(() => []),
-      searchFba(query, perEntity).catch(() => []),
-      searchReceiving(query, perEntity).catch(() => []),
-    ]);
+    search: async (query, params) => {
+      const perEntity = Math.ceil(params.limit / 4);
+      const [orders, repairs, fba, receiving] = await Promise.all([
+        searchOrders(orgId, query, perEntity).catch(() => []),
+        searchRepairs(orgId, query, perEntity).catch(() => []),
+        searchFba(orgId, query, perEntity).catch(() => []),
+        searchReceiving(orgId, query, perEntity).catch(() => []),
+      ]);
 
-    return [...orders, ...repairs, ...fba, ...receiving].slice(0, params.limit);
-  },
-});
+      return [...orders, ...repairs, ...fba, ...receiving].slice(0, params.limit);
+    },
+  });
+}
 
 // Cross-domain search used by the Cmd+K bar — require an authenticated session
 // (any staff role). Was previously exported bare (unauthenticated + invisible
-// to the route-permission audit).
-export const GET = withAuth(handler.GET as any);
+// to the route-permission audit). The handler is built per-request bound to the
+// caller's org so every entity query is tenant-scoped.
+export const GET = withAuth((req, ctx) => buildHandler(ctx.organizationId).GET(req));

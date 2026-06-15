@@ -6,13 +6,13 @@
  * the shared pool, sets `app.current_org` as a session GUC, runs the work,
  * and releases the client.
  *
- * The GUC is the hook that future Row-Level Security policies bind against
- * — once policies land, every table's `organization_id = current_setting
- * ('app.current_org')::uuid` policy becomes a backstop against handlers
- * that forget to filter explicitly. RLS isn't enforced yet (the business
- * tables don't have organization_id columns), but the plumbing here means
- * the day we turn it on, every code path is already running with the
- * setting populated.
+ * The GUC is the hook that RLS policies bind against — every enforced
+ * table's `organization_id = current_setting('app.current_org')::uuid`
+ * policy is a backstop against handlers that forget to filter explicitly.
+ * Most business tables already carry `organization_id`; FORCE enforcement is
+ * being rolled out per table (Phase E) once every route touching a table is
+ * GUC-wrapped. Note enforcement only bites under the non-BYPASSRLS
+ * `app_tenant` role — `neondb_owner` bypasses RLS (see the tenancy exec plan).
  *
  * Usage:
  *   await withTenantConnection(orgId, async (client) => {
@@ -25,7 +25,7 @@
  */
 
 import type { PoolClient, QueryResult, QueryResultRow } from 'pg';
-import pool from '@/lib/db';
+import { tenantPool } from '@/lib/db';
 import { USAV_ORG_ID, type OrgId } from './constants';
 
 function assertOrgId(orgId: OrgId): void {
@@ -44,21 +44,28 @@ export async function withTenantConnection<T>(
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
   assertOrgId(orgId);
-  const client = await pool.connect();
+  // Use the tenant pool: once TENANT_APP_DATABASE_URL points at the non-bypass
+  // app_tenant role (Phase E1), these GUC-scoped paths become RLS-subject and
+  // per-table FORCE can be enabled. Until then tenantPool aliases the owner pool.
+  const client = await tenantPool.connect();
   try {
-    // SET LOCAL scopes to the current transaction. We're not in a tx yet so
-    // use set_config(..., is_local=false) on this session. The client is
-    // returned to the pool on release, but `RESET ALL` on release is the
-    // pg pool's job — we belt-and-suspenders RESET below.
-    await client.query("SELECT set_config('app.current_org', $1, false)", [orgId]);
-    return await fn(client);
+    // Run the work inside a transaction and set the org GUC with SET LOCAL
+    // (is_local=true). SET LOCAL is scoped to THIS transaction and auto-clears
+    // on COMMIT/ROLLBACK, so a stale `app.current_org` can never survive on a
+    // pooled client into the next checkout. That matters once RLS is enforced:
+    // the loud-fail column default reads `current_setting('app.current_org')`,
+    // so a leftover session GUC could silently mis-attribute a later raw-pool
+    // INSERT to the wrong tenant. A transaction-scoped GUC closes that hole.
+    // (Read-only `fn`s are fine inside a transaction; we COMMIT either way.)
+    await client.query('BEGIN');
+    await client.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch { /* swallow — client is discarded on release */ }
+    throw err;
   } finally {
-    try {
-      await client.query("SELECT set_config('app.current_org', '', false)");
-    } catch {
-      // Best-effort cleanup; the pool will discard the client if it's
-      // poisoned.
-    }
     client.release();
   }
 }
@@ -78,28 +85,15 @@ export async function tenantQuery<T extends QueryResultRow = QueryResultRow>(
 }
 
 /**
- * Transactional variant — wraps the work in BEGIN/COMMIT and SET LOCAL.
- * Rolls back on any thrown error.
+ * Transactional variant — explicit name for write paths. Now identical to
+ * `withTenantConnection` (which is itself transactional with SET LOCAL), so it
+ * delegates; the separate name documents write intent at call sites.
  */
 export async function withTenantTransaction<T>(
   orgId: OrgId,
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
-  assertOrgId(orgId);
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    // SET LOCAL is the right scope inside a transaction.
-    await client.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
-    const result = await fn(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    try { await client.query('ROLLBACK'); } catch { /* swallow */ }
-    throw err;
-  } finally {
-    client.release();
-  }
+  return withTenantConnection(orgId, fn);
 }
 
 /**

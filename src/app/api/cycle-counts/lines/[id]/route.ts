@@ -13,6 +13,8 @@ import {
   saveApiIdempotencyResponse,
 } from '@/lib/api-idempotency';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 const ROUTE_CC_LINE = 'cycle-counts.line.patch';
 
@@ -44,15 +46,16 @@ interface LineRow {
   variance_tol: number;
 }
 
-async function loadLine(id: number): Promise<LineRow | null> {
-  const r = await pool.query<LineRow>(
+async function loadLine(id: number, orgId: OrgId): Promise<LineRow | null> {
+  const r = await tenantQuery<LineRow>(
+    orgId,
     `SELECT ccl.id, ccl.campaign_id, ccl.bin_id, ccl.sku, ccl.expected_qty,
             ccl.counted_qty, ccl.variance, ccl.status,
             c.variance_tol::float AS variance_tol
      FROM cycle_count_lines ccl
-     JOIN cycle_count_campaigns c ON c.id = ccl.campaign_id
-     WHERE ccl.id = $1 LIMIT 1`,
-    [id],
+     JOIN cycle_count_campaigns c ON c.id = ccl.campaign_id AND c.organization_id = ccl.organization_id
+     WHERE ccl.id = $1 AND ccl.organization_id = $2 LIMIT 1`,
+    [id, orgId],
   );
   return r.rows[0] ?? null;
 }
@@ -98,6 +101,7 @@ export async function PATCH(
 ) {
   const gate = await requireRoutePerm(request, 'cycle_count.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   const { id: idRaw } = await params;
   const lineId = Number(idRaw);
   if (!Number.isFinite(lineId) || lineId <= 0) {
@@ -135,7 +139,7 @@ export async function PATCH(
       return NextResponse.json(payload, { status });
     };
 
-    const line = await loadLine(lineId);
+    const line = await loadLine(lineId, orgId);
     if (!line) return respond({ error: 'Line not found' }, 404);
 
     // ─── Submit count ──────────────────────────────────────────────────────
@@ -159,16 +163,17 @@ export async function PATCH(
       if (withinTolerance) {
         // Auto-approve.
         await applyVariance(line, Math.floor(countedQty), staffId);
-        const upd = await pool.query(
+        const upd = await tenantQuery(
+          orgId,
           `UPDATE cycle_count_lines
            SET counted_qty = $2, status = 'approved',
                counted_by = $3, counted_at = NOW(),
                approved_by = $3, approved_at = NOW(),
                notes = COALESCE($4, notes),
                updated_at = NOW()
-           WHERE id = $1
+           WHERE id = $1 AND organization_id = $5
            RETURNING id, status, counted_qty, variance`,
-          [lineId, Math.floor(countedQty), staffId, notes],
+          [lineId, Math.floor(countedQty), staffId, notes, orgId],
         );
         return respond({
           success: true,
@@ -179,15 +184,16 @@ export async function PATCH(
       }
 
       // Over tolerance — route to admin review.
-      const upd = await pool.query(
+      const upd = await tenantQuery(
+        orgId,
         `UPDATE cycle_count_lines
          SET counted_qty = $2, status = 'pending_review',
              counted_by = $3, counted_at = NOW(),
              notes = COALESCE($4, notes),
              updated_at = NOW()
-         WHERE id = $1
+         WHERE id = $1 AND organization_id = $5
          RETURNING id, status, counted_qty, variance`,
-        [lineId, Math.floor(countedQty), staffId, notes],
+        [lineId, Math.floor(countedQty), staffId, notes, orgId],
       );
       return respond({
         success: true,
@@ -218,15 +224,16 @@ export async function PATCH(
         }
         await applyVariance(line, line.counted_qty, staffId);
       }
-      const upd = await pool.query(
+      const upd = await tenantQuery(
+        orgId,
         `UPDATE cycle_count_lines
          SET status = $2,
              approved_by = $3, approved_at = NOW(),
              notes = COALESCE($4, notes),
              updated_at = NOW()
-         WHERE id = $1
+         WHERE id = $1 AND organization_id = $5
          RETURNING id, status, counted_qty, variance`,
-        [lineId, action === 'approve' ? 'approved' : 'rejected', staffId, notes],
+        [lineId, action === 'approve' ? 'approved' : 'rejected', staffId, notes, orgId],
       );
       return respond({ success: true, line: upd.rows[0] });
     }

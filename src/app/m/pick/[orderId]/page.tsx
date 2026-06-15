@@ -13,8 +13,7 @@
  * Design principles (see plan B0):
  *   - One thumb, one goal — primary action in the bottom dock.
  *   - Status before form — top strip shows order + progress + connection.
- *   - Multi-modal feedback — every confirm fires haptic + sound + visual.
- *   - Optimistic + reconciling — UI advances on tap; failures roll back with error feedback.
+ *   - Optimistic + reconciling — UI advances on tap; failures roll back with a visible error.
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -22,10 +21,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { useFeedback } from '@/hooks/useFeedback';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
-import { MobileSettingsButton } from '@/components/mobile/MobileSettingsButton';
 import { ProgressDots } from '@/components/mobile/ProgressDots';
 import { ConfirmDock } from '@/components/mobile/ConfirmDock';
 import { ScanSurface } from '@/components/mobile/ScanSurface';
@@ -126,7 +123,6 @@ function PickerInner() {
   const orderIdParam = params?.orderId;
   const orderId = Number(orderIdParam);
   const { user, isLoaded } = useAuth();
-  const feedback = useFeedback();
   const scanner = useBarcodeScanner();
 
   const [order, setOrder] = useState<PickOrder | null>(null);
@@ -198,13 +194,12 @@ function PickerInner() {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : 'load failed';
         setLoadError(message);
-        feedback('error');
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, orderId, feedback]);
+  }, [user, orderId]);
 
   const currentTask = order?.tasks[currentIndex];
   const totalTasks = order?.tasks.length ?? 0;
@@ -244,7 +239,6 @@ function PickerInner() {
       if (!res.ok || !data.ok) {
         throw new Error(data.error || `confirm-pick ${res.status}`);
       }
-      feedback('success');
       // If this was the last open task, complete the session.
       const wasLast = currentIndex >= totalTasks - 1;
       if (wasLast) {
@@ -259,12 +253,11 @@ function PickerInner() {
         next.delete(allocationId);
         return next;
       });
-      feedback('error');
       console.error('[m/pick] confirm-pick failed:', err);
     } finally {
       setConfirming(false);
     }
-  }, [currentTask, sessionId, currentIndex, totalTasks, advance, feedback]);
+  }, [currentTask, sessionId, currentIndex, totalTasks, advance]);
 
   // ── Record short pick (POST /api/picking/session/:id/short-pick)
   const handleShortPick = useCallback(
@@ -292,7 +285,6 @@ function PickerInner() {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.ok) throw new Error(data.error || `short-pick ${res.status}`);
-        feedback('warning');
         advance();
       } catch (err) {
         setPickedAllocations((prev) => {
@@ -300,11 +292,10 @@ function PickerInner() {
           next.delete(allocationId);
           return next;
         });
-        feedback('error');
         console.error('[m/pick] short-pick failed:', err);
       }
     },
-    [currentTask, sessionId, advance, feedback],
+    [currentTask, sessionId, advance],
   );
 
   // ── Scan-gate. Validate the scan identifies the right unit/bin/sku
@@ -315,7 +306,6 @@ function PickerInner() {
       if (!currentTask || confirming) return;
       const matched = matchScanToTask(value, currentTask);
       if (!matched) {
-        feedback('error');
         const expectedBits = [
           currentTask.bin ? `bin ${currentTask.bin}` : null,
           currentTask.serialNumber ? `serial ${currentTask.serialNumber}` : null,
@@ -330,7 +320,7 @@ function PickerInner() {
       setScanError(null);
       void handleConfirmPick();
     },
-    [currentTask, confirming, feedback, handleConfirmPick],
+    [currentTask, confirming, handleConfirmPick],
   );
 
   // Clear stale error whenever the user moves to a new task.
@@ -379,7 +369,6 @@ function PickerInner() {
           <div className="flex items-center gap-2 shrink-0">
             <ProgressDots done={doneCount} total={totalTasks} />
             <NetworkChip compact />
-            <MobileSettingsButton />
           </div>
         </div>
       </header>
@@ -430,10 +419,7 @@ function PickerInner() {
               {/* Progressive disclosure */}
               <button
                 type="button"
-                onClick={() => {
-                  feedback('selection');
-                  setDetailsExpanded((v) => !v);
-                }}
+                onClick={() => setDetailsExpanded((v) => !v)}
                 className="mt-4 flex items-center gap-1 text-xs font-semibold text-slate-500 active:text-slate-700"
               >
                 <span>{detailsExpanded ? 'Hide details' : 'Show details'}</span>

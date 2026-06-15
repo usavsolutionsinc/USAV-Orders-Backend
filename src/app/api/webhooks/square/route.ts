@@ -88,6 +88,15 @@ export async function POST(req: NextRequest) {
       const hasRepairSku = lineItems.some((li: any) => isRepairSku(li.sku));
       const orderSource = hasRepairSku ? 'repair_payment' : 'walk_in_sale';
 
+      // TRANSITIONAL: Square webhook has no session. Single-tenant (USAV) today;
+      // resolve org from the Square account→org mapping when multi-tenant Square
+      // lands (see docs/tenancy exec plan §D1 open items). Thread it into the
+      // insert + the realtime publish so both run GUC-scoped (app.current_org).
+      // square_transactions is tenant-owned-NEEDS-COL — no organization_id column
+      // and no parent to derive from — so this only sets the GUC (RLS-ready once
+      // the column + FORCE policy land), it cannot stamp/filter a column yet.
+      const orgId = transitionalUsavOrgId();
+
       await insertSquareTransaction({
         square_order_id: payment.order_id,
         square_payment_id: payment.id || null,
@@ -106,13 +115,10 @@ export async function POST(req: NextRequest) {
         payment_method: payment.source_type || 'CARD',
         receipt_url: payment.receipt_url || null,
         order_source: orderSource,
-      });
+      }, orgId);
 
       await publishSaleCompleted({
-        // TRANSITIONAL: Square webhook has no session. Single-tenant (USAV)
-        // today; resolve org from the Square account→org mapping when multi-
-        // tenant Square lands (see docs/tenancy exec plan §D1 open items).
-        orgId: transitionalUsavOrgId(),
+        orgId,
         squareOrderId: payment.order_id,
         source: 'square-webhook',
       }).catch((err) => console.error('Failed to publish sale event:', err));

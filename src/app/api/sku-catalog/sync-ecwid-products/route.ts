@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 
@@ -20,7 +20,7 @@ function requiredEnvAny(primaryName: string, aliases: string[] = []): string {
  * Stores Ecwid product name in display_name and thumbnail in image_url.
  * Does NOT auto-pair to Zoho — all pairing is manual via SKU Pairing tab.
  */
-export const POST = withAuth(async (_req: NextRequest) => {
+export const POST = withAuth(async (_req: NextRequest, ctx) => {
   try {
     const storeId = requiredEnvAny('ECWID_STORE_ID', ['ECWID_STOREID', 'ECWID_STORE', 'NEXT_PUBLIC_ECWID_STORE_ID']);
     const token = requiredEnvAny('ECWID_API_TOKEN', ['ECWID_TOKEN', 'ECWID_ACCESS_TOKEN', 'NEXT_PUBLIC_ECWID_API_TOKEN']);
@@ -80,25 +80,28 @@ export const POST = withAuth(async (_req: NextRequest) => {
     let updated = 0;
 
     for (const product of allProducts) {
-      // Try insert first
-      const insertResult = await pool.query(
+      // Try insert first — stamp the owning org on every new platform row.
+      const insertResult = await tenantQuery(
+        ctx.organizationId,
         `INSERT INTO sku_platform_ids
-           (sku_catalog_id, platform, platform_sku, platform_item_id, display_name, image_url, is_active)
-         VALUES (NULL, 'ecwid', $1, $2, $3, $4, true)
+           (sku_catalog_id, platform, platform_sku, platform_item_id, display_name, image_url, is_active, organization_id)
+         VALUES (NULL, 'ecwid', $1, $2, $3, $4, true, $5)
          ON CONFLICT DO NOTHING`,
-        [product.sku, product.ecwidProductId, product.name, product.thumbnailUrl],
+        [product.sku, product.ecwidProductId, product.name, product.thumbnailUrl, ctx.organizationId],
       );
 
       if (insertResult.rowCount && insertResult.rowCount > 0) {
         inserted++;
       } else {
-        // Already exists — update display_name and image_url
-        const updateResult = await pool.query(
+        // Already exists — update display_name and image_url (this org's row only)
+        const updateResult = await tenantQuery(
+          ctx.organizationId,
           `UPDATE sku_platform_ids
            SET display_name = $1, image_url = COALESCE($2::text, image_url), is_active = true
            WHERE platform = 'ecwid' AND platform_item_id = $3
+             AND organization_id = $4
              AND (display_name IS DISTINCT FROM $1 OR image_url IS NULL)`,
-          [product.name, product.thumbnailUrl, product.ecwidProductId],
+          [product.name, product.thumbnailUrl, product.ecwidProductId, ctx.organizationId],
         );
         if (updateResult.rowCount && updateResult.rowCount > 0) updated++;
       }

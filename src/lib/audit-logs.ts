@@ -8,6 +8,8 @@ type Queryable = {
 export interface CreateAuditLogParams {
   actorStaffId?: number | null;
   actorRole?: string | null;
+  /** Tenant owner of this audit row. Nullable: system/no-actor rows stay NULL. */
+  organizationId?: string | null;
   source: string;
   action: string;
   entityType: string;
@@ -29,6 +31,7 @@ export async function createAuditLog(
     `INSERT INTO audit_logs (
       actor_staff_id,
       actor_role,
+      organization_id,
       source,
       action,
       entity_type,
@@ -42,12 +45,13 @@ export async function createAuditLog(
       metadata
     )
     VALUES (
-      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13::jsonb, $14::jsonb
     )
     RETURNING id`,
     [
       params.actorStaffId ?? null,
       params.actorRole ?? null,
+      params.organizationId ?? null,
       params.source,
       params.action,
       params.entityType,
@@ -270,6 +274,8 @@ export interface RecordAuditArgs {
   method?: 'scan' | 'manual' | 'system';
   /** Allow legacy routes that still extract staff from body to override. */
   actorStaffIdOverride?: number | null;
+  /** Org for cron/transitional callers that pass ctx=null (no request org). */
+  organizationIdOverride?: string | null;
   /** Free-form extension; merged into metadata. */
   extra?: Record<string, unknown>;
 }
@@ -282,6 +288,10 @@ export async function recordAudit(
 ): Promise<number | null> {
   const actorStaffId = ctx?.staffId ?? args.actorStaffIdOverride ?? null;
   const actorRole = ctx?.role ?? null;
+  // Stamp the tenant so audit reads are org-filterable (was always NULL before).
+  // ctx.organizationId covers every request route automatically; cron/transitional
+  // callers (ctx=null) pass organizationIdOverride. System rows stay NULL.
+  const organizationId = ctx?.organizationId ?? args.organizationIdOverride ?? null;
 
   const headers = req?.headers;
   const requestId = headers?.get('x-request-id') ?? null;
@@ -312,6 +322,7 @@ export async function recordAudit(
     return await createAuditLog(db, {
       actorStaffId,
       actorRole,
+      organizationId,
       source: args.source,
       action: args.action,
       entityType: args.entityType,

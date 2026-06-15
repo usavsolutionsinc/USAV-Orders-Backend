@@ -64,6 +64,7 @@ export async function POST(
 ) {
   const gate = await requireRoutePerm(req, 'admin.view');
   if (gate.denied) return gate.denied;
+  const { organizationId } = gate.ctx;
 
   try {
     const { id } = await params;
@@ -79,7 +80,7 @@ export async function POST(
     const row = rows[0];
     if (!row.gmail_msg_id) throw ApiError.badRequest('row has no gmail_msg_id');
 
-    const envelope = await fetchMessage(row.gmail_msg_id);
+    const envelope = await fetchMessage(row.gmail_msg_id, organizationId);
     const llm = await extractWithLlm({
       subject: row.email_subject ?? envelope.subject,
       from: row.email_from ?? envelope.from,

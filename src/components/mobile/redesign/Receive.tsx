@@ -17,7 +17,6 @@ import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow } from '@/components/mobile/feed/useMobileFeed';
 import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/ScanResultRow';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
-import { useFeedback } from '@/hooks/useFeedback';
 import {
   INTAKE_CLASSIFICATION_OPTS,
   type IntakeClassification,
@@ -78,7 +77,6 @@ export default function RedesignedMobileReceive() {
   // Sticky session default — pick "FBA Return" once, scan the whole pallet.
   const [intake, setIntake] = useState<IntakeClassification>('UNKNOWN');
   const scanner = useBarcodeScanner({ dedupMs: 2000 });
-  const feedback = useFeedback();
   const inFlight = useRef(false);
   const intakeRef = useRef<IntakeClassification>('UNKNOWN');
   intakeRef.current = intake;
@@ -108,7 +106,6 @@ export default function RedesignedMobileReceive() {
       const tracking = value.trim();
       if (!tracking || inFlight.current) return;
       inFlight.current = true;
-      feedback('confirm');
       setInput('');
 
       const tempId = `${Date.now()}-${tracking}`;
@@ -138,7 +135,6 @@ export default function RedesignedMobileReceive() {
           setScans((prev) =>
             prev.map((s) => (s.id === tempId ? { ...s, status: 'error' as const } : s)),
           );
-          feedback('error');
           return;
         }
 
@@ -172,18 +168,15 @@ export default function RedesignedMobileReceive() {
               : s,
           ),
         );
-        // Expedited unboxes get the stronger scan-accepted haptic.
-        feedback(verdict === 'expedited' ? 'scanAccepted' : 'confirm');
       } catch {
         setScans((prev) =>
           prev.map((s) => (s.id === tempId ? { ...s, status: 'error' as const } : s)),
         );
-        feedback('error');
       } finally {
         inFlight.current = false;
       }
     },
-    [feedback],
+    [],
   );
 
   // Feed camera-decoded values into the same lookup path. Start/stop strictly

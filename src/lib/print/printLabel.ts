@@ -54,6 +54,12 @@ export interface PrintLabelOptions {
   name?: string;
   /** Silent-print settle delay in ms. Default 250. */
   waitMs?: number;
+  /**
+   * Optional human-readable handle printed under the DataMatrix (e.g. `R-1234`),
+   * the way a barcode prints its digits. Gives the operator a value to type into
+   * the scan bar when the symbol won't scan. Omitted → no caption.
+   */
+  hri?: string;
 }
 
 /**
@@ -72,6 +78,7 @@ export function buildLabelHtml(opts: PrintLabelOptions): string {
     symbology: opts.dataMatrix.symbology,
     scale: opts.dataMatrix.scale ?? 4,
   });
+  const hri = (opts.hri ?? '').trim();
 
   return `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title>
 <style>
@@ -80,13 +87,18 @@ export function buildLabelHtml(opts: PrintLabelOptions): string {
   html,body{width:${widthIn}in;height:${heightIn}in;padding:0;margin:0;font-family:Arial,sans-serif;color:#111}
   .wrap{width:${widthIn}in;height:${heightIn}in;display:flex;align-items:stretch;gap:4px;padding:4px 5px}
   .info{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;justify-content:${infoAlign};height:100%}
-  .qr{flex:0 0 auto;width:${qrSize};height:${qrSize};display:flex;align-items:center;justify-content:center}
+  .qrcol{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  .qr{width:${qrSize};height:${qrSize};display:flex;align-items:center;justify-content:center}
   .qr svg{width:100%;height:100%;display:block}
+  .hri{font-size:7px;font-weight:800;letter-spacing:0.3px;line-height:1;color:#111;font-family:ui-monospace,Menlo,Consolas,monospace;white-space:nowrap}
   ${opts.infoCss ?? ''}
 </style></head><body>
 <div class="wrap">
   <div class="info">${opts.infoHtml}</div>
-  <div class="qr">${qrSvg}</div>
+  <div class="qrcol">
+    <div class="qr">${qrSvg}</div>
+    ${hri ? `<div class="hri">${escapeLabelHtml(hri)}</div>` : ''}
+  </div>
 </div>
 <script>
 window.onload=function(){

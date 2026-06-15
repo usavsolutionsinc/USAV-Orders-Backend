@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 // Break-glass DB migration — admin-only + step-up via admin.manage_features.
-export const POST = withAuth(async () => {
+export const POST = withAuth(async (_req, ctx) => {
   try {
     // Remove all platform='zoho' entries from sku_platform_ids.
     // Zoho SKUs already live in sku_catalog.sku (source of truth).
     // sku_platform_ids should only contain marketplace entries: ecwid, amazon, ebay, walmart, etc.
-    const removed = await pool.query(
-      `DELETE FROM sku_platform_ids WHERE platform = 'zoho'`
+    // Tenant-scoped: only clear THIS org's zoho rows.
+    const removed = await tenantQuery(
+      ctx.organizationId,
+      `DELETE FROM sku_platform_ids WHERE platform = 'zoho' AND organization_id = $1`,
+      [ctx.organizationId],
     );
 
     return NextResponse.json({

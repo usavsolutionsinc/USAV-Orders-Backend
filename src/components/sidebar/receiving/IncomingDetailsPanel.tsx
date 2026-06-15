@@ -18,7 +18,8 @@ import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { EventTimeline } from '@/components/ui/EventTimeline';
-import { carrierEventsToTimeline } from '@/lib/timeline';
+import { TimelineSection } from '@/components/ui/TimelineSection';
+import { carrierEventsToTimeline, inventoryEventsToTimeline } from '@/lib/timeline';
 import { copyToClipboard } from '@/utils/_dom';
 import { toast } from '@/lib/toast';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -26,10 +27,11 @@ import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels'
 import { useAuth } from '@/contexts/AuthContext';
 
 // ── Tab spec ────────────────────────────────────────────────────────────────
-type TabId = 'po' | 'shipment' | 'email' | 'notes';
+type TabId = 'po' | 'shipment' | 'activity' | 'email' | 'notes';
 const TABS: Array<{ value: TabId; label: string }> = [
   { value: 'po',       label: 'PO' },
   { value: 'shipment', label: 'Shipment' },
+  { value: 'activity', label: 'Activity' },
   { value: 'email',    label: 'Email' },
   { value: 'notes',    label: 'Notes' },
 ];
@@ -96,9 +98,13 @@ interface DetailsResponse {
     occurred_at: string;
     event_type: string;
     actor_staff_id: number | null;
+    actor_name: string | null;
     station: string | null;
     sku: string | null;
+    serial_number: string | null;
     serial_unit_id: number | null;
+    prev_status: string | null;
+    next_status: string | null;
     notes: string | null;
   }>;
   gmail: Array<{
@@ -417,6 +423,7 @@ export function IncomingDetailsPanel({ zohoPurchaseOrderId, poNumberHint, shipme
           <div className="p-4">
             {tab === 'po' && <PoTab data={data} />}
             {tab === 'shipment' && <ShipmentTab data={data} />}
+            {tab === 'activity' && <ActivityTab data={data} />}
             {tab === 'email' && <EmailTab data={data} />}
             {tab === 'notes' && (
               <NotesTab
@@ -489,6 +496,21 @@ function PoTab({ data }: { data: DetailsResponse }) {
       <Row label="Modified in Zoho" value={fmtDateTime(po.last_modified_zoho)} />
       <Row label="Synced locally" value={fmtDateTime(po.last_synced_at)} />
     </div>
+  );
+}
+
+// Internal-handling trail for the PO's receiving lines ("line under PO"):
+// receiving + per-unit testing verdicts (TEST_*) + putaway, from inventory_events.
+// Distinct from the carrier-event trail in the Shipment tab.
+function ActivityTab({ data }: { data: DetailsResponse }) {
+  const items = inventoryEventsToTimeline(data.receive_events ?? []);
+  return (
+    <TimelineSection
+      title="Receiving & testing"
+      items={items}
+      emptyMessage="No receiving or testing activity yet."
+      className=""
+    />
   );
 }
 

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { getInvalidFbaPlanIdMessage, parseFbaPlanId } from '@/lib/fba/plan-id';
 import { detectCarrier } from '@/lib/tracking-format';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { normalizeAllocations, replaceTrackingAllocations } from '@/lib/fba/replace-tracking-allocations';
 import { requireRoutePerm, recordRouteAudit } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 type Params = Promise<{ id: string }>;
 
@@ -24,7 +24,8 @@ export async function GET(
       return NextResponse.json({ success: false, error: getInvalidFbaPlanIdMessage(id) }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      gate.ctx.organizationId,
       `SELECT
          fst.id          AS link_id,
          fst.label,
@@ -57,16 +58,19 @@ export async function GET(
              )
              FROM fba_tracking_item_allocations fta
              JOIN fba_shipment_items fsi ON fsi.id = fta.shipment_item_id
+               AND fsi.organization_id = $2
              WHERE fta.shipment_id = fst.shipment_id
                AND fta.tracking_id = fst.tracking_id
+               AND fta.organization_id = $2
            ),
            '[]'::jsonb
          ) AS allocations
        FROM fba_shipment_tracking fst
        JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
        WHERE fst.shipment_id = $1
+         AND fst.organization_id = $2
        ORDER BY fst.created_at DESC`,
-      [planId]
+      [planId, gate.ctx.organizationId]
     );
 
     return NextResponse.json({ success: true, tracking: result.rows });
@@ -96,10 +100,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Params }
 ) {
-  const client = await pool.connect();
   try {
     const gate = await requireRoutePerm(request, 'fba.stage_shipments');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -119,44 +123,45 @@ export async function POST(
     const hasAllocationsPayload = Object.prototype.hasOwnProperty.call(body ?? {}, 'allocations');
     const allocations = hasAllocationsPayload ? normalizeAllocations(body.allocations) : [];
 
-    await client.query('BEGIN');
+    const { trackingId, linkRes, allocationCount } = await withTenantTransaction(orgId, async (client) => {
+      // Upsert into shipping_tracking_numbers
+      const trackRes = await client.query(
+        `INSERT INTO shipping_tracking_numbers
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
+         VALUES ($1, $2, $3, 'fba')
+         ON CONFLICT (tracking_number_normalized) DO UPDATE
+           SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
+               updated_at    = NOW()
+         RETURNING id, tracking_number_raw, carrier`,
+        [raw, raw, carrier]
+      );
+      const trackingId = trackRes.rows[0].id;
 
-    // Upsert into shipping_tracking_numbers
-    const trackRes = await client.query(
-      `INSERT INTO shipping_tracking_numbers
-         (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-       VALUES ($1, $2, $3, 'fba')
-       ON CONFLICT (tracking_number_normalized) DO UPDATE
-         SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
-             updated_at    = NOW()
-       RETURNING id, tracking_number_raw, carrier`,
-      [raw, raw, carrier]
-    );
-    const trackingId = trackRes.rows[0].id;
+      // Link to the shipment
+      const linkRes = await client.query(
+        `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label, organization_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (shipment_id, tracking_id) DO UPDATE
+           SET label = COALESCE(EXCLUDED.label, fba_shipment_tracking.label),
+               created_at = fba_shipment_tracking.created_at
+         RETURNING id, label, created_at`,
+        [planId, trackingId, label, orgId]
+      );
 
-    // Link to the shipment
-    const linkRes = await client.query(
-      `INSERT INTO fba_shipment_tracking (shipment_id, tracking_id, label)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (shipment_id, tracking_id) DO UPDATE
-         SET label = COALESCE(EXCLUDED.label, fba_shipment_tracking.label),
-             created_at = fba_shipment_tracking.created_at
-       RETURNING id, label, created_at`,
-      [planId, trackingId, label]
-    );
+      let allocationCount = 0;
+      if (hasAllocationsPayload) {
+        allocationCount = await replaceTrackingAllocations(client, {
+          orgId,
+          shipmentId: planId,
+          trackingId: Number(trackingId),
+          allocations,
+          staffId,
+          station,
+        });
+      }
 
-    let allocationCount = 0;
-    if (hasAllocationsPayload) {
-      allocationCount = await replaceTrackingAllocations(client, {
-        shipmentId: planId,
-        trackingId: Number(trackingId),
-        allocations,
-        staffId,
-        station,
-      });
-    }
-
-    await client.query('COMMIT');
+      return { trackingId, linkRes, allocationCount };
+    });
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.link', organizationId: gate.ctx.organizationId });
@@ -174,14 +179,11 @@ export async function POST(
       { status: 201 }
     );
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments/[id]/tracking]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to link tracking number' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }
 
@@ -200,10 +202,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Params }
 ) {
-  const client = await pool.connect();
   try {
     const gate = await requireRoutePerm(request, 'fba.stage_shipments');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     if (planId == null) {
@@ -227,82 +229,88 @@ export async function PATCH(
 
     const carrier = String(body?.carrier || detectCarrier(raw)).toUpperCase();
 
-    await client.query('BEGIN');
-
-    const linkCheck = await client.query(
-      `SELECT id, tracking_id
-       FROM fba_shipment_tracking
-       WHERE id = $1 AND shipment_id = $2`,
-      [linkId, planId]
-    );
-    if (!linkCheck.rows[0]) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Tracking link not found' }, { status: 404 });
-    }
-
-    const trackRes = await client.query(
-      `INSERT INTO shipping_tracking_numbers
-         (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-       VALUES ($1, $2, $3, 'fba')
-       ON CONFLICT (tracking_number_normalized) DO UPDATE
-         SET tracking_number_raw = EXCLUDED.tracking_number_raw,
-             carrier = COALESCE(NULLIF(EXCLUDED.carrier, 'UNKNOWN'), shipping_tracking_numbers.carrier),
-             updated_at = NOW()
-       RETURNING id, tracking_number_raw, carrier`,
-      [raw, raw, carrier]
-    );
-
-    const trackingId = Number(trackRes.rows[0].id);
-    const previousTrackingId = Number(linkCheck.rows[0].tracking_id);
-    const nextCarrier = String(trackRes.rows[0].carrier || carrier || 'UNKNOWN').toUpperCase();
-
-    const updates: string[] = ['tracking_id = $1'];
-    const values: unknown[] = [trackingId];
-    let idx = 2;
-    if (label !== undefined) {
-      updates.push(`label = $${idx++}`);
-      values.push(label);
-    }
-    values.push(linkId, planId);
-
-    const updated = await client.query(
-      `UPDATE fba_shipment_tracking
-       SET ${updates.join(', ')}
-       WHERE id = $${idx} AND shipment_id = $${idx + 1}
-       RETURNING id, shipment_id, tracking_id, label, created_at`,
-      values
-    );
-
-    if (previousTrackingId !== trackingId) {
-      await client.query(
-        `INSERT INTO fba_tracking_item_allocations
-           (shipment_id, tracking_id, shipment_item_id, qty, created_at, updated_at)
-         SELECT shipment_id, $3, shipment_item_id, qty, created_at, NOW()
-         FROM fba_tracking_item_allocations
-         WHERE shipment_id = $1 AND tracking_id = $2
-         ON CONFLICT (shipment_id, tracking_id, shipment_item_id)
-         DO UPDATE SET qty = EXCLUDED.qty, updated_at = NOW()`,
-        [planId, previousTrackingId, trackingId]
+    const outcome = await withTenantTransaction(orgId, async (client) => {
+      const linkCheck = await client.query(
+        `SELECT id, tracking_id
+         FROM fba_shipment_tracking
+         WHERE id = $1 AND shipment_id = $2 AND organization_id = $3`,
+        [linkId, planId, orgId]
       );
-      await client.query(
-        `DELETE FROM fba_tracking_item_allocations
-         WHERE shipment_id = $1 AND tracking_id = $2`,
-        [planId, previousTrackingId]
+      if (!linkCheck.rows[0]) {
+        return { error: 'Tracking link not found', status: 404 as const };
+      }
+
+      const trackRes = await client.query(
+        `INSERT INTO shipping_tracking_numbers
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
+         VALUES ($1, $2, $3, 'fba')
+         ON CONFLICT (tracking_number_normalized) DO UPDATE
+           SET tracking_number_raw = EXCLUDED.tracking_number_raw,
+               carrier = COALESCE(NULLIF(EXCLUDED.carrier, 'UNKNOWN'), shipping_tracking_numbers.carrier),
+               updated_at = NOW()
+         RETURNING id, tracking_number_raw, carrier`,
+        [raw, raw, carrier]
       );
+
+      const trackingId = Number(trackRes.rows[0].id);
+      const previousTrackingId = Number(linkCheck.rows[0].tracking_id);
+      const nextCarrier = String(trackRes.rows[0].carrier || carrier || 'UNKNOWN').toUpperCase();
+
+      const updates: string[] = ['tracking_id = $1'];
+      const values: unknown[] = [trackingId];
+      let idx = 2;
+      if (label !== undefined) {
+        updates.push(`label = $${idx++}`);
+        values.push(label);
+      }
+      values.push(linkId, planId, orgId);
+
+      const updated = await client.query(
+        `UPDATE fba_shipment_tracking
+         SET ${updates.join(', ')}
+         WHERE id = $${idx} AND shipment_id = $${idx + 1} AND organization_id = $${idx + 2}
+         RETURNING id, shipment_id, tracking_id, label, created_at`,
+        values
+      );
+
+      if (previousTrackingId !== trackingId) {
+        await client.query(
+          `INSERT INTO fba_tracking_item_allocations
+             (shipment_id, tracking_id, shipment_item_id, qty, created_at, updated_at, organization_id)
+           SELECT shipment_id, $3, shipment_item_id, qty, created_at, NOW(), organization_id
+           FROM fba_tracking_item_allocations
+           WHERE shipment_id = $1 AND tracking_id = $2 AND organization_id = $4
+           ON CONFLICT (shipment_id, tracking_id, shipment_item_id)
+           DO UPDATE SET qty = EXCLUDED.qty, updated_at = NOW()`,
+          [planId, previousTrackingId, trackingId, orgId]
+        );
+        await client.query(
+          `DELETE FROM fba_tracking_item_allocations
+           WHERE shipment_id = $1 AND tracking_id = $2 AND organization_id = $3`,
+          [planId, previousTrackingId, orgId]
+        );
+      }
+
+      let allocationCount = 0;
+      if (hasAllocationsPayload) {
+        allocationCount = await replaceTrackingAllocations(client, {
+          orgId,
+          shipmentId: planId,
+          trackingId,
+          allocations,
+          staffId,
+          station,
+        });
+      }
+
+      return { updated, trackingId, nextCarrier, allocationCount };
+    });
+
+    if ('error' in outcome) {
+      return NextResponse.json({ success: false, error: outcome.error }, { status: outcome.status });
     }
 
-    let allocationCount = 0;
-    if (hasAllocationsPayload) {
-      allocationCount = await replaceTrackingAllocations(client, {
-        shipmentId: planId,
-        trackingId,
-        allocations,
-        staffId,
-        station,
-      });
-    }
-
-    await client.query('COMMIT');
+    const { updated, nextCarrier, allocationCount } = outcome;
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'tracking-linked', shipmentId: Number(id), source: 'fba.shipments.tracking.update', organizationId: gate.ctx.organizationId });
@@ -318,14 +326,11 @@ export async function PATCH(
       allocation_count: allocationCount,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('[PATCH /api/fba/shipments/[id]/tracking]', error);
     return NextResponse.json(
       { success: false, error: error?.message || 'Failed to update tracking number' },
       { status: 500 }
     );
-  } finally {
-    client.release();
   }
 }
 
@@ -338,6 +343,7 @@ export async function DELETE(
   try {
     const gate = await requireRoutePerm(request, 'fba.stage_shipments');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const planId = parseFbaPlanId(id);
     const { searchParams } = new URL(request.url);
@@ -348,21 +354,23 @@ export async function DELETE(
       return NextResponse.json({ success: false, error }, { status: 400 });
     }
 
-    const linkRes = await pool.query(
-      `DELETE FROM fba_shipment_tracking
-       WHERE id = $1 AND shipment_id = $2
-       RETURNING tracking_id`,
-      [linkId, planId]
-    );
-
-    const trackingId = Number(linkRes.rows[0]?.tracking_id || 0);
-    if (trackingId > 0) {
-      await pool.query(
-        `DELETE FROM fba_tracking_item_allocations
-         WHERE shipment_id = $1 AND tracking_id = $2`,
-        [planId, trackingId]
+    await withTenantTransaction(orgId, async (client) => {
+      const linkRes = await client.query(
+        `DELETE FROM fba_shipment_tracking
+         WHERE id = $1 AND shipment_id = $2 AND organization_id = $3
+         RETURNING tracking_id`,
+        [linkId, planId, orgId]
       );
-    }
+
+      const trackingId = Number(linkRes.rows[0]?.tracking_id || 0);
+      if (trackingId > 0) {
+        await client.query(
+          `DELETE FROM fba_tracking_item_allocations
+           WHERE shipment_id = $1 AND tracking_id = $2 AND organization_id = $3`,
+          [planId, trackingId, orgId]
+        );
+      }
+    });
 
     await invalidateCacheTags(['fba-shipments', 'fba-board', 'fba-stage-counts']);
     await publishFbaShipmentChanged({ action: 'tracking-unlinked', shipmentId: Number(id), source: 'fba.shipments.tracking.unlink', organizationId: gate.ctx.organizationId });

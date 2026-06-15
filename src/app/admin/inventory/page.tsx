@@ -1,6 +1,5 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
-import { inventoryV2FlagSnapshot } from '@/lib/feature-flags';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
@@ -85,17 +84,20 @@ interface RecentEventRow {
   actor_name: string | null;
 }
 
+// The inventory system is V2-only and always-on — there are no longer any
+// INVENTORY_V2_* feature flags to toggle. This table now documents the live
+// lifecycle phases (all active) so the diagnostics page still reads as a map of
+// what the unit-level engine covers.
 async function loadFlags(): Promise<FlagRow[]> {
-  const snap = inventoryV2FlagSnapshot();
-  const phaseMap: Record<string, string> = {
-    INVENTORY_V2_RECEIVING_PUTAWAY: 'Phase 2 — receive+putaway',
-    INVENTORY_V2_TECH_LIFECYCLE: 'Phase 3 — tech lifecycle',
-    INVENTORY_V2_ALLOCATION: 'Phase 4 — allocation + pick',
-    INVENTORY_V2_PACKING: 'Phase 5 — pack/ship decrement',
-    INVENTORY_V2_FBA_SERIAL_LINK: 'Phase 6 — FBA serial linkage',
-    INVENTORY_V2_RETURNS: 'Phase 7 — returns + holds',
-  };
-  return Object.entries(snap).map(([key, on]) => ({ key, on, phase: phaseMap[key] ?? key }));
+  const phases: Array<{ key: string; phase: string }> = [
+    { key: 'RECEIVING_PUTAWAY', phase: 'Phase 2 — receive+putaway' },
+    { key: 'TECH_LIFECYCLE', phase: 'Phase 3 — tech lifecycle' },
+    { key: 'ALLOCATION', phase: 'Phase 4 — allocation + pick' },
+    { key: 'PACKING', phase: 'Phase 5 — pack/ship decrement' },
+    { key: 'FBA_SERIAL_LINK', phase: 'Phase 6 — FBA serial linkage' },
+    { key: 'RETURNS', phase: 'Phase 7 — returns + holds' },
+  ];
+  return phases.map(({ key, phase }) => ({ key, on: true, phase }));
 }
 
 async function loadSchema(): Promise<SchemaRow[]> {
@@ -615,7 +617,7 @@ export default async function InventoryAdminPage() {
           </header>
           {allocations.length === 0 ? (
             <p className="px-6 py-4 text-sm text-gray-600">
-              No allocations yet. Phase 4 (<code>INVENTORY_V2_ALLOCATION</code>) is the gate.
+              No allocations yet. Orders auto-allocate against STOCKED units on intake.
             </p>
           ) : (
             <table className="min-w-full divide-y divide-gray-100 text-sm">

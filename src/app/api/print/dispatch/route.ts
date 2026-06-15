@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import {
   buildBinZpl,
   buildCartonZpl,
@@ -35,27 +36,30 @@ interface ProfileRow {
 }
 
 async function resolveProfile(
+  orgId: OrgId,
   klass: LabelClass,
   profileIdHint: number | null,
 ): Promise<ProfileRow | null> {
   if (profileIdHint) {
-    const r = await pool.query<ProfileRow>(
+    const r = await tenantQuery<ProfileRow>(
+      orgId,
       `SELECT id, name, external_id, vendor
        FROM printer_profiles
-       WHERE id = $1 AND is_active = true LIMIT 1`,
-      [profileIdHint],
+       WHERE id = $1 AND is_active = true AND organization_id = $2 LIMIT 1`,
+      [profileIdHint, orgId],
     );
     if (r.rows[0]) return r.rows[0];
   }
-  const r = await pool.query<ProfileRow>(
+  const r = await tenantQuery<ProfileRow>(
+    orgId,
     `SELECT id, name, external_id, vendor
      FROM printer_profiles
-     WHERE is_active = true
+     WHERE is_active = true AND organization_id = $2
      ORDER BY
        CASE WHEN default_for = $1 THEN 0 ELSE 1 END,
        id ASC
      LIMIT 1`,
-    [klass],
+    [klass, orgId],
   );
   return r.rows[0] ?? null;
 }
@@ -98,8 +102,9 @@ async function dispatchPrintNode(
   }
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const body = await request.json().catch(() => ({}));
     const klass = String(body?.class || '').trim() as LabelClass;
     if (klass !== 'carton' && klass !== 'product' && klass !== 'bin' && klass !== 'unit') {
@@ -141,7 +146,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       );
     }
 
-    const profile = await resolveProfile(klass, profileIdHint);
+    const profile = await resolveProfile(orgId, klass, profileIdHint);
     if (!profile) {
       // No printer configured — return the ZPL so the caller can fall back
       // to a browser-side printer (HTML popup, manual download, etc.).

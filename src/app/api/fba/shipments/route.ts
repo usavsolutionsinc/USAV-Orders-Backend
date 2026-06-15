@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { buildFbaPlanRefFromIsoDate } from '@/lib/fba/plan-ref';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
 import { InvalidFbaCatalogKeyError } from '@/lib/fba/catalog-key-validation';
 import { publishFbaShipmentChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { AUDIT_ENTITY } from '@/lib/audit-logs';
 
 function parseOptionalStaffId(value: unknown): number | null {
@@ -40,7 +40,7 @@ function autoPlanRefForDueDate(isoYmd: string): string {
 // ── GET /api/fba/shipments ────────────────────────────────────────────────────
 // Returns shipments with aggregated item counts and staff names.
 // Query params: status (comma-separated), limit, q (search shipment_ref / notes)
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -57,6 +57,11 @@ export const GET = withAuth(async (request: NextRequest) => {
     const params: unknown[] = [];
     let idx = 1;
 
+    // Tenant ownership filter — never return another org's shipments.
+    conditions.push(`fs.organization_id = $${idx}`);
+    params.push(ctx.organizationId);
+    idx++;
+
     if (statusValues.length > 0) {
       conditions.push(`fs.status = ANY($${idx}::fba_shipment_status_enum[])`);
       params.push(statusValues);
@@ -71,6 +76,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           SELECT 1
           FROM fba_shipment_items fsi_q
           WHERE fsi_q.shipment_id = fs.id
+            AND fsi_q.organization_id = fs.organization_id
             AND (
               fsi_q.fnsku ILIKE $${idx}
               OR COALESCE(fsi_q.product_title, '') ILIKE $${idx}
@@ -83,6 +89,7 @@ export const GET = withAuth(async (request: NextRequest) => {
           FROM fba_shipment_tracking fst_q
           JOIN shipping_tracking_numbers stn_q ON stn_q.id = fst_q.tracking_id
           WHERE fst_q.shipment_id = fs.id
+            AND fst_q.organization_id = fs.organization_id
             AND COALESCE(stn_q.tracking_number_raw, '') ILIKE $${idx}
         )
       )`);
@@ -144,8 +151,8 @@ export const GET = withAuth(async (request: NextRequest) => {
       LEFT JOIN staff creator ON creator.id = fs.created_by_staff_id
       LEFT JOIN staff tech    ON tech.id    = fs.assigned_tech_id
       LEFT JOIN staff packer  ON packer.id  = fs.assigned_packer_id
-      LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id
-      LEFT JOIN fba_shipment_tracking fst ON fst.shipment_id = fs.id
+      LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id AND fsi.organization_id = fs.organization_id
+      LEFT JOIN fba_shipment_tracking fst ON fst.shipment_id = fs.id AND fst.organization_id = fs.organization_id
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
       ${whereClause}
       GROUP BY fs.id, creator.name, tech.name, packer.name
@@ -153,7 +160,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       LIMIT $${limitIdx}
     `;
 
-    const result = await pool.query(query, params);
+    const result = await tenantQuery(ctx.organizationId, query, params);
     return NextResponse.json({ success: true, shipments: result.rows });
   } catch (error: any) {
     console.error('[GET /api/fba/shipments]', error);
@@ -173,7 +180,6 @@ export const GET = withAuth(async (request: NextRequest) => {
 //         created_by_staff_id?, assigned_tech_id?, assigned_packer_id?,
 //         items: [{ fnsku, expected_qty, product_title?, asin?, sku? }] }
 export const POST = withAuth(async (request: NextRequest, ctx) => {
-  const client = await pool.connect();
   try {
     const body = await request.json();
     const {
@@ -199,90 +205,91 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const destinationFc = typeof destination_fc === 'string' && destination_fc.trim() ? destination_fc.trim() : null;
     const incomingItems = Array.isArray(items) ? items : [];
 
-    await client.query('BEGIN');
-
-    const shipmentRes = await client.query(
-      `INSERT INTO fba_shipments
-         (shipment_ref, destination_fc, due_date, notes,
-          created_by_staff_id, assigned_tech_id, assigned_packer_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        normalizedShipmentRef,
-        destinationFc,
-        normalizedDueDate,
-        shipmentNotes,
-        createdByStaffId,
-        assignedTechId,
-        assignedPackerId,
-      ]
-    );
-
-    const shipment = shipmentRes.rows[0];
-    const insertedItems: unknown[] = [];
-
-    const existingAssignmentRes = await client.query(
-      `SELECT id
-       FROM work_assignments
-       WHERE entity_type = 'FBA_SHIPMENT'
-         AND entity_id = $1
-         AND work_type = 'QA'
-         AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-       ORDER BY updated_at DESC NULLS LAST, id DESC
-       LIMIT 1`,
-      [shipment.id]
-    );
-
-    if (existingAssignmentRes.rows.length > 0) {
-      await client.query(
-        `UPDATE work_assignments
-         SET deadline_at = COALESCE(
-               deadline_at,
-               ($2::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz
-             ),
-             updated_at = NOW()
-         WHERE id = $1`,
-        [existingAssignmentRes.rows[0].id, normalizedDueDate]
-      );
-    } else {
-      await client.query(
-        `INSERT INTO work_assignments
-           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-         VALUES
-           ($1, 'FBA_SHIPMENT', $2, 'QA', $3, $4, 'OPEN', 1,
-            ($5::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz,
-            $6, NOW(), NOW(), NOW())`,
-        [ctx.organizationId, shipment.id, assignedTechId, assignedPackerId, normalizedDueDate, shipmentNotes]
-      );
-    }
-
-    for (const item of incomingItems) {
-      if (!item.fnsku?.trim()) continue;
-
-      const catalogRow = await upsertFnskuCatalogRow(client, {
-        fnsku: item.fnsku,
-        productTitle: item.product_title,
-        asin: item.asin,
-        sku: item.sku,
-      });
-      const productTitle = catalogRow?.product_title ?? null;
-      const asin = catalogRow?.asin ?? null;
-      const sku = catalogRow?.sku ?? null;
-
-      const itemRes = await client.query(
-        `INSERT INTO fba_shipment_items
-           (shipment_id, fnsku, product_title, asin, sku, expected_qty)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (shipment_id, fnsku) DO UPDATE
-           SET expected_qty = EXCLUDED.expected_qty,
-               updated_at   = NOW()
+    const { shipment, insertedItems } = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const shipmentRes = await client.query(
+        `INSERT INTO fba_shipments
+           (shipment_ref, destination_fc, due_date, notes,
+            created_by_staff_id, assigned_tech_id, assigned_packer_id, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [shipment.id, item.fnsku.trim(), productTitle, asin, sku, Math.max(0, Number(item.expected_qty) || 0)]
+        [
+          normalizedShipmentRef,
+          destinationFc,
+          normalizedDueDate,
+          shipmentNotes,
+          createdByStaffId,
+          assignedTechId,
+          assignedPackerId,
+          ctx.organizationId,
+        ]
       );
-      insertedItems.push(itemRes.rows[0]);
-    }
 
-    await client.query('COMMIT');
+      const shipment = shipmentRes.rows[0];
+      const insertedItems: unknown[] = [];
+
+      const existingAssignmentRes = await client.query(
+        `SELECT id
+         FROM work_assignments
+         WHERE entity_type = 'FBA_SHIPMENT'
+           AND entity_id = $1
+           AND work_type = 'QA'
+           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+         ORDER BY updated_at DESC NULLS LAST, id DESC
+         LIMIT 1`,
+        [shipment.id]
+      );
+
+      if (existingAssignmentRes.rows.length > 0) {
+        await client.query(
+          `UPDATE work_assignments
+           SET deadline_at = COALESCE(
+                 deadline_at,
+                 ($2::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz
+               ),
+               updated_at = NOW()
+           WHERE id = $1`,
+          [existingAssignmentRes.rows[0].id, normalizedDueDate]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO work_assignments
+             (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+           VALUES
+             ($1, 'FBA_SHIPMENT', $2, 'QA', $3, $4, 'OPEN', 1,
+              ($5::date + INTERVAL '23 hours 59 minutes 59 seconds')::timestamptz,
+              $6, NOW(), NOW(), NOW())`,
+          [ctx.organizationId, shipment.id, assignedTechId, assignedPackerId, normalizedDueDate, shipmentNotes]
+        );
+      }
+
+      for (const item of incomingItems) {
+        if (!item.fnsku?.trim()) continue;
+
+        const catalogRow = await upsertFnskuCatalogRow(client, {
+          fnsku: item.fnsku,
+          productTitle: item.product_title,
+          asin: item.asin,
+          sku: item.sku,
+        }, ctx.organizationId);
+        const productTitle = catalogRow?.product_title ?? null;
+        const asin = catalogRow?.asin ?? null;
+        const sku = catalogRow?.sku ?? null;
+
+        const itemRes = await client.query(
+          `INSERT INTO fba_shipment_items
+             (shipment_id, fnsku, product_title, asin, sku, expected_qty, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (shipment_id, fnsku) DO UPDATE
+             SET expected_qty = EXCLUDED.expected_qty,
+                 updated_at   = NOW()
+           RETURNING *`,
+          [shipment.id, item.fnsku.trim(), productTitle, asin, sku, Math.max(0, Number(item.expected_qty) || 0), ctx.organizationId]
+        );
+        insertedItems.push(itemRes.rows[0]);
+      }
+
+      return { shipment, insertedItems };
+    });
 
     await invalidateCacheTags(['fba-board', 'fba-shipments']);
     await publishFbaShipmentChanged({ action: 'created', shipmentId: Number(shipment.id || 0), source: 'fba.shipments.create', organizationId: ctx.organizationId });
@@ -297,15 +304,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       { status: 201 }
     );
   } catch (error: unknown) {
-    await client.query('ROLLBACK');
     console.error('[POST /api/fba/shipments]', error);
     if (error instanceof InvalidFbaCatalogKeyError) {
       return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : 'Failed to create FBA shipment';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
-  } finally {
-    client.release();
   }
 }, {
   permission: 'fba.stage_shipments',

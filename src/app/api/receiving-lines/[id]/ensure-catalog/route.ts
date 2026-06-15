@@ -15,14 +15,18 @@ function lineIdFromPath(pathname: string): number {
   return Number(segments[segments.length - 2]);
 }
 
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, ctx) => {
   const lineId = lineIdFromPath(request.nextUrl.pathname);
   if (!Number.isFinite(lineId) || lineId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid line id' }, { status: 400 });
   }
 
   try {
-    const resolved = await resolveOrCreateLineCatalog(lineId);
+    // [id]/verb write: thread the org so loadLine()/firstScannedCatalogId()
+    // scope receiving_lines + serial_units to ctx.organizationId — a foreign
+    // tenant's line resolves to no row (404 below), and create-on-demand stamps
+    // the catalog row to this org instead of silently defaulting to USAV.
+    const resolved = await resolveOrCreateLineCatalog(lineId, ctx.organizationId);
     if (!resolved) {
       return NextResponse.json({ ok: false, error: 'line not found' }, { status: 404 });
     }

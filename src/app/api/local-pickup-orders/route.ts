@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || '';
@@ -12,6 +13,10 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const filterClauses: string[] = [];
     const params: unknown[] = [];
+
+    // Tenant ownership filter — never return another org's pickup orders.
+    params.push(ctx.organizationId);
+    filterClauses.push(`o.organization_id = $${params.length}`);
 
     if (status) {
       params.push(status.toUpperCase());
@@ -39,7 +44,8 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const where = filterClauses.length > 0 ? `WHERE ${filterClauses.join(' AND ')}` : '';
 
-    const ordersResult = await pool.query(
+    const ordersResult = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          o.id,
          o.pickup_date::text,
@@ -70,7 +76,8 @@ export const GET = withAuth(async (req: NextRequest) => {
       params,
     );
 
-    const dates = await pool.query(
+    const dates = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          pickup_date::text,
          COUNT(*)::int AS order_count,
@@ -80,10 +87,11 @@ export const GET = withAuth(async (req: NextRequest) => {
          SELECT SUM(COALESCE(total_price, 0))::numeric(12,2) AS total_value
          FROM local_pickup_order_items WHERE order_id = o.id
        ) agg ON TRUE
-       WHERE o.status != 'VOIDED'
+       WHERE o.status != 'VOIDED' AND o.organization_id = $1
        GROUP BY pickup_date
        ORDER BY pickup_date DESC
        LIMIT 60`,
+      [ctx.organizationId],
     );
 
     return NextResponse.json({
@@ -109,10 +117,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const createdBy = ctx.staffId;
     const items = Array.isArray(body.items) ? body.items : [];
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
+    return await withTenantTransaction(ctx.organizationId, async (client) => {
       const orderResult = await client.query(
         `INSERT INTO local_pickup_orders (pickup_date, customer_name, notes, created_by, status, organization_id)
          VALUES ($1::date, $2, $3, $4, 'DRAFT', $5)
@@ -145,18 +150,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         insertedItems.push(result.rows[0]);
       }
 
-      await client.query('COMMIT');
-
       return NextResponse.json({
         success: true,
         order: { ...order, items: insertedItems },
       });
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
+    });
   } catch (error: any) {
     console.error('[local-pickup-orders][POST]', error);
     return NextResponse.json(

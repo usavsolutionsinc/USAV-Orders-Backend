@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import type { PoolClient } from 'pg';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,8 @@ export type InventoryEventType =
   | 'LABELED'
   | 'ALLOCATED'
   | 'RELEASED'
+  | 'REPAIR_STARTED'
+  | 'REPAIR_COMPLETED'
   | 'NOTE';
 
 export type InventoryEventStation =
@@ -85,12 +89,24 @@ export interface InventoryEventRow {
  *
  * Pass `db` to share a transaction with the caller; otherwise uses the pool
  * directly.
+ *
+ * Tenancy (backward-compatible): pass `orgId` to scope the write to a tenant.
+ * - When `orgId` is OMITTED the behavior is unchanged — the raw `db`/pool
+ *   insert runs exactly as before and `organization_id` falls to the column
+ *   default (USAV backfill / GUC, depending on the DB). All existing callers
+ *   keep compiling and behaving identically.
+ * - When `orgId` is PRESENT the row is stamped with `organization_id`. If a
+ *   caller `db` (existing transaction client) was supplied, the GUC is set on
+ *   that client first (so the table's GUC default + RLS see the right tenant);
+ *   otherwise the insert runs via `tenantQuery(orgId, …)` (a single, self-
+ *   contained GUC-scoped statement).
  */
 export async function recordInventoryEvent(
   input: RecordInventoryEventInput,
-  db: Pick<PoolClient, 'query'> = pool,
+  db?: Pick<PoolClient, 'query'>,
+  orgId?: OrgId,
 ): Promise<InventoryEventRow> {
-  const params = [
+  const baseParams = [
     input.event_type,
     input.actor_staff_id ?? null,
     input.station ?? null,
@@ -109,10 +125,47 @@ export async function recordInventoryEvent(
     JSON.stringify(input.payload ?? {}),
   ];
 
+  // ── Org-scoped path: stamp organization_id explicitly. ────────────────────
   // ON CONFLICT requires a unique constraint; client_event_id has one (UNIQUE),
   // so the upsert is safe. When no client_event_id is supplied the ON CONFLICT
   // clause is unreachable and we get a fresh insert.
-  const result = await db.query<InventoryEventRow>(
+  if (orgId) {
+    const orgParams = [...baseParams, orgId];
+    const orgSql = `INSERT INTO inventory_events (
+       event_type, actor_staff_id, station,
+       receiving_id, receiving_line_id, serial_unit_id, sku,
+       bin_id, prev_bin_id,
+       prev_status, next_status,
+       stock_ledger_id,
+       scan_token, client_event_id, notes, payload,
+       organization_id
+     ) VALUES (
+       $1, $2, $3,
+       $4, $5, $6, $7,
+       $8, $9,
+       $10, $11,
+       $12,
+       $13, $14, $15, $16::jsonb,
+       $17
+     )
+     ON CONFLICT (client_event_id) DO UPDATE
+       SET event_type = inventory_events.event_type   -- no-op, return existing row
+     RETURNING *`;
+
+    if (db) {
+      // Caller owns the transaction — set the GUC on their client so the
+      // RLS backstop + GUC column default agree with the explicit stamp.
+      await db.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+      const result = await db.query<InventoryEventRow>(orgSql, orgParams);
+      return result.rows[0];
+    }
+    const result = await tenantQuery<InventoryEventRow>(orgId, orgSql, orgParams);
+    return result.rows[0];
+  }
+
+  // ── Legacy path (no orgId): byte-identical to the original behavior. ───────
+  const executor: Pick<PoolClient, 'query'> = db ?? pool;
+  const result = await executor.query<InventoryEventRow>(
     `INSERT INTO inventory_events (
        event_type, actor_staff_id, station,
        receiving_id, receiving_line_id, serial_unit_id, sku,
@@ -131,7 +184,7 @@ export async function recordInventoryEvent(
      ON CONFLICT (client_event_id) DO UPDATE
        SET event_type = inventory_events.event_type   -- no-op, return existing row
      RETURNING *`,
-    params,
+    baseParams,
   );
 
   return result.rows[0];
@@ -150,13 +203,20 @@ export interface TimelineFilter {
   limit?: number;
 }
 
-export async function readTimeline(filter: TimelineFilter): Promise<InventoryEventRow[]> {
+export async function readTimeline(
+  filter: TimelineFilter,
+  orgId?: OrgId,
+): Promise<InventoryEventRow[]> {
   const clauses: string[] = [];
   const params: unknown[] = [];
   const push = (sql: string, value: unknown) => {
     params.push(value);
     clauses.push(sql.replace('$?', `$${params.length}`));
   };
+
+  // Tenant scope (only when orgId is supplied — keeps the legacy raw path
+  // byte-identical for callers that don't yet thread org).
+  if (orgId) push('organization_id = $?', orgId);
 
   if (filter.receiving_id != null)       push('receiving_id = $?',        filter.receiving_id);
   if (filter.receiving_line_id != null)  push('receiving_line_id = $?',   filter.receiving_line_id);
@@ -170,12 +230,15 @@ export async function readTimeline(filter: TimelineFilter): Promise<InventoryEve
   const limit = Math.min(Math.max(filter.limit ?? 100, 1), 1000);
   params.push(limit);
 
-  const result = await pool.query<InventoryEventRow>(
-    `SELECT * FROM inventory_events
+  const sql = `SELECT * FROM inventory_events
      ${where}
      ORDER BY occurred_at DESC, id DESC
-     LIMIT $${params.length}`,
-    params,
-  );
+     LIMIT $${params.length}`;
+
+  // When org-scoped, run through the tenant connection so the GUC + RLS
+  // backstop are in force; otherwise preserve the original raw pool read.
+  const result = orgId
+    ? await tenantQuery<InventoryEventRow>(orgId, sql, params)
+    : await pool.query<InventoryEventRow>(sql, params);
   return result.rows;
 }

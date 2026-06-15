@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizeSku } from '@/utils/sku';
 import { parseSerialCsvField } from '@/lib/tech/serialFields';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -7,7 +7,14 @@ import { withAuth } from '@/lib/auth/withAuth';
 /**
  * GET ?code=STATICSKU:tag or SKUx2:tag — returns serials from sku row (same matching rules as tech scan-sku).
  */
-export const GET = withAuth(async (req: NextRequest) => {
+type SkuSerialsRow = {
+  id: number;
+  serial_number: string | null;
+  notes: string | null;
+  static_sku: string | null;
+};
+
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const code = String(new URL(req.url).searchParams.get('code') || '').trim();
     if (!code || !code.includes(':')) {
@@ -29,7 +36,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
     const normalizedSkuToMatch = normalizeSku(skuToMatch);
 
-    const exactSku = await pool.query(
+    // v_sku is a read-only VIEW without an organization_id column, so tenant
+    // scope rides on the GUC (RLS on the underlying serial_units rows).
+    const exactSku = await tenantQuery<SkuSerialsRow>(
+      ctx.organizationId,
       `SELECT id, serial_number, notes, static_sku
        FROM v_sku
        WHERE BTRIM(static_sku) = BTRIM($1)
@@ -37,15 +47,16 @@ export const GET = withAuth(async (req: NextRequest) => {
       [skuToMatch],
     );
 
-    let skuRecord = exactSku.rows[0] ?? null;
+    let skuRecord: SkuSerialsRow | null = exactSku.rows[0] ?? null;
     if (!skuRecord) {
-      const fuzzy = await pool.query(
+      const fuzzy = await tenantQuery<SkuSerialsRow>(
+        ctx.organizationId,
         `SELECT id, serial_number, notes, static_sku
          FROM v_sku
          WHERE static_sku IS NOT NULL AND BTRIM(static_sku) <> ''`,
       );
       skuRecord =
-        fuzzy.rows.find((r: any) => normalizeSku(String(r.static_sku || '')) === normalizedSkuToMatch) ?? null;
+        fuzzy.rows.find((r) => normalizeSku(String(r.static_sku || '')) === normalizedSkuToMatch) ?? null;
     }
 
     if (!skuRecord) {

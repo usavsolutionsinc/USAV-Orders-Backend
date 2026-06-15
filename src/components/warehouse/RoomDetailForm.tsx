@@ -30,7 +30,6 @@ import {
   Trash2,
   X,
 } from '@/components/Icons';
-import { successFeedback, errorFeedback, scanFeedback } from '@/lib/feedback/confirm';
 import { PageHeader } from '@/components/ui/pane-header';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -216,7 +215,6 @@ export function RoomDetailForm() {
       if (creating) {
         const result = await createRoom(trimmedName, trimmedLetter);
         if (!result) throw new Error('Create failed');
-        successFeedback();
         toast.success(`Room "${trimmedName}" added (Zone ${trimmedLetter})`);
         setParam((p) => {
           p.delete('new');
@@ -230,7 +228,6 @@ export function RoomDetailForm() {
           trimmedLetter,
         );
         if (!result) throw new Error('Save failed');
-        successFeedback();
         toast.success(
           isRename
             ? `Renamed to "${trimmedName}" (Zone ${trimmedLetter})`
@@ -243,7 +240,6 @@ export function RoomDetailForm() {
         }
       }
     } catch (err: any) {
-      errorFeedback();
       toast.error(err?.message || 'Could not save');
     }
   }, [canSave, creating, trimmedName, trimmedLetter, selectedRoom, createRoom, renameRoom, setParam]);
@@ -253,14 +249,12 @@ export function RoomDetailForm() {
     try {
       const result = await removeRoom(selectedRoom);
       if (!result) throw new Error('Delete failed');
-      successFeedback();
       toast.success(`Room "${selectedRoom}" deleted`);
       setParam((p) => {
         p.delete('room');
         p.delete('new');
       });
     } catch (err: any) {
-      errorFeedback();
       toast.error(err?.message || 'Could not delete');
     } finally {
       setConfirmDelete(false);
@@ -418,10 +412,7 @@ export function RoomDetailForm() {
                 key={l}
                 type="button"
                 disabled={isLocked && !isSelected}
-                onClick={() => {
-                  scanFeedback();
-                  setForm((f) => ({ ...f, letter: l }));
-                }}
+                onClick={() => setForm((f) => ({ ...f, letter: l }))}
                 className={`relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
                   isSelected
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
@@ -555,10 +546,7 @@ function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
       {!loading && (
         <button
           type="button"
-          onClick={() => {
-            successFeedback();
-            onCreate();
-          }}
+          onClick={() => onCreate()}
           className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
         >
           <Plus className="h-4 w-4" />

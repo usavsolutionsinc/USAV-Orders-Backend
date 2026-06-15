@@ -1,8 +1,26 @@
 import { NextResponse } from 'next/server';
 import { transaction } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
-import { isInventoryV2Packing } from '@/lib/feature-flags';
 import { parseScannedUrl } from '@/lib/scan-resolver';
+import { transition } from '@/lib/inventory/state-machine';
+
+/**
+ * Thrown when a unit's guarded SHIPPED transition is rejected (it isn't in a
+ * shippable state). Caught by the outer try so the whole transaction rolls
+ * back — preserving the route's "zero mutations on failure" guarantee — and
+ * surfaced as the transition()'s own status (404/409).
+ */
+class UnitTransitionError extends Error {
+  constructor(
+    readonly httpStatus: number,
+    readonly unitId: number,
+    readonly fromStatus: string | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'UnitTransitionError';
+  }
+}
 
 /**
  * POST /api/pack/ship
@@ -41,19 +59,9 @@ import { parseScannedUrl } from '@/lib/scan-resolver';
  * /api/pack/ship?override=true after operator confirmation — not yet
  * implemented; deliberate Phase 5 limitation.
  *
- * Gated by INVENTORY_V2_PACKING; off-flag returns 503 so the legacy
- * /api/packing-logs path remains authoritative.
- *
  * Permission: packing.complete_order.
  */
 export const POST = withAuth(async (request, ctx) => {
-  if (!isInventoryV2Packing()) {
-    return NextResponse.json(
-      { ok: false, error: 'INVENTORY_V2_PACKING flag is OFF', flag: 'INVENTORY_V2_PACKING' },
-      { status: 503 },
-    );
-  }
-
   const body = await request.json().catch(() => ({}));
   const orderId = Number(body?.order_id);
   if (!Number.isFinite(orderId) || orderId <= 0) {
@@ -249,34 +257,37 @@ export const POST = withAuth(async (request, ctx) => {
           ledgerId = ledger.rows[0]?.id ?? null;
         }
 
-        // 5e. serial_units → SHIPPED.
-        await client.query(
-          `UPDATE serial_units
-              SET current_status = 'SHIPPED'::serial_status_enum,
-                  updated_at = NOW()
-            WHERE id = $1`,
-          [u.id],
-        );
-
-        // 5f. inventory_events SHIPPED — the lifecycle event that pairs
-        //     with the ledger decrement.
+        // 5e+5f. serial_units → SHIPPED via the guarded state machine. This
+        //     writes current_status=SHIPPED AND emits the single SHIPPED
+        //     inventory_event (carrying the ledger linkage via stockLedgerId).
+        //     The unit's real from-state is ALLOCATED or PICKED (or another
+        //     pre-SHIPPED state); we do NOT pass expectedFrom since it varies.
+        //     A rejection means the unit isn't shippable — throw to roll the
+        //     whole transaction back (no partial commit) and surface the
+        //     transition's own status.
         const shippedKey = clientEventId ? `${clientEventId}:${u.id}:SHIPPED` : null;
-        const shippedEv = await client.query<{ id: number }>(
-          `INSERT INTO inventory_events (
-             event_type, actor_staff_id, station, serial_unit_id, sku,
-             prev_status, next_status, stock_ledger_id, client_event_id, payload
-           )
-           VALUES ('SHIPPED', $1, 'SHIP', $2, $3, 'LABELED', 'SHIPPED', $4, $5, $6::jsonb)
-           ON CONFLICT (client_event_id) DO NOTHING
-           RETURNING id`,
-          [
-            actorStaffId, u.id, u.sku, ledgerId, shippedKey,
-            JSON.stringify({
-              source: 'pack.ship', order_id: orderId, allocation_id: a.id,
-              tracking_number: trackingNumber, carrier,
-            }),
-          ],
+        const t = await transition(
+          {
+            unitId: u.id,
+            to: 'SHIPPED',
+            eventType: 'SHIPPED',
+            actorStaffId,
+            station: 'SHIP',
+            clientEventId: shippedKey ?? undefined,
+            stockLedgerId: ledgerId ?? undefined,
+            payload: {
+              source: 'pack.ship',
+              order_id: orderId,
+              allocation_id: a.id,
+              tracking_number: trackingNumber,
+              carrier,
+            },
+          },
+          client,
         );
+        if (!t.ok) {
+          throw new UnitTransitionError(t.status, u.id, t.from ?? null, t.error);
+        }
 
         perUnit.push({
           unitId: u.id,
@@ -284,7 +295,7 @@ export const POST = withAuth(async (request, ctx) => {
           prevStatus: u.current_status,
           packedEventId: packedEv.rows[0]?.id ?? null,
           labeledEventId: labeledEv.rows[0]?.id ?? null,
-          shippedEventId: shippedEv.rows[0]?.id ?? null,
+          shippedEventId: t.eventId,
           ledgerId,
         });
       }
@@ -301,9 +312,9 @@ export const POST = withAuth(async (request, ctx) => {
       // 7. One SAL row for cross-station visibility.
       await client.query(
         `INSERT INTO station_activity_logs (
-           station, activity_type, shipment_id, scan_ref, staff_id, packer_log_id, notes, metadata
+           station, activity_type, shipment_id, scan_ref, staff_id, packer_log_id, notes, metadata, organization_id
          )
-         VALUES ('PACK', 'PACK_SHIPPED', $1, $2, $3, $4, $5, $6::jsonb)`,
+         VALUES ('PACK', 'PACK_SHIPPED', $1, $2, $3, $4, $5, $6::jsonb, $7)`,
         [
           order.shipment_id ?? null,
           trackingNumber,
@@ -317,6 +328,7 @@ export const POST = withAuth(async (request, ctx) => {
             carrier,
             units: perUnit.length,
           }),
+          ctx.organizationId,
         ],
       );
 
@@ -340,6 +352,21 @@ export const POST = withAuth(async (request, ctx) => {
     }
     return NextResponse.json(result);
   } catch (err) {
+    // A unit that wasn't in a shippable state rolled the whole transaction
+    // back — surface the transition's own status (404/409), not a 500. We do
+    // NOT force-ship.
+    if (err instanceof UnitTransitionError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: err.message,
+          mismatches: [
+            { unitId: err.unitId, reason: 'not in a shippable state', fromStatus: err.fromStatus },
+          ],
+        },
+        { status: err.httpStatus },
+      );
+    }
     const message = err instanceof Error ? err.message : 'pack ship failed';
     console.error('[POST /api/pack/ship] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });

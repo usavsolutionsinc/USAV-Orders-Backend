@@ -44,10 +44,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
     }
 
-    // Both endpoints must be real catalog rows.
+    // Both endpoints must be real catalog rows owned by this org. The
+    // org-scoped lookup 404s if either id belongs to another tenant, so an
+    // edge can only ever be created between this org's own SKUs.
     const [parent, child] = await Promise.all([
-      getSkuCatalogById(parsed.parentSkuId),
-      getSkuCatalogById(parsed.childSkuId),
+      getSkuCatalogById(parsed.parentSkuId, ctx.organizationId),
+      getSkuCatalogById(parsed.childSkuId, ctx.organizationId),
     ]);
     if (!parent) {
       return NextResponse.json({ success: false, error: 'parentSkuId not found' }, { status: 404 });
@@ -57,7 +59,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // No duplicate edge.
-    const existing = await findRelationship(parsed.parentSkuId, parsed.childSkuId);
+    const existing = await findRelationship(parsed.parentSkuId, parsed.childSkuId, ctx.organizationId);
     if (existing) {
       return NextResponse.json(
         { success: false, error: 'That relationship already exists', id: existing.id },
@@ -67,7 +69,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     // Cycle guard: adding parent→child would close a loop if `parent` is already
     // reachable underneath `child`.
-    if (await isDescendant(parsed.childSkuId, parsed.parentSkuId)) {
+    if (await isDescendant(parsed.childSkuId, parsed.parentSkuId, ctx.organizationId)) {
       return NextResponse.json(
         { success: false, error: 'That connection would create a cycle (child is an ancestor of parent)' },
         { status: 409 },
@@ -79,7 +81,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       childSkuId: parsed.childSkuId,
       qty: parsed.qty ?? 1,
       notes: parsed.notes ?? null,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'sku-graph-api',

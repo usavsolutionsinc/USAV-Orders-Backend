@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 type LocalPickupRow = {
   receiving_id: number;
@@ -47,12 +48,14 @@ function normalizePartsStatus(raw: unknown): 'COMPLETE' | 'MISSING_PARTS' {
   return String(raw || '').trim().toUpperCase() === 'MISSING_PARTS' ? 'MISSING_PARTS' : 'COMPLETE';
 }
 
-async function fetchPickupDates(search: string) {
-  const params: unknown[] = [];
+async function fetchPickupDates(orgId: OrgId, search: string) {
+  // Tenant anchor: every local-pickup row hangs off a `receiving` carton, so
+  // scoping on r.organization_id isolates the whole result set.
+  const params: unknown[] = [orgId];
   // carrier='LOCAL' is the canonical local-pickup signal. The legacy
   // LIKE 'LOCAL-%' detector was redundant — every LOCAL row in the DB also
   // carries carrier='LOCAL'. See Phase 9b-1 in the inbound-tracking plan.
-  let where = `WHERE UPPER(COALESCE(r.carrier, '')) = 'LOCAL'`;
+  let where = `WHERE UPPER(COALESCE(r.carrier, '')) = 'LOCAL' AND r.organization_id = $1`;
 
   if (search) {
     params.push(`%${search}%`);
@@ -65,7 +68,8 @@ async function fetchPickupDates(search: string) {
     `;
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         COALESCE(
@@ -99,8 +103,8 @@ async function fetchPickupDates(search: string) {
   }));
 }
 
-async function fetchPickupRows(pickupDate: string, search: string): Promise<LocalPickupRow[]> {
-  const params: unknown[] = [pickupDate];
+async function fetchPickupRows(orgId: OrgId, pickupDate: string, search: string): Promise<LocalPickupRow[]> {
+  const params: unknown[] = [pickupDate, orgId];
   let searchClause = '';
   if (search) {
     params.push(`%${search}%`);
@@ -113,7 +117,8 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
     `;
   }
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       SELECT
         r.id AS receiving_id,
@@ -142,11 +147,12 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         wa.status AS work_order_status
       FROM receiving r
       LEFT JOIN local_pickup_items lpi ON lpi.receiving_id = r.id
-      LEFT JOIN sku_catalog sc ON sc.sku = lpi.sku
+      LEFT JOIN sku_catalog sc ON sc.sku = lpi.sku AND sc.organization_id = r.organization_id
       LEFT JOIN LATERAL (
         SELECT spe.image_url, spe.display_name
         FROM sku_platform_ids spe
         WHERE (spe.sku_catalog_id = sc.id OR spe.platform_sku = sc.sku)
+          AND spe.organization_id = r.organization_id
           AND spe.platform = 'ecwid'
           AND spe.is_active = true
         ORDER BY spe.created_at DESC NULLS LAST
@@ -162,6 +168,7 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
         LIMIT 1
       ) wa ON TRUE
       WHERE UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
+      AND r.organization_id = $2
       AND COALESCE(
         lpi.pickup_date,
         (r.received_at AT TIME ZONE 'America/Los_Angeles')::date,
@@ -194,10 +201,22 @@ async function fetchPickupRows(pickupDate: string, search: string): Promise<Loca
   }));
 }
 
-async function upsertPickupDetail(body: Record<string, unknown>) {
+async function upsertPickupDetail(orgId: OrgId, body: Record<string, unknown>) {
   const receivingId = Number(body.receivingId ?? body.receiving_id);
   if (!Number.isFinite(receivingId) || receivingId <= 0) {
     throw new Error('receivingId is required');
+  }
+
+  // Ownership guard: the upsert key is receiving_id, so verify the parent
+  // carton belongs to this org before writing — otherwise a caller could
+  // create/overwrite a pickup detail against another tenant's carton.
+  const owner = await tenantQuery<{ id: number }>(
+    orgId,
+    `SELECT id FROM receiving WHERE id = $1 AND organization_id = $2`,
+    [receivingId, orgId],
+  );
+  if (owner.rows.length === 0) {
+    throw new Error('receiving not found');
   }
 
   const pickupDate = normalizePickupDate(String(body.pickupDate ?? body.pickup_date ?? '')) ?? new Date().toISOString().slice(0, 10);
@@ -206,7 +225,8 @@ async function upsertPickupDetail(body: Record<string, unknown>) {
   const offerPrice = normalizeMoney(body.offerPrice ?? body.offer_price);
   const total = normalizeMoney(body.total);
 
-  const result = await pool.query(
+  const result = await tenantQuery(
+    orgId,
     `
       INSERT INTO local_pickup_items (
         receiving_id,
@@ -220,9 +240,10 @@ async function upsertPickupDetail(body: Record<string, unknown>) {
         condition_note,
         offer_price,
         total,
+        organization_id,
         updated_at
       )
-      VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10::numeric, $11::numeric, NOW())
+      VALUES ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10::numeric, $11::numeric, $12, NOW())
       ON CONFLICT (receiving_id) DO UPDATE SET
         pickup_date = EXCLUDED.pickup_date,
         product_title = EXCLUDED.product_title,
@@ -249,23 +270,24 @@ async function upsertPickupDetail(body: Record<string, unknown>) {
       normalizeText(body.conditionNote ?? body.condition_note),
       offerPrice,
       total,
+      orgId,
     ]
   );
 
-  const rows = await fetchPickupRows(pickupDate, '');
+  const rows = await fetchPickupRows(orgId, pickupDate, '');
   return rows.find((row) => row.receiving_id === Number(result.rows[0]?.receiving_id)) ?? null;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const search = String(searchParams.get('q') || '').trim();
-    const dates = await fetchPickupDates(search);
+    const dates = await fetchPickupDates(ctx.organizationId, search);
     const selectedPickupDate =
       normalizePickupDate(searchParams.get('pickupDate')) ??
       dates[0]?.pickup_date ??
       new Date().toISOString().slice(0, 10);
-    const rows = await fetchPickupRows(selectedPickupDate, search);
+    const rows = await fetchPickupRows(ctx.organizationId, selectedPickupDate, search);
 
     return NextResponse.json({
       success: true,
@@ -287,10 +309,10 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'walk_in.view' });
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const row = await upsertPickupDetail(body);
+    const row = await upsertPickupDetail(ctx.organizationId, body);
     return NextResponse.json({ success: true, row });
   } catch (error: any) {
     console.error('[local-pickups][POST]', error);
@@ -301,10 +323,10 @@ export const POST = withAuth(async (request: NextRequest) => {
   }
 }, { permission: 'walk_in.intake' });
 
-export const PATCH = withAuth(async (request: NextRequest) => {
+export const PATCH = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const row = await upsertPickupDetail(body);
+    const row = await upsertPickupDetail(ctx.organizationId, body);
     return NextResponse.json({ success: true, row });
   } catch (error: any) {
     console.error('[local-pickups][PATCH]', error);
@@ -322,16 +344,18 @@ export const PATCH = withAuth(async (request: NextRequest) => {
  * carton exists and is a LOCAL pickup so a non-pickup carton can't be touched;
  * an already-absent detail row is an idempotent success.
  */
-export const DELETE = withAuth(async (request: NextRequest) => {
+export const DELETE = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const receivingId = Number(request.nextUrl.searchParams.get('receiving_id'));
     if (!Number.isFinite(receivingId) || receivingId <= 0) {
       return NextResponse.json({ success: false, error: 'receiving_id is required' }, { status: 400 });
     }
 
-    const recv = await pool.query<{ carrier: string | null }>(
-      `SELECT carrier FROM receiving WHERE id = $1 LIMIT 1`,
-      [receivingId],
+    const recv = await tenantQuery<{ carrier: string | null }>(
+      orgId,
+      `SELECT carrier FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [receivingId, orgId],
     );
     if (recv.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving not found' }, { status: 404 });
@@ -343,7 +367,11 @@ export const DELETE = withAuth(async (request: NextRequest) => {
       );
     }
 
-    await pool.query(`DELETE FROM local_pickup_items WHERE receiving_id = $1`, [receivingId]);
+    await tenantQuery(
+      orgId,
+      `DELETE FROM local_pickup_items WHERE receiving_id = $1 AND organization_id = $2`,
+      [receivingId, orgId],
+    );
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('[local-pickups][DELETE]', error);

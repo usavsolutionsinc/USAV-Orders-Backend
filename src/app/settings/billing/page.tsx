@@ -110,10 +110,10 @@ export default async function BillingPage() {
                     {current ? (
                       <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-[11px] font-medium text-white">Current</span>
                     ) : configured ? (
-                      <form action="/api/billing/checkout" method="post">
-                        <input type="hidden" name="plan" value={plan} />
-                        <UpgradeButton plan={plan} />
-                      </form>
+                      // No wrapping <form>: UpgradeButton POSTs JSON via fetch.
+                      // A native form-POST would send urlencoded and 400 the
+                      // JSON-only /api/billing/checkout route.
+                      <UpgradeButton plan={plan} />
                     ) : (
                       <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-medium text-amber-700">Not configured</span>
                     )}

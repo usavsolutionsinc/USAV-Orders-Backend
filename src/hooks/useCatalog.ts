@@ -2,11 +2,18 @@
 
 import { useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { catalogKeys, platformsQuery, typesQuery } from '@/lib/queries/catalog-queries';
-import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
+import {
+  catalogKeys,
+  platformsQuery,
+  platformAccountsQuery,
+  typesQuery,
+  workflowNodesQuery,
+} from '@/lib/queries/catalog-queries';
+import type { PlatformAccountRow, PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
 import { SOURCE_PLATFORMS, sourcePlatformMeta, type SourcePlatformMeta } from '@/lib/source-platform';
 import { RECEIVING_TYPE_OPTS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { receivingLabelTypeDisplay } from '@/lib/print/printReceivingLabel';
+import { getOrderPlatformLabel } from '@/utils/order-platform';
 
 /** A picker option resolved from the catalog (or the built-in fallback). */
 export interface CatalogOption {
@@ -97,7 +104,66 @@ export function useReceivingTypeLabel(): (code: string | null | undefined) => st
   }, [rows]);
 }
 
-/** Invalidate both catalog lists — call after a CRUD mutation. */
+/**
+ * Org storefront accounts (platform_accounts). `byPlatform` groups active rows
+ * under their platform id for the accounts manager. No built-in fallback —
+ * accounts are entirely org-defined (seeded from ebay_accounts + one default
+ * per platform).
+ */
+export function usePlatformAccountCatalog(opts: { includeInactive?: boolean; platformId?: number } = {}) {
+  const q = useQuery(platformAccountsQuery(opts));
+  const rows: PlatformAccountRow[] = q.data ?? [];
+  const byPlatform = useMemo(() => {
+    const m = new Map<number, PlatformAccountRow[]>();
+    for (const r of rows) {
+      const list = m.get(r.platform_id) ?? [];
+      list.push(r);
+      m.set(r.platform_id, list);
+    }
+    return m;
+  }, [rows]);
+  return { ...q, rows, byPlatform };
+}
+
+/** Bindable workflow-graph nodes for the type editor's custom-flow picker. */
+export function useWorkflowNodeOptions() {
+  const q = useQuery(workflowNodesQuery());
+  return { ...q, nodes: q.data ?? [] };
+}
+
+/**
+ * Catalog-aware order-channel label resolver. Returns `resolve(orderId,
+ * accountSource)` → the channel label, preferring the org catalog (so a renamed
+ * or custom platform / storefront reads correctly) and falling back to the
+ * built-in {@link getOrderPlatformLabel} pattern matcher. `account_source` is
+ * hybrid-grain — an eBay account slug ('ebay-mk') or a platform slug
+ * ('ecwid','fba') — so we match accounts first, then platforms. This is the
+ * read-side unlock the plan defers to Phase 2 (orders.account_source → catalog
+ * label across the order tables). The text column stays the cache.
+ */
+export function useOrderChannelLabel(): (
+  orderId: string | null | undefined,
+  accountSource: string | null | undefined,
+) => string {
+  const { rows: platforms } = usePlatformCatalog();
+  const { rows: accounts } = usePlatformAccountCatalog();
+  return useMemo(() => {
+    const platformById = new Map(platforms.map((p) => [p.id, p]));
+    const accountBySlug = new Map(accounts.map((a) => [a.slug.toLowerCase(), a]));
+    const platformBySlug = new Map(platforms.map((p) => [p.slug.toLowerCase(), p]));
+    return (orderId: string | null | undefined, accountSource: string | null | undefined): string => {
+      const key = String(accountSource ?? '').trim().toLowerCase();
+      if (key) {
+        const acct = accountBySlug.get(key);
+        const platform = acct ? platformById.get(acct.platform_id) : platformBySlug.get(key);
+        if (platform) return platform.label;
+      }
+      return getOrderPlatformLabel(orderId, accountSource);
+    };
+  }, [platforms, accounts]);
+}
+
+/** Invalidate every catalog list — call after a CRUD mutation. */
 export function useInvalidateCatalog() {
   const qc = useQueryClient();
   return () => {

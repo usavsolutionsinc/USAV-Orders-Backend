@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from '@/components/Icons';
+import { Check, Loader2 } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import WeekHeader from '@/components/ui/WeekHeader';
+import { SkeletonList } from '@/design-system';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { PaneHeader } from '@/components/ui/pane-header';
 import {
   FnskuChip,
   OrderIdChip,
@@ -19,8 +22,10 @@ import {
   getLast4,
 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL } from '@/components/ui/ChipColumns';
-import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
-import { isStalled } from '@/components/shipping/ShipmentStatusBadge';
+import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
+import { useTableSelectMode } from '@/hooks/useTableSelectMode';
+import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
+import { isStalled, CarrierStatusIcon } from '@/components/shipping/ShipmentStatusBadge';
 import {
   readShippedCarrierFilter,
   readShippedExceptionsFilter,
@@ -36,7 +41,7 @@ import type { PackerRecord } from '@/hooks/usePackerLogs';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
-import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
+import { isSkuSourceRecord } from '@/utils/source-dot';
 import { normalizeShippedSearchField } from '@/lib/shipped-search';
 import {
   readShippedFilterPreference,
@@ -50,7 +55,7 @@ import {
   dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
 } from '@/lib/dashboard-order-row-layout';
-import { OutboundStateDot } from './OutboundStateDot';
+import { OUTBOUND_STATE_META } from '@/lib/outbound-state';
 import {
   dedupeShippedRecords,
   deriveShippedRecord,
@@ -89,6 +94,8 @@ export interface DashboardShippedTableProps {
   testedBy?: number;
   /** Mobile tech/packer: one scroll column, no extra shell wrappers; WeekHeader matches other mobile week tables. */
   embedded?: boolean;
+  /** Pencil multi-select: rows render checkboxes; the page owns the action bar. */
+  selectMode?: boolean;
   bannerTitle?: DashboardSearchSectionProps['bannerTitle'];
   bannerSubtitle?: DashboardSearchSectionProps['bannerSubtitle'];
   searchEmptyTitle?: DashboardSearchSectionProps['searchEmptyTitle'];
@@ -100,6 +107,7 @@ export function DashboardShippedTable({
   packedBy,
   testedBy,
   embedded = false,
+  selectMode = false,
   bannerTitle,
   bannerSubtitle,
   searchEmptyTitle = 'No shipped orders found',
@@ -135,6 +143,19 @@ export function DashboardShippedTable({
   const exceptionsOnly = readShippedExceptionsFilter(searchParams);
   const carrierFilter = readShippedCarrierFilter(searchParams);
   const statusFilter = readShippedStatusFilter(searchParams);
+  // Click-to-filter from the outbound status legend (`?ostatus`). Narrows the
+  // already-loaded week records by exact derived state — week-scoped, so it
+  // stays in lockstep with the legend's week counts (no all-time widening).
+  // The Exception chip folds PROCESS_GAP (same bucket the legend renders).
+  const obStatus = String(searchParams.get('ostatus') || '').trim().toUpperCase();
+  const matchesOutbound = useCallback(
+    (r: PackerRecord): boolean => {
+      if (!obStatus) return true;
+      const s = deriveShippedRecord(r).outboundState;
+      return obStatus === 'EXCEPTION' ? s === 'EXCEPTION' || s === 'PROCESS_GAP' : s === obStatus;
+    },
+    [obStatus],
+  );
 
   const parseStaffParam = (raw: string | null): number | undefined => {
     const n = Number(raw);
@@ -249,6 +270,9 @@ export function DashboardShippedTable({
     packer_id: record.packed_by ?? null,
     packed_by: record.packed_by ?? null,
     packed_at: record.created_at || null,
+    ship_confirmed_at: record.ship_confirmed_at ?? null,
+    shipped_out_by: record.shipped_out_by ?? null,
+    shipped_out_by_name: record.shipped_out_by_name ?? null,
     packer_photos_url: record.packer_photos_url || [],
     tracking_type: record.tracking_type || null,
     account_source: record.account_source || null,
@@ -340,8 +364,9 @@ export function DashboardShippedTable({
   );
 
   const carrierFilteredRecords = useMemo(() => {
-    if (!exceptionsOnly && !carrierFilter && !statusFilter) return typeFilteredRecords;
+    if (!exceptionsOnly && !carrierFilter && !statusFilter && !obStatus) return typeFilteredRecords;
     return typeFilteredRecords.filter((r) => {
+      if (!matchesOutbound(r)) return false;
       if (carrierFilter && String(r.carrier ?? '').toUpperCase() !== carrierFilter) return false;
       if (statusFilter && String(r.latest_status_category ?? '').toUpperCase() !== statusFilter) return false;
       if (exceptionsOnly) {
@@ -355,15 +380,16 @@ export function DashboardShippedTable({
       }
       return true;
     });
-  }, [typeFilteredRecords, exceptionsOnly, carrierFilter, statusFilter]);
+  }, [typeFilteredRecords, exceptionsOnly, carrierFilter, statusFilter, obStatus, matchesOutbound]);
 
   const searchRecords = useMemo<PackerRecord[]>(
     () => (searchResult.data?.records ?? []).map(toSearchResultRecord),
     [searchResult.data, toSearchResultRecord],
   );
   const searchFilteredRecords = useMemo(() => {
-    if (!exceptionsOnly && !carrierFilter && !statusFilter) return searchRecords;
+    if (!exceptionsOnly && !carrierFilter && !statusFilter && !obStatus) return searchRecords;
     return searchRecords.filter((r) => {
+      if (!matchesOutbound(r)) return false;
       if (carrierFilter && String(r.carrier ?? '').toUpperCase() !== carrierFilter) return false;
       if (statusFilter && String(r.latest_status_category ?? '').toUpperCase() !== statusFilter) return false;
       if (exceptionsOnly) {
@@ -377,7 +403,7 @@ export function DashboardShippedTable({
       }
       return true;
     });
-  }, [searchRecords, exceptionsOnly, carrierFilter, statusFilter]);
+  }, [searchRecords, exceptionsOnly, carrierFilter, statusFilter, obStatus, matchesOutbound]);
   const records = useMemo(
     () => (normalizedSearch ? searchFilteredRecords : carrierFilteredRecords),
     [normalizedSearch, searchFilteredRecords, carrierFilteredRecords],
@@ -406,9 +432,10 @@ export function DashboardShippedTable({
   const groupedRecords = useMemo(() => {
     const groups: Record<string, DerivedPackerRecord[]> = {};
     derivedRecords.forEach((record) => {
-      // File each package under the day it LEFT (scanned out), falling back to the
-      // day it was packed — so a package packed Mon and shipped out Tue shows Tue.
-      const dateSource = record.effShipTime || record.created_at;
+      // File each package under the day it was PACKED (created_at = pack-scan time),
+      // so the list order matches the packing photo / camera timeline. effShipTime
+      // (scan-out time) is only a last-resort fallback for rows with no pack time.
+      const dateSource = record.created_at || record.effShipTime;
       if (!dateSource || dateSource === '1') return;
       let date = '';
       try {
@@ -427,11 +454,20 @@ export function DashboardShippedTable({
 
   const orderedRecords = sortedGroupedEntries.flatMap(([, dayRecords]) =>
       [...dayRecords].sort((a, b) => {
-        const timeA = new Date(a.effShipTime || a.created_at || 0).getTime();
-        const timeB = new Date(b.effShipTime || b.created_at || 0).getTime();
+        const timeA = new Date(a.created_at || a.effShipTime || 0).getTime();
+        const timeB = new Date(b.created_at || b.effShipTime || 0).getTime();
         return timeB - timeA;
       })
     );
+
+  // Pencil multi-select wiring (off by default → no-op for non-select callers).
+  const getRowId = useCallback((r: DerivedPackerRecord) => Number(r.id), []);
+  const { selectedIds, toggle } = useTableSelectMode<DerivedPackerRecord>({
+    scope: DASHBOARD_ORDERS_SELECTION_SCOPE,
+    selectMode,
+    rows: orderedRecords,
+    getId: getRowId,
+  });
 
   useEffect(() => {
     const handleNavigate = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
@@ -464,23 +500,11 @@ export function DashboardShippedTable({
     return text;
   };
 
-  if (query.isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-sm font-semibold text-gray-600">Loading shipped records...</p>
-        </div>
-      </div>
-    );
-  }
-
   // One row renderer, reused by the day-grouped list AND the two scan-out sections
   // so both render the exact same shipped row (chips, platform, state pill, staff).
   const renderRecordRow = (record: DerivedPackerRecord, index: number) => {
     const detail = toDetailRecord(record);
     const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
-    const dotType = getSourceDotType({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: record.scan_ref });
     const rowIsFba = isFbaPackerRecord(record);
     const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
     const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
@@ -490,25 +514,50 @@ export function DashboardShippedTable({
     const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
     const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
     const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
+    const checked = selectMode && selectedIds.has(Number(record.id));
 
     return (
       <div
         key={record.id}
-        onClick={() => handleRowClick(record)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleRowClick(record); } }}
-        role="button"
+        onClick={(e) => (selectMode ? toggle(Number(record.id), e.shiftKey) : handleRowClick(record))}
+        // Suppress native text-selection on shift-click so range-select reads cleanly.
+        onMouseDown={(e) => { if (selectMode && e.shiftKey) e.preventDefault(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (selectMode) { toggle(Number(record.id), e.shiftKey); } else { handleRowClick(record); } } }}
+        role={selectMode ? 'checkbox' : 'button'}
         tabIndex={0}
-        aria-pressed={selectedDetailId === detail.id}
+        aria-checked={selectMode ? checked : undefined}
+        aria-pressed={selectMode ? undefined : selectedDetailId === detail.id}
         className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
-          selectedDetailId === detail.id ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
+          (selectMode ? checked : selectedDetailId === detail.id) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
         }`}
       >
         <div className="flex flex-col min-w-0">
-          <RowTitle dot={SOURCE_DOT_BG[dotType]} dotTitle={SOURCE_DOT_LABEL[dotType]} title={record.product_title || record.item_number || record.sku || 'Unknown Product'} />
+          <RowTitle
+            leading={
+              selectMode ? (
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                    checked ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-300 bg-white'
+                  }`}
+                >
+                  {checked && <Check className="h-3 w-3" />}
+                </span>
+              ) : undefined
+            }
+            dot={OUTBOUND_STATE_META[record.outboundState].dot}
+            dotTitle={`${OUTBOUND_STATE_META[record.outboundState].label} — ${OUTBOUND_STATE_META[record.outboundState].description}`}
+            dotTooltip
+            title={record.product_title || record.item_number || record.sku || 'Unknown Product'}
+          />
           <RowMetaColumns
+            indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}
             qty={<span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : 'text-gray-500'}>{parseInt(String(record.quantity || '1'), 10) || 1}</span>}
             condition={<span className={String(displayValues.condition || '').trim().toLowerCase() === 'new' ? 'text-yellow-600' : 'text-gray-400'}>{displayValues.condition || 'N/A'}</span>}
-            rest={<div className="flex items-center gap-2"><OutboundStateDot state={record.outboundState} /><StaffInitials staffId={techStaffId} name={techDisplay} /><StaffInitials staffId={packerStaffId} name={packerDisplay} /></div>}
+            rest={<div className="flex items-center gap-2">
+              {techDisplay !== '---' ? <HoverTooltip label={`Tested by ${techDisplay}`}><StaffInitials staffId={techStaffId} name={techDisplay} /></HoverTooltip> : <StaffInitials staffId={techStaffId} name={techDisplay} />}
+              {packerDisplay !== '---' ? <HoverTooltip label={`Packed by ${packerDisplay}`}><StaffInitials staffId={packerStaffId} name={packerDisplay} /></HoverTooltip> : <StaffInitials staffId={packerStaffId} name={packerDisplay} />}
+              <CarrierStatusIcon className="ml-1" carrier={record.carrier} category={record.latest_status_category} statusLabel={record.latest_status_label} description={record.latest_status_description} latestEventAt={record.latest_event_at} hasException={record.has_exception} isTerminal={record.is_terminal} />
+            </div>}
           />
         </div>
         {(() => {
@@ -544,14 +593,22 @@ export function DashboardShippedTable({
             </div>
           </div>
         ) : (normalizedSearch || anyCarrierFilter) ? (
-          <div className={mainStickyHeaderClass}>
-            <div className={mainStickyHeaderRowClass}>
+          // Render through PaneHeader with the SAME class overrides WeekHeader
+          // uses (border-b-0 shell + gray-300 row divider) so the search-results
+          // header is pixel-identical chrome to every other table header —
+          // same 40px height, padding, and divider weight.
+          <PaneHeader
+            className="border-b-0"
+            rowClassName="border-b border-gray-300"
+            leftSlot={
               <p className={`${sectionLabel} text-gray-700`}>{totalCount} result{totalCount !== 1 ? 's' : ''}</p>
+            }
+            rightSlot={
               <div className="min-w-[18px] flex items-center justify-end">
                 {((query.isFetching && !query.isLoading) || isResolvingSearch) ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
               </div>
-            </div>
-          </div>
+            }
+          />
         ) : (
           <WeekHeader
             count={totalCount}
@@ -566,7 +623,9 @@ export function DashboardShippedTable({
           ref={scrollRef}
           className="flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar w-full"
         >
-          {Object.keys(groupedRecords).length === 0 ? (
+          {query.isLoading ? (
+            <SkeletonList count={12} />
+          ) : Object.keys(groupedRecords).length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 text-center">
               {search ? (
                 <>
@@ -603,8 +662,8 @@ export function DashboardShippedTable({
             <div className="flex flex-col w-full">
               {sortedGroupedEntries.map(([date, dayRecords]) => {
                 const sortedRecords = [...dayRecords].sort((a, b) => {
-                  const timeA = new Date(a.effShipTime || a.created_at || 0).getTime();
-                  const timeB = new Date(b.effShipTime || b.created_at || 0).getTime();
+                  const timeA = new Date(a.created_at || a.effShipTime || 0).getTime();
+                  const timeB = new Date(b.created_at || b.effShipTime || 0).getTime();
                   return timeB - timeA;
                 });
                 return (

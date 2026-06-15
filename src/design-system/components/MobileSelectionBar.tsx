@@ -1,10 +1,10 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Check, Share2, Star, DollarSign, X } from '@/components/Icons';
+import { Check, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 
-/** Mass actions, in the order named: share · highlight · quote. */
+/** Mass actions, in declaration order. `danger` tints the icon rose (delete). */
 export type MobileSelectionAction = {
   key: string;
   label: string;
@@ -24,13 +24,15 @@ interface MobileSelectionBarProps {
 
 const spring = { type: 'spring', stiffness: 520, damping: 38 } as const;
 
+// Light design-system palette — matches the repo's white/blur action chrome
+// (StickyActionBar) rather than the old dark-glass capsule.
 const TONE = {
-  iconBtn: 'text-white hover:bg-white/15',
-  danger: 'text-rose-300 hover:bg-rose-500/20',
-  saChip: 'text-white bg-white/10 ring-white/15 hover:bg-white/[0.18]',
-  saRing: 'border-white/50 text-white/80',
-  saActive: 'border-white bg-white text-navy-900',
-  clear: 'text-white/60 hover:bg-white/10 hover:text-white',
+  iconBtn: 'text-gray-500 hover:bg-gray-100 hover:text-gray-900',
+  danger: 'text-rose-600 hover:bg-rose-50',
+  saChip: 'bg-gray-50 ring-gray-200 hover:bg-gray-100',
+  saRing: 'border-gray-300 bg-white text-gray-700',
+  saActive: 'border-blue-600 bg-blue-600 text-white',
+  clear: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600',
 };
 
 /**
@@ -109,6 +111,8 @@ function GlassActions({ actions, onClear }: { actions: MobileSelectionAction[]; 
           </motion.button>
         );
       })}
+      {/* Hairline divider keeps the dismiss control visually distinct from actions. */}
+      <span aria-hidden className="mx-0.5 h-5 w-px bg-gray-200" />
       <motion.button
         onClick={onClear}
         aria-label="Clear selection"
@@ -126,53 +130,6 @@ function GlassActions({ actions, onClear }: { actions: MobileSelectionAction[]; 
   );
 }
 
-function AuroraSweep() {
-  const reduce = useReducedMotion();
-  if (reduce) return null;
-  return (
-    <>
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 z-[1] w-4/5"
-        initial={{ x: '-55%' }}
-        animate={{ x: '185%' }}
-        transition={{ duration: 5.4, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.2 }}
-        style={{
-          background:
-            'linear-gradient(90deg, transparent, rgba(167, 139, 250, 0.45), rgba(34, 211, 238, 0.45), rgba(52, 211, 153, 0.4), transparent)',
-          skewX: '-12deg',
-          filter: 'blur(24px)',
-        }}
-      />
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 z-[1] w-3/4"
-        initial={{ x: '180%' }}
-        animate={{ x: '-60%' }}
-        transition={{ duration: 7.2, ease: 'easeInOut', repeat: Infinity, repeatDelay: 0.1 }}
-        style={{
-          background:
-            'linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.35), rgba(99, 102, 241, 0.4), transparent)',
-          skewX: '-12deg',
-          filter: 'blur(28px)',
-        }}
-      />
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-[1]"
-        initial={{ opacity: 0.3 }}
-        animate={{ opacity: [0.3, 0.55, 0.3] }}
-        transition={{ duration: 6, ease: 'easeInOut', repeat: Infinity }}
-        style={{
-          background:
-            'linear-gradient(110deg, rgba(99, 102, 241, 0.25), rgba(34, 211, 238, 0.2), rgba(52, 211, 153, 0.2))',
-          filter: 'blur(35px)',
-        }}
-      />
-    </>
-  );
-}
-
 function useBarAnim() {
   const reduce = useReducedMotion();
   return {
@@ -183,7 +140,9 @@ function useBarAnim() {
   } as const;
 }
 
-const SURFACE_FROSTED = 'bg-gray-950/55 ring-1 ring-white/20 backdrop-blur-3xl backdrop-saturate-200';
+// Light, clean surface that reads as part of the white table chrome (mirrors
+// StickyActionBar's `bg-white/90 backdrop-blur border`) instead of dark glass.
+const SURFACE_LIGHT = 'bg-white/95 ring-1 ring-gray-200 backdrop-blur-xl';
 
 export function MobileSelectionBar({
   count,
@@ -198,13 +157,12 @@ export function MobileSelectionBar({
     <AnimatePresence>
       {count > 0 && (
         <motion.div {...anim} className="absolute inset-x-0 bottom-0 z-20 px-3 pb-4">
-          <div className={cn('relative flex items-center overflow-hidden rounded-full p-1.5 shadow-2xl shadow-black/60', SURFACE_FROSTED)}>
-            <span aria-hidden className="pointer-events-none absolute inset-0 bg-white/[0.05]" />
-            <span aria-hidden className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/10" />
-            <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-white/20 to-transparent" />
-            <AuroraSweep />
-            <div className="relative z-10 flex flex-1 items-center gap-1.5">
+          <div className={cn('relative flex items-center overflow-hidden rounded-full p-1.5 shadow-xl shadow-gray-900/10', SURFACE_LIGHT)}>
+            <div className="relative z-10 flex flex-1 items-center gap-2">
               <SelectAll count={count} allSelected={allSelected} onToggleAll={onToggleAll} />
+              <span className="text-eyebrow font-bold uppercase tracking-wider text-gray-500">
+                selected
+              </span>
               <GlassActions actions={actions} onClear={onClear} />
             </div>
           </div>

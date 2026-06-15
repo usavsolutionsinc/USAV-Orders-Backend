@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { upsertProductManual } from '@/lib/product-manuals';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 
-async function handlePost(request: NextRequest) {
+async function handlePost(request: NextRequest, ctx: AuthContext) {
   try {
     const body = await request.json();
 
+    // Thread orgId so the upsert GUC-wraps the write, scopes the existing-row
+    // lookup to this org's sku_catalog children, and resolves sku_catalog_id
+    // within this org (no cross-tenant catalog linkage).
+    const orgId = ctx.organizationId ?? undefined;
     const manual = await upsertProductManual({
       itemNumber: String(body?.itemNumber || body?.item_number || ''),
       productTitle: String(body?.productTitle || body?.product_title || ''),
@@ -18,7 +22,7 @@ async function handlePost(request: NextRequest) {
       status: body?.status,
       assignedBy: String(body?.assignedBy || body?.assigned_by || ''),
       type: body?.type,
-    });
+    }, orgId);
 
     return NextResponse.json({ success: true, manual }, { status: 201 });
   } catch (error: any) {

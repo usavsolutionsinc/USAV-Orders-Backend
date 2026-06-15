@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 interface UpsertFnskuCatalogInput {
   fnsku: unknown;
@@ -25,6 +26,7 @@ function looksLikeAsin(value: string): boolean {
 export async function upsertFnskuCatalogRow(
   client: PoolClient,
   input: UpsertFnskuCatalogInput,
+  orgId: OrgId,
 ) {
   let fnsku = normalizeNullableUpperText(input.fnsku);
   if (!fnsku) {
@@ -44,10 +46,10 @@ export async function upsertFnskuCatalogRow(
     const existing = await client.query(
       `SELECT fnsku, product_title, asin, sku, is_active
        FROM fba_fnskus
-       WHERE asin = $1 AND fnsku != $1
+       WHERE asin = $1 AND fnsku != $1 AND organization_id = $2
        ORDER BY last_seen_at DESC NULLS LAST
        LIMIT 1`,
-      [fnsku],
+      [fnsku, orgId],
     );
     if (existing.rows.length > 0) {
       // A real FNSKU exists for this ASIN — update it and return.
@@ -59,9 +61,9 @@ export async function upsertFnskuCatalogRow(
              is_active     = TRUE,
              last_seen_at  = NOW(),
              updated_at    = NOW()
-         WHERE fnsku = $1
+         WHERE fnsku = $1 AND organization_id = $4
          RETURNING fnsku, product_title, asin, sku, is_active`,
-        [realFnsku, productTitle, sku],
+        [realFnsku, productTitle, sku, orgId],
       );
       return result.rows[0];
     }
@@ -69,8 +71,8 @@ export async function upsertFnskuCatalogRow(
   }
 
   const result = await client.query(
-    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
-     VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
+    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, organization_id, is_active, last_seen_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
      ON CONFLICT (fnsku) DO UPDATE
        SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
            asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
@@ -78,8 +80,9 @@ export async function upsertFnskuCatalogRow(
            is_active     = TRUE,
            last_seen_at  = NOW(),
            updated_at    = NOW()
+     WHERE fba_fnskus.organization_id = $5
      RETURNING fnsku, product_title, asin, sku, is_active`,
-    [fnsku, productTitle, asin, sku],
+    [fnsku, productTitle, asin, sku, orgId],
   );
 
   return result.rows[0];

@@ -9,10 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache } from '@/lib/auth/role-store';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -37,14 +37,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'INVALID_KEY' }, { status: 400 });
   }
 
-  const src = await pool.query(`SELECT key, label, color, position, permissions FROM roles WHERE id = $1`, [srcId]);
+  // `roles` is GLOBAL (no organization_id) — both the source read and the
+  // duplicate insert carry no org column; routed through the tenant connection
+  // for GUC parity.
+  const src = await tenantQuery(ctx.organizationId, `SELECT key, label, color, position, permissions FROM roles WHERE id = $1`, [srcId]);
   const srcRow = src.rows[0] as { key: string; label: string; color: string; position: number; permissions: string[] } | undefined;
   if (!srcRow) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   const label = typeof labelRaw === 'string' && labelRaw.trim() ? labelRaw.trim() : `${srcRow.label} (copy)`;
 
   try {
-    const r = await pool.query(
+    const r = await tenantQuery(
+      ctx.organizationId,
       `INSERT INTO roles (key, label, color, position, permissions, is_system)
        VALUES ($1, $2, $3, $4, $5::TEXT[], FALSE)
        RETURNING id, key, label, color, position, permissions, is_system, created_at, updated_at`,

@@ -22,10 +22,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const gate = await requireRoutePerm(req, 'supplier.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const id = parseId((await params).id);
     if (!id) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const supplier = await getSupplierById(id);
+    const supplier = await getSupplierById(id, orgId);
     if (!supplier) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ success: true, supplier });
@@ -45,6 +46,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const gate = await requireRoutePerm(req, 'supplier.manage');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const id = parseId((await params).id);
     if (!id) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
@@ -52,7 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const parsed = parseBody(SupplierUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getSupplierById(id);
+    const before = await getSupplierById(id, orgId);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     const updated = await updateSupplier(id, {
@@ -66,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       leadTimeDays: parsed.leadTimeDays,
       notes: parsed.notes,
       isActive: parsed.isActive,
-    });
+    }, orgId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'suppliers-api',
@@ -101,15 +103,16 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const gate = await requireRoutePerm(req, 'supplier.manage');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const id = parseId((await params).id);
     if (!id) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const before = await getSupplierById(id);
+    const before = await getSupplierById(id, orgId);
     if (!before || !before.is_active) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    const deleted = await softDeleteSupplier(id);
+    const deleted = await softDeleteSupplier(id, orgId);
     if (!deleted) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     await recordAudit(pool, gate.ctx, req, {

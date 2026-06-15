@@ -17,7 +17,6 @@
 
 import { useEffect, useState } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
-import { useFeedback } from '@/hooks/useFeedback';
 
 export type ShortPickReason =
   | 'NOT_FOUND_IN_BIN'
@@ -68,7 +67,6 @@ export function ShortPickSheet({
   productLabel,
   onConfirm,
 }: ShortPickSheetProps) {
-  const feedback = useFeedback();
   const [reason, setReason] = useState<ShortPickReason | null>(null);
   const [note, setNote] = useState('');
   const missing = Math.max(0, plannedQty - pickedQty);
@@ -78,16 +76,14 @@ export function ShortPickSheet({
     if (open) {
       setReason(null);
       setNote('');
-      feedback('warning');
     }
-  }, [open, feedback]);
+  }, [open]);
 
   const noteRequired = reason === 'OTHER';
   const canSubmit = reason !== null && (!noteRequired || note.trim().length > 0);
 
   const handleConfirm = () => {
     if (!canSubmit || reason == null) return;
-    feedback('confirm');
     onConfirm({ pickedQty, plannedQty, reason, note: note.trim() });
     onClose();
   };
@@ -116,10 +112,7 @@ export function ShortPickSheet({
             <button
               key={opt.value}
               type="button"
-              onClick={() => {
-                feedback('selection');
-                setReason(opt.value);
-              }}
+              onClick={() => setReason(opt.value)}
               aria-pressed={selected}
               className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors min-h-[56px] ${
                 selected

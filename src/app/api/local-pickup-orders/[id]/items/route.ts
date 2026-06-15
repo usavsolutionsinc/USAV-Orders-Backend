@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRoutePerm(req, 'walk_in.intake');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -12,9 +13,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 });
     }
 
-    const orderCheck = await pool.query(
-      `SELECT status FROM local_pickup_orders WHERE id = $1`,
-      [orderId],
+    const orderCheck = await tenantQuery(
+      orgId,
+      `SELECT status FROM local_pickup_orders WHERE id = $1 AND organization_id = $2`,
+      [orderId, orgId],
     );
     if (orderCheck.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
@@ -28,7 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const body = (await req.json()) as Record<string, unknown>;
 
-    const result = await pool.query(
+    return await withTenantTransaction(orgId, async (client) => {
+    const result = await client.query(
       `INSERT INTO local_pickup_order_items
          (order_id, sku, product_title, image_url, quantity, condition_grade, parts_status, missing_parts_note, condition_note, total_price, organization_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric, (SELECT organization_id FROM local_pickup_orders WHERE id = $1))
@@ -47,12 +50,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ],
     );
 
-    await pool.query(
-      `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1`,
-      [orderId],
+    await client.query(
+      `UPDATE local_pickup_orders SET updated_at = NOW() WHERE id = $1 AND organization_id = $2`,
+      [orderId, orgId],
     );
 
     return NextResponse.json({ success: true, item: result.rows[0] });
+    });
   } catch (error: any) {
     console.error('[local-pickup-orders][POST items]', error);
     return NextResponse.json(

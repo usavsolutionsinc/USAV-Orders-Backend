@@ -13,8 +13,8 @@ function idFromPath(pathname: string): number {
   return Number(segments[segments.length - 1]);
 }
 
-async function findMode(id: number) {
-  const all = await listFailureModes();
+async function findMode(id: number, orgId: string) {
+  const all = await listFailureModes(undefined, orgId);
   return all.find((m) => m.id === id) ?? null;
 }
 
@@ -29,7 +29,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     const parsed = parseBody(FailureModeUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await findMode(id);
+    const before = await findMode(id, ctx.organizationId);
     if (!before) {
       return NextResponse.json({ success: false, error: 'Failure mode not found' }, { status: 404 });
     }
@@ -43,7 +43,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
       capsGradeAt: parsed.capsGradeAt,
       sortOrder: parsed.sortOrder,
       active: parsed.active,
-    });
+    }, ctx.organizationId);
     if (!updated) {
       return NextResponse.json({ success: false, error: 'No changes' }, { status: 400 });
     }
@@ -73,8 +73,8 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
-    const before = await findMode(id);
-    const deactivated = await deactivateFailureMode(id);
+    const before = await findMode(id, ctx.organizationId);
+    const deactivated = await deactivateFailureMode(id, ctx.organizationId);
     if (deactivated && before) {
       await recordAudit(pool, ctx, req, {
         source: 'failure-modes-api',

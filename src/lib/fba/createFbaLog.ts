@@ -1,3 +1,5 @@
+import type { OrgId } from '@/lib/tenancy/constants';
+
 type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
 };
@@ -36,13 +38,14 @@ export interface CreateFbaLogParams {
  */
 export async function createFbaLog(
   db: Queryable,
+  orgId: OrgId,
   params: CreateFbaLogParams,
 ): Promise<number | null> {
   const result = await db.query(
     `INSERT INTO fba_fnsku_logs
      (fnsku, source_stage, event_type, staff_id, station_activity_log_id,
-      fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+      fba_shipment_id, fba_shipment_item_id, quantity, station, notes, metadata, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
      RETURNING id`,
     [
       params.fnsku,
@@ -56,6 +59,7 @@ export async function createFbaLog(
       params.station ?? null,
       params.notes ?? null,
       JSON.stringify(params.metadata ?? {}),
+      orgId,
     ],
   );
 

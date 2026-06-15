@@ -10,7 +10,10 @@
  */
 
 import 'server-only';
+import type { QueryResultRow } from 'pg';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AuditLogFilters } from './filters';
 
 export interface SkuSummary {
@@ -46,9 +49,24 @@ interface ListOpts {
   search: string | null;
 }
 
-export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
+export async function listSkus(opts: ListOpts, orgId?: OrgId): Promise<SkuSummary[]> {
   const { filters, search } = opts;
+  // When orgId is present we reserve $1 for the org and offset every other
+  // positional parameter by one; the CTE branches gain explicit
+  // `<t>.organization_id = $1` predicates so each tenant table is filtered at
+  // the source. The org GUC is also set by tenantQuery as an RLS backstop.
   const params: unknown[] = [];
+  const orgParamIdx = orgId ? (params.push(orgId), params.length) : 0;
+  const orgPred = orgId ? `$${orgParamIdx}` : '';
+  // Per-source org predicate appended into each CTE branch's WHERE.
+  const salOrg = orgId ? ` AND sal.organization_id = ${orgPred}` : '';
+  const plOrg = orgId ? ` AND pl.organization_id = ${orgPred}` : '';
+  const oOrg = orgId ? ` AND o.organization_id = ${orgPred}` : '';
+  const tsnOrg = orgId ? ` AND tsn.organization_id = ${orgPred}` : '';
+  const skOrg = orgId ? ` AND sk.organization_id = ${orgPred}` : '';
+  const ieOrg = orgId ? ` AND ie.organization_id = ${orgPred}` : '';
+  const rlOrg = orgId ? ` AND rl.organization_id = ${orgPred}` : '';
+
   const clauses: string[] = [];
 
   if (filters.range.start) {
@@ -82,9 +100,9 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
              COALESCE(o.sku, '') AS sku,
              COALESCE(o.product_title, NULL) AS item_name
         FROM station_activity_logs sal
-        JOIN packer_logs pl ON pl.id = sal.packer_log_id
-        LEFT JOIN orders o ON o.shipment_id = pl.shipment_id
-       WHERE COALESCE(o.sku, '') <> ''
+        JOIN packer_logs pl ON pl.id = sal.packer_log_id${plOrg}
+        LEFT JOIN orders o ON o.shipment_id = pl.shipment_id${oOrg}
+       WHERE COALESCE(o.sku, '') <> ''${salOrg}
       UNION ALL
       -- Tech events.
       SELECT sal.created_at AS occurred_at,
@@ -92,9 +110,9 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
              COALESCE(sk.static_sku, '') AS sku,
              NULL::text AS item_name
         FROM station_activity_logs sal
-        JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
-        LEFT JOIN sku sk ON sk.id = tsn.source_sku_id
-       WHERE COALESCE(sk.static_sku, '') <> ''
+        JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id${tsnOrg}
+        LEFT JOIN sku sk ON sk.id = tsn.source_sku_id${skOrg}
+       WHERE COALESCE(sk.static_sku, '') <> ''${salOrg}
       UNION ALL
       -- Lifecycle spine. LEFT JOIN + COALESCE(rl.sku, ie.sku) so line-less
       -- serial/SKU events (e.g. ADMIN label prints → LABELED, which carry
@@ -104,8 +122,8 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
              COALESCE(rl.sku, ie.sku, '') AS sku,
              rl.item_name AS item_name
         FROM inventory_events ie
-        LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
-       WHERE COALESCE(rl.sku, ie.sku, '') <> ''
+        LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id${rlOrg}
+       WHERE COALESCE(rl.sku, ie.sku, '') <> ''${ieOrg}
     )
     SELECT sku,
            MAX(item_name) AS item_name,
@@ -118,7 +136,9 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
      LIMIT ${limitParam} OFFSET ${offsetParam}
   `;
 
-  const { rows } = await pool.query(sql, params);
+  const { rows } = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return rows.map((r: Record<string, unknown>) => ({
     sku: r.sku as string,
     item_name: r.item_name as string | null,
@@ -130,10 +150,30 @@ export async function listSkus(opts: ListOpts): Promise<SkuSummary[]> {
 export async function getSkuDetail(
   sku: string,
   filters: AuditLogFilters,
+  orgId?: OrgId,
 ): Promise<SkuDetail | null> {
   const dateStart = filters.range.start;
   const dateEnd = filters.range.end;
   const staffId = filters.staffId;
+
+  // When orgId is present, $1 holds the org and the SKU shifts to $2; the rest
+  // of the positional params follow. Each tenant table also gains an explicit
+  // `<t>.organization_id = $1` predicate (in the ON clause for LEFT JOINs so the
+  // line-less / unmatched-order behavior is preserved). When orgId is omitted
+  // the original $1=sku layout and raw-pool path are kept byte-identical.
+  // shipping_tracking_numbers has NO organization_id column; it is joined by
+  // its integer surrogate PK (stn.id = ...shipment_id), so it is implicitly
+  // scoped through its org-bearing parent rows (see notes / needsColTables).
+  const orgPrefix: unknown[] = orgId ? [orgId] : [];
+  const skuIdx = orgId ? 2 : 1; // positional index of the sku param
+  const orgPred = orgId ? '$1' : '';
+  const salOrg = orgId ? ` AND sal.organization_id = ${orgPred}` : '';
+  const plOrg = orgId ? ` AND pl.organization_id = ${orgPred}` : '';
+  const oOrg = orgId ? ` AND o.organization_id = ${orgPred}` : '';
+  const tsnOrg = orgId ? ` AND tsn.organization_id = ${orgPred}` : '';
+  const skOrg = orgId ? ` AND sk.organization_id = ${orgPred}` : '';
+  const ieOrg = orgId ? ` AND ie.organization_id = ${orgPred}` : '';
+  const rlOrg = orgId ? ` AND rl.organization_id = ${orgPred}` : '';
 
   const buildDateClauses = (col: string, startParamIdx: number): { sql: string; params: unknown[] } => {
     const params: unknown[] = [];
@@ -149,16 +189,20 @@ export async function getSkuDetail(
     return { sql: parts.join(' AND '), params };
   };
 
+  const runQuery = orgId
+    ? <R extends QueryResultRow>(text: string, params: unknown[]) => tenantQuery<R>(orgId, text, params)
+    : <R extends QueryResultRow>(text: string, params: unknown[]) => pool.query<R>(text, params);
+
   // 1) Packer events.
-  const packerParams: unknown[] = [sku];
+  const packerParams: unknown[] = [...orgPrefix, sku];
   let p1 = buildDateClauses('sal.created_at', packerParams.length);
   packerParams.push(...p1.params);
-  let packerWhere = `o.sku = $1${p1.sql ? ` AND ${p1.sql}` : ''}`;
+  let packerWhere = `o.sku = $${skuIdx}${p1.sql ? ` AND ${p1.sql}` : ''}`;
   if (staffId != null) {
     packerParams.push(staffId);
     packerWhere += ` AND sal.staff_id = $${packerParams.length}`;
   }
-  const packerRes = await pool.query(
+  const packerRes = await runQuery(
     `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
@@ -170,26 +214,26 @@ export async function getSkuDetail(
             stn.tracking_number_raw AS tracking,
             o.product_title AS item_name
        FROM station_activity_logs sal
-       JOIN packer_logs pl ON pl.id = sal.packer_log_id
-       LEFT JOIN orders o ON o.shipment_id = pl.shipment_id
+       JOIN packer_logs pl ON pl.id = sal.packer_log_id${plOrg}
+       LEFT JOIN orders o ON o.shipment_id = pl.shipment_id${oOrg}
        LEFT JOIN staff s ON s.id = sal.staff_id
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
-       WHERE ${packerWhere}
+       WHERE ${packerWhere}${salOrg}
        ORDER BY sal.created_at DESC
        LIMIT 500`,
     packerParams,
   );
 
   // 2) Tech events (via source_sku_id).
-  const techParams: unknown[] = [sku];
+  const techParams: unknown[] = [...orgPrefix, sku];
   let p2 = buildDateClauses('sal.created_at', techParams.length);
   techParams.push(...p2.params);
-  let techWhere = `sk.static_sku = $1${p2.sql ? ` AND ${p2.sql}` : ''}`;
+  let techWhere = `sk.static_sku = $${skuIdx}${p2.sql ? ` AND ${p2.sql}` : ''}`;
   if (staffId != null) {
     techParams.push(staffId);
     techWhere += ` AND sal.staff_id = $${techParams.length}`;
   }
-  const techRes = await pool.query(
+  const techRes = await runQuery(
     `SELECT sal.id,
             sal.created_at,
             sal.activity_type,
@@ -201,11 +245,11 @@ export async function getSkuDetail(
             stn.tracking_number_raw AS tracking,
             tsn.serial_number
        FROM station_activity_logs sal
-       JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id
-       JOIN sku sk ON sk.id = tsn.source_sku_id
+       JOIN tech_serial_numbers tsn ON tsn.id = sal.tech_serial_number_id${tsnOrg}
+       JOIN sku sk ON sk.id = tsn.source_sku_id${skOrg}
        LEFT JOIN staff s ON s.id = sal.staff_id
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = COALESCE(sal.shipment_id, tsn.shipment_id)
-       WHERE ${techWhere}
+       WHERE ${techWhere}${salOrg}
        ORDER BY sal.created_at DESC
        LIMIT 500`,
     techParams,
@@ -215,15 +259,15 @@ export async function getSkuDetail(
   //    serial/SKU events (e.g. ADMIN label prints → LABELED, which carry
   //    ie.sku but no receiving_line_id) surface under their SKU here — the
   //    SKU view is the home for label-print activity that has no line/PO/tracking.
-  const recParams: unknown[] = [sku];
+  const recParams: unknown[] = [...orgPrefix, sku];
   let p3 = buildDateClauses('ie.occurred_at', recParams.length);
   recParams.push(...p3.params);
-  let recWhere = `COALESCE(rl.sku, ie.sku) = $1${p3.sql ? ` AND ${p3.sql}` : ''}`;
+  let recWhere = `COALESCE(rl.sku, ie.sku) = $${skuIdx}${p3.sql ? ` AND ${p3.sql}` : ''}`;
   if (staffId != null) {
     recParams.push(staffId);
     recWhere += ` AND ie.actor_staff_id = $${recParams.length}`;
   }
-  const recRes = await pool.query(
+  const recRes = await runQuery(
     `SELECT ie.id,
             ie.occurred_at,
             ie.event_type,
@@ -233,9 +277,9 @@ export async function getSkuDetail(
             rl.receiving_id,
             rl.zoho_purchaseorder_id
        FROM inventory_events ie
-       LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id
+       LEFT JOIN receiving_lines rl ON rl.id = ie.receiving_line_id${rlOrg}
        LEFT JOIN staff s ON s.id = ie.actor_staff_id
-       WHERE ${recWhere}
+       WHERE ${recWhere}${ieOrg}
        ORDER BY ie.occurred_at DESC
        LIMIT 500`,
     recParams,

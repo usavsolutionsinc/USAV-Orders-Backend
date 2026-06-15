@@ -224,7 +224,7 @@ async function getSquareVariationIdBySku(
   return refreshed.get(normalizedSku) || null;
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json(
@@ -243,7 +243,11 @@ export const POST = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ success: false, error: 'repairId is required' }, { status: 400 });
     }
 
-    const repair = await getRepairById(repairId);
+    // Tenant isolation: scope the repair read to the caller's org so a user in
+    // org A cannot pass another org's repairId to exfiltrate repair/customer
+    // PII or mint a live Square payment link against a foreign tenant's repair.
+    // A cross-tenant repairId resolves to null here → org-ownership 404 (not 403).
+    const repair = await getRepairById(repairId, ctx.organizationId);
     if (!repair) {
       return NextResponse.json({ success: false, error: `Repair ${repairId} not found` }, { status: 404 });
     }

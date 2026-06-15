@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { resolveReceivingSchema } from '@/utils/receiving-schema';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     try {
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q');
@@ -19,7 +19,12 @@ export const GET = withAuth(async (req: NextRequest) => {
         // Search across both the canonical shipment tracking (stn.tracking_number_raw)
         // and the legacy receiving_tracking_number text column. The JOIN is a LEFT JOIN
         // so rows without a shipment_id still match via the legacy column.
-        const logs = await pool.query(
+        // Tenant-scoped: filter on the org-owned `receiving` row (r.organization_id);
+        // shipping_tracking_numbers has no org column yet (NEEDS-COL) and is joined on
+        // its integer surrogate PK (stn.id = r.shipment_id), so it inherits scope from
+        // its receiving parent under the GUC-wrapped tenantQuery.
+        const logs = await tenantQuery(
+            ctx.organizationId,
             `SELECT r.id,
                     r.${dateColumn} AS timestamp,
                     COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
@@ -27,14 +32,15 @@ export const GET = withAuth(async (req: NextRequest) => {
                     ${countExpr} AS count
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-             WHERE (
+             WHERE r.organization_id = $3
+               AND (
                     RIGHT(COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text, 8) = $1
                  OR COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)::text ILIKE $2
                )
                AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) IS NOT NULL
                AND COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) <> ''
              ORDER BY r.id DESC`,
-            [last8, `%${query}%`]
+            [last8, `%${query}%`, ctx.organizationId]
         );
 
         const formattedLogs = logs.rows.map((log: any) => ({

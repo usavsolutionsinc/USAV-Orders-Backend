@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/audit-log/staff-directory
@@ -13,7 +13,8 @@ import pool from '@/lib/db';
  * last_seen + event_count. Used by the audit-log sidebar's staff combobox.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId;
     const { searchParams } = req.nextUrl;
     const q = (searchParams.get('q') || '').trim();
     const sinceDaysRaw = Number(searchParams.get('sinceDays'));
@@ -22,7 +23,9 @@ export const GET = withAuth(
     const includeAll = searchParams.get('includeAll') === 'true';
 
     try {
-      const params: unknown[] = [];
+      // $1 + $2 are the tenant org filters for the two activity-source CTEs
+      // (audit_logs and station_activity_logs both carry organization_id).
+      const params: unknown[] = [orgId, orgId];
       const filters: string[] = [];
 
       if (!includeAll) {
@@ -33,16 +36,23 @@ export const GET = withAuth(
         params.push(`%${q}%`);
         filters.push(`s.name ILIKE $${params.length}`);
       }
+      // Scope the staff directory to this tenant's staff. The join to `staff`
+      // is on an integer surrogate PK so it can't collide cross-tenant, but the
+      // staff row itself is tenant-owned, so filter it explicitly too.
+      params.push(orgId);
+      filters.push(`s.organization_id = $${params.length}`);
 
       const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-      const { rows } = await pool.query(
+      const { rows } = await tenantQuery(
+        orgId,
         `WITH activity AS (
            SELECT actor_staff_id AS staff_id,
                   MAX(created_at) AS last_seen_at,
                   COUNT(*) AS event_count
              FROM audit_logs
              WHERE actor_staff_id IS NOT NULL
+               AND organization_id = $1
              GROUP BY actor_staff_id
            UNION ALL
            SELECT staff_id,
@@ -50,6 +60,7 @@ export const GET = withAuth(
                   COUNT(*) AS event_count
              FROM station_activity_logs
              WHERE staff_id IS NOT NULL
+               AND organization_id = $2
              GROUP BY staff_id
          ),
          rolled AS (

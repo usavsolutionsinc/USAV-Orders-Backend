@@ -9,13 +9,9 @@
  *
  * Per-unit dispositions live on a future detail page; this index covers the
  * lifecycle transitions a supervisor needs at-a-glance.
- *
- * Gated server-side by INVENTORY_V2_RMA — when off the API returns 503 and
- * this page shows an explanation banner.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFeedback } from '@/hooks/useFeedback';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 
 type RmaDirection = 'INBOUND_FROM_CUSTOMER' | 'OUTBOUND_TO_VENDOR';
@@ -57,10 +53,8 @@ const DIRECTION_LABEL: Record<RmaDirection, string> = {
 type DirectionFilter = 'all' | RmaDirection;
 
 export default function RmaPage() {
-  const feedback = useFeedback();
   const [rmas, setRmas] = useState<RmaRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [flagOff, setFlagOff] = useState(false);
   const [working, setWorking] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [filter, setFilter] = useState<DirectionFilter>('all');
@@ -69,21 +63,14 @@ export default function RmaPage() {
     setError(null);
     try {
       const res = await fetch('/api/rma', { cache: 'no-store' });
-      if (res.status === 503) {
-        setFlagOff(true);
-        setRmas([]);
-        return;
-      }
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setRmas(data.rmas);
-      setFlagOff(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'load failed';
       setError(message);
-      feedback('error');
     }
-  }, [feedback]);
+  }, []);
 
   useEffect(() => {
     void fetchRmas();
@@ -100,10 +87,8 @@ export default function RmaPage() {
       const res = await fetch(`/api/rma/${id}/mark-received`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('confirm');
       await fetchRmas();
     } catch (err) {
-      feedback('error');
       setError(err instanceof Error ? err.message : 'mark-received failed');
     } finally {
       setWorking(null);
@@ -117,10 +102,8 @@ export default function RmaPage() {
       const res = await fetch(`/api/rma/${id}/close`, { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('success');
       await fetchRmas();
     } catch (err) {
-      feedback('error');
       setError(err instanceof Error ? err.message : 'close failed');
     } finally {
       setWorking(null);
@@ -157,15 +140,6 @@ export default function RmaPage() {
       </header>
 
       {createOpen && <CreateRmaForm onCreated={async () => { setCreateOpen(false); await fetchRmas(); }} onError={setError} />}
-
-      {flagOff && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">RMA flow is disabled.</p>
-          <p className="mt-1 text-amber-800/80">
-            Set <code className="font-mono">INVENTORY_V2_RMA=true</code> on the server to enable issuance and lifecycle.
-          </p>
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -272,7 +246,6 @@ interface CreateFormProps {
 }
 
 function CreateRmaForm({ onCreated, onError }: CreateFormProps) {
-  const feedback = useFeedback();
   const [direction, setDirection] = useState<RmaDirection>('INBOUND_FROM_CUSTOMER');
   const [orderId, setOrderId] = useState('');
   const [carrier, setCarrier] = useState('');
@@ -296,13 +269,11 @@ function CreateRmaForm({ onCreated, onError }: CreateFormProps) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      feedback('confirm');
       setOrderId('');
       setCarrier('');
       setNotes('');
       await onCreated();
     } catch (err) {
-      feedback('error');
       onError(err instanceof Error ? err.message : 'create failed');
     } finally {
       setSubmitting(false);

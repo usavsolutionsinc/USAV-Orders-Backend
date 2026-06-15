@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── GET /api/dashboard/fba-shipments ─────────────────────────────────────────
 // Returns FBA shipments from fba_shipments (new lifecycle tables) with
 // aggregated item readiness counts and staff names for the dashboard board.
 // Falls back gracefully if the tables don't exist yet (pre-migration).
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const q = String(searchParams.get('q') || '').trim();
@@ -75,6 +76,10 @@ export const GET = withAuth(async (request: NextRequest) => {
     let idx = 1;
     const conditions: string[] = [];
 
+    // Tenant ownership filter — never return another org's FBA shipments.
+    conditions.push(`fs.organization_id = $${idx++}`);
+    params.push(ctx.organizationId);
+
     if (q) {
       conditions.push(`(fs.shipment_ref ILIKE $${idx} OR fs.notes ILIKE $${idx} OR tech.name ILIKE $${idx} OR packer.name ILIKE $${idx})`);
       params.push(`%${q}%`);
@@ -84,7 +89,8 @@ export const GET = withAuth(async (request: NextRequest) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     params.push(limit);
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          fs.id,
          fs.shipment_ref,
@@ -112,7 +118,7 @@ export const GET = withAuth(async (request: NextRequest) => {
        LEFT JOIN staff creator ON creator.id = fs.created_by_staff_id
        LEFT JOIN staff tech    ON tech.id    = fs.assigned_tech_id
        LEFT JOIN staff packer  ON packer.id  = fs.assigned_packer_id
-       LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id
+       LEFT JOIN fba_shipment_items fsi ON fsi.shipment_id = fs.id AND fsi.organization_id = fs.organization_id
        ${whereClause}
        GROUP BY fs.id, creator.name, tech.name, packer.name
        ORDER BY fs.created_at DESC

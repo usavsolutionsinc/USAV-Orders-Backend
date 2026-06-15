@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -22,16 +22,22 @@ export const dynamic = 'force-dynamic';
  *   default         → all PO-bearing lines, newest activity first
  *   ?search=…       → matches PO number, vendor field (when present), SKU
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const params = req.nextUrl.searchParams;
     const view = String(params.get('view') || '').trim().toLowerCase();
     const search = String(params.get('search') || '').trim();
     const limit = Math.min(Number(params.get('limit') || 100), 250);
 
+    // Tenant scope — explicit org filter on the base receiving_lines feed.
     const conditions: string[] = [`rl.zoho_purchaseorder_id IS NOT NULL`];
     const values: unknown[] = [];
     let idx = 1;
+
+    values.push(orgId);
+    conditions.push(`rl.organization_id = $${idx}`);
+    idx++;
 
     if (search) {
       conditions.push(
@@ -55,7 +61,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     // newest activity timestamp so list order tracks "what just happened".
     // Status summary buckets a PO as open (any non-terminal line) vs done
     // (every line is DONE/PASSED/MATCHED).
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `WITH grouped AS (
          SELECT
            COALESCE(rl.zoho_purchaseorder_id, '') AS po_id,
@@ -76,10 +83,12 @@ export const GET = withAuth(async (req: NextRequest) => {
                                                     AS has_pending
          FROM receiving_lines rl
          LEFT JOIN receiving r ON (
-              r.id = rl.receiving_id
+              (r.id = rl.receiving_id
+               AND r.organization_id = rl.organization_id)
            OR (rl.receiving_id IS NULL
                AND r.source = 'zoho_po'
-               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+               AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+               AND r.organization_id = rl.organization_id)
          )
          ${where}
          GROUP BY COALESCE(rl.zoho_purchaseorder_id, ''),
@@ -94,13 +103,18 @@ export const GET = withAuth(async (req: NextRequest) => {
               -- photos for every receiving_lines row under it. Item-level
               -- photos live as (entity_type='RECEIVING_LINE', entity_id=line.id)
               -- and pivot back to receiving_id via the receiving_lines join.
+              -- $1 is the tenant orgId (first positional param) — scope both
+              -- photo buckets and the rl2 pivot to it.
               SELECT
                 (SELECT COUNT(*)::int FROM photos
-                  WHERE entity_type = 'RECEIVING' AND entity_id = g.receiving_id)
+                  WHERE entity_type = 'RECEIVING' AND entity_id = g.receiving_id
+                    AND organization_id = $1)
                 +
                 (SELECT COUNT(*)::int FROM photos pl
-                   JOIN receiving_lines rl2 ON rl2.id = pl.entity_id
+                   JOIN receiving_lines rl2 ON (rl2.id = pl.entity_id
+                        AND rl2.organization_id = pl.organization_id)
                   WHERE pl.entity_type = 'RECEIVING_LINE'
+                    AND pl.organization_id = $1
                     AND rl2.receiving_id = g.receiving_id) AS photo_count
          ) p ON TRUE
          ${

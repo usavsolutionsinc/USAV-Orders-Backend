@@ -79,6 +79,8 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
             active={activeSection}
             onSelect={(next) => onSectionChange(next)}
             ariaLabel="Admin sections"
+            // px-3 lines the rows' icons up with the MasterNavHeader above.
+            gutterClassName="px-3"
           />
         </div>
       ) : (

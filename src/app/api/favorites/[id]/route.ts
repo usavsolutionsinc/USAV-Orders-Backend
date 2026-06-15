@@ -46,7 +46,7 @@ export async function PATCH(
       sortOrder: body?.sortOrder,
       isActive: body?.isActive,
       staffId: gate.ctx.staffId,
-    });
+    }, gate.ctx.organizationId ?? undefined);
 
     if (!favorite) {
       return NextResponse.json({ error: 'Favorite not found' }, { status: 404 });
@@ -81,7 +81,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'workspace is required' }, { status: 400 });
     }
 
-    const deleted = await deleteFavoriteSku(id, workspaceKey);
+    const deleted = await deleteFavoriteSku(id, workspaceKey, gate.ctx.organizationId ?? undefined);
     if (!deleted) {
       return NextResponse.json({ error: 'Favorite not found' }, { status: 404 });
     }

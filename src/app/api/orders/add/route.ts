@@ -18,6 +18,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       sku,
       accountSource,
       status = 'unassigned',
+      saleAmount,
+      currency,
     } = body;
 
     // Validate required fields
@@ -27,6 +29,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         { status: 400 }
       );
     }
+
+    // sale_amount is optional; when supplied it must be a finite number.
+    if (saleAmount != null && !Number.isFinite(Number(saleAmount))) {
+      return NextResponse.json(
+        { error: 'saleAmount must be a finite number when provided' },
+        { status: 400 }
+      );
+    }
+    const saleAmountValue = saleAmount != null ? Number(saleAmount) : null;
+    const currencyValue = (typeof currency === 'string' && currency.trim()) || 'USD';
 
     // Check if order already exists with this order_id
     const existingOrder = await pool.query(
@@ -61,8 +73,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         account_source,
         status,
         created_at,
-        sku_catalog_id
-      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6)
+        sku_catalog_id,
+        sale_amount,
+        currency
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
       RETURNING id, order_id, product_title, sku`,
       [
         orderId,
@@ -71,6 +85,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         accountSource,
         status,
         skuCatalogId,
+        saleAmountValue,
+        currencyValue,
       ]
     );
 

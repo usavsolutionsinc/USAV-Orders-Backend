@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/sku-catalog/pairing-queue/count
@@ -13,18 +13,24 @@ import pool from '@/lib/db';
  *   highConfidence — distinct sku_catalog rows with at least one suggestion ≥ 80
  */
 export const GET = withAuth(
-  async () => {
+  async (_req, ctx) => {
     try {
-      const result = await pool.query<{
+      // sku_pairing_suggestions has no organization_id (child of sku_catalog);
+      // scope via the parent sku_catalog org filter + GUC wrap. Join on the
+      // integer surrogate PK (sc.id = s.sku_catalog_id) is tenant-safe bare.
+      const result = await tenantQuery<{
         total: number;
         high_confidence: number;
       }>(
+        ctx.organizationId,
         `SELECT
            COUNT(DISTINCT s.sku_catalog_id)::int                       AS total,
            COUNT(DISTINCT s.sku_catalog_id) FILTER (WHERE s.confidence >= 80)::int AS high_confidence
          FROM sku_pairing_suggestions s
          JOIN sku_catalog sc ON sc.id = s.sku_catalog_id
-         WHERE sc.is_active = true`,
+         WHERE sc.is_active = true
+           AND sc.organization_id = $1`,
+        [ctx.organizationId],
       );
       const row = result.rows[0];
       return NextResponse.json({

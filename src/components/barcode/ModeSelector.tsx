@@ -3,7 +3,6 @@
 import React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Printer, Database, RotateCcw } from '../Icons';
-import { successFeedback } from '@/lib/feedback/confirm';
 
 // 'bin-labels' was previously bundled here; bin/zone printing now lives at
 // /warehouse (WarehouseSidebarPanel → Labels tab). Keep this union focused
@@ -61,7 +60,6 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                             aria-selected={isActive}
                             onClick={() => {
                                 if (mode === id) return;
-                                successFeedback();
                                 onModeChange(id);
                             }}
                             className={`group relative flex flex-col items-start gap-2 rounded-2xl p-3 text-left transition-all duration-150 outline-none ${
@@ -106,7 +104,6 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                             aria-selected={isActive}
                             onClick={() => {
                                 if (mode === id) return;
-                                successFeedback();
                                 onModeChange(id);
                             }}
                             className={`group relative flex items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors duration-150 outline-none ${
@@ -160,7 +157,6 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                             aria-selected={isActive}
                             onClick={() => {
                                 if (mode === id) return;
-                                successFeedback();
                                 onModeChange(id);
                             }}
                             className={`relative flex-1 flex flex-col items-center justify-center gap-1 rounded-xl py-2 transition-colors duration-150 outline-none ${

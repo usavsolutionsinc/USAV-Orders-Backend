@@ -1,4 +1,5 @@
 import { createFbaLog } from '@/lib/fba/createFbaLog';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type AllocationPayload = { shipmentItemId: number; quantity: number };
 
@@ -32,6 +33,7 @@ export async function refreshShipmentAggregateCounts(
 export async function replaceTrackingAllocations(
   client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> },
   params: {
+    orgId: OrgId;
     shipmentId: number;
     trackingId: number;
     allocations: AllocationPayload[];
@@ -39,20 +41,22 @@ export async function replaceTrackingAllocations(
     station: string | null;
   },
 ) {
-  const { shipmentId, trackingId, allocations, staffId, station } = params;
+  const { orgId, shipmentId, trackingId, allocations, staffId, station } = params;
 
   const oldRes = await client.query(
     `SELECT shipment_item_id FROM fba_tracking_item_allocations
-     WHERE shipment_id = $1 AND tracking_id = $2`,
-    [shipmentId, trackingId],
+     WHERE shipment_id = $1 AND tracking_id = $2
+       AND organization_id = $3`,
+    [shipmentId, trackingId, orgId],
   );
   const oldItemIds = oldRes.rows.map((r) => Number((r as { shipment_item_id: number }).shipment_item_id));
 
   await client.query(
     `DELETE FROM fba_tracking_item_allocations
      WHERE shipment_id = $1
-       AND tracking_id = $2`,
-    [shipmentId, trackingId],
+       AND tracking_id = $2
+       AND organization_id = $3`,
+    [shipmentId, trackingId, orgId],
   );
 
   if (allocations.length > 0) {
@@ -61,8 +65,9 @@ export async function replaceTrackingAllocations(
       `SELECT id, fnsku
        FROM fba_shipment_items
        WHERE shipment_id = $1
-         AND id = ANY($2::int[])`,
-      [shipmentId, shipmentItemIds],
+         AND id = ANY($2::int[])
+         AND organization_id = $3`,
+      [shipmentId, shipmentItemIds, orgId],
     );
 
     if (itemRes.rows.length !== shipmentItemIds.length) {
@@ -77,16 +82,16 @@ export async function replaceTrackingAllocations(
     for (const allocation of allocations) {
       await client.query(
         `INSERT INTO fba_tracking_item_allocations
-           (shipment_id, tracking_id, shipment_item_id, qty)
-         VALUES ($1, $2, $3, $4)
+           (shipment_id, tracking_id, shipment_item_id, qty, organization_id)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (shipment_id, tracking_id, shipment_item_id)
          DO UPDATE SET qty = EXCLUDED.qty, updated_at = NOW()`,
-        [shipmentId, trackingId, allocation.shipmentItemId, allocation.quantity],
+        [shipmentId, trackingId, allocation.shipmentItemId, allocation.quantity, orgId],
       );
 
       const fnsku = fnskuByItemId.get(allocation.shipmentItemId);
       if (fnsku) {
-        await createFbaLog(client, {
+        await createFbaLog(client, orgId, {
           fnsku,
           sourceStage: 'PACK',
           eventType: 'BOXED',
@@ -118,8 +123,9 @@ export async function replaceTrackingAllocations(
            updated_at = NOW()
        WHERE shipment_id = $1
          AND id = ANY($3::int[])
-         AND status IN ('PLANNED', 'TESTED', 'PACKED')`,
-      [shipmentId, staffId, shipmentItemIds],
+         AND status IN ('PLANNED', 'TESTED', 'PACKED')
+         AND organization_id = $4`,
+      [shipmentId, staffId, shipmentItemIds, orgId],
     );
   }
 
@@ -133,11 +139,13 @@ export async function replaceTrackingAllocations(
        WHERE fsi.shipment_id = $1
          AND fsi.id = ANY($2::int[])
          AND fsi.status = 'LABEL_ASSIGNED'
+         AND fsi.organization_id = $3
          AND NOT EXISTS (
            SELECT 1 FROM fba_tracking_item_allocations ftia
            WHERE ftia.shipment_item_id = fsi.id
+             AND ftia.organization_id = $3
          )`,
-      [shipmentId, removedFromBundle],
+      [shipmentId, removedFromBundle, orgId],
     );
   }
 

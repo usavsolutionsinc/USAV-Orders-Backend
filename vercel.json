@@ -53,6 +53,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/amazon/orders-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/google-sheets/transfer-orders",
       "schedule": "30 15 * * 1-5"
     },
@@ -107,6 +111,10 @@
     {
       "path": "/api/cron/ebay/refresh-tokens",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/integrations/sync?providers=ebay,square",
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/cleanup",

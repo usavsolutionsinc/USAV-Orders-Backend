@@ -20,6 +20,7 @@ export async function PATCH(
 ) {
   const gate = await requireRoutePerm(req, 'sku_stock.manage');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
 
   const { barcode } = await params;
   const code = decodeURIComponent(barcode).trim();
@@ -32,7 +33,9 @@ export async function PATCH(
     const parsed = parseBody(LocationPropertiesPatchBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getLocationByBarcode(code);
+    // Org-ownership precheck: a barcode collides across orgs, so scope the
+    // lookup to this tenant — another org's bin reads as "not found" (404).
+    const before = await getLocationByBarcode(code, orgId);
     if (!before || !before.is_active) {
       return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
     }
@@ -43,7 +46,7 @@ export async function PATCH(
       ...(parsed.binType !== undefined ? { binType: parsed.binType } : {}),
       ...(parsed.capacity !== undefined ? { capacity: parsed.capacity } : {}),
       ...(parsed.sortOrder !== undefined ? { sortOrder: parsed.sortOrder } : {}),
-    });
+    }, orgId);
     if (!updated) {
       return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
     }

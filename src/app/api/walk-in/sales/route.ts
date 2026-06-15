@@ -10,7 +10,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * GET /api/walk-in/sales?q=&status=&weekStart=&weekEnd=&orderSource=&limit=
  * Query local square_transactions table. Defaults to walk_in_sale orders only.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -27,7 +27,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     const limitRaw = Number(searchParams.get('limit') || 200);
     const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 200;
 
-    const rows = await getSquareTransactions({ search, status, weekStart, weekEnd, orderSource, limit });
+    const rows = await getSquareTransactions(
+      { search, status, weekStart, weekEnd, orderSource, limit },
+      ctx.organizationId,
+    );
 
     return NextResponse.json({ rows });
   } catch (error: unknown) {
@@ -46,7 +49,7 @@ export const GET = withAuth(async (req: NextRequest) => {
  * (sets deleted_at); the sale is NOT removed from Square and re-syncs keep it
  * hidden. Refund/void in Square if you need to reverse the actual sale.
  */
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -56,7 +59,7 @@ export const DELETE = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ success: false, error: 'id is required' }, { status: 400 });
     }
 
-    const hidden = await softDeleteSquareTransaction(id);
+    const hidden = await softDeleteSquareTransaction(id, ctx.organizationId);
     if (!hidden) {
       return NextResponse.json(
         { success: false, error: 'Sale not found or already removed' },

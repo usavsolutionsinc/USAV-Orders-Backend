@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 const ALLOWED_STATUSES = ['TESTED', 'OUT_OF_STOCK', 'PACKED', 'PLANNED', 'LABEL_ASSIGNED'] as const;
@@ -17,7 +17,7 @@ const DEFAULT_PRINT_STATUSES: AllowedStatus[] = ['TESTED', 'OUT_OF_STOCK', 'PACK
  *   status — comma-separated statuses (each must be allowed), or single status
  *   date   — optional ISO date YYYY-MM-DD; filters rows to shipments with that due_date (calendar day, UTC)
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const rawStatus = searchParams.get('status');
@@ -37,7 +37,8 @@ export const GET = withAuth(async (request: NextRequest) => {
     const dateIso =
       dateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dateFilter.trim()) ? dateFilter.trim() : null;
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          fsi.id               AS item_id,
          fsi.fnsku,
@@ -76,6 +77,7 @@ export const GET = withAuth(async (request: NextRequest) => {
              FROM fba_shipment_tracking fst
              JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
              WHERE fst.shipment_id = fs.id
+               AND fst.organization_id = $3
            ),
            '[]'::jsonb
          )                   AS tracking_numbers,
@@ -88,11 +90,12 @@ export const GET = withAuth(async (request: NextRequest) => {
          ) AS display_title
        FROM fba_shipment_items fsi
        JOIN fba_shipments fs ON fs.id = fsi.shipment_id
-       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+       LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = fsi.organization_id
        WHERE fsi.status::text = ANY($1::text[])
          AND ($2::date IS NULL OR fs.due_date IS NOT NULL AND (fs.due_date AT TIME ZONE 'UTC')::date = $2::date)
+         AND fsi.organization_id = $3
        ORDER BY fs.due_date ASC NULLS LAST, fs.id ASC, fsi.fnsku ASC`,
-      [statuses, dateIso]
+      [statuses, dateIso, ctx.organizationId]
     );
 
     const items = result.rows.map((row: Record<string, unknown>) => {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { readTimeline } from '@/lib/inventory/events';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
@@ -15,6 +15,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(request, 'receiving.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id: idRaw } = await params;
     const lineId = Number(idRaw);
     if (!Number.isFinite(lineId) || lineId <= 0) {
@@ -35,7 +36,7 @@ export async function GET(
       receiving_line_id: lineId,
       since: since && since.trim() ? since.trim() : null,
       limit,
-    });
+    }, orgId);
 
     if (rawEvents.length === 0) {
       return NextResponse.json({ success: true, events: [] });
@@ -67,27 +68,30 @@ export async function GET(
 
     const staffMap = new Map<number, string>();
     if (staffIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
-        [staffIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [staffIds, orgId],
       );
       for (const row of r.rows) staffMap.set(row.id, row.name);
     }
 
     const binMap = new Map<number, string>();
     if (binIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM locations WHERE id = ANY($1::int[])`,
-        [binIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM locations WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [binIds, orgId],
       );
       for (const row of r.rows) binMap.set(row.id, row.name);
     }
 
     const serialMap = new Map<number, string>();
     if (serialIds.length > 0) {
-      const r = await pool.query<{ id: number; serial_number: string }>(
-        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[])`,
-        [serialIds],
+      const r = await tenantQuery<{ id: number; serial_number: string }>(
+        orgId,
+        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [serialIds, orgId],
       );
       for (const row of r.rows) serialMap.set(row.id, row.serial_number);
     }

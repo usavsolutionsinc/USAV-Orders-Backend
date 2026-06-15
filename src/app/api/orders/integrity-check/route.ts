@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,12 +28,17 @@ function isBlank(value: unknown): boolean {
  * tracking number are not touched. Blank/no-tracking rows are not touched.
  */
 // Destructive when dryRun=false (deletes duplicate orders). Admin-only.
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body?.dryRun === true;
 
-    const { rows: orders } = await pool.query<{
+    // orders is tenant-owned — filter to this org so dedup only ever groups (and
+    // deletes) rows owned by the caller. The stn join is on the integer surrogate
+    // PK (stn.id = o.shipment_id) so it's safe bare; shipping_tracking_numbers
+    // has no organization_id column (NEEDS-COL) and is reached only via the
+    // org-scoped orders row.
+    const { rows: orders } = await tenantQuery<{
       id: number;
       order_id: string | null;
       shipment_id: number | null;
@@ -46,6 +51,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       quantity: string | null;
       notes: string | null;
     }>(
+      ctx.organizationId,
       `SELECT
          o.id,
          o.order_id,
@@ -61,7 +67,9 @@ export const POST = withAuth(async (req: NextRequest) => {
        FROM orders o
        LEFT JOIN shipping_tracking_numbers stn
          ON stn.id = o.shipment_id
-       ORDER BY o.id ASC`
+       WHERE o.organization_id = $1
+       ORDER BY o.id ASC`,
+      [ctx.organizationId]
     );
 
     // Group only by (order_id, tracking) when both values exist.
@@ -104,7 +112,11 @@ export const POST = withAuth(async (req: NextRequest) => {
 
     if (!dryRun && ordersToDelete.length > 0) {
       for (const id of ordersToDelete) {
-        await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+        await tenantQuery(
+          ctx.organizationId,
+          'DELETE FROM orders WHERE id = $1 AND organization_id = $2',
+          [id, ctx.organizationId],
+        );
       }
     }
 

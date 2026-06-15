@@ -5,6 +5,8 @@ import { queryWithRetry } from '@/lib/db-retry';
 import { getShippedSearchFieldConfig, type ShippedSearchField } from '@/lib/shipped-search';
 import { buildRankedSearchSql, buildTextSearchVariants, type RankedSearchVariant } from '@/lib/search/sql-ranked-search';
 import { resolveOrCreateSkuCatalogId } from './sku-catalog-queries';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // Order record with shipping information
 export interface ShippedOrder {
@@ -37,6 +39,11 @@ export interface ShippedOrder {
   packed_by: number | null;
   packed_at: string | null;        // packer_logs.created_at (scan timestamp)
   pack_activity_at?: string | null;
+  /** SHIP_CONFIRM station_activity_logs.created_at — when it was scanned out at the dock. */
+  ship_confirmed_at?: string | null;
+  /** SHIP_CONFIRM station_activity_logs.staff_id — who scanned it out at the dock. */
+  shipped_out_by?: number | null;
+  shipped_out_by_name?: string | null;
   next_pack_activity_at?: string | null;
   pack_duration?: string | null;
   test_duration?: string | null;
@@ -44,6 +51,8 @@ export interface ShippedOrder {
   tracking_type: string | null;
   account_source: string | null;
   notes: string;
+  sale_amount?: string | number | null;
+  currency?: string | null;
   status_history: any;
   /** Derived from shipping_tracking_numbers carrier status — not stored on orders */
   is_shipped?: boolean;
@@ -66,6 +75,10 @@ export interface ShippedOrder {
   packer_log_id?: number | null;
   /** `station_activity_logs.id` when delete has no packer_logs row (e.g. some FBA scans). */
   station_activity_log_id?: number | null;
+  /** FK to customers — linked buyer (e.g. Amazon MFN shipping contact). */
+  customer_id?: number | null;
+  /** Amazon fulfillment channel: 'AFN' (FBA) | 'MFN'. Null for non-Amazon. */
+  fulfillment_channel?: string | null;
   row_source?: 'order' | 'exception';
   exception_reason?: string | null;
   exception_status?: string | null;
@@ -89,6 +102,8 @@ export interface ActiveOrder {
   sku: string | null;
   account_source: string | null;
   notes: string | null;
+  sale_amount?: string | number | null;
+  currency?: string | null;
   status_history: any;
   /** Derived from shipping_tracking_numbers carrier status */
   is_shipped: boolean;
@@ -118,6 +133,8 @@ export interface CreateOrderParams {
   itemNumber?: string | null;
   shipByDate?: string | null;
   notes?: string | null;
+  saleAmount?: number | null;
+  currency?: string | null;
 }
 
 // ─── Shared CTE fragments ─────────────────────────────────────────────────────
@@ -169,6 +186,8 @@ const ORDER_SERIALS_CTE = `
       o.sku,
       o.account_source,
       o.notes,
+      o.sale_amount,
+      o.currency,
       COALESCE(o.status_history::jsonb, '[]'::jsonb) AS status_history,
       COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
         OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
@@ -303,7 +322,7 @@ const ORDER_SERIALS_CTE = `
             OR stn.is_out_for_delivery OR stn.is_delivered, false)
     GROUP BY o.id, o.organization_id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
              o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
-             o.account_source, o.notes, o.status_history::jsonb,
+             o.account_source, o.notes, o.sale_amount, o.currency, o.status_history::jsonb,
              stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
              stn.latest_status_category, stn.latest_status_code, stn.latest_status_label, stn.latest_status_description,
              stn.latest_event_at, stn.has_exception, stn.exception_at, stn.is_terminal,
@@ -346,13 +365,20 @@ export interface GetAllShippedOrdersOptions {
   shippedFilter?: ShippedFilterMode;
 }
 
-export async function getAllShippedOrders(limit: number, offset?: number): Promise<ShippedOrder[]>;
-export async function getAllShippedOrders(options: GetAllShippedOrdersOptions): Promise<ShippedOrder[]>;
+export async function getAllShippedOrders(limit: number, offset?: number, orgId?: OrgId): Promise<ShippedOrder[]>;
+export async function getAllShippedOrders(options: GetAllShippedOrdersOptions, orgId?: OrgId): Promise<ShippedOrder[]>;
 export async function getAllShippedOrders(
   limitOrOptions: number | GetAllShippedOrdersOptions = 100,
-  offsetArg = 0,
+  offsetOrOrgId?: number | OrgId,
+  orgIdArg?: OrgId,
 ): Promise<ShippedOrder[]> {
   try {
+    // Disambiguate the two overloads: in the (limit, offset, orgId) form the
+    // second arg is a number; in the (options, orgId) form it is the orgId.
+    const offsetArg = typeof offsetOrOrgId === 'number' ? offsetOrOrgId : 0;
+    const orgId: OrgId | undefined =
+      typeof offsetOrOrgId === 'number' ? orgIdArg : (offsetOrOrgId ?? orgIdArg);
+
     const options: GetAllShippedOrdersOptions =
       typeof limitOrOptions === 'number'
         ? { limit: limitOrOptions, offset: offsetArg }
@@ -362,6 +388,11 @@ export async function getAllShippedOrders(
 
     const conditions: string[] = [];
     const params: any[] = [];
+
+    if (orgId) {
+      params.push(orgId);
+      conditions.push(`os.organization_id = $${params.length}`);
+    }
 
     if (options.weekStart) {
       params.push(options.weekStart);
@@ -411,7 +442,7 @@ export async function getAllShippedOrders(
        LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, params),
+      () => (orgId ? tenantQuery(orgId, sql, params) : pool.query(sql, params)),
       { retries: 3, delayMs: 1000 },
     );
     return result.rows;
@@ -435,9 +466,17 @@ export async function getPackedOrdersForAi(opts: {
   weekStart: string;
   weekEnd: string;
   limit?: number;
-}): Promise<ShippedOrder[]> {
+}, orgId?: OrgId): Promise<ShippedOrder[]> {
   const limit = opts.limit ?? 5000;
   try {
+    // When orgId is threaded, scope to the tenant via the `orders` parent (which
+    // carries organization_id). LIMIT stays at $3 (byte-identical to the legacy
+    // path); the org predicate is appended as $4 so existing placeholders are
+    // untouched.
+    const orgClause = orgId ? `AND o.organization_id = $4` : '';
+    const params = orgId
+      ? [opts.weekStart, opts.weekEnd, limit, orgId]
+      : [opts.weekStart, opts.weekEnd, limit];
     const sql = `
       SELECT
         o.id,
@@ -447,6 +486,8 @@ export async function getPackedOrdersForAi(opts: {
         o.quantity,
         o.sku,
         o.account_source,
+        o.sale_amount,
+        o.currency,
         to_char(o.created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
         'order'::text AS row_source,
         pl.packed_by,
@@ -489,8 +530,9 @@ export async function getPackedOrdersForAi(opts: {
         (COALESCE(stn.is_carrier_accepted OR stn.is_in_transit OR stn.is_out_for_delivery OR stn.is_delivered, false)
          AND stn.updated_at::date >= $1::date AND stn.updated_at::date <= $2::date)
       )
+      ${orgClause}
       GROUP BY o.id, o.shipment_id, o.order_id, o.product_title, o.quantity, o.sku,
-               o.account_source, o.created_at,
+               o.account_source, o.sale_amount, o.currency, o.created_at,
                pl.packed_by, pl.packed_at, s_packer.name,
                wa_t.assigned_tech_id, s_tester.name, s_tested.name,
                stn.tracking_number_raw, stn.is_carrier_accepted, stn.is_in_transit,
@@ -500,7 +542,7 @@ export async function getPackedOrdersForAi(opts: {
     `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, [opts.weekStart, opts.weekEnd, limit]),
+      () => (orgId ? tenantQuery(orgId, sql, params) : pool.query(sql, params)),
       { retries: 3, delayMs: 1000 },
     );
     return result.rows;
@@ -513,9 +555,12 @@ export async function getPackedOrdersForAi(opts: {
 /**
  * Get a single shipped order by ID (orders table only, no exceptions)
  */
-export async function getShippedOrderById(id: number): Promise<ShippedOrder | null> {
+export async function getShippedOrderById(id: number, orgId?: OrgId): Promise<ShippedOrder | null> {
   try {
-    const result = await pool.query(
+    // When orgId is threaded, add an org-ownership predicate ($2) so a row owned
+    // by another tenant resolves to null (the route turns that into a 404).
+    const orgClause = orgId ? `AND o.organization_id = $2` : '';
+    const sql =
       `WITH order_serials AS (
         SELECT
           o.id,
@@ -533,6 +578,8 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
           o.sku,
           o.account_source,
           o.notes,
+          o.sale_amount,
+          o.currency,
           COALESCE(o.status_history::jsonb, '[]'::jsonb) AS status_history,
           COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
             OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
@@ -661,11 +708,12 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
         ) test_sal ON true
         LEFT JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id AND o.shipment_id IS NOT NULL
         WHERE o.id = $1
+          ${orgClause}
           AND COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
                 OR stn.is_out_for_delivery OR stn.is_delivered, false)
         GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
                  o.condition, o.item_number, stn.tracking_number_raw, order_trackings.tracking_numbers, order_trackings.tracking_number_rows, o.sku,
-                 o.account_source, o.notes, o.status_history::jsonb,
+                 o.account_source, o.notes, o.sale_amount, o.currency, o.status_history::jsonb,
                  stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
                  stn.latest_status_category, stn.latest_status_code, stn.latest_status_label, stn.latest_status_description,
                  stn.latest_event_at, stn.has_exception, stn.exception_at, stn.is_terminal,
@@ -681,9 +729,11 @@ export async function getShippedOrderById(id: number): Promise<ShippedOrder | nu
       FROM order_serials os
       LEFT JOIN staff s1 ON os.tested_by = s1.id
       LEFT JOIN staff s2 ON os.packed_by = s2.id
-      LEFT JOIN staff s3 ON os.tester_id = s3.id`,
-      [id],
-    );
+      LEFT JOIN staff s3 ON os.tester_id = s3.id`;
+    const params = orgId ? [id, orgId] : [id];
+    const result = orgId
+      ? await tenantQuery(orgId, sql, params)
+      : await pool.query(sql, params);
     return result.rows[0] ?? null;
   } catch (error) {
     console.error('Error fetching shipped order by ID:', error);
@@ -914,7 +964,8 @@ export async function searchShippedOrders(
       const orgParam = pushParam(organizationId);
       const limitParam = pushParam(resultLimit);
 
-      const queryResult = await pool.query(
+      const queryResult = await tenantQuery<ShippedOrder>(
+        organizationId,
         `WITH ${ORDER_SERIALS_CTE_ALL}
          SELECT
            os.*,
@@ -986,7 +1037,8 @@ export async function searchShippedOrders(
 
       const orgParam = pushParam(organizationId);
 
-      const result = await pool.query(
+      const result = await tenantQuery<ShippedOrder>(
+        organizationId,
         `SELECT
            oe.id,
            NULL::bigint AS shipment_id,
@@ -1111,10 +1163,13 @@ export async function searchShippedOrders(
 /**
  * Get shipped orders by tracking number (last-8 digits match)
  */
-export async function getShippedOrderByTracking(tracking: string): Promise<ShippedOrder | null> {
+export async function getShippedOrderByTracking(tracking: string, orgId?: OrgId): Promise<ShippedOrder | null> {
   try {
     const last8 = tracking.slice(-8).toLowerCase();
-    const result = await pool.query(
+    // Tracking is a STRING key — it collides across tenants — so when orgId is
+    // threaded we add an explicit org predicate ($2) on the order's org column.
+    const orgClause = orgId ? `AND os.organization_id = $2` : '';
+    const sql =
       `WITH ${ORDER_SERIALS_CTE}
        SELECT
          os.*,
@@ -1126,9 +1181,12 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
        LEFT JOIN staff s2 ON os.packed_by = s2.id
        LEFT JOIN staff s3 ON os.tester_id = s3.id
        WHERE RIGHT(COALESCE(os.tracking_number, ''), 8) = $1
-       LIMIT 1`,
-      [last8],
-    );
+       ${orgClause}
+       LIMIT 1`;
+    const params = orgId ? [last8, orgId] : [last8];
+    const result = orgId
+      ? await tenantQuery(orgId, sql, params)
+      : await pool.query(sql, params);
     return result.rows[0] ?? null;
   } catch (error) {
     console.error('Error fetching shipped order by tracking:', error);
@@ -1139,15 +1197,21 @@ export async function getShippedOrderByTracking(tracking: string): Promise<Shipp
 /**
  * Get count of shipped orders
  */
-export async function getShippedOrdersCount(): Promise<number> {
+export async function getShippedOrdersCount(orgId?: OrgId): Promise<number> {
   try {
-    const result = await pool.query(
+    // When orgId is threaded, scope the count to the tenant via orders.organization_id.
+    // The carrier-status group is wrapped in parens so the org predicate ANDs cleanly.
+    const orgClause = orgId ? `AND o.organization_id = $1` : '';
+    const sql =
       `SELECT COUNT(DISTINCT o.id) AS count
        FROM orders o
        JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-       WHERE stn.is_carrier_accepted OR stn.is_in_transit
-          OR stn.is_out_for_delivery OR stn.is_delivered`,
-    );
+       WHERE (stn.is_carrier_accepted OR stn.is_in_transit
+          OR stn.is_out_for_delivery OR stn.is_delivered)
+       ${orgClause}`;
+    const result = orgId
+      ? await tenantQuery(orgId, sql, [orgId])
+      : await pool.query(sql);
     return parseInt(result.rows[0].count);
   } catch (error) {
     console.error('Error counting shipped orders:', error);
@@ -1170,13 +1234,21 @@ export async function getActiveOrders(options?: {
   pendingOnly?: boolean;
   limit?: number;
   offset?: number;
-}): Promise<ActiveOrder[]> {
+}, orgId?: OrgId): Promise<ActiveOrder[]> {
   const conditions: string[] = [
     `NOT COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
        OR stn.is_out_for_delivery OR stn.is_delivered, false)`,
   ];
   const params: any[] = [];
   let idx = 1;
+
+  // Tenant scope: orders carries organization_id, so when orgId is threaded we
+  // add an explicit predicate. Pushed first so it claims $1 before the other
+  // positional conditions advance idx.
+  if (orgId) {
+    conditions.push(`o.organization_id = $${idx++}`);
+    params.push(orgId);
+  }
 
   if (options?.missingShipmentOnly) {
     conditions.push(`o.shipment_id IS NULL`);
@@ -1199,7 +1271,7 @@ export async function getActiveOrders(options?: {
   const offset = options?.offset ?? 0;
   params.push(limit, offset);
 
-  const result = await pool.query(
+  const sql =
     `SELECT
        o.id,
        o.shipment_id,
@@ -1212,6 +1284,8 @@ export async function getActiveOrders(options?: {
        o.sku,
        o.account_source,
        o.notes,
+       o.sale_amount,
+       o.currency,
        o.status_history,
        COALESCE(stn.is_carrier_accepted OR stn.is_in_transit
          OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped,
@@ -1257,15 +1331,16 @@ export async function getActiveOrders(options?: {
      WHERE ${conditions.join(' AND ')}
      GROUP BY o.id, o.shipment_id, wa_deadline.deadline_at, o.order_id, o.product_title, o.quantity,
               o.condition, o.item_number, stn.tracking_number_raw, o.sku, o.out_of_stock,
-              o.account_source, o.notes, o.status_history,
+              o.account_source, o.notes, o.sale_amount, o.currency, o.status_history,
               stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered,
               stn.latest_status_category, stn.carrier,
               wa_t.assigned_tech_id, wa_p.assigned_packer_id,
               pl.packed_by, pl.packed_at
      ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC
-     LIMIT $${idx++} OFFSET $${idx}`,
-    params,
-  );
+     LIMIT $${idx++} OFFSET $${idx}`;
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return result.rows;
 }
 
@@ -1274,7 +1349,7 @@ export async function getActiveOrders(options?: {
 /**
  * Update a specific field in a shipped order
  */
-export async function updateShippedOrderField(id: number, field: string, value: any): Promise<void> {
+export async function updateShippedOrderField(id: number, field: string, value: any, orgId?: OrgId): Promise<void> {
   const allowedFields = ['notes', 'status_history'];
   if (!allowedFields.includes(field)) {
     throw new Error(
@@ -1284,16 +1359,24 @@ export async function updateShippedOrderField(id: number, field: string, value: 
     );
   }
   try {
-    await pool.query(
+    // When orgId is threaded, gate the UPDATE on the order's org ($3) so a row
+    // owned by another tenant is never mutated.
+    const orgClause = orgId ? `AND o.organization_id = $3` : '';
+    const sql =
       `UPDATE orders o
        SET ${field} = $1
        FROM shipping_tracking_numbers stn
        WHERE o.id = $2
          AND stn.id = o.shipment_id
          AND (stn.is_carrier_accepted OR stn.is_in_transit
-              OR stn.is_out_for_delivery OR stn.is_delivered)`,
-      [value, id],
-    );
+              OR stn.is_out_for_delivery OR stn.is_delivered)
+         ${orgClause}`;
+    const params = orgId ? [value, id, orgId] : [value, id];
+    if (orgId) {
+      await tenantQuery(orgId, sql, params);
+    } else {
+      await pool.query(sql, params);
+    }
   } catch (error) {
     console.error('Error updating shipped order field:', error);
     throw new Error('Failed to update shipped order field');
@@ -1303,11 +1386,13 @@ export async function updateShippedOrderField(id: number, field: string, value: 
 /**
  * Create a new order
  */
-export async function createOrder(params: CreateOrderParams): Promise<ActiveOrder> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+export async function createOrder(params: CreateOrderParams, orgId?: OrgId): Promise<ActiveOrder> {
+  // The order + its canonical deadline work_assignment are both org-stamped from
+  // params.organizationId (already required). When orgId is threaded the whole
+  // transaction runs through withTenantTransaction so the app.current_org GUC is
+  // set for the inserts; otherwise the legacy raw-pool transaction is used
+  // byte-identically. Both paths execute the same statements.
+  const runWrites = async (client: import('pg').PoolClient): Promise<ActiveOrder> => {
     const skuCatalogId = await resolveOrCreateSkuCatalogId({
       sku: params.sku,
       itemNumber: params.itemNumber,
@@ -1319,8 +1404,8 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
     const result = await client.query(
       `INSERT INTO orders
          (organization_id, order_id, product_title, sku, account_source,
-          condition, quantity, item_number, notes, sku_catalog_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          condition, quantity, item_number, notes, sale_amount, currency, sku_catalog_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         params.organizationId,
@@ -1332,6 +1417,8 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
         params.quantity ?? null,
         params.itemNumber ?? null,
         params.notes ?? null,
+        params.saleAmount ?? null,
+        params.currency ?? 'USD',
         skuCatalogId,
       ],
     );
@@ -1345,11 +1432,22 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
       [params.organizationId, order.id, params.shipByDate ?? null],
     );
 
-    await client.query('COMMIT');
     return {
       ...order,
       ship_by_date: params.shipByDate ?? null,
     };
+  };
+
+  if (orgId) {
+    return withTenantTransaction(orgId, runWrites);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await runWrites(client);
+    await client.query('COMMIT');
+    return out;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -1361,16 +1459,22 @@ export async function createOrder(params: CreateOrderParams): Promise<ActiveOrde
 /**
  * Check if a tracking number already exists (last-8 match via shipping_tracking_numbers)
  */
-export async function trackingNumberExists(trackingNumber: string): Promise<boolean> {
+export async function trackingNumberExists(trackingNumber: string, orgId?: OrgId): Promise<boolean> {
   const last8 = trackingNumber.replace(/\D/g, '').slice(-8);
-  const result = await pool.query(
+  // Tracking is a STRING key that collides across tenants — when orgId is
+  // threaded, scope the existence check to this org via orders.organization_id ($2).
+  const orgClause = orgId ? `AND o.organization_id = $2` : '';
+  const sql =
     `SELECT 1
      FROM orders o
      JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
      WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
-     LIMIT 1`,
-    [last8],
-  );
+     ${orgClause}
+     LIMIT 1`;
+  const params = orgId ? [last8, orgId] : [last8];
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return result.rowCount ? result.rowCount > 0 : false;
 }
 
@@ -1390,7 +1494,10 @@ export async function updateOrder(
     outOfStock: string | null;
     statusHistory: any;
     accountSource: string | null;
+    saleAmount: number | null;
+    currency: string | null;
   }>,
+  orgId?: OrgId,
 ): Promise<ActiveOrder | null> {
   const columnMap: Record<string, string> = {
     productTitle: 'product_title',
@@ -1402,6 +1509,8 @@ export async function updateOrder(
     outOfStock: 'out_of_stock',
     statusHistory: 'status_history',
     accountSource: 'account_source',
+    saleAmount: 'sale_amount',
+    currency: 'currency',
   };
 
   const setClauses: string[] = [];
@@ -1419,25 +1528,30 @@ export async function updateOrder(
 
   if (setClauses.length === 0 && deadlineAt === undefined) return null;
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  // When orgId is threaded, every read/write below is org-gated so an order owned
+  // by another tenant resolves to null (the route turns that into a 404). The
+  // dynamic UPDATE appends id then orgId; the SELECT-fallback uses [id, orgId].
+  const runWrites = async (client: import('pg').PoolClient): Promise<ActiveOrder | null> => {
     let order: any = null;
     if (setClauses.length > 0) {
       params.push(id);
-      const result = await client.query(
-        `UPDATE orders SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
-        params,
-      );
+      const idIdx = idx;
+      let updateSql = `UPDATE orders SET ${setClauses.join(', ')} WHERE id = $${idIdx}`;
+      if (orgId) {
+        params.push(orgId);
+        updateSql += ` AND organization_id = $${idIdx + 1}`;
+      }
+      updateSql += ` RETURNING *`;
+      const result = await client.query(updateSql, params);
       order = result.rows[0] ?? null;
     } else {
-      const result = await client.query(`SELECT * FROM orders WHERE id = $1`, [id]);
+      const result = orgId
+        ? await client.query(`SELECT * FROM orders WHERE id = $1 AND organization_id = $2`, [id, orgId])
+        : await client.query(`SELECT * FROM orders WHERE id = $1`, [id]);
       order = result.rows[0] ?? null;
     }
 
     if (!order) {
-      await client.query('ROLLBACK');
       return null;
     }
 
@@ -1463,11 +1577,22 @@ export async function updateOrder(
       );
     }
 
-    await client.query('COMMIT');
     return {
       ...order,
       ship_by_date: deadlineAt !== undefined ? (deadlineAt ?? null) : null,
     };
+  };
+
+  if (orgId) {
+    return withTenantTransaction(orgId, runWrites);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await runWrites(client);
+    await client.query('COMMIT');
+    return out;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -1479,27 +1604,50 @@ export async function updateOrder(
 /**
  * Delete an order by ID
  */
-export async function deleteOrder(id: number): Promise<boolean> {
-  const result = await pool.query('DELETE FROM orders WHERE id = $1', [id]);
+export async function deleteOrder(id: number, orgId?: OrgId): Promise<boolean> {
+  // When orgId is threaded, gate the DELETE on the org so a row owned by another
+  // tenant is never removed.
+  const sql = orgId
+    ? 'DELETE FROM orders WHERE id = $1 AND organization_id = $2'
+    : 'DELETE FROM orders WHERE id = $1';
+  const params = orgId ? [id, orgId] : [id];
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return (result.rowCount ?? 0) > 0;
 }
 
 /** Fetch one raw `orders` row by id (record-route GET). */
-export async function getOrderById(id: number): Promise<Record<string, unknown> | null> {
-  const result = await pool.query('SELECT * FROM orders WHERE id = $1 LIMIT 1', [id]);
+export async function getOrderById(id: number, orgId?: OrgId): Promise<Record<string, unknown> | null> {
+  // [id] read — when orgId is threaded, gate on the org so another tenant's row
+  // resolves to null (route turns that into a 404).
+  const sql = orgId
+    ? 'SELECT * FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1'
+    : 'SELECT * FROM orders WHERE id = $1 LIMIT 1';
+  const params = orgId ? [id, orgId] : [id];
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return result.rows[0] ?? null;
 }
 
 /**
  * Skip an order (mark with a skip status in status_history)
  */
-export async function skipOrder(id: number, reason?: string): Promise<boolean> {
+export async function skipOrder(id: number, reason?: string, orgId?: OrgId): Promise<boolean> {
   const now = formatPSTTimestamp();
-  const result = await pool.query(
+  // When orgId is threaded, gate the UPDATE ($3) so another tenant's order is
+  // never mutated.
+  const orgClause = orgId ? `AND organization_id = $3` : '';
+  const sql =
     `UPDATE orders
      SET status_history = COALESCE(status_history, '[]'::jsonb) || $1::jsonb
-     WHERE id = $2`,
-    [JSON.stringify([{ status: 'SKIPPED', timestamp: now, reason: reason ?? null }]), id],
-  );
+     WHERE id = $2
+     ${orgClause}`;
+  const payload = JSON.stringify([{ status: 'SKIPPED', timestamp: now, reason: reason ?? null }]);
+  const params = orgId ? [payload, id, orgId] : [payload, id];
+  const result = orgId
+    ? await tenantQuery(orgId, sql, params)
+    : await pool.query(sql, params);
   return (result.rowCount ?? 0) > 0;
 }

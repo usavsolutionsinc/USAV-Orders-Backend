@@ -30,7 +30,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { Calendar } from '@/design-system/components/Calendar';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { CornerField } from '@/components/labels/CornerField';
+import { useLabelDraft } from '@/components/labels/useLabelDraft';
+import { formatLabelDate, parseLabelDate } from '@/components/labels/labelDate';
 import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
 import { Calendar as CalendarIcon, ChevronDown, Pencil, Printer, X } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
@@ -121,22 +124,6 @@ function ManagedFieldLabel({ children, onManage }: { children: ReactNode; onMana
   );
 }
 
-function parseLabelDate(s: string): Date | undefined {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(s.trim());
-  if (m) {
-    let yy = Number(m[3]);
-    if (yy < 100) yy += 2000;
-    const d = new Date(yy, Number(m[1]) - 1, Number(m[2]));
-    return Number.isNaN(d.getTime()) ? undefined : d;
-  }
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-function formatLabelDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
-}
-
 export function LabelEditPopover({
   open,
   defaults,
@@ -153,7 +140,7 @@ export function LabelEditPopover({
   onApplyAndPrint: (draft: LabelEditDraft) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState<LabelEditDraft>(defaults);
+  const { draft, set } = useLabelDraft<LabelEditDraft>(defaults, open);
   const [calOpen, setCalOpen] = useState(false);
   const [managerKind, setManagerKind] = useState<CatalogKind | null>(null);
 
@@ -168,21 +155,34 @@ export function LabelEditPopover({
     return Array.from(new Set(merged));
   }, [platformCat.options, draft.platform]);
 
-  // Re-seed from the record whenever the popover (re)opens so it never shows a
-  // stale draft from a previous edit / previous line. `defaults` is intentionally
-  // not a dep — typing re-derives it each render and would clobber the draft.
+  // Reseed of the draft itself happens in useLabelDraft on the open transition;
+  // also collapse the calendar when the popover (re)opens.
   useEffect(() => {
-    if (open) {
-      setDraft(defaults);
-      setCalOpen(false);
-    }
+    if (open) setCalOpen(false);
   }, [open]);
-
-  const set = <K extends keyof LabelEditDraft>(key: K, value: LabelEditDraft[K]) =>
-    setDraft((d) => ({ ...d, [key]: value }));
 
   const preview = useMemo(() => buildPayload(draft), [buildPayload, draft]);
   const selectedDate = parseLabelDate(draft.date);
+
+  // Bottom-right corner: which draft field the single input maps to, plus its
+  // placeholder + sanitizing, switched by the active mode.
+  const cornerValue =
+    draft.cornerMode === 'order'
+      ? draft.reference
+      : draft.cornerMode === 'ticket'
+        ? draft.ticket
+        : draft.tracking;
+  const cornerPlaceholder =
+    draft.cornerMode === 'order'
+      ? 'Order / PO# — e.g. PO-1234'
+      : draft.cornerMode === 'ticket'
+        ? 'Ticket # — e.g. 12345'
+        : 'Tracking # — full carrier number';
+  const onCornerValue = (v: string) => {
+    if (draft.cornerMode === 'order') set('reference', v);
+    else if (draft.cornerMode === 'ticket') set('ticket', v.replace(/[^\d]/g, ''));
+    else set('tracking', v);
+  };
 
   return (
     <>
@@ -286,37 +286,16 @@ export function LabelEditPopover({
 
           <div>
             <label className={FIELD_LABEL}>Bottom-right corner</label>
-            <HorizontalButtonSlider
+            <CornerField
               items={CORNER_ITEMS}
-              value={draft.cornerMode}
-              onChange={(id) => set('cornerMode', id as LabelCornerMode)}
-              variant="nav"
-              size="md"
-              aria-label="Bottom-right corner shows order, ticket, or tracking number"
+              mode={draft.cornerMode}
+              onModeChange={(id) => set('cornerMode', id as LabelCornerMode)}
+              value={cornerValue}
+              onValueChange={onCornerValue}
+              placeholder={cornerPlaceholder}
+              inputMode={draft.cornerMode === 'ticket' ? 'numeric' : 'text'}
+              ariaLabel="Bottom-right corner shows order, ticket, or tracking number"
             />
-            {draft.cornerMode === 'order' ? (
-              <input
-                value={draft.reference}
-                onChange={(e) => set('reference', e.target.value)}
-                placeholder="Order / PO# — e.g. PO-1234"
-                className={`${TEXT_INPUT} mt-2`}
-              />
-            ) : draft.cornerMode === 'ticket' ? (
-              <input
-                value={draft.ticket}
-                onChange={(e) => set('ticket', e.target.value.replace(/[^\d]/g, ''))}
-                inputMode="numeric"
-                placeholder="Ticket # — e.g. 12345"
-                className={`${TEXT_INPUT} mt-2`}
-              />
-            ) : (
-              <input
-                value={draft.tracking}
-                onChange={(e) => set('tracking', e.target.value)}
-                placeholder="Tracking # — full carrier number"
-                className={`${TEXT_INPUT} mt-2`}
-              />
-            )}
           </div>
 
           <div>

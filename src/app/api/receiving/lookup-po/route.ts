@@ -15,6 +15,7 @@ import {
 } from '@/lib/receiving/intake-classification';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
+import { recordReceivingScan } from '@/lib/receiving/record-scan';
 import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
 import {
   upsertOpenTrackingException,
@@ -177,18 +178,11 @@ async function memoizeLookupHit(
   receivingId: number,
   trackingNumber: string,
   receivingSource: string,
+  staffId: number | null,
+  carrier: string,
 ): Promise<number> {
   const scanSource: 'zoho_po' | 'unmatched' = receivingSource === 'zoho_po' ? 'zoho_po' : 'unmatched';
-  const inserted = await pool.query<{ id: number }>(
-    `INSERT INTO receiving_scans
-       (receiving_id, tracking_number, scanned_at, source, organization_id)
-     VALUES ($1, $2, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
-     ON CONFLICT (tracking_number, receiving_id) DO UPDATE
-       SET scanned_at = EXCLUDED.scanned_at
-     RETURNING id`,
-    [receivingId, trackingNumber, scanSource],
-  );
-  return Number(inserted.rows[0].id);
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, scanSource);
 }
 
 /**
@@ -213,6 +207,8 @@ async function memoizeLookupHit(
  */
 async function findScanByTracking(
   trackingNumber: string,
+  staffId: number | null,
+  carrier: string,
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
   const digits = String(trackingNumber || '').replace(/\D/g, '');
   if (digits.length < 8) return null;
@@ -231,7 +227,7 @@ async function findScanByTracking(
   );
   if (stnHit.rows.length === 1) {
     const { receiving_id, source } = stnHit.rows[0];
-    const scan_id = await memoizeLookupHit(receiving_id, trackingNumber, source);
+    const scan_id = await memoizeLookupHit(receiving_id, trackingNumber, source, staffId, carrier);
     return { scan_id, receiving_id };
   }
 
@@ -464,7 +460,7 @@ async function createOrGetTestReceiving(
   const zohoLineItemId = `TEST-LINE-${key}`;
 
   const { receivingId, preexisting } = await upsertMatchedReceiving(poId, carrier, staffId);
-  const scanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
+  const scanId = await recordReceivingScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
 
   // A scanned test carton belongs in receiving triage as a SCANNED line — NOT
   // the tech testing queue. The testing queue (/api/work-orders) keys on the
@@ -505,63 +501,7 @@ async function recordScan(
   staffId: number | null,
   source: 'zoho_po' | 'unmatched',
 ): Promise<number> {
-  const result = await pool.query<{ id: number }>(
-    `INSERT INTO receiving_scans
-       (receiving_id, tracking_number, carrier, scanned_at, scanned_by, source, organization_id)
-     VALUES ($1, $2, $3, NOW(), $4, $5, (SELECT organization_id FROM receiving WHERE id = $1))
-     ON CONFLICT (tracking_number, receiving_id) DO UPDATE
-       SET scanned_at = EXCLUDED.scanned_at,
-           scanned_by = EXCLUDED.scanned_by
-     RETURNING id`,
-    [receivingId, trackingNumber, carrier || null, staffId, source],
-  );
-  const scanId = Number(result.rows[0].id);
-  await linkScanToStn(scanId, receivingId, trackingNumber, source);
-  return scanId;
-}
-
-/**
- * Phase 6 (STN consolidation) — guarantee every real carrier scan resolves to a
- * canonical shipping_tracking_numbers row and link the dock-scan event to it by
- * id. The flow the receiving_scans table follows:
- *   1. get-or-create the STN row for this tracking (registerShipmentPermissive
- *      is an idempotent upsert by normalized tracking#),
- *   2. set receiving_scans.shipment_id to that STN id,
- *   3. adopt the link onto the carton (receiving.shipment_id) when it has none,
- *      so the carton, its lines (Phase 3), and the scan all point at one STN row.
- *
- * registerShipmentPermissive returns null for non-carrier inputs (SKU-format,
- * sub-8-char, blank) — those record the dock event with shipment_id NULL by
- * design. Column-gated by RECEIVING_UNIFIED_INBOUND + best-effort so an
- * unapplied migration (or a transient STN write) can never fail a scan.
- */
-async function linkScanToStn(
-  scanId: number,
-  receivingId: number,
-  trackingNumber: string,
-  source: 'zoho_po' | 'unmatched',
-): Promise<void> {
-  if (!isReceivingUnifiedInbound()) return;
-  try {
-    const stn = await registerShipmentPermissive({
-      trackingNumber,
-      sourceSystem: `receiving_scan:${source}`,
-    });
-    const shipmentId = stn?.id ?? null;
-    if (shipmentId == null) return; // non-carrier / SKU-format → no STN row, leave NULL
-    await pool.query(
-      `UPDATE receiving_scans SET shipment_id = $2 WHERE id = $1 AND shipment_id IS DISTINCT FROM $2`,
-      [scanId, shipmentId],
-    );
-    // Keep the carton authoritative too — adopt the STN onto receiving when it
-    // lacks one (so receiving_lines.shipment_id stamping, Phase 3, can follow).
-    await pool.query(
-      `UPDATE receiving SET shipment_id = $2 WHERE id = $1 AND shipment_id IS NULL`,
-      [receivingId, shipmentId],
-    );
-  } catch (err) {
-    console.warn(`[lookup-po] linkScanToStn skipped for scan=${scanId}:`, err);
-  }
+  return recordReceivingScan(receivingId, trackingNumber, carrier, staffId, source);
 }
 
 /**
@@ -746,7 +686,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     //    empty (e.g. receiving_lines was truncated, or the row was created
     //    as 'unmatched' before Zoho synced the PO), fall through to the
     //    Zoho lookup so we can repopulate the PO linkage on this same row.
-    const existingScan = await findScanByTracking(trackingNumber);
+    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier);
     let preassignedReceivingId: number | null = null;
     let preassignedScanId: number | null = null;
     if (existingScan) {
@@ -756,6 +696,20 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         fetchReceivingPackage(existingScan.receiving_id),
       ]);
       if (lines.length > 0) {
+        // Re-attribute this dock event to the current operator (dedup path
+        // used to leave scanned_by stale or NULL via memoizeLookupHit).
+        const recvSourceRes = await pool.query<{ source: string | null }>(
+          `SELECT source FROM receiving WHERE id = $1 LIMIT 1`,
+          [existingScan.receiving_id],
+        );
+        const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
+        await recordReceivingScan(
+          existingScan.receiving_id,
+          trackingNumber,
+          carrier,
+          staffId,
+          recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+        );
         const poIdsSet = new Set<string>();
         for (const l of lines) {
           if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);

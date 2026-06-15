@@ -10,10 +10,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { revokeAllSessionsForStaff, SESSION_POLICIES, type SessionPolicy } from '@/lib/auth/session';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -73,9 +73,17 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if (updates.length === 0) {
     return NextResponse.json({ error: 'NO_UPDATES' }, { status: 400 });
   }
+  // staff is tenant-owned: gate the mutation on the caller's org. A staff id
+  // from another tenant matches no row, so nothing is updated and we 404 below
+  // (never mutate cross-tenant, never 403).
   params.push(id);
-  const r = await pool.query(
-    `UPDATE staff SET ${updates.join(', ')} WHERE id = $${params.length}
+  const idParam = params.length;
+  params.push(ctx.organizationId);
+  const orgParam = params.length;
+  const r = await tenantQuery(
+    ctx.organizationId,
+    `UPDATE staff SET ${updates.join(', ')}
+      WHERE id = $${idParam} AND organization_id = $${orgParam}
      RETURNING id, name, role, status, employee_code, session_policy,
                default_home_path, default_home_path_mobile`,
     params,
@@ -104,7 +112,16 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   if (!Number.isFinite(id) || id <= 0) {
     return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
   }
-  await pool.query(`UPDATE staff SET status = 'disabled', active = false WHERE id = $1`, [id]);
+  // staff is tenant-owned: only soft-disable a staff row in the caller's org.
+  // A cross-tenant id matches no row → 404, and is never mutated (no session
+  // revoke / audit for it).
+  const r = await tenantQuery(
+    ctx.organizationId,
+    `UPDATE staff SET status = 'disabled', active = false
+      WHERE id = $1 AND organization_id = $2`,
+    [id, ctx.organizationId],
+  );
+  if (r.rowCount === 0) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
   await revokeAllSessionsForStaff(id);
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,

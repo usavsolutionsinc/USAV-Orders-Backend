@@ -24,19 +24,53 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       );
     }
 
-    const idsToDelete: number[] = orderId ? [orderId] : orderIds;
-    const placeholders = idsToDelete.map((_, idx) => `$${idx + 1}`).join(', ');
+    const requestedIds: number[] = orderId ? [orderId] : orderIds;
 
-    // Snapshot rows before delete for the audit trail.
-    const beforeRows = await pool.query(
-      `SELECT id, order_id, product_title, sku, condition, status, shipment_id, created_at
-       FROM orders WHERE id IN (${placeholders})`,
-      idsToDelete,
+    // An order number (order_id) can carry multiple rows in `orders`: accidental
+    // same-product dupes (which the dashboard de-dupes to one visible row) AND
+    // genuinely different products (shown as separate lines under one expandable
+    // order). A delete carries only the visible row's id, so expand it to its
+    // same-product siblings — otherwise an accidental dupe reappears after refetch
+    // (the delete "doesn't stick"). Scope the expansion to the SAME product
+    // identity (sku_catalog_id → sku → normalized title, mirroring the table's
+    // dedupeByOrderProduct) so deleting one product never nukes a different line
+    // of a multi-product order.
+    // Product identity for a row under the given alias, mirroring the table's
+    // dedupeByOrderProduct (sku_catalog_id → non-empty sku → normalized title).
+    const productKeyExpr = (a: string) => `COALESCE(
+        NULLIF('cat:' || ${a}.sku_catalog_id::text, 'cat:'),
+        NULLIF('sku:' || lower(trim(${a}.sku)), 'sku:'),
+        NULLIF('title:' || lower(regexp_replace(trim(coalesce(${a}.product_title, '')), '\\s+', ' ', 'g')), 'title:')
+      )`;
+    const expanded = await pool.query(
+      `WITH targets AS (
+         SELECT t.order_id, ${productKeyExpr('t')} AS pkey
+           FROM orders t
+          WHERE t.id = ANY($1::int[]) AND t.order_id IS NOT NULL AND t.order_id <> ''
+       )
+       SELECT o.id, o.order_id, o.product_title, o.sku, o.condition, o.status, o.shipment_id, o.created_at
+         FROM orders o
+        WHERE o.id = ANY($1::int[])
+           OR EXISTS (
+                SELECT 1 FROM targets tg
+                 WHERE tg.order_id = o.order_id
+                   AND tg.pkey IS NOT DISTINCT FROM ${productKeyExpr('o')}
+              )`,
+      [requestedIds],
     );
+    const beforeRows = expanded;
+    const idsToDelete: number[] = expanded.rows.map((r) => Number(r.id));
+
+    if (idsToDelete.length === 0) {
+      return NextResponse.json(
+        { error: 'No matching orders were deleted', deleted: 0 },
+        { status: 404 }
+      );
+    }
 
     const result = await pool.query(
-      `DELETE FROM orders WHERE id IN (${placeholders})`,
-      idsToDelete
+      `DELETE FROM orders WHERE id = ANY($1::int[])`,
+      [idsToDelete]
     );
     if ((result.rowCount || 0) === 0) {
       return NextResponse.json(

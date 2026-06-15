@@ -83,7 +83,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       segments,
       binType: typeof body?.binType === 'string' ? body.binType.trim() || null : null,
       capacity: typeof body?.capacity === 'number' ? body.capacity : null,
-    });
+    }, ctx.organizationId);
 
     // Audit floor — log only when we actually inserted/reactivated rows
     // (re-prints of existing live bins are silent).

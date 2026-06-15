@@ -316,23 +316,20 @@ export async function PATCH(
       );
       const beforeQty = Number((before.rows as Array<{ stock: number | null }>)[0]?.stock ?? 0);
 
-      // Increment/decrement stock
-      const result = await pool.query(
-        `INSERT INTO sku_stock (sku, stock)
-         VALUES ($1, $2)
-         ON CONFLICT (sku)
-         DO UPDATE SET stock = sku_stock.stock + $2
-         RETURNING *`,
-        [skuValue, delta],
+      // Ledger-only: the sku_stock_ledger row is the system of record. The
+      // trg_sku_stock_from_ledger trigger projects SUM(WAREHOUSE deltas) onto
+      // sku_stock.stock (creating the row if absent) — no direct write to
+      // sku_stock.stock. Load-bearing (no .catch swallow): a failed ledger write
+      // must surface, not silently no-op the adjustment.
+      await pool.query(
+        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
+         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
+        [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
       );
 
-      // Log to ledger (best-effort)
-      await pool
-        .query(
-          `INSERT INTO sku_stock_ledger (sku, delta, reason, staff_id) VALUES ($1, $2, $3, $4)`,
-          [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
-        )
-        .catch(() => {});
+      const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
+      const afterRow = (after.rows as Array<{ stock: number | null }>)[0];
+      const afterQty = Number(afterRow?.stock ?? beforeQty + delta);
 
       await recordAudit(pool, ctx, request, {
         source: 'sku-stock-page',
@@ -340,13 +337,13 @@ export async function PATCH(
         entityType: AUDIT_ENTITY.SKU_STOCK,
         entityId: skuValue,
         before: { stock: beforeQty },
-        after: { stock: Number(result.rows[0]?.stock ?? beforeQty + delta) },
+        after: { stock: afterQty },
         reasonCode: reason || 'ADJUSTMENT',
         actorStaffIdOverride: effectiveStaffId,
         extra: { delta },
       });
 
-      return NextResponse.json({ success: true, stock: result.rows[0] });
+      return NextResponse.json({ success: true, stock: afterRow });
     }
 
     if (action === 'set' && typeof absoluteQty === 'number') {
@@ -358,24 +355,18 @@ export async function PATCH(
       const currentQty = Number(current.rows[0]?.stock) || 0;
       const ledgerDelta = absoluteQty - currentQty;
 
-      const result = await pool.query(
-        `INSERT INTO sku_stock (sku, stock)
-         VALUES ($1, $2)
-         ON CONFLICT (sku)
-         DO UPDATE SET stock = EXCLUDED.stock
-         RETURNING *`,
-        [skuValue, absoluteQty],
+      // Ledger-only: post a WAREHOUSE delta that brings the sum to absoluteQty;
+      // the trigger projects it onto sku_stock.stock (and creates the row if
+      // absent). Always post — a 0 delta still ensures the projected row exists
+      // at the intended value. Load-bearing (no .catch swallow).
+      await pool.query(
+        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
+         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
+        [skuValue, ledgerDelta, reason || 'SET', staffId || null],
       );
 
-      // Log to ledger
-      if (ledgerDelta !== 0) {
-        await pool
-          .query(
-            `INSERT INTO sku_stock_ledger (sku, delta, reason, staff_id) VALUES ($1, $2, $3, $4)`,
-            [skuValue, ledgerDelta, reason || 'SET', staffId || null],
-          )
-          .catch(() => {});
-      }
+      const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
+      const afterRow = (after.rows as Array<{ stock: number | null }>)[0];
 
       await recordAudit(pool, ctx, request, {
         source: 'sku-stock-page',
@@ -389,7 +380,7 @@ export async function PATCH(
         extra: { delta: ledgerDelta, mode: 'set' },
       });
 
-      return NextResponse.json({ success: true, stock: result.rows[0] });
+      return NextResponse.json({ success: true, stock: afterRow });
     }
 
     if (action === 'location' && typeof location === 'string') {

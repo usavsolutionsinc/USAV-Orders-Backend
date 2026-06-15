@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/tracking-exceptions
@@ -13,7 +13,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  *   ?limit=<n> (default 100, max 500)
  *   ?offset=<n> (default 0)
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const domain = (searchParams.get('domain') || 'receiving').toLowerCase();
@@ -77,10 +77,14 @@ export const GET = withAuth(async (request: NextRequest) => {
        LIMIT $${params.length - 1} OFFSET $${params.length}
     `;
 
-    const result = await pool.query(sql, params);
+    // tracking_exceptions has no organization_id column (child-scoped via
+    // staff/receiving). Both parent FKs are nullable and joined on integer
+    // surrogate PKs, so we GUC-wrap (tenantQuery) for the RLS backstop rather
+    // than adding an explicit org filter. See NEEDS-COL note in tenancy audit.
+    const result = await tenantQuery(ctx.organizationId, sql, params);
 
     const countSql = `SELECT COUNT(*)::int AS n FROM tracking_exceptions te WHERE ${where.join(' AND ')}`;
-    const countResult = await pool.query(countSql, params.slice(0, -2));
+    const countResult = await tenantQuery(ctx.organizationId, countSql, params.slice(0, -2));
 
     return NextResponse.json({
       success: true,

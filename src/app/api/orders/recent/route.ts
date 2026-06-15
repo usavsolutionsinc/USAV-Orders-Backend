@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getCurrentPSTDateKey, normalizePSTTimestamp, toPSTDateKey } from '@/utils/date';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -31,14 +31,19 @@ interface DateGroup {
  * Returns all orders (shipped + unshipped) from the last N days,
  * grouped by creation date descending.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const startedAt = Date.now();
   let ok = false;
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const days = Math.min(Math.max(parseInt(searchParams.get('days') || '7', 10), 1), 60);
     const query = searchParams.get('q') || '';
 
+    // $1 is always the org anchor — orders is tenant-owned, so the result set
+    // is scoped to this tenant. product_manuals has no organization_id column
+    // (child of sku_catalog, matched here by item_number string), so the
+    // has_manual EXISTS subquery is GUC-wrapped only — see needsColTables.
     let sql = `
       SELECT
         o.id,
@@ -66,15 +71,17 @@ export const GET = withAuth(async (req: NextRequest) => {
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa
         WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+          AND wa.organization_id = o.organization_id
         ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                  wa.updated_at DESC, wa.id DESC LIMIT 1
       ) wa_deadline ON TRUE
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
       WHERE o.created_at >= NOW() - INTERVAL '${days} days'
+        AND o.organization_id = $1
     `;
 
-    const params: string[] = [];
-    let paramCount = 1;
+    const params: string[] = [orgId];
+    let paramCount = 2;
 
     if (query.trim()) {
       sql += ` AND (
@@ -90,7 +97,7 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     sql += ' ORDER BY o.created_at DESC LIMIT 500';
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(orgId, sql, params);
     const orders: RecentOrder[] = result.rows.map((row) => ({
       id: Number(row.id),
       shipment_id: row.shipment_id ? Number(row.shipment_id) : null,

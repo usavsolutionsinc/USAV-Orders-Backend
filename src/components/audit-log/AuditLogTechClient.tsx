@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { FileText } from '@/components/Icons';
 import { AuditLogDailyReport } from './AuditLogDailyReport';
 import { AuditEventCard, AuditCenterMessage } from './AuditEventCard';
+import { EventTimeline } from '@/components/ui/EventTimeline';
+import { techEventsToTimeline } from '@/lib/timeline';
 
 interface TechEvent {
   id: string;
@@ -117,11 +119,24 @@ export function AuditLogTechClient() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-6 py-6">
-        <div className="mx-auto max-w-3xl space-y-3">
+        <div className="mx-auto max-w-3xl space-y-4">
           {detail.events.length === 0 ? (
             <AuditCenterMessage label="No events match the current filters." />
           ) : (
-            detail.events.map((ev) => <AuditEventCard key={ev.id} event={ev} />)
+            <>
+              {/* Unified trail — same shared EventTimeline as the Shipped /
+                  Incoming detail panels (label → tech verdict → pack → ship). */}
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <h3 className="mb-2 text-eyebrow font-black uppercase tracking-wider text-gray-500">
+                  Activity timeline
+                </h3>
+                <EventTimeline items={techEventsToTimeline(detail.events)} />
+              </div>
+              {/* Detailed per-event cards (before/after diffs) kept below. */}
+              <div className="space-y-3">
+                {detail.events.map((ev) => <AuditEventCard key={ev.id} event={ev} />)}
+              </div>
+            </>
           )}
         </div>
       </div>

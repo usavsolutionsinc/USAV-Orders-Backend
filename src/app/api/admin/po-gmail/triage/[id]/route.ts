@@ -25,7 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { ApiError, errorResponse } from '@/lib/api';
 
@@ -39,6 +39,7 @@ export async function PATCH(
 ) {
   const gate = await requireRoutePerm(req, 'admin.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
 
   try {
     const { id } = await params;
@@ -107,17 +108,21 @@ export async function PATCH(
       sets.push(`zoho_uploaded_at = COALESCE(zoho_uploaded_at, NOW())`);
     }
 
-    const { rowCount, rows } = await pool.query(
+    // Org-ownership gate via the WHERE clause: a row owned by another org
+    // matches nothing → rowCount 0 → 404 (never 403).
+    const orgParam = next(orgId);
+    const { rowCount, rows } = await withTenantTransaction(orgId, (client) => client.query(
       `UPDATE email_missing_purchase_orders
           SET ${sets.join(', ')}
         WHERE id = $1
+          AND organization_id = ${orgParam}
         RETURNING id, gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
                   email_subject, email_from, email_received, scanned_at,
                   pile, status, notes, assigned_to,
                   zoho_uploaded_po_number, zoho_uploaded_at,
                   triage_state, resolved_at`,
       sqlParams,
-    );
+    ));
 
     if (!rowCount) throw ApiError.notFound('email_missing_purchase_orders', id);
     return NextResponse.json({ ok: true, row: rows[0] });

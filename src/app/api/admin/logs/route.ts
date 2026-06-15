@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
@@ -36,8 +36,9 @@ function pushParam(params: any[], value: any): string {
   return `$${params.length}`;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const limit = Math.min(parsePositiveInt(searchParams.get('limit'), 100), 200);
     const offset = Math.max(0, parsePositiveInt(searchParams.get('offset'), 0));
@@ -54,6 +55,11 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     const auditParams: any[] = [];
     const auditWhere: string[] = ['1=1'];
+
+    // Tenant ownership filter — never surface another org's audit rows. The
+    // staff / station_activity_logs joins are on integer surrogate PKs (safe
+    // bare); only the anchor table needs an explicit org filter.
+    auditWhere.push(`al.organization_id = ${pushParam(auditParams, orgId)}`);
 
     if (actorStaffId != null) {
       auditWhere.push(`al.actor_staff_id = ${pushParam(auditParams, actorStaffId)}`);
@@ -85,6 +91,11 @@ export const GET = withAuth(async (req: NextRequest) => {
     const salParams: any[] = [];
     const salWhere: string[] = ['1=1'];
 
+    // Tenant ownership filter — anchor table station_activity_logs carries
+    // organization_id; staff / packer_logs / tech_serial_numbers /
+    // shipping_tracking_numbers joins are on integer surrogate PKs (safe bare).
+    salWhere.push(`sal.organization_id = ${pushParam(salParams, orgId)}`);
+
     if (actorStaffId != null) {
       salWhere.push(`sal.staff_id = ${pushParam(salParams, actorStaffId)}`);
     }
@@ -115,7 +126,8 @@ export const GET = withAuth(async (req: NextRequest) => {
     const [auditRowsRes, salRowsRes] = await Promise.all([
       kind === 'sal'
         ? Promise.resolve({ rows: [] as any[] })
-        : pool.query(
+        : tenantQuery(
+            orgId,
             `SELECT
               ('audit:' || al.id::text) AS event_id,
               'AUDIT'::text AS kind,
@@ -158,7 +170,8 @@ export const GET = withAuth(async (req: NextRequest) => {
           ),
       kind === 'audit'
         ? Promise.resolve({ rows: [] as any[] })
-        : pool.query(
+        : tenantQuery(
+            orgId,
             `SELECT
               ('sal:' || sal.id::text) AS event_id,
               'SAL'::text AS kind,

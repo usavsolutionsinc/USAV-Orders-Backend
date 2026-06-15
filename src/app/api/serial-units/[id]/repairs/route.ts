@@ -14,13 +14,15 @@ function unitIdFromPath(pathname: string): number {
 }
 
 /** GET — repair history for a unit (newest first), with staff + resolved modes. */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   const serialUnitId = unitIdFromPath(request.nextUrl.pathname);
   if (!Number.isFinite(serialUnitId) || serialUnitId <= 0) {
     return NextResponse.json({ ok: false, error: 'invalid serial_unit id' }, { status: 400 });
   }
   try {
-    const repairs = await listUnitRepairs(serialUnitId);
+    // Org-scoped read: listUnitRepairs filters unit_repairs by organization_id,
+    // so a cross-tenant serial_unit id yields an empty list (no disclosure).
+    const repairs = await listUnitRepairs(serialUnitId, ctx.organizationId);
     return NextResponse.json({ ok: true, repairs });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to load repairs';
@@ -40,6 +42,9 @@ export const POST = withAuth(async (request, ctx) => {
   if (parsed instanceof NextResponse) return parsed;
 
   try {
+    // Org-ownership gate (404, never 403): openRepair resolves serial_units with
+    // an explicit organization_id predicate when orgId is threaded, so a
+    // cross-tenant unit throws "unit not found" → mapped to 404 below.
     const repair = await openRepair({
       serialUnitId,
       summary: parsed.summary,
@@ -49,7 +54,7 @@ export const POST = withAuth(async (request, ctx) => {
       repairServiceId: parsed.repairServiceId ?? null,
       staffId: ctx.staffId,
       clientEventId: parsed.clientEventId ?? null,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, request, {
       source: 'serial-unit-repairs',

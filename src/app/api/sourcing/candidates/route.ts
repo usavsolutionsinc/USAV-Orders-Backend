@@ -17,7 +17,7 @@ const ROUTE_CANDIDATES_POST = 'sourcing-candidates.post';
  * GET /api/sourcing/candidates?skuId=&boseModelId=&sourcingAlertId=&status=
  * The saved watchlist of secondary-market hits.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const num = (k: string) => {
@@ -34,7 +34,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       status: searchParams.get('status'),
       limit,
       offset,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ success: true, items, total });
   } catch (error: any) {
     console.error('Error in GET /api/sourcing/candidates:', error);
@@ -81,7 +81,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       supplierId: parsed.supplierId ?? null,
       status: parsed.status,
       raw: parsed.raw ?? null,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'sourcing-candidates-api',

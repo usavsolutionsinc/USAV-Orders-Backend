@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
@@ -33,9 +33,16 @@ interface PayrollSettingsRow {
   updated_at: string;
 }
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req: NextRequest, ctx) => {
   try {
-    const r = await pool.query<PayrollSettingsRow>(`SELECT * FROM payroll_settings WHERE id = 1`);
+    // payroll_settings is a shop-wide singleton (id=1) with no organization_id
+    // column and no parent to scope by, so it can't carry an explicit org
+    // predicate. Routing through tenantQuery sets the app.current_org GUC
+    // (the RLS backstop) on the session for this read.
+    const r = await tenantQuery<PayrollSettingsRow>(
+      ctx.organizationId,
+      `SELECT * FROM payroll_settings WHERE id = 1`,
+    );
     return NextResponse.json({ settings: r.rows[0] ?? null }, { headers: { 'cache-control': 'no-store' } });
   } catch (err) {
     console.error('[/api/payroll/settings GET] error:', err);
@@ -90,9 +97,15 @@ export const PATCH = withAuth(async (req: NextRequest, me) => {
   setClauses.push(`updated_at = NOW()`);
 
   try {
-    const r = await pool.query<PayrollSettingsRow>(
-      `UPDATE payroll_settings SET ${setClauses.join(', ')} WHERE id = 1 RETURNING *`,
-      params,
+    // payroll_settings is a shop-wide singleton (id=1) with no organization_id
+    // column and no parent to scope by, so the WHERE can't carry an explicit
+    // org predicate. Running the write inside withTenantTransaction sets the
+    // app.current_org GUC (the RLS backstop) for this UPDATE.
+    const r = await withTenantTransaction(me.organizationId, (client) =>
+      client.query<PayrollSettingsRow>(
+        `UPDATE payroll_settings SET ${setClauses.join(', ')} WHERE id = 1 RETURNING *`,
+        params,
+      ),
     );
     return NextResponse.json({ settings: r.rows[0] });
   } catch (err) {

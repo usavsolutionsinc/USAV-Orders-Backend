@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { upsertStaffGoalWithHistory } from '@/lib/neon/staff-goals-queries';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const staffIdParam = searchParams.get('staffId');
@@ -13,15 +13,18 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     // Single staff lookup
     if (staffId && Number.isFinite(staffId)) {
-      const single = await pool.query(
+      // staff is org-owned; staff_goals scoped via the staff_id join (global PK).
+      const orgIdx = stationParam ? 3 : 2;
+      const single = await tenantQuery(
+        ctx.organizationId,
         `SELECT s.id AS staff_id, s.name, s.employee_id,
                 COALESCE(sg.daily_goal, 50) AS daily_goal,
                 COALESCE(sg.station, ${stationParam ? '$2' : `'TECH'`}) AS station
          FROM staff s
          LEFT JOIN staff_goals sg ON sg.staff_id = s.id
            ${stationParam ? 'AND sg.station = $2' : ''}
-         WHERE s.id = $1 LIMIT 1`,
-        stationParam ? [staffId, stationParam] : [staffId],
+         WHERE s.id = $1 AND s.organization_id = $${orgIdx} LIMIT 1`,
+        stationParam ? [staffId, stationParam, ctx.organizationId] : [staffId, ctx.organizationId],
       );
       if (single.rows.length === 0) {
         return NextResponse.json({ error: 'Staff not found' }, { status: 404 });
@@ -33,7 +36,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     // Derive default station from employee_id prefix when no goal row exists
     const safeStation = stationParam ? stationParam.replace(/'/g, '') : null;
 
-    const result = await pool.query(`
+    const result = await tenantQuery(ctx.organizationId, `
       WITH derived_station AS (
         SELECT id,
           CASE
@@ -87,8 +90,9 @@ export const GET = withAuth(async (req: NextRequest) => {
       LEFT JOIN today_counts tc ON tc.staff_id = s.id AND tc.station = COALESCE(spg.station, ds.default_station)
       LEFT JOIN week_counts wc ON wc.staff_id = s.id AND wc.station = COALESCE(spg.station, ds.default_station)
       WHERE s.active = true
+        AND s.organization_id = $1
       ORDER BY s.name ASC
-    `);
+    `, [ctx.organizationId]);
 
     return NextResponse.json(result.rows);
   } catch (error: any) {
@@ -97,7 +101,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'operations.view' });
 
-export const PUT = withAuth(async (req: NextRequest) => {
+export const PUT = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json();
     const staffId = parseInt(String(body?.staffId || ''), 10);
@@ -114,7 +118,7 @@ export const PUT = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: 'station must be TECH, PACK, UNBOX, SALES, or FBA' }, { status: 400 });
     }
 
-    await upsertStaffGoalWithHistory(staffId, dailyGoal, station);
+    await upsertStaffGoalWithHistory(staffId, dailyGoal, station, ctx.organizationId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('Error updating staff goal:', error);

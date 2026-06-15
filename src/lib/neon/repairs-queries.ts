@@ -1,6 +1,8 @@
 import pool from '@/lib/db';
-import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
+import { transition } from '@/lib/inventory/state-machine';
 import { tapWorkflow } from '@/lib/workflow/tap';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * Per-serial repair history (unit_repairs) + the failure modes each repair
@@ -8,10 +10,11 @@ import { tapWorkflow } from '@/lib/workflow/tap';
  * docs/condition-grading-repair-qc-plan.md §4.5 / 2026-06-07_unit_repairs.sql.
  *
  * Lifecycle uses the existing IN_REPAIR / REPAIR_DONE serial statuses and the
- * REPAIR_STARTED / REPAIR_COMPLETED inventory events. The event write runs on
- * the Drizzle neon-http connection (appendInventoryEvent) AFTER the pg
- * transaction commits — the same standalone-event pattern the grade/test
- * routes use — so the core rows stay atomic and the event is best-effort.
+ * REPAIR_STARTED / REPAIR_COMPLETED inventory events. The status change is
+ * routed through the guarded state machine (transition()) on the SAME pg
+ * transaction, so the serial status and its inventory event are written
+ * atomically. A rejected transition is non-fatal (drift-tolerant): the repair
+ * row still commits and the *_event_id back-link is simply left null.
  */
 
 export interface RepairPart {
@@ -48,7 +51,35 @@ export interface UnitRepairRow {
 const OPEN_STATUSES = new Set(['pending', 'in_progress']);
 const DONE_STATUSES = new Set(['completed', 'failed', 'scrapped']);
 
-export async function listUnitRepairs(serialUnitId: number): Promise<UnitRepairRow[]> {
+export async function listUnitRepairs(serialUnitId: number, orgId?: OrgId): Promise<UnitRepairRow[]> {
+  // Tenant-scoped read: unit_repairs is tenant-owned (has organization_id). The
+  // rfr subquery (repair_failure_resolutions, tenant-owned) is org-aligned to ur;
+  // failure_modes is a global reference table (no organization_id) so its join
+  // stays bare. Staff joins are integer surrogate-PK (id) so they stay bare.
+  if (orgId) {
+    const r = await tenantQuery<UnitRepairRow>(
+      orgId,
+      `SELECT ur.*,
+              sb.name AS started_by_name,
+              cb.name AS completed_by_name,
+              COALESCE(
+                (SELECT json_agg(json_build_object('id', fm.id, 'code', fm.code, 'label', fm.label) ORDER BY fm.label)
+                   FROM repair_failure_resolutions rfr
+                   JOIN failure_modes fm ON fm.id = rfr.failure_mode_id
+                  WHERE rfr.repair_id = ur.id
+                    AND rfr.organization_id = ur.organization_id),
+                '[]'::json
+              ) AS failure_modes
+         FROM unit_repairs ur
+    LEFT JOIN staff sb ON sb.id = ur.started_by_staff_id
+    LEFT JOIN staff cb ON cb.id = ur.completed_by_staff_id
+        WHERE ur.serial_unit_id = $1
+          AND ur.organization_id = $2
+     ORDER BY ur.created_at DESC`,
+      [serialUnitId, orgId],
+    );
+    return r.rows;
+  }
   const r = await pool.query<UnitRepairRow>(
     `SELECT ur.*,
             sb.name AS started_by_name,
@@ -74,38 +105,43 @@ export async function listUnitRepairs(serialUnitId: number): Promise<UnitRepairR
  * Open a repair: insert the row (in_progress by default), link failure modes,
  * and move the unit to IN_REPAIR. Emits REPAIR_STARTED.
  */
-export async function openRepair(params: {
-  serialUnitId: number;
-  summary: string;
-  status?: 'pending' | 'in_progress';
-  failureModeIds?: number[];
-  rmaId?: number | null;
-  repairServiceId?: number | null;
-  staffId?: number | null;
-  clientEventId?: string | null;
-}): Promise<UnitRepairRow> {
+export async function openRepair(
+  params: {
+    serialUnitId: number;
+    summary: string;
+    status?: 'pending' | 'in_progress';
+    failureModeIds?: number[];
+    rmaId?: number | null;
+    repairServiceId?: number | null;
+    staffId?: number | null;
+    clientEventId?: string | null;
+  },
+  orgId?: OrgId,
+): Promise<UnitRepairRow> {
   const status = params.status === 'pending' ? 'pending' : 'in_progress';
-  const client = await pool.connect();
-  let repairId: number;
-  let sku: string | null = null;
-  let prevStatus: string | null = null;
-  try {
-    await client.query('BEGIN');
 
+  // Shared transactional body. Runs on a single client (which already owns its
+  // transaction): the raw-pool path opens/commits BEGIN itself; the tenant path
+  // runs inside withTenantTransaction (BEGIN + set_config('app.current_org') +
+  // COMMIT are handled by the wrapper). When orgId is present we add an explicit
+  // serial_units.organization_id predicate (cross-tenant miss → "unit not
+  // found"), org-derived child inserts already subquery from the parent, and the
+  // orgId is threaded into transition().
+  const body = async (client: import('pg').PoolClient): Promise<number> => {
     const unit = await client.query<{ sku: string | null; current_status: string | null }>(
-      `SELECT sku, current_status::text AS current_status FROM serial_units WHERE id = $1 FOR UPDATE`,
-      [params.serialUnitId],
+      orgId
+        ? `SELECT sku, current_status::text AS current_status FROM serial_units WHERE id = $1 AND organization_id = $2 FOR UPDATE`
+        : `SELECT sku, current_status::text AS current_status FROM serial_units WHERE id = $1 FOR UPDATE`,
+      orgId ? [params.serialUnitId, orgId] : [params.serialUnitId],
     );
     if (unit.rows.length === 0) {
       throw new Error('unit not found');
     }
-    sku = unit.rows[0].sku;
-    prevStatus = unit.rows[0].current_status;
 
     const ins = await client.query<{ id: number }>(
       `INSERT INTO unit_repairs
-         (serial_unit_id, status, summary, started_at, started_by_staff_id, rma_id, repair_service_id)
-       VALUES ($1, $2, $3, NOW(), $4, $5, $6)
+         (serial_unit_id, status, summary, started_at, started_by_staff_id, rma_id, repair_service_id, organization_id)
+       VALUES ($1, $2, $3, NOW(), $4, $5, $6, (SELECT organization_id FROM serial_units WHERE id = $1))
        RETURNING id`,
       [
         params.serialUnitId,
@@ -116,48 +152,64 @@ export async function openRepair(params: {
         params.repairServiceId ?? null,
       ],
     );
-    repairId = ins.rows[0].id;
+    const newRepairId = ins.rows[0].id;
 
     for (const modeId of params.failureModeIds ?? []) {
       await client.query(
-        `INSERT INTO repair_failure_resolutions (repair_id, failure_mode_id)
-         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [repairId, modeId],
+        `INSERT INTO repair_failure_resolutions (repair_id, failure_mode_id, organization_id)
+         VALUES ($1, $2, (SELECT organization_id FROM unit_repairs WHERE id = $1)) ON CONFLICT DO NOTHING`,
+        [newRepairId, modeId],
       );
     }
 
-    await client.query(
-      `UPDATE serial_units SET current_status = 'IN_REPAIR', updated_at = NOW() WHERE id = $1`,
-      [params.serialUnitId],
+    // Route the IN_REPAIR transition through the guarded state machine (atomic
+    // status + single REPAIR_STARTED event on the shared txn). DRIFT: if the
+    // guard rejects, do NOT throw — that would roll back the whole repair.
+    // Pass orgId (state-machine accepts an optional trailing orgId) so the unit
+    // read/write inside transition() is org-scoped on the same client.
+    const t = await transition(
+      {
+        unitId: params.serialUnitId,
+        to: 'IN_REPAIR',
+        eventType: 'REPAIR_STARTED',
+        actorStaffId: params.staffId ?? null,
+        station: 'TECH',
+        clientEventId: params.clientEventId ?? null,
+        payload: { repair_id: newRepairId, failure_mode_ids: params.failureModeIds ?? [] },
+      },
+      client,
+      orgId,
     );
+    const startEventId = t.ok ? t.eventId : null;
+    if (!t.ok) {
+      console.warn('[openRepair] IN_REPAIR transition rejected (non-fatal)', t.status, t.error);
+    } else {
+      await client.query(`UPDATE unit_repairs SET start_event_id = $2 WHERE id = $1`, [newRepairId, startEventId]);
+    }
 
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
+    return newRepairId;
+  };
+
+  let repairId: number;
+  if (orgId) {
+    repairId = await withTenantTransaction(orgId, body);
+  } else {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      repairId = await body(client);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
-  // Standalone event (neon-http) + back-link. Best-effort.
-  try {
-    const { event } = await appendInventoryEvent({
-      eventType: 'REPAIR_STARTED',
-      clientEventId: params.clientEventId ?? null,
-      actorStaffId: params.staffId ?? null,
-      station: 'TECH',
-      serialUnitId: params.serialUnitId,
-      sku,
-      prevStatus,
-      nextStatus: 'IN_REPAIR',
-      payload: { repair_id: repairId, failure_mode_ids: params.failureModeIds ?? [] },
-    });
-    await pool.query(`UPDATE unit_repairs SET start_event_id = $2 WHERE id = $1`, [repairId, event.id]);
-  } catch (eventErr) {
-    console.warn('[openRepair] REPAIR_STARTED event failed (non-fatal)', eventErr);
-  }
-
-  const row = await pool.query<UnitRepairRow>(`SELECT * FROM unit_repairs WHERE id = $1`, [repairId]);
+  const row = orgId
+    ? await tenantQuery<UnitRepairRow>(orgId, `SELECT * FROM unit_repairs WHERE id = $1 AND organization_id = $2`, [repairId, orgId])
+    : await pool.query<UnitRepairRow>(`SELECT * FROM unit_repairs WHERE id = $1`, [repairId]);
   return row.rows[0];
 }
 
@@ -178,23 +230,33 @@ export async function updateRepair(
     staffId?: number | null;
     clientEventId?: string | null;
   },
+  orgId?: OrgId,
 ): Promise<UnitRepairRow | null> {
-  const client = await pool.connect();
   let serialUnitId: number | null = null;
-  let sku: string | null = null;
-  let prevStatus: string | null = null;
   let becameTerminal = false;
   let resolvedTagCount = 0;
-  try {
-    await client.query('BEGIN');
+  // Sentinel for an org-ownership miss on the FOR UPDATE read: the raw path
+  // ROLLBACKs + returns null directly; the tenant path can't early-return out of
+  // the wrapper, so the body returns this and the caller maps it to null.
+  let notFound = false;
 
+  // Shared transactional body. Runs on a single client owning its own
+  // transaction (raw-pool path BEGIN/COMMITs itself; tenant path runs inside
+  // withTenantTransaction with set_config('app.current_org') already applied).
+  // When orgId is present: unit_repairs read/UPDATE carry an explicit
+  // organization_id predicate (cross-tenant miss → notFound → null = 404);
+  // unit_failure_tags has NO organization_id column so it is scoped via its
+  // org-bearing parent serial_units; transition() gets the threaded orgId.
+  const body = async (client: import('pg').PoolClient): Promise<void> => {
     const cur = await client.query<{ serial_unit_id: number; status: string }>(
-      `SELECT serial_unit_id, status FROM unit_repairs WHERE id = $1 FOR UPDATE`,
-      [repairId],
+      orgId
+        ? `SELECT serial_unit_id, status FROM unit_repairs WHERE id = $1 AND organization_id = $2 FOR UPDATE`
+        : `SELECT serial_unit_id, status FROM unit_repairs WHERE id = $1 FOR UPDATE`,
+      orgId ? [repairId, orgId] : [repairId],
     );
     if (cur.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return null;
+      notFound = true;
+      return;
     }
     serialUnitId = cur.rows[0].serial_unit_id;
     const nextStatus = params.status ?? cur.rows[0].status;
@@ -216,63 +278,100 @@ export async function updateRepair(
       sets.push(`completed_by_staff_id = $${idx++}`); values.push(params.staffId ?? null);
     }
     values.push(repairId);
-    await client.query(`UPDATE unit_repairs SET ${sets.join(', ')} WHERE id = $${idx}`, values);
+    if (orgId) {
+      values.push(orgId);
+      await client.query(
+        `UPDATE unit_repairs SET ${sets.join(', ')} WHERE id = $${idx} AND organization_id = $${idx + 1}`,
+        values,
+      );
+    } else {
+      await client.query(`UPDATE unit_repairs SET ${sets.join(', ')} WHERE id = $${idx}`, values);
+    }
 
     if (nextStatus === 'completed') {
       // Resolve the unit's OPEN tags this repair addresses; stamp the repair.
-      const res = await client.query(
-        `UPDATE unit_failure_tags t
-            SET resolution_status = 'resolved', resolved_repair_id = $1
-          WHERE t.serial_unit_id = $2
-            AND t.resolution_status = 'open'
-            AND t.failure_mode_id IN (
-              SELECT failure_mode_id FROM repair_failure_resolutions WHERE repair_id = $1
-            )`,
-        [repairId, serialUnitId],
-      );
+      // unit_failure_tags has NO organization_id column → scope via its parent
+      // serial_units (su.organization_id) when orgId is present, and align the
+      // rfr subquery on org.
+      const res = orgId
+        ? await client.query(
+            `UPDATE unit_failure_tags t
+                SET resolution_status = 'resolved', resolved_repair_id = $1
+               WHERE t.serial_unit_id = $2
+                 AND t.resolution_status = 'open'
+                 AND EXISTS (
+                   SELECT 1 FROM serial_units su
+                    WHERE su.id = t.serial_unit_id AND su.organization_id = $3
+                 )
+                 AND t.failure_mode_id IN (
+                   SELECT failure_mode_id FROM repair_failure_resolutions
+                    WHERE repair_id = $1 AND organization_id = $3
+                 )`,
+            [repairId, serialUnitId, orgId],
+          )
+        : await client.query(
+            `UPDATE unit_failure_tags t
+                SET resolution_status = 'resolved', resolved_repair_id = $1
+              WHERE t.serial_unit_id = $2
+                AND t.resolution_status = 'open'
+                AND t.failure_mode_id IN (
+                  SELECT failure_mode_id FROM repair_failure_resolutions WHERE repair_id = $1
+                )`,
+            [repairId, serialUnitId],
+          );
       resolvedTagCount = res.rowCount ?? 0;
     }
 
     if (becameTerminal) {
-      const su = await client.query<{ sku: string | null; current_status: string | null }>(
-        `SELECT sku, current_status::text AS current_status FROM serial_units WHERE id = $1`,
-        [serialUnitId],
+      // Route the REPAIR_DONE transition through the guarded state machine
+      // (atomic status + single REPAIR_COMPLETED event on the shared txn).
+      // DRIFT: if the guard rejects, do NOT throw — keep the repair completion.
+      // Thread orgId so transition()'s unit read/write is org-scoped.
+      const t = await transition(
+        {
+          unitId: serialUnitId,
+          to: 'REPAIR_DONE',
+          eventType: 'REPAIR_COMPLETED',
+          actorStaffId: params.staffId ?? null,
+          station: 'TECH',
+          clientEventId: params.clientEventId ?? null,
+          notes: params.status && params.status !== 'completed' ? `status: ${params.status}` : null,
+          payload: { repair_id: repairId, status: params.status ?? 'completed', resolved_tags: resolvedTagCount },
+        },
+        client,
+        orgId,
       );
-      sku = su.rows[0]?.sku ?? null;
-      prevStatus = su.rows[0]?.current_status ?? null;
-      await client.query(
-        `UPDATE serial_units SET current_status = 'REPAIR_DONE', updated_at = NOW() WHERE id = $1`,
-        [serialUnitId],
-      );
+      const doneEventId = t.ok ? t.eventId : null;
+      if (!t.ok) {
+        console.warn('[updateRepair] REPAIR_DONE transition rejected (non-fatal)', t.status, t.error);
+      } else {
+        await client.query(`UPDATE unit_repairs SET done_event_id = $2 WHERE id = $1`, [repairId, doneEventId]);
+      }
     }
+  };
 
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
+  if (orgId) {
+    await withTenantTransaction(orgId, body);
+  } else {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await body(client);
+      if (notFound) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
   }
+  if (notFound) return null;
 
   if (becameTerminal && serialUnitId != null) {
-    try {
-      const { event } = await appendInventoryEvent({
-        eventType: 'REPAIR_COMPLETED',
-        clientEventId: params.clientEventId ?? null,
-        actorStaffId: params.staffId ?? null,
-        station: 'TECH',
-        serialUnitId,
-        sku,
-        prevStatus,
-        nextStatus: 'REPAIR_DONE',
-        notes: params.status && params.status !== 'completed' ? `status: ${params.status}` : null,
-        payload: { repair_id: repairId, status: params.status ?? 'completed', resolved_tags: resolvedTagCount },
-      });
-      await pool.query(`UPDATE unit_repairs SET done_event_id = $2 WHERE id = $1`, [repairId, event.id]);
-    } catch (eventErr) {
-      console.warn('[updateRepair] REPAIR_COMPLETED event failed (non-fatal)', eventErr);
-    }
-
     // Workflow-engine tap (fire-and-forget — never throws). Only a repair
     // that lands on 'completed' fires the repair node's `repaired` port
     // (→ back to inspection for re-test); 'failed'/'scrapped' repairs leave
@@ -284,11 +383,14 @@ export async function updateRepair(
         input: { repairId },
         staffId: params.staffId ?? null,
         source: 'manual',
+        orgId: orgId ?? null,
       });
     }
   }
 
-  const row = await pool.query<UnitRepairRow>(`SELECT * FROM unit_repairs WHERE id = $1`, [repairId]);
+  const row = orgId
+    ? await tenantQuery<UnitRepairRow>(orgId, `SELECT * FROM unit_repairs WHERE id = $1 AND organization_id = $2`, [repairId, orgId])
+    : await pool.query<UnitRepairRow>(`SELECT * FROM unit_repairs WHERE id = $1`, [repairId]);
   return row.rows[0] ?? null;
 }
 

@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { isPrimaryTechStaff } from '@/lib/neon/staff-stations-queries';
 
 export const runtime = 'nodejs';
@@ -39,11 +39,12 @@ export const GET = withAuth(async (_req, ctx) => {
   // Unboxed returns that still have at least one line needing test (not yet
   // resolved). The EXISTS clears the bucket once every line reaches a terminal
   // workflow state, so this bucket self-corrects without a manual dismiss.
-  const returnsRes = await pool.query<{
+  const returnsRes = await tenantQuery<{
     receiving_id: number;
     tracking: string | null;
     unboxed_at: string | null;
   }>(
+    ctx.organizationId,
     `SELECT r.id AS receiving_id,
             COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
             r.unboxed_at::text AS unboxed_at
@@ -51,24 +52,28 @@ export const GET = withAuth(async (_req, ctx) => {
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
       WHERE COALESCE(r.is_return, false) = true
         AND r.unboxed_at IS NOT NULL
+        AND r.organization_id = $1
         AND EXISTS (
           SELECT 1 FROM receiving_lines rl
            WHERE rl.receiving_id = r.id
+             AND rl.organization_id = $1
              AND COALESCE(rl.needs_test, true) = true
              AND COALESCE(rl.workflow_status::text, '') NOT IN ('DONE','PASSED','FAILED','RTV','SCRAP')
         )
       ORDER BY r.unboxed_at DESC
       LIMIT 50`,
+    [ctx.organizationId],
   );
 
   // Unboxed priority cartons (pending-order match or manual) ready to ship.
   // Bounded to a recent window as the v1 clear signal — there's no order-ship
   // hook yet, so the window keeps the bucket from growing without bound.
-  const ordersRes = await pool.query<{
+  const ordersRes = await tenantQuery<{
     receiving_id: number;
     tracking: string | null;
     unboxed_at: string | null;
   }>(
+    ctx.organizationId,
     `SELECT r.id AS receiving_id,
             COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
             r.unboxed_at::text AS unboxed_at
@@ -78,8 +83,10 @@ export const GET = withAuth(async (_req, ctx) => {
         AND COALESCE(r.is_return, false) = false
         AND r.unboxed_at IS NOT NULL
         AND r.unboxed_at > NOW() - interval '3 days'
+        AND r.organization_id = $1
       ORDER BY r.unboxed_at DESC
       LIMIT 50`,
+    [ctx.organizationId],
   );
 
   const items: TechQueueItem[] = [

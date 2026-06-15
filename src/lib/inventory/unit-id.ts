@@ -26,6 +26,8 @@
  */
 
 import { queryOne } from '@/lib/neon-client';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import {
   shortSku,
   isoWeekParts,
@@ -45,11 +47,21 @@ export { shortSku, isoWeekParts, parseUnitId, describeUnitId, formatUnitId };
  * field). YYWW in the rendered unitId is always computed from the
  * allocation moment, so tests passing yearOverride still get a
  * coherent-looking week stamp from "now".
+ *
+ * Tenancy: when `orgId` is supplied, the allocation runs inside
+ * `tenantQuery` so `app.current_org` is set on the connection — this binds
+ * `unit_id_sequences`' org-default/RLS to the tenant for the upsert that
+ * `fn_next_unit_seq` performs. When omitted, behavior is byte-identical to
+ * the legacy raw-pool path so un-migrated callers are unaffected. (The SQL
+ * function partitions on (sku_catalog_id, year) only; a fully org-keyed
+ * counter would need an org-aware fn signature/PK — out of scope for this
+ * file. See report notes.)
  */
 export async function allocateNextUnitId(
   skuCatalogId: number,
   skuText: string,
   yearOverride?: number,
+  orgId?: OrgId,
 ): Promise<{
   unitId: string;
   seq: number;
@@ -66,9 +78,17 @@ export async function allocateNextUnitId(
     throw new Error(`allocateNextUnitId: SKU "${skuText}" produced empty short form`);
   }
 
-  const row = await queryOne<{ seq: number }>`
-    SELECT fn_next_unit_seq(${skuCatalogId}, ${year}) AS seq
-  `;
+  const row = orgId
+    ? (
+        await tenantQuery<{ seq: number }>(
+          orgId,
+          'SELECT fn_next_unit_seq($1, $2) AS seq',
+          [skuCatalogId, year],
+        )
+      ).rows[0] ?? null
+    : await queryOne<{ seq: number }>`
+        SELECT fn_next_unit_seq(${skuCatalogId}, ${year}) AS seq
+      `;
   const seq = Number(row?.seq);
   if (!Number.isFinite(seq) || seq < 1) {
     throw new Error(`allocateNextUnitId: fn_next_unit_seq returned ${row?.seq}`);
@@ -90,11 +110,18 @@ export async function allocateNextUnitId(
  * printer to show the operator what the next label will be before they commit
  * to printing (the authoritative allocation happens server-side at print time
  * via {@link allocateNextUnitId}). Returns the same shape as allocateNextUnitId.
+ *
+ * Tenancy: when `orgId` is supplied, the preview runs inside `tenantQuery`
+ * so `app.current_org` is set on the connection (RLS on `unit_id_sequences`
+ * binds the read to the tenant). When omitted, behavior is byte-identical to
+ * the legacy raw-pool path. (fn_peek_unit_seq reads on (sku_catalog_id,
+ * year) only — see allocateNextUnitId's note / report.)
  */
 export async function peekNextUnitId(
   skuCatalogId: number,
   skuText: string,
   yearOverride?: number,
+  orgId?: OrgId,
 ): Promise<{
   unitId: string;
   seq: number;
@@ -111,9 +138,17 @@ export async function peekNextUnitId(
     throw new Error(`peekNextUnitId: SKU "${skuText}" produced empty short form`);
   }
 
-  const row = await queryOne<{ seq: number }>`
-    SELECT fn_peek_unit_seq(${skuCatalogId}, ${year}) AS seq
-  `;
+  const row = orgId
+    ? (
+        await tenantQuery<{ seq: number }>(
+          orgId,
+          'SELECT fn_peek_unit_seq($1, $2) AS seq',
+          [skuCatalogId, year],
+        )
+      ).rows[0] ?? null
+    : await queryOne<{ seq: number }>`
+        SELECT fn_peek_unit_seq(${skuCatalogId}, ${year}) AS seq
+      `;
   const seq = Number(row?.seq);
   if (!Number.isFinite(seq) || seq < 1) {
     throw new Error(`peekNextUnitId: fn_peek_unit_seq returned ${row?.seq}`);

@@ -154,6 +154,7 @@ export const PERMISSIONS = [
   // ─ Integrations ─
   { id: 'integrations.zoho',        category: 'integrations', label: 'Manage Zoho integration' },
   { id: 'integrations.ebay',        category: 'integrations', label: 'Manage eBay integration' },
+  { id: 'integrations.amazon',      category: 'integrations', label: 'Manage Amazon integration' },
   { id: 'integrations.ecwid',       category: 'integrations', label: 'Manage Ecwid integration' },
   { id: 'integrations.sheets',      category: 'integrations', label: 'Trigger Google Sheets sync' },
   { id: 'integrations.zendesk',     category: 'integrations', label: 'Manage Zendesk tickets' },

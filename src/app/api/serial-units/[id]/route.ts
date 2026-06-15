@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { readTimeline } from '@/lib/inventory/events';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * GET /api/serial-units/:id
@@ -18,6 +19,7 @@ export async function GET(
 ) {
   const gate = await requireRoutePerm(request, 'sku_stock.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId as OrgId;
   try {
     const { id: idRaw } = await params;
     const raw = decodeURIComponent(idRaw || '').trim();
@@ -41,23 +43,26 @@ export async function GET(
     // instead of 404'ing (the QR carries the bare unit id, not the serial).
     let unit: Record<string, unknown> | null = null;
     if (/^\d+$/.test(raw)) {
-      const r = await pool.query(
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE id = $1 LIMIT 1`,
-        [Number(raw)],
+      const r = await tenantQuery(
+        orgId,
+        `SELECT ${SELECT_COLS} FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [Number(raw), orgId],
       );
       unit = r.rows[0] ?? null;
     }
     if (!unit) {
-      const r = await pool.query(
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) LIMIT 1`,
-        [raw],
+      const r = await tenantQuery(
+        orgId,
+        `SELECT ${SELECT_COLS} FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) AND organization_id = $2 LIMIT 1`,
+        [raw, orgId],
       );
       unit = r.rows[0] ?? null;
     }
     if (!unit) {
-      const r = await pool.query(
-        `SELECT ${SELECT_COLS} FROM serial_units WHERE unit_uid = $1 LIMIT 1`,
-        [raw],
+      const r = await tenantQuery(
+        orgId,
+        `SELECT ${SELECT_COLS} FROM serial_units WHERE unit_uid = $1 AND organization_id = $2 LIMIT 1`,
+        [raw, orgId],
       );
       unit = r.rows[0] ?? null;
     }
@@ -68,7 +73,7 @@ export async function GET(
     // LABEL_PRINTED log for this unit_id, enriched with catalog + stock, so
     // the Recent/History detail pane can still show SKU, condition, location.
     if (!unit && request.nextUrl.searchParams.get('orPrint') === '1') {
-      const printView = await buildPrintFallback(raw);
+      const printView = await buildPrintFallback(raw, orgId);
       if (printView) return NextResponse.json(printView);
     }
 
@@ -82,26 +87,28 @@ export async function GET(
     const events = await readTimeline({
       serial_unit_id: Number(unit.id),
       limit: 50,
-    });
+    }, orgId);
 
     // Inline product title + receiver name for display.
     let productTitle: string | null = null;
     if (unit.sku) {
-      const r = await pool.query<{ product_title: string | null }>(
+      const r = await tenantQuery<{ product_title: string | null }>(
+        orgId,
         `SELECT COALESCE(sc.product_title, ss.product_title) AS product_title
          FROM sku_stock ss
-         LEFT JOIN sku_catalog sc ON sc.sku = ss.sku
-         WHERE ss.sku = $1 LIMIT 1`,
-        [unit.sku],
+         LEFT JOIN sku_catalog sc ON sc.sku = ss.sku AND sc.organization_id = ss.organization_id
+         WHERE ss.sku = $1 AND ss.organization_id = $2 LIMIT 1`,
+        [unit.sku, orgId],
       );
       productTitle = r.rows[0]?.product_title ?? null;
     }
 
     let receivedByName: string | null = null;
     if (unit.received_by != null) {
-      const r = await pool.query<{ name: string | null }>(
-        `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
-        [unit.received_by],
+      const r = await tenantQuery<{ name: string | null }>(
+        orgId,
+        `SELECT name FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [unit.received_by, orgId],
       );
       receivedByName = r.rows[0]?.name ?? null;
     }
@@ -128,8 +135,8 @@ export async function GET(
           ? unit.current_location.trim()
           : null;
       const [eventsFull, conditions, allocations, tsnLinks, locationDetail, stock, unitPhotos] = await Promise.all([
-        pool
-          .query(
+        tenantQuery(
+            orgId,
             `SELECT ie.id, ie.occurred_at, ie.event_type, ie.station,
                     ie.prev_status, ie.next_status,
                     ie.bin_id, l.name AS bin_name,
@@ -140,14 +147,14 @@ export async function GET(
                FROM inventory_events ie
                LEFT JOIN staff s ON s.id = ie.actor_staff_id
                LEFT JOIN locations l ON l.id = ie.bin_id
-              WHERE ie.serial_unit_id = $1
+              WHERE ie.serial_unit_id = $1 AND ie.organization_id = $2
               ORDER BY ie.occurred_at ASC, ie.id ASC`,
-            [unitId],
+            [unitId, orgId],
           )
           .then((r) => r.rows)
           .catch(() => [] as unknown[]),
-        pool
-          .query(
+        tenantQuery(
+            orgId,
             `SELECT h.id, h.assessed_at,
                     h.assessed_by_staff_id, s.name AS assessed_by_name,
                     h.prev_grade::text AS prev_grade,
@@ -156,36 +163,36 @@ export async function GET(
                     h.inventory_event_id
                FROM serial_unit_condition_history h
                LEFT JOIN staff s ON s.id = h.assessed_by_staff_id
-              WHERE h.serial_unit_id = $1
+              WHERE h.serial_unit_id = $1 AND h.organization_id = $2
               ORDER BY h.assessed_at ASC, h.id ASC`,
-            [unitId],
+            [unitId, orgId],
           )
           .then((r) => r.rows)
           .catch(() => [] as unknown[]),
-        pool
-          .query(
+        tenantQuery(
+            orgId,
             `SELECT a.id, a.order_id, a.allocated_at,
                     a.state::text AS state,
                     a.released_at, a.released_reason,
                     s.name AS allocated_by_name
                FROM order_unit_allocations a
                LEFT JOIN staff s ON s.id = a.allocated_by_staff_id
-              WHERE a.serial_unit_id = $1
+              WHERE a.serial_unit_id = $1 AND a.organization_id = $2
               ORDER BY a.allocated_at DESC, a.id DESC`,
-            [unitId],
+            [unitId, orgId],
           )
           .then((r) => r.rows)
           .catch(() => [] as unknown[]),
-        pool
-          .query(
+        tenantQuery(
+            orgId,
             `SELECT tsn.id, tsn.station_source, tsn.shipment_id,
                     tsn.serial_type, tsn.fnsku,
                     s.name AS tested_by_name, tsn.created_at
                FROM tech_serial_numbers tsn
                LEFT JOIN staff s ON s.id = tsn.tested_by
-              WHERE tsn.serial_unit_id = $1
+              WHERE tsn.serial_unit_id = $1 AND tsn.organization_id = $2
               ORDER BY tsn.created_at ASC, tsn.id ASC`,
-            [unitId],
+            [unitId, orgId],
           )
           .then((r) => r.rows)
           .catch(() => [] as unknown[]),
@@ -194,11 +201,11 @@ export async function GET(
         // location card instead of a bare code. NULL when the unit isn't
         // stocked or the string doesn't match a known bin.
         locationName
-          ? pool
-              .query(
+          ? tenantQuery(
+                orgId,
                 `SELECT id, name, room, zone_letter, bin_type, barcode
-                   FROM locations WHERE name = $1 LIMIT 1`,
-                [locationName],
+                   FROM locations WHERE name = $1 AND organization_id = $2 LIMIT 1`,
+                [locationName, orgId],
               )
               .then((r) => r.rows[0] ?? null)
               .catch(() => null)
@@ -206,11 +213,11 @@ export async function GET(
         // SKU-level inventory snapshot (loose + boxed on-hand) for the
         // inventory-linkage popover. Keyed by the unit's sku.
         unit.sku
-          ? pool
-              .query(
+          ? tenantQuery(
+                orgId,
                 `SELECT stock, boxed_stock, product_title
-                   FROM sku_stock WHERE sku = $1 LIMIT 1`,
-                [unit.sku],
+                   FROM sku_stock WHERE sku = $1 AND organization_id = $2 LIMIT 1`,
+                [unit.sku, orgId],
               )
               .then((r) => r.rows[0] ?? null)
               .catch(() => null)
@@ -218,13 +225,13 @@ export async function GET(
         // Photos captured against THIS unit (entity_type='SERIAL_UNIT') — the
         // packer's scan-the-QR + take-photos set. Surfaced so the detail panel
         // can render them alongside the timeline (one screen, full evidence).
-        pool
-          .query(
+        tenantQuery(
+            orgId,
             `SELECT id, url, photo_type, taken_by_staff_id AS uploaded_by, created_at
                FROM photos
-              WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1
+              WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1 AND organization_id = $2
               ORDER BY created_at ASC`,
-            [unitId],
+            [unitId, orgId],
           )
           .then((r) => r.rows)
           .catch(() => [] as unknown[]),
@@ -258,20 +265,22 @@ export async function GET(
  * metadata.unit_id matches `unitId`. Used when no serial_units row exists for
  * a printed products label. Returns null when there's no matching print.
  */
-async function buildPrintFallback(unitId: string) {
-  const sal = await pool.query<{
+async function buildPrintFallback(unitId: string, orgId: OrgId) {
+  const sal = await tenantQuery<{
     id: number;
     staff_id: number | null;
     created_at: string;
     metadata: Record<string, unknown>;
   }>(
+    orgId,
     `SELECT id, staff_id, created_at, metadata
        FROM station_activity_logs
       WHERE activity_type = 'LABEL_PRINTED'
         AND metadata->>'unit_id' = $1
+        AND organization_id = $2
       ORDER BY created_at DESC, id DESC
       LIMIT 1`,
-    [unitId],
+    [unitId, orgId],
   );
   const row = sal.rows[0];
   if (!row) return null;
@@ -286,39 +295,39 @@ async function buildPrintFallback(unitId: string) {
 
   const [catalog, stock, staffRow, tsn, invEvent] = await Promise.all([
     skuCatalogId
-      ? pool
-          .query<{ product_title: string | null; image_url: string | null; category: string | null }>(
-            `SELECT product_title, image_url, category FROM sku_catalog WHERE id = $1 LIMIT 1`,
-            [skuCatalogId],
+      ? tenantQuery<{ product_title: string | null; image_url: string | null; category: string | null }>(
+            orgId,
+            `SELECT product_title, image_url, category FROM sku_catalog WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [skuCatalogId, orgId],
           )
           .then((r) => r.rows[0] ?? null)
           .catch(() => null)
       : Promise.resolve(null),
     sku
-      ? pool
-          .query<{ stock: number; boxed_stock: number; product_title: string | null; location: string | null }>(
-            `SELECT stock, boxed_stock, product_title, location FROM sku_stock WHERE sku = $1 LIMIT 1`,
-            [sku],
+      ? tenantQuery<{ stock: number; boxed_stock: number; product_title: string | null; location: string | null }>(
+            orgId,
+            `SELECT stock, boxed_stock, product_title, location FROM sku_stock WHERE sku = $1 AND organization_id = $2 LIMIT 1`,
+            [sku, orgId],
           )
           .then((r) => r.rows[0] ?? null)
           .catch(() => null)
       : Promise.resolve(null),
     row.staff_id != null
-      ? pool
-          .query<{ name: string | null }>(`SELECT name FROM staff WHERE id = $1 LIMIT 1`, [row.staff_id])
+      ? tenantQuery<{ name: string | null }>(orgId, `SELECT name FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`, [row.staff_id, orgId])
           .then((r) => r.rows[0]?.name ?? null)
           .catch(() => null)
       : Promise.resolve(null),
     // The serial actually LINKED to this printed label, via the SKU↔serial
     // lineage (tech_serial_numbers.context_station_activity_log_id).
-    pool
-      .query<{ serial_number: string | null; serial_unit_id: number | null }>(
+    tenantQuery<{ serial_number: string | null; serial_unit_id: number | null }>(
+        orgId,
         `SELECT serial_number, serial_unit_id
            FROM tech_serial_numbers
           WHERE context_station_activity_log_id = $1
+            AND organization_id = $2
           ORDER BY id ASC
           LIMIT 1`,
-        [row.id],
+        [row.id, orgId],
       )
       .then((r) => r.rows[0] ?? null)
       .catch(() => null),
@@ -326,15 +335,16 @@ async function buildPrintFallback(unitId: string) {
     // carries the serial_unit_id it labeled (its scan_token is the QR payload
     // and payload.unit_id is this unit id). This resolves even when the label
     // was a reprint whose minted unit_id differs from the unit's own unit_uid.
-    pool
-      .query<{ serial_unit_id: number | null }>(
+    tenantQuery<{ serial_unit_id: number | null }>(
+        orgId,
         `SELECT serial_unit_id
            FROM inventory_events
           WHERE serial_unit_id IS NOT NULL
             AND (payload->>'unit_id' = $1 OR scan_token = $1)
+            AND organization_id = $2
           ORDER BY occurred_at DESC, id DESC
           LIMIT 1`,
-        [unitId],
+        [unitId, orgId],
       )
       .then((r) => r.rows[0] ?? null)
       .catch(() => null),
@@ -344,8 +354,7 @@ async function buildPrintFallback(unitId: string) {
   // the LABELED event's serial_unit_id. That row holds the REAL device serial.
   const resolvedSerialUnitId = tsn?.serial_unit_id ?? invEvent?.serial_unit_id ?? null;
   const liveUnit = resolvedSerialUnitId
-    ? await pool
-        .query<{
+    ? await tenantQuery<{
           id: number;
           serial_number: string | null;
           unit_uid: string | null;
@@ -355,11 +364,12 @@ async function buildPrintFallback(unitId: string) {
           received_at: string | null;
           received_by: number | null;
         }>(
+          orgId,
           `SELECT id, serial_number, unit_uid, current_status::text AS current_status,
                   current_location, condition_grade::text AS condition_grade,
                   received_at, received_by
-             FROM serial_units WHERE id = $1 LIMIT 1`,
-          [resolvedSerialUnitId],
+             FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [resolvedSerialUnitId, orgId],
         )
         .then((r) => r.rows[0] ?? null)
         .catch(() => null)
@@ -371,10 +381,10 @@ async function buildPrintFallback(unitId: string) {
   // unstocked printed label — resolve it to a full bin row when known.
   const locationName = stock?.location?.trim() || null;
   const locationDetail = locationName
-    ? await pool
-        .query(
-          `SELECT id, name, room, zone_letter, bin_type, barcode FROM locations WHERE name = $1 LIMIT 1`,
-          [locationName],
+    ? await tenantQuery(
+          orgId,
+          `SELECT id, name, room, zone_letter, bin_type, barcode FROM locations WHERE name = $1 AND organization_id = $2 LIMIT 1`,
+          [locationName, orgId],
         )
         .then((r) => r.rows[0] ?? null)
         .catch(() => null)

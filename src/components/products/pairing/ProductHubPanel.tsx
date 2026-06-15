@@ -30,6 +30,14 @@ interface ProductHubPanelProps {
    * testing-workspace pairing modal.
    */
   allowManualPair?: boolean;
+  /**
+   * Authoritative product title for the header, supplied by the calling line
+   * context (the Zoho receiving line under test). Overrides the marketplace
+   * catalog's product_title so the header shows the real Zoho product name —
+   * the catalog SKU namespace collides with Zoho's, so the catalog title can be
+   * a different product. Falls back to the canonical title when omitted.
+   */
+  headerTitle?: string | null;
 }
 
 /**
@@ -40,7 +48,7 @@ interface ProductHubPanelProps {
  * so the operator's default action is one Save click. Nothing commits without
  * explicit Save — this is human-in-the-loop by design.
  */
-export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: ProductHubPanelProps) {
+export function ProductHubPanel({ skuCatalogId, allowManualPair = false, headerTitle }: ProductHubPanelProps) {
   const hub = useProductHub(skuCatalogId);
   const snapshot = hub.snapshot;
 
@@ -81,7 +89,7 @@ export function ProductHubPanel({ skuCatalogId, allowManualPair = false }: Produ
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <HubHeader sku={snapshot.canonicalSku} title={snapshot.canonicalTitle} />
+      <HubHeader sku={snapshot.canonicalSku} title={headerTitle?.trim() || snapshot.canonicalTitle} />
 
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {allowManualPair ? (

@@ -58,6 +58,9 @@ export interface ReceivingDetailsLog {
   /** Earliest `receiving_scans` row for this carton (when present). */
   tracking_scanned_at?: string | null;
   tracking_scanned_by?: number | null;
+  tracking_scanned_by_name?: string | null;
+  unboxed_by_name?: string | null;
+  received_by_name?: string | null;
   zoho_purchase_receive_id?: string | null;
   zoho_warehouse_id?: string | null;
   /** First-line Zoho PO linkage (merged in by receiving overlay fetch). */

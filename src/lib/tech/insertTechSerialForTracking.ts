@@ -6,7 +6,6 @@ import { publishOrderTested, publishTechLogChanged } from '@/lib/realtime/publis
 import { createStationActivityLog } from '@/lib/station-activity';
 import { mergeSerialsFromTsnRows } from '@/lib/tech/serialFields';
 import { resolveTechSerialInsertContextFromSal } from '@/lib/tech/resolveTechSerialInsertContextFromSal';
-import { isInventoryV2TechLifecycle } from '@/lib/feature-flags';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 
 export type TechSerialInsertDb = Pick<Pool, 'query'>;
@@ -172,7 +171,7 @@ export async function insertTechSerialForTracking(
     return { ok: false, error: 'Serial is required', status: 400 };
   }
 
-  const salCtx = await resolveTechSerialInsertContextFromSal(db, staffId);
+  const salCtx = await resolveTechSerialInsertContextFromSal(db, staffId, params.organizationId);
   if (!salCtx.ok) {
     return { ok: false, error: salCtx.error, status: salCtx.status };
   }
@@ -277,26 +276,24 @@ export async function insertTechSerialForTracking(
 
   const targetTechSerialId: number | null = insertResult.id;
 
-  // Phase 3 (INVENTORY_V2_TECH_LIFECYCLE): link the just-inserted TSN row
+  // Link the just-inserted TSN row
   // to its serial_units master and emit an inventory_events NOTE so the
   // unit timeline reflects the tech scan. Best-effort — failures don't
-  // affect the legacy write path. Off-flag is a no-op.
-  if (isInventoryV2TechLifecycle()) {
-    // Note: orderResult doesn't select orders.sku to keep the legacy
-    // shape unchanged. The serial_units upsert COALESCEs sku so an
-    // already-known SKU on the master row is preserved.
-    await linkTechSerialToInventoryV2(db, {
-      techSerialNumberId: targetTechSerialId,
-      upperSerial,
-      sku: null,
-      staffId,
-      shipmentId: ctx.shipmentId ?? null,
-      ordersExceptionId: ctx.ordersExceptionId ?? null,
-      fbaShipmentId: ctx.matchedFnskuLog?.fba_shipment_id ?? null,
-      fbaShipmentItemId: ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
-      serialType,
-    });
-  }
+  // affect the legacy write path.
+  // Note: orderResult doesn't select orders.sku to keep the legacy
+  // shape unchanged. The serial_units upsert COALESCEs sku so an
+  // already-known SKU on the master row is preserved.
+  await linkTechSerialToInventoryV2(db, {
+    techSerialNumberId: targetTechSerialId,
+    upperSerial,
+    sku: null,
+    staffId,
+    shipmentId: ctx.shipmentId ?? null,
+    ordersExceptionId: ctx.ordersExceptionId ?? null,
+    fbaShipmentId: ctx.matchedFnskuLog?.fba_shipment_id ?? null,
+    fbaShipmentItemId: ctx.matchedFnskuLog?.fba_shipment_item_id ?? null,
+    serialType,
+  });
 
   const updatedSerialList = [...allExistingSerials, upperSerial];
 

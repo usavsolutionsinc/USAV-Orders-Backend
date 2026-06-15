@@ -1,5 +1,8 @@
 import pool from '@/lib/db';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+import type { PoolClient } from 'pg';
 
 const ECWID_BASE_URL = 'https://app.ecwid.com/api/v3';
 const ECWID_PAGE_LIMIT = 100;
@@ -93,7 +96,7 @@ export async function upsertProductManual(params: {
   type?: string | null;
   skuCatalogId?: number | null;
   sku?: string | null;
-}): Promise<LegacyProductManualRecord> {
+}, orgId?: OrgId): Promise<LegacyProductManualRecord> {
   const itemNumber = normalizeIdentifier(String(params.itemNumber || '')) || null;
   const productTitle = String(params.productTitle || '').trim() || null;
   const relativePath = String(params.relativePath || '').trim() || null;
@@ -124,34 +127,59 @@ export async function upsertProductManual(params: {
       skuCatalogId = await resolveSkuCatalogId(
         params.sku?.trim() || null,
         itemNumber || null,
+        null,
+        orgId,
       );
     } catch { /* non-critical — proceed without */ }
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  // Core upsert body, parameterized by tenant scoping. `product_manuals` has NO
+  // organization_id column (see docs/tenancy/org-id-coverage.generated.md —
+  // classification: child-scoped(sku_catalog)). When `scoped` is true we constrain
+  // the existing-row lookup to manuals whose sku_catalog parent belongs to this org
+  // (`sku_catalog_id IN (SELECT id FROM sku_catalog WHERE organization_id = $n)`),
+  // so we never cross-tenant match. New rows are attributed via their resolved
+  // sku_catalog_id (resolved above with orgId threaded through). NULL-parent rows are
+  // unattributable to any org and are intentionally excluded from scoped lookups.
+  const runUpsert = async (client: PoolClient, scoped: boolean): Promise<LegacyProductManualRecord> => {
     const existing = relativePath
       ? await client.query(
-        `SELECT id
-         FROM product_manuals
-         WHERE is_active = TRUE
-           AND relative_path = $1
-         LIMIT 1`,
-        [relativePath],
+        scoped
+          ? `SELECT pm.id
+             FROM product_manuals pm
+             WHERE pm.is_active = TRUE
+               AND pm.relative_path = $1
+               AND pm.sku_catalog_id IN (SELECT id FROM sku_catalog WHERE organization_id = $2)
+             LIMIT 1`
+          : `SELECT id
+             FROM product_manuals
+             WHERE is_active = TRUE
+               AND relative_path = $1
+             LIMIT 1`,
+        scoped ? [relativePath, orgId] : [relativePath],
       )
       : await client.query(
-        `SELECT id
-         FROM product_manuals
-         WHERE is_active = TRUE
-           AND google_file_id = $1
-           AND (
-             ($2::text IS NULL AND item_number IS NULL)
-             OR regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2
-           )
-         LIMIT 1`,
-        [googleDocId, itemNumber],
+        scoped
+          ? `SELECT pm.id
+             FROM product_manuals pm
+             WHERE pm.is_active = TRUE
+               AND pm.google_file_id = $1
+               AND (
+                 ($2::text IS NULL AND pm.item_number IS NULL)
+                 OR regexp_replace(UPPER(TRIM(COALESCE(pm.item_number, ''))), '[^A-Z0-9]', '', 'g') = $2
+               )
+               AND pm.sku_catalog_id IN (SELECT id FROM sku_catalog WHERE organization_id = $3)
+             LIMIT 1`
+          : `SELECT id
+             FROM product_manuals
+             WHERE is_active = TRUE
+               AND google_file_id = $1
+               AND (
+                 ($2::text IS NULL AND item_number IS NULL)
+                 OR regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2
+               )
+             LIMIT 1`,
+        scoped ? [googleDocId, itemNumber, orgId] : [googleDocId, itemNumber],
       );
 
     if ((existing.rowCount ?? 0) > 0) {
@@ -178,7 +206,6 @@ export async function upsertProductManual(params: {
         [existing.rows[0].id, null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type, skuCatalogId],
       );
 
-      await client.query('COMMIT');
       return toLegacyManualRecord(updated.rows[0]);
     }
 
@@ -190,8 +217,23 @@ export async function upsertProductManual(params: {
       [null, itemNumber, productTitle, displayName, googleDocId, sourceUrl, relativePath, folderPath, fileName, status, params.assignedBy ?? null, type, skuCatalogId]
     );
 
-    await client.query('COMMIT');
     return toLegacyManualRecord(inserted.rows[0]);
+  };
+
+  // Tenant-scoped path: run inside withTenantTransaction (sets app.current_org GUC
+  // via SET LOCAL + owns BEGIN/COMMIT/ROLLBACK) and apply parent-org predicates.
+  if (orgId) {
+    return withTenantTransaction(orgId, (client) => runUpsert(client, true));
+  }
+
+  // Legacy path: byte-identical to the prior behavior — raw pool client with an
+  // explicit transaction, no org scoping. Keeps un-migrated callers behaving as today.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await runUpsert(client, false);
+    await client.query('COMMIT');
+    return result;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

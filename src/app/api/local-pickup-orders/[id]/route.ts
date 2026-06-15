@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRoutePerm(req, 'walk_in.view');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -12,29 +13,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 });
     }
 
-    const orderResult = await pool.query(
+    const orderResult = await tenantQuery(
+      orgId,
       `SELECT o.*, s.name AS created_by_name, vs.name AS voided_by_name
        FROM local_pickup_orders o
        LEFT JOIN staff s ON s.id = o.created_by
        LEFT JOIN staff vs ON vs.id = o.voided_by
-       WHERE o.id = $1`,
-      [orderId],
+       WHERE o.id = $1 AND o.organization_id = $2`,
+      [orderId, orgId],
     );
     if (orderResult.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
     // Titles come from the canonical Zoho `sku_catalog` (not Ecwid display_name)
-    // so the review/reprint panel matches the pickup product search.
-    const itemsResult = await pool.query(
+    // so the review/reprint panel matches the pickup product search. The
+    // sku_catalog join is on the SKU string (collides across tenants) so it is
+    // org-aligned to the line's own org.
+    const itemsResult = await tenantQuery(
+      orgId,
       `SELECT oi.*,
          COALESCE(sc.product_title, oi.product_title) AS display_name,
          COALESCE(sc.image_url, oi.image_url) AS resolved_image_url
        FROM local_pickup_order_items oi
-       LEFT JOIN sku_catalog sc ON sc.sku = oi.sku
-       WHERE oi.order_id = $1
+       LEFT JOIN sku_catalog sc ON sc.sku = oi.sku AND sc.organization_id = oi.organization_id
+       WHERE oi.order_id = $1 AND oi.organization_id = $2
        ORDER BY oi.id ASC`,
-      [orderId],
+      [orderId, orgId],
     );
 
     return NextResponse.json({
@@ -57,6 +62,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRoutePerm(req, 'walk_in.intake');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -83,9 +89,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     values.push(orderId);
     const idIdx = values.length;
+    values.push(orgId);
+    const orgIdx = values.length;
 
-    const result = await pool.query(
-      `UPDATE local_pickup_orders SET ${setClauses.join(', ')} WHERE id = $${idIdx} AND status = 'DRAFT' RETURNING *`,
+    const result = await tenantQuery(
+      orgId,
+      `UPDATE local_pickup_orders SET ${setClauses.join(', ')} WHERE id = $${idIdx} AND organization_id = $${orgIdx} AND status = 'DRAFT' RETURNING *`,
       values,
     );
 
@@ -109,6 +118,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRoutePerm(req, 'walk_in.intake');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
   try {
     const { id } = await params;
     const orderId = Number(id);
@@ -116,9 +126,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ success: false, error: 'Invalid order ID' }, { status: 400 });
     }
 
-    const result = await pool.query(
-      `DELETE FROM local_pickup_orders WHERE id = $1 AND status = 'DRAFT' RETURNING id`,
-      [orderId],
+    const result = await tenantQuery(
+      orgId,
+      `DELETE FROM local_pickup_orders WHERE id = $1 AND organization_id = $2 AND status = 'DRAFT' RETURNING id`,
+      [orderId, orgId],
     );
 
     if (result.rows.length === 0) {

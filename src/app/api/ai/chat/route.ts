@@ -141,7 +141,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
     if (intents.length > 0) {
       try {
-        const contextBlock = await buildContextBlock(intents, params);
+        const contextBlock = await buildContextBlock(intents, params, ctx.organizationId);
         if (contextBlock) {
           enrichedMessage =
             `[Live USAV data - ${new Date().toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })} PST]\n` +

@@ -7,8 +7,8 @@
  * cards + a scrollable detail table showing each packer-scanned shipped order
  * that was pushed to a Zoho sales order (→ package → shipment → invoice).
  *
- * It is a presentational component — the ZohoSyncButton owns the data fetching
- * (dry-run preview + live run) and feeds the report/phase/elapsed in as props.
+ * It is a presentational component — the ShippedActionsButton owns the data
+ * fetching (dry-run preview + live run) and feeds report/phase/elapsed in as props.
  */
 
 import { useEffect, useState } from 'react';

@@ -16,6 +16,7 @@ import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateStaffRolesCache } from '@/lib/auth/role-store';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -27,9 +28,19 @@ function staffIdFromUrl(req: NextRequest): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const staffId = staffIdFromUrl(req);
   if (!staffId) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
+  // Org-ownership gate: a staffId from another org reads as NOT_FOUND, so an
+  // admin can never enumerate another org's staff↔role assignments. `roles`
+  // itself is a system-global table (no organization_id) — we gate via the
+  // `staff` parent's org, not via roles.
+  const probe = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [staffId, ctx.organizationId],
+  );
+  if (!probe.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
   const r = await pool.query(
     `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
             sr.granted_at, sr.granted_by
@@ -57,11 +68,19 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
     if (Number.isFinite(n) && n > 0) wanted.add(Math.floor(n));
   }
 
-  const probe = await pool.query(`SELECT id FROM staff WHERE id = $1`, [staffId]);
+  // Org-ownership gate: a staffId from another org reads as NOT_FOUND, never
+  // mutated. `staff` carries organization_id; `roles`/`staff_roles` do not, so
+  // the staff parent's org is the only tenant boundary for the assignment.
+  const probe = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [staffId, ctx.organizationId],
+  );
   if (!probe.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   // Verify all requested role ids exist (avoid orphan FK failures + give a
-  // clearer error message to the caller).
+  // clearer error message to the caller). `roles` is system-global — no org
+  // predicate here.
   if (wanted.size > 0) {
     const r = await pool.query(`SELECT id FROM roles WHERE id = ANY($1::INT[])`, [Array.from(wanted)]);
     const present = new Set((r.rows as Array<{ id: number }>).map((row) => row.id));
@@ -82,10 +101,11 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
   }
 
   // Use a single transaction so a partial failure leaves the assignment set
-  // unchanged.
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  // unchanged. Run it under the org GUC: the staff parent is already org-gated
+  // by the probe above, and the trailing `staff` UPDATE re-asserts the org
+  // predicate so it can never sync a row in another org. `staff_roles`/`roles`
+  // have no organization_id, so they remain scoped only by the gated staffId.
+  await withTenantTransaction(ctx.organizationId, async (client) => {
     if (toRemove.length > 0) {
       await client.query(
         `DELETE FROM staff_roles WHERE staff_id = $1 AND role_id = ANY($2::INT[])`,
@@ -113,15 +133,12 @@ export const PUT = withAuth(async (req: NextRequest, ctx) => {
       [staffId],
     );
     if (primary.rows[0]?.key) {
-      await client.query(`UPDATE staff SET role = $2 WHERE id = $1`, [staffId, primary.rows[0].key]);
+      await client.query(
+        `UPDATE staff SET role = $2 WHERE id = $1 AND organization_id = $3`,
+        [staffId, primary.rows[0].key, ctx.organizationId],
+      );
     }
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 
   invalidateStaffRolesCache(staffId);
 

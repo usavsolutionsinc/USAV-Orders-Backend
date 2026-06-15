@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
@@ -13,6 +13,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(req, 'repair.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id } = await params;
     const repairId = parseInt(id);
 
@@ -20,7 +21,8 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `SELECT
          d.id,
          d.entity_type,
@@ -33,9 +35,10 @@ export async function GET(
          d.created_at
        FROM documents d
        WHERE d.entity_type = 'REPAIR' AND d.entity_id = $1
+         AND d.organization_id = $2
        ORDER BY d.created_at DESC
        LIMIT 10`,
-      [repairId],
+      [repairId, orgId],
     );
 
     return NextResponse.json({

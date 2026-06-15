@@ -22,7 +22,7 @@ function flagOff() {
  * ?expiringWithinDays, ?provisionalOnly, ?limit, ?offset.
  * Gated by WARRANTY_LOGGER.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   if (!isWarrantyLogger()) return flagOff();
 
   const parsed = WarrantyClaimListQuery.safeParse(
@@ -43,7 +43,7 @@ export const GET = withAuth(async (request) => {
       provisionalOnly: parsed.data.provisionalOnly ?? false,
       limit: parsed.data.limit,
       offset: parsed.data.offset,
-    });
+    }, ctx.organizationId);
     return NextResponse.json({ ok: true, claims });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'list warranty claims failed';

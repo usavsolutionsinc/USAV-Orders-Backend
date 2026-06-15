@@ -18,6 +18,7 @@ export const qk = {
       ['walk-in-sales', search, weekStart, weekEnd, status] as const,
   },
   ebayAccounts: ['ebay-accounts'] as const,
+  amazonAccounts: ['amazon-accounts'] as const,
   adminFbaFnskus: {
     /** Broad invalidation prefix — matches every admin FNSKU directory query. */
     all: ['admin-fba-fnskus'] as const,

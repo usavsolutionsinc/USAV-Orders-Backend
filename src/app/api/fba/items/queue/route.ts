@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -7,7 +7,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 // Returns individual FNSKU items from all active (non-SHIPPED) FBA shipments,
 // joined with their shipment context. Used by UpNextOrder FBA tab.
 // Query params: status (comma-sep, default PLANNED,TESTED,PACKED,LABEL_ASSIGNED), limit
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const statusParam = searchParams.get('status') || 'PLANNED,TESTED,PACKED,LABEL_ASSIGNED';
@@ -20,7 +20,8 @@ export const GET = withAuth(async (request: NextRequest) => {
       .filter(Boolean);
 
     const result = await queryWithRetry(
-      () => pool.query(
+      () => tenantQuery(
+        ctx.organizationId,
         `SELECT
            fsi.id           AS item_id,
            fsi.shipment_id,
@@ -42,11 +43,12 @@ export const GET = withAuth(async (request: NextRequest) => {
            fsi.ready_at,
            tech.name        AS assigned_tech_name
          FROM fba_shipment_items fsi
-         JOIN fba_shipments fs ON fs.id = fsi.shipment_id
-         LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku
+         JOIN fba_shipments fs ON fs.id = fsi.shipment_id AND fs.organization_id = $3
+         LEFT JOIN fba_fnskus ff ON ff.fnsku = fsi.fnsku AND ff.organization_id = $3
          LEFT JOIN staff tech ON tech.id = fs.assigned_tech_id
          WHERE fsi.status = ANY($1::fba_shipment_status_enum[])
            AND fs.status != 'SHIPPED'
+           AND fsi.organization_id = $3
          ORDER BY
            CASE fsi.status
              WHEN 'PACKED'         THEN 1
@@ -58,7 +60,7 @@ export const GET = withAuth(async (request: NextRequest) => {
            fs.due_date ASC NULLS LAST,
            fsi.fnsku
          LIMIT $2`,
-        [statuses, limit]
+        [statuses, limit, ctx.organizationId]
       ),
       { retries: 3, delayMs: 1000 },
     );

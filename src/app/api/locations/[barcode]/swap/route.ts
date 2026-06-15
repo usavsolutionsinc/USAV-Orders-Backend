@@ -6,6 +6,7 @@ import {
   upsertBinContent,
 } from '@/lib/neon/location-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -106,6 +107,12 @@ export async function POST(
       throw err;
     }
 
+    // Resolve session org up-front so the bin lookup + both adjustBinQty
+    // writes + the bin_contents read + the inventory_events write are all
+    // tenant-scoped. Anonymous callers fall back to legacy un-scoped behavior.
+    const ctx = await resolveCtx(request);
+    const orgId = ctx.organizationId ?? undefined;
+
     if (!oldSku || !newSku) {
       return respond({ error: 'oldSku and newSku are required' }, 400);
     }
@@ -113,19 +120,29 @@ export async function POST(
       return respond({ error: 'oldSku and newSku must differ' }, 400);
     }
 
-    const loc = await getLocationByBarcode(code);
+    const loc = await getLocationByBarcode(code, orgId);
     if (!loc) {
       return respond({ error: 'Bin not found' }, 404);
     }
 
-    // Current qty on the old SKU's bin row.
-    const oldRowRes = await pool.query<{ qty: number; min_qty: number | null; max_qty: number | null }>(
-      `SELECT qty, min_qty, max_qty
+    // Current qty on the old SKU's bin row. `sku` collides across orgs, so the
+    // probe is org-scoped when a session org is present.
+    const oldRowRes = orgId
+      ? await tenantQuery<{ qty: number; min_qty: number | null; max_qty: number | null }>(
+          orgId,
+          `SELECT qty, min_qty, max_qty
+       FROM bin_contents
+       WHERE location_id = $1 AND sku = $2 AND organization_id = $3
+       LIMIT 1`,
+          [loc.id, oldSku, orgId],
+        )
+      : await pool.query<{ qty: number; min_qty: number | null; max_qty: number | null }>(
+          `SELECT qty, min_qty, max_qty
        FROM bin_contents
        WHERE location_id = $1 AND sku = $2
        LIMIT 1`,
-      [loc.id, oldSku],
-    );
+          [loc.id, oldSku],
+        );
     const oldQty = Number(oldRowRes.rows[0]?.qty ?? 0);
     if (oldQty <= 0) {
       return respond(
@@ -146,7 +163,7 @@ export async function POST(
       delta: -transferQty,
       staffId,
       reason: 'SWAP_OUT',
-    });
+    }, orgId);
 
     // 2. put qty into the new SKU — same path.
     await adjustBinQty({
@@ -155,31 +172,54 @@ export async function POST(
       delta: transferQty,
       staffId,
       reason: 'SWAP_IN',
-    });
+    }, orgId);
 
     // 3. inventory_events row for the lifecycle timeline — non-quantity
     //    event that joins the two ledger rows together by intent.
+    //    recordInventoryEvent (src/lib/inventory/events.ts) doesn't take an
+    //    orgId; inventory_events relies on the `app.current_org` GUC default
+    //    to stamp the tenant. Running it inside withTenantTransaction sets that
+    //    GUC so the row lands on the right org instead of NULL/USAV-fallback.
     try {
-      await recordInventoryEvent({
-        event_type: 'MOVED',
-        actor_staff_id: staffId,
-        station: 'MOBILE',
-        bin_id: loc.id,
-        sku: newSku,
-        notes: `SKU swap in bin ${code}: ${oldSku} → ${newSku} (qty ${transferQty})`,
-        payload: {
-          action: 'sku_swap',
-          bin_barcode: code,
-          old_sku: oldSku,
-          new_sku: newSku,
-          qty: transferQty,
-        },
-      });
+      if (orgId) {
+        await withTenantTransaction(orgId, (client) =>
+          recordInventoryEvent({
+            event_type: 'MOVED',
+            actor_staff_id: staffId,
+            station: 'MOBILE',
+            bin_id: loc.id,
+            sku: newSku,
+            notes: `SKU swap in bin ${code}: ${oldSku} → ${newSku} (qty ${transferQty})`,
+            payload: {
+              action: 'sku_swap',
+              bin_barcode: code,
+              old_sku: oldSku,
+              new_sku: newSku,
+              qty: transferQty,
+            },
+          }, client),
+        );
+      } else {
+        await recordInventoryEvent({
+          event_type: 'MOVED',
+          actor_staff_id: staffId,
+          station: 'MOBILE',
+          bin_id: loc.id,
+          sku: newSku,
+          notes: `SKU swap in bin ${code}: ${oldSku} → ${newSku} (qty ${transferQty})`,
+          payload: {
+            action: 'sku_swap',
+            bin_barcode: code,
+            old_sku: oldSku,
+            new_sku: newSku,
+            qty: transferQty,
+          },
+        });
+      }
     } catch (err) {
       console.warn('swap: audit insert failed (non-fatal)', err);
     }
 
-    const ctx = await resolveCtx(request);
     await recordAudit(pool, ctx, request, {
       source: 'mobile-scanner',
       action: AUDIT_ACTION.BIN_SWAP,

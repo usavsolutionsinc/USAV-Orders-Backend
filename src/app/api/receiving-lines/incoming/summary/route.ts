@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import {
   getDeliveredUnscannedCount,
   getDeliveredUnscannedByCarrier,
@@ -38,9 +39,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (_request: NextRequest) => {
+export const GET = withAuth(async (_request: NextRequest, ctx) => {
   try {
-    const r = await pool.query<{
+    const orgId = ctx.organizationId;
+    const r = await tenantQuery<{
       issued: number;
       delivered_unopened: number;
       arriving_today: number;
@@ -52,6 +54,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
       awaiting_tracking: number;
       expected_today: number;
     }>(
+      orgId,
       `SELECT
          COUNT(DISTINCT rl.zoho_purchaseorder_id)::int AS issued,
          COUNT(DISTINCT rl.zoho_purchaseorder_id) FILTER (
@@ -100,13 +103,17 @@ export const GET = withAuth(async (_request: NextRequest) => {
             r.id = rl.receiving_id
          OR (rl.receiving_id IS NULL
              AND r.source = 'zoho_po'
-             AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+             AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+             -- String-key join (PO id) collides across tenants; pin to same org.
+             AND r.organization_id = rl.organization_id)
        )
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
        LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
        WHERE rl.workflow_status = 'EXPECTED'
          AND COALESCE(rl.quantity_received, 0) = 0
          AND rl.zoho_purchaseorder_id IS NOT NULL
+         -- Tenant ownership: only this org's incoming PO lines.
+         AND rl.organization_id = $1
          -- Drop POs Zoho now reports received/closed/cancelled, so a
          -- received order leaves Incoming after a Refresh-Zoho mirror sync.
          AND ${NOT_ZOHO_RECEIVED_PREDICATE}
@@ -114,6 +121,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
          -- exclude it here too — keeps these chip counts in sync with the list's
          -- view=incoming rows, which now apply the same scan guard.
          AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
+      [orgId],
     );
 
     const row = r.rows[0] ?? {
@@ -135,14 +143,22 @@ export const GET = withAuth(async (_request: NextRequest) => {
     // so the PO-line FILTER above misses them and always reads ~0. The canonical
     // count lives in one helper (Phase B) shared with the list endpoint and the
     // main delivery_state, so the tile count, the list length, and the row
-    // badges agree by construction.
-    row.delivered_unopened = await getDeliveredUnscannedCount(pool);
+    // badges agree by construction. Threaded orgId → the helper takes its
+    // GUC-wrapped tenant branch (the `pool` arg is ignored there, kept only to
+    // satisfy the required positional), pinning the org-bearing aliases
+    // (receiving/receiving_scans) inside the shared predicates so the tile no
+    // longer counts other tenants' delivered-unscanned boxes.
+    row.delivered_unopened = await getDeliveredUnscannedCount(pool, undefined, orgId);
 
     // Email-driven delivered-unscanned: orders an "ORDER DELIVERED" email
     // flagged that map to a still-incoming, unscanned receiving line. Shown
     // alongside the carrier signal (both surface a delivered-but-not-scanned
     // box; email catches the ones carrier polling misses or can't reach).
-    const deliveredEmail = await getEmailDeliveredUnscannedCount(pool);
+    // Threaded orgId → the helper's tenant branch pins eds/rl on organization_id
+    // AND aligns the org across the normalized-order# string-key join, matching
+    // the sibling list endpoint's `eds.organization_id = rl.organization_id`, so
+    // this org's count no longer mixes in other tenants' order#/PO# collisions.
+    const deliveredEmail = await getEmailDeliveredUnscannedCount(pool, undefined, orgId);
 
     // E4 per-carrier breakdown — "USPS: 12 unavailable, FedEx: 3 delivered-
     // unscanned". delivered_unscanned reuses the deduped canonical base (sums to
@@ -153,13 +169,17 @@ export const GET = withAuth(async (_request: NextRequest) => {
     // which is what made USPS read 200+ "unavailable" while only a handful were
     // actually in the Incoming queue.
     const [duByCarrier, carrierAgg] = await Promise.all([
-      getDeliveredUnscannedByCarrier(pool),
-      pool.query<{
+      // Threaded orgId → same org-pinned canonical base as the tile, split by
+      // carrier, so each per-carrier delivered_unscanned value counts only this
+      // org's inbound shipments (was aggregating every tenant's via bypass pool).
+      getDeliveredUnscannedByCarrier(pool, undefined, orgId),
+      tenantQuery<{
         carrier: string;
         tracking_unavailable: number;
         in_transit: number;
         carrier_mismatch: number;
       }>(
+        orgId,
         // UNKNOWN is included so carrier/number mismatches (a tracking# we
         // couldn't attribute to any carrier) get a row of their own — they have
         // no UPS/USPS/FedEx bucket to live in, but still need surfacing.
@@ -180,7 +200,9 @@ export const GET = withAuth(async (_request: NextRequest) => {
                 WHERE r.id = rl.receiving_id
                    OR (rl.receiving_id IS NULL
                        AND r.source = 'zoho_po'
-                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id)
+                       AND r.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+                       -- String-key join (PO id) collides across tenants; pin to same org.
+                       AND r.organization_id = rl.organization_id)
                 ORDER BY (r.id = rl.receiving_id) DESC,
                          (r.shipment_id IS NOT NULL) DESC,
                          r.id DESC
@@ -190,6 +212,8 @@ export const GET = withAuth(async (_request: NextRequest) => {
             WHERE rl.workflow_status = 'EXPECTED'
               AND COALESCE(rl.quantity_received, 0) = 0
               AND rl.zoho_purchaseorder_id IS NOT NULL
+              -- Tenant ownership: only this org's incoming PO lines.
+              AND rl.organization_id = $1
               AND ${NOT_ZOHO_RECEIVED_PREDICATE}
               AND NOT ${SHIPMENT_SCANNED_PREDICATE}
               AND upper(COALESCE(stn.carrier, '')) IN ('UPS','USPS','FEDEX','UNKNOWN')
@@ -216,6 +240,7 @@ export const GET = withAuth(async (_request: NextRequest) => {
                 )::int AS carrier_mismatch
            FROM incoming_shipments
           GROUP BY 1`,
+        [orgId],
       ),
     ]);
 

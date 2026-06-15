@@ -28,14 +28,19 @@ import { PoGmailNotConnectedError } from '@/lib/po-gmail/client';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const url = new URL(req.url);
     const limitRaw = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT);
     const query = url.searchParams.get('q') ?? 'is:unread';
     const persist = url.searchParams.get('persist') !== 'false'; // default true
 
-    const result = await runPoMailboxReconcile({ limit: limitRaw, query, persist });
+    const result = await runPoMailboxReconcile({
+      limit: limitRaw,
+      query,
+      persist,
+      orgId: ctx.organizationId,
+    });
     return NextResponse.json(result);
   } catch (error) {
     // A revoked/expired Gmail token (the common weekly failure) is not a 500 —

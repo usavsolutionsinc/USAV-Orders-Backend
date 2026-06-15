@@ -15,14 +15,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
-import { readTimeline, type InventoryEventRow } from '@/lib/inventory/events';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { readInventorySpine, type InventoryEventRecord } from '@/lib/audit-log/inventory-spine';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const url = new URL(req.url);
     const poId = (url.searchParams.get('po_id') || '').trim();
     const shipmentIdParam = (url.searchParams.get('shipment_id') || '').trim();
@@ -39,7 +40,10 @@ export const GET = withAuth(async (req: NextRequest) => {
       if (!Number.isFinite(sid) || sid <= 0) {
         return NextResponse.json({ success: false, error: 'valid shipment_id required' }, { status: 400 });
       }
-      const stnRes = await pool.query<{
+      // shipping_tracking_numbers has no organization_id column yet (NEEDS-COL):
+      // run GUC-wrapped via tenantQuery (RLS backstop) — no explicit org filter
+      // is possible until the column lands.
+      const stnRes = await tenantQuery<{
         id: number;
         tracking_number_raw: string | null;
         carrier: string | null;
@@ -49,6 +53,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         last_checked_at: string | null;
         out_for_delivery_at: string | null;
       }>(
+        orgId,
         `SELECT id, tracking_number_raw, carrier, latest_status_category, is_delivered,
                 delivered_at::text, last_checked_at::text, out_for_delivery_at::text
            FROM shipping_tracking_numbers
@@ -60,16 +65,22 @@ export const GET = withAuth(async (req: NextRequest) => {
       if (!stn) {
         return NextResponse.json({ success: false, error: 'shipment not found' }, { status: 404 });
       }
-      const recvRes = await pool.query<{ id: number; support_notes: string | null; received_at: string | null }>(
+      const recvRes = await tenantQuery<{ id: number; support_notes: string | null; received_at: string | null }>(
+        orgId,
         `SELECT id, support_notes, received_at::text
            FROM receiving
           WHERE shipment_id = $1
+            AND organization_id = $2
           ORDER BY id
           LIMIT 1`,
-        [sid],
+        [sid, orgId],
       );
       const recv = recvRes.rows[0] ?? null;
-      const ev = await pool.query(
+      // shipment_tracking_events has no organization_id column yet (NEEDS-COL):
+      // GUC-wrapped only, scoped by the shipment id (whose owning receiving row
+      // was already org-checked above).
+      const ev = await tenantQuery(
+        orgId,
         `SELECT id, event_occurred_at::text, normalized_status_category,
                 external_status_label, external_status_description,
                 event_city, event_state, exception_description, signed_by
@@ -111,7 +122,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
 
     // ── PO header (zoho_po_mirror) ──────────────────────────────────────────
-    const mirrorRes = await pool.query<{
+    // zoho_po_mirror has no organization_id column yet (NEEDS-COL): GUC-wrapped
+    // via tenantQuery only — no explicit org filter until the column lands.
+    const mirrorRes = await tenantQuery<{
       zoho_purchaseorder_id: string;
       zoho_purchaseorder_number: string;
       vendor_id: string | null;
@@ -126,6 +139,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       last_modified_zoho: string | null;
       last_synced_at: string;
     }>(
+      orgId,
       `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number, vendor_id, vendor_name,
               status, po_date::text, expected_delivery_date::text, reference_number, total, currency,
               raw, last_modified_zoho::text, last_synced_at::text
@@ -137,7 +151,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const mirror = mirrorRes.rows[0] ?? null;
 
     // ── receiving row + shipment + carrier status ──────────────────────────
-    const recvRes = await pool.query<{
+    const recvRes = await tenantQuery<{
       id: number;
       shipment_id: number | null;
       support_notes: string | null;
@@ -150,6 +164,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       shipment_last_checked_at: string | null;
       shipment_out_for_delivery_at: string | null;
     }>(
+      orgId,
       `SELECT r.id,
               r.shipment_id,
               r.support_notes,
@@ -165,8 +180,9 @@ export const GET = withAuth(async (req: NextRequest) => {
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
         WHERE r.source = 'zoho_po'
           AND r.zoho_purchaseorder_id = $1
+          AND r.organization_id = $2
         LIMIT 1`,
-      [poId],
+      [poId, orgId],
     );
     const recv = recvRes.rows[0] ?? null;
 
@@ -183,7 +199,11 @@ export const GET = withAuth(async (req: NextRequest) => {
       signed_by: string | null;
     }> = [];
     if (recv?.shipment_id) {
-      const ev = await pool.query(
+      // shipment_tracking_events has no organization_id column yet (NEEDS-COL):
+      // GUC-wrapped only, scoped by the shipment id of the org-checked receiving
+      // row above.
+      const ev = await tenantQuery(
+        orgId,
         `SELECT id,
                 event_occurred_at::text,
                 normalized_status_category,
@@ -220,16 +240,19 @@ export const GET = withAuth(async (req: NextRequest) => {
 
     let receivedByLineItemId = new Map<string, { quantity_received: number; workflow_status: string | null; line_id: number }>();
     if (rawLineItems.length > 0) {
-      const linesRes = await pool.query<{
+      const linesRes = await tenantQuery<{
         id: number;
         zoho_line_item_id: string | null;
         quantity_received: number;
         workflow_status: string | null;
       }>(
+        orgId,
         `SELECT id, zoho_line_item_id, quantity_received, workflow_status::text
            FROM receiving_lines
-          WHERE zoho_purchaseorder_id = $1`,
-        [poId],
+          WHERE zoho_purchaseorder_id = $1
+            AND organization_id = $2
+          LIMIT 500`,
+        [poId, orgId],
       );
       for (const row of linesRes.rows) {
         if (!row.zoho_line_item_id) continue;
@@ -257,13 +280,27 @@ export const GET = withAuth(async (req: NextRequest) => {
       };
     });
 
-    // ── Receive history (inventory_events) ─────────────────────────────────
-    let receiveEvents: InventoryEventRow[] = [];
-    if (recv?.id) {
+    // ── Receive / line lifecycle history (inventory_events) ─────────────────
+    // Anchor on the PO's receiving_line_ids ("line under PO") AND the carton, so
+    // the trail includes receiving AND per-unit testing verdicts (TEST_*) — not
+    // just carton-level RECEIVED rows. readInventorySpine joins actor_name +
+    // serial_number so the timeline reads in full fidelity.
+    const lineIds = line_items
+      .map((l) => l.receiving_line_id)
+      .filter((n): n is number => Number.isFinite(n as number));
+    const cartonIds = recv?.id ? [recv.id] : [];
+    let receiveEvents: InventoryEventRecord[] = [];
+    if (lineIds.length > 0 || cartonIds.length > 0) {
       try {
-        receiveEvents = await readTimeline({ receiving_id: recv.id, limit: 50 });
+        // Thread orgId (Phase A) → GUC-wraps the spine read, pins
+        // ie.organization_id, and aligns the staff/serial_units LEFT JOINs so a
+        // cross-tenant actor_name / serial_number can't surface. The id sets
+        // themselves are already this-org-only (derived from the org-gated
+        // receiving_lines / receiving reads above), but this closes the
+        // bypass-pool path the un-threaded call previously took.
+        receiveEvents = await readInventorySpine({ lineIds, cartonIds, order: 'desc', limit: 50 }, orgId);
       } catch (err) {
-        console.warn('details: readTimeline failed', err);
+        console.warn('details: readInventorySpine failed', err);
       }
     }
 
@@ -284,14 +321,16 @@ export const GET = withAuth(async (req: NextRequest) => {
       scanned_at: string | null;
     }> = [];
     if (poNumberNorm) {
-      const gm = await pool.query(
+      const gm = await tenantQuery(
+        orgId,
         `SELECT id, gmail_msg_id, gmail_thread_id, email_subject, email_from,
                 email_received::text, status, scanned_at::text
            FROM email_missing_purchase_orders
           WHERE $1 = ANY(po_numbers_norm)
+            AND organization_id = $2
           ORDER BY scanned_at DESC NULLS LAST, id DESC
           LIMIT 25`,
-        [poNumberNorm],
+        [poNumberNorm, orgId],
       );
       gmail = gm.rows as typeof gmail;
     }
@@ -310,14 +349,16 @@ export const GET = withAuth(async (req: NextRequest) => {
       delivered_at: string | null;
     }> = [];
     if (poNumberNorm) {
-      const de = await pool.query(
+      const de = await tenantQuery(
+        orgId,
         `SELECT gmail_msg_id, gmail_thread_id, order_number, email_subject,
                 email_from, snippet, delivered_at::text
            FROM email_delivery_signals
           WHERE order_number_norm = $1
+            AND organization_id = $2
           ORDER BY delivered_at DESC
           LIMIT 25`,
-        [poNumberNorm],
+        [poNumberNorm, orgId],
       );
       delivered_emails = de.rows as typeof delivered_emails;
     }
@@ -383,7 +424,20 @@ export const GET = withAuth(async (req: NextRequest) => {
             events: shipmentEvents,
           }
         : null,
-      receive_events: receiveEvents,
+      receive_events: receiveEvents.map((e) => ({
+        id: e.id,
+        occurred_at: e.occurred_at,
+        event_type: e.event_type,
+        actor_staff_id: e.actor_staff_id,
+        actor_name: e.actor_name,
+        station: e.station,
+        sku: e.sku,
+        serial_number: e.serial_number,
+        serial_unit_id: e.serial_unit_id,
+        prev_status: e.prev_status,
+        next_status: e.next_status,
+        notes: e.notes,
+      })),
       gmail,
       delivered_emails,
       zoho_activity,

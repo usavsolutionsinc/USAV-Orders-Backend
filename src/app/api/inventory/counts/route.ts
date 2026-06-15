@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,15 +17,17 @@ export const dynamic = 'force-dynamic';
  * Returns:
  *   { success, items: CountRow[], counts: { open, in_progress, reconciling, closed, total } }
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId;
         const sp = req.nextUrl.searchParams;
         const q = (sp.get('q') ?? '').trim();
         const buckets = readBuckets(sp.getAll('bucket'));
         const limit = Math.min(Math.max(Number(sp.get('limit') ?? 50), 1), 200);
 
         const where: string[] = [];
-        const params: unknown[] = [];
+        // $1 is always the org id — referenced inside the base CTE below.
+        const params: unknown[] = [orgId];
 
         if (q) {
             params.push(`%${q}%`);
@@ -63,6 +65,7 @@ export const GET = withAuth(async (req: NextRequest) => {
                     COUNT(line.id) FILTER (WHERE line.status IN ('approved','rejected'))::int AS resolved_count
                 FROM cycle_count_campaigns c
                 LEFT JOIN cycle_count_lines line ON line.campaign_id = c.id
+                WHERE c.organization_id = $1
                 GROUP BY c.id
             )
             SELECT
@@ -84,7 +87,7 @@ export const GET = withAuth(async (req: NextRequest) => {
             LIMIT $${limitIdx}
         `;
 
-        const result = await pool.query(listSql, params);
+        const result = await tenantQuery(orgId, listSql, params);
         const rows = result.rows.map((r: any) => ({
             id: r.id,
             name: r.name,
@@ -97,7 +100,8 @@ export const GET = withAuth(async (req: NextRequest) => {
         }));
 
         // Counts pass — separate query against derived statuses for badge tallies.
-        const countsResult = await pool.query(
+        const countsResult = await tenantQuery(
+            orgId,
             `
             WITH base AS (
                 SELECT
@@ -106,6 +110,7 @@ export const GET = withAuth(async (req: NextRequest) => {
                     COUNT(line.id) FILTER (WHERE line.status IN ('counted','approved','rejected'))::int AS progress_count
                 FROM cycle_count_campaigns c
                 LEFT JOIN cycle_count_lines line ON line.campaign_id = c.id
+                WHERE c.organization_id = $1
                 GROUP BY c.id
             )
             SELECT
@@ -116,6 +121,7 @@ export const GET = withAuth(async (req: NextRequest) => {
                 COUNT(*) FILTER (WHERE status <> 'closed' AND review_count = 0 AND progress_count = 0)::int AS open
             FROM base
             `,
+            [orgId],
         );
 
         return NextResponse.json({

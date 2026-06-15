@@ -369,6 +369,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         o.out_of_stock,
         o.status,
         o.notes,
+        o.sale_amount,
+        o.currency,
         ${replenishmentSelect}
         o.customer_id,
         stn.latest_status_code,
@@ -485,6 +487,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       // Pending/unshipped dashboards should stay limited to orders that have not
       // entered a carrier-shipped state, even when excludePacked is also active.
       sql += ` AND NOT ${shippedByCarrierOrLatestStatusSql}`;
+      // Amazon-fulfilled (FBA/AFN) orders are read-only records — Amazon ships
+      // them, so they never belong on the to-ship/pack to-do list.
+      sql += ` AND COALESCE(o.fulfillment_channel, '') <> 'AFN'`;
     }
 
     if (packedOnly) {

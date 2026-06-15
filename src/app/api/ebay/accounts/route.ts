@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { deleteEbayAccount } from '@/lib/ebay/credentials';
 
 /**
  * GET /api/ebay/accounts
@@ -81,4 +82,37 @@ export const PUT = withAuth(async (req, ctx) => {
     );
   }
 }, { permission: 'integrations.ebay' });
+
+/**
+ * DELETE /api/ebay/accounts?id=123
+ * Disconnect an eBay account. eBay exposes no token-revocation API, so deleting
+ * the row (which holds the encrypted access + refresh tokens) IS the revocation.
+ * We intentionally do NOT touch organization_integrations: for eBay that row
+ * holds the org's *app* credentials (appId/certId), not the seller token.
+ *
+ * step-up required (token destruction); admins are exempt per withAuth.
+ */
+export const DELETE = withAuth(async (req, ctx) => {
+  const idParam = req.nextUrl.searchParams.get('id');
+  const id = Number(idParam);
+  if (!idParam || !Number.isInteger(id)) {
+    return NextResponse.json({ ok: false, error: 'id must be an integer' }, { status: 400 });
+  }
+
+  const accountName = await deleteEbayAccount(ctx.organizationId, id);
+  if (!accountName) {
+    return NextResponse.json({ ok: false, error: 'Account not found or access denied' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true, accountName });
+}, {
+  permission: 'integrations.ebay',
+  stepUp: true,
+  audit: {
+    source: 'admin',
+    action: 'integrations.ebay.disconnected',
+    entityType: 'ebay_account',
+    entityId: ({ req }) => new URL(req.url).searchParams.get('id'),
+  },
+});
 

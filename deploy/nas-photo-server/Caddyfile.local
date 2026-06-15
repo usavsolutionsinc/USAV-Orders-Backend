@@ -1,0 +1,44 @@
+# LOCAL dev/test NAS — serves /Volumes/personal_folder/Photos with the same
+# read + WebDAV-write contract as the production Ugreen Caddyfile, so the
+# "Select from NAS" + label-upload flows can be exercised end-to-end locally.
+#
+# Needs a Caddy build that INCLUDES the webdav module (the stock binary doesn't):
+#   curl -fsSL "https://caddyserver.com/api/download?os=darwin&arch=arm64&p=github.com/mholt/caddy-webdav" -o ./caddy-webdav
+#   chmod +x ./caddy-webdav
+#   ./caddy-webdav run --config deploy/nas-photo-server/Caddyfile.local --adapter caddyfile
+#
+# Then point the app at it: NEXT_PUBLIC_NAS_PHOTOS_BASE_URL=http://localhost:8088
+#
+# Round-trip sanity (full CRUD + list):
+#   curl -X PUT --data-binary @label.pdf http://localhost:8088/LABEL_test__label.pdf   # 201
+#   curl -H "Accept: application/json" http://localhost:8088/                           # JSON list
+#   curl -I http://localhost:8088/LABEL_test__label.pdf                                 # 200
+#   curl -X DELETE http://localhost:8088/LABEL_test__label.pdf                          # 204
+
+{
+	auto_https off
+}
+
+:8088 {
+	root * "/Volumes/personal_folder/Photos"
+
+	header {
+		Access-Control-Allow-Origin "{http.request.header.Origin}"
+		Access-Control-Allow-Credentials "true"
+		Access-Control-Allow-Methods "GET, HEAD, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type"
+		Vary Origin
+		defer
+	}
+
+	@preflight method OPTIONS
+	@write method PUT DELETE
+
+	route {
+		respond @preflight 204
+		webdav @write {
+			root "/Volumes/personal_folder/Photos"
+		}
+		file_server browse
+	}
+}

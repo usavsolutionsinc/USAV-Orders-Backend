@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseBody } from '@/lib/schemas/parse';
 import { ReasonCodeCreateBody } from '@/lib/schemas/reason-codes';
@@ -29,7 +30,7 @@ export interface ReasonCodeRow {
  * Returns active reason codes, optionally filtered. Used by ReasonCodePicker
  * in the mobile bin editor (and any future write surface).
  */
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const direction = searchParams.get('direction'); // in | out | either
@@ -37,6 +38,10 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     const clauses: string[] = ['is_active = true'];
     const params: string[] = [];
+
+    // Tenant ownership filter — never return another org's reason codes.
+    params.push(ctx.organizationId);
+    clauses.push(`organization_id = $${params.length}`);
 
     // Direction filter — when the caller specifies 'out' we still want
     // 'either'-direction codes available (e.g. CYCLE_COUNT_ADJ).
@@ -58,7 +63,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       WHERE ${clauses.join(' AND ')}
       ORDER BY sort_order ASC, label ASC
     `;
-    const result = await pool.query<ReasonCodeRow>(sql, params);
+    const result = await tenantQuery<ReasonCodeRow>(ctx.organizationId, sql, params);
     return NextResponse.json({ success: true, reason_codes: result.rows });
   } catch (err: any) {
     console.error('[GET /api/reason-codes] error:', err);
@@ -97,7 +102,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       requiresNote: parsed.requiresNote,
       requiresPhoto: parsed.requiresPhoto,
       sortOrder: parsed.sortOrder,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, request, {
       source: 'reason-codes-api',

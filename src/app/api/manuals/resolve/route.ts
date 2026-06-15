@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { normalizeIdentifier } from '@/lib/product-manuals';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -12,8 +12,9 @@ function buildDocUrls(googleFileId: string) {
   };
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(req.url);
     const itemNumber = String(searchParams.get('itemNumber') || '');
     const sku = String(searchParams.get('sku') || '');
@@ -28,12 +29,22 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
 
     // ── Hub-first: resolve through sku_catalog ──────────────────────────────
-    const skuCatalogId = await resolveSkuCatalogId(sku || null, itemNumber || null);
+    // Thread orgId so the crosswalk (sku_catalog / sku_platform_ids) only
+    // matches THIS tenant's catalog — otherwise org A could resolve to org B's
+    // catalog id and read its hub-linked manual.
+    const skuCatalogId = await resolveSkuCatalogId(sku || null, itemNumber || null, null, orgId);
 
     let rows: any[] = [];
+    // Track which branch produced the rows so matchedBy is accurate (the prior
+    // `rows === rows` was always true, mislabeling legacy hits as sku_catalog).
+    let matchedBy: 'sku_catalog' | 'item_number' = 'item_number';
 
     if (skuCatalogId) {
-      const hubResult = await pool.query(
+      // product_manuals has no organization_id column (child-scoped via
+      // sku_catalog); scope this read through the parent catalog row's org and
+      // run it GUC-wrapped via tenantQuery.
+      const hubResult = await tenantQuery(
+        orgId,
         `SELECT
            id,
            item_number,
@@ -45,28 +56,56 @@ export const GET = withAuth(async (req: NextRequest) => {
          FROM product_manuals
          WHERE is_active = TRUE
            AND sku_catalog_id = $1
+           AND EXISTS (
+             SELECT 1 FROM sku_catalog sc
+             WHERE sc.id = product_manuals.sku_catalog_id
+               AND sc.organization_id = $2
+           )
          ORDER BY updated_at DESC`,
-        [skuCatalogId]
+        [skuCatalogId, orgId]
       );
       rows = hubResult.rows;
+      if (rows.length > 0) matchedBy = 'sku_catalog';
     }
 
     // ── Fallback: legacy item_number match for un-migrated records ──────────
     if (rows.length === 0 && normalizedItemNumber) {
-      const fallbackResult = await pool.query(
+      // Legacy path matches by item_number on un-migrated rows that have no
+      // sku_catalog_id, so there is no parent to scope through and
+      // product_manuals carries no organization_id column. The GUC is INERT for
+      // this table (no RLS, no org column), so tenantQuery alone provides ZERO
+      // isolation here. To close the cross-tenant read leak we (a) restrict to
+      // genuinely-legacy rows (sku_catalog_id IS NULL — hub-linked rows are
+      // already org-scoped above and must not leak via the org-blind
+      // item_number) and (b) refuse to return a shared item_number whenever that
+      // item_number resolves, through THIS org's crosswalk, to a catalog row
+      // owned by a DIFFERENT org — i.e. only surface the legacy row when it is
+      // either unattributed everywhere or attributable to the caller's org.
+      // (NEEDS-COL: full isolation still requires product_manuals to grow an
+      // organization_id column + RLS; tracked separately.)
+      const fallbackResult = await tenantQuery(
+        orgId,
         `SELECT
-           id,
-           item_number,
-           product_title,
-           display_name,
-           google_file_id,
-           type,
-           updated_at
-         FROM product_manuals
-         WHERE is_active = TRUE
-           AND regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $1
-         ORDER BY updated_at DESC`,
-        [normalizedItemNumber]
+           pm.id,
+           pm.item_number,
+           pm.product_title,
+           pm.display_name,
+           pm.google_file_id,
+           pm.type,
+           pm.updated_at
+         FROM product_manuals pm
+         WHERE pm.is_active = TRUE
+           AND pm.sku_catalog_id IS NULL
+           AND regexp_replace(UPPER(TRIM(COALESCE(pm.item_number, ''))), '[^A-Z0-9]', '', 'g') = $1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM sku_platform_ids spi
+             JOIN sku_catalog sc ON sc.id = spi.sku_catalog_id
+             WHERE regexp_replace(UPPER(TRIM(COALESCE(spi.platform_item_id, ''))), '[^A-Z0-9]', '', 'g') = $1
+               AND sc.organization_id <> $2
+           )
+         ORDER BY pm.updated_at DESC`,
+        [normalizedItemNumber, orgId]
       );
       rows = fallbackResult.rows;
     }
@@ -83,7 +122,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       displayName: row.display_name || null,
       googleFileId: row.google_file_id,
       type: row.type || null,
-      matchedBy: skuCatalogId && rows === rows ? 'sku_catalog' as const : 'item_number' as const,
+      matchedBy,
       updatedAt: row.updated_at,
       ...buildDocUrls(row.google_file_id),
     }));

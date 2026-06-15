@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { getCurrentUser } from '@/lib/auth/current-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,9 +11,21 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 1000) : 50;
     const statusFilter = status === 'unassigned' || status === 'assigned' || status === 'archived' ? status : null;
 
+    // This route has no auth gate (gate: NONE) so there's no ctx — resolve the
+    // tenant from the existing session. Without a tenant we cannot GUC-wrap the
+    // read, so return the empty success shape rather than leaking across orgs.
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ success: true, manuals: [], count: 0 });
+    }
+    const orgId = user.organizationId;
+
     if (!query) {
-      // Return recent manuals when no query
-      const result = await pool.query(
+      // Return recent manuals when no query.
+      // product_manuals has no organization_id column (child-scoped to
+      // sku_catalog); tenantQuery GUC-wraps the read so RLS can backstop.
+      const result = await tenantQuery(
+        orgId,
         `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
          FROM product_manuals
          WHERE is_active = TRUE
@@ -33,7 +46,10 @@ export async function GET(request: NextRequest) {
     // plus similarity scoring via pg_trgm when available.
     const pattern = `%${query.replace(/[%_]/g, '\\$&')}%`;
 
-    const result = await pool.query(
+    // product_manuals has no organization_id column (child-scoped to
+    // sku_catalog); tenantQuery GUC-wraps the read so RLS can backstop.
+    const result = await tenantQuery(
+      orgId,
       `SELECT id, sku, item_number, product_title, display_name, google_file_id, source_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, updated_at
        FROM product_manuals
        WHERE is_active = TRUE

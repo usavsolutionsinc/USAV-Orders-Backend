@@ -50,10 +50,17 @@ test.describe('Warranty claim — Zendesk round-trip', () => {
     // to reflect the link once the mocked POST has fired.
     let linked = false;
     await page.route(new RegExp(`/api/warranty/claims/${claimId}$`), async (route) => {
-      const res = await route.fetch();
-      const json = await res.json().catch(() => null);
-      if (linked && json?.claim) json.claim.zendeskTicketId = 9999;
-      await route.fulfill({ response: res, body: JSON.stringify(json) });
+      // A background react-query refetch can still be in flight when the test
+      // ends; guard route.fetch() so a lingering call during teardown doesn't
+      // throw "Target page has been closed" and fail an otherwise-passing test.
+      try {
+        const res = await route.fetch();
+        const json = await res.json().catch(() => null);
+        if (linked && json?.claim) json.claim.zendeskTicketId = 9999;
+        await route.fulfill({ response: res, body: JSON.stringify(json) });
+      } catch {
+        await route.abort().catch(() => {});
+      }
     });
 
     // GET .../zendesk — live ticket status; POST — create ticket

@@ -45,7 +45,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
   const unreadOnly = req.nextUrl.searchParams.get('unread') === '1';
   const limitRaw = Number(req.nextUrl.searchParams.get('limit'));
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 100) : undefined;
-  const items = await listInboxMessages(ctx.staffId, { unreadOnly, limit });
+  const items = await listInboxMessages(ctx.organizationId, ctx.staffId, { unreadOnly, limit });
   return NextResponse.json({ items });
 });
 
@@ -114,11 +114,11 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if (parsed instanceof NextResponse) return parsed;
 
   if (parsed.action === 'mark_read') {
-    await markStaffMessageRead(ctx.staffId, parsed.id);
+    await markStaffMessageRead(ctx.organizationId, ctx.staffId, parsed.id);
     // Idempotent + reconstructable — no audit row for a read receipt.
     return NextResponse.json({ success: true });
   }
 
-  const count = await markAllStaffMessagesRead(ctx.staffId);
+  const count = await markAllStaffMessagesRead(ctx.organizationId, ctx.staffId);
   return NextResponse.json({ success: true, count });
 });

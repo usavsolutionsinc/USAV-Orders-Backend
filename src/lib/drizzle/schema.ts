@@ -12,21 +12,144 @@ export function orgIdCol() {
 export const ebayAccounts = pgTable('ebay_accounts', {
   id: serial('id').primaryKey(),
   organizationId: orgIdCol(),
-  accountName: varchar('account_name', { length: 50 }).notNull().unique(),
+  // account_name is unique PER ORG (see ux_ebay_accounts_org_account below),
+  // not globally — two tenants may both label an account 'ebay-main'.
+  accountName: varchar('account_name', { length: 50 }).notNull(),
   ebayUserId: varchar('ebay_user_id', { length: 100 }),
   accessToken: text('access_token').notNull(),
   refreshToken: text('refresh_token').notNull(),
   tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }).notNull(),
   refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }).notNull(),
   marketplaceId: varchar('marketplace_id', { length: 20 }).default('EBAY_US'),
+  // Added by 2026-03-09_ebay_accounts_add_platform_zoho.sql (EBAY | ZOHO).
+  platform: varchar('platform', { length: 20 }),
   lastSyncDate: timestamp('last_sync_date', { withTimezone: true }),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 }, (table) => ({
   orgEbayUserIdx: uniqueIndex('ux_ebay_accounts_org_ebay_user').on(table.organizationId, table.ebayUserId),
+  orgAccountIdx: uniqueIndex('ux_ebay_accounts_org_account').on(table.organizationId, table.accountName),
   orgIdx: index('idx_ebay_accounts_organization').on(table.organizationId),
 }));
+
+// ─── Platform / Account / Type catalog ──────────────────────────────────────
+// Org-scoped, CRUD-able replacement for the hardcoded SOURCE_PLATFORMS /
+// RECEIVING_TYPE_OPTS lists. See docs/platform-account-type-catalog-plan.md and
+// migrations 2026-06-13g (tables), 2026-06-14b (RLS), 2026-06-14f (type_id FK +
+// account seed). The raw query layer lives in src/lib/neon/catalog-queries.ts;
+// these definitions exist so the rest of the app can join type-safely.
+
+/** CHANNEL — was SOURCE_PLATFORMS in src/lib/source-platform.ts. */
+export const platforms = pgTable('platforms', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  slug: text('slug').notNull(),
+  label: text('label').notNull(),
+  /** Pill color token (was hardcoded in source-platform.ts). */
+  tone: text('tone'),
+  /** Soft-link → organization_integrations.provider (null = display-only). */
+  provider: text('provider'),
+  sortOrder: integer('sort_order').notNull().default(100),
+  isActive: boolean('is_active').notNull().default(true),
+  /** Seeded built-in (hide-only, slug immutable) vs the org's own custom row. */
+  isSystem: boolean('is_system').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgSlugUx: uniqueIndex('uq_platforms_org_slug').on(table.organizationId, table.slug),
+  orgIdx: index('idx_platforms_org').on(table.organizationId),
+}));
+
+/** STOREFRONT under a channel — generalizes ebay_accounts. */
+export const platformAccounts = pgTable('platform_accounts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  platformId: bigint('platform_id', { mode: 'number' })
+    .notNull()
+    .references(() => platforms.id, { onDelete: 'cascade' }),
+  slug: text('slug').notNull(),
+  label: text('label').notNull(),
+  /** → organization_integrations.scope (the specific connection). */
+  integrationScope: text('integration_scope'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgPlatformSlugUx: uniqueIndex('uq_platform_accounts_org_platform_slug').on(
+    table.organizationId, table.platformId, table.slug,
+  ),
+  orgPlatformIdx: index('idx_platform_accounts_org_platform').on(table.organizationId, table.platformId),
+}));
+
+/** Per-org FLOW — was RECEIVING_TYPE_OPTS; the customizable one. */
+export const types = pgTable('types', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  slug: text('slug').notNull(),
+  label: text('label').notNull(),
+  /** 'receiving' | 'shipping' | 'both'. */
+  kind: text('kind').notNull().default('receiving'),
+  /** Optional channel binding for fixed platform×flow combos (returns, etc.). */
+  platformAccountId: bigint('platform_account_id', { mode: 'number' })
+    .references(() => platformAccounts.id, { onDelete: 'set null' }),
+  /** Optional: drives a custom node-graph flow (workflow_nodes.id). */
+  workflowNodeId: text('workflow_node_id'),
+  isReturn: boolean('is_return').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(100),
+  isActive: boolean('is_active').notNull().default(true),
+  isSystem: boolean('is_system').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgSlugUx: uniqueIndex('uq_types_org_slug').on(table.organizationId, table.slug),
+  orgIdx: index('idx_types_org').on(table.organizationId),
+}));
+
+// Amazon SP-API accounts (mirror of ebay_accounts; see 2026-06-14b_amazon_integration.sql)
+// Per-account metadata + sync state. The per-seller LWA refresh token lives
+// encrypted in organization_integrations (provider='amazon', scope='seller-{id}').
+export const amazonAccounts = pgTable('amazon_accounts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  accountName: varchar('account_name', { length: 80 }).notNull(),
+  sellerId: varchar('seller_id', { length: 64 }),
+  region: text('region').notNull().default('NA'), // 'NA' | 'EU' | 'FE'
+  marketplaceIds: jsonb('marketplace_ids').notNull().default(sql`'[]'::jsonb`),
+  accessToken: text('access_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+  lastUpdatedWatermark: timestamp('last_updated_watermark', { withTimezone: true }),
+  syncStartedAt: timestamp('sync_started_at', { withTimezone: true }),
+  lastSyncAt: timestamp('last_sync_at', { withTimezone: true }),
+  status: text('status').notNull().default('active'), // active | error | revoked
+  lastError: text('last_error'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgNameIdx: uniqueIndex('ux_amazon_accounts_org_name').on(table.organizationId, table.accountName),
+  orgIdx: index('idx_amazon_accounts_org').on(table.organizationId),
+}));
+
+// Per-call SP-API audit (mirror of ebay_api_calls)
+export const amazonApiCalls = pgTable('amazon_api_calls', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  accountId: bigint('account_id', { mode: 'number' }),
+  operation: text('operation').notNull(),
+  method: text('method'),
+  path: text('path'),
+  statusCode: integer('status_code'),
+  ok: boolean('ok'),
+  rateLimit: text('rate_limit'),
+  durationMs: integer('duration_ms'),
+  error: text('error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AmazonAccountRow = typeof amazonAccounts.$inferSelect;
+export type NewAmazonAccountRow = typeof amazonAccounts.$inferInsert;
 
 // Staff table
 //
@@ -814,9 +937,22 @@ export const orders = pgTable('orders', {
   // is_shipped removed from schema — shipped state is derived from shipping_tracking_numbers
   accountSource: text('account_source'),
   orderDate: timestamp('order_date', { withTimezone: true }),
+  /** Realized sale price of this order line — what it sold for on its platform.
+   *  Per-transaction fact (varies by platform/time), filled at ingestion. */
+  saleAmount: numeric('sale_amount', { precision: 12, scale: 2 }),
+  currency: text('currency').default('USD'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   /** FK to sku_catalog — central product hub */
   skuCatalogId: integer('sku_catalog_id'),
+  /** Amazon fulfillment channel: 'AFN' (FBA, read-only) | 'MFN' (we ship). Null for non-Amazon. */
+  fulfillmentChannel: text('fulfillment_channel'),
+  /**
+   * Catalog flow type (org `types` row). Additive FK from the platform/type
+   * catalog (2026-06-14f); the order's channel still derives from
+   * `account_source` (denormalized cache) — type_id is the normalized link
+   * that reaches account → platform → integration.
+   */
+  typeId: bigint('type_id', { mode: 'number' }),
 });
 
 // Multi-shipment links per order row. Keeps orders.shipment_id as canonical
@@ -856,6 +992,11 @@ export const packerLogs = pgTable('packer_logs', {
 // Fact tables still own specialized writes; this table records operator activity.
 export const stationActivityLogs = pgTable('station_activity_logs', {
   id: serial('id').primaryKey(),
+  // Tenant scope. The DB column was added NOT NULL (FK→organizations, indexed,
+  // RLS-armed) by 2026-05-23_org_id_on_business_tables.sql; this reflects it so
+  // typed queries can select/filter it. Default = the tenant GUC set by
+  // withTenantConnection.
+  organizationId: orgIdCol(),
   station: varchar('station', { length: 20 }).notNull(),
   activityType: varchar('activity_type', { length: 30 }).notNull(),
   shipmentId: bigint('shipment_id', { mode: 'number' }),
@@ -919,6 +1060,12 @@ export const receiving = pgTable('receiving', {
    * boxes-received rollup; NULL = open-ended). docs/multi-tracking-po-plan.md.
    */
   expectedBoxCount: integer('expected_box_count'),
+  /**
+   * Catalog flow type (org `types` row). Additive FK from the platform/type
+   * catalog (2026-06-14f); the carton's effective type still comes from
+   * `intake_type` (denormalized cache) — type_id is the normalized link.
+   */
+  typeId: bigint('type_id', { mode: 'number' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });

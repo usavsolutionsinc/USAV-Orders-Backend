@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchProductsByEcwidCategory, normalizeIdentifier } from '@/lib/product-manuals';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -42,7 +42,7 @@ async function getCachedEcwidProducts(categoryId: string) {
   return rows;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const category = String(searchParams.get('category') || '').trim();
@@ -70,15 +70,27 @@ export const GET = withAuth(async (request: NextRequest) => {
       return NextResponse.json(payload, { headers: { 'Cache-Control': 'private, max-age=300' } });
     }
 
-    // Targeted DB query — only fetch manuals for the item_numbers in this category
+    // Targeted DB query — only fetch manuals for the item_numbers in this category.
+    // product_manuals has NO organization_id column and NO RLS policy, so a bare
+    // GUC wrap provides ZERO isolation — the bare item_number string-key match
+    // would otherwise read ANY org's manual rows (cross-tenant read leak of
+    // display_name/google_file_id). Scope through the org-bearing sku_catalog
+    // parent (sku_catalog_id → sku_catalog.organization_id).
+    // NEEDS-COL: NULL-parent (unpaired) manuals are unattributable to any org
+    // and are intentionally excluded until product_manuals gains its own column.
     const itemNumbers = ecwidRows.map((r) => r.item_number);
     const placeholders = itemNumbers.map((_, i) => `$${i + 1}`).join(', ');
-    const dbResult = await pool.query(
+    const orgParam = `$${itemNumbers.length + 1}`;
+    const dbResult = await tenantQuery(
+      ctx.organizationId,
       `SELECT item_number, display_name, google_file_id AS google_file_id
        FROM product_manuals
        WHERE is_active = TRUE
-         AND item_number IN (${placeholders})`,
-      itemNumbers
+         AND item_number IN (${placeholders})
+         AND sku_catalog_id IN (
+           SELECT id FROM sku_catalog WHERE organization_id = ${orgParam}
+         )`,
+      [...itemNumbers, ctx.organizationId]
     );
 
     // Build O(1) lookup

@@ -48,9 +48,14 @@ async function insertEvent(
   },
 ): Promise<void> {
   await client.query(
+    // organization_id is derived from the parent claim so the row is org-stamped
+    // even on the raw (non-GUC) pool — warranty_claim_events.organization_id is
+    // NOT NULL with a loud-fail GUC default, so omitting it here previously
+    // inserted NULL and violated the constraint on every write.
     `INSERT INTO warranty_claim_events
-       (claim_id, event_type, from_status, to_status, payload, actor_staff_id)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+       (claim_id, event_type, from_status, to_status, payload, actor_staff_id, organization_id)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6,
+       (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
     [
       args.claimId,
       args.eventType,
@@ -182,6 +187,12 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
   if (!input.serialNumber && !input.serialUnitId && !input.orderId && !sku) {
     return { ok: false, status: 400, error: 'a serial, order, or SKU is required to log a claim' };
   }
+  // warranty_claims.organization_id is NOT NULL with a loud-fail GUC default;
+  // this path runs on the raw pool (no GUC), so the org must be stamped
+  // explicitly or the INSERT violates the constraint (the route passes ctx.organizationId).
+  if (!input.organizationId) {
+    return { ok: false, status: 400, error: 'organization is required to log a claim' };
+  }
 
   const warrantyDays = await resolveWarrantyDays(input.organizationId);
   const clock = computeWarranty({ deliveredAt, packedScannedAt, warrantyDays });
@@ -198,13 +209,13 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
              customer_id, source_system, source_order_id, source_tracking_number,
              purchase_proof_url, purchase_proof_attachment_id, purchased_at,
              delivered_at, packed_scanned_at, warranty_starts_at, warranty_expires_at,
-             clock_basis, warranty_days, notes, created_by_staff_id
+             clock_basis, warranty_days, notes, created_by_staff_id, organization_id
            ) VALUES (
              $1, $2, $3, $4, $5, $6,
              $7, $8, $9, $10,
              $11, $12, $13,
              $14, $15, $16, $17,
-             $18, $19, $20, $21
+             $18, $19, $20, $21, $22
            )
            RETURNING id`,
           [
@@ -229,6 +240,7 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
             warrantyDays,
             input.notes ?? null,
             input.createdByStaffId,
+            input.organizationId,
           ],
         );
         const id = Number(rows[0].id);
@@ -361,8 +373,9 @@ export async function softDeleteClaims(
     );
     if (rows.length > 0) {
       await client.query(
-        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id)
-         SELECT t.id, 'DELETED', '{}'::jsonb, $2
+        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+         SELECT t.id, 'DELETED', '{}'::jsonb, $2,
+                (SELECT organization_id FROM warranty_claims wc WHERE wc.id = t.id)
            FROM unnest($1::bigint[]) AS t(id)`,
         [rows.map((r) => Number(r.id)), actorStaffId],
       );
@@ -373,6 +386,60 @@ export async function softDeleteClaims(
     return {
       deleted: rows.map((r) => ({ id: Number(r.id), claimNumber: r.claim_number })),
       notFound: unique.filter((id) => !deletedIds.has(id)),
+    };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export interface RestoreClaimsResult {
+  restored: { id: number; claimNumber: string }[];
+  /** Ids that didn't match a soft-deleted claim (unknown or already live). */
+  notFound: number[];
+}
+
+/**
+ * Reverse of {@link softDeleteClaims}: un-tombstone claims (deleted_at → NULL)
+ * so they return to the live list with their full event/RMA/repair trail. Set-
+ * based to mirror the bulk delete. Only flips rows that are actually deleted, so
+ * a double-restore (or a live id) is a clean no-op reported in `notFound`.
+ */
+export async function restoreClaims(
+  ids: number[],
+  actorStaffId: number | null,
+): Promise<RestoreClaimsResult> {
+  const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
+  if (unique.length === 0) return { restored: [], notFound: [] };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ id: number; claim_number: string }>(
+      `UPDATE warranty_claims
+          SET deleted_at = NULL, updated_at = NOW()
+        WHERE id = ANY($1::bigint[])
+          AND deleted_at IS NOT NULL
+        RETURNING id, claim_number`,
+      [unique],
+    );
+    if (rows.length > 0) {
+      await client.query(
+        `INSERT INTO warranty_claim_events (claim_id, event_type, payload, actor_staff_id, organization_id)
+         SELECT t.id, 'RESTORED', '{}'::jsonb, $2,
+                (SELECT organization_id FROM warranty_claims wc WHERE wc.id = t.id)
+           FROM unnest($1::bigint[]) AS t(id)`,
+        [rows.map((r) => Number(r.id)), actorStaffId],
+      );
+    }
+    await client.query('COMMIT');
+
+    const restoredIds = new Set(rows.map((r) => Number(r.id)));
+    return {
+      restored: rows.map((r) => ({ id: Number(r.id), claimNumber: r.claim_number })),
+      notFound: unique.filter((id) => !restoredIds.has(id)),
     };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -479,6 +546,76 @@ export function closeClaim(claimId: number, actorStaffId: number | null): Promis
   });
 }
 
+/**
+ * Reverse a forward lifecycle step — the single context-aware "undo" for the
+ * verb routes (submit/approve/deny/close). Steps the claim back ONE stage based
+ * on its current status:
+ *   SUBMITTED → LOGGED     (un-submit, pull back to edit)
+ *   APPROVED  → SUBMITTED  (un-approve)
+ *   DENIED    → SUBMITTED  (un-deny; clears denial_reason_code/denial_notes)
+ *   CLOSED    → <pre-close status>  (reopen, restored EXACTLY from the close
+ *                                    STATUS_CHANGE event's from_status)
+ * IN_REPAIR is intentionally NOT handled here — its reverse is detaching the
+ * repair (DELETE …/repair-handoff). REPAIRED/LOGGED/EXPIRED have no reverse verb
+ * and are refused (409).
+ */
+export async function revertClaimStatus(
+  claimId: number,
+  actorStaffId: number | null,
+): Promise<TransitionResult> {
+  const cur = await pool.query<{ status: WarrantyClaimStatus }>(
+    `SELECT status FROM warranty_claims WHERE id = $1 AND deleted_at IS NULL`,
+    [claimId],
+  );
+  if (cur.rowCount === 0) return { ok: false, status: 404, error: 'claim not found' };
+  const status = cur.rows[0].status;
+
+  if (status === 'SUBMITTED') {
+    return transition(claimId, { allowedFrom: ['SUBMITTED'], to: 'LOGGED', actorStaffId, eventPayload: { via: 'revert' } });
+  }
+  if (status === 'APPROVED') {
+    return transition(claimId, { allowedFrom: ['APPROVED'], to: 'SUBMITTED', actorStaffId, eventPayload: { via: 'revert' } });
+  }
+  if (status === 'DENIED') {
+    return transition(claimId, {
+      allowedFrom: ['DENIED'],
+      to: 'SUBMITTED',
+      actorStaffId,
+      extraSet: [
+        { col: 'denial_reason_code', value: null },
+        { col: 'denial_notes', value: null },
+      ],
+      eventPayload: { via: 'revert' },
+    });
+  }
+  if (status === 'CLOSED') {
+    const ev = await pool.query<{ from_status: WarrantyClaimStatus | null }>(
+      `SELECT from_status FROM warranty_claim_events
+        WHERE claim_id = $1 AND event_type = 'STATUS_CHANGE' AND to_status = 'CLOSED'
+        ORDER BY id DESC LIMIT 1`,
+      [claimId],
+    );
+    const prior = ev.rows[0]?.from_status;
+    if (!prior) return { ok: false, status: 409, error: 'cannot determine the pre-close status to reopen to' };
+    // Never reopen back into EXPIRED — it's a terminal, cron-only state with no
+    // adjudication path (the only verb that accepts EXPIRED is close again), so
+    // a literal restore would strand a "reopened" claim. An expired-then-closed
+    // claim reopens to SUBMITTED for re-review instead.
+    const reopenTo: WarrantyClaimStatus = prior === 'EXPIRED' ? 'SUBMITTED' : prior;
+    return transition(claimId, {
+      allowedFrom: ['CLOSED'],
+      to: reopenTo,
+      actorStaffId,
+      eventPayload: { via: 'reopen', restoredTo: reopenTo, ...(reopenTo !== prior ? { remappedFrom: prior } : {}) },
+    });
+  }
+  return {
+    ok: false,
+    status: 409,
+    error: `claim is ${status}; no status to revert (IN_REPAIR detaches the repair; REPAIRED/LOGGED/EXPIRED have no reverse)`,
+  };
+}
+
 // ─── Repair attempts ─────────────────────────────────────────────────────────
 
 export interface RepairAttemptInput {
@@ -536,11 +673,12 @@ export async function logRepairAttempt(
       `INSERT INTO warranty_repair_attempts (
          claim_id, attempt_no, technician_staff_id, diagnosis, parts_used, outcome,
          labor_minutes, cost_parts, cost_labor, photo_attachment_ids, notes,
-         started_at, completed_at
+         started_at, completed_at, organization_id
        ) VALUES (
          $1, $2, $3, $4, $5::jsonb, $6,
          $7, $8, $9, $10::jsonb, $11,
-         $12, $13
+         $12, $13,
+         (SELECT organization_id FROM warranty_claims WHERE id = $1)
        ) RETURNING id`,
       [
         claimId,

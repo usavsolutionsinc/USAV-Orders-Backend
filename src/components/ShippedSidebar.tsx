@@ -7,8 +7,6 @@ import {
     Copy,
     Check,
     Plus,
-    List,
-    Barcode,
 } from './Icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -28,16 +26,19 @@ import {
     type ShippedSearchField,
 } from '@/lib/shipped-search';
 import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
-import { ZohoSyncButton } from '@/components/shipped/ZohoSyncButton';
-import { PickupReportButton } from '@/components/shipped/PickupReportButton';
+import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
+import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
+import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { ShippedScanOutSidebar } from '@/components/shipped/ShippedScanOutSidebar';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 
 interface SearchHistory {
     query: string;
     timestamp: Date;
     resultCount?: number;
 }
+
+/** Params that define a Shipped saved view (type + status-dot filter, not search). */
+const SHIPPED_VIEW_PARAMS = ['shippedFilter', 'shippedSearchField', 'ostatus'] as const;
 
 type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
@@ -79,16 +80,9 @@ export default function ShippedSidebar({
     const pathname = usePathname();
     const router = useRouter();
     const searchParams = useSearchParams();
-    // Scan-out mode (toggled by the List/Scan-Out pills below the search). When
-    // active, the sidebar body is the dock scan bar + cross-reference tiles.
-    const shippedView = searchParams.get('shippedView') === 'scanout' ? 'scanout' : 'list';
-    const setShippedViewInUrl = (next: 'list' | 'scanout') => {
-        const params = new URLSearchParams(searchParams.toString());
-        if (next === 'scanout') params.set('shippedView', 'scanout');
-        else params.delete('shippedView');
-        const qs = params.toString();
-        router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard', { scroll: false });
-    };
+    // Scan-Out moved to the Unshipped sidebar (the seam where a packed/staged
+    // order hands off to the carrier), so Shipped is list-only now — no view
+    // toggle here.
     // Industry-standard search pipeline:
     //   1) Input owns its own state (`inputValue`). Nothing else writes to it.
     //   2) `useDebounce` collapses keystrokes into a committed value (250ms quiet period).
@@ -298,10 +292,10 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     {!hideSectionHeader ? (
                         <motion.header variants={itemVariants} className={`${SIDEBAR_GUTTER} ${filterControl ? 'pt-2' : 'pt-6'}`}>
                             <h2 className="text-xl font-black tracking-tighter uppercase leading-none text-gray-900">
-                                {shippedView === 'scanout' ? 'Scan Out' : 'Shipped Orders'}
+                                Shipped Orders
                             </h2>
                             <p className={`${microBadge} text-blue-600 mt-1`}>
-                                {shippedView === 'scanout' ? 'Dock Handoff' : 'Search Database'}
+                                Search Database
                             </p>
                         </motion.header>
                     ) : null}
@@ -331,27 +325,8 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     </button>
                 ),
             }}
-            // List / Scan-Out pills live right below the search (above the filter),
-            // with no hairline band — matching the clean scan-out layout.
-            searchGroup={(searchBar) => (
-                <>
-                    {searchBar}
-                    <div className={`${SIDEBAR_GUTTER} pt-1.5`}>
-                        <HorizontalButtonSlider
-                            items={[
-                                { id: 'list', label: 'List', icon: List },
-                                { id: 'scanout', label: 'Scan Out', icon: Barcode },
-                            ]}
-                            value={shippedView}
-                            onChange={(id) => setShippedViewInUrl(id === 'scanout' ? 'scanout' : 'list')}
-                            variant="nav"
-                            className="w-full"
-                            aria-label="Shipped view"
-                        />
-                    </div>
-                </>
-            )}
-            filter={shippedView === 'scanout' ? undefined : {
+            // Filters bar stays pinned at the top of the sidebar (above the body).
+            filter={{
                 label: 'Filters',
                 refinements,
                 onClearAll: clearAll,
@@ -363,19 +338,29 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                     />
                 ),
             }}
+            // Status legend (dot color → meaning) + live counts — pinned here so
+            // it explains the shipped table's outbound status dots.
+            headerBelow={
+                <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
+                    <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+                        <SavedViewsControl storageKey="shipped_saved_views" paramKeys={SHIPPED_VIEW_PARAMS} />
+                    </div>
+                    <OutboundStatusLegend />
+                </div>
+            }
             bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
+            // Dock scan-out pinned at the very bottom — always available, matching
+            // the Unshipped sidebar. autoFocus off so it never steals the search box.
+            footer={
+                <div className={`${SIDEBAR_GUTTER} border-t border-gray-100 bg-white pb-4 pt-3`}>
+                    <ShippedScanOutSidebar autoFocus={false} />
+                </div>
+            }
         >
-                {shippedView === 'scanout' ? (
-                    <motion.div variants={itemVariants}>
-                        <ShippedScanOutSidebar />
-                    </motion.div>
-                ) : (
                 <motion.div variants={itemVariants} className="space-y-4">
-                        {/* Manual Zoho fulfillment sync — gated by integrations.zoho */}
-                        <ZohoSyncButton variant="sidebar" />
-
-                        {/* Daily carrier pickup report — pick a day, print the hand-off log */}
-                        <PickupReportButton />
+                        {/* Combined Zoho sync + daily pickup report (tabbed) */}
+                        <ShippedActionsButton />
 
                         {/* Search Results */}
                         {results.length > 0 && (
@@ -489,7 +474,6 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                             />
                         )}
                     </motion.div>
-                )}
         </SidebarShell>
     );
 

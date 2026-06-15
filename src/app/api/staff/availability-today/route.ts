@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
 import { getWeekStartDateKeyForDateKey } from '@/lib/staff-availability';
 import { toAvailabilityResponse, type RawStaffScheduleRow } from '@/lib/staff-availability';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 function isDatabaseUnavailable(error: unknown) {
   return isTransientDbError(error);
@@ -22,7 +22,7 @@ function parseRoleFilter(input: string | null): Set<string> | null {
   return new Set(values);
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const roleFilter = parseRoleFilter(searchParams.get('roles'));
@@ -76,13 +76,14 @@ export const GET = withAuth(async (request: NextRequest) => {
             ELSE true
           END AS is_allowed
       ) sar ON true
+      WHERE s.organization_id = $4
       ORDER BY s.role ASC, s.name ASC
     `;
 
     let result;
     try {
         result = await queryWithRetry(
-        () => pool.query(sql, [todayDayOfWeek, todayDateKey, todayWeekStartDate]),
+        () => tenantQuery(ctx.organizationId, sql, [todayDayOfWeek, todayDateKey, todayWeekStartDate, ctx.organizationId]),
         { retries: 3, delayMs: 1000 }
       );
     } catch (queryError: any) {
@@ -111,10 +112,11 @@ export const GET = withAuth(async (request: NextRequest) => {
           s.employee_id,
           true AS is_scheduled_today
         FROM staff s
+        WHERE s.organization_id = $1
         ORDER BY s.role ASC, s.name ASC
       `;
       result = await queryWithRetry(
-        () => pool.query(fallbackSql),
+        () => tenantQuery(ctx.organizationId, fallbackSql, [ctx.organizationId]),
         { retries: 1, delayMs: 250 }
       );
     }

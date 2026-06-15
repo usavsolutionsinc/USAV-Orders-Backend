@@ -14,7 +14,6 @@ import {
 } from '@/components/receiving/workspace/TestingStatusPills';
 import { resolveTestingScan } from '@/lib/testing/resolve-testing-scan';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import { useFeedback } from '@/hooks/useFeedback';
 
 type State = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
@@ -50,7 +49,6 @@ function toSlotSerials(line: ReceivingLineRow): UnitSlotSerial[] {
 export function ScanTestingPanel({ query }: { query: string }) {
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
-  const feedback = useFeedback();
 
   const [state, setState] = useState<State>('idle');
   const [lines, setLines] = useState<ReceivingLineRow[]>([]);
@@ -123,20 +121,17 @@ export function ScanTestingPanel({ query }: { query: string }) {
           const data = await res.json().catch(() => null);
           if (!res.ok || !data?.ok) {
             toast.error(data?.error || `Verdict save failed (${res.status})`);
-            feedback('error');
             return;
           }
         }
-        feedback('success');
         await refetch();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Verdict request failed');
-        feedback('error');
       } finally {
         setIsMutating(false);
       }
     },
-    [feedback, refetch],
+    [refetch],
   );
 
   const addSerial = useCallback(
@@ -159,19 +154,16 @@ export function ScanTestingPanel({ query }: { query: string }) {
         const data = await res.json().catch(() => null);
         if (!res.ok || !data?.success) {
           toast.error(data?.error || `Scan failed (${res.status})`);
-          feedback('scanRejected');
           return;
         }
-        feedback('scanAccepted');
         await refetch();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
-        feedback('error');
       } finally {
         setSerialSubmitting(false);
       }
     },
-    [staffId, serialSubmitting, feedback, refetch],
+    [staffId, serialSubmitting, refetch],
   );
 
   const deleteSerial = useCallback(

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { errorFeedback, successFeedback } from '@/lib/feedback/confirm';
 import { useStaffRole } from '@/hooks/useStaffRole';
 
 function randomId(): string {
@@ -119,10 +118,8 @@ export function BinRowDetailsSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await invalidate();
-      successFeedback();
       setInfo(next ? 'Title saved' : 'Title cleared');
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Rename failed');
     } finally {
       setBusy(null);
@@ -165,11 +162,9 @@ export function BinRowDetailsSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await invalidate();
-      successFeedback();
       setInfo(`Moved ${data.qty_transferred ?? row.qty} → ${next}`);
       onClose();
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Swap failed');
     } finally {
       setBusy(null);
@@ -216,13 +211,11 @@ export function BinRowDetailsSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await invalidate();
-      successFeedback();
       setInfo(`Moved ${data.qty} → ${toBin}`);
       setTransferToDraft('');
       setTransferQtyDraft('');
       onClose();
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Transfer failed');
     } finally {
       setBusy(null);
@@ -268,7 +261,6 @@ export function BinRowDetailsSheet({
       );
       const data = await res.json().catch(() => null);
       if (res.status === 409 && data?.error === 'STALE') {
-        errorFeedback();
         setError(
           typeof data?.message === 'string'
             ? data.message
@@ -281,10 +273,8 @@ export function BinRowDetailsSheet({
         throw new Error(data?.error || `HTTP ${res.status}`);
       }
       await invalidate();
-      successFeedback();
       setInfo('Limits saved');
     } catch (err) {
-      errorFeedback();
       setError(err instanceof Error ? err.message : 'Limits update failed');
     } finally {
       setBusy(null);

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
+import { assertUsavMailbox, PoGmailWrongTenantError } from '@/lib/po-gmail/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,8 +14,9 @@ interface Row {
   needs_reconnect_reason: string | null;
 }
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
+    assertUsavMailbox(ctx.organizationId);
     const { rows, rowCount } = await pool.query<Row>(
       `SELECT account_email, created_at, scope, needs_reconnect, needs_reconnect_reason
          FROM google_oauth_tokens
@@ -30,6 +32,16 @@ export const GET = withAuth(async () => {
       needsReconnectReason: rows[0]?.needs_reconnect_reason ?? null,
     });
   } catch (error) {
+    if (error instanceof PoGmailWrongTenantError) {
+      return NextResponse.json({
+        connected: false,
+        accountEmail: null,
+        connectedAt: null,
+        scope: null,
+        needsReconnect: false,
+        needsReconnectReason: null,
+      });
+    }
     return errorResponse(error, 'GET /api/admin/po-gmail/status');
   }
 }, { permission: 'admin.view' });

@@ -14,9 +14,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { audit } from '@/lib/auth/audit';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest, routeCtx: { params: Promise<{ id: s
   const gate = await requireRoutePerm(req, 'admin.manage_staff');
   if (gate.denied) return gate.denied;
   const me = gate.ctx;
+  const orgId = gate.ctx.organizationId;
 
   const { id } = await routeCtx.params;
   const originalShiftId = Number(id);
@@ -53,79 +54,107 @@ export async function POST(req: NextRequest, routeCtx: { params: Promise<{ id: s
     return NextResponse.json({ error: 'INVALID_COVERING_STAFF' }, { status: 400 });
   }
 
-  const client = await pool.connect();
+  // Thrown to force a transaction ROLLBACK and surface a specific HTTP error
+  // for cases that occur AFTER a write has happened inside the transaction.
+  class CoverAbort extends Error {
+    constructor(public body: Record<string, unknown>, public status: number) {
+      super('CoverAbort');
+    }
+  }
+
   try {
-    await client.query('BEGIN');
-
-    // Lock the original shift row so we don't race a parallel cover.
-    const origRes = await client.query<ShiftRow>(
-      `SELECT id, staff_id, starts_at, ends_at, status, location_id
-         FROM shifts
-        WHERE id = $1
-        FOR UPDATE`,
-      [originalShiftId],
-    );
-    const orig = origRes.rows[0];
-    if (!orig) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'SHIFT_NOT_FOUND' }, { status: 404 });
-    }
-    if (orig.status === 'cancelled' || orig.status === 'missed') {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'SHIFT_NOT_COVERABLE', status: orig.status }, { status: 409 });
-    }
-    if (orig.staff_id === coveringStaffId) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'CANT_COVER_SELF' }, { status: 400 });
-    }
-
-    const startsAt = body.startsAt ? new Date(body.startsAt) : orig.starts_at;
-    const endsAt = body.endsAt ? new Date(body.endsAt) : orig.ends_at;
-    if (!(endsAt > startsAt)) {
-      await client.query('ROLLBACK');
-      return NextResponse.json({ error: 'INVALID_WINDOW' }, { status: 400 });
-    }
-
-    // Step 1 — cancel the original.
-    await client.query(
-      `UPDATE shifts
-          SET status = 'cancelled', updated_at = NOW()
-        WHERE id = $1`,
-      [originalShiftId],
-    );
-
-    // Step 2 — insert the cover shift. The btree_gist exclusion constraint
-    // will raise if the covering staff has an overlapping non-cancelled shift.
-    let coverShiftId: number | null = null;
-    try {
-      const insRes = await client.query<{ id: number }>(
-        `INSERT INTO shifts
-           (staff_id, starts_at, ends_at, status, covers_shift_id, location_id, notes, created_by)
-         VALUES ($1, $2, $3, 'confirmed', $4, $5, $6, $7)
-         RETURNING id`,
-        [coveringStaffId, startsAt, endsAt, originalShiftId, orig.location_id, body.notes ?? null, me.staffId],
+    // shifts has no own organization_id — the cover transaction is scoped via
+    // the parent staff row. The org GUC is set by withTenantTransaction.
+    const outcome = await withTenantTransaction(orgId, async (client) => {
+      // Lock the original shift row so we don't race a parallel cover. Org
+      // ownership is enforced via the parent staff row (404 on mismatch).
+      const origRes = await client.query<ShiftRow>(
+        `SELECT id, staff_id, starts_at, ends_at, status, location_id
+           FROM shifts
+          WHERE id = $1
+            AND staff_id IN (SELECT id FROM staff WHERE organization_id = $2)
+          FOR UPDATE`,
+        [originalShiftId, orgId],
       );
-      coverShiftId = insRes.rows[0]?.id ?? null;
-    } catch (err) {
-      const code = (err as { code?: string }).code;
-      if (code === '23P01') {
-        await client.query('ROLLBACK');
-        return NextResponse.json({ error: 'COVER_OVERLAPS_EXISTING_SHIFT' }, { status: 409 });
+      const orig = origRes.rows[0];
+      if (!orig) {
+        // No write yet — return the response and let the txn commit empty.
+        return { kind: 'response' as const, response: NextResponse.json({ error: 'SHIFT_NOT_FOUND' }, { status: 404 }) };
       }
-      throw err;
+      if (orig.status === 'cancelled' || orig.status === 'missed') {
+        return { kind: 'response' as const, response: NextResponse.json({ error: 'SHIFT_NOT_COVERABLE', status: orig.status }, { status: 409 }) };
+      }
+      if (orig.staff_id === coveringStaffId) {
+        return { kind: 'response' as const, response: NextResponse.json({ error: 'CANT_COVER_SELF' }, { status: 400 }) };
+      }
+
+      const startsAt = body.startsAt ? new Date(body.startsAt) : orig.starts_at;
+      const endsAt = body.endsAt ? new Date(body.endsAt) : orig.ends_at;
+      if (!(endsAt > startsAt)) {
+        return { kind: 'response' as const, response: NextResponse.json({ error: 'INVALID_WINDOW' }, { status: 400 }) };
+      }
+
+      // Verify the covering staff belongs to this org before any write —
+      // shifts has no org column to stamp, so the guard is on the parent staff.
+      const coverStaffRes = await client.query<{ id: number }>(
+        `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+        [coveringStaffId, orgId],
+      );
+      if (coverStaffRes.rows.length === 0) {
+        return { kind: 'response' as const, response: NextResponse.json({ error: 'INVALID_COVERING_STAFF' }, { status: 404 }) };
+      }
+
+      // Step 1 — cancel the original.
+      await client.query(
+        `UPDATE shifts
+            SET status = 'cancelled', updated_at = NOW()
+          WHERE id = $1`,
+        [originalShiftId],
+      );
+
+      // Step 2 — insert the cover shift. The btree_gist exclusion constraint
+      // will raise if the covering staff has an overlapping non-cancelled shift.
+      let coverShiftId: number | null = null;
+      try {
+        const insRes = await client.query<{ id: number }>(
+          `INSERT INTO shifts
+             (staff_id, starts_at, ends_at, status, covers_shift_id, location_id, notes, created_by)
+           VALUES ($1, $2, $3, 'confirmed', $4, $5, $6, $7)
+           RETURNING id`,
+          [coveringStaffId, startsAt, endsAt, originalShiftId, orig.location_id, body.notes ?? null, me.staffId],
+        );
+        coverShiftId = insRes.rows[0]?.id ?? null;
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === '23P01') {
+          // Already wrote (cancel) — throw to roll the whole txn back.
+          throw new CoverAbort({ error: 'COVER_OVERLAPS_EXISTING_SHIFT' }, 409);
+        }
+        throw err;
+      }
+
+      // Step 3 — revoke any open sessions for the covered staff so they're
+      // signed out of the workstation immediately. orig.staff_id is already
+      // org-verified above.
+      const revoked = await client.query(
+        `UPDATE staff_sessions
+            SET revoked_at = NOW()
+          WHERE staff_id = $1 AND revoked_at IS NULL
+          RETURNING sid`,
+        [orig.staff_id],
+      );
+
+      return {
+        kind: 'ok' as const,
+        coverShiftId,
+        coveredStaffId: orig.staff_id,
+        sessionsRevoked: revoked.rowCount ?? 0,
+      };
+    });
+
+    if (outcome.kind === 'response') {
+      return outcome.response;
     }
-
-    // Step 3 — revoke any open sessions for the covered staff so they're
-    // signed out of the workstation immediately.
-    const revoked = await client.query(
-      `UPDATE staff_sessions
-          SET revoked_at = NOW()
-        WHERE staff_id = $1 AND revoked_at IS NULL
-        RETURNING sid`,
-      [orig.staff_id],
-    );
-
-    await client.query('COMMIT');
 
     await audit({
       staffId: me.staffId,
@@ -133,25 +162,25 @@ export async function POST(req: NextRequest, routeCtx: { params: Promise<{ id: s
       result: 'ok',
       detail: {
         originalShiftId,
-        coverShiftId,
-        coveredStaffId: orig.staff_id,
+        coverShiftId: outcome.coverShiftId,
+        coveredStaffId: outcome.coveredStaffId,
         coveringStaffId,
-        sessionsRevoked: revoked.rowCount ?? 0,
+        sessionsRevoked: outcome.sessionsRevoked,
       },
     });
 
     return NextResponse.json({
       ok: true,
-      coverShiftId,
-      coveredStaffId: orig.staff_id,
+      coverShiftId: outcome.coverShiftId,
+      coveredStaffId: outcome.coveredStaffId,
       coveringStaffId,
-      sessionsRevoked: revoked.rowCount ?? 0,
+      sessionsRevoked: outcome.sessionsRevoked,
     });
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => { /* ignore */ });
+    if (err instanceof CoverAbort) {
+      return NextResponse.json(err.body, { status: err.status });
+    }
     console.error('[/api/shifts/:id/cover] error:', err);
     return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
-  } finally {
-    client.release();
   }
 }

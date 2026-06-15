@@ -8,7 +8,9 @@ import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking } from
 import { importZohoPurchaseOrderToReceiving } from '@/lib/zoho-receiving-sync';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { recordReceivingScan } from '@/lib/receiving/record-scan';
 import { withAuth } from '@/lib/auth/withAuth';
+import { resolveReceivingTypeId } from '@/lib/catalog/org-catalog';
 
 /**
  * Compute Mon–Fri week range (PST date strings) for a given PST timestamp string
@@ -101,6 +103,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         const rawSource = String(body?.source || '').trim().toLowerCase();
         const source = sourceAllowed.has(rawSource) ? rawSource : 'unmatched';
 
+        // Normalized catalog link (Phase 2). Resolve the flow type from the
+        // intake shape (a return → the 'return' type; otherwise the default
+        // 'po'). Added to valuesByColumn below — the schema-driven insert only
+        // writes it when migration 2026-06-14f added the column, so this is a
+        // no-op until then. The is_return text column stays the cache.
+        const typeId = await resolveReceivingTypeId(ctx.organizationId, { isReturn });
+
         const valuesByColumn: Record<string, any> = {
             [dateColumn]: now,
             receiving_tracking_number: trackingNumber,
@@ -108,6 +117,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             carrier: detectedCarrier,
             source,
             received_at: now,
+            received_by: ctx.staffId,
             condition_grade: conditionGrade,
             qa_status: qaStatus,
             disposition_code: dispositionCode,
@@ -117,6 +127,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             needs_test: needsTest,
             assigned_tech_id: assignedTechId,
             target_channel: targetChannel,
+            type_id: typeId,
             zoho_purchase_receive_id: zohoPurchaseReceiveId,
             zoho_warehouse_id: zohoWarehouseId,
             updated_at: now,
@@ -162,6 +173,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
         // ── Respond immediately, then run cache invalidation + Zoho in background ──
         const newReceivingId = Number(inserted.rows[0].id);
+
+        try {
+            await recordReceivingScan(
+                newReceivingId,
+                trackingNumber,
+                detectedCarrier,
+                ctx.staffId,
+                source === 'zoho_po' ? 'zoho_po' : 'unmatched',
+            );
+        } catch (err) {
+            console.warn('receiving-entry: recordReceivingScan failed (non-fatal)', err);
+        }
 
         after(async () => {
             try {

@@ -25,17 +25,22 @@ export async function GET(req: NextRequest) {
   try {
     const type = req.nextUrl.searchParams.get('type');
 
+    // Resolve the session org so reads are tenant-scoped. Anonymous callers
+    // (no session) get the legacy un-scoped behavior — orgId stays undefined.
+    const ctx = await resolveCtx(req);
+    const orgId = ctx.organizationId ?? undefined;
+
     if (type === 'rooms') {
-      const rooms = await getRooms();
+      const rooms = await getRooms(orgId);
       return NextResponse.json({ locations: rooms });
     }
 
     if (type === 'low-stock') {
-      const bins = await getLowStockBins();
+      const bins = await getLowStockBins(orgId);
       return NextResponse.json({ bins });
     }
 
-    const locations = await getActiveLocations();
+    const locations = await getActiveLocations(orgId);
 
     // Build room → rows → cols structure for cascading picker
     const roomMap: Record<string, { rows: Record<string, string[]> }> = {};
@@ -79,6 +84,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
+    // Resolve session org up-front so the INSERT is tenant-stamped. Anonymous
+    // callers fall back to the legacy un-stamped path (orgId undefined).
+    const ctx = await resolveCtx(req);
+    const orgId = ctx.organizationId ?? undefined;
+
     const location = await createLocation({
       name: name.trim(),
       room: room?.trim() || null,
@@ -90,9 +100,8 @@ export async function POST(req: NextRequest) {
       binType: binType?.trim() || null,
       capacity: capacity ?? null,
       parentId: parentId ?? null,
-    });
+    }, orgId);
 
-    const ctx = await resolveCtx(req);
     await recordAudit(pool, ctx, req, {
       source: 'settings.locations',
       action: AUDIT_ACTION.BIN_CREATE,

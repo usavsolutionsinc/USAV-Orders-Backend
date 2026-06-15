@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // ── GET /api/fba/fnskus/validate?fnskus=X00XXXXXXX,X00YYYYYYY ─────────────────
 // Validates a comma-separated list of FNSKUs against the fba_fnskus table.
 // Optional: `persist_missing=1` upserts stub catalog rows for unknown FNSKUs so
 // metadata can be filled in later, while still returning them as not ready.
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const raw = String(searchParams.get('fnskus') || '').trim();
@@ -32,7 +32,8 @@ export const GET = withAuth(async (request: NextRequest) => {
       );
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `SELECT
          fnsku,
          product_title,
@@ -40,8 +41,9 @@ export const GET = withAuth(async (request: NextRequest) => {
          sku,
          is_active
        FROM fba_fnskus
-       WHERE UPPER(TRIM(fnsku)) = ANY($1::text[])`,
-      [fnskus]
+       WHERE UPPER(TRIM(fnsku)) = ANY($1::text[])
+         AND organization_id = $2`,
+      [fnskus, ctx.organizationId]
     );
 
     const foundMap = new Map(result.rows.map((r) => [r.fnsku.toUpperCase(), r]));
@@ -50,11 +52,12 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     if (persistMissing && missingFnskus.length > 0) {
       // B0-prefixed FNSKUs are ASINs — populate the asin column on upsert
-      const upsertResult = await pool.query(
-        `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
+      const upsertResult = await tenantQuery(
+        ctx.organizationId,
+        `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, organization_id, is_active, last_seen_at, updated_at)
          SELECT missing.fnsku, NULL,
                 CASE WHEN missing.fnsku LIKE 'B0%' THEN missing.fnsku ELSE NULL END,
-                NULL, TRUE, NOW(), NOW()
+                NULL, $2, TRUE, NOW(), NOW()
          FROM UNNEST($1::text[]) AS missing(fnsku)
          ON CONFLICT (fnsku) DO UPDATE
            SET is_active = TRUE,
@@ -63,8 +66,9 @@ export const GET = withAuth(async (request: NextRequest) => {
                  THEN EXCLUDED.fnsku ELSE fba_fnskus.asin END,
                last_seen_at = EXCLUDED.last_seen_at,
                updated_at = EXCLUDED.updated_at
+         WHERE fba_fnskus.organization_id = EXCLUDED.organization_id
          RETURNING fnsku, asin`,
-        [missingFnskus]
+        [missingFnskus, ctx.organizationId]
       );
       const upsertedAsinMap = new Map<string, string | null>();
       for (const row of upsertResult.rows) {

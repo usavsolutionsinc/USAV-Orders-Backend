@@ -9,6 +9,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface WarrantyReportFilters {
   status?: string | null;
@@ -73,8 +75,11 @@ export function toCsv<T>(rows: T[], columns: Array<{ key: keyof T; label: string
   return [header, ...body].join('\r\n');
 }
 
-export async function buildWarrantyReportRows(filters: WarrantyReportFilters = {}): Promise<WarrantyReportRow[]> {
-  const { rows } = await pool.query<{
+export async function buildWarrantyReportRows(
+  filters: WarrantyReportFilters = {},
+  orgId?: OrgId,
+): Promise<WarrantyReportRow[]> {
+  type WarrantyReportQueryRow = {
     claim_number: string;
     status: string;
     sku: string | null;
@@ -91,8 +96,23 @@ export async function buildWarrantyReportRows(filters: WarrantyReportFilters = {
     labor_cost: string | null;
     rma_number: string | null;
     repair_ticket: string | null;
-  }>(
-    `SELECT
+  };
+
+  // Build the column-projection + FROM/JOIN body once. The tenant-aware path
+  // additionally aligns the string-key reason_codes join on organization_id and
+  // scopes the warranty_repair_attempts LATERAL to the same org, then adds an
+  // explicit `wc.organization_id = $6` predicate. Integer surrogate-PK joins
+  // (customers.id, repair_service.id, rma_authorizations.id) are safe bare;
+  // rma_authorizations has no organization_id column (see needsColTables).
+  const repairAttemptsOrgPredicate = orgId
+    ? '\n         AND wra.organization_id = wc.organization_id'
+    : '';
+  const reasonCodesOrgAlignment = orgId
+    ? ' AND rc.organization_id = wc.organization_id'
+    : '';
+  const orgPredicate = orgId ? '\n       AND wc.organization_id = $6' : '';
+
+  const sql = `SELECT
        wc.claim_number,
        wc.status,
        wc.sku,
@@ -115,7 +135,7 @@ export async function buildWarrantyReportRows(filters: WarrantyReportFilters = {
        COALESCE(rs.ticket_number, 'RS-' || rs.id::text) AS repair_ticket
      FROM warranty_claims wc
      LEFT JOIN customers c ON c.id = wc.customer_id
-     LEFT JOIN reason_codes rc ON rc.code = wc.denial_reason_code
+     LEFT JOIN reason_codes rc ON rc.code = wc.denial_reason_code${reasonCodesOrgAlignment}
      LEFT JOIN rma_authorizations rma ON rma.id = wc.rma_id
      LEFT JOIN repair_service rs ON rs.id = wc.repair_service_id
      LEFT JOIN LATERAL (
@@ -125,24 +145,31 @@ export async function buildWarrantyReportRows(filters: WarrantyReportFilters = {
          COALESCE(SUM(cost_parts), 0) AS parts_cost,
          COALESCE(SUM(cost_labor), 0) AS labor_cost
        FROM warranty_repair_attempts wra
-       WHERE wra.claim_id = wc.id
+       WHERE wra.claim_id = wc.id${repairAttemptsOrgPredicate}
      ) ra ON true
      WHERE wc.deleted_at IS NULL
        AND ($1::text IS NULL OR wc.status = $1)
        AND ($2::text IS NULL OR wc.sku ILIKE '%' || $2 || '%')
        AND ($3::timestamptz IS NULL OR wc.created_at >= $3)
        AND ($4::timestamptz IS NULL OR wc.created_at <= $4)
-       AND ($5::text IS NULL OR ra.last_outcome = $5)
+       AND ($5::text IS NULL OR ra.last_outcome = $5)${orgPredicate}
      ORDER BY wc.created_at DESC
-     LIMIT 5000`,
-    [
-      filters.status ?? null,
-      filters.sku ?? null,
-      filters.from ?? null,
-      filters.to ?? null,
-      filters.outcome ?? null,
-    ],
-  );
+     LIMIT 5000`;
+
+  const params: unknown[] = [
+    filters.status ?? null,
+    filters.sku ?? null,
+    filters.from ?? null,
+    filters.to ?? null,
+    filters.outcome ?? null,
+  ];
+  if (orgId) params.push(orgId);
+
+  // orgId present → run through the GUC-wrapped tenant pool with explicit
+  // predicates. orgId omitted → preserve the original raw-pool behavior exactly.
+  const { rows } = orgId
+    ? await tenantQuery<WarrantyReportQueryRow>(orgId, sql, params)
+    : await pool.query<WarrantyReportQueryRow>(sql, params);
 
   return rows.map((r) => ({
     claimNumber: r.claim_number,

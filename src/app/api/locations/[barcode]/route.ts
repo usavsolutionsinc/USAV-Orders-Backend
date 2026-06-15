@@ -51,7 +51,7 @@ async function resolveCtx(req: NextRequest): Promise<AnonymousAuthContext> {
  * Scan a bin barcode → returns the bin location + all SKUs stored there.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ barcode: string }> },
 ) {
   const { barcode } = await params;
@@ -62,7 +62,12 @@ export async function GET(
   }
 
   try {
-    const result = await getBinContentsByBarcode(code);
+    // Tenant-scope the lookup: a barcode collides across orgs, so resolve the
+    // session org and only return this tenant's bin. Anonymous callers fall
+    // back to the legacy un-scoped lookup (orgId undefined).
+    const ctx = await resolveCtx(req);
+    const orgId = ctx.organizationId ?? undefined;
+    const result = await getBinContentsByBarcode(code, orgId);
 
     if (!result) {
       return NextResponse.json(
@@ -141,7 +146,13 @@ export async function PATCH(
       }
     }
 
-    const loc = await getLocationByBarcode(code);
+    // Resolve session org up-front so the lookup + every write below is
+    // tenant-scoped. Anonymous callers (no session) fall back to legacy
+    // un-scoped behavior (orgId undefined).
+    const ctx = await resolveCtx(request);
+    const orgId = ctx.organizationId ?? undefined;
+
+    const loc = await getLocationByBarcode(code, orgId);
     if (!loc) {
       return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
     }
@@ -218,7 +229,6 @@ export async function PATCH(
       }
     }
 
-    const ctx = await resolveCtx(request);
     const effectiveStaffId = ctx.staffId ?? (staffId && staffId > 0 ? staffId : null);
     const binCode = loc.barcode ?? code;
     const binLabel = loc.name ?? null;
@@ -233,7 +243,7 @@ export async function PATCH(
         reason: reason || 'TAKEN',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
-      });
+      }, orgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
@@ -268,7 +278,7 @@ export async function PATCH(
         reason: reason || 'RECEIVED',
         reasonCodeId: reasonCodeId ?? null,
         notes: notes ?? null,
-      });
+      }, orgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
@@ -307,7 +317,7 @@ export async function PATCH(
           minQty: minQty ?? null,
           maxQty: maxQty ?? null,
           expectedUpdatedAt: expectedUpdatedAt.trim(),
-        });
+        }, orgId);
         if (!versioned.ok) {
           return respond(
             {
@@ -330,7 +340,7 @@ export async function PATCH(
         qty,
         minQty: minQty ?? null,
         maxQty: maxQty ?? null,
-      });
+      }, orgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: AUDIT_ACTION.SKU_STOCK_ADJUST,
@@ -350,7 +360,7 @@ export async function PATCH(
     }
 
     if (action === 'count') {
-      await markBinCounted(loc.id, trimmedSku);
+      await markBinCounted(loc.id, trimmedSku, orgId);
       await recordAudit(pool, ctx, request, {
         source: 'mobile-scanner',
         action: 'bin.count',
@@ -389,6 +399,7 @@ export async function DELETE(
 ) {
   const gate = await requireRoutePerm(req, 'bin.remove');
   if (gate.denied) return gate.denied;
+  const orgId = gate.ctx.organizationId;
 
   const { barcode } = await params;
   const code = decodeURIComponent(barcode).trim();
@@ -397,7 +408,9 @@ export async function DELETE(
   }
 
   try {
-    const bin = await getBinContentsByBarcode(code);
+    // Org-ownership precheck: scope the lookup to this tenant so a barcode
+    // belonging to another org resolves to "not found" (404), never deleted.
+    const bin = await getBinContentsByBarcode(code, orgId);
     if (!bin || !bin.location.is_active) {
       return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
     }
@@ -413,7 +426,7 @@ export async function DELETE(
       );
     }
 
-    const deleted = await softDeleteLocation(bin.location.id);
+    const deleted = await softDeleteLocation(bin.location.id, orgId);
     if (!deleted) {
       return NextResponse.json({ error: 'Bin not found' }, { status: 404 });
     }

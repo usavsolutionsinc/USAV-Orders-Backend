@@ -2,7 +2,7 @@
  * verify-tracking-lookup.js
  *
  * Diagnostic script that verifies a tracking number can be found by the
- * three lookup paths used in /api/tech/scan-tracking and
+ * three lookup paths used in /api/tech/scan and
  * /api/packing-logs.  Surfaces the most common causes of "order in system
  * but not found" errors.
  *

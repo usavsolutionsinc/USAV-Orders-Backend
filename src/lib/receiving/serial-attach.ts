@@ -1,4 +1,6 @@
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import {
   normalizeSerial,
   upsertSerialUnit,
@@ -57,15 +59,28 @@ function lineState(line: SerialLineTarget) {
 async function loadLine(
   client: Pick<import('pg').PoolClient, 'query'>,
   lineId: number,
+  orgId?: OrgId,
 ): Promise<SerialLineTarget | null> {
-  const r = await client.query<SerialLineTarget>(
-    `SELECT id, receiving_id, sku, item_name, zoho_item_id,
-            quantity_expected, quantity_received, workflow_status::text AS workflow_status
-     FROM receiving_lines
-     WHERE id = $1
-     LIMIT 1`,
-    [lineId],
-  );
+  // When orgId is provided, add an explicit tenant predicate so a line from
+  // another tenant is invisible (the GUC-wrapped client also backstops via RLS
+  // once enforced). When omitted, behaviour is byte-identical to before.
+  const r = orgId
+    ? await client.query<SerialLineTarget>(
+        `SELECT id, receiving_id, sku, item_name, zoho_item_id,
+                quantity_expected, quantity_received, workflow_status::text AS workflow_status
+         FROM receiving_lines
+         WHERE id = $1 AND organization_id = $2
+         LIMIT 1`,
+        [lineId, orgId],
+      )
+    : await client.query<SerialLineTarget>(
+        `SELECT id, receiving_id, sku, item_name, zoho_item_id,
+                quantity_expected, quantity_received, workflow_status::text AS workflow_status
+         FROM receiving_lines
+         WHERE id = $1
+         LIMIT 1`,
+        [lineId],
+      );
   return r.rows[0] ?? null;
 }
 
@@ -100,11 +115,136 @@ export interface AttachSerialResult {
  */
 export async function attachSerialToLine(
   input: AttachSerialInput,
+  orgId?: OrgId,
 ): Promise<AttachSerialResult | null> {
   const normalized = normalizeSerial(input.serial_number);
   if (!normalized) return null; // invalid serial
 
   const station: InventoryEventStation = input.station ?? 'RECEIVING';
+
+  // ── Tenant-scoped path ────────────────────────────────────────────────────
+  // When an orgId is threaded, run the whole unit of work inside
+  // `withTenantTransaction` so the `app.current_org` GUC is set for the duration
+  // (BEGIN/COMMIT/ROLLBACK + SET LOCAL are owned by the wrapper). Reads/writes on
+  // tenant tables carry an explicit `organization_id` predicate, and the child
+  // tech-serial insert is stamped via `organizationId`. The other shared writers
+  // (`upsertSerialUnit`, `recordInventoryEvent`) inherit the tenant via the
+  // GUC-aware column default on the wrapped client.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const line = await loadLine(client, input.receiving_line_id, orgId);
+      if (!line) {
+        throw new Error(`receiving_line ${input.receiving_line_id} not found`);
+      }
+
+      // Idempotent re-scan: same serial already on this line → friendly no-op.
+      const existing = await client.query<{ id: number }>(
+        `SELECT id FROM serial_units
+          WHERE normalized_serial = $1
+            AND origin_receiving_line_id = $2
+            AND organization_id = $3
+          LIMIT 1`,
+        [normalized, line.id, orgId],
+      );
+      if (existing.rows[0]) {
+        const full = await client.query<SerialUnitRow>(
+          `SELECT * FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [existing.rows[0].id, orgId],
+        );
+        return {
+          line_id: line.id,
+          serial_unit: full.rows[0],
+          is_new: false,
+          prior_status: full.rows[0]?.current_status ?? null,
+          is_return: false,
+          warnings: [],
+          already_attached: true,
+          inventory_event_id: null,
+          line_state: lineState(line),
+        };
+      }
+
+      const catalog = line.sku ? await getSkuCatalogBySku(line.sku, orgId) : null;
+
+      const upserted = await upsertSerialUnit(
+        {
+          serial_number: input.serial_number,
+          sku: line.sku,
+          sku_catalog_id: catalog?.id ?? null,
+          zoho_item_id: line.zoho_item_id,
+          origin_source: 'receiving',
+          origin_receiving_line_id: line.id,
+          actor_id: input.staff_id ?? null,
+          condition_grade: input.condition_grade ?? null,
+          target_status: 'RECEIVED',
+        },
+        { dbClient: client },
+      );
+      if (!upserted) {
+        // Surface invalid-serial as a thrown error so the wrapper rolls back.
+        throw new Error('attachSerialToLine: invalid serial');
+      }
+
+      // Lineage audit row. Idempotent via ON CONFLICT DO NOTHING. Shares the
+      // transaction client so it commits/rolls back atomically with the upsert.
+      try {
+        await attachTechSerial(
+          {
+            serialNumber: input.serial_number,
+            serialUnitId: upserted.unit.id,
+            stationSource: 'RECEIVING',
+            testedBy: input.staff_id ?? null,
+            receivingLineId: line.id,
+            organizationId: orgId,
+          },
+          client,
+        );
+      } catch (err) {
+        console.warn('attachSerialToLine: tsn audit insert failed (non-fatal)', err);
+      }
+
+      // Audit-only lifecycle event. stock_ledger_id is deliberately null — a
+      // serial attach is not a stock movement.
+      const event = await recordInventoryEvent(
+        {
+          event_type: 'RECEIVED',
+          actor_staff_id: input.staff_id ?? null,
+          station,
+          receiving_id: line.receiving_id,
+          receiving_line_id: line.id,
+          serial_unit_id: upserted.unit.id,
+          sku: line.sku,
+          next_status: 'RECEIVED',
+          stock_ledger_id: null,
+          scan_token: input.scan_token ?? null,
+          client_event_id: input.client_event_id
+            ? `${input.client_event_id}:attach`
+            : null,
+          notes: `Serial ${input.serial_number.toUpperCase()}`,
+          payload: {
+            serial_attach: true,
+            is_return: upserted.is_return,
+            warnings: upserted.warnings,
+          },
+        },
+        client,
+      );
+
+      return {
+        line_id: line.id,
+        serial_unit: upserted.unit,
+        is_new: upserted.is_new,
+        prior_status: upserted.prior_status,
+        is_return: upserted.is_return,
+        warnings: upserted.warnings,
+        already_attached: false,
+        inventory_event_id: event.id,
+        line_state: lineState(line),
+      };
+    });
+  }
+
+  // ── Legacy raw-pool path (byte-identical to pre-tenancy behaviour) ──────────
   const client = await pool.connect();
   let committed = false;
   try {
@@ -259,6 +399,7 @@ export interface DetachSerialResult {
  */
 export async function detachSerialFromLine(
   input: DetachSerialInput,
+  orgId?: OrgId,
 ): Promise<DetachSerialResult> {
   const serialUnitId =
     input.serial_unit_id != null && Number.isFinite(input.serial_unit_id)
@@ -270,6 +411,83 @@ export async function detachSerialFromLine(
   }
 
   const station: InventoryEventStation = input.station ?? 'RECEIVING';
+
+  // ── Tenant-scoped path ────────────────────────────────────────────────────
+  // Run inside `withTenantTransaction` (GUC set + BEGIN/COMMIT/ROLLBACK owned by
+  // the wrapper). Lookups, the DELETE, and the line-state reads all carry an
+  // explicit `organization_id` predicate so a unit/line owned by another tenant
+  // is invisible; `recordInventoryEvent` inherits the tenant via the GUC default.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const lookup = await client.query<{
+        id: number;
+        sku: string | null;
+        serial_number: string;
+      }>(
+        serialUnitId
+          ? `SELECT id, sku, serial_number
+               FROM serial_units
+              WHERE id = $1 AND origin_receiving_line_id = $2
+                AND organization_id = $3
+              LIMIT 1`
+          : `SELECT id, sku, serial_number
+               FROM serial_units
+              WHERE normalized_serial = upper(trim($1))
+                AND origin_receiving_line_id = $2
+                AND organization_id = $3
+              LIMIT 1`,
+        serialUnitId
+          ? [serialUnitId, input.receiving_line_id, orgId]
+          : [serialNumber, input.receiving_line_id, orgId],
+      );
+
+      const unit = lookup.rows[0];
+      if (!unit) {
+        const line = await loadLine(client, input.receiving_line_id, orgId);
+        return {
+          removed: false,
+          removed_serial_unit_id: null,
+          removed_serial_number: null,
+          line_state: line ? lineState(line) : null,
+        };
+      }
+
+      // FK references in tech_serial_numbers / sku_stock_ledger are ON DELETE SET
+      // NULL so historical lineage is preserved.
+      await client.query(
+        `DELETE FROM serial_units WHERE id = $1 AND organization_id = $2`,
+        [unit.id, orgId],
+      );
+
+      // Lineage NOTE so the timeline records the removal. No qty / ledger change.
+      try {
+        await recordInventoryEvent(
+          {
+            event_type: 'NOTE',
+            actor_staff_id: input.staff_id ?? null,
+            station,
+            receiving_line_id: input.receiving_line_id,
+            sku: unit.sku,
+            notes: `Serial ${unit.serial_number.toUpperCase()} removed`,
+            payload: { serial_detach: true },
+          },
+          client,
+        );
+      } catch (err) {
+        console.warn('detachSerialFromLine: note event failed (non-fatal)', err);
+      }
+
+      const line = await loadLine(client, input.receiving_line_id, orgId);
+      return {
+        removed: true,
+        removed_serial_unit_id: unit.id,
+        removed_serial_number: unit.serial_number,
+        line_state: line ? lineState(line) : null,
+      };
+    });
+  }
+
+  // ── Legacy raw-pool path (byte-identical to pre-tenancy behaviour) ──────────
   const client = await pool.connect();
   let committed = false;
   try {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 // GET /api/inventory/units
@@ -16,7 +16,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 //
 // Returns:
 //   { items: UnitRow[], total: number, limit, offset }
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     try {
         const { searchParams } = new URL(req.url);
         const states = readList(searchParams.getAll('state'));
@@ -29,6 +29,11 @@ export const GET = withAuth(async (req: NextRequest) => {
 
         const where: string[] = [];
         const params: unknown[] = [];
+
+        // Tenant ownership filter — never list another org's units. Always the
+        // first clause so it's present regardless of the optional filters.
+        params.push(ctx.organizationId);
+        where.push(`su.organization_id = $${params.length}`);
 
         if (states.length > 0) {
             params.push(states);
@@ -74,7 +79,7 @@ export const GET = withAuth(async (req: NextRequest) => {
                 su.current_location,
                 su.updated_at
             FROM serial_units su
-            LEFT JOIN sku_catalog sc ON sc.id = su.sku_catalog_id OR sc.sku = su.sku
+            LEFT JOIN sku_catalog sc ON (sc.id = su.sku_catalog_id OR sc.sku = su.sku) AND sc.organization_id = su.organization_id
             ${whereClause}
             ORDER BY su.updated_at DESC NULLS LAST, su.id DESC
             LIMIT $${limitIdx} OFFSET $${offsetIdx}
@@ -83,14 +88,18 @@ export const GET = withAuth(async (req: NextRequest) => {
         const countSql = `
             SELECT COUNT(*)::int AS total
             FROM serial_units su
-            LEFT JOIN sku_catalog sc ON sc.id = su.sku_catalog_id OR sc.sku = su.sku
+            LEFT JOIN sku_catalog sc ON (sc.id = su.sku_catalog_id OR sc.sku = su.sku) AND sc.organization_id = su.organization_id
             ${whereClause}
         `;
         const countParams = params.slice(0, params.length - 2);
 
+        // tenantQuery sets the org GUC + runs against the tenant pool. The
+        // sku_catalog join is aligned on organization_id (the `sc.sku = su.sku`
+        // disjunct is a string key that collides across tenants), and the
+        // serial_units rows are org-filtered via the WHERE clause above.
         const [listResult, countResult] = await Promise.all([
-            pool.query(listSql, params),
-            pool.query(countSql, countParams),
+            tenantQuery(ctx.organizationId, listSql, params),
+            tenantQuery(ctx.organizationId, countSql, countParams),
         ]);
 
         return NextResponse.json({

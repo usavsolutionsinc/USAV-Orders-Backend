@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { toast } from '@/lib/toast';
 import { Loader2, Printer } from '@/components/Icons';
+import { deriveColorFromTitle, printProductLabel } from '@/lib/print/printProductLabel';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
 import { CartonContextCard } from '@/components/receiving/workspace/line-edit/CartonContextCard';
 import { LineEditToolbar } from '@/components/receiving/workspace/line-edit/LineEditToolbar';
@@ -11,6 +13,7 @@ import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingC
 import { ReceivingAuditModal } from '@/components/receiving/workspace/ReceivingAuditModal';
 import { LineNotesCard } from '@/components/receiving/workspace/line-edit/LineNotesCard';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
+import type { ProductLabelDraft } from '@/components/labels/ProductLabelEditPopover';
 import { TestingLinePanel, type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
 import { SkuTestingPanel } from '@/components/tech/SkuTestingPanel';
 import { SkuPairingModal } from '@/components/products/pairing/SkuPairingModal';
@@ -35,7 +38,20 @@ const SECTION = 'rounded-2xl bg-white p-4 ring-1 ring-gray-200/70';
  * useTestingLineController (which composes the shared useReceivingLineCore).
  */
 export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId: string }) {
-  const c = useTestingLineController(row, staffId);
+  // Display title always comes from the Zoho SKU's own title (items.name, the
+  // canonical SoT) — NOT the PO line's listing-style item_name. Fall back to the
+  // marketplace catalog title, then item_name, only when there's no Zoho item.
+  const rowTitle =
+    (row.zoho_item_title ?? '').trim() ||
+    (row.catalog_product_title ?? '').trim() ||
+    (row.item_name ?? '').trim();
+  // Label-face overrides set from the Edit-label popover. Color prefills from the
+  // SKU title (manual + title-derived, per the v1 plan); title can be shortened.
+  const [colorOverride, setColorOverride] = useState<string | null>(null);
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const labelColor = (colorOverride ?? deriveColorFromTitle(rowTitle)).trim();
+  const productTitle = titleOverride ?? rowTitle;
+  const c = useTestingLineController(row, staffId, { labelColor });
   const {
     // toolbar / sync
     saving, copyingAll, handleCopyAll, setAuditOpen,
@@ -59,7 +75,6 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
     auditOpen, claimOpen, setClaimOpen, pairOpen, setPairOpen,
   } = c;
 
-  const productTitle = (row.catalog_product_title ?? '').trim() || (row.item_name ?? '').trim();
   const activeVerdict = unitStatusToVerdict(activeSerial?.current_status);
   const hasSku = Boolean((row.sku || '').trim());
   const hasActiveSerial = activeSerial != null;
@@ -282,9 +297,26 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
             <LabelPreviewCard
               sku={activeAllocation?.unitId || row.sku}
               title={productTitle}
+              condition={row.condition_grade}
+              color={labelColor}
               dataMatrixValue={previewPayload.value}
               dataMatrixSymbology={previewPayload.symbology}
-              showReady={activeVerdict === 'PASS' && hasActiveSerial}
+              onApplyAndPrint={(draft: ProductLabelDraft) => {
+                setColorOverride(draft.color);
+                setTitleOverride(draft.title);
+                if ((draft.condition || '') !== (row.condition_grade || '')) {
+                  patch({ condition_grade: draft.condition });
+                }
+                printProductLabel({
+                  sku: activeAllocation?.unitId || row.sku || '',
+                  title: draft.title,
+                  serialNumber: activeSerial?.serial_number,
+                  gtin: activeAllocation?.gtin ?? undefined,
+                  qrPayload: activeAllocation?.qrUrl ?? undefined,
+                  condition: draft.condition,
+                  color: draft.color,
+                });
+              }}
             />
           ) : null}
         </div>
@@ -335,6 +367,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
       open={pairOpen}
       onClose={() => setPairOpen(false)}
       skuCatalogId={row.sku_catalog_id ?? null}
+      headerTitle={productTitle}
     />
     </>
   );

@@ -5,6 +5,9 @@ import {
   getProductManualById,
   updateProductManual,
 } from '@/lib/neon/product-manuals-queries';
+// NOTE: getProductManualById/updateProductManual accept an optional trailing
+// orgId; threading it GUC-wraps the by-id read+write so RLS gates ownership
+// once enforced (NEEDS-COL — product_manuals has no organization_id yet).
 
 /**
  * POST /api/product-manuals/thumbnail
@@ -24,7 +27,8 @@ import {
  * blob is unreachable but Vercel Blob garbage-collects eventually).
  */
 export const POST = withAuth(
-  async (request) => {
+  async (request, ctx) => {
+    const orgId = ctx.organizationId ?? undefined;
     let form: FormData;
     try {
       form = await request.formData();
@@ -50,7 +54,9 @@ export const POST = withAuth(
     }
 
     try {
-      const existing = await getProductManualById(id);
+      // Org-ownership gate: GUC-wrapped by-id read so a caller can't backfill a
+      // thumbnail onto another org's manual once RLS is enforced (404 not 403).
+      const existing = await getProductManualById(id, orgId);
       if (!existing) {
         return NextResponse.json({ success: false, error: 'manual not found' }, { status: 404 });
       }
@@ -62,7 +68,7 @@ export const POST = withAuth(
         contentType: thumbnail.type || 'image/jpeg',
       });
 
-      const row = await updateProductManual({ id, thumbnailUrl: uploaded.url });
+      const row = await updateProductManual({ id, thumbnailUrl: uploaded.url }, orgId);
       return NextResponse.json({ success: true, manual: row, thumbnailUrl: uploaded.url });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'thumbnail save failed';

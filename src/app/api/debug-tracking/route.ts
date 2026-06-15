@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 /**
  * DEBUG endpoint to check tracking number matching
  * GET /api/debug-tracking?tracking=XXXXX
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const tracking = searchParams.get('tracking');
@@ -16,7 +16,12 @@ export const GET = withAuth(async (req: NextRequest) => {
     }
 
     // Check if any orders match via shipment_id → shipping_tracking_numbers join.
-    const matchResult = await pool.query(`
+    // shipping_tracking_numbers has no organization_id column (NEEDS-COL); it is
+    // tenant-scoped here via the parent `orders` org filter + the surrogate-PK
+    // join (stn.id = o.shipment_id). work_assignments carries org, so align it
+    // to the order's org (entity_id/entity_type is a polymorphic key that can
+    // collide across tenants).
+    const matchResult = await tenantQuery(ctx.organizationId, `
       SELECT
         o.id,
         o.order_id,
@@ -36,14 +41,18 @@ export const GET = withAuth(async (req: NextRequest) => {
         WHERE entity_type = 'ORDER'
           AND entity_id   = o.id
           AND work_type   = 'PACK'
+          AND organization_id = o.organization_id
         ORDER BY id DESC LIMIT 1
       ) wa_pack ON TRUE
       WHERE RIGHT(stn.tracking_number_raw, 8) = RIGHT($1, 8)
+        AND o.organization_id = $2
       ORDER BY o.created_at DESC
-    `, [tracking]);
+    `, [tracking, ctx.organizationId]);
 
-    // Also check packer_logs
-    const packerLogsResult = await pool.query(`
+    // Also check packer_logs. packer_logs carries org → filter directly;
+    // shipping_tracking_numbers (no org col) is scoped via its surrogate-PK
+    // join to packer_logs (stn.id = pl.shipment_id).
+    const packerLogsResult = await tenantQuery(ctx.organizationId, `
       SELECT
         pl.id,
         COALESCE(stn.tracking_number_raw, pl.scan_ref) AS tracking_number,
@@ -52,12 +61,13 @@ export const GET = withAuth(async (req: NextRequest) => {
         pl.packed_by
       FROM packer_logs pl
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
-      WHERE stn.tracking_number_raw ILIKE $1
+      WHERE (stn.tracking_number_raw ILIKE $1
          OR pl.scan_ref ILIKE $1
-         OR RIGHT(COALESCE(stn.tracking_number_raw, ''), 8) = RIGHT($1, 8)
+         OR RIGHT(COALESCE(stn.tracking_number_raw, ''), 8) = RIGHT($1, 8))
+        AND pl.organization_id = $2
       ORDER BY pl.created_at DESC NULLS LAST
       LIMIT 5
-    `, [tracking]);
+    `, [tracking, ctx.organizationId]);
 
     return NextResponse.json({
       inputTracking: tracking,

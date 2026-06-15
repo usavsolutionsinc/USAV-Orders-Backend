@@ -36,13 +36,13 @@ function toSlimComment(c: ZendeskComment): WarrantyZendeskComment {
  * (not an error) when the claim has no linked ticket so the popover can render
  * the internal-events-only timeline. Gated by WARRANTY_LOGGER.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   if (!warrantyFlagEnabled()) return warrantyFlagOff();
   const id = claimIdFromPath(request, 3);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
 
   try {
-    const claim = await getClaimTicketRef(id);
+    const claim = await getClaimTicketRef(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
     if (!claim.zendeskTicketId) {
       return NextResponse.json({ ok: true, ticketId: null, comments: [], count: 0 });
@@ -99,7 +99,7 @@ export const POST = withAuth(async (request, ctx) => {
     route: 'POST /api/warranty/claims/[id]/zendesk/comments',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
-      const claim = await getClaimTicketRef(id);
+      const claim = await getClaimTicketRef(id, ctx.organizationId);
       if (!claim) return { status: 404, body: { ok: false, error: 'claim not found' } };
       if (!claim.zendeskTicketId) {
         return {

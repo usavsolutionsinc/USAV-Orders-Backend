@@ -20,6 +20,12 @@ interface SidebarSectionListProps<TId extends string = string> {
   onSelect: (id: TId) => void;
   /** Optional aria-label for the nav landmark. */
   ariaLabel?: string;
+  /**
+   * Horizontal padding for rows + group headers. Defaults to the shared
+   * {@link SIDEBAR_GUTTER}. Override (e.g. `px-3`) to line rows up with a
+   * MasterNavHeader above the panel.
+   */
+  gutterClassName?: string;
 }
 
 interface RenderItem<TId extends string> {
@@ -49,6 +55,7 @@ export function SidebarSectionList<TId extends string = string>({
   active,
   onSelect,
   ariaLabel,
+  gutterClassName = SIDEBAR_GUTTER,
 }: SidebarSectionListProps<TId>) {
   const items = buildRenderList(sections);
 
@@ -59,7 +66,7 @@ export function SidebarSectionList<TId extends string = string>({
           return (
             <div
               key={`group:${item.group}:${idx}`}
-              className={`border-b border-gray-100 bg-gray-50 ${SIDEBAR_GUTTER} py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500`}
+              className={`border-b border-gray-100 bg-gray-50 ${gutterClassName} py-1.5 text-micro font-semibold uppercase tracking-wide text-gray-500`}
             >
               {item.group}
             </div>
@@ -73,12 +80,14 @@ export function SidebarSectionList<TId extends string = string>({
             type="button"
             onClick={() => onSelect(s.id)}
             aria-current={isActive ? 'page' : undefined}
-            className={`group flex w-full items-start gap-3 border-b border-gray-100 ${SIDEBAR_GUTTER} py-3 text-left transition ${
+            className={`group flex w-full items-start gap-3 border-b border-gray-100 ${gutterClassName} py-3 text-left transition ${
               isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-900 hover:bg-gray-50'
             }`}
           >
             {s.icon && (
-              <span className={`mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
+              // w-5 box (= the MasterNavHeader icon width) with the glyph centered
+              // so the row icon's center lines up under the header icon, not its left edge.
+              <span className={`mt-0.5 flex w-5 shrink-0 justify-center ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
                 {s.icon}
               </span>
             )}

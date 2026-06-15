@@ -25,13 +25,13 @@ export const dynamic = 'force-dynamic';
  * been created yet). Read-time fetch — Zendesk stays the source of truth for
  * the conversation, we only persist the id mapping. Gated by WARRANTY_LOGGER.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   if (!warrantyFlagEnabled()) return warrantyFlagOff();
   const id = claimIdFromPath(request, 2);
   if (id == null) return NextResponse.json({ ok: false, error: 'invalid claim id' }, { status: 400 });
 
   try {
-    const claim = await getClaimTicketRef(id);
+    const claim = await getClaimTicketRef(id, ctx.organizationId);
     if (!claim) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
     if (!claim.zendeskTicketId) {
       return NextResponse.json({ ok: true, ticket: null, ticketUrl: null });
@@ -92,7 +92,7 @@ export const POST = withAuth(async (request, ctx) => {
     route: 'POST /api/warranty/claims/[id]/zendesk',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
-      const claim = await getClaim(id);
+      const claim = await getClaim(id, ctx.organizationId);
       if (!claim) return { status: 404, body: { ok: false, error: 'claim not found' } };
       if (claim.zendeskTicketId) {
         return {

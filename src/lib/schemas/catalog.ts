@@ -44,6 +44,11 @@ export const PlatformUpdateBody = z
 
 // ─── types ──────────────────────────────────────────────────────────────────
 
+// platform_account_id binding (nullable to clear) + workflow_node_id picker
+// (Phase 5 — the custom "own repair-service flow"). A positive int id, or null.
+const accountBinding = z.number().int().positive().nullable();
+const workflowNodeId = trimmed.min(1).max(128).nullable();
+
 export const TypeCreateBody = z
   .object({
     label: trimmed.min(1, 'label is required'),
@@ -51,6 +56,8 @@ export const TypeCreateBody = z
     kind: typeKind.optional(),
     isReturn: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    platformAccountId: accountBinding.optional(),
+    workflowNodeId: workflowNodeId.optional(),
     idempotencyKey: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -61,6 +68,29 @@ export const TypeUpdateBody = z
     kind: typeKind.optional(),
     isReturn: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    isActive: z.boolean().optional(),
+    platformAccountId: accountBinding.optional(),
+    workflowNodeId: workflowNodeId.optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: 'At least one field must be provided' });
+
+// ─── platform_accounts ────────────────────────────────────────────────────────
+
+export const PlatformAccountCreateBody = z
+  .object({
+    platformId: z.number().int().positive(),
+    label: trimmed.min(1, 'label is required'),
+    slug: slug.optional(),
+    integrationScope: trimmed.min(1).nullable().optional(),
+    idempotencyKey: z.string().trim().min(1).optional(),
+  })
+  .strict();
+
+export const PlatformAccountUpdateBody = z
+  .object({
+    label: trimmed.min(1).optional(),
+    integrationScope: trimmed.min(1).nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .strict()

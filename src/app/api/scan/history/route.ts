@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mapScanToDesktopRoute } from '@/lib/scan-history-route';
 
@@ -22,16 +22,27 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50)
       : 20;
 
-    const result = await pool.query(
-      `SELECT id, raw_value, kind, routed_to, created_at
-         FROM mobile_scan_events
-        WHERE staff_id = $1
-          AND (routed_to LIKE '/m/r/%'
-            OR routed_to LIKE '/m/l/%'
-            OR routed_to LIKE '/m/u/%')
-        ORDER BY id DESC
+    // `mobile_scan_events` has no organization_id column (child-scoped to
+    // staff), so isolation is enforced two ways: (1) GUC-wrap via tenantQuery
+    // so the row is read under the org session, and (2) require the owning
+    // staff row to belong to this org via an EXISTS subquery against the
+    // tenant-owned `staff` table — a cross-tenant staff id can never surface.
+    const result = await tenantQuery(
+      ctx.organizationId,
+      `SELECT mse.id, mse.raw_value, mse.kind, mse.routed_to, mse.created_at
+         FROM mobile_scan_events mse
+        WHERE mse.staff_id = $1
+          AND EXISTS (
+            SELECT 1 FROM staff s
+             WHERE s.id = mse.staff_id
+               AND s.organization_id = $3
+          )
+          AND (mse.routed_to LIKE '/m/r/%'
+            OR mse.routed_to LIKE '/m/l/%'
+            OR mse.routed_to LIKE '/m/u/%')
+        ORDER BY mse.id DESC
         LIMIT $2`,
-      [ctx.staffId, limit],
+      [ctx.staffId, limit, ctx.organizationId],
     );
 
     const entries = result.rows

@@ -11,13 +11,12 @@
  * rows and a re-attempt for any line that previously failed to
  * allocate.
  *
- * Auto-allocation is gated by INVENTORY_V2_ALLOCATION; off-flag the
- * helper still creates orders rows but skips the allocation call.
+ * Auto-allocation runs unconditionally: each created/looked-up order line
+ * is passed to allocateOrder() (best-effort per line).
  */
 
 import { transaction } from '@/lib/neon-client';
 import { allocateOrder, type AllocateOrderResult } from './allocate';
-import { isInventoryV2Allocation } from '@/lib/feature-flags';
 
 export interface OrderIntakeLine {
   sku: string;
@@ -27,6 +26,10 @@ export interface OrderIntakeLine {
   condition?: string;
   /** Free-form descriptive text. */
   productTitle?: string;
+  /** Realized sale price for this line. Maps to orders.sale_amount; null when source omits it. */
+  saleAmount?: number | null;
+  /** ISO currency for saleAmount. Maps to orders.currency; defaults to 'USD'. */
+  currency?: string | null;
 }
 
 export interface OrderIntakeInput {
@@ -45,7 +48,7 @@ export interface OrderIntakeLineResult {
   sku: string;
   orderId: number;
   created: boolean;
-  /** Set when allocation was attempted. null when the flag was off. */
+  /** Set when allocation was attempted. null when the allocation call threw. */
   allocation: AllocateOrderResult | null;
 }
 
@@ -87,6 +90,11 @@ export async function ingestOrder(input: OrderIntakeInput): Promise<OrderIntakeR
           : 1;
         const condition = line.condition?.trim() || null;
         const productTitle = line.productTitle?.trim() || null;
+        const saleAmount =
+          line.saleAmount != null && Number.isFinite(line.saleAmount)
+            ? line.saleAmount
+            : null;
+        const currency = line.currency?.trim() || 'USD';
 
         // Find existing orders row first. We don't have a UNIQUE on
         // (order_id, sku) so we can't ON CONFLICT — explicit lookup.
@@ -104,13 +112,13 @@ export async function ingestOrder(input: OrderIntakeInput): Promise<OrderIntakeR
         const inserted = await client.query<{ id: number }>(
           `INSERT INTO orders (
              order_id, sku, condition, quantity, product_title,
-             account_source, order_date, status
+             account_source, order_date, sale_amount, currency, status
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'open')
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open')
            RETURNING id`,
           [
             externalId, sku, condition, String(qty), productTitle,
-            source, input.orderDate ?? null,
+            source, input.orderDate ?? null, saleAmount, currency,
           ],
         );
         const id = inserted.rows[0]?.id;
@@ -124,25 +132,22 @@ export async function ingestOrder(input: OrderIntakeInput): Promise<OrderIntakeR
   // 2. Auto-allocate each line (best-effort). Allocation runs in its
   //    own transaction inside allocateOrder() — keeping it separate
   //    means one failing line doesn't roll back the others.
-  const allocationFlagOn = isInventoryV2Allocation();
   const actorStaffId = input.actorStaffId ?? null;
   const lines: OrderIntakeLineResult[] = [];
   let unitsAllocated = 0;
   for (const row of orderRows) {
     let allocation: AllocateOrderResult | null = null;
-    if (allocationFlagOn) {
-      try {
-        allocation = await allocateOrder({
-          orderId: row.id,
-          actorStaffId,
-          clientEventId: `order-intake:${source}:${externalId}:${row.sku}`,
-        });
-        if (allocation.ok) {
-          unitsAllocated += allocation.allocated;
-        }
-      } catch (err) {
-        console.error(`[order-intake] allocate failed for order #${row.id} sku=${row.sku}:`, err);
+    try {
+      allocation = await allocateOrder({
+        orderId: row.id,
+        actorStaffId,
+        clientEventId: `order-intake:${source}:${externalId}:${row.sku}`,
+      });
+      if (allocation.ok) {
+        unitsAllocated += allocation.allocated;
       }
+    } catch (err) {
+      console.error(`[order-intake] allocate failed for order #${row.id} sku=${row.sku}:`, err);
     }
     lines.push({
       sku: row.sku,

@@ -13,6 +13,20 @@ export interface TimelineItemBadge {
 }
 
 /**
+ * An identifier attached to an event (tracking #, serial, FNSKU, order/PO id,
+ * SKU). The {@link EventTimeline} renders it through the shared `CopyChip`
+ * family — last-4 preview, copy-on-click, tone+icon — so timeline ids look and
+ * behave exactly like ids everywhere else in the app. Adapters pass the raw
+ * value + kind; the chip owns the last-4 formatting.
+ */
+export type TimelineRefKind = 'tracking' | 'serial' | 'fnsku' | 'id' | 'sku';
+
+export interface TimelineRef {
+  value: string;
+  kind: TimelineRefKind;
+}
+
+/**
  * One generic, domain-agnostic event row. Per-domain feed adapters
  * (`src/lib/timeline/*`) map their source — carrier events, audit logs, repair
  * history, … — into `TimelineItem[]`; the {@link EventTimeline} component knows
@@ -28,6 +42,8 @@ export interface TimelineItem {
   tone?: TimelineTone;
   /** Secondary line (location / detail), rendered muted under the title. */
   subtitle?: string;
+  /** Identifier shown as a last-4 CopyChip under the title (tracking/serial/…). */
+  ref?: TimelineRef;
   /** Actor name — rendered after the time as "· {actor}". */
   actor?: string;
   /** Optional pills below the title (signed-by, exception, …). */

@@ -6,11 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { invalidateRoleCache, invalidateStaffRolesCache } from '@/lib/auth/role-store';
 import { ALL_PERMISSIONS, isAdminRoleKey } from '@/lib/auth/permissions-shared';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -36,31 +36,41 @@ function sanitizePermissions(raw: unknown): string[] {
   return out;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   const id = idFromUrl(req);
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
-  const roleQ = pool.query(
-    `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
-            r.mobile_defaults,
-            r.created_at, r.updated_at,
-            COALESCE(c.cnt, 0)::INT AS member_count
-       FROM roles r
-       LEFT JOIN (
-         SELECT role_id, COUNT(*)::INT AS cnt FROM staff_roles GROUP BY role_id
-       ) c ON c.role_id = r.id
-      WHERE r.id = $1`,
-    [id],
-  );
-  const membersQ = pool.query(
-    `SELECT s.id, s.name, s.role, s.status,
-            sr.granted_at, sr.granted_by
-       FROM staff_roles sr
-       JOIN staff s ON s.id = sr.staff_id
-      WHERE sr.role_id = $1
-      ORDER BY s.name ASC`,
-    [id],
-  );
-  const [roleR, membersR] = await Promise.all([roleQ, membersQ]);
+  // `roles` is GLOBAL (no organization_id) — fetched without an org filter.
+  // Both the member_count and the member list are staff-derived, so they are
+  // scoped to THIS org through the org-owned `staff` parent of staff_roles.
+  const [roleR, membersR] = await withTenantTransaction(ctx.organizationId, async (client) => {
+    const roleQ = client.query(
+      `SELECT r.id, r.key, r.label, r.color, r.position, r.permissions, r.is_system,
+              r.mobile_defaults,
+              r.created_at, r.updated_at,
+              COALESCE(c.cnt, 0)::INT AS member_count
+         FROM roles r
+         LEFT JOIN (
+           SELECT sr.role_id, COUNT(*)::INT AS cnt
+             FROM staff_roles sr
+             JOIN staff s ON s.id = sr.staff_id
+            WHERE s.organization_id = $2
+            GROUP BY sr.role_id
+         ) c ON c.role_id = r.id
+        WHERE r.id = $1`,
+      [id, ctx.organizationId],
+    );
+    const membersQ = client.query(
+      `SELECT s.id, s.name, s.role, s.status,
+              sr.granted_at, sr.granted_by
+         FROM staff_roles sr
+         JOIN staff s ON s.id = sr.staff_id
+        WHERE sr.role_id = $1
+          AND s.organization_id = $2
+        ORDER BY s.name ASC`,
+      [id, ctx.organizationId],
+    );
+    return Promise.all([roleQ, membersQ]);
+  });
   if (!roleR.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
   return NextResponse.json({ role: roleR.rows[0], members: membersR.rows });
 }, { permission: 'admin.manage_roles' });
@@ -70,8 +80,9 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
 
   // Load the existing row so we can enforce the admin-role guardrail and
-  // compute a diff for the audit detail.
-  const cur = await pool.query(`SELECT id, key, is_system, permissions FROM roles WHERE id = $1`, [id]);
+  // compute a diff for the audit detail. `roles` is GLOBAL (no organization_id)
+  // — no org predicate; routed through the tenant connection for GUC parity.
+  const cur = await tenantQuery(ctx.organizationId, `SELECT id, key, is_system, permissions FROM roles WHERE id = $1`, [id]);
   const row = cur.rows[0] as { id: number; key: string; is_system: boolean; permissions: string[] } | undefined;
   if (!row) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
@@ -112,7 +123,8 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
 
   sets.push(`updated_at = NOW()`);
   params.push(id);
-  const r = await pool.query(
+  const r = await tenantQuery(
+    ctx.organizationId,
     `UPDATE roles SET ${sets.join(', ')} WHERE id = $${params.length}
      RETURNING id, key, label, color, position, permissions, is_system, created_at, updated_at`,
     params,
@@ -137,13 +149,24 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   const id = idFromUrl(req);
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
 
-  const cur = await pool.query(
+  // `roles` is GLOBAL (no organization_id) — the role row is read without an
+  // org filter. The in-use gate, however, must count only THIS org's members
+  // (staff_roles → org-owned staff), so cross-tenant assignments don't leak
+  // into this admin's delete decision.
+  const cur = await tenantQuery(
+    ctx.organizationId,
     `SELECT r.id, r.key, r.is_system,
             COALESCE(c.cnt, 0)::INT AS member_count
        FROM roles r
-       LEFT JOIN (SELECT role_id, COUNT(*)::INT AS cnt FROM staff_roles GROUP BY role_id) c ON c.role_id = r.id
+       LEFT JOIN (
+         SELECT sr.role_id, COUNT(*)::INT AS cnt
+           FROM staff_roles sr
+           JOIN staff s ON s.id = sr.staff_id
+          WHERE s.organization_id = $2
+          GROUP BY sr.role_id
+       ) c ON c.role_id = r.id
       WHERE r.id = $1`,
-    [id],
+    [id, ctx.organizationId],
   );
   const row = cur.rows[0] as { id: number; key: string; is_system: boolean; member_count: number } | undefined;
   if (!row) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
@@ -154,7 +177,7 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     return NextResponse.json({ error: 'ROLE_IN_USE', memberCount: row.member_count, message: 'Remove all members before deleting this role.' }, { status: 409 });
   }
 
-  await pool.query(`DELETE FROM roles WHERE id = $1`, [id]);
+  await tenantQuery(ctx.organizationId, `DELETE FROM roles WHERE id = $1`, [id]);
   invalidateRoleCache();
   await audit({
     staffId: ctx.staffId, sid: ctx.session?.sid ?? null,

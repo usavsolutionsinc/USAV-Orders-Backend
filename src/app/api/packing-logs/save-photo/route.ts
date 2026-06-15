@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { db } from '@/lib/drizzle/db';
-import { photos } from '@/lib/drizzle/schema';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
@@ -33,17 +32,23 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // Write to Neon DB photos table
         let photoId: number | null = null;
         if (packerLogId) {
-            const [inserted] = await db
-                .insert(photos)
-                .values({
-                    entityType: 'PACKER_LOG',
-                    entityId: Number(packerLogId),
-                    url: blob.url,
-                    takenByStaffId: Number(packerId),
-                    photoType: photoType ?? 'packer_photo',
-                })
-                .returning({ id: photos.id });
-            photoId = inserted?.id ?? null;
+            photoId = await withTenantTransaction(ctx.organizationId, async (client) => {
+                const { rows } = await client.query<{ id: number }>(
+                    `INSERT INTO photos
+                         (entity_type, entity_id, url, taken_by_staff_id, photo_type, organization_id)
+                     VALUES ($1, $2, $3, $4, $5, $6)
+                     RETURNING id`,
+                    [
+                        'PACKER_LOG',
+                        Number(packerLogId),
+                        blob.url,
+                        Number(packerId),
+                        photoType ?? 'packer_photo',
+                        ctx.organizationId,
+                    ],
+                );
+                return rows[0]?.id ?? null;
+            });
         }
 
         return NextResponse.json({

@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * GET /api/ebay/search
@@ -12,7 +12,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * - limit: Max results to return (default 50)
  * - status: Filter by order status
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get('q') || '';
@@ -38,19 +38,21 @@ export const GET = withAuth(async (req: NextRequest) => {
       LEFT JOIN LATERAL (
         SELECT wa.deadline_at FROM work_assignments wa
         WHERE wa.entity_type = 'ORDER' AND wa.entity_id = o.id AND wa.work_type = 'TEST'
+          AND wa.organization_id = o.organization_id
         ORDER BY CASE wa.status WHEN 'IN_PROGRESS' THEN 1 WHEN 'ASSIGNED' THEN 2 WHEN 'OPEN' THEN 3 WHEN 'DONE' THEN 4 ELSE 5 END,
                  wa.updated_at DESC, wa.id DESC LIMIT 1
       ) wa_deadline ON TRUE
       LEFT JOIN tech_serial_numbers tsn ON o.shipment_id = tsn.shipment_id AND o.shipment_id IS NOT NULL
+        AND tsn.organization_id = o.organization_id
       LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-      WHERE o.account_source IS NOT NULL
+      WHERE o.account_source IS NOT NULL AND o.organization_id = $1
       GROUP BY o.id, o.order_id, o.product_title, o.sku, o.account_source, o.order_date,
                stn.tracking_number_raw, wa_deadline.deadline_at, o.status,
                stn.is_carrier_accepted, stn.is_in_transit, stn.is_out_for_delivery, stn.is_delivered
     `;
 
-    const params: any[] = [];
-    let paramCount = 1;
+    const params: any[] = [ctx.organizationId];
+    let paramCount = 2;
 
     // Search across multiple fields
     if (query && query.trim() !== '') {
@@ -80,7 +82,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     sql += ` ORDER BY o.order_date DESC NULLS LAST LIMIT $${paramCount}`;
     params.push(limit);
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(ctx.organizationId, sql, params);
 
     return NextResponse.json({
       success: true,

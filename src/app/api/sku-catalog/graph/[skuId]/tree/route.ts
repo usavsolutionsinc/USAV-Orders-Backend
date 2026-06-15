@@ -26,12 +26,15 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const depth = Math.max(1, Math.min(20, Number(searchParams.get('depth') || 10)));
 
-    const sku = await getSkuCatalogById(skuId);
+    // Org-scope the root catalog lookup: a root SKU owned by another org reads
+    // as "not found" here (404), which gates the tree walk below — the tree is
+    // rooted at a SKU this org owns.
+    const sku = await getSkuCatalogById(skuId, gate.ctx.organizationId);
     if (!sku) {
       return NextResponse.json({ success: false, error: 'SKU not found' }, { status: 404 });
     }
 
-    const tree = await getTree(skuId, depth);
+    const tree = await getTree(skuId, depth, gate.ctx.organizationId);
     return NextResponse.json({ success: true, ...tree });
   } catch (error: any) {
     console.error('Error in GET /api/sku-catalog/graph/[skuId]/tree:', error);

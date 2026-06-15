@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { squareFetch, formatSquareErrors } from '@/lib/square/client';
+import { formatSquareErrors } from '@/lib/square/client';
+import { squareFetchForOrg } from '@/lib/square/server';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { isRepairSku } from '@/utils/sku';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -33,7 +34,7 @@ interface CatalogSearchResponse {
  * Fetch Square catalog items for sales (excludes -RS repair SKUs).
  * Includes category IDs on each item. Optionally filter by category.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     if (!isAllowedAdminOrigin(req)) {
       return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
@@ -49,10 +50,16 @@ export const GET = withAuth(async (req: NextRequest) => {
       ...(query ? { query: { text_query: { keywords: [query] } } } : {}),
     };
 
-    const result = await squareFetch<CatalogSearchResponse>('/catalog/search', {
-      method: 'POST',
-      body,
-    });
+    // Read the caller-org's Square catalog (Nango-connected token when present;
+    // env fallback) so one tenant never sees another's item names/SKUs/prices.
+    const result = await squareFetchForOrg<CatalogSearchResponse>(
+      ctx.organizationId,
+      '/catalog/search',
+      {
+        method: 'POST',
+        body,
+      },
+    );
 
     if (!result.ok) {
       return NextResponse.json(

@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { createFbaLog } from '@/lib/fba/createFbaLog';
 import { upsertFnskuCatalogRow } from '@/lib/fba/upsert-fnsku-catalog';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { AddFnskuResult } from './types';
 
 interface AddFnskuToPlanParams {
@@ -25,9 +26,13 @@ interface AddFnskuToPlanParams {
  * This enforces the constraint: one FNSKU can only live in one unshipped plan.
  *
  * Must be called inside an existing transaction (caller manages BEGIN/COMMIT).
+ * The caller must run that transaction inside `withTenantConnection(orgId)` so
+ * the `app.current_org` GUC is live (it backs the INSERT default + RLS), and
+ * must pass the same `orgId` here for the explicit tenant filters.
  */
 export async function addFnskuToPlan(
   client: PoolClient,
+  orgId: OrgId,
   params: AddFnskuToPlanParams,
 ): Promise<AddFnskuResult> {
   const { targetPlanId, expectedQty, staffId } = params;
@@ -40,7 +45,7 @@ export async function addFnskuToPlan(
     productTitle: params.productTitle,
     asin: params.asin,
     sku: params.sku,
-  });
+  }, orgId);
   const fnsku = String(catalogRow?.fnsku || params.fnsku).trim().toUpperCase();
   const productTitle = catalogRow?.product_title ?? null;
   const asin = catalogRow?.asin ?? null;
@@ -50,13 +55,14 @@ export async function addFnskuToPlan(
   const otherPlanItem = await client.query(
     `SELECT fsi.id, fsi.shipment_id AS plan_id, fsi.expected_qty, fsi.actual_qty
      FROM fba_shipment_items fsi
-     JOIN fba_shipments fs ON fs.id = fsi.shipment_id
+     JOIN fba_shipments fs ON fs.id = fsi.shipment_id AND fs.organization_id = $3
      WHERE fsi.fnsku = $1
+       AND fsi.organization_id = $3
        AND fs.status != 'SHIPPED'
        AND fsi.shipment_id != $2
      ORDER BY fsi.created_at ASC
      LIMIT 1`,
-    [fnsku, targetPlanId],
+    [fnsku, targetPlanId, orgId],
   );
 
   if (otherPlanItem.rows.length > 0) {
@@ -69,8 +75,8 @@ export async function addFnskuToPlan(
     // Check if the target plan already has this FNSKU.
     const targetExisting = await client.query(
       `SELECT id, expected_qty, actual_qty FROM fba_shipment_items
-       WHERE shipment_id = $1 AND fnsku = $2`,
-      [targetPlanId, fnsku],
+       WHERE shipment_id = $1 AND fnsku = $2 AND organization_id = $3`,
+      [targetPlanId, fnsku, orgId],
     );
 
     if (targetExisting.rows.length > 0) {
@@ -82,14 +88,17 @@ export async function addFnskuToPlan(
       await client.query(
         `UPDATE fba_shipment_items
          SET expected_qty = $1, actual_qty = $2, updated_at = NOW()
-         WHERE id = $3`,
-        [mergedExpected, mergedActual, targetRow.id],
+         WHERE id = $3 AND organization_id = $4`,
+        [mergedExpected, mergedActual, targetRow.id, orgId],
       );
 
       // Delete the old row from the source plan.
-      await client.query(`DELETE FROM fba_shipment_items WHERE id = $1`, [oldItemId]);
+      await client.query(
+        `DELETE FROM fba_shipment_items WHERE id = $1 AND organization_id = $2`,
+        [oldItemId, orgId],
+      );
 
-      await createFbaLog(client, {
+      await createFbaLog(client, orgId, {
         fnsku,
         sourceStage: 'FBA',
         eventType: 'REASSIGNED',
@@ -114,11 +123,11 @@ export async function addFnskuToPlan(
            asin = COALESCE($4, asin),
            sku = COALESCE($5, sku),
            updated_at = NOW()
-       WHERE id = $6`,
-      [targetPlanId, mergedQty, productTitle, asin, sku, oldItemId],
+       WHERE id = $6 AND organization_id = $7`,
+      [targetPlanId, mergedQty, productTitle, asin, sku, oldItemId, orgId],
     );
 
-    await createFbaLog(client, {
+    await createFbaLog(client, orgId, {
       fnsku,
       sourceStage: 'FBA',
       eventType: 'REASSIGNED',
@@ -135,8 +144,8 @@ export async function addFnskuToPlan(
   // ── Step 2: Upsert into target plan (no other unshipped plan has it) ──
   const result = await client.query(
     `INSERT INTO fba_shipment_items
-       (shipment_id, fnsku, product_title, asin, sku, expected_qty)
-     VALUES ($1, $2, $3, $4, $5, $6)
+       (shipment_id, fnsku, product_title, asin, sku, expected_qty, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (shipment_id, fnsku) DO UPDATE
        SET expected_qty  = fba_shipment_items.expected_qty + EXCLUDED.expected_qty,
            product_title = COALESCE(EXCLUDED.product_title, fba_shipment_items.product_title),
@@ -144,7 +153,7 @@ export async function addFnskuToPlan(
            sku           = COALESCE(EXCLUDED.sku, fba_shipment_items.sku),
            updated_at    = NOW()
      RETURNING id, expected_qty`,
-    [targetPlanId, fnsku, productTitle, asin, sku, expectedQty],
+    [targetPlanId, fnsku, productTitle, asin, sku, expectedQty, orgId],
   );
 
   const row = result.rows[0];

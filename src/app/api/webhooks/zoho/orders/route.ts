@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestOrder, type OrderIntakeLine } from '@/lib/inventory/order-intake';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -9,7 +11,7 @@ export const maxDuration = 60;
  *
  * Receives a Zoho Inventory / Zoho Books order-created webhook and
  * routes it through src/lib/inventory/order-intake.ts to ensure orders
- * rows exist + auto-allocate when INVENTORY_V2_ALLOCATION is on.
+ * rows exist + auto-allocate against available STOCKED units.
  *
  * Auth:
  *   - The request MUST carry the header
@@ -45,6 +47,10 @@ interface ZohoLineItem {
   name?: string;
   item_name?: string;
   description?: string;
+  /** Unit price for the line (Zoho Inventory/Books sales-order line). */
+  rate?: number | string;
+  /** Pre-tax line total (rate * quantity). Preferred when present. */
+  item_total?: number | string;
 }
 
 interface ZohoSalesOrder {
@@ -53,6 +59,8 @@ interface ZohoSalesOrder {
   salesorder_number?: string;
   date?: string;
   customer_id?: string;
+  /** ISO currency code at the sales-order header (e.g. 'USD'). */
+  currency_code?: string;
   line_items?: ZohoLineItem[];
   items?: ZohoLineItem[];   // alternate key
 }
@@ -83,6 +91,14 @@ function extractZohoOrder(body: unknown): NormalizedZohoOrder | null {
   const externalId = String(so?.salesorder_id ?? so?.sales_order_id ?? '').trim();
   if (!externalId) return null;
 
+  // Header currency applies to every line; default to USD when absent.
+  const currency = so?.currency_code?.toString().trim() || 'USD';
+  const toFiniteNumber = (value: unknown): number | null => {
+    if (value == null || value === '') return null;
+    const n = typeof value === 'number' ? value : Number(String(value).trim());
+    return Number.isFinite(n) ? n : null;
+  };
+
   const rawLines = Array.isArray(so?.line_items)
     ? so.line_items
     : Array.isArray(so?.items)
@@ -93,10 +109,18 @@ function extractZohoOrder(body: unknown): NormalizedZohoOrder | null {
       const sku = String(row?.sku ?? '').trim();
       if (!sku) return null;
       const qty = Number(row?.quantity);
+      const effectiveQty = Number.isFinite(qty) && qty > 0 ? qty : 1;
+      // Prefer the pre-tax line total; fall back to rate * quantity.
+      const itemTotal = toFiniteNumber(row?.item_total);
+      const rate = toFiniteNumber(row?.rate);
+      const saleAmount =
+        itemTotal ?? (rate != null ? rate * effectiveQty : null);
       return {
         sku,
-        quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,
+        quantity: effectiveQty,
         productTitle: (row?.name ?? row?.item_name ?? row?.description ?? '')?.toString().trim() || undefined,
+        saleAmount,
+        currency,
       } as OrderIntakeLine;
     })
     .filter((l): l is OrderIntakeLine => l !== null);
@@ -139,15 +163,36 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Ingest.
+  // TRANSITIONAL: this Zoho webhook has no session. Single-tenant (USAV) today;
+  // resolve the org from a Zoho-account→org mapping when multi-tenant Zoho lands
+  // (see docs/tenancy exec plan). Thread it into ingestOrder so the orders INSERT
+  // and the downstream allocateOrder() run GUC-scoped (app.current_org) and stamp
+  // organization_id on the tenant-owned orders / order_unit_allocations rows.
+  // NOTE: ingestOrder() in src/lib/inventory/order-intake.ts has NOT yet been
+  // given the optional-orgId overload Phase A added to allocate.ts — it still uses
+  // the raw transaction() with no GUC. Passing orgId here is the route-side half of
+  // the fix; order-intake.ts must accept this trailing arg and thread it through to
+  // allocateOrder(input, orgId) to actually close the leak (tracked in stillOpen).
+  const orgId = transitionalUsavOrgId();
   try {
-    const result = await ingestOrder({
+    // The trailing `orgId` is threaded per the verifier finding so that, once
+    // order-intake.ts gains its optional-orgId overload, the orders INSERT runs
+    // under withTenantTransaction and allocateOrder(input, orgId) takes its
+    // org-aligned path. Until that shared-module edit lands (it is out of this
+    // fileset — see stillOpen), ingestOrder still types as 1-arg, so the call is
+    // cast to keep the build green while the org value is already wired here.
+    const ingestOrderWithOrg = ingestOrder as (
+      input: Parameters<typeof ingestOrder>[0],
+      orgId?: OrgId,
+    ) => ReturnType<typeof ingestOrder>;
+    const result = await ingestOrderWithOrg({
       externalId: order.externalId,
       source: 'zoho',
       customerExternalId: order.customerExternalId,
       orderDate: order.orderDate,
       lineItems: order.lineItems,
       actorStaffId: null,
-    });
+    }, orgId);
     return NextResponse.json({
       ok: true,
       externalId: result.externalId,

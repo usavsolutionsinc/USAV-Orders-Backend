@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { put, del } from '@vercel/blob';
 import { createCrudHandler, ApiError } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import type { OrgId } from '@/lib/tenancy/constants';
 import {
   getAllProductManuals,
   getProductManualById,
@@ -11,6 +13,18 @@ import {
   deactivateProductManual,
   type ProductManual,
 } from '@/lib/neon/product-manuals-queries';
+
+/**
+ * The CRUD config closures below run inside the request scope but don't
+ * receive the withAuth `ctx`, so we re-resolve the caller's org from the
+ * session (same source withAuth gates on). Threaded into every shared-module
+ * call so reads/writes are tenant-scoped (the queries GUC-wrap + apply
+ * parent-derived scoping when orgId is present — see lib/neon/product-manuals-queries.ts).
+ */
+async function currentOrgId(): Promise<OrgId | undefined> {
+  const user = await getCurrentUser();
+  return user?.organizationId ?? undefined;
+}
 
 /**
  * Vercel Blob URLs all sit under a `*.public.blob.vercel-storage.com` host
@@ -127,17 +141,18 @@ const handler = createCrudHandler<ProductManual>({
     const status = params.searchParams.get('status');
     const itemNumber = params.searchParams.get('itemNumber');
     const relativePath = params.searchParams.get('relativePath');
+    const orgId = await currentOrgId();
     const manuals = await getAllProductManuals({
       limit: params.limit,
       offset: params.offset,
       status: status === 'unassigned' || status === 'assigned' || status === 'archived' ? status : null,
       itemNumber: itemNumber ? itemNumber : null,
       relativePath: relativePath ? relativePath : null,
-    });
+    }, orgId);
     return { rows: manuals };
   },
 
-  getById: async (id) => getProductManualById(Number(id)),
+  getById: async (id) => getProductManualById(Number(id), await currentOrgId()),
 
   search: async (query, params) => {
     const status = params.searchParams.get('status');
@@ -145,10 +160,11 @@ const handler = createCrudHandler<ProductManual>({
       query,
       params.limit,
       status === 'unassigned' || status === 'assigned' || status === 'archived' ? status : null,
+      await currentOrgId(),
     );
   },
 
-  create: async (body) => upsertProductManual(body),
+  create: async (body) => upsertProductManual(body, await currentOrgId()),
 
   /**
    * On display-name change, also rename the underlying Vercel Blob so the
@@ -157,10 +173,11 @@ const handler = createCrudHandler<ProductManual>({
    * the rename and act like the bare `updateProductManual` call.
    */
   update: async (body) => {
+    const orgId = await currentOrgId();
     const nextDisplayName = typeof body?.displayName === 'string' ? body.displayName.trim() : '';
 
     if (nextDisplayName) {
-      const existing = await getProductManualById(Number(body.id));
+      const existing = await getProductManualById(Number(body.id), orgId);
       const oldUrl = existing?.source_url;
       const oldName = (existing?.display_name || '').trim();
       const needsRename =
@@ -175,11 +192,11 @@ const handler = createCrudHandler<ProductManual>({
       }
     }
 
-    return updateProductManual(body);
+    return updateProductManual(body, orgId);
   },
 
   remove: async (id) => {
-    const ok = await deactivateProductManual(Number(id));
+    const ok = await deactivateProductManual(Number(id), await currentOrgId());
     if (!ok) throw ApiError.notFound('product-manual', id);
     return { success: true as const };
   },

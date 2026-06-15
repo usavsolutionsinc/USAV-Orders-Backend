@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { loadPickTasks } from '@/lib/picking/sessions';
 
 /**
@@ -8,7 +9,7 @@ import { loadPickTasks } from '@/lib/picking/sessions';
  * Returns the picker's task list for an order: one row per open allocation,
  * sorted to match the order the picker should walk the warehouse in.
  */
-export const GET = withAuth(async (request) => {
+export const GET = withAuth(async (request, ctx) => {
   const segments = request.nextUrl.pathname.split('/').filter(Boolean);
   const idStr = segments[segments.length - 2]; // …/orders/<id>/pick-tasks
   const orderId = Number(idStr);
@@ -17,6 +18,21 @@ export const GET = withAuth(async (request) => {
   }
 
   try {
+    // Org-ownership precheck on the [id] before delegating: orders is tenant-owned,
+    // so a cross-tenant id reads back nothing → 404 (never 403). loadPickTasks
+    // (src/lib/picking/sessions.ts) is a shared module outside this fileset and
+    // not yet org-parameterized — it runs its own raw-pool reads (incl. a
+    // sc.sku = su.sku string join), so its internal isolation is a tracked
+    // follow-up; this precheck is the route-level gate available without editing it.
+    const ownQ = await tenantQuery<{ id: number }>(
+      ctx.organizationId,
+      'SELECT id FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1',
+      [orderId, ctx.organizationId],
+    );
+    if (ownQ.rows.length === 0) {
+      return NextResponse.json({ ok: false, error: 'order not found' }, { status: 404 });
+    }
+
     const tasks = await loadPickTasks(orderId);
     if (!tasks) {
       return NextResponse.json({ ok: false, error: 'order not found' }, { status: 404 });

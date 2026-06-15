@@ -19,13 +19,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit } from '@/lib/audit-logs';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { getSyncCursor } from '@/lib/sync-cursors';
 import { syncShippedOrdersToZoho } from '@/lib/zoho/fulfillment-sync';
 import { getFulfillmentSyncConfig } from '@/lib/zoho/fulfillment-config';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -78,21 +79,32 @@ export const POST = withAuth(
       // Record an audit entry for live (non-dry-run) runs — these create Zoho
       // sales orders / packages / invoices, so we capture who initiated them.
       if (!report.dryRun) {
-        await recordAudit(pool, ctx, request, {
-          source: 'zoho-fulfillment-sync-manual',
-          action: 'zoho_fulfillment_sync.run',
-          entityType: 'zoho_fulfillment_sync',
-          entityId: body.reference?.trim() || 'batch',
-          method: 'manual',
-          extra: {
-            mode,
-            invoiceMode: report.invoiceMode,
-            scanned: report.scanned,
-            completed: report.completed,
-            skipped: report.skipped,
-            errored: report.errored,
-          },
-        });
+        // Scope the audit_logs INSERT under the tenant GUC so the row lands as
+        // RLS-subject once app_tenant is live. This route is authed (withAuth),
+        // so the real session tenant is available — use it directly rather than
+        // the transitionalUsavOrgId() service-org fallback the truly session-less
+        // crons in this folder rely on.
+        // TODO(multi-tenant): the heavy syncShippedOrdersToZoho() path still
+        // resolves its tenant via transitionalUsavOrgId() internally; thread
+        // ctx.organizationId into it once that module is org-aware.
+        const orgId: OrgId = ctx.organizationId;
+        await withTenantTransaction(orgId, (client) =>
+          recordAudit(client, ctx, request, {
+            source: 'zoho-fulfillment-sync-manual',
+            action: 'zoho_fulfillment_sync.run',
+            entityType: 'zoho_fulfillment_sync',
+            entityId: body.reference?.trim() || 'batch',
+            method: 'manual',
+            extra: {
+              mode,
+              invoiceMode: report.invoiceMode,
+              scanned: report.scanned,
+              completed: report.completed,
+              skipped: report.skipped,
+              errored: report.errored,
+            },
+          })
+        );
       }
 
       return NextResponse.json({ success: true, report });

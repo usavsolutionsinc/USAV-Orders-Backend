@@ -14,7 +14,6 @@
  * Pair with the bin-roles migration (2026-05-21_inventory_v2_bin_roles.sql).
  */
 
-import { isInventoryV2BinRoles } from '@/lib/feature-flags';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -92,14 +91,8 @@ export function isAllocatable(candidate: PickabilityCandidate): PickabilityResul
  *
  * Callers compose the fragment into their query and pass it through to pg
  * with no parameters — the fragment is parameter-free and safe to interpolate.
- *
- * When INVENTORY_V2_BIN_ROLES is OFF, returns the legacy filter (status only)
- * so the change is gated on rollout.
  */
 export function pickableSerialUnitsWhereClause(): string {
-  if (!isInventoryV2BinRoles()) {
-    return `su.current_status = 'STOCKED'::serial_status_enum`;
-  }
   // ANY(ARRAY[...]) avoids ENUM:: arrays in the SQL since the new role list
   // lives in app code; the cast keeps null-safe via COALESCE.
   return [
@@ -121,6 +114,5 @@ export function pickableSerialUnitsWhereClause(): string {
  *    WHERE ${pickableSerialUnitsWhereClause()}
  */
 export function pickableSerialUnitsLeftJoin(): string {
-  if (!isInventoryV2BinRoles()) return '';
   return 'LEFT JOIN locations loc ON loc.name = su.current_location';
 }

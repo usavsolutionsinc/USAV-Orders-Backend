@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
-import { db } from '@/lib/drizzle/db';
-import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
-import { recordChange } from '@/lib/repositories/inventory/conditionHistory';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
 import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
 import { gatherQualityInputs, recomputeUnitQualitySafe } from '@/lib/neon/quality-queries';
@@ -59,10 +56,13 @@ export const POST = withAuth(async (request, ctx) => {
     const actorStaffId: number | null =
         typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
 
+    const orgId = ctx.organizationId;
+
     try {
-        const existing = await pool.query<{ condition_grade: string | null; sku: string | null }>(
-            `SELECT condition_grade::text AS condition_grade, sku FROM serial_units WHERE id = $1`,
-            [serialUnitId],
+        const existing = await tenantQuery<{ condition_grade: string | null; sku: string | null }>(
+            orgId,
+            `SELECT condition_grade::text AS condition_grade, sku FROM serial_units WHERE id = $1 AND organization_id = $2`,
+            [serialUnitId, orgId],
         );
         if (existing.rows.length === 0) {
             return NextResponse.json({ ok: false, error: 'unit not found' }, { status: 404 });
@@ -79,36 +79,83 @@ export const POST = withAuth(async (request, ctx) => {
 
         // Update the unit row first so the conditionHistory row reflects the
         // new authoritative state.
-        const updated = await pool.query(
+        const updated = await tenantQuery(
+            orgId,
             `UPDATE serial_units
              SET condition_grade = $2::condition_grade_enum,
                  updated_at = NOW()
              WHERE id = $1
+               AND organization_id = $3
              RETURNING id, condition_grade::text AS condition_grade, current_status::text AS current_status, updated_at`,
-            [serialUnitId, newGrade],
+            [serialUnitId, newGrade, orgId],
         );
 
-        // Audit + history.
-        const { event } = await appendInventoryEvent({
-            eventType: 'GRADED',
-            clientEventId,
-            actorStaffId,
-            serialUnitId,
-            sku,
-            notes: cosmeticNotes || functionalNotes
+        // Audit + history. inventory_events and serial_unit_condition_history are
+        // both tenant-owned with NOT NULL organization_id whose default reads the
+        // app.current_org GUC. The shared drizzle writers (appendInventoryEvent /
+        // recordChange) run on the stateless neon-http connection with NO GUC and
+        // NO org stamp → org resolves to NULL → NOT NULL violation. We instead
+        // write both rows org-scoped here (GUC set + organization_id stamped) in
+        // one tenant transaction, preserving the prior behavior: GRADED event is
+        // idempotent on client_event_id, and the condition-history row links the
+        // event via inventory_event_id (DB CHECK still rejects no-op grade rows).
+        const eventNotes =
+            cosmeticNotes || functionalNotes
                 ? `cosmetic: ${cosmeticNotes ?? '-'} | functional: ${functionalNotes ?? '-'}`
-                : null,
-            payload: { prev_grade: prevGrade, new_grade: newGrade },
-        });
+                : null;
+        const eventId = await withTenantTransaction(orgId, async (client) => {
+            // Idempotent GRADED event: if client_event_id already exists, reuse it.
+            if (clientEventId) {
+                const dup = await client.query<{ id: number }>(
+                    `SELECT id FROM inventory_events WHERE client_event_id = $1 LIMIT 1`,
+                    [clientEventId],
+                );
+                if (dup.rows[0]) return dup.rows[0].id;
+            }
+            const ev = await client.query<{ id: number }>(
+                `INSERT INTO inventory_events
+                   (event_type, actor_staff_id, serial_unit_id, sku, client_event_id, notes, payload, organization_id)
+                 VALUES ('GRADED', $1, $2, $3, $4, $5, $6::jsonb, $7)
+                 ON CONFLICT (client_event_id) DO NOTHING
+                 RETURNING id`,
+                [
+                    actorStaffId,
+                    serialUnitId,
+                    sku,
+                    clientEventId,
+                    eventNotes,
+                    JSON.stringify({ prev_grade: prevGrade, new_grade: newGrade }),
+                    orgId,
+                ],
+            );
+            let newEventId = ev.rows[0]?.id ?? null;
+            if (newEventId == null && clientEventId) {
+                const existing = await client.query<{ id: number }>(
+                    `SELECT id FROM inventory_events WHERE client_event_id = $1 LIMIT 1`,
+                    [clientEventId],
+                );
+                newEventId = existing.rows[0]?.id ?? null;
+            }
 
-        await recordChange({
-            serialUnitId,
-            prevGrade: prevGrade as never,
-            newGrade: newGrade as never,
-            assessedByStaffId: actorStaffId,
-            cosmeticNotes,
-            functionalNotes,
-            inventoryEventId: event.id,
+            // Condition-history row, linked to the GRADED event. The DB CHECK
+            // (prev_grade IS DISTINCT FROM new_grade) is already satisfied — we
+            // 409 above on an unchanged grade.
+            await client.query(
+                `INSERT INTO serial_unit_condition_history
+                   (serial_unit_id, prev_grade, new_grade, assessed_by_staff_id, cosmetic_notes, functional_notes, inventory_event_id, organization_id)
+                 VALUES ($1, $2::condition_grade_enum, $3::condition_grade_enum, $4, $5, $6, $7, $8)`,
+                [
+                    serialUnitId,
+                    prevGrade,
+                    newGrade,
+                    actorStaffId,
+                    cosmeticNotes,
+                    functionalNotes,
+                    newEventId,
+                    orgId,
+                ],
+            );
+            return newEventId;
         });
 
         // Auto-sort: a unit graded "For Parts" needs no testing or claim — it's
@@ -146,7 +193,7 @@ export const POST = withAuth(async (request, ctx) => {
         return NextResponse.json({
             ok: true,
             unit: updated.rows[0],
-            event_id: event.id,
+            event_id: eventId,
             parts_sorted: partsSort?.sorted === true,
             parts_bin: partsSort?.sorted === true ? partsSort.bin : null,
             warnings,
@@ -157,7 +204,3 @@ export const POST = withAuth(async (request, ctx) => {
         return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
 }, { permission: 'serial_units.grade' });
-
-// Drizzle db import keeps tree-shaking happy when only the pool is used in
-// future revisions; conditionHistory uses `db` internally.
-void db;

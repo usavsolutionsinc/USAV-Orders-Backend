@@ -9,11 +9,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { audit } from '@/lib/auth/audit';
 import { createEnrollment } from '@/lib/auth/enrollment';
 import { revokeAllSessionsForStaff } from '@/lib/auth/session';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const runtime = 'nodejs';
 
@@ -29,28 +29,38 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   const id = idFromUrl(req);
   if (!id) return NextResponse.json({ error: 'INVALID_ID' }, { status: 400 });
 
-  // Verify the row exists before mutating.
-  const probe = await pool.query(`SELECT id FROM staff WHERE id = $1`, [id]);
+  // Org-ownership gate: a staffId in another org reads as NOT_FOUND, never
+  // mutated. staffId is org-unique, so the subsequent session revoke and
+  // enrollment mint are correctly scoped once ownership is confirmed.
+  const probe = await tenantQuery(
+    ctx.organizationId,
+    `SELECT id FROM staff WHERE id = $1 AND organization_id = $2`,
+    [id, ctx.organizationId],
+  );
   if (!probe.rows[0]) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
 
   // Clear PIN + lockout, drop status to 'invited' so the picker shows it.
-  await pool.query(
+  await tenantQuery(
+    ctx.organizationId,
     `UPDATE staff
         SET pin_hash = NULL,
             pin_set_at = NULL,
             pin_failed_count = 0,
             pin_locked_until = NULL,
             status = 'invited'
-      WHERE id = $1`,
-    [id],
+      WHERE id = $1 AND organization_id = $2`,
+    [id, ctx.organizationId],
   );
   const revoked = await revokeAllSessionsForStaff(id);
 
-  const enrollment = await createEnrollment({
-    staffId: id,
-    createdBy: ctx.staffId,
-    ttlHours: 24,
-  });
+  const enrollment = await createEnrollment(
+    {
+      staffId: id,
+      createdBy: ctx.staffId,
+      ttlHours: 24,
+    },
+    ctx.organizationId,
+  );
 
   const origin = (
     process.env.NEXT_PUBLIC_APP_URL ||

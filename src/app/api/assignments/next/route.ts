@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { withAuth } from '@/lib/auth/withAuth';
 import { parsePositiveInt } from '@/utils/number';
 
 const WORK_TYPES = new Set(['TEST', 'PACK', 'REPAIR', 'QA', 'RECEIVE']);
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId;
     const { searchParams } = new URL(request.url);
 
     // Accept either the specific new column params or the legacy staff_id param
@@ -28,18 +30,20 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `SELECT *
        FROM work_assignments
        WHERE ${col} = $1
          AND work_type = $2
          AND status IN ('ASSIGNED', 'IN_PROGRESS')
+         AND organization_id = $3
        ORDER BY
          CASE WHEN status = 'IN_PROGRESS' THEN 0 ELSE 1 END,
          priority ASC,
          assigned_at ASC
        LIMIT 1`,
-      [staffId, workType]
+      [staffId, workType, orgId]
     );
 
     return NextResponse.json({ success: true, assignment: result.rows[0] || null });
@@ -50,4 +54,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}, { permission: 'work_orders.view' });

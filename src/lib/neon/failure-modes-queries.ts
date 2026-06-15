@@ -1,9 +1,23 @@
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * Failure-mode taxonomy (failure_modes) + per-unit failure tags
  * (unit_failure_tags). See docs/condition-grading-repair-qc-plan.md §4.3/§4.4
  * and 2026-06-07_failure_modes.sql.
+ *
+ * Tenancy (additive, backward-compatible): every SQL-touching export takes an
+ * OPTIONAL trailing `orgId`. When present, the query runs through the tenant
+ * pool (GUC-scoped) so RLS can bite under app_tenant; when omitted, behavior is
+ * byte-identical to before (raw `pool`).
+ *
+ * Table notes (docs/tenancy/org-id-coverage.generated.md):
+ *   - `failure_modes`     → NO organization_id column, NO org-bearing parent
+ *                           (reference-decide). GUC-wrap only; NEEDS-COL.
+ *   - `unit_failure_tags` → NO organization_id column; parent `serial_units`
+ *                           HAS organization_id, so scope via a JOIN/subquery on
+ *                           serial_units.organization_id. NEEDS-COL.
  */
 
 export interface FailureModeRow {
@@ -42,14 +56,21 @@ export interface UnitFailureTagRow {
 
 // ─── Taxonomy CRUD ──────────────────────────────────────────────────────────
 
-export async function listFailureModes(opts?: { activeOnly?: boolean }): Promise<FailureModeRow[]> {
+export async function listFailureModes(
+  opts?: { activeOnly?: boolean },
+  orgId?: OrgId,
+): Promise<FailureModeRow[]> {
   const activeOnly = opts?.activeOnly === true;
-  const r = await pool.query(
-    `SELECT * FROM failure_modes
+  // failure_modes has NO organization_id column and no org-bearing parent
+  // (reference-decide / NEEDS-COL): when orgId is present we can only GUC-wrap.
+  const sql = `SELECT * FROM failure_modes
       WHERE ($1::boolean IS FALSE OR active = true)
-      ORDER BY sort_order, label`,
-    [activeOnly],
-  );
+      ORDER BY sort_order, label`;
+  if (orgId) {
+    const r = await tenantQuery<FailureModeRow>(orgId, sql, [activeOnly]);
+    return r.rows;
+  }
+  const r = await pool.query(sql, [activeOnly]);
   return r.rows;
 }
 
@@ -62,23 +83,31 @@ export async function createFailureMode(params: {
   typicalCostCents?: number | null;
   capsGradeAt?: string | null;
   sortOrder?: number;
-}): Promise<FailureModeRow> {
-  const r = await pool.query(
-    `INSERT INTO failure_modes
+}, orgId?: OrgId): Promise<FailureModeRow> {
+  // failure_modes has NO organization_id column (NEEDS-COL): nothing to stamp.
+  // When orgId is present we still route the write through the tenant pool so
+  // the GUC is set (RLS-ready) and the write is transactional.
+  const sql = `INSERT INTO failure_modes
        (code, label, category, severity, is_repairable, typical_cost_cents, caps_grade_at, sort_order)
      VALUES ($1, $2, $3, $4, $5, $6, $7::condition_grade_enum, $8)
-     RETURNING *`,
-    [
-      params.code.trim().toUpperCase(),
-      params.label.trim(),
-      params.category ?? 'hardware',
-      params.severity ?? 'major',
-      params.isRepairable ?? true,
-      params.typicalCostCents ?? null,
-      params.capsGradeAt ?? null,
-      params.sortOrder ?? 0,
-    ],
-  );
+     RETURNING *`;
+  const values = [
+    params.code.trim().toUpperCase(),
+    params.label.trim(),
+    params.category ?? 'hardware',
+    params.severity ?? 'major',
+    params.isRepairable ?? true,
+    params.typicalCostCents ?? null,
+    params.capsGradeAt ?? null,
+    params.sortOrder ?? 0,
+  ];
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const r = await client.query<FailureModeRow>(sql, values);
+      return r.rows[0];
+    });
+  }
+  const r = await pool.query(sql, values);
   return r.rows[0];
 }
 
@@ -94,6 +123,7 @@ export async function updateFailureMode(
     sortOrder?: number;
     active?: boolean;
   },
+  orgId?: OrgId,
 ): Promise<FailureModeRow | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -112,25 +142,58 @@ export async function updateFailureMode(
   if (updates.active !== undefined) push('active', updates.active);
   if (sets.length === 0) return null;
   values.push(id);
-  const r = await pool.query(
-    `UPDATE failure_modes SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`,
-    values,
-  );
+  // failure_modes has NO organization_id column (NEEDS-COL): no per-row org
+  // predicate is possible. GUC-wrap only when orgId present (id is an integer
+  // surrogate PK, safe bare).
+  const sql = `UPDATE failure_modes SET ${sets.join(', ')} WHERE id = $${idx} RETURNING *`;
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const r = await client.query<FailureModeRow>(sql, values);
+      return r.rows[0] ?? null;
+    });
+  }
+  const r = await pool.query(sql, values);
   return r.rows[0] ?? null;
 }
 
 /** Soft delete — deactivate so historical tags keep resolving their mode. */
-export async function deactivateFailureMode(id: number): Promise<boolean> {
-  const r = await pool.query(
-    `UPDATE failure_modes SET active = false WHERE id = $1`,
-    [id],
-  );
+export async function deactivateFailureMode(id: number, orgId?: OrgId): Promise<boolean> {
+  // failure_modes has NO organization_id column (NEEDS-COL): GUC-wrap only.
+  const sql = `UPDATE failure_modes SET active = false WHERE id = $1`;
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const r = await client.query(sql, [id]);
+      return (r.rowCount || 0) > 0;
+    });
+  }
+  const r = await pool.query(sql, [id]);
   return (r.rowCount || 0) > 0;
 }
 
 // ─── Per-unit tags ──────────────────────────────────────────────────────────
 
-export async function listUnitFailureTags(serialUnitId: number): Promise<UnitFailureTagRow[]> {
+export async function listUnitFailureTags(
+  serialUnitId: number,
+  orgId?: OrgId,
+): Promise<UnitFailureTagRow[]> {
+  // unit_failure_tags has NO organization_id column; scope via its org-bearing
+  // parent serial_units (su.organization_id = $n). t.serial_unit_id = su.id is
+  // an integer surrogate-PK join (safe bare); the org predicate sits on su.
+  if (orgId) {
+    const r = await tenantQuery<UnitFailureTagRow>(
+      orgId,
+      `SELECT t.*, fm.code, fm.label, fm.category, fm.severity, fm.caps_grade_at,
+              s.name AS detected_by_name
+         FROM unit_failure_tags t
+         JOIN serial_units su ON su.id = t.serial_unit_id
+         JOIN failure_modes fm ON fm.id = t.failure_mode_id
+    LEFT JOIN staff s ON s.id = t.detected_by_staff_id
+        WHERE t.serial_unit_id = $1 AND su.organization_id = $2
+     ORDER BY (t.resolution_status = 'open') DESC, t.detected_at DESC`,
+      [serialUnitId, orgId],
+    );
+    return r.rows;
+  }
   const r = await pool.query(
     `SELECT t.*, fm.code, fm.label, fm.category, fm.severity, fm.caps_grade_at,
             s.name AS detected_by_name
@@ -154,7 +217,49 @@ export async function tagUnitFailure(params: {
   detectedByStaffId?: number | null;
   source?: string;
   notes?: string | null;
-}): Promise<UnitFailureTagRow> {
+}, orgId?: OrgId): Promise<UnitFailureTagRow> {
+  const insertValues = [
+    params.serialUnitId,
+    params.failureModeId,
+    params.detectedByStaffId ?? null,
+    params.source ?? 'manual',
+    params.notes?.trim() || null,
+  ];
+
+  // unit_failure_tags has NO organization_id column; scope through the
+  // org-bearing parent serial_units. When orgId is present, the INSERT is
+  // gated by an EXISTS on serial_units (cross-tenant unit → zero rows), and
+  // the fallback SELECT joins serial_units with the org predicate.
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const inserted = await client.query<UnitFailureTagRow>(
+        `INSERT INTO unit_failure_tags
+           (serial_unit_id, failure_mode_id, detected_by_staff_id, source, notes)
+         SELECT $1, $2, $3, $4, $5
+          WHERE EXISTS (
+            SELECT 1 FROM serial_units su
+             WHERE su.id = $1 AND su.organization_id = $6
+          )
+         ON CONFLICT (serial_unit_id, failure_mode_id) WHERE resolution_status = 'open'
+           DO NOTHING
+         RETURNING *`,
+        [...insertValues, orgId],
+      );
+      if (inserted.rows.length > 0) return inserted.rows[0];
+      // Already an open tag (or a cross-tenant/non-existent unit) — return the
+      // existing org-owned open tag, if any.
+      const existing = await client.query<UnitFailureTagRow>(
+        `SELECT t.* FROM unit_failure_tags t
+           JOIN serial_units su ON su.id = t.serial_unit_id
+          WHERE t.serial_unit_id = $1 AND t.failure_mode_id = $2
+            AND t.resolution_status = 'open' AND su.organization_id = $3
+          LIMIT 1`,
+        [params.serialUnitId, params.failureModeId, orgId],
+      );
+      return existing.rows[0];
+    });
+  }
+
   const inserted = await pool.query(
     `INSERT INTO unit_failure_tags
        (serial_unit_id, failure_mode_id, detected_by_staff_id, source, notes)
@@ -162,13 +267,7 @@ export async function tagUnitFailure(params: {
      ON CONFLICT (serial_unit_id, failure_mode_id) WHERE resolution_status = 'open'
        DO NOTHING
      RETURNING *`,
-    [
-      params.serialUnitId,
-      params.failureModeId,
-      params.detectedByStaffId ?? null,
-      params.source ?? 'manual',
-      params.notes?.trim() || null,
-    ],
+    insertValues,
   );
   if (inserted.rows.length > 0) return inserted.rows[0];
   // Already an open tag — return it.
@@ -185,14 +284,36 @@ export async function resolveUnitFailureTag(
   tagId: number,
   status: 'resolved' | 'scrapped' | 'wontfix' | 'open',
   notes?: string | null,
+  orgId?: OrgId,
 ): Promise<UnitFailureTagRow | null> {
+  const noteVal = notes?.trim() || null;
+  // unit_failure_tags has NO organization_id column; scope the UPDATE through
+  // the org-bearing parent serial_units. A cross-tenant tag id matches zero
+  // rows → returns null (org-ownership 404 at the route layer).
+  if (orgId) {
+    return withTenantTransaction(orgId, async (client) => {
+      const r = await client.query<UnitFailureTagRow>(
+        `UPDATE unit_failure_tags t
+            SET resolution_status = $2,
+                notes = COALESCE($3, t.notes)
+          WHERE t.id = $1
+            AND EXISTS (
+              SELECT 1 FROM serial_units su
+               WHERE su.id = t.serial_unit_id AND su.organization_id = $4
+            )
+          RETURNING t.*`,
+        [tagId, status, noteVal, orgId],
+      );
+      return r.rows[0] ?? null;
+    });
+  }
   const r = await pool.query(
     `UPDATE unit_failure_tags
         SET resolution_status = $2,
             notes = COALESCE($3, notes)
       WHERE id = $1
       RETURNING *`,
-    [tagId, status, notes?.trim() || null],
+    [tagId, status, noteVal],
   );
   return r.rows[0] ?? null;
 }
