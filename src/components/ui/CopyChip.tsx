@@ -134,6 +134,11 @@ export interface CopyChipProps {
   disableTooltip?: boolean;
   /** Smaller label + icons (mobile rows that must keep all chips on one line). */
   dense?: boolean;
+  /** Replaces copy-on-click while preserving the standard chip presentation. */
+  onActivate?: () => void;
+  activationLabel?: string;
+  activationTitle?: string;
+  activationDisabled?: boolean;
 }
 
 export function CopyChip({
@@ -151,6 +156,10 @@ export function CopyChip({
   outerPad = 'chip',
   disableTooltip = false,
   dense = false,
+  onActivate,
+  activationLabel,
+  activationTitle,
+  activationDisabled = false,
 }: CopyChipProps) {
   const {
     chipRef,
@@ -189,11 +198,25 @@ export function CopyChip({
     >
       <button
         type="button"
-        onClick={handleCopy}
+        onClick={(e) => {
+          if (!onActivate) {
+            handleCopy(e);
+            return;
+          }
+          e.stopPropagation();
+          if (!activationDisabled) onActivate();
+        }}
         onFocus={openTooltip}
         onBlur={closeTooltipImmediate}
-        disabled={isDisabled}
-        title={!disableTooltip && !hasTooltipProvider && canCopy ? normalizedValue : undefined}
+        disabled={onActivate ? activationDisabled : isDisabled}
+        aria-label={onActivate ? activationLabel : undefined}
+        title={
+          onActivate
+            ? activationTitle
+            : !disableTooltip && !hasTooltipProvider && canCopy
+              ? normalizedValue
+              : undefined
+        }
         className={
           fitDisplayWidth
             ? 'inline-flex w-auto max-w-full items-center justify-start gap-0.5 py-0 bg-transparent text-left text-black transition-all active:scale-95 disabled:opacity-30'

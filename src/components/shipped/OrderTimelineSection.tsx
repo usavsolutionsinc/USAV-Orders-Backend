@@ -57,5 +57,11 @@ export function OrderTimelineSection({ orderId }: { orderId: number }) {
     }),
   );
 
-  return <TimelineSection items={items} loading={isLoading} />;
+  return (
+    <TimelineSection
+      items={items}
+      loading={isLoading}
+      headerRight={!isLoading && items.length > 0 ? `${items.length} events` : undefined}
+    />
+  );
 }

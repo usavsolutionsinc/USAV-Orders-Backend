@@ -89,14 +89,30 @@ export async function GET(
       shipmentId != null
         ? pool.query(
             `SELECT sal.id, sal.created_at, sal.station, sal.activity_type, sal.scan_ref,
+                    sal.tech_serial_number_id, sal.metadata,
+                    COALESCE(
+                      NULLIF(BTRIM(tsn.serial_number), ''),
+                      NULLIF(BTRIM(sal.metadata->>'serial'), '')
+                    ) AS serial_number,
+                    tsn.serial_type,
                     s.name AS actor_name
                FROM station_activity_logs sal
                LEFT JOIN staff s ON s.id = sal.staff_id
-              WHERE sal.shipment_id = $1
+               LEFT JOIN tech_serial_numbers tsn
+                 ON tsn.id = sal.tech_serial_number_id
+                AND tsn.organization_id = $3
+              WHERE sal.organization_id = $3
+                AND (
+                  sal.shipment_id = $1
+                  OR (
+                    sal.activity_type = 'SERIAL_ADDED'
+                    AND tsn.shipment_id = $1
+                  )
+                )
                 AND sal.station = ANY($2::text[])
               ORDER BY sal.created_at DESC, sal.id DESC
               LIMIT 200`,
-            [shipmentId, ['TECH', 'OUTBOUND']],
+            [shipmentId, ['TECH', 'OUTBOUND'], gate.ctx.organizationId],
           )
         : Promise.resolve({ rows: [] as any[] }),
     ]);

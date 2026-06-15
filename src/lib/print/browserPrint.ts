@@ -400,13 +400,13 @@ async function sendSerial(profile: PrinterProfile, bytes: Uint8Array): Promise<v
  * office paper goes through the HTML print path, not raw bytes.
  */
 export async function printRawToProfile(
-  commands: string,
+  commands: string | Uint8Array,
   profile: PrinterProfile,
 ): Promise<{ success: boolean; reason: string | null }> {
   if (profile.kind === 'os') {
     return { success: false, reason: 'OS/paper profiles print via the document path, not raw' };
   }
-  const bytes = new TextEncoder().encode(commands);
+  const bytes = typeof commands === 'string' ? new TextEncoder().encode(commands) : commands;
   try {
     if (profile.kind === 'serial') await sendSerial(profile, bytes);
     else await sendUsb(profile, bytes);

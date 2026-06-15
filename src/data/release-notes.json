@@ -1,7 +1,67 @@
 {
-  "generatedAt": "2026-06-15T02:55:55.844Z",
+  "generatedAt": "2026-06-15T17:07:29.433Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "934c3c140cfe344ac9735bc022d9f60837c0a90b",
+      "shortSha": "934c3c14",
+      "date": "2026-06-15T09:27:43-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(po-gmail): lazily load email HTML sanitizer",
+      "body": "",
+      "type": "fix",
+      "title": "lazily load email HTML sanitizer"
+    },
+    {
+      "sha": "00067545d9689dbac2832b94215375b072f78494",
+      "shortSha": "00067545",
+      "date": "2026-06-15T08:50:48-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(outbound): add dock station with labels and scan-out queues",
+      "body": "Introduce /outbound as a sidebar-mode station: label queue and staged\nscan-out in the right panel, compact 40px staging header, DOCK_STAGED\nactivity logs, and bulk mark-staged API. Reorder master nav to\nReceiving → Outbound → Testing → Amazon FBA → Packing and lift dock\nscan bars off the dashboard sidebars.\n\nRefactor receiving line detail into a shared overlay module and add\noperator backfill scripts for dock staging, tracking scans, and unbox\nattribution.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "feature",
+      "title": "add dock station with labels and scan-out queues"
+    },
+    {
+      "sha": "098007be87a85caee6857cddc24ea478c91676a8",
+      "shortSha": "098007be",
+      "date": "2026-06-14T22:02:30-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(deps): remove unused motion-plus (0 imports; private dep 404s in CI, blocked all prod deploys)",
+      "body": "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "remove unused motion-plus (0 imports; private dep 404s in CI, blocked all prod deploys)"
+    },
+    {
+      "sha": "905439e6520ede8ff8bd86c257a41e4884c387ab",
+      "shortSha": "905439e6",
+      "date": "2026-06-14T21:56:48-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): E1 staged — app_tenant role created+validated, TENANT_APP_DATABASE_URL set, USAV-default safety migration",
+      "body": "Enforcement is staged + validated (RLS isolation proven on live DB, grants\ncomplete, 0 NULL-org rows). Activates on next successful prod deploy; the\nactivating redeploy is currently blocked by the in-flight motion-plus dep.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "E1 staged — app_tenant role created+validated, TENANT_APP_DATABASE_URL set, USAV-default safety migration"
+    },
+    {
+      "sha": "fdda74f544804825f69f8ce245119299c940e63f",
+      "shortSha": "fdda74f5",
+      "date": "2026-06-14T21:54:19-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(deps): regenerate pnpm-lock.yaml to match package.json (electron-log, motion-plus)",
+      "body": "Unblocks the production build (frozen-lockfile CI check).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "regenerate pnpm-lock.yaml to match package.json (electron-log, motion-plus)"
+    },
+    {
+      "sha": "17fd0392a133e771d77e1058206909576715f595",
+      "shortSha": "17fd0392",
+      "date": "2026-06-14T21:42:49-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): logical-RLS multi-tenant sweep — request/module/identity layers org-scoped + NEEDS-COL columns applied",
+      "body": "Tenant-isolation hardening across the codebase (3 sweep workflows + manual\nfixes). Brings the route-file leak surface from 178 critical → 29 (all\nremaining are deferred-by-design: auth-flow Phase F, session-less Zoho sync,\ndev/test routes). GUC-wrapped routes 59 → 242.\n\n- Hot-core + cold domains: 225 critical/high routes + ~58 shared query/\n  aggregator/backbone modules made org-aware (optional-orgId, backward-compatible).\n- Identity layer: admin staff/role CRUD org-scoped (roles stay global; sign-in\n  credential logic untouched).\n- Session-less crons: service-org interim via transitionalUsavOrgId + TODOs.\n- Schema: applied 2026-06-14_org_id_phase_b_needs_col{,_2}.sql (35 NEEDS-COL\n  tables gained nullable organization_id + armed RLS). Composite-PK migrations\n  staged .sql.gated (deploy-coupled).\n- tsc clean; tenancy guard green. Docs: docs/tier0-{resume-handoff,execution-checklist}.md.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "logical-RLS multi-tenant sweep — request/module/identity layers org-scoped + NEEDS-COL columns applied"
+    },
     {
       "sha": "8adbdfb9dfb34ddbcbcab179cd14f63294ec449e",
       "shortSha": "8adbdfb9",
@@ -1931,66 +1991,6 @@
       "body": "auth:\n- /signin with PIN-first flow, optional Face ID passkey upgrade, self-serve PIN creation (POST /api/auth/pin/create gated on pin_hash IS NULL)\n- session cookies (usav_sid) with device-kind aware TTLs, scrypt PIN hashing + 5-try lockout\n- proxy enforce-mode is now default (no guest mode); only /signin, /m/enroll, /api/auth/*, and static assets stay public\n\nadmin + access:\n- roles editor with permission toggles, color picker, duplicate/reorder\n- per-staff access matrix, override permissions, enroll-token + reset-pin flows\n- admin sub-sections now have their own sidebar panels (jobs, logs, fba, manuals, features, etc.)\n\naudit log:\n- new /audit-log pages: receiving, packing, tech, sku, staff\n- shared filter strip (day/start/end/staff)\n- per-aggregator queries under src/lib/audit-log/\n\nsidebar redesign:\n- HorizontalButtonSlider gets a 'nav' variant: blue-600 fill on active, 1.04 spring scale, optional icon + disabled state\n- pill row replaces ViewDropdown/TabSwitch across FBA, Receiving, Tech, SkuStock, Packer, Walk-In, Dashboard, Work Orders, Replenish, Admin, Audit Log, plus the in-panel Shipped type filter, Pending stock filter, and Repair sub-tabs\n- ActiveStaffChip removed from per-panel headers (identity lives on the bottom-of-sidebar SignedInChip)\n\ninventory:\n- new /inventory page with bins overview, room manager, label printing\n- bin detail flyout + SKU finder\n\nmobile + misc:\n- MobilePageHeader uses read-only ActiveStaffChip (no per-page staff dropdown)\n- phone-pair flow removed (superseded by global signin)\n- Quick Access FAB icon: always Search now\n- Tooltip primitive for icon-only triggers\n- new Settings page (appearance, hardware, audit, sessions, security, workstation)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "auth system + sidebar nav pills redesign"
-    },
-    {
-      "sha": "64072679780411d302725476086f8b6b2afcc94d",
-      "shortSha": "64072679",
-      "date": "2026-05-15T17:01:00-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the receiving pipeline for photos and the inventory bin creation",
-      "body": "",
-      "type": "other",
-      "title": "updated the receiving pipeline for photos and the inventory bin creation"
-    },
-    {
-      "sha": "900993ece57d1b799150749923a4eee41fba3907",
-      "shortSha": "900993ec",
-      "date": "2026-05-14T17:00:37-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the architecture",
-      "body": "",
-      "type": "other",
-      "title": "updated the architecture"
-    },
-    {
-      "sha": "209791d6310d5b18b9120f4f88754268c1e79edf",
-      "shortSha": "209791d6",
-      "date": "2026-05-14T17:00:22-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows",
-      "body": "",
-      "type": "other",
-      "title": "updated the sku stock for QR Code acknowledgement and different printing of labels and editing of location and stock via bin# to sku and mermaid and HTML process flows"
-    },
-    {
-      "sha": "b680dbdfc9c1e09db8e567db969ad5d3ac991bf3",
-      "shortSha": "b680dbdf",
-      "date": "2026-05-14T13:28:28-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the proxy problem",
-      "body": "",
-      "type": "other",
-      "title": "updated the proxy problem"
-    },
-    {
-      "sha": "433578b0df63ddf857a8d7ea090ab8b27560ba78",
-      "shortSha": "433578b0",
-      "date": "2026-05-13T17:00:28-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the whole receiving pipeline",
-      "body": "",
-      "type": "other",
-      "title": "updated the whole receiving pipeline"
-    },
-    {
-      "sha": "7ae98020d827673d9331466b5e987e88eea147f5",
-      "shortSha": "7ae98020",
-      "date": "2026-05-13T08:45:08-07:00",
-      "author": "DENSENSE8",
-      "subject": "udpated the receiving side bar to be more modern",
-      "body": "",
-      "type": "other",
-      "title": "udpated the receiving side bar to be more modern"
     }
   ]
 }

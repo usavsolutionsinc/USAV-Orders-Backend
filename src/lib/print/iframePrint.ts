@@ -13,8 +13,8 @@
  *   call prints straight to the *default* printer with NO dialog. Without that
  *   flag the normal print dialog appears (browsers give web pages no other way
  *   to reach a driver-owned OS printer). So for dialog-free receiving labels in
- *   a browser tab: set the label printer (e.g. CTP800BD) as the Windows default
- *   and start the browser with `--kiosk-printing`. The desktop (Electron) shell
+ *   a browser tab: set the label printer as the default printer and start the
+ *   browser with `--kiosk-printing`. The desktop (Electron) shell
  *   needs none of this — it prints silently via `webContents.print` upstream of
  *   this fallback (see {@link printHtmlSilent}).
  *

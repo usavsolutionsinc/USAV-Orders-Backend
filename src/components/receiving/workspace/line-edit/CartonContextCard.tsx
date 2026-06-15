@@ -229,8 +229,8 @@ export function CartonContextCard({
           {/* Condensed identity row — Priority · Platform · Type · listing ·
               PO# · tracking# · Claim · Photos. Platform/Type collapse to the
               active pill and expand inline on click; listing/PO#/tracking are
-              consistent [open · copy · edit] chips. Priority/Claim/Photos are
-              unbox-only (hidden in triage). */}
+              compact chips with hover Open/Edit menus. Priority/Claim/Photos
+              are unbox-only (hidden in triage). */}
           <div className="flex min-w-0 items-center">
             <AnimatePresence mode="wait" initial={false}>
               {openPicker === null ? (
@@ -279,7 +279,8 @@ export function CartonContextCard({
               placeholder="Type"
             />
 
-            {/* Listing — opens + copies the listing URL; labeled by its
+            {/* Listing — the complete platform-colored chip opens the listing.
+                Its hover menu offers Copy, then Edit. It is labeled by the
                 canonical platform (SoT) with the matching tone so it reads
                 consistently with the Platform pill. The only wide chip. */}
             <IdentityLinkChip
@@ -308,9 +309,13 @@ export function CartonContextCard({
               }}
               editOpen={listingEditorOpen}
               editLabel="Edit listing URL"
+              actionsInMenu
+              chipAction="open"
+              showExternalIcon
+              menuFirstAction="copy"
             />
 
-            {/* PO# — opens the PO in Zoho; copies the PO#. */}
+            {/* PO# — chip click copies; hover menu opens Zoho or edits. */}
             <IdentityLinkChip
               openHref={poOpenHref}
               openTitle="Open PO in Zoho"
@@ -328,9 +333,11 @@ export function CartonContextCard({
               }}
               editOpen={poEditorOpen}
               editLabel="Edit PO#"
+              actionsInMenu
             />
 
-            {/* Tracking# — opens carrier tracking; copies the number. */}
+            {/* Tracking# — chip click copies; hover menu opens carrier tracking
+                or edits the primary/extra tracking values. */}
             <div className="flex shrink-0 items-center gap-1">
               <IdentityLinkChip
                 openHref={trackingOpenHref}
@@ -343,6 +350,7 @@ export function CartonContextCard({
                 onEdit={onToggleTrackingEditors}
                 editOpen={trackingEditorsOpen}
                 editLabel="Edit tracking"
+                actionsInMenu
               />
               {filledExtraTrackingsCount > 0 ? (
                 <span className="shrink-0 rounded bg-slate-200/90 px-1 py-px text-eyebrow font-black tabular-nums text-slate-700">
@@ -532,7 +540,7 @@ export function CartonContextCard({
                           disabled={listingOpenHref == null}
                           aria-label="Open listing URL in new tab"
                           title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
-                          className="-m-0.5 rounded p-0.5 text-inherit transition-colors hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
+                          className="-m-0.5 rounded p-0.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
                         >
                           <ExternalLink className="h-[14px] w-[14px]" />
                         </button>

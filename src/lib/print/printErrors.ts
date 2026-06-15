@@ -3,8 +3,8 @@
  * Shared by the Settings → Hardware test buttons and the live print paths so
  * an operator sees WHY a silent print fell back to the dialog.
  *
- * The most common Windows cause is a printer the OS driver already owns
- * (USB "Access denied" / can't claim the interface, or a COM port in use).
+ * The most common cause is a printer the OS driver already owns
+ * (USB "Access denied" / can't claim the interface, or the serial port in use).
  */
 export function friendlyPrintError(reason: string | null | undefined): string {
   const r = (reason || '').toLowerCase();
@@ -14,10 +14,10 @@ export function friendlyPrintError(reason: string | null | undefined): string {
     r.includes('unable to claim') ||
     r.includes('the device is in use')
   ) {
-    return 'This USB printer is held by its Windows driver, so the browser can’t send to it directly. Pair it as a serial (COM) port instead, or remove its Windows driver to use WebUSB.';
+    return 'This USB printer is held by the OS driver, so the browser can’t send to it directly. Pair it as a serial port instead, or remove the driver to use WebUSB.';
   }
   if (r.includes('failed to open') && r.includes('serial')) {
-    return 'Couldn’t open the COM port — it’s likely in use by the matching Windows printer. Remove that printer under Windows → Printers & scanners, then retry.';
+    return 'Couldn’t open the serial port — it’s likely in use by the matching printer. Remove the conflicting printer/driver, then retry.';
   }
   if (
     r.includes('not connected') ||

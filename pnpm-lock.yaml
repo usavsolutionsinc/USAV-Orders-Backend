@@ -273,6 +273,10 @@ importers:
       wait-on:
         specifier: ^9.0.4
         version: 9.0.10
+    optionalDependencies:
+      sharp:
+        specifier: 0.34.5
+        version: 0.34.5
 
 packages:
 
@@ -13124,14 +13128,14 @@ snapshots:
 
   node-abi@4.31.0:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.1
 
   node-addon-api@1.7.2:
     optional: true
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.7.4
+      semver: 7.8.1
 
   node-domexception@1.0.0: {}
 
@@ -13169,7 +13173,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.7.4
+      semver: 7.8.1
       tar: 7.5.16
       tinyglobby: 0.2.17
       undici: 6.26.0

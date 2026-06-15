@@ -130,8 +130,8 @@ export function PrintPreferences({ onClose }: PrintPreferencesProps) {
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-semibold">Silent printing isn&rsquo;t available in this browser.</p>
-          <p className="mt-1 text-amber-800">
-            Use Chrome or Edge to pair wired label printers, or install the desktop app.
+        <p className="mt-1 text-amber-800">
+            Use Chrome or Edge to pair wired label printers on Windows or macOS, or install the desktop app.
           </p>
         </div>
       )}
@@ -253,7 +253,7 @@ function BrowserProfiles() {
       reload();
       setStatus(
         kind === 'usb'
-          ? `Paired: ${profile.name}. If its Test says “Access denied”, this USB printer is driver-owned — pair it as a serial (COM) port instead.`
+          ? `Paired: ${profile.name}. If its Test says “Access denied”, this USB printer is driver-owned — pair it as a serial port instead.`
           : `Paired: ${profile.name}. Set the language to match your printer, then hit Test.`,
       );
     } catch (err) {
@@ -286,9 +286,8 @@ function BrowserProfiles() {
         TSPL/ZPL/ESC-POS). Paper/office printers print silently only in the desktop app — in a
         browser tab they use the print dialog.
         <span className="mt-1 block text-gray-500">
-          On Windows, a USB printer with a vendor driver installed is owned by that driver, so
-          WebUSB can’t reach it (“Access denied”). Pair it as a <strong>serial (COM)</strong> port
-          for reliable silent printing, or remove its Windows driver to use USB.
+          If a vendor driver already owns the USB printer, WebUSB can’t reach it (“Access denied”).
+          Pair it as a <strong>serial port</strong> for reliable silent printing, or remove the driver to use USB.
         </span>
       </div>
 
