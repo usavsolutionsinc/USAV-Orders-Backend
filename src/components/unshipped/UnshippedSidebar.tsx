@@ -8,7 +8,6 @@ import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
 import { Plus, Check } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { ShippedScanOutSidebar } from '@/components/shipped/ShippedScanOutSidebar';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
 import { motion } from 'framer-motion';
@@ -407,15 +406,6 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         </div>
       }
       bodyClassName="flex flex-col no-scrollbar pb-6"
-      // Dock scan-out pinned at the very bottom — always available (no mode
-      // toggle). The list above is unchanged; scanning a staged label hands the
-      // order off to the carrier (PACKED_STAGED → SCANNED_OUT) and drops it from
-      // this board into Shipped. autoFocus off so it never steals the search box.
-      footer={
-        <div className={`${SIDEBAR_GUTTER} border-t border-gray-100 bg-white pb-4 pt-3`}>
-          <ShippedScanOutSidebar autoFocus={false} />
-        </div>
-      }
     >
       <motion.div variants={itemVariants} initial="hidden" animate="visible" className="space-y-4">
         <RecentSearchesList

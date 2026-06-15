@@ -387,11 +387,10 @@ export function ShippedDetailsPanel({
           <>
             <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
               <QtyBadge quantity={(shipped as any).quantity} />
-              {/* Only surface a status pill when it carries real signal (tested /
-                  out-of-stock). The bare "Pending" placeholder was misleading —
-                  the shipped/packer record doesn't carry has_tech_scan, so it
-                  false-negatived to Pending even for tech-scanned orders. */}
-              {(hasTechScan || hasOutOfStock) && (
+              {/* Only surface a status pill when it carries real signal (named
+                  tester or out-of-stock). Skip when tech scan exists but the
+                  tester id is missing — that rendered "Tested by Not specified". */}
+              {((hasTechScan && testedById) || hasOutOfStock) && (
                 <PaneHeaderStatusPill tone={statusTone} pulse>
                   {statusLabel}
                 </PaneHeaderStatusPill>

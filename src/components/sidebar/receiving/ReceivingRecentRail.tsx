@@ -54,21 +54,14 @@ interface Props {
 
 /**
  * Time label for this rail's rows — MUST mirror the server's
- * `sort=unbox_activity` axis (max of unboxed_at / line updated_at) so the
- * relative times read monotonically down the rail. The base accessor reads
- * `last_activity_at`, which is door-scan based: sorting by unbox activity
- * while labeling with scan time made a carton unboxed weeks ago but
- * re-scanned today show "8h" at the BOTTOM of the rail. Module-scope for
- * stable identity (the shell wires it into a listener effect).
+ * `sort=unboxed_newest` axis (receiving.unboxed_at DESC) so relative times
+ * read monotonically down the rail. Never fall back to last_activity_at /
+ * updated_at / tested_at: those are door-scan, line-edit, or testing axes and
+ * made rows jump when unrelated fields changed. Module-scope for stable
+ * identity (the shell wires it into a listener effect).
  */
 function getUnboxActivityAt(r: ReceivingLineRow): string | null {
-  // Label with the UNBOXED time so the relative stamp matches the rail's
-  // sort axis (unboxed_at DESC). A later line edit (qty bump, note, condition)
-  // must NOT bump the displayed time — that's what made an old carton read
-  // "8h" at the wrong spot. Fall back to line activity only for rows with no
-  // unbox stamp yet (they sort last anyway).
-  if (r.unboxed_at) return r.unboxed_at;
-  return r.last_activity_at ?? r.updated_at ?? r.created_at;
+  return r.unboxed_at ?? null;
 }
 
 /**
@@ -85,7 +78,10 @@ export function ReceivingRecentRail({
   // ApiResponse object, not the array) so the two queries can't share a cache
   // entry and feed each other the wrong shape. Still under the
   // ['receiving-lines-table'] prefix so broad invalidations refresh it.
-  const queryKey = useMemo(() => ['receiving-lines-table', 'rail', 'activity', 'receive'] as const, []);
+  const queryKey = useMemo(
+    () => ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const,
+    [],
+  );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });

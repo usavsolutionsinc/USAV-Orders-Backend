@@ -80,6 +80,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const excludePacked      = searchParams.get('excludePacked') === 'true';
     /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
+    /** stagedOnly=true → packed (PACK event) but not yet dock scan-out (no SHIP_CONFIRM) */
+    const stagedOnly         = searchParams.get('stagedOnly') === 'true';
     /** exceptionsOnly=true → only orders whose shipment has an exception or has been stalled (no carrier scan in >stallHours, default 72h) */
     const exceptionsOnly     = searchParams.get('exceptions') === '1' || searchParams.get('exceptions') === 'true';
     const stallHoursRaw      = Number(searchParams.get('stallHours'));
@@ -113,6 +115,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       packedOnly,
       excludePacked,
       awaitingOnly,
+      stagedOnly,
       exceptionsOnly,
       stallHours,
       carrierFilter,
@@ -506,6 +509,22 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     if (awaitingOnly) {
       sql += ` AND o.shipment_id IS NULL`;
+    }
+
+    if (stagedOnly) {
+      sql += ` AND EXISTS (
+        SELECT 1 FROM station_activity_logs sal_pack
+        WHERE sal_pack.shipment_id IS NOT NULL
+          AND sal_pack.shipment_id = o.shipment_id
+          AND sal_pack.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+      )`;
+      sql += ` AND NOT EXISTS (
+        SELECT 1 FROM station_activity_logs sal_out
+        WHERE sal_out.shipment_id = o.shipment_id
+          AND sal_out.activity_type = 'SHIP_CONFIRM'
+      )`;
+      sql += ` AND NOT ${shippedByCarrierOrLatestStatusSql}`;
+      sql += ` AND COALESCE(o.fulfillment_channel, '') <> 'AFN'`;
     }
 
     if (carrierFilter) {

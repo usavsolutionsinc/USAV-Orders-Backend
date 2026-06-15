@@ -41,6 +41,7 @@ import {
   normalizeReceivingHistorySearchField,
   normalizeReceivingHistorySearchScope,
 } from '@/lib/receiving-history-search';
+import { receivingLineRowToDetailsSeed } from '@/lib/receiving/receiving-details-overlay';
 
 /**
  * Passed to `/api/receiving-lines` as `view`. Re-exported from the shared
@@ -1395,9 +1396,16 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
       const nextReceivingId = uniqueReceivingIds[nextIndex];
       if (nextReceivingId == null) return;
 
+      const seedRow = orderedVisibleRows.find(
+        (row) => Number(row.receiving_id) === nextReceivingId,
+      );
+
       window.dispatchEvent(
         new CustomEvent('receiving-open-details-overlay', {
-          detail: { receivingId: nextReceivingId },
+          detail: {
+            receivingId: nextReceivingId,
+            seed: seedRow ? receivingLineRowToDetailsSeed(seedRow) : undefined,
+          },
         }),
       );
     };

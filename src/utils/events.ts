@@ -162,16 +162,27 @@ export function dispatchReceivingWorkspaceNavState(
   );
 }
 
+export type ReceivingDetailsOverlayDetail = {
+  receivingId: number;
+  /** Row/list fields for instant overlay render before the enrich fetch lands. */
+  seed?: Partial<import('@/components/station/ReceivingDetailsStack').ReceivingDetailsLog>;
+};
+
 /**
  * Surface the existing `ReceivingDetailsStack` overlay on-demand. The
  * workspace's `i` info button dispatches this; ReceivingDashboard listens and
  * mounts the overlay with the matching log.
  */
-export function dispatchReceivingDetailsOverlay(receivingId: number): void {
+export function dispatchReceivingDetailsOverlay(
+  receivingId: number,
+  seed?: ReceivingDetailsOverlayDetail['seed'],
+): void {
   if (typeof window === 'undefined') return;
   if (!Number.isFinite(receivingId) || receivingId <= 0) return;
   window.dispatchEvent(
-    new CustomEvent('receiving-open-details-overlay', { detail: { receivingId } }),
+    new CustomEvent('receiving-open-details-overlay', {
+      detail: { receivingId, seed } satisfies ReceivingDetailsOverlayDetail,
+    }),
   );
 }
 

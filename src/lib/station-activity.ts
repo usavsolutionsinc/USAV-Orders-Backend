@@ -15,6 +15,8 @@ export type StationActivityType =
   // `station_activity_logs.activity_type`/`station` are free-text VARCHAR, so this
   // needs no migration — only this union edit.
   | 'SHIP_CONFIRM'
+  // Dock staging: packed package placed in the outbound staging lane, awaiting scan-out.
+  | 'DOCK_STAGED'
   | 'WS_ORDER_TESTED'
   | 'WS_REPAIR_CHANGED'
   | 'WS_RECEIVING_CHANGED'

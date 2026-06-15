@@ -215,6 +215,14 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 r.support_notes              AS receiving_support_notes,
                 r.listing_url                AS receiving_listing_url,
                 r.received_at::text          AS receiving_received_at,
+                r.unboxed_at::text           AS receiving_unboxed_at,
+                r.received_by                AS receiving_received_by,
+                r.unboxed_by                 AS receiving_unboxed_by,
+                staff_rb.name                AS received_by_name,
+                staff_ub.name                AS unboxed_by_name,
+                scan_first.scanned_at::text  AS first_scanned_at,
+                scan_first.scanned_by        AS first_scanned_by,
+                staff_sb.name                AS scanned_by_name,
                 -- Last physical scan against this carton. Must match the list
                 -- view (view=activity) so the single-line refresh dispatched on
                 -- every line-select doesn't clobber the rail's scan-based
@@ -265,6 +273,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             WHERE rs.receiving_id = r.id
          ) rs_agg ON TRUE
          LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+         LEFT JOIN staff staff_rb                ON staff_rb.id = r.received_by
+         LEFT JOIN staff staff_ub                ON staff_ub.id = r.unboxed_by
+         LEFT JOIN LATERAL (
+           SELECT rs.scanned_at, rs.scanned_by
+           FROM receiving_scans rs
+           WHERE rs.receiving_id = r.id
+           ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+           LIMIT 1
+         ) scan_first ON TRUE
+         LEFT JOIN staff staff_sb                ON staff_sb.id = scan_first.scanned_by
          -- sku_catalog join is on the SKU STRING, which collides across tenants;
          -- pin to the line's org so a same-SKU row in another tenant can't leak.
          -- Title-guarded: rl.sku is a Zoho SKU whose numbering collides with the

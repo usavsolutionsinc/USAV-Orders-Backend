@@ -1,7 +1,7 @@
 'use client';
 
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
-import { formatDateTimePST } from '@/utils/date';
+import { DateTimeValue } from '@/design-system/components/DateTimeValue';
 import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
 import { ReceivingPhotosSection } from './ReceivingPhotosSection';
 
@@ -20,24 +20,42 @@ function resolveStaffLabel(
   return '';
 }
 
+function StaffTimestampRow({
+  at,
+  staffName,
+  emptyFallback,
+}: {
+  at: string | null | undefined;
+  staffName: string;
+  emptyFallback: string;
+}) {
+  const hasAt = Boolean(at && String(at).trim());
+  if (!hasAt && !staffName) {
+    return <span className="text-sm font-bold text-gray-400">{emptyFallback}</span>;
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      {staffName ? (
+        <p className="min-w-0 truncate text-sm font-bold text-gray-900">{staffName}</p>
+      ) : (
+        <span className="text-sm font-bold text-gray-400">—</span>
+      )}
+      <DateTimeValue value={hasAt ? at : null} fallback={emptyFallback} />
+    </div>
+  );
+}
+
 /** Top-of-panel context: tracking scan, unboxing, receiving photos — matches shipped packing photos viewer. */
 export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
   const { getStaffName } = useStaffNameMap();
 
-  const scanTime = log.tracking_scanned_at ? formatDateTimePST(log.tracking_scanned_at) : '';
   const scanName = resolveStaffLabel(
     log.tracking_scanned_by_name,
     log.tracking_scanned_by,
     getStaffName,
   );
-  const scanPart =
-    scanName && scanTime ? `${scanTime} · ${scanName}` : scanTime || scanName;
-
-  const unboxAt = log.unboxed_at ?? null;
-  const unboxTime = unboxAt ? formatDateTimePST(unboxAt) : '';
   const unboxName = resolveStaffLabel(log.unboxed_by_name, log.unboxed_by, getStaffName);
-  const unboxPart =
-    unboxName && unboxTime ? `${unboxTime} · ${unboxName}` : unboxTime || unboxName;
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50/90 to-white p-4 space-y-5 shadow-sm shadow-gray-100/40">
@@ -46,18 +64,22 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
           <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
             Tracking scanned
           </p>
-          <p className="text-sm font-bold text-gray-900 leading-snug">
-            {scanPart || <span className="text-gray-400 font-semibold">Not recorded</span>}
-          </p>
+          <StaffTimestampRow
+            at={log.tracking_scanned_at}
+            staffName={scanName}
+            emptyFallback="Not recorded"
+          />
         </div>
 
         <div>
           <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
             Unboxed by
           </p>
-          <p className="text-sm font-bold text-gray-900 leading-snug">
-            {unboxPart || <span className="text-gray-400 font-semibold">—</span>}
-          </p>
+          <StaffTimestampRow
+            at={log.unboxed_at}
+            staffName={unboxName}
+            emptyFallback="—"
+          />
         </div>
       </div>
 

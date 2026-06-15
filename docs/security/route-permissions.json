@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-14T22:02:54Z",
-  "totalRoutes": 602,
+  "generatedAt": "2026-06-15T15:47:46Z",
+  "totalRoutes": 607,
   "summary": {
-    "permissionGated": 508,
+    "permissionGated": 524,
     "authenticatedNoPermission": 24,
     "anonymousIntentional": 50,
     "serviceToService": 3,
-    "ungatedRead": 17,
+    "ungatedRead": 6,
     "ungatedWrite": 0
   },
   "routes": [
@@ -646,8 +646,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "work_orders.view",
       "exemptReason": null
     },
     {
@@ -956,6 +956,26 @@
       "exemptReason": null
     },
     {
+      "path": "/api/catalog/platform-accounts/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "admin.manage_features",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/catalog/platform-accounts/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/catalog/platforms/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -996,12 +1016,21 @@
       "exemptReason": null
     },
     {
+      "path": "/api/catalog/workflow-nodes/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/check-tracking/route.ts",
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "orders.view",
       "exemptReason": null
     },
     {
@@ -1326,8 +1355,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "operations.view",
       "exemptReason": null
     },
     {
@@ -2232,7 +2261,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
       "exemptReason": null
     },
@@ -2326,7 +2355,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
       "exemptReason": null
     },
@@ -2568,6 +2597,15 @@
       ],
       "gate": "withAuth",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/outbound/mark-staged/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.mark_shipped",
       "exemptReason": null
     },
     {
@@ -2846,7 +2884,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
       "exemptReason": null
     },
@@ -2900,8 +2938,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3370,6 +3408,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/touch-scan/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk/draft/route.ts",
       "methods": [
         "POST"
@@ -3716,8 +3763,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "reports.view",
       "exemptReason": null
     },
     {
@@ -3725,8 +3772,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "reports.view",
       "exemptReason": null
     },
     {
@@ -4042,8 +4089,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "requireRoutePerm",
+      "permission": "shipping.view",
       "exemptReason": null
     },
     {
@@ -4059,6 +4106,7 @@
     {
       "path": "/api/shipped/scan-out/route.ts",
       "methods": [
+        "DELETE",
         "POST"
       ],
       "gate": "withAuth",
@@ -5532,7 +5580,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
       "exemptReason": null
     },

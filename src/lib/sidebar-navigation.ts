@@ -52,6 +52,7 @@ export type SidebarRouteKey =
   | 'sourcing'
   | 'tech'
   | 'packer'
+  | 'outbound'
   | 'support'
   | 'ai-chat'
   | 'previous-quarters'
@@ -94,6 +95,7 @@ const MOBILE_ALLOWED_PREFIXES: ReadonlyArray<string> = [
   '/signin',
   '/receiving',
   '/packer',
+  '/outbound',
   '/tech',
   '/01',
   '/414',
@@ -115,6 +117,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
+  { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'station', requires: 'fba.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Packer,          kind: 'station', requires: 'packing.view' },
@@ -182,6 +185,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (pathname === '/settings/audit' || pathname.startsWith('/settings/audit/')) return 'audit-log';
   if (pathname === '/tech' || pathname.startsWith('/tech/')) return 'tech';
   if (pathname === '/packer' || pathname.startsWith('/packer/')) return 'packer';
+  if (pathname === '/outbound' || pathname.startsWith('/outbound/')) return 'outbound';
   if (pathname === '/manuals/library' || pathname.startsWith('/manuals/library/')) return 'manuals-library';
   // /manuals now redirects to /products (see src/app/manuals/page.tsx)
   if (pathname === '/manuals' || pathname.startsWith('/manuals/')) return 'products';
@@ -227,6 +231,7 @@ export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: stri
   { prefix: '/tech',               permission: 'tech.view' },
   { prefix: '/packer',             permission: 'packing.view' },
   { prefix: '/packers',            permission: 'packing.view' },
+  { prefix: '/outbound',           permission: 'shipping.view' },
   { prefix: '/products',           permission: 'sku_stock.view' },
   { prefix: '/warehouse',          permission: 'sku_stock.view' },
   { prefix: '/sourcing',           permission: 'sourcing.view' },
@@ -320,6 +325,7 @@ const PRODUCTS = '/products';
 const TECH = '/tech';
 const WALK_IN = '/walk-in';
 const ADMIN = '/admin';
+const OUTBOUND = '/outbound';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
@@ -400,6 +406,16 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       const v = String(params.get('mode') || '').trim().toLowerCase();
       return v === 'plan' || v === 'shipped' ? v : 'combine';
     },
+  },
+  // ── Outbound ──────────────────────────────────────────────────────────────
+  // `?mode=labels|scan-out`; default `labels` (param cleared).
+  {
+    id: 'outbound', label: 'Outbound', href: OUTBOUND, icon: Truck, kind: 'station', requires: 'shipping.view',
+    modes: [
+      { id: 'labels',   label: 'Labels',   icon: Printer, to: () => ({ pathname: OUTBOUND, params: { mode: null, q: null, open: null, sort: null } }) },
+      { id: 'scan-out', label: 'Scan out', icon: Barcode, to: () => ({ pathname: OUTBOUND, params: { mode: 'scan-out', q: null, open: null, sort: null } }) },
+    ],
+    resolveMode: ({ params }) => (params.get('mode') === 'scan-out' ? 'scan-out' : 'labels'),
   },
   // ── Inventory ─────────────────────────────────────────────────────────────
   // `?mode=triage|pulse` or `?section=replenish`; default `ledger`.

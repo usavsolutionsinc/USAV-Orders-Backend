@@ -29,12 +29,14 @@ export function useZohoSync(
     zendesk,
     setListingLink,
     setZendesk,
+    dispatchLine = dispatchLineUpdated,
   }: {
     staffId: string;
     listingLink: string;
     zendesk: string;
     setListingLink: (v: string) => void;
     setZendesk: (v: string) => void;
+    dispatchLine?: (patch: Partial<ReceivingLineRow> & { id: number }) => void;
   },
 ) {
   const [zohoSyncing, setZohoSyncing] = useState(false);
@@ -54,7 +56,7 @@ export function useZohoSync(
         const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
         const lineData = await lineRes.json();
         if (lineData?.success && lineData.receiving_line) {
-          dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
+          dispatchLine(lineData.receiving_line as ReceivingLineRow);
         }
 
         // Fetch full PO for notes → prefill listing / zendesk.
@@ -126,7 +128,7 @@ export function useZohoSync(
       const lineRes = await fetch(`/api/receiving-lines?id=${row.id}`);
       const lineData = await lineRes.json();
       if (lineData?.success && lineData.receiving_line) {
-        dispatchLineUpdated(lineData.receiving_line as ReceivingLineRow);
+        dispatchLine(lineData.receiving_line as ReceivingLineRow);
       }
 
       // Prefill listing / zendesk from PO notes if still empty.

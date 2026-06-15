@@ -278,6 +278,7 @@ export function useReceivingLineCore(
     zendesk,
     setListingLink,
     setZendesk,
+    dispatchLine,
   });
 
   const handleShare = useCallback(async () => {

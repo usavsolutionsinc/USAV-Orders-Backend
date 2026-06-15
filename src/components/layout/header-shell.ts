@@ -41,3 +41,5 @@ export const sidebarHeaderControlClass = 'h-full min-h-[44px] w-full appearance-
 export const mainStickyHeaderClass = 'shrink-0 sticky top-0 z-10 border-b border-gray-100 bg-white/95 backdrop-blur-sm';
 export const mainStickyHeaderRowClass = 'flex min-h-[44px] items-center justify-between gap-4 px-4 py-1';
 export const mainStickyHeaderShellRowClass = 'flex h-[44px] items-center justify-between gap-4 px-4';
+/** 40px queue banner — matches sidebar identity bands (receivingIdentityBandClass). */
+export const mainStickyHeaderCompactRowClass = 'flex h-[40px] items-center justify-between gap-4 px-4';

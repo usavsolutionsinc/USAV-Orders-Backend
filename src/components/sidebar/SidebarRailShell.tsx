@@ -38,6 +38,13 @@ export function railRelativeTime(iso: string | null | undefined): string {
   return `${Math.floor(d / 7)}w`;
 }
 
+/** DESC sort key for a feed's `getActivityAt` axis; missing/invalid → 0 (last). */
+function railActivitySortMs(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
 export interface SidebarRailRowContext {
   isSelected: boolean;
   isFocused: boolean;
@@ -136,12 +143,22 @@ export function SidebarRailShell<TRow>({
     refetchOnWindowFocus: true,
   });
 
+  const sortRowsByActivity = useCallback((rows: TRow[]): TRow[] => {
+    if (!getActivityAt) return rows;
+    return [...rows].sort((a, b) => {
+      const d = railActivitySortMs(getActivityAt(b)) - railActivitySortMs(getActivityAt(a));
+      return d !== 0 ? d : getId(b) - getId(a);
+    });
+  }, [getActivityAt, getId]);
+
   const [localRows, setLocalRows] = useState<TRow[] | null>(null);
   // Mirror query data, but ALSO clear to null when the active query has no array
   // data — i.e. a queryKey switch (e.g. tester A → tester B) where data is briefly
   // undefined, or an error. Without the clear, the mirror keeps the previous
   // feed's rows and renders them under the new feed's label with no skeleton.
-  useEffect(() => { setLocalRows(Array.isArray(data) ? data : null); }, [data]);
+  useEffect(() => {
+    setLocalRows(Array.isArray(data) ? sortRowsByActivity(data) : null);
+  }, [data, sortRowsByActivity]);
 
   useEffect(() => {
     if (!updateEvent) return;
@@ -152,14 +169,20 @@ export function SidebarRailShell<TRow>({
         if (!rows) return rows;
         const idx = rows.findIndex((r) => getId(r) === updated.id);
         if (idx < 0) return rows;
+        const existing = rows[idx];
+        const merged = { ...existing, ...updated } as TRow;
+        const prevMs = getActivityAt ? railActivitySortMs(getActivityAt(existing)) : 0;
+        const nextMs = getActivityAt ? railActivitySortMs(getActivityAt(merged)) : prevMs;
         const next = rows.slice();
-        next[idx] = { ...next[idx], ...updated } as TRow;
-        return next;
+        next[idx] = merged;
+        // Re-sort only when the feed's activity axis actually moved — partial
+        // by-id refreshes must not shuffle rows that still share the same stamp.
+        return nextMs !== prevMs ? sortRowsByActivity(next) : next;
       });
     };
     window.addEventListener(updateEvent, handlePatch);
     return () => window.removeEventListener(updateEvent, handlePatch);
-  }, [updateEvent, getId]);
+  }, [updateEvent, getId, sortRowsByActivity]);
 
   // Ids removed via `deleteEvent`/`deleteGroupEvent`. These MUST outlive the
   // refetch: `usav-refresh-data` invalidates the query right after a delete, but

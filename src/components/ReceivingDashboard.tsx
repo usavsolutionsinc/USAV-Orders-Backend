@@ -20,6 +20,11 @@ import { LocalPickupReviewPanel } from './work-orders/LocalPickupReviewPanel';
 import { ReceivingLineWorkspace } from './receiving/workspace/ReceivingLineWorkspace';
 import { ReceivingScanLoader } from './receiving/workspace/ReceivingScanLoader';
 import { ReceivingDetailsStack, type ReceivingDetailsLog } from './station/ReceivingDetailsStack';
+import {
+  fetchReceivingDetailsEnrich,
+  receivingDetailsInstantSeed,
+} from '@/lib/receiving/receiving-details-overlay';
+import type { ReceivingDetailsOverlayDetail } from '@/utils/events';
 import { IncomingDetailsPanel } from './sidebar/receiving/IncomingDetailsPanel';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
@@ -102,6 +107,31 @@ export default function ReceivingDashboard() {
   // A finalized local pickup PO opens its own review/reprint panel instead of
   // the generic carton details stack (it has no receiving_lines).
   const [pickupReviewOrderId, setPickupReviewOrderId] = useState<number | null>(null);
+  const overlayLogIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    overlayLogIdRef.current = overlayLog?.id ?? null;
+  }, [overlayLog?.id]);
+
+  const enrichOverlayLog = useCallback(async (receivingId: number) => {
+    try {
+      const result = await fetchReceivingDetailsEnrich(receivingId);
+      if (overlayLogIdRef.current !== String(receivingId)) return;
+
+      if (result.kind === 'local_pickup') {
+        setOverlayLog(null);
+        setPickupReviewOrderId(result.orderId);
+        return;
+      }
+      if (result.kind === 'missing') return;
+
+      setPickupReviewOrderId(null);
+      setOverlayLog((prev) =>
+        prev?.id === String(receivingId) ? { ...prev, ...result.log } : prev,
+      );
+    } catch {
+      // Keep the instant seed visible when enrichment fails.
+    }
+  }, []);
   // Incoming-mode details panel — populated when a row is selected in
   // mode=incoming. Stored as {po_id, po_number} so the panel can render its
   // header label immediately, then re-key its details query on po_id change.
@@ -401,12 +431,12 @@ export default function ReceivingDashboard() {
     void (async () => {
       try {
         const res = await fetch(
-          // sort MUST match ReceivingRecentRail's axis (unbox_activity) so
+          // sort MUST match ReceivingRecentRail's axis (unboxed_newest) so
           // this effect and the rail's auto-select resolve to the SAME "most
           // recent" line — the default activity sort is door-scan based and
           // picked a different row, so the workspace and the rail highlight
           // disagreed on mode open.
-          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials&sort=unbox_activity`,
+          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials&sort=unboxed_newest`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
@@ -454,7 +484,7 @@ export default function ReceivingDashboard() {
       void (async () => {
         try {
           const res = await fetch(
-            `/api/receiving-lines?limit=5&offset=0&view=activity&include=serials`,
+            `/api/receiving-lines?limit=5&offset=0&view=activity&include=serials&sort=unboxed_newest`,
             { cache: 'no-store' },
           );
           const data = await res.json().catch(() => null);
@@ -505,65 +535,17 @@ export default function ReceivingDashboard() {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ receivingId: number }>).detail;
+      const detail = (e as CustomEvent<ReceivingDetailsOverlayDetail>).detail;
       const receivingId = Number(detail?.receivingId);
       if (!Number.isFinite(receivingId) || receivingId <= 0) return;
-      void (async () => {
-        try {
-          const res = await fetch(`/api/receiving/${receivingId}`, { cache: 'no-store' });
-          const data = await res.json().catch(() => null);
-          if (!data?.success || !data.receiving) {
-            setOverlayLog(null);
-            return;
-          }
-          const carton = data.receiving as ReceivingDetailsLog & {
-            id?: number | string;
-            receiving_tracking_number?: string | null;
-            source?: string | null;
-            local_pickup_order_id?: number | string | null;
-          };
-          // Local pickup POs route to the dedicated review/reprint panel.
-          if (carton.source === 'local_pickup') {
-            const lpoId = Number(carton.local_pickup_order_id);
-            setOverlayLog(null);
-            setPickupReviewOrderId(Number.isFinite(lpoId) && lpoId > 0 ? lpoId : null);
-            return;
-          }
-          setPickupReviewOrderId(null);
-          const lines = Array.isArray(data.lines)
-            ? (data.lines as Array<{
-                zoho_purchaseorder_id?: string | null;
-                zoho_purchaseorder_number?: string | null;
-                listing_url?: string | null;
-              }>)
-            : [];
-          const first = lines[0];
-          const trackingRaw = String(carton.tracking ?? carton.receiving_tracking_number ?? '').trim();
-          setOverlayLog({
-            ...carton,
-            id: String(carton.id ?? receivingId),
-            tracking: trackingRaw || carton.tracking,
-            zoho_purchaseorder_id:
-              first?.zoho_purchaseorder_id != null && String(first.zoho_purchaseorder_id).trim()
-                ? String(first.zoho_purchaseorder_id).trim()
-                : carton.zoho_purchaseorder_id ?? null,
-            zoho_purchaseorder_number:
-              first?.zoho_purchaseorder_number != null && String(first.zoho_purchaseorder_number).trim()
-                ? String(first.zoho_purchaseorder_number).trim()
-                : carton.zoho_purchaseorder_number ?? null,
-            listing_url:
-              first?.listing_url != null && String(first.listing_url).trim()
-                ? String(first.listing_url).trim()
-                : carton.listing_url ?? null,
-          });
-        } catch {
-          setOverlayLog(null);
-        }
-      })();
+
+      setPickupReviewOrderId(null);
+      setOverlayLog(receivingDetailsInstantSeed(receivingId, detail?.seed));
+      void enrichOverlayLog(receivingId);
     };
     window.addEventListener('receiving-open-details-overlay', handler);
     return () => window.removeEventListener('receiving-open-details-overlay', handler);
-  }, []);
+  }, [enrichOverlayLog]);
 
   if (isPickupMode) {
     return (
@@ -735,7 +717,7 @@ export default function ReceivingDashboard() {
           <ReceivingDetailsStack
             log={overlayLog}
             onClose={() => setOverlayLog(null)}
-            onUpdated={() => setOverlayLog(null)}
+            onUpdated={() => void enrichOverlayLog(Number(overlayLog.id))}
             onDeleted={() => setOverlayLog(null)}
           />
         ) : null}

@@ -15,6 +15,7 @@ import { useLineSerials } from './useLineSerials';
 import { useReceiveAction } from './useReceiveAction';
 import { useZohoLinePrefill } from './useZohoLinePrefill';
 import { useReceivingLineCore } from './useReceivingLineCore';
+import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unbox-rail-events';
 import { useReceivingTypeLabel } from '@/hooks/useCatalog';
 import type { LabelEditDraft } from '../LabelEditPopover';
 
@@ -34,7 +35,9 @@ export function useUnboxLineController(
   staffId: string,
   { itemTotal }: { itemTotal?: number },
 ) {
-  const core = useReceivingLineCore(row, staffId);
+  const core = useReceivingLineCore(row, staffId, {
+    dispatchLine: dispatchUnboxRailLineUpdated,
+  });
   // Resolve a receiving-type code → its org-catalog label for the printed face.
   const resolveTypeLabel = useReceivingTypeLabel();
 

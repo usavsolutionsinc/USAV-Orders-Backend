@@ -29,7 +29,6 @@ import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components
 import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
 import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
-import { ShippedScanOutSidebar } from '@/components/shipped/ShippedScanOutSidebar';
 
 interface SearchHistory {
     query: string;
@@ -350,13 +349,6 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 </div>
             }
             bodyClassName="flex flex-col space-y-4 scrollbar-hide pb-6"
-            // Dock scan-out pinned at the very bottom — always available, matching
-            // the Unshipped sidebar. autoFocus off so it never steals the search box.
-            footer={
-                <div className={`${SIDEBAR_GUTTER} border-t border-gray-100 bg-white pb-4 pt-3`}>
-                    <ShippedScanOutSidebar autoFocus={false} />
-                </div>
-            }
         >
                 <motion.div variants={itemVariants} className="space-y-4">
                         {/* Combined Zoho sync + daily pickup report (tabbed) */}

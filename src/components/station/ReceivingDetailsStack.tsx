@@ -6,24 +6,15 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
-import { ViewDropdown } from '@/components/ui/ViewDropdown';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
 import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
 import { listingUrlForOpen } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { toast } from '@/lib/toast';
 import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import {
-  CARRIER_OPTS,
-  QA_OPTS,
-  DISPOSITION_OPTS,
-  CONDITION_OPTS,
-} from '@/components/station/receiving-constants';
 import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
 import { PoLinesSection } from './receiving/PoLinesSection';
 import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
-import { useReceivingDetailForm, normalizeCarrier } from '@/hooks/useReceivingDetailForm';
+import { useReceivingDetailForm } from '@/hooks/useReceivingDetailForm';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -70,26 +61,6 @@ export interface ReceivingDetailsLog {
   listing_url?: string | null;
 }
 
-// CARRIER_OPTS, QA_OPTS, DISPOSITION_OPTS, CONDITION_OPTS now come from the
-// shared receiving-constants source of truth (imported above). The previous
-// local copies had drifted — QA was missing HOLD and CONDITION was missing
-// LIKE_NEW + REFURBISHED.
-const RETURN_PLATFORM_OPTS = [
-  { value: '', label: 'Select Platform' },
-  { value: 'AMZ', label: 'AMZ' },
-  { value: 'EBAY_DRAGONH', label: 'eBay DragonH' },
-  { value: 'EBAY_USAV', label: 'eBay USAV' },
-  { value: 'EBAY_MEKONG', label: 'eBay Mekong' },
-  { value: 'FBA', label: 'FBA' },
-  { value: 'WALMART', label: 'Walmart' },
-  { value: 'ECWID', label: 'Ecwid' },
-];
-const CHANNEL_OPTS = [
-  { value: 'ORDERS', label: 'PO',     active: 'bg-emerald-500 text-white',  inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'RETURN', label: 'Return', active: 'bg-red-500 text-white',      inactive: 'bg-gray-100 text-gray-500' },
-  { value: 'REPAIR', label: 'Repair', active: 'bg-orange-400 text-white',   inactive: 'bg-gray-100 text-gray-500' },
-];
-
 interface ReceivingDetailsStackProps {
   log: ReceivingDetailsLog;
   onClose: () => void;
@@ -98,7 +69,7 @@ interface ReceivingDetailsStackProps {
 }
 
 export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: ReceivingDetailsStackProps) {
-  const form = useReceivingDetailForm({ log, onClose, onUpdated, onDeleted });
+  const form = useReceivingDetailForm({ log, onUpdated, onDeleted });
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isOpeningEditor, setIsOpeningEditor] = useState(false);
@@ -109,6 +80,11 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   const handleRefresh = () => {
     onUpdated();
     toast.success('Refreshed');
+  };
+
+  const handleClose = () => {
+    if (form.isSaving || form.isDeleting) return;
+    onClose();
   };
 
   const handleCopyAll = async () => {
@@ -136,10 +112,8 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
     if (isOpeningEditor || form.isSaving) return;
     setIsOpeningEditor(true);
     try {
-      // Commit any in-flight detail-stack edits so the workspace opens with
-      // the saved state — handleClose() would also save, but explicit save
-      // here gives us a deterministic order: save → fetch → dispatch → close.
-      await form.handleSave();
+      const saved = await form.saveTrackingIfDirty();
+      if (!saved) return;
       const receivingId = Number(log.id);
       if (!Number.isFinite(receivingId) || receivingId <= 0) {
         toast.error('Receiving id missing');
@@ -179,8 +153,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
   };
 
   const backdropClose = () => {
-    if (form.isSaving) return;
-    void form.handleClose();
+    handleClose();
   };
 
   return (
@@ -193,7 +166,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
         className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
-      {/* Header — eyebrow + value identity, primary "Edit PO" action in the
+      {/* Header — receiving ID identity, primary "Edit PO" action in the
           right slot, and segmented tabs in the dual-sticky belowSlot. Matches
           the 2026 ops convention (Vercel/Front/Stripe pattern). */}
       <PaneHeader
@@ -203,11 +176,6 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           <>
             <PaneHeaderIconBadge Icon={Package} bg="bg-blue-600" tint="text-white" />
             <PaneHeaderLabel
-              eyebrow={
-                <>
-                  RECEIVING <span className="text-gray-500"> · {formatDateTimePST(log.timestamp)}</span>
-                </>
-              }
               value={`#${log.id}`}
               valueTitle={`Receiving #${log.id}`}
             />
@@ -230,12 +198,12 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               <span aria-hidden className="text-white/70 transition-transform group-hover:translate-x-0.5">→</span>
             </button>
             <button
-              onClick={form.handleClose}
-              disabled={form.isSaving}
+              onClick={handleClose}
+              disabled={form.isSaving || form.isDeleting}
               className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95 disabled:opacity-50"
-              aria-label="Save and close"
+              aria-label="Close"
             >
-              {form.isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <X className="h-5 w-5" />}
+              <X className="h-5 w-5" />
             </button>
           </>
         }
@@ -327,6 +295,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
                   placeholder="Tracking number"
                   allowEdit
                   onChange={form.setTracking}
+                  onBlur={() => void form.saveTrackingIfDirty()}
                   keepBottomDivider={Boolean(listingRaw || poValue || receiveId || warehouseId)}
                 />
                 {listingRaw ? (
@@ -367,105 +336,6 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               </div>
             );
           })()}
-
-          {/* Channel slider — `nav` variant lights the active pill blue to
-              match the global sidebar nav, replacing the prior black/slate
-              active state. */}
-          <HorizontalButtonSlider
-            aria-label="Target channel"
-            variant="nav"
-            value={form.targetChannel}
-            onChange={(id) => form.setTargetChannel(id)}
-            items={CHANNEL_OPTS.map<HorizontalSliderItem>((ch) => ({
-              id: ch.value,
-              label: ch.label,
-            }))}
-          />
-
-          {/* Return details */}
-          {form.isReturn && (
-            <div className="space-y-2">
-              <ViewDropdown options={RETURN_PLATFORM_OPTS} value={form.returnPlatform} onChange={form.setReturnPlatform} borderRadius="12px" backgroundColor="#ffffff" fontSize="11px" />
-              <textarea
-                value={form.returnReason}
-                onChange={(e) => form.setReturnReason(e.target.value)}
-                placeholder="Return reason"
-                className="min-h-[60px] w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-900 outline-none focus:border-gray-400"
-              />
-            </div>
-          )}
-
-          {/* Needs Test */}
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-3">
-            <label className="flex items-center gap-2 text-micro font-black uppercase tracking-widest text-gray-700">
-              <input
-                type="checkbox"
-                checked={form.needsTest}
-                onChange={(e) => form.setNeedsTest(e.target.checked)}
-                disabled={form.targetChannel === 'REPAIR'}
-              />
-              Needs Test
-            </label>
-            {form.needsTest && form.techs.length > 0 && (
-              <div
-                ref={form.channelScrollRef}
-                onWheel={form.handleChannelWheel}
-                className="overflow-x-auto w-full"
-                style={{ scrollbarWidth: 'thin', scrollbarColor: '#9ca3af #f9fafb' }}
-              >
-                <div className="flex gap-1.5 w-max pb-1">
-                  {form.techs.map((tech) => {
-                    const theme = getStaffThemeById(tech.id);
-                    const colors = stationThemeColors[theme];
-                    const isActive = form.assignedTechId === String(tech.id);
-                    return (
-                      <button
-                        key={tech.id}
-                        type="button"
-                        onClick={() => form.setAssignedTechId(String(tech.id))}
-                        className={`rounded-xl px-4 py-2 text-caption font-black uppercase tracking-wider whitespace-nowrap transition-all ${
-                          isActive ? `${colors.bg} text-white` : `bg-gray-100 ${colors.text} hover:${colors.light}`
-                        }`}
-                      >
-                        {tech.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Condition + Carrier */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Condition</label>
-              <ViewDropdown options={CONDITION_OPTS} value={form.conditionGrade} onChange={form.setConditionGrade} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Carrier</label>
-              <ViewDropdown
-                options={CARRIER_OPTS.some((o) => o.value === form.carrier) ? CARRIER_OPTS : [{ value: form.carrier, label: form.carrier }, ...CARRIER_OPTS]}
-                value={form.carrier}
-                onChange={(v) => form.setCarrier(normalizeCarrier(v))}
-                borderRadius="12px"
-                backgroundColor="#f9fafb"
-                fontSize="11px"
-              />
-            </div>
-          </div>
-
-          {/* Disposition + QA Status */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Disposition</label>
-              <ViewDropdown options={DISPOSITION_OPTS} value={form.dispositionCode} onChange={form.setDispositionCode} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-eyebrow font-black uppercase tracking-widest text-gray-500">QA Status</label>
-              <ViewDropdown options={QA_OPTS} value={form.qaStatus} onChange={form.setQaStatus} borderRadius="12px" backgroundColor="#f9fafb" fontSize="11px" />
-            </div>
-          </div>
             </>
           )}
 
@@ -499,8 +369,8 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
           {form.isDeleting
             ? 'Deleting...'
             : confirmingDelete
-              ? 'Click again to confirm delete'
-              : 'Delete receiving'}
+              ? 'Click again to confirm'
+              : 'Delete'}
         </button>
       </div>
     </motion.div>

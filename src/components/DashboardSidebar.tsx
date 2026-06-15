@@ -11,6 +11,7 @@ import { WarehouseSidebarPanel } from '@/components/sidebar/WarehouseSidebarPane
 import { QuarterSidebar } from '@/components/QuarterSelector';
 import { DashboardManagementPanel } from '@/components/sidebar/DashboardManagementPanel';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
+import { OutboundSidebarPanel } from '@/components/sidebar/OutboundSidebarPanel';
 import ShippedSidebar from '@/components/ShippedSidebar';
 import UnshippedSidebar from '@/components/unshipped/UnshippedSidebar';
 import { WarrantyLoggerSidebar } from '@/components/warranty/WarrantyLoggerSidebar';
@@ -49,6 +50,7 @@ const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'walk-in',
   'tech',
   'sourcing',
+  'outbound',
 ]);
 
 // Sub-views shown above the search bar. Rail order matches SIDEBAR_PAGE_NAV:
@@ -77,6 +79,7 @@ function getSidebarTitle(pathname: string | null) {
     sourcing: 'Sourcing',
     tech: 'Testing',
     packer: 'Packing',
+    outbound: 'Outbound',
     support: 'Support',
     'ai-chat': 'AI Chat',
     'previous-quarters': 'Quarters',
@@ -273,6 +276,10 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
 
   if (routeKey === 'packer') {
     return <PackerSidebarPanel />;
+  }
+
+  if (routeKey === 'outbound') {
+    return <OutboundSidebarPanel />;
   }
 
   return null;

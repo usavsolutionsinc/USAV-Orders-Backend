@@ -22,7 +22,7 @@ interface ApiResponse {
 
 // Same query key + fetch as the desktop ReceivingRecentRail (the "Unboxing"
 // rail) so the mobile feed shares its cache and shows the exact same lines.
-const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive'] as const;
+const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const;
 
 /**
  * Mobile receiving surface — single scrollable list of receiving lines, newest
@@ -55,6 +55,9 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
         offset: '0',
         view: 'activity',
         include: 'serials',
+        // MUST match ReceivingRecentRail — same react-query key; without this
+        // the default server sort is scanned_newest and refetches scramble order.
+        sort: 'unboxed_newest',
       });
       const res = await fetch(`/api/receiving-lines?${params.toString()}`);
       if (!res.ok) throw new Error('fetch failed');

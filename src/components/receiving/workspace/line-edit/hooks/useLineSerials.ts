@@ -22,6 +22,7 @@ import {
   dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
+import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unbox-rail-events';
 import type { useSerialLookup } from '../../SerialMatchResult';
 
 /** Append a serial_units row to the line's `serials` snapshot (deduped by id + normalized sn). */
@@ -79,7 +80,7 @@ export function useLineSerials({
       if (data?.success && data.receiving_line) {
         // dispatchLineUpdated patches the accordion's matching row, so editing
         // a serial on a non-active sibling refreshes that sibling's chips too.
-        dispatchLineUpdated(data.receiving_line as ReceivingLineRow);
+        dispatchUnboxRailLineUpdated(data.receiving_line as ReceivingLineRow);
       }
     } catch {
       /* silent */

@@ -41,6 +41,7 @@ import {
   dispatchReceivingWorkspaceNavState,
   dispatchReceivingDetailsOverlay,
 } from '@/utils/events';
+import { receivingLineRowToDetailsSeed } from '@/lib/receiving/receiving-details-overlay';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -548,7 +549,7 @@ export function ReceivingSidebarPanel() {
         // open nothing AND mutate sidebar state. Stop here with feedback so the
         // click is deterministic instead of a silent dead click.
         if (row?.receiving_id != null) {
-          dispatchReceivingDetailsOverlay(row.receiving_id);
+          dispatchReceivingDetailsOverlay(row.receiving_id, receivingLineRowToDetailsSeed(row));
         } else if (row != null) {
           toast.info('No receiving record for this row yet');
         }
@@ -1337,8 +1338,8 @@ export function ReceivingSidebarPanel() {
         <div className="sticky top-0 z-10 bg-white/90 px-3 pb-1.5 pt-1 backdrop-blur">
           <HorizontalButtonSlider
             items={[
-              { id: 'queue', label: 'Queue', icon: Layers },
               { id: 'recent', label: 'Unboxed', icon: PackageOpen },
+              { id: 'queue', label: 'Queue', icon: Layers },
               { id: 'viewed', label: 'Viewed', icon: History },
             ]}
             value={unboxView}

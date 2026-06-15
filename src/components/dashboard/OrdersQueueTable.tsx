@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
 import { Check, Loader2 } from '@/components/Icons';
-import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
+import { mainStickyHeaderClass, mainStickyHeaderRowClass, mainStickyHeaderCompactRowClass } from '@/components/layout/header-shell';
 import { OrderIdentityChips } from '@/components/ui/OrderIdentityChips';
 import {
   OrderIdChip,
@@ -344,6 +344,45 @@ function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; isMobile:
  *  bands by created date, most-recently-added first. */
 export type OrdersQueueSort = 'priority' | 'newest';
 
+function QueueTableBanner({
+  title,
+  subtitle,
+  compact = false,
+  isRefreshing = false,
+}: {
+  title: string;
+  subtitle?: string;
+  compact?: boolean;
+  isRefreshing?: boolean;
+}) {
+  const rowClass = compact ? mainStickyHeaderCompactRowClass : mainStickyHeaderRowClass;
+
+  return (
+    <div className={mainStickyHeaderClass}>
+      <div className={rowClass}>
+        {compact ? (
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <span className={`${sectionLabel} shrink-0 text-blue-700`}>{title}</span>
+            {subtitle ? (
+              <span className={`${fieldLabel} truncate text-gray-600`}>{subtitle}</span>
+            ) : null}
+          </div>
+        ) : (
+          <div>
+            <p className={`${sectionLabel} text-blue-700`}>{title}</p>
+            {subtitle ? (
+              <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{subtitle}</p>
+            ) : null}
+          </div>
+        )}
+        <div className="min-w-[18px] flex items-center justify-end">
+          {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export interface OrdersQueueTableProps {
   records: ShippedOrder[];
   loading: boolean;
@@ -362,6 +401,8 @@ export interface OrdersQueueTableProps {
   clearSearchLabel?: string;
   bannerTitle?: string;
   bannerSubtitle?: string;
+  /** Single-line 40px banner row (title + subtitle on one line). */
+  bannerCompact?: boolean;
   onOpenRecord?: (record: ShippedOrder) => void;
   onCloseRecord?: (record: ShippedOrder | null) => void;
   /** When true, display tester/packer from work_assignments (tester_id, packer_id) only */
@@ -394,6 +435,7 @@ export function OrdersQueueTable({
   clearSearchLabel = 'Show All Orders',
   bannerTitle,
   bannerSubtitle,
+  bannerCompact = false,
   onOpenRecord,
   onCloseRecord,
   useWaForDisplay = false,
@@ -618,16 +660,11 @@ export function OrdersQueueTable({
     return (
       <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
         {bannerTitle ? (
-          <div className={mainStickyHeaderClass}>
-            <div className={mainStickyHeaderRowClass}>
-              <div>
-                <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
-                {bannerSubtitle ? (
-                  <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{bannerSubtitle}</p>
-                ) : null}
-              </div>
-            </div>
-          </div>
+          <QueueTableBanner
+            title={bannerTitle}
+            subtitle={bannerSubtitle}
+            compact={bannerCompact}
+          />
         ) : (
           <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
             <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
@@ -645,19 +682,12 @@ export function OrdersQueueTable({
     <div className="flex h-full min-w-0 flex-1 bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         {bannerTitle ? (
-          <div className={mainStickyHeaderClass}>
-            <div className={mainStickyHeaderRowClass}>
-              <div>
-                <p className={`${sectionLabel} text-blue-700`}>{bannerTitle}</p>
-                {bannerSubtitle ? (
-                  <p className={`${fieldLabel} mt-0.5 text-gray-500`}>{bannerSubtitle}</p>
-                ) : null}
-              </div>
-              <div className="min-w-[18px] flex items-center justify-end">
-                {isRefreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" /> : null}
-              </div>
-            </div>
-          </div>
+          <QueueTableBanner
+            title={bannerTitle}
+            subtitle={bannerSubtitle}
+            compact={bannerCompact}
+            isRefreshing={isRefreshing}
+          />
         ) : (
           <WeekHeader
             count={totalCount}

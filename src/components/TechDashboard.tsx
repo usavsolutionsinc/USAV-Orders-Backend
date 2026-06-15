@@ -308,7 +308,6 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
     }, []);
 
     const handleLogUpdated = () => {
-        setSelectedLog(null);
         queryClient.invalidateQueries({ queryKey: ['receiving-logs'] });
         queryClient.invalidateQueries({ queryKey: ['receiving-inbound-feed'] });
         queryClient.invalidateQueries({ queryKey: ['receiving-pending-unboxing'] });
