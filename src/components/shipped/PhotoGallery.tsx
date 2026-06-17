@@ -7,6 +7,7 @@ import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
+import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 import {
   X,
   Download,
@@ -16,10 +17,7 @@ import {
   ChevronRight,
   Image as ImageIcon,
   AlertCircle,
-  Copy,
-  Check,
   Trash2,
-  Link2 as LinkIcon,
   Plus,
 } from '../Icons';
 
@@ -41,7 +39,7 @@ interface PhotoGalleryProps {
   /** Main label on the launcher button (default: packing copy). Viewer/modal unchanged. */
   launcherTitle?: string;
   /**
-   * `toolbar` — slim row with download-all, copy links, and fullscreen (shipped UX uses `default`).
+   * `toolbar` — slim row with download-all and fullscreen (shipped UX uses `default`).
    * `thumbnails` — a clickable thumbnail strip (no launcher button); each opens the
    * fullscreen viewer at that photo. Used to promote photos inline into a timeline row.
    */
@@ -87,7 +85,6 @@ export function PhotoGallery({
   const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
   const [mounted, setMounted] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
-  const [linksCopied, setLinksCopied] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -105,12 +102,13 @@ export function PhotoGallery({
     const parsed = photos
       .map((photo) => {
         if (typeof photo === 'string') {
-          return photo.trim() ? { id: null as number | null, url: photo } : null;
+          const trimmed = photo.trim();
+          return trimmed ? { id: null as number | null, url: normalizePhotoDisplayUrl(trimmed) } : null;
         }
         if (!photo?.url?.trim()) return null;
         const idNum =
           typeof photo.id === 'number' && Number.isFinite(photo.id) ? photo.id : null;
-        return { id: idNum, url: photo.url };
+        return { id: idNum, url: normalizePhotoDisplayUrl(photo.url) };
       })
       .filter((p): p is { id: number | null; url: string } => p !== null);
 
@@ -319,21 +317,6 @@ export function PhotoGallery({
     }
   };
 
-  const copyAllPhotoUrls = async () => {
-    const text = photoItems
-      .map((p) => p.url)
-      .filter(Boolean)
-      .join('\n');
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setLinksCopied(true);
-      window.setTimeout(() => setLinksCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy photo links:', err);
-    }
-  };
-
   // Mouse drag handlers for zoomed images
   const handleMouseDown = (e: React.MouseEvent) => {
     if (zoomLevel > 1) {
@@ -435,24 +418,6 @@ export function PhotoGallery({
             title={downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`}
           >
             <Download className="h-5 w-5" />
-          </button>
-
-          {/* Copy-Links Button — copies every photo URL to the clipboard. */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void copyAllPhotoUrls();
-            }}
-            disabled={photoItems.length === 0}
-            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label={linksCopied ? 'Links copied' : 'Copy all photo links'}
-            title={linksCopied ? 'Copied' : 'Copy all photo links'}
-          >
-            {linksCopied ? (
-              <Check className="h-5 w-5 text-emerald-300" />
-            ) : (
-              <LinkIcon className="h-5 w-5" />
-            )}
           </button>
 
           {/* Delete Button — only rendered when this photo has a DB id. */}
@@ -637,6 +602,8 @@ export function PhotoGallery({
                   e.stopPropagation();
                   setCurrentIndex(index);
                   resetZoom();
+                  setDeleteArmed(false);
+                  setDeleteError(null);
                 }}
                 className={`relative flex-shrink-0 h-16 w-16 rounded-xl overflow-hidden transition-all ${
                   index === currentIndex
@@ -777,23 +744,6 @@ export function PhotoGallery({
               title="Download all photos"
             >
               <Download className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void copyAllPhotoUrls();
-              }}
-              disabled={photoItems.length === 0}
-              className={toolbarIconBtn}
-              aria-label="Copy all photo links"
-              title={linksCopied ? 'Copied' : 'Copy all photo links'}
-            >
-              {linksCopied ? (
-                <Check className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
             </button>
           </div>
         </div>

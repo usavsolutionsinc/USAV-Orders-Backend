@@ -12,6 +12,7 @@ import {
 } from '@/components/station/receiving-constants';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { MobilePhotoCountBadge } from '@/components/mobile/receiving/MobilePhotoCountBadge';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
@@ -38,7 +39,7 @@ interface MobileReceivingRowProps {
  * and {@link ReceivingIdentityChips} (PO / SKU / tracking / serial, always
  * rendered as fixed columns — empties read as '----'). The bottom-pinned
  * expanded card adds a big "Take Photos" CTA; collapsed rows show a compact
- * photo-count chip.
+ * camera + xN chip to the right of the serial column (gray x0, blue when photos exist).
  */
 export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref, display = { isHistory: true } }: MobileReceivingRowProps) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
@@ -100,8 +101,9 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             ) : undefined
           }
         />
-        <div className="ml-auto min-w-0">
+        <div className="ml-auto flex min-w-0 items-center gap-1">
           <ReceivingIdentityChips po={poValue} sku={skuValue} tracking={trackingValue} serialsCsv={serialsCsv} asColumns dense />
+          {!isExpanded ? <MobilePhotoCountBadge count={photoCount} /> : null}
         </div>
       </div>
 
@@ -115,7 +117,7 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         >
           <Camera className="h-4 w-4" />
           <span>Take Photos</span>
-          <span className="ml-1 tabular-nums lowercase text-white">x{photoCount}</span>
+          {photoCount > 0 ? <span>x{photoCount}</span> : null}
         </Link>
       )}
     </MobileRowCard>

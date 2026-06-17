@@ -202,20 +202,40 @@ export function ActivityInboxProvider({
           id: number;
           senderName: string;
           body: string;
+          kind: string;
+          context: Record<string, unknown> | null;
           createdAtMs: number;
         }>;
       };
-      const mapped: ActivityInboxItem[] = (data.items ?? []).map((m) => ({
-        id: `msg-${m.id}`,
-        kind: 'staff_message' as const,
-        title: `Message · ${truncateLabel(m.senderName, 32)}`,
-        subtitle: m.body,
-        createdAt: Number.isFinite(m.createdAtMs) ? m.createdAtMs : Date.now(),
-        undoUntil: 0, // not reversible
-        messageId: m.id,
-        senderName: m.senderName,
-        body: m.body,
-      }));
+      const mapped: ActivityInboxItem[] = (data.items ?? []).map((m) => {
+        const ctx = m.context ?? {};
+        const sellerMessageId =
+          typeof ctx.sellerMessageId === 'number' ? ctx.sellerMessageId : null;
+        if (m.kind === 'seller_claim_message' && sellerMessageId) {
+          return {
+            id: `msg-${m.id}`,
+            kind: 'staff_message' as const,
+            title: `Seller msg #${sellerMessageId}`,
+            subtitle: `From ${truncateLabel(m.senderName, 32)} · copy for full text`,
+            createdAt: Number.isFinite(m.createdAtMs) ? m.createdAtMs : Date.now(),
+            undoUntil: 0, // not reversible
+            messageId: m.id,
+            senderName: m.senderName,
+            body: m.body,
+          };
+        }
+        return {
+          id: `msg-${m.id}`,
+          kind: 'staff_message' as const,
+          title: `Message · ${truncateLabel(m.senderName, 32)}`,
+          subtitle: m.body,
+          createdAt: Number.isFinite(m.createdAtMs) ? m.createdAtMs : Date.now(),
+          undoUntil: 0, // not reversible
+          messageId: m.id,
+          senderName: m.senderName,
+          body: m.body,
+        };
+      });
       setStaffMessageItems(mapped);
     } catch {
       /* best-effort — next push or reload retries */

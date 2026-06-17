@@ -61,7 +61,7 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'bose_models',  label: 'Bose Models',  description: 'Model catalog + the parts compatible with each model',          group: 'Data sources', icon: Cpu,         requires: 'sourcing.view' },
   { value: 'compatibility',label: 'Compatibility',description: 'Audit the model ↔ part compatibility edge table',               group: 'Data sources', icon: Layers,      requires: 'sourcing.view' },
   { value: 'suppliers',    label: 'Suppliers',    description: 'Third-party sourcing vendors (eBay sellers, distributors, salvage)', group: 'Data sources', icon: Link2,    requires: 'supplier.view' },
-  { value: 'station_photos',label: 'Receiving Photos', description: 'Per-station NAS folder the photo picker opens to',          group: 'Data sources', icon: Camera },
+  { value: 'station_photos',label: 'NAS Photos', description: 'NAS address, workflow folders, and station picker defaults',       group: 'Data sources', icon: Camera },
   { value: 'po_mailbox',   label: 'PO Mailbox',   description: 'Triage emailed POs not in Zoho, unmatched cartons, and exceptions', group: 'Data sources', icon: Mail, requires: 'receiving.view' },
 
   { value: 'logs',         label: 'Logs',         description: 'Unified audit + station activity logs',                        group: 'System',      icon: FileText,     requires: 'admin.view_logs' },

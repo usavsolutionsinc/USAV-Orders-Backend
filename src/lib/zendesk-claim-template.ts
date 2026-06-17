@@ -31,7 +31,6 @@ export interface ClaimTemplateInput {
   receivingId: number;
   lineId?: number | null;
   claimType: ClaimType;
-  severity: ClaimSeverity;
   reason?: string;
   /** "View the PO receiving" link to embed in the body (built from req origin). */
   poReceivingLink?: string;
@@ -46,7 +45,7 @@ export async function buildReceivingClaimTemplate(
   input: ClaimTemplateInput,
   orgId?: OrgId,
 ): Promise<ClaimTemplateResult> {
-  const { receivingId, lineId, claimType, severity, reason, poReceivingLink } = input;
+  const { receivingId, lineId, claimType, reason, poReceivingLink } = input;
 
   // When orgId is present, scope the read to the tenant: filter the
   // org-bearing `receiving` row and align the org-bearing `receiving_lines`
@@ -148,7 +147,6 @@ export async function buildReceivingClaimTemplate(
   const trimmedReason = String(reason ?? '').trim();
   const descriptionLines: string[] = [
     `Issue: ${CLAIM_TYPE_LABEL[claimType]}`,
-    `Severity: ${CLAIM_SEVERITY_LABEL[severity]}`,
     `Purchase Order: ${poRef}`,
     `Tracking: ${trackingRef}`,
     lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,

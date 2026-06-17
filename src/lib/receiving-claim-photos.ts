@@ -167,6 +167,8 @@ export async function archiveClaimViaAgent(opts: {
   ticketId: number | string;
   photos: Array<{ url: string }>;
   info: string;
+  archiveRoot?: string;
+  archiveFolder?: string;
 }): Promise<{ folder: string; copied: number; total: number } | null> {
   const base = (process.env.NAS_AGENT_URL || '').replace(/\/+$/, '');
   const token = process.env.NAS_AGENT_TOKEN || '';
@@ -175,7 +177,13 @@ export async function archiveClaimViaAgent(opts: {
   const res = await fetch(`${base}/archive`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-agent-token': token },
-    body: JSON.stringify({ ticketId: opts.ticketId, photos: opts.photos, info: opts.info }),
+    body: JSON.stringify({
+      ticketId: opts.ticketId,
+      photos: opts.photos,
+      info: opts.info,
+      archiveRoot: opts.archiveRoot,
+      archiveFolder: opts.archiveFolder,
+    }),
     cache: 'no-store',
   });
   if (!res.ok) throw new Error(`archive agent returned HTTP ${res.status}`);

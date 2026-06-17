@@ -2,11 +2,12 @@
 
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Trash2 } from '@/components/Icons';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { useUploadQueue, photoUploadQueue, type PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { NasPhotoPicker } from '@/components/mobile/receiving/NasPhotoPicker';
-import { nasConfigured } from '@/lib/nas-photos';
+import { deleteNasPhoto, isNasPhotoUrl, nasConfigured, normalizePhotoDisplayUrl } from '@/lib/nas-photos';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 
@@ -39,7 +40,9 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
   useNasConfig();
   const queryKey = ['receiving-photos', scope.receivingId, scope.receivingLineId ?? 'po'];
   const queueEntries = useUploadQueue(scope);
-  const [zoom, setZoom] = useState<string | null>(null);
+  const [zoomPhotoId, setZoomPhotoId] = useState<number | null>(null);
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [nasOpen, setNasOpen] = useState(false);
   // Refresh the photo grid when another station uploads or a desktop QA action
   // fires on the receiving-log channel.
@@ -65,16 +68,48 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
   });
 
   const photos = data?.photos ?? [];
+  const zoomPhoto = zoomPhotoId != null ? photos.find((p) => p.id === zoomPhotoId) : null;
+  const zoomUrl = zoomPhoto ? normalizePhotoDisplayUrl(zoomPhoto.photoUrl) : null;
+
+  useEffect(() => {
+    if (zoomPhotoId == null) setDeleteArmed(false);
+  }, [zoomPhotoId]);
 
   // Pending uploads are rendered as tiles with their state ring; once "done",
   // they appear in the committed list via the next refetch. We still keep the
   // failed/queued ones visible until the user explicitly clears them.
   const pendingTiles = queueEntries.filter((e) => e.state !== 'done');
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this photo?')) return;
-    const res = await fetch(`/api/receiving-photos?id=${id}`, { method: 'DELETE' });
-    if (res.ok) qc.invalidateQueries({ queryKey });
+  const performDelete = async (id: number) => {
+    setDeleting(true);
+    try {
+      const row = photos.find((p) => p.id === id);
+      const displayUrl = row ? normalizePhotoDisplayUrl(row.photoUrl) : '';
+      if (displayUrl && isNasPhotoUrl(displayUrl)) {
+        const nasDel = await deleteNasPhoto(displayUrl);
+        if (!nasDel.ok) console.warn('NAS file delete failed:', nasDel.error);
+      }
+      const res = await fetch(`/api/photos/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        qc.invalidateQueries({ queryKey });
+        setZoomPhotoId(null);
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteArmed(false);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    if (zoomPhotoId == null || deleting) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      window.setTimeout(() => {
+        setDeleteArmed((armed) => (armed ? false : armed));
+      }, 4000);
+      return;
+    }
+    void performDelete(zoomPhotoId);
   };
 
   return (
@@ -143,7 +178,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
             <button
               key={p.id}
               type="button"
-              onClick={() => setZoom(p.photoUrl)}
+              onClick={() => setZoomPhotoId(p.id)}
               className="relative aspect-square bg-gray-900"
             >
               {/* Photos served through the same-origin /api/nas proxy are
@@ -152,39 +187,60 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
                   those unoptimized so the browser loads them directly with the
                   cookie; public absolute NAS URLs still optimize normally. */}
               <Image
-                src={p.photoUrl}
+                src={normalizePhotoDisplayUrl(p.photoUrl)}
                 alt=""
                 fill
                 sizes="33vw"
                 className="object-cover"
-                unoptimized={p.photoUrl.startsWith('/api/nas')}
+                unoptimized={
+                  p.photoUrl.startsWith('/api/nas') || p.photoUrl.startsWith('/api/nas-dev')
+                }
               />
             </button>
           ))}
         </div>
       )}
 
-      {zoom ? (
+      {zoomUrl ? (
         <div
           role="dialog"
           aria-modal="true"
-          onClick={() => setZoom(null)}
-          className="fixed inset-0 z-modal grid place-items-center bg-black/95 p-4"
+          onClick={() => setZoomPhotoId(null)}
+          className="fixed inset-0 z-modal bg-black/95"
         >
+          <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
+            <div className="flex items-center justify-end px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteClick();
+                }}
+                disabled={deleting}
+                aria-label={deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
+                title={deleteArmed ? 'Click again to confirm' : 'Delete photo'}
+                className={
+                  deleteArmed
+                    ? 'flex h-11 items-center gap-2 rounded-full bg-red-600 px-4 text-white transition-colors active:bg-red-700 disabled:opacity-60'
+                    : 'flex h-11 w-11 items-center justify-center rounded-full bg-red-600 text-white transition-colors active:bg-red-700 disabled:opacity-60'
+                }
+              >
+                <Trash2 className="h-5 w-5 shrink-0" />
+                {deleteArmed ? (
+                  <span className="text-caption font-black uppercase tracking-wider">
+                    {deleting ? 'Deleting…' : 'Confirm'}
+                  </span>
+                ) : null}
+              </button>
+            </div>
+          </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={zoom} alt="" className="max-h-full max-w-full object-contain" />
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const match = photos.find((p) => p.photoUrl === zoom);
-              if (match) handleDelete(match.id);
-              setZoom(null);
-            }}
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full bg-rose-600 px-5 py-2.5 text-caption font-black uppercase tracking-widest text-white active:bg-rose-700"
-          >
-            Delete
-          </button>
+          <img
+            src={zoomUrl}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="absolute inset-0 m-auto max-h-full max-w-full object-contain p-4 pt-16 pb-8"
+          />
         </div>
       ) : null}
 

@@ -7,7 +7,7 @@ import { z } from 'zod';
  */
 
 /** Where the message came from. Extensible without a schema/table change. */
-export const StaffMessageKind = z.enum(['copied_text', 'note']);
+export const StaffMessageKind = z.enum(['copied_text', 'note', 'seller_claim_message']);
 export type StaffMessageKind = z.infer<typeof StaffMessageKind>;
 
 export const StaffMessageCreateBody = z.object({

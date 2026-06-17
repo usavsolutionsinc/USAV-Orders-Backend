@@ -1,19 +1,22 @@
 /**
- * Client helpers for the "Select from NAS" receiving photo picker.
+ * Client helpers for receiving NAS photos (picker + capture upload).
  *
- * The app is hosted on Vercel (cloud); the NAS lives on the office LAN. A
- * Vercel API route can never reach the LAN, so the BROWSER talks to the NAS
- * file-server directly (see deploy/nas-photo-server). We read the nginx
- * `autoindex_format json` directory listing, let the receiver pick files, and
- * attach the chosen URLs through the existing /api/receiving-photos endpoint
- * (which already accepts a `photoUrl` instead of an uploaded blob).
+ * Production: the browser talks only to the same-origin `/api/nas` proxy; Vercel
+ * forwards read/write to the office NAS Media Agent (Synology share mounted at
+ * `/Volumes/USAV Media` on the tunnel Mac). Local dev may use `/api/nas-dev`
+ * against a mounted share.
  *
- * Internal-use only by design: the stored URL points at the LAN/HTTPS NAS, so
- * it renders only for browsers on the office network. That matches the
- * "internal only" viewing requirement.
+ * Attach flows store the resulting URL on the `photos` table via
+ * POST /api/receiving-photos — no bytes through Vercel.
  */
 
 import type { PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
+import {
+  isSameOriginNasProxyUrl,
+  normalizePhotoDisplayUrl,
+} from '@/lib/nas-photo-url';
+
+export { normalizePhotoDisplayUrl, isSameOriginNasProxyUrl };
 
 // Base URL of the NAS file server, e.g. "https://nas.usav.local" or, for local
 // dev, "http://192.168.1.50:8088" / "/api/nas-dev". No trailing slash.
@@ -24,6 +27,12 @@ import type { PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue'
 // GET /api/nas-config and is pushed in with `setNasBaseUrl()` (see
 // `useEnsureNasConfig`). The env var is kept only as an initial dev seed.
 let runtimeBase = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
+
+/** Same-origin proxy the browser should PUT/list through. */
+export function getClientNasProxyBase(): string {
+  if (process.env.NODE_ENV !== 'production') return '/api/nas-dev';
+  return getNasBaseUrl() || '/api/nas';
+}
 
 export function setNasBaseUrl(url: string | null | undefined): void {
   runtimeBase = (url || '').replace(/\/+$/, '');
@@ -71,8 +80,8 @@ export interface NasEntry {
 
 // One directory entry from the NAS file server. We accept either format:
 //   • Caddy `file_server browse` (Accept: application/json): { name, size,
-//     is_dir, mod_time, ... }  — what the Ugreen NAS runs today.
-//   • nginx `autoindex_format json`: { name, type, size, mtime }.
+//     is_dir, mod_time, ... }
+//   • nginx `autoindex_format json`: { name, type, size, mtime }
 interface RawEntry {
   name: string;
   size?: number;

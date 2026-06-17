@@ -1,5 +1,11 @@
 # NAS Photo Server — "Select from NAS" picker
 
+> **Current production storage:** Synology NAS (`USAVSolutions`), SMB-mounted on
+> the office Mac at `/Volumes/USAV Media`. New capture/upload flows use the
+> **NAS Media Agent** (`deploy/nas-media-agent/`) and the app's `/api/nas` proxy.
+> This folder documents the older **read-only Caddy browse** stack (historically
+> deployed on a Ugreen DH2300 dev unit).
+
 A tiny **read-only** file server that serves your synced photo folder to the
 receiving app's "Select from NAS" picker. Photos taken on phones sync to the NAS
 as usual; receivers then pick the right shots from a PO/item screen instead of

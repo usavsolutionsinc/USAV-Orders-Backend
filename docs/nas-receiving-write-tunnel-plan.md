@@ -1,113 +1,229 @@
-# Plan: HTTPS write path for receiving-capture photos (Ugreen NAS + `nas-photos` tunnel)
+# Production NAS photo uploads — deployment plan
 
-**Decision (2026-06-12):** newly-captured receiving/unboxing photos live on the
-**Ugreen NAS**, reached through the **one existing tunnel hostname**
-`https://nas-photos.michaelgarisek.com`. The app stays on **Vercel** and the
-**browser never talks to the NAS directly** — it goes through a same-origin
-**`/api/nas` proxy** that does the real read/write server-side over the tunnel,
-carrying the shared `x-agent-token`. This removes the mixed-content / CORS /
-per-device Cloudflare-Access-cookie problems that made mobile capture silently
-fail and the Done button white-screen.
+**Status (2026-06-16):** App-side split read/write is implemented locally.
+Production uploads fail because the office Mac runs a **partial agent** at
+`/_agent` (health returns `{ archiveDir, mounted }`, no `PUT /file/receiving`).
+The fix is office infrastructure, not app code.
 
-> Earlier drafts proposed a second `nas-rw.michaelgarisek.com` hostname. That is
-> dropped — we use **only** `nas-photos.michaelgarisek.com`.
+**Decision:** Deploy the full NAS Media Agent (`deploy/nas-media-agent/server.mjs`)
+on the office Mac. Keep the public tunnel browse root **read-only**; route all
+writes (PUT/DELETE) through the token-guarded agent at `/_agent/*`.
+
+See also: `deploy/nas-media-agent/README.md`, `context/ENV-VARS.md`.
 
 ---
 
 ## Target architecture
 
 ```
-Mobile capture / picker (HTTPS app on Vercel, browser on LAN or anywhere)
-        │  same-origin: GET/PUT/DELETE /api/nas/<folder>/<file>
+Clients (mobile capture, desktop picker, Zendesk archive)
+        │  same-origin only
         ▼
-Vercel function  /api/nas  ── HTTPS + x-agent-token ──▶ nas-photos.michaelgarisek.com
-        ▲                                                     │  (Cloudflare tunnel)
-        │                                                     ▼
-        └─────────── image bytes / listing ◀──── connector (office machine) ──LAN──▶ NAS
+Vercel  /api/nas          GET  → NAS_RW_URL (browse root)
+        /api/nas-target/* PUT  → NAS_AGENT_URL/file/{receiving|shipping|claims}
+        /api/receiving-photos   (DB attach — after NAS PUT succeeds)
+        │
+        ▼
+Caddy on office Mac (nas-photos.michaelgarisek.com)
+   :8088  browse (read-only) ──▶ tunnel GET works today
+   :8787  NAS Media Agent     ──▶ PUT/DELETE/POST /archive (needs full agent)
+        │
+        ▼
+/Volumes/USAV Media  (Synology SMB mount)
 ```
 
-- **Browser → `/api/nas`** only. No CORS, no mixed-content, no per-phone Access cookie.
-- **`/api/nas` → NAS** server-side, holding `NAS_RW_URL` + `NAS_RW_TOKEN`
-  (`x-agent-token`). Source: `src/app/api/nas/[[...path]]/route.ts`.
-- Stored `photoUrl` becomes a relative `/api/nas/...`, so photos render for any
-  authenticated user anywhere — not just on the LAN.
+Principles:
+
+- Browsers never talk to the NAS directly — only `/api/nas` and `/api/nas-target`.
+- Stored URLs are relative (`/api/nas/JUN%202026/photo_….jpg`).
+- Reads use the tunnel browse root; writes use the agent + `x-agent-token`.
+- Folder roots: Admin → NAS Photos → synced to agent via `PUT /roots`.
 
 ---
 
 ## App side — DONE (in this repo)
 
-| Change | File |
+| Behavior | Implementation |
 |---|---|
-| Same-origin CRUD proxy (LIST/GET/PUT/DELETE, per-verb permission, traversal + image-only guards) | `src/app/api/nas/[[...path]]/route.ts` |
-| Client base URL → `/api/nas` when a NAS is configured | `src/lib/nas-photos-server.ts` (`getNasConfigForOperator`) |
-| `isNasPhotoUrl` recognises `/api/nas` (deletes route through the proxy) | `src/lib/nas-photos.ts` |
-| Error boundary so a failed capture/return shows a message, not a white screen | `src/app/m/error.tsx` |
+| GET `/api/nas` → browse root | `resolveNasReceivingUpstream()` in `src/lib/nas-agent-client.ts` |
+| PUT/DELETE → agent write path | `resolveNasReceivingWriteUpstream()` |
+| Shipping/claims CRUD | `src/app/api/nas-target/[target]/[[...path]]/route.ts` |
+| Admin root sync | `syncAgentRootsFromSettings()` on org settings save |
+| Client base URL `/api/nas` | `getNasConfigForOperator()` in `src/lib/nas-photos-server.ts` |
+| Legacy URL rewrite | `normalizePhotoDisplayUrl()` in `src/lib/nas-photo-url.ts` |
+| Zendesk archive | `POST /_agent/archive` via `NAS_AGENT_URL` |
 
-`PUT` / `DELETE` require `receiving.upload_photo`; `GET` requires `receiving.view`.
-`/api/receiving-photos` already accepts the relative `/api/nas/...` URL.
-
----
-
-## Office machine — the one remaining step (give the host a WRITE verb)
-
-`nas-photos.michaelgarisek.com` today routes to the **read-only purchasing-photos
-agent** (`x-agent-token`, browse + claim `/archive`, **no write**). Reads already
-work through `/api/nas`. To make captures land, the office host must accept a
-**write** for the receiving folder. Either option keeps the single hostname:
-
-### Option A — add WebDAV write to the tunnel's Caddy
-The verified WebDAV server (`deploy/nas-photo-server/Caddyfile`, Caddy + webdav,
-`:8088`, root `…/Michael Garisek/Photos`) already does `PUT`/`DELETE`. Point the
-`nas-photos` tunnel ingress (or a Caddy route in front of the agent) so that
-`PUT`/`DELETE`/`GET` reach that WebDAV server. The `/api/nas` proxy speaks plain
-WebDAV verbs, so no agent code is needed.
-
-### Option B — extend the agent with a write endpoint
-Add a token-guarded write to the agent that backs `/_agent/*` (mirroring its
-existing `/archive`): accept the photo bytes and write them into the receiving
-folder, plus a delete. The `/api/nas` proxy already sends `x-agent-token`.
-
-Either way, set the proxy upstream env on Vercel:
-```sh
-NAS_RW_URL   = https://nas-photos.michaelgarisek.com   # (or omit to use the active nasPhotoServers slot)
-NAS_RW_TOKEN = <same shared secret as NAS_AGENT_TOKEN>  # sent as x-agent-token; omit if the host is unauthenticated
-```
+Deploy the app after Phase 1–2 complete so production runs the split read/write
+proxy and config fallback.
 
 ---
 
-## Verify
+## Phase 0 — Preconditions
 
-```sh
-# Reads (work today, through the proxy — run while signed in):
-#   GET https://<app>/api/nas/            → JSON listing
-#   GET https://<app>/api/nas/<file>.jpg  → image bytes
-# Writes (after the office host exposes the verb):
-#   take a receiving/unboxing photo on a phone → it uploads (no white screen),
-#   appears in the PO gallery + desktop picker, and Done returns to the Unbox feed.
-```
+Confirm on the office Mac:
 
-Direct tunnel probe (bypassing the app), once the write verb is live:
-```sh
-printf '\xff\xd8\xff\xe0 test' > /tmp/p.jpg
-curl -s -o /dev/null -w "PUT %{http_code}\n"  -X PUT --data-binary @/tmp/p.jpg \
-  -H "Content-Type: image/jpeg" -H "x-agent-token: <token>" https://nas-photos.michaelgarisek.com/probe.jpg
-curl -s -o /dev/null -w "GET %{http_code}\n"  -H "x-agent-token: <token>" https://nas-photos.michaelgarisek.com/probe.jpg
-curl -s -o /dev/null -w "DEL %{http_code}\n"  -X DELETE -H "x-agent-token: <token>" https://nas-photos.michaelgarisek.com/probe.jpg
-```
-Expect `201 / 200 / 204`.
+| Item | Expected |
+|---|---|
+| NAS | Synology `USAVSolutions`, share at `/volume1/USAV Media/Puchasing photos/2026` |
+| Connector host | Office Mac, SMB mount at `/Volumes/USAV Media` |
+| Tunnel | `cloudflared` for `nas-photos.michaelgarisek.com` |
+| Front proxy | Caddy splitting `/_agent/*` → `:8787`, everything else → `:8088` browse |
+
+Inventory what's running today:
+
+- Which process serves `:8088` (browse)?
+- Which process serves `:8787` (agent)? Full `server.mjs` or slim archive-only build?
+- Is Caddy routing `handle_path /_agent/*` → `127.0.0.1:8787`?
+- Is `cloudflared` a LaunchAgent/service or a foreground shell?
+
+Generate `NAS_AGENT_TOKEN` (32+ random bytes); store in password manager — must
+match on agent + Vercel Production. Do not commit.
 
 ---
 
-## Tunnel / connector notes
+## Phase 1 — Office infrastructure (the fix)
 
-- `cloudflared` upgraded **2026.5.2 → 2026.6.0** (Homebrew). Restart the
-  `nas-photos` connector so the running tunnel picks up the new binary; it is
-  currently an unsupervised foreground process — consider installing it as a
-  durable service so it survives reboots.
-- Cloudflare Access: `nas-photos…` has no Access wall today (verified). Since the
-  proxy now sends a shared `x-agent-token`, prefer protecting the host by token
-  (and/or Cloudflare WAF/IP) rather than a per-device Access cookie.
+### 1.1 Deploy full NAS Media Agent
+
+```sh
+cd deploy/nas-media-agent
+ls "/Volumes/USAV Media/Puchasing photos/2026"
+
+NAS_AGENT_TOKEN="<secret>" \
+NAS_AGENT_PORT=8787 \
+NAS_ROOT_RECEIVING="/Volumes/USAV Media/Puchasing photos/2026" \
+NAS_ROOT_SHIPPING="/Volumes/Shipping/2026" \
+NAS_ROOT_CLAIMS="/Volumes/USAV Media/Puchasing photos/2026/2 Zendesk 2026" \
+node server.mjs
+```
+
+Local verification (must pass before touching tunnel):
+
+```sh
+TOKEN="<secret>"
+
+curl -s http://127.0.0.1:8787/health
+# → { "ok": true, "roots": ["receiving","shipping","claims"] }
+
+curl -s -o /dev/null -w "PUT %{http_code}\n" \
+  -X PUT -H "x-agent-token: $TOKEN" -H "content-type: image/jpeg" \
+  --data-binary @test.jpg \
+  "http://127.0.0.1:8787/file/receiving/JUN%202026/_probe.jpg"
+# → 201
+```
+
+### 1.2 Wire Caddy
+
+```caddyfile
+nas-photos.michaelgarisek.com {
+    handle_path /_agent/* {
+        reverse_proxy 127.0.0.1:8787
+    }
+    reverse_proxy 127.0.0.1:8088
+}
+```
+
+Verify through public tunnel:
+
+```sh
+curl -s https://nas-photos.michaelgarisek.com/_agent/health
+# Must show { "ok": true, "roots": [...] } — NOT { archiveDir, mounted }
+
+curl -s -o /dev/null -w "PUT %{http_code}\n" \
+  -X PUT -H "x-agent-token: $TOKEN" -H "content-type: image/jpeg" \
+  --data-binary @test.jpg \
+  "https://nas-photos.michaelgarisek.com/_agent/file/receiving/JUN%202026/_probe.jpg"
+# → 201, not 404
+```
+
+### 1.3 Durability
+
+| Service | Recommendation |
+|---|---|
+| NAS Media Agent | macOS LaunchAgent — auto-start, restart on crash |
+| Caddy | LaunchAgent |
+| cloudflared | System service — survives reboots |
+| SMB mount | Auto-mount before agent starts |
+
+Health monitor: `GET https://nas-photos.michaelgarisek.com/_agent/health` every 5 min.
+
+### 1.4 Retire slim agent
+
+Replace the partial agent on `:8787` — do not run two agents on the same port.
+
+---
+
+## Phase 2 — Vercel configuration
+
+| Variable | Value |
+|---|---|
+| `NAS_RW_URL` | `https://nas-photos.michaelgarisek.com` |
+| `NAS_AGENT_URL` | `https://nas-photos.michaelgarisek.com/_agent` |
+| `NAS_AGENT_TOKEN` | Same secret as office agent |
+
+Redeploy production after env changes. Ignore legacy `NEXT_PUBLIC_NAS_PHOTOS_BASE_URL`.
+
+---
+
+## Phase 3 — Admin UI
+
+Admin → NAS Photos:
+
+- Active NAS server: `https://nas-photos.michaelgarisek.com`
+- Receiving root: `/Volumes/USAV Media/Puchasing photos/2026`
+- Receiving folder + station folders: current month (e.g. `JUN 2026`)
+
+Saving workflow folders triggers `PUT /roots` — confirm `agentSync.ok` in the save response.
+
+---
+
+## Phase 4 — App deploy
+
+Deploy when Phase 1–2 are green. No additional code changes required for the minimum path.
+
+---
+
+## Phase 5 — End-to-end verification
+
+**External probes:**
+
+```sh
+# Browse stays read-only (PUT should fail — expected)
+curl -s -o /dev/null -w "browse PUT %{http_code}\n" \
+  -X PUT --data-binary "x" \
+  "https://nas-photos.michaelgarisek.com/JUN%202026/_probe.jpg"
+
+# Agent write works
+curl -s -o /dev/null -w "agent PUT %{http_code}\n" \
+  -X PUT -H "x-agent-token: $TOKEN" -H "content-type: image/jpeg" \
+  --data-binary @test.jpg \
+  "https://nas-photos.michaelgarisek.com/_agent/file/receiving/JUN%202026/_probe.jpg"
+```
+
+**App flow (signed-in mobile):**
+
+1. Capture photo → `PUT /api/nas/...` → 201
+2. `POST /api/receiving-photos` → 200
+3. Photo visible in strip + gallery; file on Synology under month folder
+4. Gallery delete → `DELETE /api/nas/...` → 204
+
+---
 
 ## Rollback
-Unset `NAS_RW_URL`/`NAS_RW_TOKEN` and revert `getNasConfigForOperator` to return
-the absolute active NAS URL — restores the previous browser-direct behaviour.
+
+1. Stop new agent; restore slim archive-only agent if Zendesk claims need it temporarily.
+2. Unset or revert `NAS_AGENT_URL` on Vercel.
+3. Reads continue via browse; writes disabled (same as today). No data loss.
+
+---
+
+## Success criteria
+
+- [ ] `/_agent/health` returns `{ ok: true, roots: [...] }`
+- [ ] `PUT /_agent/file/receiving/...` returns 201 through public tunnel
+- [ ] Mobile capture: PUT 201 + POST 200 + photo visible everywhere
+- [ ] File on Synology under correct month folder
+- [ ] Gallery delete removes file from NAS
+- [ ] Agent, Caddy, cloudflared survive Mac reboot
+
+**Minimum path to green:** Phase 1 → Phase 2 → Phase 5 mobile test.

@@ -76,6 +76,15 @@ type ReceivingLogChangedPayload = {
   source: string;
 };
 
+type ReceivingPhotoChangedPayload = {
+  organizationId: string;
+  action: 'insert' | 'delete';
+  receivingId: number;
+  receivingLineId?: number | null;
+  photoId?: number | null;
+  source: string;
+};
+
 type DashboardUpdatePayload = {
   organizationId: string;
   type: 'kpi_update' | 'activity_event' | 'distribution_update' | 'staff_progress_update';
@@ -641,6 +650,26 @@ export async function publishReceivingLogChanged(payload: ReceivingLogChangedPay
     action: payload.action,
     rowId: payload.rowId,
     row: payload.row,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+export async function publishReceivingPhotoChanged(payload: ReceivingPhotoChangedPayload) {
+  const receivingId = Number(payload.receivingId);
+  if (!Number.isFinite(receivingId) || receivingId <= 0) return;
+
+  const receivingLineId =
+    payload.receivingLineId == null ? null : Number(payload.receivingLineId);
+  const photoId = payload.photoId == null ? null : Number(payload.photoId);
+
+  await publishEvent(getStationChannelName(payload.organizationId), 'receiving-photo.changed', {
+    type: 'receiving-photo.changed',
+    action: payload.action,
+    receiving_id: receivingId,
+    receiving_line_id:
+      receivingLineId != null && Number.isFinite(receivingLineId) ? receivingLineId : null,
+    photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
     source: payload.source,
     timestamp: formatPSTTimestamp(),
   });

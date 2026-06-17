@@ -31,6 +31,7 @@ const TONE_DOT: Record<string, string> = {
   sku: 'bg-yellow-500',
   fnsku: 'bg-purple-500',
   ticket: 'bg-orange-500',
+  seller_claim: 'bg-blue-600',
 };
 
 function timeAgo(ts: number): string {
@@ -84,6 +85,7 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
       recordHistory: true,
       historyKind: entry.kind,
       historyDisplay: entry.display,
+      historySellerMessageId: entry.sellerMessageId,
     });
     if (ok) {
       setCopiedId(entry.id);
@@ -94,17 +96,26 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
   const handleSend = useCallback(
     async (entry: ClipboardEntry, recipient: PickerStaff) => {
       try {
+        const isSellerClaim =
+          entry.kind === 'seller_claim' &&
+          typeof entry.sellerMessageId === 'number' &&
+          entry.sellerMessageId > 0;
         const res = await fetch('/api/staff-messages', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             recipientId: recipient.id,
             body: entry.value,
-            kind: 'copied_text',
-            context: {
-              ...(entry.kind ? { tone: entry.kind } : {}),
-              ...(entry.display ? { display: entry.display } : {}),
-            },
+            kind: isSellerClaim ? 'seller_claim_message' : 'copied_text',
+            context: isSellerClaim
+              ? {
+                  sellerMessageId: entry.sellerMessageId,
+                  display: entry.display ?? `Seller msg #${entry.sellerMessageId}`,
+                }
+              : {
+                  ...(entry.kind ? { tone: entry.kind } : {}),
+                  ...(entry.display ? { display: entry.display } : {}),
+                },
           }),
         });
         if (!res.ok) throw new Error('send failed');

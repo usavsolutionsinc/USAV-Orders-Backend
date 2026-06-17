@@ -9,6 +9,7 @@ import {
   getStaffStationBridgeChannelName,
 } from '@/lib/realtime/channels';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
@@ -44,6 +45,8 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   const stationBridgeChannel = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId));
   const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
   useRealtimeToasts('receiving');
+  // Seed runtime NAS base (/api/nas) before capture routes or the carton sheet open.
+  useNasConfig();
 
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
     queryKey: QUERY_KEY,
@@ -98,10 +101,15 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   );
   const openSheet = useCallback((row: ReceivingLineRow) => setSheetRow(row), []);
   const closeSheet = useCallback(() => setSheetRow(null), []);
-  const buildPhotosHref = useCallback(
-    (row: ReceivingLineRow) => (row.receiving_id ? `/m/r/${row.receiving_id}/photos` : '#'),
-    [],
-  );
+  const buildPhotosHref = useCallback((row: ReceivingLineRow) => {
+    if (!row.receiving_id) return '#';
+    const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
+    const cameraTitle =
+      row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
+    const params = new URLSearchParams({ title: cameraTitle });
+    if (poValue) params.set('poRef', poValue);
+    return `/m/r/${row.receiving_id}/photos?${params.toString()}`;
+  }, []);
 
   return (
     <div className="flex h-full w-full flex-col bg-white">

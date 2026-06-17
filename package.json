@@ -8,6 +8,7 @@
     "dev": "next dev --turbopack",
     "dev:phone": "node scripts/dev-phone.mjs",
     "dev:tunnel": "node scripts/dev-tunnel.mjs",
+    "dev:tunnel:named": "node scripts/dev-tunnel-named.mjs",
     "prebuild": "node scripts/generate-release-notes.mjs",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build --webpack",
     "release-notes:generate": "node scripts/generate-release-notes.mjs",

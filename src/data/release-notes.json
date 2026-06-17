@@ -1,7 +1,17 @@
 {
-  "generatedAt": "2026-06-15T17:07:29.433Z",
+  "generatedAt": "2026-06-16T18:23:22.440Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "8a757a0f145200bd5b7b52b99a015ed9c251750c",
+      "shortSha": "8a757a0f",
+      "date": "2026-06-15T10:55:16-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "updated the printer preferences for silent printing to be the correct sizing in mm",
+      "body": "",
+      "type": "other",
+      "title": "updated the printer preferences for silent printing to be the correct sizing in mm"
+    },
     {
       "sha": "934c3c140cfe344ac9735bc022d9f60837c0a90b",
       "shortSha": "934c3c14",
@@ -1981,16 +1991,6 @@
       "body": "Pure-foundation phase. Zero behavior change to existing routes; all\nexisting reads/writes continue to work. Sets up the typed Drizzle layer\nand the new tables the application code will start using in Phase 1+.\n\nPer context/inventory_system_upgrade_plan.md §5 (Schema decisions) and\n§10 (Phase 0 — Schema and ORM alignment).\n\nDrizzle schema (src/lib/drizzle/schema.ts):\n- New pgEnum serialStatusEnum with original 2026-04-10 set plus Phase 0\n  expansion (TRIAGED, IN_REPAIR, REPAIR_DONE, IN_TEST, GRADED,\n  ALLOCATED, PACKED, LABELED, STAGED, ON_HOLD).\n- Declare existing-but-undeclared inventory tables: locations,\n  binContents, locationTransfers, serialUnits, skuStockLedger,\n  inventoryEvents, reasonCodes, printerProfiles, stockAlerts,\n  cycleCountCampaigns, cycleCountLines. All previously accessed via\n  raw SQL only; now typed.\n- Add Phase 0 NEW tables: serialUnitConditionHistory,\n  orderUnitAllocations, fbaShipmentItemUnits, unitIdSequences.\n- Re-export $inferSelect/$inferInsert types for every new table.\n\nMigration (src/lib/migrations/2026-05-17_inventory_v2_phase0.sql):\n- ALTER TYPE serial_status_enum ADD VALUE × 10 (idempotent DO blocks).\n- CREATE TABLE serial_unit_condition_history with chk_grade_changed\n  CHECK (prev_grade IS DISTINCT FROM new_grade).\n- CREATE TABLE order_unit_allocations with partial UNIQUE INDEX\n  idx_oua_open_unit on serial_unit_id WHERE state != 'RELEASED'\n  (enforces one open allocation per unit; released history preserved).\n- CREATE TABLE fba_shipment_item_units (Tier-3 FBA serial linkage).\n- CREATE TABLE unit_id_sequences with fn_next_unit_seq() function for\n  atomic per-SKU-per-year sequence allocation.\n\nBackfill (scripts/backfill-tech-serial-unit-id.mjs):\n- Idempotent: stamps tech_serial_numbers.serial_unit_id by find-or-create\n  on serial_units.normalized_serial. Skips FNSKU-type and empty serials.\n- Supports --dry-run, --limit N, --batch-size N. Safe to run repeatedly.\n\nRepositories (src/lib/repositories/inventory/):\n- serialUnits: upsertSerialUnit (fill-in only via COALESCE on conflict),\n  findBy{Normalized,Serial}, getById, normalizeSerial.\n- inventoryEvents: appendInventoryEvent with clientEventId idempotency\n  (returns {event, created}); typed InventoryEventType union;\n  listEventsFor{SerialUnit,Sku,ReceivingLine}; listRecentEventsByType.\n- stockLedger: appendLedgerRow with delta != 0 guard; listLedgerForSku;\n  ledgerSum (validates trigger projection).\n- locations: findLocationBy{Barcode,Name}; listBins (room/binType filter,\n  skips room-header rows); listBinContentsBy{Location,Sku};\n  totalBinQtyForSku.\n- allocations: allocate (relies on idx_oua_open_unit for collision);\n  advanceState (rejects RELEASED rows); release (idempotent);\n  findOpenAllocationForUnit; listAllocationsForOrder.\n- conditionHistory: recordChange (DB CHECK rejects no-op); listHistoryForUnit.\n- index.ts: namespaced barrel exports.\n\nWhat this commit does NOT do:\n- Touch any existing API route or workflow.\n- Run the migration or backfill (those are deploy-time / ops actions).\n- Wire the new repositories into receiving / tech / pack / FBA flows\n  (that's Phase 1–5, gated behind feature flags per the plan).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "inventory v2 Phase 0: schema declarations + migration + repositories"
-    },
-    {
-      "sha": "b8dc5725016aac60a3f7d142209e5d72d7641a7d",
-      "shortSha": "b8dc5725",
-      "date": "2026-05-17T00:38:43-07:00",
-      "author": "DENSENSE8",
-      "subject": "auth system + sidebar nav pills redesign",
-      "body": "auth:\n- /signin with PIN-first flow, optional Face ID passkey upgrade, self-serve PIN creation (POST /api/auth/pin/create gated on pin_hash IS NULL)\n- session cookies (usav_sid) with device-kind aware TTLs, scrypt PIN hashing + 5-try lockout\n- proxy enforce-mode is now default (no guest mode); only /signin, /m/enroll, /api/auth/*, and static assets stay public\n\nadmin + access:\n- roles editor with permission toggles, color picker, duplicate/reorder\n- per-staff access matrix, override permissions, enroll-token + reset-pin flows\n- admin sub-sections now have their own sidebar panels (jobs, logs, fba, manuals, features, etc.)\n\naudit log:\n- new /audit-log pages: receiving, packing, tech, sku, staff\n- shared filter strip (day/start/end/staff)\n- per-aggregator queries under src/lib/audit-log/\n\nsidebar redesign:\n- HorizontalButtonSlider gets a 'nav' variant: blue-600 fill on active, 1.04 spring scale, optional icon + disabled state\n- pill row replaces ViewDropdown/TabSwitch across FBA, Receiving, Tech, SkuStock, Packer, Walk-In, Dashboard, Work Orders, Replenish, Admin, Audit Log, plus the in-panel Shipped type filter, Pending stock filter, and Repair sub-tabs\n- ActiveStaffChip removed from per-panel headers (identity lives on the bottom-of-sidebar SignedInChip)\n\ninventory:\n- new /inventory page with bins overview, room manager, label printing\n- bin detail flyout + SKU finder\n\nmobile + misc:\n- MobilePageHeader uses read-only ActiveStaffChip (no per-page staff dropdown)\n- phone-pair flow removed (superseded by global signin)\n- Quick Access FAB icon: always Search now\n- Tooltip primitive for icon-only triggers\n- new Settings page (appearance, hardware, audit, sessions, security, workstation)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "auth system + sidebar nav pills redesign"
     }
   ]
 }

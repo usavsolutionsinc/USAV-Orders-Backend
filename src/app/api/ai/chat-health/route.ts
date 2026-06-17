@@ -5,16 +5,16 @@
 import { NextResponse } from 'next/server';
 import { formatPSTTimestamp } from '@/utils/date';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getHermesApiUrl, getHermesHeaders } from '@/lib/ai/hermes-client';
 
 export const runtime = 'nodejs';
-
-const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
 
 export const GET = withAuth(async () => {
   const timestamp = formatPSTTimestamp();
 
   try {
-    const res = await fetch(`${HERMES_API_URL}/models`, {
+    const res = await fetch(`${getHermesApiUrl()}/models`, {
+      headers: getHermesHeaders(),
       signal: AbortSignal.timeout(4_000),
     });
 

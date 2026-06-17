@@ -3,9 +3,7 @@ import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   buildReceivingClaimTemplate,
-  CLAIM_SEVERITY_LABEL,
   CLAIM_TYPE_LABEL,
-  type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
 import { poReceivingLink } from '@/lib/receiving-claim-photos';
@@ -16,7 +14,6 @@ interface PreviewRequest {
   receivingId: number;
   lineId?: number | null;
   claimType: ClaimType;
-  severity: ClaimSeverity;
   reason?: string;
 }
 
@@ -33,10 +30,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (!body.claimType || !(body.claimType in CLAIM_TYPE_LABEL)) {
       throw ApiError.badRequest('Invalid claimType');
     }
-    const severity = body.severity ?? 'medium';
-    if (!(severity in CLAIM_SEVERITY_LABEL)) {
-      throw ApiError.badRequest('Invalid severity');
-    }
     const lineId = body.lineId != null ? Number(body.lineId) : null;
 
     // Org-scope the template build: it reads tenant-owned receiving /
@@ -47,7 +40,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       receivingId,
       lineId,
       claimType: body.claimType,
-      severity,
       reason: body.reason,
       poReceivingLink: poReceivingLink(req, receivingId),
     }, orgId);

@@ -14,6 +14,8 @@
  * returned args.
  */
 
+import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
+
 // Default model when AI_MODEL isn't set — Gemma 4 e4B has explicit tool-call
 // support, the most disciplined arg adherence we get from a sub-5GB local
 // model. Swap by setting AI_MODEL; the Hermes runtime verifies it's loaded.
@@ -75,12 +77,11 @@ interface OpenAiChatResponse {
 export async function hermesToolCall<T = unknown>(
   input: HermesToolCallInput,
 ): Promise<HermesToolCallResult<T>> {
-  const baseUrl = String(process.env.HERMES_API_URL ?? '').trim();
+  const baseUrl = getHermesApiUrl();
   if (!baseUrl) {
     throw new Error('HERMES_API_URL is not set; cannot reach the local AI gateway');
   }
-  const apiKey = String(process.env.HERMES_API_KEY ?? '').trim();
-  const model = String(process.env.AI_MODEL ?? DEFAULT_AI_MODEL).trim();
+  const model = getHermesModel(DEFAULT_AI_MODEL);
 
   const requestBody = {
     model,
@@ -111,10 +112,9 @@ export async function hermesToolCall<T = unknown>(
 
   const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: {
+    headers: getHermesHeaders({
       'content-type': 'application/json',
-      ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-    },
+    }),
     body: JSON.stringify(requestBody),
   });
   if (!res.ok) {

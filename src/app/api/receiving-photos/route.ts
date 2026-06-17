@@ -6,6 +6,8 @@ import { getOrganization } from '@/lib/tenancy/organizations';
 import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
+import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
+import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +62,7 @@ function mapRow(row: DbRow): PhotoRow {
     id: Number(row.id),
     receivingId: row.receiving_id_resolved != null ? Number(row.receiving_id_resolved) : null,
     receivingLineId: isLine ? Number(row.entity_id) : null,
-    photoUrl: row.url,
+    photoUrl: normalizePhotoDisplayUrl(row.url),
     caption: row.caption || null,
     uploadedBy: row.uploaded_by != null ? Number(row.uploaded_by) : null,
     createdAt: row.created_at,
@@ -249,32 +251,68 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       [inserted.rows[0].id],
     );
 
-    return NextResponse.json({ success: true, photo: mapRow(read.rows[0]) });
+    const photo = mapRow(read.rows[0]);
+    await publishReceivingPhotoChanged({
+      organizationId: ctx.organizationId as OrgId,
+      action: 'insert',
+      receivingId,
+      receivingLineId,
+      photoId: photo.id,
+      source: 'receiving-photos.post',
+    });
+
+    return NextResponse.json({ success: true, photo });
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving-photos');
   }
 }, { permission: 'receiving.upload_photo' });
 
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   try {
     const id = Number(new URL(req.url).searchParams.get('id'));
     if (!Number.isFinite(id) || id <= 0) {
       throw ApiError.badRequest('Valid id is required');
     }
 
-    const existing = await pool.query(
-      `SELECT url FROM photos
-        WHERE id = $1
-          AND entity_type IN ('RECEIVING', 'RECEIVING_LINE')`,
+    const existing = await pool.query<{
+      entity_type: string;
+      entity_id: number;
+      receiving_id_resolved: number | null;
+    }>(
+      `SELECT p.entity_type, p.entity_id,
+              CASE
+                WHEN p.entity_type = 'RECEIVING'      THEN p.entity_id
+                WHEN p.entity_type = 'RECEIVING_LINE' THEN rl.receiving_id
+                ELSE NULL
+              END AS receiving_id_resolved
+         FROM photos p
+         LEFT JOIN receiving_lines rl
+                ON p.entity_type = 'RECEIVING_LINE'
+               AND rl.id = p.entity_id
+        WHERE p.id = $1
+          AND p.entity_type IN ('RECEIVING', 'RECEIVING_LINE')`,
       [id],
     );
     if (existing.rowCount === 0) throw ApiError.notFound('photo', id);
+    const existingPhoto = existing.rows[0];
 
     // Photos live on the NAS now. Deleting just unlinks the DB row; the file
     // stays on the NAS share (same behavior the NAS picker has always had).
     // Legacy rows may still hold a Vercel Blob URL from before the migration —
     // those are left untouched too.
     await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
+
+    if (existingPhoto?.receiving_id_resolved) {
+      await publishReceivingPhotoChanged({
+        organizationId: ctx.organizationId as OrgId,
+        action: 'delete',
+        receivingId: Number(existingPhoto.receiving_id_resolved),
+        receivingLineId:
+          existingPhoto.entity_type === 'RECEIVING_LINE' ? Number(existingPhoto.entity_id) : null,
+        photoId: id,
+        source: 'receiving-photos.delete',
+      });
+    }
 
     return NextResponse.json({ success: true, id });
   } catch (error) {

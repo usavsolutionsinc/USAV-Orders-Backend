@@ -4,9 +4,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import {
   buildReceivingClaimTemplate,
   claimBodyToHtml,
-  CLAIM_SEVERITY_LABEL,
   CLAIM_TYPE_LABEL,
-  type ClaimSeverity,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
 import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError } from '@/lib/zendesk';
@@ -14,6 +12,9 @@ import { readPhotoBytes, archiveClaimToFolder, archiveClaimViaAgent, poReceiving
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getNasStorageTarget } from '@/lib/tenancy/settings';
+import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
 import pool from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
@@ -22,12 +23,13 @@ interface ClaimRequest {
   receivingId: number;
   lineId?: number | null;
   claimType: ClaimType;
-  severity: ClaimSeverity;
   reason?: string;
   /** Operator-edited subject. When omitted, the server builds from template. */
   subject?: string;
   /** Operator-edited body. When omitted, the server builds from template. */
   description?: string;
+  /** Seller-facing marketplace message (plain text, no URLs). Persisted to Neon. */
+  sellerMessage?: string;
   /** Photo row ids (from /api/receiving-photos) to upload to Zendesk as files. */
   attachPhotoIds?: number[];
 }
@@ -55,10 +57,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (!claimType || !(claimType in CLAIM_TYPE_LABEL)) {
       throw ApiError.badRequest('Invalid claimType');
     }
-    const severity = body.severity ?? 'medium';
-    if (!(severity in CLAIM_SEVERITY_LABEL)) {
-      throw ApiError.badRequest('Invalid severity');
-    }
     const lineIdRaw = body.lineId != null ? Number(body.lineId) : null;
     const lineId = lineIdRaw != null && Number.isFinite(lineIdRaw) ? lineIdRaw : null;
 
@@ -75,7 +73,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         receivingId,
         lineId,
         claimType,
-        severity,
         reason: body.reason,
         poReceivingLink: poReceivingLink(req, receivingId),
       });
@@ -178,7 +175,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             `URL: ${zendeskTicketUrl(ticket.id)}`,
             `Subject: ${subject}`,
             `Claim type: ${CLAIM_TYPE_LABEL[claimType]}`,
-            `Severity: ${CLAIM_SEVERITY_LABEL[severity]}`,
             `Filed: ${new Date().toISOString()}`,
             `Photos uploaded to Zendesk: ${uploads.length}`,
             `Photos archived locally: ${allPhotos.length}`,
@@ -189,8 +185,23 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           // Prefer the office agent (works from Vercel); fall back to a direct
           // filesystem write when running on a box that has the share mounted.
           const useAgent = Boolean(process.env.NAS_AGENT_URL && process.env.NAS_AGENT_TOKEN);
+          let claimTarget = { root: '', folder: '' };
+          if (useAgent) {
+            try {
+              const org = await getOrganization(ctx.organizationId);
+              if (org) claimTarget = getNasStorageTarget(org.settings, 'claims');
+            } catch {
+              claimTarget = { root: '', folder: '' };
+            }
+          }
           const archived = useAgent
-            ? await archiveClaimViaAgent({ ticketId: ticket.id, photos: allPhotos, info })
+            ? await archiveClaimViaAgent({
+                ticketId: ticket.id,
+                photos: allPhotos,
+                info,
+                archiveRoot: claimTarget.root,
+                archiveFolder: claimTarget.folder,
+              })
             : await archiveClaimToFolder({ ticketId: ticket.id, photos: allPhotos, info });
           if (!archived) {
             archiveWarning = 'Photos were NOT archived to the NAS (archive agent/mount unavailable).';
@@ -231,6 +242,23 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           }
         } catch (colErr) {
           console.warn('[POST /api/receiving/zendesk-claim] zendesk_ticket column update failed', colErr);
+        }
+
+        const sellerDraft = typeof body.sellerMessage === 'string' ? body.sellerMessage.trim() : '';
+        if (sellerDraft) {
+          try {
+            await upsertClaimSellerMessage({
+              orgId: ctx.organizationId,
+              receivingId,
+              lineId,
+              sellerMessage: sellerDraft,
+              subjectSnapshot: subject,
+              zendeskTicketId: ticket.id,
+              staffId: ctx.staffId ?? null,
+            });
+          } catch (sellerErr) {
+            console.warn('[POST /api/receiving/zendesk-claim] seller message persist failed', sellerErr);
+          }
         }
 
         return {

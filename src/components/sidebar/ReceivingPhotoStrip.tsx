@@ -8,6 +8,7 @@ import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/chann
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
+import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
@@ -85,7 +86,7 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     () =>
       (data?.photos ?? [])
         .filter((p) => !!p.photoUrl?.trim())
-        .map((p) => ({ id: p.id, url: p.photoUrl })),
+        .map((p) => ({ id: p.id, url: normalizePhotoDisplayUrl(p.photoUrl) })),
     [data],
   );
 

@@ -369,6 +369,10 @@ export function LineEditPanel({
         if (!zendesk.trim()) setZendesk(tk);
         dispatchLineUpdated({ id: row.id, notes: row.notes });
       }}
+      onTicketUnlinked={() => {
+        setZendesk('');
+        dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
+      }}
     />
     </>
   );

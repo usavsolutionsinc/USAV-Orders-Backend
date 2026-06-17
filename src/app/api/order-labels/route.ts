@@ -3,7 +3,7 @@ import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization } from '@/lib/tenancy/organizations';
-import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
+import { getActiveNasBaseUrl, getAllNasBaseUrls, getNasStorageTarget } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
 import { createAuditLog } from '@/lib/audit-logs';
@@ -74,8 +74,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       [orderId],
     );
 
-    // Surface the NAS base + the operator's folder so the client can build the
-    // browser-direct PUT URL (mirrors GET /api/receiving-photos). Best-effort.
+    // Surface the NAS base + outbound label folder so the client can build the
+    // PUT URL. Falls back to the operator's station folder for older settings.
     let nasBaseUrl = '';
     let nasFolder = '';
     try {
@@ -84,8 +84,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         getOrganization(orgId),
         resolveOperatorNasFolder(orgId, ctx.staffId),
       ]);
-      nasFolder = folder;
-      nasBaseUrl = org ? getActiveNasBaseUrl(org.settings) : '';
+      nasFolder = org ? getNasStorageTarget(org.settings, 'shipping').folder || folder : folder;
+      nasBaseUrl = process.env.NAS_AGENT_URL
+        ? '/api/nas-target/shipping'
+        : org ? getActiveNasBaseUrl(org.settings) : '';
     } catch {
       nasBaseUrl = '';
       nasFolder = '';
