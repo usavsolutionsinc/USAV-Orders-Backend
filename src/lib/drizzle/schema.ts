@@ -1684,6 +1684,44 @@ export const skuPlatformIds = pgTable('sku_platform_ids', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * platform_listings — first-class per-channel listing (ported from USAV_ERP's
+ * `platform_listing`). Unlike sku_platform_ids (a thin id mapping), this carries
+ * channel price/qty/condition + its own outbound sync state + a sync_hash for
+ * idempotent skip. `skuCatalogId` is nullable so an UNRESOLVED listing (matched
+ * to a channel but not yet to a catalog SKU) is persisted, not dropped.
+ * org-scoped (organization_id, GUC default, RLS armed). See migration
+ * 2026-06-17_platform_listings.sql + src/lib/inventory/platform-listings.ts.
+ */
+export const platformListings = pgTable('platform_listings', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
+  platform: text('platform').notNull(),
+  accountName: text('account_name'),
+  externalRefId: text('external_ref_id'),
+  merchantSku: text('merchant_sku'),
+  listedName: text('listed_name'),
+  listedDescription: text('listed_description'),
+  listingPriceCents: integer('listing_price_cents'),
+  listingQuantity: integer('listing_quantity'),
+  listingCondition: text('listing_condition'),
+  upc: text('upc'),
+  platformMetadata: jsonb('platform_metadata'),
+  /** PENDING | SYNCED | ERROR */
+  syncStatus: text('sync_status').notNull().default('PENDING'),
+  /** sha256 of last-pushed payload; skip the push when unchanged. */
+  syncHash: text('sync_hash'),
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  syncError: text('sync_error'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type PlatformListing = typeof platformListings.$inferSelect;
+export type NewPlatformListing = typeof platformListings.$inferInsert;
+
 export const skuKitParts = pgTable('sku_kit_parts', {
   id: serial('id').primaryKey(),
   skuCatalogId: integer('sku_catalog_id').notNull().references(() => skuCatalog.id, { onDelete: 'cascade' }),

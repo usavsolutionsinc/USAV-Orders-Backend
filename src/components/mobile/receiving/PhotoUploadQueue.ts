@@ -44,6 +44,8 @@ export interface PhotoScope {
    * Falls back to `PO_{receivingId}` when absent.
    */
   poRef?: string | null;
+  /** One-based clean filename suffix for captured photos, e.g. PO123_3.jpg. */
+  fileIndex?: number | null;
 }
 
 export interface UploadEntry {
@@ -244,7 +246,9 @@ async function postPhoto(
     baseUrl,
     folder,
     scope: entry.scope,
-    filename: `photo_${entry.id}.jpg`,
+    filename: entry.scope.fileIndex != null
+      ? `${Math.max(1, Math.floor(Number(entry.scope.fileIndex)))}.jpg`
+      : `photo_${entry.id}.jpg`,
   });
 
   const put = await putNasPhoto(targetUrl, blob);

@@ -152,6 +152,19 @@ export function useRealtimeInvalidation({
     !!stationChannel && receiving,
   );
 
+  useAblyChannel(
+    stationChannel,
+    'receiving-photo.changed',
+    () => {
+      queryClient.invalidateQueries({ queryKey: ['receiving-photos'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-po-list'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-po-detail'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-item-photos'] });
+    },
+    !!stationChannel && receiving,
+  );
+
   // Carrier tracking status changed (webhook push or sync poll). Keeps the
   // incoming list, its summary tiles, and any open details panel live with the
   // carrier's real-world state — the receiving-side equivalent of the

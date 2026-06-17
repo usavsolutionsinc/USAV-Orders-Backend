@@ -228,14 +228,22 @@ export function buildNasPhotoUrl(opts: {
     .replace(/[^A-Za-z0-9._-]+/g, '_')
     .replace(/^_+|_+$/g, '');
   const poPart = sanitizedPo || `PO_${scope.receivingId}`;
-  const prefix =
-    scope.receivingLineId != null
-      ? `${poPart}_L${scope.receivingLineId}__`
-      : `${poPart}__`;
+  const cleanFilename = (filename || 'photo.jpg')
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const hasCleanSequence = scope.fileIndex != null && /^\d+\.jpe?g$/i.test(cleanFilename);
+  const finalName = hasCleanSequence
+    ? scope.receivingLineId != null
+      ? `${poPart}_L${scope.receivingLineId}_${cleanFilename}`
+      : `${poPart}_${cleanFilename}`
+    : scope.receivingLineId != null
+      ? `${poPart}_L${scope.receivingLineId}__${cleanFilename}`
+      : `${poPart}__${cleanFilename}`;
   const segments: string[] = [];
   const cleanFolder = (folder || '').replace(/^\/+|\/+$/g, '');
   if (cleanFolder) segments.push(...cleanFolder.split('/'));
-  segments.push(`${prefix}${filename}`);
+  segments.push(finalName);
   const encoded = segments.map(encodeURIComponent).join('/');
   return `${baseUrl.replace(/\/+$/, '')}/${encoded}`;
 }

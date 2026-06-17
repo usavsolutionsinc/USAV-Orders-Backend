@@ -9,8 +9,8 @@
 import pool from '@/lib/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
-import { connectorsWithCapability, getConnector } from './registry';
-import type { SyncOutcome } from './types';
+import { connectorsWithCapability, getConnector, listConnectors } from './registry';
+import type { ReconcileOutcome, SyncOutcome } from './types';
 
 /** Run one org's sync for one provider (the "Sync now" action). */
 export async function syncConnection(orgId: OrgId, provider: IntegrationProvider): Promise<SyncOutcome> {
@@ -58,6 +58,39 @@ export async function runOrdersSyncAllOrgs(only?: IntegrationProvider[]): Promis
     for (const orgId of orgs) {
       try {
         out.push({ provider: connector.provider, orgId, outcome: await connector.sync(orgId) });
+      } catch (e) {
+        out.push({
+          provider: connector.provider,
+          orgId,
+          outcome: { ok: false, error: e instanceof Error ? e.message : String(e) },
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export interface ReconcileResult {
+  provider: IntegrationProvider;
+  orgId: OrgId;
+  outcome: ReconcileOutcome;
+}
+
+/** Daily drift-repair entrypoint: for every connector with a wired reconcile(),
+ *  reconcile every org that has it connected. No-op (returns []) until providers
+ *  implement reconcile() — additive and safe to schedule now. */
+export async function runReconcileAllOrgs(opts?: { since?: Date }): Promise<ReconcileResult[]> {
+  const out: ReconcileResult[] = [];
+  for (const connector of listConnectors()) {
+    if (!connector.reconcile) continue;
+    const orgs = await connectedOrgsForProvider(connector.provider);
+    for (const orgId of orgs) {
+      try {
+        out.push({
+          provider: connector.provider,
+          orgId,
+          outcome: await connector.reconcile(orgId, opts),
+        });
       } catch (e) {
         out.push({
           provider: connector.provider,

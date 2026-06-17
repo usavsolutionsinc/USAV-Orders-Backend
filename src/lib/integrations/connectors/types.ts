@@ -66,6 +66,33 @@ export interface SyncOutcome {
   cursor?: unknown;
 }
 
+/** One channel-listing stock/price push (bidirectional sync — Hub → Spoke). */
+export interface InventoryPush {
+  /** platform_listings.external_ref_id (channel listing id). */
+  externalRefId: string;
+  quantity?: number;
+  priceCents?: number;
+}
+
+export interface InventoryPushOutcome {
+  ok: boolean;
+  pushed?: number;
+  failed?: number;
+  error?: string;
+}
+
+/** Result of a reconciliation pass (drift repair against the external system). */
+export interface ReconcileOutcome {
+  ok: boolean;
+  /** Records found in sync (no action needed). */
+  inSync?: number;
+  /** Local records repaired from the external system (missed inbound). */
+  inboundFixed?: number;
+  /** External records repaired from local (failed/dropped outbound). */
+  outboundFixed?: number;
+  error?: string;
+}
+
 export interface IntegrationConnector {
   provider: IntegrationProvider;
   authKind: AuthKind;
@@ -80,4 +107,10 @@ export interface IntegrationConnector {
   validate?(orgId: OrgId, scope?: string | null): Promise<HealthResult>;
   /** Connection-driven ingestion (replaces the transfer-orders buttons). */
   sync?(orgId: OrgId, opts?: { full?: boolean; cursor?: unknown }): Promise<SyncOutcome>;
+  /** Push channel stock/price OUT to the provider (bidirectional sync). Wired
+   *  per-provider where the channel API supports it. */
+  pushInventory?(orgId: OrgId, updates: InventoryPush[]): Promise<InventoryPushOutcome>;
+  /** Drift-repair pass: compare the provider's recently-modified records against
+   *  local state and fix either side. Driven by the daily reconcile cron. */
+  reconcile?(orgId: OrgId, opts?: { since?: Date }): Promise<ReconcileOutcome>;
 }

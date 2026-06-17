@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { attachNasPhoto, listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
+import { isSameOriginNasProxyUrl, normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { useMediaQuery } from '@/hooks/_ui';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
@@ -89,26 +90,23 @@ function compareEntries(a: NasEntry, b: NasEntry, key: SortKey, anchor: number |
   return key === 'oldest' ? at - bt : bt - at;
 }
 
-// Shrink the multi-MB NAS original to a fast thumbnail. Two paths, because the
-// source differs by environment:
-//   • Public NAS tunnel (absolute https) → the Next.js image optimizer, which
-//     downscales to a tiny cached webp. Works because the tunnel is
-//     unauthenticated (CORS-open) and its host is allowlisted in next.config
-//     `images.remotePatterns`. `size` must be an allowed Next width, and `q`
-//     must be an allowed quality — Next 16 rejects anything but 75 by default
-//     (q=60 → HTTP 400 / broken image), so keep q=75 unless next.config sets
-//     `images.qualities`.
-//   • Dev route (/api/nas-dev, same-origin) → fetch directly with ?thumb. The
-//     optimizer can't be used here: that route is behind the session auth gate
-//     and the optimizer fetches server-side WITHOUT the browser cookie (→ 401,
-//     broken image). A direct browser request carries the cookie and the dev
-//     route honours ?thumb to downscale.
-// The full-res `url` is always what gets attached to the PO.
+// Shrink the NAS original through the same display path used by saved photos.
+// Avoid `/_next/image` here: the optimizer fetches server-side, so it misses
+// browser/session context for protected NAS routes and shows broken thumbnails.
+// The full-res `url` is still what gets attached to the PO.
 function thumbUrl(url: string, size = 128): string {
-  if (/^https?:\/\//i.test(url)) {
-    return `/_next/image?url=${encodeURIComponent(url)}&w=${size}&q=75`;
+  const displayUrl = normalizePhotoDisplayUrl(url, { production: true });
+  if (isSameOriginNasProxyUrl(displayUrl)) {
+    return displayUrl + (displayUrl.includes('?') ? '&' : '?') + `thumb=${size}`;
   }
-  return url + (url.includes('?') ? '&' : '?') + `thumb=${size}`;
+  return displayUrl;
+}
+
+function handleImgFallback(e: React.SyntheticEvent<HTMLImageElement>, url: string): void {
+  const img = e.currentTarget;
+  if (img.dataset.fallbackApplied === '1') return;
+  img.dataset.fallbackApplied = '1';
+  img.src = normalizePhotoDisplayUrl(url, { production: true });
 }
 
 function formatMtime(mtime?: string): string {
@@ -509,6 +507,7 @@ export function NasPickerDialog({
                             alt=""
                             loading="lazy"
                             decoding="async"
+                            onError={(e) => handleImgFallback(e, f.url)}
                             className="h-10 w-10 bg-gray-100 object-cover"
                           />
                         </button>
@@ -572,6 +571,7 @@ export function NasPickerDialog({
             src={thumbUrl(preview.url, 1080)}
             alt={preview.name}
             onClick={(e) => e.stopPropagation()}
+            onError={(e) => handleImgFallback(e, preview.url)}
             className="max-h-[82vh] max-w-full rounded-lg object-contain shadow-2xl"
           />
           <div className="flex items-center gap-3 rounded-full bg-white/10 px-4 py-1.5 text-center backdrop-blur">

@@ -9,6 +9,7 @@ import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
 import {
   getReceivingPhotoDeleteMeta,
   listReceivingPhotos,
+  sqlReceivingPhotoCount,
 } from '@/lib/photos/queries/receiving-list';
 import { resolvePoRef } from '@/lib/photos/resolve-po-ref';
 import { attachPhotoWithLegacyUrl, deletePhoto } from '@/lib/photos/service';
@@ -70,6 +71,14 @@ function mapRow(row: {
     uploadedBy: row.uploadedBy,
     createdAt: row.createdAt,
   };
+}
+
+async function countReceivingPhotos(organizationId: string, receivingId: number): Promise<number> {
+  const result = await pool.query<{ photo_count: number }>(
+    `SELECT ${sqlReceivingPhotoCount('$2', '$1')}::int AS photo_count`,
+    [organizationId, receivingId],
+  );
+  return Number(result.rows[0]?.photo_count ?? 0);
 }
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
@@ -241,6 +250,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       receivingId,
       receivingLineId,
       photoId: photo.id,
+      totalPhotoCount: await countReceivingPhotos(ctx.organizationId, receivingId),
       source: 'receiving-photos.post',
     });
 
@@ -276,6 +286,7 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
         receivingId: existingPhoto.receivingId,
         receivingLineId: existingPhoto.receivingLineId,
         photoId: id,
+        totalPhotoCount: await countReceivingPhotos(ctx.organizationId, existingPhoto.receivingId),
         source: 'receiving-photos.delete',
       });
     }

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Loader2, MessageSquare } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
+import type { ClaimType } from '@/lib/zendesk-claim-template';
 
 const sellerMessageKey = (receivingId: number, lineId: number | null) =>
   ['receiving', 'claim-seller-message', receivingId, lineId ?? 0] as const;
@@ -19,6 +20,39 @@ interface SellerMessagePayload {
   model: string | null;
   zendeskTicketId: number | null;
   updatedAt: string;
+}
+
+interface ZendeskTicketPayload {
+  id?: number;
+  subject?: string | null;
+  description?: string | null;
+  raw_subject?: string | null;
+  tags?: string[];
+}
+
+function inferClaimType(text: string): ClaimType {
+  const haystack = text.toLowerCase();
+  if (haystack.includes('missing item') || /\bmissing\b/.test(haystack)) return 'missing';
+  if (haystack.includes('wrong item') || haystack.includes('incorrect item')) return 'wrong_item';
+  if (haystack.includes('vendor defect') || haystack.includes('defective')) return 'vendor_defect';
+  if (haystack.includes('unfound') || haystack.includes('no po match')) return 'unfound';
+  if (haystack.includes('repair service')) return 'repair_service';
+  return 'damage';
+}
+
+function fallbackTicketSubject(ticketId: number | null): string {
+  return ticketId ? `Receiving Claim — Ticket #${ticketId}` : 'Receiving Claim';
+}
+
+function fallbackTicketBody(ticketId: number | null): string {
+  return [
+    'Issue: Damage',
+    'Purchase Order: n/a',
+    'Tracking: n/a',
+    'Scope: package-wide (no specific item)',
+    '',
+    ticketId ? `Zendesk ticket: #${ticketId}` : null,
+  ].filter(Boolean).join('\n');
 }
 
 function useSellerMessage(
@@ -155,6 +189,73 @@ function SellerMessagePanel({
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not save'),
   });
 
+  const generate = useMutation({
+    mutationFn: async () => {
+      let subject = data?.subjectSnapshot?.trim() || fallbackTicketSubject(linkedTicketId);
+      let description = fallbackTicketBody(linkedTicketId);
+      let claimType: ClaimType = inferClaimType(subject);
+
+      if (linkedTicketId != null) {
+        const ticketRes = await fetch(`/api/zendesk/tickets/${linkedTicketId}`, { cache: 'no-store' });
+        if (ticketRes.ok) {
+          const ticketJson = await ticketRes.json().catch(() => null);
+          const ticket = ticketJson?.ticket as ZendeskTicketPayload | undefined;
+          const ticketSubject = String(ticket?.subject || ticket?.raw_subject || '').trim();
+          const ticketDescription = String(ticket?.description || '').trim();
+          if (ticketSubject) subject = ticketSubject;
+          if (ticketDescription) description = ticketDescription;
+          claimType = inferClaimType(
+            [
+              ticketSubject,
+              ticketDescription,
+              Array.isArray(ticket?.tags) ? ticket.tags.join(' ') : '',
+            ].join('\n'),
+          );
+        }
+      }
+
+      const res = await fetch('/api/receiving/zendesk-claim/assist-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivingId,
+          lineId,
+          claimType,
+          subject,
+          description,
+          zendeskTicketNumber: linkedTicketId != null ? `#${linkedTicketId}` : '#pending',
+          zendeskTicketId: linkedTicketId,
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `Request failed (${res.status})`);
+      }
+      return {
+        id: Number(json.sellerMessageId ?? 0) || Date.now(),
+        sellerMessage: String(json.sellerMessage || ''),
+        subjectSnapshot: subject,
+        model: typeof json.model === 'string' ? json.model : null,
+        zendeskTicketId: linkedTicketId,
+        updatedAt: new Date().toISOString(),
+        linksStripped: Boolean(json.linksStripped),
+        degraded: Boolean(json.degraded),
+      } as SellerMessagePayload & { linksStripped?: boolean; degraded?: boolean };
+    },
+    onSuccess: (msg) => {
+      qc.setQueryData(sellerMessageKey(receivingId, lineId), msg);
+      setDraft(msg.sellerMessage);
+      if (msg.linksStripped) {
+        toast.warning('Links were removed from the seller message');
+      } else if (msg.degraded) {
+        toast.success('Seller message generated from template');
+      } else {
+        toast.success('Seller message generated');
+      }
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not generate message'),
+  });
+
   const dirty = data ? draft.trim() !== data.sellerMessage.trim() : draft.trim().length > 0;
 
   const handleCopy = async () => {
@@ -214,9 +315,20 @@ function SellerMessagePanel({
             {error instanceof Error ? error.message : 'Could not load message'}
           </p>
         ) : !data && !draft.trim() ? (
-          <p className="py-6 text-center text-sm text-gray-400">
-            No seller message yet. Use AI refine in the claim modal to generate one.
-          </p>
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="max-w-[260px] text-sm text-gray-400">
+              No seller message yet for this ticket.
+            </p>
+            <button
+              type="button"
+              disabled={generate.isPending}
+              onClick={() => generate.mutate()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-[11px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+            >
+              {generate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+              AI generate
+            </button>
+          </div>
         ) : (
           <textarea
             value={draft}
@@ -240,7 +352,7 @@ function SellerMessagePanel({
         </button>
         <button
           type="button"
-          disabled={save.isPending || !dirty || !draft.trim()}
+          disabled={save.isPending || generate.isPending || !dirty || !draft.trim()}
           onClick={() => save.mutate(draft.trim())}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >

@@ -74,7 +74,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     queryClient.invalidateQueries({ queryKey });
     invalidateReceivingFeeds(queryClient);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient, receivingId]);
+  }, [queryClient, queryKey]);
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
@@ -86,9 +86,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     [data],
   );
 
-  const adapterUpload =
-    process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER === 'adapter';
-  const canAdd = nasConfigured() || adapterUpload;
+  const canAdd = nasConfigured() || process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER === 'adapter';
   const count = photos.length;
   const poCreatedAt = data?.receivingCreatedAt ?? null;
   const initialFolder = data?.initialNasFolder ?? '';

@@ -9,6 +9,10 @@
       "schedule": "45 0 * * *"
     },
     {
+      "path": "/api/cron/integrations/reconcile",
+      "schedule": "0 4 * * *"
+    },
+    {
       "path": "/api/cron/shipping/sync-due?limit=150&concurrency=8",
       "schedule": "*/15 * * * *"
     },

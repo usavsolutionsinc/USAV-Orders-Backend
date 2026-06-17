@@ -165,8 +165,13 @@ export function PhotoCaptureSurface({
         router.push(returnHref);
         return;
       }
-      shots.forEach((s) => {
-        photoUploadQueue.enqueue(scope, s.blob, s.previewUrl);
+      const existingCount = existingPhotos?.photos?.length ?? 0;
+      shots.forEach((s, index) => {
+        photoUploadQueue.enqueue(
+          { ...scope, fileIndex: existingCount + index + 1 },
+          s.blob,
+          s.previewUrl,
+        );
       });
       toast.message(`Uploading ${shots.length} photo${shots.length === 1 ? '' : 's'}…`, {
         description: 'Saving to NAS in the background.',
@@ -175,7 +180,7 @@ export function PhotoCaptureSurface({
       });
       router.push(returnHref);
     },
-    [scope, router, returnHref],
+    [existingPhotos?.photos?.length, scope, router, returnHref],
   );
 
   const handleCancel = useCallback(() => {

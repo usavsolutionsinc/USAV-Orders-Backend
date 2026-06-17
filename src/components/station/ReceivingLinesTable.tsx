@@ -316,7 +316,7 @@ function IncomingAttachTrackingButton({
           // dashboard paste-tracking button uses, so the two can't drift.
           className="inline-flex shrink-0 items-center transition-colors"
         >
-          <AddValueChipFace label="Add TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} />
+          <AddValueChipFace label="+ TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} />
         </button>
       }
     />

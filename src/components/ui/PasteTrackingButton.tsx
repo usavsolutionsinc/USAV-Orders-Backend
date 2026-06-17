@@ -63,7 +63,7 @@ export function PasteTrackingButton({ orderId }: { orderId: number }) {
       title="Paste a copied tracking number onto this order"
       className="inline-flex shrink-0 items-center transition-transform active:scale-95"
     >
-      <AddValueChipFace label="Add TRK#" icon={icon} colorClass={colorClass} underlineClass={underlineClass} />
+      <AddValueChipFace label="+ TRK#" icon={icon} colorClass={colorClass} underlineClass={underlineClass} />
     </button>
   );
 }

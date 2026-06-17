@@ -82,6 +82,7 @@ type ReceivingPhotoChangedPayload = {
   receivingId: number;
   receivingLineId?: number | null;
   photoId?: number | null;
+  totalPhotoCount?: number | null;
   source: string;
 };
 
@@ -662,6 +663,8 @@ export async function publishReceivingPhotoChanged(payload: ReceivingPhotoChange
   const receivingLineId =
     payload.receivingLineId == null ? null : Number(payload.receivingLineId);
   const photoId = payload.photoId == null ? null : Number(payload.photoId);
+  const totalPhotoCount =
+    payload.totalPhotoCount == null ? null : Number(payload.totalPhotoCount);
 
   await publishEvent(getStationChannelName(payload.organizationId), 'receiving-photo.changed', {
     type: 'receiving-photo.changed',
@@ -670,6 +673,8 @@ export async function publishReceivingPhotoChanged(payload: ReceivingPhotoChange
     receiving_line_id:
       receivingLineId != null && Number.isFinite(receivingLineId) ? receivingLineId : null,
     photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
+    total_photo_count:
+      totalPhotoCount != null && Number.isFinite(totalPhotoCount) ? totalPhotoCount : null,
     source: payload.source,
     timestamp: formatPSTTimestamp(),
   });

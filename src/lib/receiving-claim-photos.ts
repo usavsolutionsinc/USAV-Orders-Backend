@@ -6,7 +6,9 @@ import type { NextRequest } from 'next/server';
  * Server-side reader for a receiving photo's raw bytes, so the claim route can
  * upload the actual file to Zendesk (as an attachment) instead of pasting a link.
  *
- * Handles the two URL shapes the picker stores:
+ * Handles the URL shapes the picker stores:
+ *   • NAS app route ("/api/nas/<path>") → read through the office media agent
+ *     when configured, so Vercel can upload the original bytes to Zendesk.
  *   • NAS dev route ("/api/nas-dev/<path>") → read straight off the mounted
  *     filesystem (the LAN box running the app has the share mounted). No HTTP /
  *     auth round-trip needed.
@@ -18,7 +20,9 @@ import type { NextRequest } from 'next/server';
 const NAS_DEV_ROOT = resolve(
   process.env.NAS_DEV_ROOT || '/Volumes/USAV Media/Puchasing photos/2026',
 );
+const NAS_APP_PREFIX = '/api/nas/';
 const NAS_DEV_PREFIX = '/api/nas-dev/';
+const NAS_AGENT_RECEIVING_PREFIX = '/_agent/file/receiving/';
 
 const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -34,48 +38,115 @@ export interface PhotoBytes {
   contentType: string;
 }
 
+function decodePath(pathname: string): string {
+  return pathname
+    .split('/')
+    .filter(Boolean)
+    .map((s) => {
+      try {
+        return decodeURIComponent(s);
+      } catch {
+        return s;
+      }
+    })
+    .join('/');
+}
+
+function encodePath(pathname: string): string {
+  return pathname
+    .split('/')
+    .filter(Boolean)
+    .map((s) => encodeURIComponent(s))
+    .join('/');
+}
+
+async function readNasDevPhoto(relPath: string): Promise<PhotoBytes | null> {
+  const rel = decodePath(relPath);
+  const target = resolve(NAS_DEV_ROOT, rel);
+  // Path-traversal guard: stay inside the configured root.
+  if (target !== NAS_DEV_ROOT && !target.startsWith(NAS_DEV_ROOT + sep)) return null;
+  try {
+    const buf = await readFile(target);
+    const ext = extname(target).toLowerCase();
+    return {
+      bytes: new Uint8Array(buf),
+      filename: basename(target) || 'photo.jpg',
+      contentType: MIME[ext] || 'application/octet-stream',
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function readReceivingPhotoViaAgent(relPath: string): Promise<PhotoBytes | null> {
+  const base = (process.env.NAS_AGENT_URL || '').replace(/\/+$/, '');
+  const token = process.env.NAS_AGENT_TOKEN || '';
+  if (!base || !token) return null;
+
+  const rel = decodePath(relPath);
+  const encodedRel = encodePath(rel);
+  if (!encodedRel) return null;
+
+  try {
+    const res = await fetch(`${base}/file/receiving/${encodedRel}`, {
+      headers: { 'x-agent-token': token },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    const ab = await res.arrayBuffer();
+    const ext = extname(rel).toLowerCase();
+    return {
+      bytes: new Uint8Array(ab),
+      filename: basename(rel) || `photo${ext || '.jpg'}`,
+      contentType: res.headers.get('content-type') || MIME[ext] || 'application/octet-stream',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function readPhotoBytes(rawUrl: string): Promise<PhotoBytes | null> {
   const url = (rawUrl || '').trim();
   if (!url) return null;
   // Drop any query (e.g. ?thumb=128) — the attachment should be the full original.
   const noQuery = url.split('?')[0];
 
+  // NAS app route → office media agent. This is the production path for photos
+  // written through /api/nas because Vercel cannot read /Volumes directly.
+  if (noQuery.startsWith(NAS_APP_PREFIX)) {
+    return readReceivingPhotoViaAgent(noQuery.slice(NAS_APP_PREFIX.length));
+  }
+
   // NAS dev route → filesystem read.
   if (noQuery.startsWith(NAS_DEV_PREFIX)) {
-    const rel = noQuery
-      .slice(NAS_DEV_PREFIX.length)
-      .split('/')
-      .map((s) => {
-        try {
-          return decodeURIComponent(s);
-        } catch {
-          return s;
-        }
-      })
-      .join('/');
-    const target = resolve(NAS_DEV_ROOT, rel);
-    // Path-traversal guard: stay inside the configured root.
-    if (target !== NAS_DEV_ROOT && !target.startsWith(NAS_DEV_ROOT + sep)) return null;
-    try {
-      const buf = await readFile(target);
-      const ext = extname(target).toLowerCase();
-      return {
-        bytes: new Uint8Array(buf),
-        filename: basename(target) || 'photo.jpg',
-        contentType: MIME[ext] || 'application/octet-stream',
-      };
-    } catch {
-      return null;
-    }
+    return readNasDevPhoto(noQuery.slice(NAS_DEV_PREFIX.length));
+  }
+
+  // Agent URL saved directly → keep using the tokened agent path.
+  if (noQuery.startsWith(NAS_AGENT_RECEIVING_PREFIX)) {
+    return readReceivingPhotoViaAgent(noQuery.slice(NAS_AGENT_RECEIVING_PREFIX.length));
   }
 
   // Absolute URL (Vercel Blob / nginx tunnel) → fetch.
   if (/^https?:\/\//i.test(noQuery)) {
     try {
+      const parsed = new URL(noQuery);
+      if (parsed.pathname.startsWith(NAS_APP_PREFIX)) {
+        return readReceivingPhotoViaAgent(parsed.pathname.slice(NAS_APP_PREFIX.length));
+      }
+      if (parsed.pathname.startsWith(NAS_DEV_PREFIX)) {
+        return readNasDevPhoto(parsed.pathname.slice(NAS_DEV_PREFIX.length));
+      }
+      if (parsed.pathname.startsWith(NAS_AGENT_RECEIVING_PREFIX)) {
+        return readReceivingPhotoViaAgent(
+          parsed.pathname.slice(NAS_AGENT_RECEIVING_PREFIX.length),
+        );
+      }
+
       const res = await fetch(noQuery, { cache: 'no-store' });
       if (!res.ok) return null;
       const ab = await res.arrayBuffer();
-      const pathname = new URL(noQuery).pathname;
+      const pathname = parsed.pathname;
       const ext = extname(pathname).toLowerCase();
       return {
         bytes: new Uint8Array(ab),
