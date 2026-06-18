@@ -57,15 +57,45 @@ The Settings catalog entry is **"Ollama (AI) — Local LLM via Cloudflare tunnel
 local loopback and exposed to Vercel via a Cloudflare tunnel. There is **no cloud LLM
 fallback** — if the local box is down, AI features return a clear error.
 
-### How AI calls work — `src/lib/ai/hermes-tool-call.ts`
-A single OpenAI-style request with **forced tool call** (`tool_choice: 'required'`,
-`temperature: 0`); returns the parsed tool arguments (caller validates). This shared
-harness is the path for every new AI feature (see the AI-automation memory). Consumers:
+### Tunnel contract
+
+The named Cloudflare tunnel on this workstation maps:
+
+```text
+https://hermes.michaelgarisek.com/v1 -> http://127.0.0.1:8642/v1
+```
+
+Production and preview Vercel env should use the public tunnel URL:
+
+```text
+HERMES_API_URL=https://hermes.michaelgarisek.com/v1
+HERMES_MODEL=hermes-agent
+```
+
+Keep `HERMES_API_KEY` server-only. If the tunnel is later protected by Cloudflare
+Access Service Auth, also set `CLOUDFLARE_ACCESS_CLIENT_ID` and
+`CLOUDFLARE_ACCESS_CLIENT_SECRET`; `src/lib/ai/hermes-client.ts` forwards those
+headers on every Hermes request.
+
+### How AI calls work
+
+Most deterministic extraction/drafting calls use `src/lib/ai/hermes-tool-call.ts`: a
+single OpenAI-style request with **forced tool call** (`tool_choice: 'required'`,
+`temperature: 0`); returns the parsed tool arguments (caller validates).
+
+The live `hermes-agent` runtime on this workstation currently answers strict JSON
+prompts reliably but does not always emit OpenAI `tool_calls`. New features that need to
+work through the paired ChatGPT/Hermes agent can use strict JSON chat via
+`src/lib/ai/hermes-client.ts`, as `POST /api/sourcing/research` does.
+
+Consumers:
 
 - `POST /api/ai/chat` + `/api/ai/chat/stream` — the assistant (rate-limited via
   `AI_CHAT_RATE_LIMIT`, default 25/min).
 - `POST /api/ai/search` — RAG over product manuals (`queryNemoClawRag`).
 - `GET /api/ai/health` / `/api/ai/chat-health` — `/models` probe.
+- `POST /api/sourcing/research` — runs the sourcing scour, then asks Hermes to
+  rank candidates by fit, price, and risk for the buyer.
 - Server-side feature LLMs: `lib/po-gmail/extract-llm.ts` (PO-email extraction),
   `lib/ai/zendesk-claim-{draft,classify}-llm.ts` (warranty claim drafting/classification).
 
@@ -77,7 +107,8 @@ Embeddings are the one cloud dependency — Gemini `text-embedding-004` via
 |---|---|
 | `HERMES_API_URL` | Gateway base (default `http://127.0.0.1:8642/v1`). |
 | `HERMES_API_KEY` | Optional bearer for the gateway. |
-| `AI_MODEL` | Default model (e.g. `gemma-4-e4b`). |
+| `HERMES_MODEL` / `AI_MODEL` | Default model. Chat defaults to `hermes-agent`; forced tool calls default to `gemma-4-e4b` unless env overrides. |
+| `CLOUDFLARE_ACCESS_CLIENT_ID` / `CLOUDFLARE_ACCESS_CLIENT_SECRET` | Optional Cloudflare Access service-token headers for a protected tunnel. |
 | `AI_CHAT_RATE_LIMIT` / `AI_SEARCH_RATE_LIMIT` | Per-minute caps (25 / 40). |
 | `OLLAMA_BASE_URL` / `OLLAMA_TUNNEL_URL` / `OLLAMA_MODEL` | Vault `OllamaCredentials` shape (catalog representation of the local-LLM connection). |
 | `GEMINI_API_KEY` | Embeddings fallback. |

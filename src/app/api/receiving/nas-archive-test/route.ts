@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getNasStorageTarget } from '@/lib/tenancy/settings';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -19,7 +21,7 @@ export const runtime = 'nodejs';
  *   NAS_AGENT_TOKEN = <shared secret, also on the agent>
  */
 export const POST = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     try {
       const base = (process.env.NAS_AGENT_URL || '').replace(/\/+$/, '');
       const token = process.env.NAS_AGENT_TOKEN || '';
@@ -33,11 +35,23 @@ export const POST = withAuth(
       const body = await req.json().catch(() => ({} as Record<string, unknown>));
       const name =
         String((body as { name?: unknown }).name || '').trim() || `TEST-${Date.now()}`;
+      let claimTarget = { root: '', folder: '' };
+      try {
+        const org = await getOrganization(ctx.organizationId);
+        if (org) claimTarget = getNasStorageTarget(org.settings, 'claims');
+      } catch {
+        claimTarget = { root: '', folder: '' };
+      }
 
       const res = await fetch(`${base}/test-folder`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-agent-token': token },
-        body: JSON.stringify({ name, note: 'claim popover prod test button' }),
+        body: JSON.stringify({
+          name,
+          note: 'claim popover prod test button',
+          archiveRoot: claimTarget.root,
+          archiveFolder: claimTarget.folder,
+        }),
         cache: 'no-store',
       });
       const data = (await res.json().catch(() => null)) as

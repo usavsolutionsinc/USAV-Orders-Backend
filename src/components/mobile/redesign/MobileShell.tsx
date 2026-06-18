@@ -5,8 +5,7 @@ import { usePathname } from 'next/navigation';
 import { RedesignedBottomNav } from './RedesignedBottomNav';
 import { MobileTopBar } from './MobileTopBar';
 import { TOKENS } from './DesignSystem';
-import { ReceivingShareToPhoneSheet } from '@/components/mobile/receiving/ReceivingShareToPhoneSheet';
-import { ReceivingPhotoRequestCamera } from '@/components/mobile/receiving/ReceivingPhotoRequestCamera';
+import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
 
 /**
  * Global Mobile Shell for 2026 Redesign
@@ -67,13 +66,8 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
       {/* Shared Bottom Nav */}
       {showNav && <RedesignedBottomNav />}
 
-      {/* Phone-side receiver for the desktop "share to phone" action — pops a
-          "Shared from computer" sheet with a Take photos CTA. */}
-      <ReceivingShareToPhoneSheet />
-
-      {/* Phone-side receiver for desktop PO#/tracking scans — auto-opens the
-          spam camera for whatever the same staff just scanned in at the station. */}
-      <ReceivingPhotoRequestCamera />
+      {/* Phone↔desktop receiving bridge (scan → camera, share → sheet). */}
+      <ReceivingPhoneBridgeMount />
     </div>
   );
 };

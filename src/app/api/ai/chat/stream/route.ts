@@ -23,15 +23,13 @@ import { formatAnalysisForPrompt, resolveLocalAiAnswer } from '@/lib/ai/ops-assi
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
 import { checkRateLimit } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
+import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiStructuredAnswer } from '@/lib/ai/types';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const runtime = 'nodejs';
 
 type AiChatBody = { sessionId?: string; message?: string };
-
-const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
-const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
 const encoder = new TextEncoder();
 function sse(event: string, data: unknown): Uint8Array {
@@ -190,16 +188,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         send('meta', { mode: localResolution?.analysis ? 'hybrid' : 'assistant', sessionId });
         send('step', { label: 'Asking the assistant' });
 
-        const hermesRes = await fetch(`${HERMES_API_URL}/chat/completions`, {
+        const hermesRes = await fetch(`${getHermesApiUrl()}/chat/completions`, {
           method: 'POST',
-          headers: {
+          headers: getHermesHeaders({
             'Content-Type': 'application/json',
-            ...(HERMES_API_KEY && { Authorization: `Bearer ${HERMES_API_KEY}` }),
             'X-Hermes-Session-Id': sessionId,
             'X-Source': 'usav',
-          },
+          }),
           body: JSON.stringify({
-            model: process.env.HERMES_MODEL || 'hermes-agent',
+            model: getHermesModel(),
             messages: [
               {
                 role: 'system',

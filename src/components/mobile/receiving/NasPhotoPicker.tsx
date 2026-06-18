@@ -17,12 +17,10 @@ interface NasPhotoPickerProps {
 }
 
 /**
- * Full-screen modal that browses the NAS photo folder (via the read-only nginx
- * file server) and attaches selected files to the current receiving scope.
+ * Full-screen modal that browses the receiving NAS folder via GET /api/nas
+ * (same-origin proxy) and attaches selected files to the current scope.
  *
- * No camera, no upload — it stores the NAS URL on the photo row. The browser
- * reads both the listing and the thumbnails straight from the NAS, since the
- * Vercel server can't see the LAN.
+ * No camera — selected URLs are linked through POST /api/receiving-photos.
  */
 export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerProps) {
   const [dir, setDir] = useState('');

@@ -13,6 +13,7 @@ import { StaffScheduleSidebarPanel } from './StaffScheduleSidebarPanel';
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
 import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
+import { NasPhotosSidebarPanel } from './NasPhotosSidebarPanel';
 import { BoseModelsSidebarPanel } from './sourcing/BoseModelsSidebarPanel';
 import { CompatibilitySidebarPanel } from './sourcing/CompatibilitySidebarPanel';
 import { SuppliersSidebarPanel } from './sourcing/SuppliersSidebarPanel';
@@ -35,6 +36,7 @@ function panelFor(section: AdminSection): JSX.Element | null {
     case 'connections':     return <ConnectionsSidebarPanel />;
     case 'architecture':    return <OperationsSidebarPanel />;
     case 'logs':            return <LogsSidebarPanel />;
+    case 'station_photos':  return <NasPhotosSidebarPanel />;
     default:                return null;
   }
 }

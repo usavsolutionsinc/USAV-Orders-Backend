@@ -11,6 +11,7 @@ import {
   deliveredUnscannedBaseSql,
   getDeliveredUnscannedCount,
   INBOUND_SHIPMENT_PREDICATE,
+  ZOHO_PO_RESOLVED_SHIPMENT_PREDICATE,
   DELIVERED_UNSCANNED_WINDOW_DAYS,
 } from './delivered-unscanned';
 
@@ -21,6 +22,7 @@ test('base SQL embeds the inbound predicate, dedupe, and unscanned guard', () =>
   assert.match(sql, /NOT EXISTS/);          // no receiving_scans
   assert.match(sql, /receiving_scans rs/);
   assert.ok(sql.includes(INBOUND_SHIPMENT_PREDICATE));
+  assert.ok(sql.includes(ZOHO_PO_RESOLVED_SHIPMENT_PREDICATE));
   // Window is parameterized, not hard-coded.
   assert.match(sql, /\$1 \|\| ' days'/);
 });

@@ -17,6 +17,26 @@ const BrandSchema = z.object({
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
+const NasStorageTargetSchema = z.object({
+  root: z.string().default(''),
+  folder: z.string().default(''),
+});
+
+export const DEFAULT_NAS_STORAGE_TARGETS = {
+  receiving: {
+    root: '/Volumes/USAV Media/Puchasing photos/2026',
+    folder: 'JUN 2026',
+  },
+  shipping: {
+    root: '/Volumes/Shipping/2026',
+    folder: 'Jun 2026',
+  },
+  claims: {
+    root: '/Volumes/USAV Media/Puchasing photos/2026/2 Zendesk 2026',
+    folder: '',
+  },
+} as const;
+
 export const OrgSettingsSchema = z.object({
   timezone: z.string().default('America/Los_Angeles'),
   currency: z.string().length(3).default('USD'),
@@ -55,6 +75,17 @@ export const OrgSettingsSchema = z.object({
       active: z.enum(['test', 'prod']).default('prod'),
     })
     .default({ test: '', prod: '', active: 'prod' }),
+  // Workflow-specific NAS storage targets. `root` is the real mount/path used
+  // by the office/NAS agent; `folder` is the active relative folder for that
+  // workflow, typically the current month. Receiving still supports per-station
+  // overrides through stationNasPhotoFolders.
+  nasStorageTargets: z
+    .object({
+      receiving: NasStorageTargetSchema.default(DEFAULT_NAS_STORAGE_TARGETS.receiving),
+      shipping: NasStorageTargetSchema.default(DEFAULT_NAS_STORAGE_TARGETS.shipping),
+      claims: NasStorageTargetSchema.default(DEFAULT_NAS_STORAGE_TARGETS.claims),
+    })
+    .default(DEFAULT_NAS_STORAGE_TARGETS),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -89,4 +120,17 @@ export function getAllNasBaseUrls(settings: OrgSettings): string[] {
   return [servers.test, servers.prod]
     .map((u) => (u || '').trim().replace(/\/+$/, ''))
     .filter(Boolean);
+}
+
+export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;
+
+export function getNasStorageTarget(
+  settings: OrgSettings,
+  key: NasStorageTargetKey,
+): { root: string; folder: string } {
+  const target = settings.nasStorageTargets?.[key] ?? DEFAULT_NAS_STORAGE_TARGETS[key];
+  return {
+    root: (target.root || '').trim().replace(/\/+$/, ''),
+    folder: (target.folder || '').trim().replace(/^\/+|\/+$/g, ''),
+  };
 }

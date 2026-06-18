@@ -7,6 +7,7 @@ import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
+import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 import {
   X,
   Download,
@@ -111,12 +112,13 @@ export function PhotoGallery({
     const parsed = photos
       .map((photo) => {
         if (typeof photo === 'string') {
-          return photo.trim() ? { id: null as number | null, url: photo } : null;
+          const trimmed = photo.trim();
+          return trimmed ? { id: null as number | null, url: normalizePhotoDisplayUrl(trimmed) } : null;
         }
         if (!photo?.url?.trim()) return null;
         const idNum =
           typeof photo.id === 'number' && Number.isFinite(photo.id) ? photo.id : null;
-        return { id: idNum, url: photo.url };
+        return { id: idNum, url: normalizePhotoDisplayUrl(photo.url) };
       })
       .filter((p): p is { id: number | null; url: string } => p !== null);
 

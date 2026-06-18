@@ -2,33 +2,79 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/lib/toast';
-import { Loader2, X } from '@/components/Icons';
+import { Copy, Loader2, MessageSquare, Sparkles, Unlink, X } from '@/components/Icons';
+import { copySellerClaimMessageWithPersist } from '@/lib/receiving-claim-seller-copy';
+import {
+  parseZendeskTicketId,
+  sellerDraftMatchesTicket,
+} from '@/lib/receiving-claim-seller-ticket-match';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import {
   CLAIM_TYPE_OPTIONS,
-  CLAIM_SEVERITY_OPTIONS,
   type ClaimType,
-  type ClaimSeverity,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { PaneHeaderTabs } from '@/components/ui/pane-header';
+import { SkeletonBase } from '@/design-system/components/Skeletons';
+import {
+  LinearWorkflowStepper,
+  type LinearStepState,
+} from '@/components/receiving/workspace/ReceivingProgressStepper';
 import { priorityBadge, statusBadge } from '@/components/support/zendesk/badges';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 
-// Small preview for the selection grid. NAS-dev URLs support ?thumb (a tiny
-// webp); other URLs (Blob) are shown as-is.
+// Small preview for the selection grid. Dev proxy supports ?thumb; prod loads
+// the full image through the same-origin /api/nas proxy (session cookie).
 function claimThumb(url: string): string {
-  if (url.startsWith('/api/nas-dev/')) {
-    return url + (url.includes('?') ? '&' : '?') + 'thumb=96';
+  const normalized = normalizePhotoDisplayUrl(url);
+  if (normalized.startsWith('/api/nas-dev/')) {
+    return normalized + (normalized.includes('?') ? '&' : '?') + 'thumb=96';
   }
-  return url;
+  return normalized;
 }
 
 type ClaimModalMode = 'create' | 'link';
+type CreateClaimStep = 'internal' | 'seller';
 
-const MODE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'create', label: 'New ticket' },
-  { id: 'link', label: 'Link existing' },
-];
+interface FiledTicket {
+  number: string;
+  url: string | null;
+  id: number | null;
+}
+
+
+const SELLER_SKELETON_WIDTHS = ['92%', '88%', '76%', '84%', '68%', '56%'] as const;
+
+function SellerMessageSkeleton() {
+  return (
+    <div className="space-y-2.5 rounded-lg border border-blue-100 bg-white px-3 py-3" aria-hidden>
+      {SELLER_SKELETON_WIDTHS.map((width) => (
+        <SkeletonBase key={width} width={width} height="0.75rem" />
+      ))}
+    </div>
+  );
+}
+
+const CLAIM_WIZARD_STEPS = [
+  { key: 'internal', label: 'Ticket Creation' },
+  { key: 'seller', label: 'Seller Message' },
+] as const;
+
+function claimWizardStepStates(
+  createStep: CreateClaimStep,
+  filedTicket: FiledTicket | null,
+  mode: ClaimModalMode,
+): Record<string, LinearStepState> {
+  const ticketStepDone = !!filedTicket || mode === 'link';
+  if (createStep === 'seller' && ticketStepDone) {
+    return { internal: 'done', seller: 'active' };
+  }
+  if (ticketStepDone) {
+    return { internal: 'done', seller: 'pending' };
+  }
+  return { internal: 'active', seller: 'pending' };
+}
 
 /** Slim ticket shape returned by GET /api/receiving/zendesk-claim/link. */
 interface LinkCandidate {
@@ -63,6 +109,8 @@ interface Props {
   onClose: () => void;
   /** Called with the formatted ticket number on success ("#12345"). */
   onTicketCreated: (ticketNumber: string) => void;
+  /** Called after a committed ticket link is removed (clears Support chip). */
+  onTicketUnlinked?: () => void;
 }
 
 /**
@@ -77,16 +125,19 @@ interface Props {
  * Operator can still manually paste a # via the existing affordance if the
  * bridge fails or returns no number.
  */
-export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicketCreated }: Props) {
+export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicketCreated, onTicketUnlinked }: Props) {
   // Auto-select 'unfound' when the carton has no Zoho match — support's
   // routing for unmatched-tracking claims is different from damage/missing.
   const initialClaimType: ClaimType =
     row.receiving_source === 'unmatched' ? 'unfound' : 'damage';
   const [claimType, setClaimType] = useState<ClaimType>(initialClaimType);
-  const [severity, setSeverity] = useState<ClaimSeverity>('medium');
   // 'create' files a fresh ticket; 'link' attaches an existing Zendesk ticket
   // to this carton/line instead (search → pick → POST .../link).
   const [mode, setMode] = useState<ClaimModalMode>('create');
+  const [createStep, setCreateStep] = useState<CreateClaimStep>('internal');
+  const [filedTicket, setFiledTicket] = useState<FiledTicket | null>(null);
+  /** Last ticket id/number we bootstrapped seller step for — re-run when it changes. */
+  const sellerBootstrapKey = useRef<string | null>(null);
   const [ticketQuery, setTicketQuery] = useState('');
   const [ticketResults, setTicketResults] = useState<LinkCandidate[]>([]);
   // Tickets already linked to OTHER items are excluded server-side; we only
@@ -95,9 +146,15 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<LinkCandidate | null>(null);
   const [linking, setLinking] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [linkCommitted, setLinkCommitted] = useState(false);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [sellerMessage, setSellerMessage] = useState('');
+  const [sellerMessageId, setSellerMessageId] = useState<number | null>(null);
+  const [aiModel, setAiModel] = useState('');
   // Photos to attach to the Zendesk ticket as real files (default: none — pick
   // the ones to send; all PO photos are archived to the ticket folder regardless).
   const [photos, setPhotos] = useState<{ id: number; url: string }[]>([]);
@@ -122,8 +179,12 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
     if (!open) return;
     // Seed the operator note from a return-match prefill when present so the
     // claim opens populated; otherwise start blank.
+    setLinkCommitted(false);
     setReason(prefillReason ?? '');
     setDraftBody(null);
+    setSellerMessage('');
+    setSellerMessageId(null);
+    setAiModel('');
     setSubject('');
     setDescription('');
     setClaimType(
@@ -135,6 +196,9 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
     setPhotos([]);
     setSelectedPhotoIds(new Set());
     setMode('create');
+    setCreateStep('internal');
+    setFiledTicket(null);
+    sellerBootstrapKey.current = null;
     setTicketQuery('');
     setTicketResults([]);
     setHiddenLinked(0);
@@ -154,7 +218,10 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
       .then((data) => {
         const list: { id: number; url: string }[] = (data?.photos ?? [])
           .filter((p: { photoUrl?: string }) => !!p.photoUrl?.trim())
-          .map((p: { id: number; photoUrl: string }) => ({ id: p.id, url: p.photoUrl }));
+          .map((p: { id: number; photoUrl: string }) => ({
+            id: p.id,
+            url: normalizePhotoDisplayUrl(p.photoUrl),
+          }));
         setPhotos(list);
         // Start with none selected — the operator picks exactly which photos go
         // to Zendesk. (All PO photos are still archived to the ticket folder.)
@@ -169,7 +236,7 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
   // Fetch the server-rendered template whenever inputs change. Debounced so
   // typing in "reason" doesn't hammer the endpoint.
   useEffect(() => {
-    if (!open || mode !== 'create' || !row.receiving_id) return;
+    if (!open || mode !== 'create' || createStep !== 'internal' || !row.receiving_id) return;
     const ctrl = new AbortController();
     const handle = window.setTimeout(() => {
       setPreviewLoading(true);
@@ -180,7 +247,6 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
           receivingId: row.receiving_id,
           lineId: row.id,
           claimType,
-          severity,
           reason: reason.trim(),
         }),
         signal: ctrl.signal,
@@ -206,7 +272,7 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
       ctrl.abort();
       window.clearTimeout(handle);
     };
-  }, [open, mode, row.receiving_id, row.id, claimType, severity, reason]);
+  }, [open, mode, createStep, row.receiving_id, row.id, claimType, reason]);
 
   // Link mode: fetch candidate tickets — the most recent ones when the search
   // box is empty (the common case: the related ticket was just filed), or a
@@ -261,13 +327,83 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
     () => CLAIM_TYPE_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
     [],
   );
-  const severityItems = useMemo<HorizontalSliderItem[]>(
-    () => CLAIM_SEVERITY_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
-    [],
+
+  const claimStepStates = useMemo(
+    () => claimWizardStepStates(createStep, filedTicket, mode),
+    [createStep, filedTicket, mode],
   );
 
-  const submit = async () => {
-    if (submitting || !row.receiving_id) return;
+  const sellerStepReady = !!filedTicket || mode === 'link';
+
+  const resetSellerDraftState = () => {
+    setSellerMessage('');
+    setSellerMessageId(null);
+    setAiModel('');
+    sellerBootstrapKey.current = null;
+  };
+
+  const clearPersistedSellerDraft = async () => {
+    if (!row.receiving_id) return;
+    const sp = new URLSearchParams({ receivingId: String(row.receiving_id) });
+    if (row.id != null) sp.set('lineId', String(row.id));
+    try {
+      await fetch(`/api/receiving/zendesk-claim/seller-message?${sp}`, { method: 'DELETE' });
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  const handleModeChange = (next: ClaimModalMode) => {
+    setMode(next);
+    if (next === 'link') {
+      setCreateStep('seller');
+      sellerBootstrapKey.current = null;
+    } else {
+      setCreateStep('internal');
+      setLinkCommitted(false);
+    }
+  };
+
+  const selectLinkTicket = (t: LinkCandidate | null) => {
+    if (!t) {
+      setSelectedTicket(null);
+      if (mode === 'link') {
+        setFiledTicket(null);
+        setLinkCommitted(false);
+        resetSellerDraftState();
+      }
+      return;
+    }
+    const ticketChanged = selectedTicket?.id !== t.id;
+    setSelectedTicket(t);
+    if (mode === 'link') {
+      setFiledTicket({ number: `#${t.id}`, url: t.url, id: t.id });
+      setLinkCommitted(false);
+      if (ticketChanged) resetSellerDraftState();
+    }
+  };
+
+  const handleClaimStepClick = (key: string) => {
+    if (key === 'internal') {
+      if (mode === 'link' && !filedTicket) {
+        setMode('create');
+      }
+      setCreateStep('internal');
+      return;
+    }
+    if (key === 'seller' && sellerStepReady) {
+      setCreateStep('seller');
+    }
+  };
+
+  const advanceToSellerStep = (ticket: FiledTicket) => {
+    setFiledTicket(ticket);
+    setCreateStep('seller');
+    sellerBootstrapKey.current = null;
+  };
+
+  const submitInternal = async () => {
+    if (submitting || !row.receiving_id || filedTicket) return;
     setSubmitting(true);
     setDraftBody(null);
     try {
@@ -281,7 +417,6 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
           receivingId: row.receiving_id,
           lineId: row.id,
           claimType,
-          severity,
           reason: reason.trim(),
           subject: subject.trim(),
           description: description.trim(),
@@ -294,28 +429,207 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
         toast.error(data?.error || 'Could not file the claim');
         return;
       }
-      if (data.ticketNumber) {
-        const url = typeof data.ticketUrl === 'string' ? data.ticketUrl : null;
-        toast.success(`Claim ${data.ticketNumber} created`, {
-          action: url
-            ? { label: 'Open', onClick: () => window.open(url, '_blank', 'noopener') }
+      const ticketNumber = data.ticketNumber ? String(data.ticketNumber) : '';
+      const ticketUrl = typeof data.ticketUrl === 'string' ? data.ticketUrl : null;
+      const ticketId =
+        ticketNumber && /^#?(\d+)$/.test(ticketNumber.replace(/\s+/g, ''))
+          ? Number(ticketNumber.replace(/^#/, ''))
+          : null;
+
+      if (ticketNumber) {
+        toast.success(`Internal ticket ${ticketNumber} filed`, {
+          action: ticketUrl
+            ? { label: 'Open', onClick: () => window.open(ticketUrl, '_blank', 'noopener') }
             : undefined,
         });
-        onTicketCreated(String(data.ticketNumber));
+        onTicketCreated(ticketNumber);
       } else {
-        toast.success('Claim filed — paste the Zendesk # back when assigned');
+        toast.success('Claim filed — continue to seller message when the ticket # is assigned');
       }
-      // Surface a NAS-archive problem so a claim whose photos didn't archive
-      // isn't silently treated as fully done.
       if (data.archiveWarning) {
         toast.warning(String(data.archiveWarning), { duration: 8000 });
       }
-      onClose();
+
+      advanceToSellerStep({
+        number: ticketNumber || 'pending',
+        url: ticketUrl,
+        id: ticketId,
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const draftSellerMessage = async (ticket: FiledTicket = filedTicket!) => {
+    if (aiLoading || !row.receiving_id || !ticket?.number || ticket.number === 'pending') return;
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/assist-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivingId: row.receiving_id,
+          lineId: row.id,
+          claimType,
+          reason: reason.trim(),
+          subject: subject.trim(),
+          description: description.trim(),
+          zendeskTicketNumber: ticket.number,
+          zendeskTicketId: ticket.id,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not draft seller message');
+        return;
+      }
+      setSellerMessage(typeof data.sellerMessage === 'string' ? data.sellerMessage : '');
+      if (typeof data.sellerMessageId === 'number' && data.sellerMessageId > 0) {
+        setSellerMessageId(data.sellerMessageId);
+      }
+      setAiModel(typeof data.model === 'string' ? data.model : '');
+      if (data.linksStripped) {
+        toast.warning('Links were removed from the seller message (marketplace TOS)', { duration: 6000 });
+      }
+      if (!data.degraded) {
+        toast.success('Seller message drafted');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not draft seller message');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleCopySellerMessage = async () => {
+    const text = sellerMessage.trim();
+    if (!text || !row.receiving_id) return;
+    const { ok, messageId } = await copySellerClaimMessageWithPersist({
+      text,
+      messageId: sellerMessageId,
+      receivingId: row.receiving_id,
+      lineId: row.id ?? null,
+      subjectSnapshot: subject.trim(),
+    });
+    if (messageId != null) setSellerMessageId(messageId);
+    if (ok) {
+      toast.success(
+        messageId != null
+          ? `Copied · Seller msg #${messageId} (header clipboard)`
+          : 'Copied to clipboard',
+      );
+    } else {
+      toast.error('Could not copy');
+    }
+  };
+
+  const finishSellerStep = async () => {
+    const text = sellerMessage.trim();
+    if (text && row.receiving_id) {
+      try {
+        await fetch('/api/receiving/zendesk-claim/seller-message', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receivingId: row.receiving_id,
+            lineId: row.id ?? null,
+            sellerMessage: text,
+            subjectSnapshot: subject.trim(),
+          }),
+        });
+      } catch {
+        /* best-effort — assist-seller may have already saved */
+      }
+    }
+    onClose();
+  };
+
+  // Step 2: restore saved draft or auto-generate seller message (includes filed ticket #).
+  useEffect(() => {
+    if (!open || createStep !== 'seller' || !filedTicket || !row.receiving_id) return;
+
+    const bootstrapKey = `${filedTicket.id ?? ''}:${filedTicket.number}`;
+    if (sellerBootstrapKey.current === bootstrapKey) return;
+    sellerBootstrapKey.current = bootstrapKey;
+
+    const ctrl = new AbortController();
+    const bootstrap = async () => {
+      const sp = new URLSearchParams({ receivingId: String(row.receiving_id) });
+      if (row.id != null) sp.set('lineId', String(row.id));
+      try {
+        const res = await fetch(`/api/receiving/zendesk-claim/seller-message?${sp}`, {
+          cache: 'no-store',
+          signal: ctrl.signal,
+        });
+        const data = await res.json().catch(() => null);
+        const saved = data?.message?.sellerMessage;
+        const savedTicketId = data?.message?.zendeskTicketId;
+        const matchesTicket = sellerDraftMatchesTicket(
+          savedTicketId,
+          filedTicket.id,
+          filedTicket.number,
+        );
+        if (typeof saved === 'string' && saved.trim() && matchesTicket) {
+          setSellerMessage(saved.trim());
+          const savedId = data?.message?.id;
+          if (typeof savedId === 'number' && savedId > 0) setSellerMessageId(savedId);
+          const savedModel = data?.message?.model;
+          if (typeof savedModel === 'string' && savedModel.trim()) setAiModel(savedModel.trim());
+          return;
+        }
+      } catch {
+        /* fall through to AI draft */
+      }
+      if (!ctrl.signal.aborted) {
+        await draftSellerMessage(filedTicket);
+      }
+    };
+    void bootstrap();
+    return () => ctrl.abort();
+  }, [open, mode, createStep, filedTicket, row.receiving_id, row.id]);
+
+  const deselectLinkedTicket = () => {
+    setSelectedTicket(null);
+    setFiledTicket(null);
+    setLinkCommitted(false);
+    resetSellerDraftState();
+  };
+
+  const unlinkCommittedTicket = async () => {
+    if (unlinking || !filedTicket?.id || !row.receiving_id) return;
+    setUnlinking(true);
+    try {
+      const sp = new URLSearchParams({
+        receivingId: String(row.receiving_id),
+        ticketId: String(filedTicket.id),
+      });
+      if (row.id != null) sp.set('lineId', String(row.id));
+      const res = await fetch(`/api/receiving/zendesk-claim/link?${sp}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not unlink the ticket');
+        return;
+      }
+      await clearPersistedSellerDraft();
+      deselectLinkedTicket();
+      onTicketUnlinked?.();
+      toast.success('Ticket unlinked');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not unlink the ticket');
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  const handleBannerUnlink = () => {
+    if (linkCommitted) {
+      void unlinkCommittedTicket();
+      return;
+    }
+    void clearPersistedSellerDraft();
+    deselectLinkedTicket();
   };
 
   // Link mode submit: attach the picked existing ticket to this carton/line.
@@ -346,7 +660,21 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
           : undefined,
       });
       onTicketCreated(String(data.ticketNumber));
-      onClose();
+      setLinkCommitted(true);
+      setFiledTicket({
+        number: String(data.ticketNumber),
+        url,
+        id: selectedTicket.id,
+      });
+      if (createStep !== 'seller') {
+        advanceToSellerStep({
+          number: String(data.ticketNumber),
+          url,
+          id: selectedTicket.id,
+        });
+      } else {
+        sellerBootstrapKey.current = null;
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -389,16 +717,30 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
 
             {/* Body */}
             <div className="space-y-4 overflow-y-auto px-5 py-4">
-              <HorizontalButtonSlider
-                items={MODE_ITEMS}
-                value={mode}
-                onChange={(id) => setMode(id as ClaimModalMode)}
-                variant="nav"
-                size="md"
-                aria-label="New ticket or link existing"
-              />
+              <div className="flex justify-center">
+                <LinearWorkflowStepper
+                  steps={CLAIM_WIZARD_STEPS}
+                  states={claimStepStates}
+                  ariaLabel="Claim filing steps"
+                  size="compact"
+                  className="w-full max-w-[15rem]"
+                  onStepClick={handleClaimStepClick}
+                  isStepDisabled={(key) => key === 'seller' && !sellerStepReady}
+                />
+              </div>
 
-              {mode === 'create' ? (
+              <div className="flex justify-center border-b border-gray-100 pb-1">
+                <PaneHeaderTabs<ClaimModalMode>
+                  tabs={[
+                    { value: 'create', label: 'New ticket' },
+                    { value: 'link', label: 'Link existing' },
+                  ]}
+                  value={mode}
+                  onChange={handleModeChange}
+                />
+              </div>
+
+              {createStep === 'internal' && mode === 'create' ? (
                 <>
               <div>
                 <p className="mb-1.5 text-micro font-black uppercase tracking-[0.14em] text-gray-500">
@@ -411,20 +753,6 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
                   variant="nav"
                   size="md"
                   aria-label="Claim type"
-                />
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-micro font-black uppercase tracking-[0.14em] text-gray-500">
-                  Severity
-                </p>
-                <HorizontalButtonSlider
-                  items={severityItems}
-                  value={severity}
-                  onChange={(id) => setSeverity(id as ClaimSeverity)}
-                  variant="nav"
-                  size="md"
-                  aria-label="Severity"
                 />
               </div>
 
@@ -512,25 +840,29 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
 
               <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
-                    Ticket preview {previewLoading ? '(updating…)' : '(editable)'}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    {(subjectTouched.current || descriptionTouched.current) ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          subjectTouched.current = false;
-                          descriptionTouched.current = false;
-                          // Nudge the preview effect to re-run with current inputs.
-                          setReason((r) => r);
-                        }}
-                        className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
-                      >
-                        Reset to template
-                      </button>
+                  <div className="min-w-0">
+                    <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
+                      Zendesk ticket {previewLoading ? '(updating…)' : '(editable)'}
+                    </p>
+                    {filedTicket ? (
+                      <p className="mt-0.5 text-[10px] font-semibold text-emerald-600">
+                        Filed {filedTicket.number}
+                      </p>
                     ) : null}
                   </div>
+                  {(subjectTouched.current || descriptionTouched.current) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        subjectTouched.current = false;
+                        descriptionTouched.current = false;
+                        setReason((r) => r);
+                      }}
+                      className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+                    >
+                      Reset to template
+                    </button>
+                  ) : null}
                 </div>
 
                 <label
@@ -571,9 +903,8 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
               </div>
 
               <p className="text-micro font-semibold leading-snug text-gray-500">
-                The template auto-fills from PO, tracking, photos, and the active line. Edit either
-                field above before posting. A ticket # will be filed back into the Support section
-                automatically.
+                Auto-fills from PO, tracking, photos, and the active line. Filing creates the
+                internal ticket, then step 2 drafts the external seller message with the ticket #.
               </p>
 
               {draftBody ? (
@@ -604,12 +935,14 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
                 </>
               ) : (
                 <>
+              {mode === 'link' && !filedTicket ? (
+                <>
                   <div>
                     <label
                       htmlFor="claim-ticket-search"
                       className="mb-1.5 block text-micro font-black uppercase tracking-[0.14em] text-gray-500"
                     >
-                      Find the ticket
+                      Pick the existing ticket
                     </label>
                     <input
                       id="claim-ticket-search"
@@ -625,106 +958,56 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
                   <div>
                     <div className="mb-1.5 flex items-center gap-2">
                       <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
-                        {ticketQuery.trim() ? 'Results' : 'Recent tickets'} — click to expand
+                        {ticketQuery.trim() ? 'Results' : 'Recent tickets'} — click to select
                       </p>
                       {searchLoading ? (
                         <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
                       ) : null}
                     </div>
-                    {/* Fixed TALL height no matter the state (loading / results /
-                        empty) so the modal doesn't jump while tickets load —
-                        stale results stay visible, dimmed, during a refetch. */}
-                    <div className="h-[min(60vh,520px)] overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                    <div className="max-h-[280px] overflow-y-auto rounded-xl border border-gray-200 bg-white">
                       {ticketResults.length > 0 ? (
                         <div className={searchLoading ? 'opacity-50' : ''}>
                         {ticketResults.map((t) => {
                           const isSel = selectedTicket?.id === t.id;
                           const badge = statusBadge(t.status);
-                          const prio = priorityBadge(t.priority);
                           return (
-                            <div key={t.id} className="border-b border-gray-100 last:border-b-0">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTicket(isSel ? null : t)}
-                                disabled={t.linkedToThis}
-                                className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors ${
-                                  isSel ? 'bg-rose-50' : 'hover:bg-gray-50'
-                                } ${t.linkedToThis ? 'cursor-default opacity-60' : ''}`}
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => selectLinkTicket(isSel ? null : t)}
+                              disabled={t.linkedToThis}
+                              className={`flex w-full items-center gap-2.5 border-b border-gray-100 px-3 py-2.5 text-left transition-colors last:border-b-0 ${
+                                isSel ? 'bg-rose-50' : 'hover:bg-gray-50'
+                              } ${t.linkedToThis ? 'cursor-default opacity-60' : ''}`}
+                            >
+                              <span className="shrink-0 font-mono text-caption font-bold text-gray-900">
+                                #{t.id}
+                              </span>
+                              <span
+                                className={`shrink-0 rounded-full px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${badge.className}`}
                               >
-                                <span className="shrink-0 font-mono text-caption font-bold text-gray-900">
-                                  #{t.id}
-                                </span>
-                                <span
-                                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${badge.className}`}
-                                >
-                                  {badge.label}
-                                </span>
-                                <span className="min-w-0 flex-1 truncate text-label font-medium text-gray-700">
-                                  {t.subject || '—'}
-                                </span>
-                                <span className="shrink-0 text-micro font-medium text-gray-400">
-                                  {ticketDate(t.updatedAt)}
-                                </span>
-                                {t.linkedToThis ? (
-                                  <span className="shrink-0 text-eyebrow font-black uppercase tracking-wider text-emerald-600">
-                                    Linked to this item
-                                  </span>
-                                ) : null}
-                              </button>
-                              {isSel ? (
-                                <div className="space-y-2 border-t border-rose-100 bg-rose-50/50 px-3 py-2.5">
-                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-micro font-semibold text-gray-500">
-                                    <span>Created {ticketDate(t.createdAt)}</span>
-                                    <span>Updated {ticketDate(t.updatedAt)}</span>
-                                    {prio ? (
-                                      <span
-                                        className={`rounded-full px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${prio.className}`}
-                                      >
-                                        {prio.label}
-                                      </span>
-                                    ) : null}
-                                    {t.url ? (
-                                      <a
-                                        href={t.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="font-bold uppercase tracking-wider text-rose-700 hover:text-rose-900"
-                                      >
-                                        Open in Zendesk ↗
-                                      </a>
-                                    ) : null}
-                                  </div>
-                                  {t.description ? (
-                                    <p className="line-clamp-4 whitespace-pre-line text-caption font-medium leading-snug text-gray-600">
-                                      {t.description}
-                                    </p>
-                                  ) : null}
-                                  <button
-                                    type="button"
-                                    onClick={submitLink}
-                                    disabled={linking}
-                                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                                    {linking ? 'Linking…' : `Link ticket #${t.id} to this item`}
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
+                                {badge.label}
+                              </span>
+                              <span className="min-w-0 flex-1 truncate text-label font-medium text-gray-700">
+                                {t.subject || '—'}
+                              </span>
+                              <span className="shrink-0 text-micro font-medium text-gray-400">
+                                {ticketDate(t.updatedAt)}
+                              </span>
+                            </button>
                           );
                         })}
                         </div>
+                      ) : searchLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-10 text-micro font-semibold text-gray-400">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching…
+                        </div>
                       ) : (
-                        <div className="grid h-full place-items-center px-4 text-center">
-                          {searchLoading ? (
-                            <Loader2 className="h-5 w-5 animate-spin text-gray-300" />
-                          ) : (
-                            <p className="text-micro font-semibold text-gray-400">
-                              {ticketQuery.trim()
-                                ? 'No linkable tickets found.'
-                                : 'No recent tickets to show.'}
-                            </p>
-                          )}
+                        <div className="px-4 py-10 text-center text-micro font-medium text-gray-400">
+                          {ticketQuery.trim()
+                            ? 'No tickets found — try a different search or ticket #'
+                            : 'Recent Zendesk tickets will appear here'}
                         </div>
                       )}
                     </div>
@@ -736,11 +1019,90 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
                       already linked to other items.
                     </p>
                   ) : null}
-
-                  <p className="text-micro font-semibold leading-snug text-gray-500">
-                    Linking files the ticket # back into the Support section and connects the
-                    ticket to this carton's photos and history in the support workspace.
+                </>
+              ) : null}
+              {filedTicket ? (
+                <div className="relative rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2.5">
+                  {mode === 'link' ? (
+                    <button
+                      type="button"
+                      onClick={handleBannerUnlink}
+                      disabled={unlinking}
+                      aria-label={linkCommitted ? 'Unlink ticket' : 'Deselect ticket'}
+                      title={linkCommitted ? 'Unlink ticket' : 'Deselect ticket'}
+                      className="absolute right-2 top-2 rounded-md p-1 text-rose-600 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+                    >
+                      {unlinking ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                      ) : (
+                        <Unlink className="h-3.5 w-3.5 text-rose-600" />
+                      )}
+                    </button>
+                  ) : null}
+                  <p className="pr-8 text-micro font-black uppercase tracking-[0.14em] text-emerald-800">
+                    {mode === 'link' && !linkCommitted
+                      ? 'Existing ticket selected'
+                      : mode === 'link'
+                        ? 'Ticket linked'
+                        : 'Internal ticket filed'}
                   </p>
+                  <p className="mt-1 text-label font-bold text-emerald-900">{filedTicket.number}</p>
+                  {filedTicket.url ? (
+                    <a
+                      href={filedTicket.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-block text-micro font-bold uppercase tracking-wider text-emerald-700 hover:text-emerald-900"
+                    >
+                      Open in Zendesk ↗
+                    </a>
+                  ) : null}
+                  <p className="mt-1.5 text-micro font-medium text-emerald-800/80">
+                    The seller message below will reference this case # for full context.
+                  </p>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
+                    <div>
+                      <p className="text-micro font-black uppercase tracking-[0.14em] text-blue-700">
+                        Seller message
+                      </p>
+                      {aiModel ? (
+                        <p className="text-[10px] font-semibold text-blue-600/70">Drafted by {aiModel}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => filedTicket && void draftSellerMessage(filedTicket)}
+                    disabled={aiLoading || !filedTicket || filedTicket.number === 'pending'}
+                    title="Regenerate seller message with AI"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2 text-micro font-black uppercase tracking-wider text-blue-700 shadow-sm transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                    {aiLoading ? 'Drafting…' : 'Redraft'}
+                  </button>
+                </div>
+                {aiLoading && !sellerMessage ? (
+                  <SellerMessageSkeleton />
+                ) : (
+                  <textarea
+                    value={sellerMessage}
+                    onChange={(e) => setSellerMessage(e.target.value)}
+                    rows={12}
+                    placeholder="Seller-facing message will appear here…"
+                    className="block w-full resize-y rounded-lg border border-blue-100 bg-white px-3 py-2 text-caption font-medium leading-snug text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                )}
+                <p className="mt-1.5 text-micro font-medium text-blue-700/70">
+                  Paste into eBay or the marketplace seller. Plain text only — no links. Includes
+                  your Zendesk case # as a reference.
+                </p>
+              </div>
                 </>
               )}
             </div>
@@ -750,35 +1112,68 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
               <button
                 type="button"
                 onClick={onClose}
-                disabled={submitting || linking}
+                disabled={submitting || linking || unlinking}
                 className="inline-flex h-10 items-center rounded-xl border border-gray-200 bg-white px-4 text-caption font-bold uppercase tracking-widest text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
-              {mode === 'create' ? (
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={submitting || !row.receiving_id || !subject.trim() || !description.trim()}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {submitting ? 'Creating…' : 'Create Zendesk ticket'}
-                </button>
+              {createStep === 'internal' && mode === 'create' ? (
+                  <>
+                    {filedTicket ? (
+                      <button
+                        type="button"
+                        onClick={() => setCreateStep('seller')}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700"
+                      >
+                        Continue to seller →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={submitInternal}
+                        disabled={submitting || !row.receiving_id || !subject.trim() || !description.trim()}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {submitting ? 'Creating…' : 'Create Zendesk ticket →'}
+                      </button>
+                    )}
+                  </>
               ) : (
-                <button
-                  type="button"
-                  onClick={submitLink}
-                  disabled={linking || !row.receiving_id || !selectedTicket}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  {linking
-                    ? 'Linking…'
-                    : selectedTicket
-                      ? `Link ticket #${selectedTicket.id}`
-                      : 'Link ticket'}
-                </button>
+                  <>
+                    {mode === 'link' && filedTicket && !linkCommitted ? (
+                      <button
+                        type="button"
+                        onClick={submitLink}
+                        disabled={linking || !row.receiving_id || !selectedTicket}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {linking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                        {linking
+                          ? 'Linking…'
+                          : selectedTicket
+                            ? `Link ticket #${selectedTicket.id} →`
+                            : 'Link ticket'}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={!sellerMessage.trim()}
+                      onClick={() => void handleCopySellerMessage()}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-4 text-caption font-bold uppercase tracking-widest text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void finishSellerStep()}
+                      disabled={aiLoading || (mode === 'link' && !linkCommitted)}
+                      className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Done
+                    </button>
+                  </>
               )}
             </div>
     </RightPaneOverlay>

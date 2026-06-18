@@ -15,6 +15,8 @@ import {
 import { ReceivingPhotoButton } from './ReceivingPhotoButton';
 import { IdentityLinkChip } from './IdentityLinkChip';
 import { ReceivingTicketChip } from './ReceivingTicketChip';
+import { parseZendeskTicketId } from '@/lib/receiving-claim-seller-ticket-match';
+import { SellerMessageChip } from './SellerMessageChip';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
@@ -365,14 +367,21 @@ export function CartonContextCard({
                 shows ticket history (with Unlink) via Edit. */}
             {showStaffPhotoRow ? (
               zendeskTrimmed ? (
-                <ReceivingTicketChip
-                  value={zendeskTrimmed}
-                  display={zendeskChipDisplay}
-                  openHref={zendeskHref}
-                  receivingId={receivingId}
-                  lineId={lineId}
-                  onUnlinked={() => onTicketUnlinked?.()}
-                />
+                <div className="flex shrink-0 items-center gap-1">
+                  <ReceivingTicketChip
+                    value={zendeskTrimmed}
+                    display={zendeskChipDisplay}
+                    openHref={zendeskHref}
+                    receivingId={receivingId}
+                    lineId={lineId}
+                    onUnlinked={() => onTicketUnlinked?.()}
+                  />
+                  <SellerMessageChip
+                    receivingId={receivingId}
+                    lineId={lineId}
+                    linkedTicketId={parseZendeskTicketId(zendeskTrimmed)}
+                  />
+                </div>
               ) : onMakeClaim ? (
                 <button
                   type="button"

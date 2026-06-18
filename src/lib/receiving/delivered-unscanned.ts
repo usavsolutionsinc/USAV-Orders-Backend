@@ -30,7 +30,6 @@ export const DELIVERED_UNSCANNED_CAP = 100;
  */
 export const INBOUND_SOURCE_SYSTEMS = [
   'zoho_po',
-  'receiving_lookup_po',
   'receiving_lines_patch',
   'receiving.link-po',
   'receiving_entry',
@@ -167,6 +166,22 @@ export function deliveredUnscannedBaseSql(windowParam: string, orgParam?: string
      )
 )`
     : NOT_ZOHO_RECEIVED_SHIPMENT_PREDICATE;
+  const zohoPoResolved = orgParam
+    ? `(
+  EXISTS (
+    SELECT 1 FROM zoho_po_mirror mm
+     WHERE COALESCE(mm.reference_number, '') <> ''
+       AND regexp_replace(upper(mm.reference_number), '[^A-Z0-9]', '', 'g')
+           = stn.tracking_number_normalized
+  )
+  OR EXISTS (
+    SELECT 1 FROM receiving r
+     WHERE r.shipment_id = stn.id
+       AND r.zoho_purchaseorder_id IS NOT NULL
+       AND r.organization_id = ${orgParam}
+  )
+)`
+    : ZOHO_PO_RESOLVED_SHIPMENT_PREDICATE;
   return `
     SELECT DISTINCT ON (stn.tracking_number_normalized)
            stn.id                       AS shipment_id,
@@ -186,6 +201,11 @@ export function deliveredUnscannedBaseSql(windowParam: string, orgParam?: string
        -- two ways the list endpoint uses (linked receiving row, else tracking#
        -- → reference#), keeping count === list.length.
        AND ${notZohoReceived}
+       -- Delivered-unscanned is strictly Zoho-expected inbound work: the
+       -- tracking# must resolve to a PO (reference# match or linked receiving
+       -- row). Unmatched dock scans (receiving_lookup_po) and orphan STNs
+       -- without a Zoho PO belong in triage / PO Mailbox, not here.
+       AND ${zohoPoResolved}
      ORDER BY stn.tracking_number_normalized, stn.delivered_at DESC
   `;
 }
@@ -215,7 +235,6 @@ export const NOT_ZOHO_RECEIVED_PREDICATE = `COALESCE(mirror.status, '') NOT IN (
  * is resolved exactly as the list endpoint does — the linked `receiving` row's
  * PO id, else the normalized tracking# matched back to
  * `zoho_po_mirror.reference_number` — so the base and the rendered list agree.
- * A shipment with no resolvable PO is kept (treated as still-incoming).
  */
 export const NOT_ZOHO_RECEIVED_SHIPMENT_PREDICATE = `NOT EXISTS (
   SELECT 1 FROM zoho_po_mirror mm
@@ -232,6 +251,26 @@ export const NOT_ZOHO_RECEIVED_SHIPMENT_PREDICATE = `NOT EXISTS (
              = stn.tracking_number_normalized
        )
      )
+)`;
+
+/**
+ * SQL predicate (references alias `stn`) — TRUE when the shipment ties to a
+ * Zoho PO (reference# match or a linked `receiving.zoho_purchaseorder_id`).
+ * Required for delivered-unscanned: unfound / unmatched dock scans must not
+ * surface as "Delivered · not scanned".
+ */
+export const ZOHO_PO_RESOLVED_SHIPMENT_PREDICATE = `(
+  EXISTS (
+    SELECT 1 FROM zoho_po_mirror mm
+     WHERE COALESCE(mm.reference_number, '') <> ''
+       AND regexp_replace(upper(mm.reference_number), '[^A-Z0-9]', '', 'g')
+           = stn.tracking_number_normalized
+  )
+  OR EXISTS (
+    SELECT 1 FROM receiving r
+     WHERE r.shipment_id = stn.id
+       AND r.zoho_purchaseorder_id IS NOT NULL
+  )
 )`;
 
 /**

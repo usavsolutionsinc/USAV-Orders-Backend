@@ -20,7 +20,11 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
-import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
+import {
+  getPhoneBridgeChannelName,
+  getStationChannelName,
+  safeChannelName,
+} from '@/lib/realtime/channels';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
@@ -71,17 +75,36 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     staleTime: 10_000,
   });
 
-  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
-  const handlePhoneMessage = useCallback(
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+    invalidateReceivingFeeds(queryClient);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryClient, receivingId]);
+
+  const handlePhotoMessage = useCallback(
     (msg: { data?: { receiving_id?: number } }) => {
       const incoming = Number(msg?.data?.receiving_id);
       if (!Number.isFinite(incoming) || incoming !== receivingId) return;
-      queryClient.invalidateQueries({ queryKey });
+      refresh();
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [receivingId, queryClient],
+    [receivingId, refresh],
   );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
+
+  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
+  useAblyChannel(
+    phoneChannel,
+    'receiving_photo_uploaded',
+    handlePhotoMessage,
+    !!phoneChannel && staffId > 0,
+  );
+
+  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
+  useAblyChannel(
+    stationChannel,
+    'receiving-photo.changed',
+    handlePhotoMessage,
+    !!stationChannel,
+  );
 
   const photos = useMemo(
     () =>
@@ -90,13 +113,6 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
         .map((p) => ({ id: p.id, url: p.photoUrl })),
     [data],
   );
-
-  // Refetch the strip AND every receiving feed so photo counts stay in sync.
-  const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryClient, receivingId]);
 
   const canAdd = nasConfigured();
   const count = photos.length;

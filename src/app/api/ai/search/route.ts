@@ -5,11 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/api-guard';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { withAuth } from '@/lib/auth/withAuth';
+import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 
 export const runtime = 'nodejs';
-
-const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
-const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
 
 type SearchRequestBody = {
   page?: string;
@@ -62,15 +60,14 @@ export const POST = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Missing search query' }, { status: 400 });
     }
 
-    const res = await fetch(`${HERMES_API_URL}/chat/completions`, {
+    const res = await fetch(`${getHermesApiUrl()}/chat/completions`, {
       method: 'POST',
-      headers: {
+      headers: getHermesHeaders({
         'Content-Type': 'application/json',
-        ...(HERMES_API_KEY && { 'Authorization': `Bearer ${HERMES_API_KEY}` }),
         'X-Source': 'usav-search',
-      },
+      }),
       body: JSON.stringify({
-        model: 'hermes-agent',
+        model: getHermesModel(),
         messages: [
           { role: 'system', content: getSystemPrompt() },
           {

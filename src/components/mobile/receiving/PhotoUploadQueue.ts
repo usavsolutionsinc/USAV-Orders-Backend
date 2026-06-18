@@ -8,6 +8,7 @@ import {
 import {
   attachNasPhoto,
   buildNasPhotoUrl,
+  getClientNasProxyBase,
   getNasBaseUrl,
   putNasPhoto,
 } from '@/lib/nas-photos';
@@ -211,7 +212,7 @@ async function postPhoto(
   entry: UploadEntry,
   blob: Blob,
 ): Promise<{ id: number; url: string }> {
-  const baseUrl = nasUploadConfig?.baseUrl || getNasBaseUrl();
+  const baseUrl = getClientNasProxyBase() || nasUploadConfig?.baseUrl || getNasBaseUrl();
   if (!baseUrl) {
     throw new Error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
   }

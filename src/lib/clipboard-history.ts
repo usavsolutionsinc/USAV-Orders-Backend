@@ -21,10 +21,12 @@ import { useSyncExternalStore } from 'react';
 export interface ClipboardEntry {
   id: string;
   value: string;
-  /** Chip tone the value came from (id/tracking/serial/sku/fnsku/ticket), if known. */
+  /** Chip tone the value came from (id/tracking/serial/sku/fnsku/ticket/seller_claim), if known. */
   kind?: string;
   /** Short label shown on the chip, if known (else the raw value is shown). */
   display?: string;
+  /** receiving_claim_seller_messages.id — for inbox send + compact inbox display. */
+  sellerMessageId?: number;
   /** Epoch ms when copied. */
   ts: number;
 }
@@ -82,7 +84,7 @@ function nextId(ts: number): string {
  */
 export function recordCopy(
   value: string | null | undefined,
-  meta?: { kind?: string; display?: string },
+  meta?: { kind?: string; display?: string; sellerMessageId?: number },
 ): void {
   if (!isBrowser()) return;
   const v = (value ?? '').trim();
@@ -97,6 +99,7 @@ export function recordCopy(
     value: v,
     kind: meta?.kind,
     display: meta?.display,
+    sellerMessageId: meta?.sellerMessageId,
     ts,
   };
   entries = [entry, ...deduped].slice(0, MAX_ENTRIES);

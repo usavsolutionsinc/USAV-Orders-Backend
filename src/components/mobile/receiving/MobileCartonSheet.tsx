@@ -1,9 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera, Package, PackageCheck, Box, AlertCircle, Loader2 } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
-import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
+import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
 import {
   OrderIdChip,
   TrackingChip,
@@ -43,23 +42,13 @@ function getStatusDotBg(
   return 'bg-gray-400';
 }
 
-function getStatusIcon(status: string | null | undefined, className: string) {
-  const value = String(status || '').trim().toUpperCase();
-  if (value === 'EXPECTED') return <Box className={`${className} text-amber-500`} />;
-  if (value === 'ARRIVED' || value === 'MATCHED') return <Package className={`${className} text-blue-500`} />;
-  if (value === 'UNBOXED') return <Box className={`${className} text-indigo-500`} />;
-  if (value === 'AWAITING_TEST' || value === 'IN_TEST') return <Loader2 className={`${className} text-violet-500`} />;
-  if (value === 'PASSED' || value === 'DONE' || value === 'RECEIVED') return <PackageCheck className={`${className} text-emerald-500`} />;
-  if (value.startsWith('FAILED') || value === 'SCRAP' || value === 'RTV') return <AlertCircle className={`${className} text-rose-500`} />;
-  return <Package className={`${className} text-gray-400`} />;
-}
-
 /**
  * Phone-tuned sheet for a single receiving line. Mobile is photo-only — no
- * editor fields, no form. Header mirrors the desktop ReceivingLinesTable row:
- * title + qty • condition • workflow on the left, copy chips stacked on the
- * right. ReceivingPhotoStrip shows what's already captured, the CTA hands off
- * to the dedicated camera route at /m/r/{id}/photos.
+ * editor fields, no form. Header mirrors {@link MobileReceivingRow}: title +
+ * qty • condition on the left (workflow icon suppressed on history/unbox feed),
+ * copy chips stacked on the right. {@link MobileReceivingPhotoStrip} shows all
+ * captured thumbs plus a camera xN badge; tapping opens the shared swipe viewer.
+ * The CTA hands off to the dedicated camera route at /m/r/{id}/photos.
  */
 export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonSheetProps) {
   if (!row) return null;
@@ -94,12 +83,16 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         poValue ? `&poRef=${encodeURIComponent(poValue)}` : ''
       }`
     : null;
+  const galleryHref = receivingId
+    ? `/m/r/${receivingId}/gallery?title=${encodeURIComponent(cameraTitle)}${
+        poValue ? `&poRef=${encodeURIComponent(poValue)}` : ''
+      }&back=${encodeURIComponent('/m/receiving')}`
+    : null;
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">
       <div className="flex flex-col gap-4">
-        {/* Header — mirrors desktop ReceivingLinesTable OrderRow: title + meta
-            on the left, copy chips column on the right. */}
+        {/* Header — mirrors MobileReceivingRow: title + meta on the left, chips on the right. */}
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
@@ -126,10 +119,6 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
               </span>
               <span className="text-gray-400">•</span>
               <span className={conditionColor}>{conditionLabel}</span>
-              <span className="text-gray-400">•</span>
-              <span title={workflowLabel} className="inline-flex items-center">
-                {getStatusIcon(row.workflow_status, 'h-3.5 w-3.5')}
-              </span>
               {row.needs_test ? <span className="ml-2 text-orange-600">NEEDS TEST</span> : null}
             </span>
 
@@ -142,11 +131,15 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         </div>
 
         {/* Existing photos */}
-        {receivingId ? (
-          <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-3">
-            <ReceivingPhotoStrip receivingId={receivingId} staffId={staffId} />
-          </div>
-        ) : (
+        {receivingId && galleryHref ? (
+          <MobileReceivingPhotoStrip
+            receivingId={receivingId}
+            staffId={staffId}
+            galleryHref={galleryHref}
+            countHint={row.photo_count ?? 0}
+            onNavigate={onClose}
+          />
+        ) : receivingId ? null : (
           <p className="rounded-2xl bg-amber-50 px-4 py-3 text-center text-caption font-semibold text-amber-700">
             No package id yet — scan tracking from desktop first.
           </p>
@@ -158,14 +151,10 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             href={photosHref}
             prefetch={false}
             onClick={onClose}
-            className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
-            <Camera className="h-6 w-6" />
             <span className="text-sm font-black uppercase tracking-[0.18em]">
               Take Photos
-            </span>
-            <span className="tabular-nums lowercase text-white/90">
-              x{row.photo_count ?? 0}
             </span>
           </Link>
         ) : null}

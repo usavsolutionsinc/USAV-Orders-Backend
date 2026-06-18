@@ -15,6 +15,7 @@ import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuSca
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
 import { OfflineBanner } from '@/components/layout/OfflineBanner';
+import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
 
 /**
  * Mount-only component. Subscribes to phone-originated scans on
@@ -292,6 +293,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
           user is signed in on can service the lookup. */}
       <PhoneScanBridgeMount />
+      <ReceivingPhoneBridgeMount />
 
       {/* Same wedge scanner listener as desktop — works for HID-over-USB on
           tablets and Bluetooth ring scanners paired to a phone. */}

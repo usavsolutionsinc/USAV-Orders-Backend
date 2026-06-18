@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization, updateOrgSettings } from '@/lib/tenancy/organizations';
-import type { OrgSettings } from '@/lib/tenancy/settings';
+import { DEFAULT_NAS_STORAGE_TARGETS, type OrgSettings } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { syncAgentRootsFromSettings } from '@/lib/nas-agent-client';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,10 +12,12 @@ export const dynamic = 'force-dynamic';
  * Org-level settings the admin UI edits, managed by StationNasFoldersTab:
  *   • stationNasPhotoFolders — per-station default folder for the photo picker.
  *   • nasPhotoServers        — the test/prod NAS base URLs + which is active.
+ *   • nasStorageTargets      — workflow roots/folders for receiving, labels,
+ *                              and claim archives.
  * Reads/writes go through the tenancy helpers so the in-process org cache stays
  * consistent. PATCH merges only the keys present in the body.
  *
- * GET   → { stationNasPhotoFolders, nasPhotoServers }
+ * GET   → { stationNasPhotoFolders, nasPhotoServers, nasStorageTargets }
  * PATCH → body may contain either/both key; merged into jsonb settings.
  */
 export const GET = withAuth(async (_req: NextRequest, ctx) => {
@@ -22,6 +25,7 @@ export const GET = withAuth(async (_req: NextRequest, ctx) => {
   return NextResponse.json({
     stationNasPhotoFolders: org?.settings.stationNasPhotoFolders ?? {},
     nasPhotoServers: org?.settings.nasPhotoServers ?? { test: '', prod: '', active: 'prod' },
+    nasStorageTargets: org?.settings.nasStorageTargets ?? DEFAULT_NAS_STORAGE_TARGETS,
   });
 }, { permission: 'admin.view' });
 
@@ -33,6 +37,16 @@ function cleanNasUrl(value: unknown): string {
   if (!v) return '';
   if (v.startsWith('/')) return v; // dev proxy, e.g. /api/nas-dev
   return /^https?:\/\//i.test(v) ? v : '';
+}
+
+function cleanRootPath(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\/+$/, '');
+}
+
+function cleanRelativeFolder(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^\/+|\/+$/g, '');
 }
 
 export const PATCH = withAuth(async (req: NextRequest, ctx) => {
@@ -81,13 +95,49 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
     };
   }
 
+  // ── nasStorageTargets (workflow roots + active folders) ─────────────────
+  if ('nasStorageTargets' in body) {
+    const raw = (body as Record<string, unknown>).nasStorageTargets;
+    if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+      return NextResponse.json(
+        { error: 'nasStorageTargets must be an object of { receiving, shipping, claims }' },
+        { status: 400 },
+      );
+    }
+    const r = raw as Record<string, unknown>;
+    const cleanTarget = (key: 'receiving' | 'shipping' | 'claims') => {
+      const current = r[key];
+      const obj = current && typeof current === 'object' && !Array.isArray(current)
+        ? (current as Record<string, unknown>)
+        : {};
+      return {
+        root: cleanRootPath(obj.root),
+        folder: cleanRelativeFolder(obj.folder),
+      };
+    };
+    patch.nasStorageTargets = {
+      receiving: cleanTarget('receiving'),
+      shipping: cleanTarget('shipping'),
+      claims: cleanTarget('claims'),
+    };
+  }
+
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
-      { error: 'Provide stationNasPhotoFolders and/or nasPhotoServers' },
+      { error: 'Provide stationNasPhotoFolders, nasPhotoServers, and/or nasStorageTargets' },
       { status: 400 },
     );
   }
 
   await updateOrgSettings(ctx.organizationId as OrgId, patch as Partial<OrgSettings>);
-  return NextResponse.json({ ok: true, ...patch });
+
+  let agentSync: { ok: boolean; error?: string } | undefined;
+  if ('nasStorageTargets' in patch) {
+    const org = await getOrganization(ctx.organizationId as OrgId);
+    if (org) {
+      agentSync = await syncAgentRootsFromSettings(org.settings);
+    }
+  }
+
+  return NextResponse.json({ ok: true, ...patch, ...(agentSync ? { agentSync } : {}) });
 }, { permission: 'admin.view' });

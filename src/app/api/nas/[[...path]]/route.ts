@@ -3,6 +3,21 @@ import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getActiveNasBaseUrl } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
+import {
+  buildNasAgentProxyHeaders,
+  nasAgentToken,
+  nasAgentUrl,
+  resolveNasReceivingUpstream,
+  resolveNasReceivingWriteUpstream,
+} from '@/lib/nas-agent-client';
+import {
+  deleteNasLocalFile,
+  listNasLocalDir,
+  nasPathSegmentsFromProxyPath,
+  readNasLocalFile,
+  shouldNasProxyUseLocalMount,
+  writeNasLocalFile,
+} from '@/lib/nas-local-mount';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,15 +54,28 @@ export const runtime = 'nodejs';
 // an arbitrary file drop.
 const IMAGE_RE = /\.(jpe?g|png|webp|gif)$/i;
 
-async function resolveUpstream(ctx: AuthContext): Promise<string> {
-  const envBase = (process.env.NAS_RW_URL || '').trim().replace(/\/+$/, '');
-  if (envBase) return envBase;
+async function resolveReadUpstream(ctx: AuthContext): Promise<string> {
   const org = await getOrganization(ctx.organizationId as OrgId);
-  return org ? getActiveNasBaseUrl(org.settings) : '';
+  const activeNas = org ? getActiveNasBaseUrl(org.settings) : '';
+  return resolveNasReceivingUpstream(activeNas);
+}
+
+async function resolveWriteUpstream(ctx: AuthContext): Promise<string> {
+  const org = await getOrganization(ctx.organizationId as OrgId);
+  const activeNas = org ? getActiveNasBaseUrl(org.settings) : '';
+  return resolveNasReceivingWriteUpstream(activeNas);
+}
+
+function nasWriteFailureHint(status: number): string {
+  if (status !== 404) return '';
+  if (nasAgentUrl()) {
+    return ' — deploy deploy/nas-media-agent on the office Mac (PUT /file/receiving) and route /_agent/* in Caddy';
+  }
+  return ' — the photo tunnel may be read-only; enable WebDAV PUT or deploy the NAS media agent';
 }
 
 function agentToken(): string {
-  return process.env.NAS_RW_TOKEN || process.env.NAS_AGENT_TOKEN || '';
+  return nasAgentToken();
 }
 
 /**
@@ -76,13 +104,41 @@ function buildUpstreamUrl(req: NextRequest, base: string): string | null {
 // ─── GET: directory listing or file bytes ────────────────────────────────────
 export const GET = withAuth(
   async (req: NextRequest, ctx) => {
-    const base = await resolveUpstream(ctx);
+    if (shouldNasProxyUseLocalMount()) {
+      const segments = nasPathSegmentsFromProxyPath(req.nextUrl.pathname);
+      const lastSeg = segments[segments.length - 1] || '';
+      const isFile = /\.[a-z0-9]+$/i.test(lastSeg);
+      if (!isFile) {
+        const listed = await listNasLocalDir(segments);
+        if (!listed.ok) {
+          return NextResponse.json({ error: listed.error }, { status: listed.status });
+        }
+        return NextResponse.json(listed.entries, { headers: { 'Cache-Control': 'no-store' } });
+      }
+      const file = await readNasLocalFile(segments);
+      if (!file.ok) {
+        return NextResponse.json({ error: file.error }, { status: file.status });
+      }
+      return new NextResponse(new Uint8Array(file.body), {
+        headers: {
+          'Content-Type': file.contentType,
+          'Cache-Control': 'private, max-age=600',
+        },
+      });
+    }
+
+    const base = await resolveReadUpstream(ctx);
     if (!base) return NextResponse.json({ error: 'NAS not configured' }, { status: 503 });
     const url = buildUpstreamUrl(req, base);
     if (!url) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
     let upstream: Response;
     try {
+      const agentHeaders = await buildNasAgentProxyHeaders(
+        ctx.organizationId as OrgId,
+        'receiving',
+        base,
+      );
       upstream = await fetch(url, {
         method: 'GET',
         headers: {
@@ -90,6 +146,7 @@ export const GET = withAuth(
           // caller asks for JSON; pass the client's Accept through verbatim.
           Accept: req.headers.get('accept') || 'application/json',
           ...(agentToken() ? { 'x-agent-token': agentToken() } : {}),
+          ...agentHeaders,
         },
         cache: 'no-store',
       });
@@ -122,7 +179,20 @@ export const GET = withAuth(
 // ─── PUT: write one captured photo ───────────────────────────────────────────
 export const PUT = withAuth(
   async (req: NextRequest, ctx) => {
-    const base = await resolveUpstream(ctx);
+    if (shouldNasProxyUseLocalMount()) {
+      if (!IMAGE_RE.test(req.nextUrl.pathname)) {
+        return NextResponse.json({ error: 'only image files are allowed' }, { status: 400 });
+      }
+      const segments = nasPathSegmentsFromProxyPath(req.nextUrl.pathname);
+      const body = await req.arrayBuffer();
+      const written = await writeNasLocalFile(segments, body);
+      if (!written.ok) {
+        return NextResponse.json({ error: written.error }, { status: written.status });
+      }
+      return new NextResponse(null, { status: 201 });
+    }
+
+    const base = await resolveWriteUpstream(ctx);
     if (!base) return NextResponse.json({ error: 'NAS not configured' }, { status: 503 });
     const url = buildUpstreamUrl(req, base);
     if (!url) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
@@ -137,12 +207,18 @@ export const PUT = withAuth(
 
     let upstream: Response;
     try {
+      const agentHeaders = await buildNasAgentProxyHeaders(
+        ctx.organizationId as OrgId,
+        'receiving',
+        base,
+      );
       upstream = await fetch(url, {
         method: 'PUT',
         body: new Uint8Array(body),
         headers: {
           'Content-Type': req.headers.get('content-type') || 'image/jpeg',
           ...(agentToken() ? { 'x-agent-token': agentToken() } : {}),
+          ...agentHeaders,
         },
         cache: 'no-store',
       });
@@ -155,7 +231,9 @@ export const PUT = withAuth(
       return new NextResponse(null, { status: 201 });
     }
     return NextResponse.json(
-      { error: `NAS write failed (HTTP ${upstream.status})` },
+      {
+        error: `NAS write failed (HTTP ${upstream.status})${nasWriteFailureHint(upstream.status)}`,
+      },
       { status: 502 },
     );
   },
@@ -165,16 +243,33 @@ export const PUT = withAuth(
 // ─── DELETE: remove one photo ────────────────────────────────────────────────
 export const DELETE = withAuth(
   async (req: NextRequest, ctx) => {
-    const base = await resolveUpstream(ctx);
+    if (shouldNasProxyUseLocalMount()) {
+      const segments = nasPathSegmentsFromProxyPath(req.nextUrl.pathname);
+      const removed = await deleteNasLocalFile(segments);
+      if (!removed.ok) {
+        return NextResponse.json({ error: removed.error }, { status: removed.status });
+      }
+      return new NextResponse(null, { status: 204 });
+    }
+
+    const base = await resolveWriteUpstream(ctx);
     if (!base) return NextResponse.json({ error: 'NAS not configured' }, { status: 503 });
     const url = buildUpstreamUrl(req, base);
     if (!url) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
 
     let upstream: Response;
     try {
+      const agentHeaders = await buildNasAgentProxyHeaders(
+        ctx.organizationId as OrgId,
+        'receiving',
+        base,
+      );
       upstream = await fetch(url, {
         method: 'DELETE',
-        headers: { ...(agentToken() ? { 'x-agent-token': agentToken() } : {}) },
+        headers: {
+          ...(agentToken() ? { 'x-agent-token': agentToken() } : {}),
+          ...agentHeaders,
+        },
         cache: 'no-store',
       });
     } catch {

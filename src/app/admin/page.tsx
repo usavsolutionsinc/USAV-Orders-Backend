@@ -46,7 +46,7 @@ function renderTab(
     case 'logs':           return <AdminLogsTab initialSearch={args.searchValue} />;
     case 'architecture':   return <OperationsSection mode={args.mode} canManageStock={args.canManageStock} />;
     case 'system_sync':    return <SystemSyncActivityTab />;
-    case 'station_photos': return <StationNasFoldersTab />;
+    case 'station_photos': return <StationNasFoldersTab mode={args.mode} />;
     case 'po_mailbox':     return <PoMailboxAdminSection />;
     case 'repair_issues':  return <RepairIssuesManagementTab />;
     case 'favorites':      return <FavoritesManagementTab />;

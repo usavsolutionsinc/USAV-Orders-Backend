@@ -48,7 +48,9 @@ interface Props {
 }
 
 type StepKey = 'scan' | 'photos' | 'condition' | 'serial' | 'print';
-type StepState = 'done' | 'active' | 'pending';
+export type LinearStepState = 'done' | 'active' | 'pending';
+
+export type LinearStep = { key: string; label: string };
 
 const STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
   { key: 'scan',      label: 'Scan' },
@@ -57,6 +59,96 @@ const STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
   { key: 'serial',    label: 'Serial' },
   { key: 'print',     label: 'Print' },
 ];
+
+/**
+ * Shared dot + connector stepper used by the receiving workspace header and
+ * other flows (e.g. claim modal) that want the same visual language.
+ */
+export function LinearWorkflowStepper({
+  steps,
+  states,
+  ariaLabel,
+  className = '',
+  size = 'default',
+  onStepClick,
+  isStepDisabled,
+}: {
+  steps: ReadonlyArray<LinearStep>;
+  states: Record<string, LinearStepState>;
+  ariaLabel: string;
+  className?: string;
+  size?: 'default' | 'compact';
+  onStepClick?: (key: string) => void;
+  isStepDisabled?: (key: string) => boolean;
+}) {
+  const compact = size === 'compact';
+  const connectorPt = compact ? 'pt-2' : 'pt-2.5';
+  const stepGap = compact ? 'gap-1' : 'gap-1.5';
+  const labelClass = compact
+    ? 'text-[9px] font-bold uppercase leading-none tracking-[0.1em]'
+    : 'text-[10px] font-black uppercase leading-none tracking-[0.12em]';
+
+  return (
+    <nav aria-label={ariaLabel} className={className}>
+      <ol className="flex w-full items-start">
+        {steps.map((step, idx) => {
+          const s = states[step.key] ?? 'pending';
+          const prevState = idx > 0 ? (states[steps[idx - 1].key] ?? 'pending') : null;
+          const labelTone =
+            s === 'done'
+              ? 'text-blue-600'
+              : s === 'active'
+                ? 'text-gray-900'
+                : 'text-gray-400';
+          const disabled = isStepDisabled?.(step.key) ?? false;
+          const clickable = !!onStepClick && !disabled;
+
+          const stepContent = (
+            <>
+              <StepDot state={s} index={idx + 1} compact={compact} />
+              <span className={`whitespace-nowrap text-center ${labelClass} ${labelTone}`}>
+                {step.label}
+              </span>
+            </>
+          );
+
+          return (
+            <Fragment key={step.key}>
+              {idx > 0 ? (
+                <li aria-hidden className={`min-w-0 flex-1 self-start ${connectorPt}`}>
+                  <span
+                    className={`block h-px w-full ${
+                      prevState === 'done' ? 'bg-blue-300' : 'bg-gray-200'
+                    }`}
+                  />
+                </li>
+              ) : null}
+              <li className={`flex shrink-0 flex-col items-center ${stepGap}`}>
+                {clickable ? (
+                  <button
+                    type="button"
+                    onClick={() => onStepClick(step.key)}
+                    className={`flex flex-col items-center ${stepGap}`}
+                  >
+                    {stepContent}
+                  </button>
+                ) : (
+                  <div
+                    className={`flex flex-col items-center ${stepGap} ${
+                      disabled ? 'cursor-not-allowed opacity-45' : ''
+                    }`}
+                  >
+                    {stepContent}
+                  </div>
+                )}
+              </li>
+            </Fragment>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
 
 /**
  * Five-dot horizontal stepper that mirrors the operator's actual workflow:
@@ -99,7 +191,7 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
   };
 
   // Compute states: walk left-to-right, first non-done step is "active".
-  const states: Record<StepKey, StepState> = {
+  const states: Record<StepKey, LinearStepState> = {
     scan: 'done', photos: 'pending', condition: 'pending', serial: 'pending', print: 'pending',
   };
   let activeAssigned = false;
@@ -115,71 +207,52 @@ export function ReceivingProgressStepper({ row, photoCount, serialCount, isCompl
   }
 
   return (
-    <nav
-      aria-label="Receiving progress"
-      className={`${receivingScanBandClass} bg-white`}
-    >
-      {/* Shares the action toolbar's `px-6 sm:px-8` column. Connectors are flex-1
-          siblings between shrink-0 step columns so each line runs dot-to-dot (not
-          cell-edge-to-dot). A segment is blue once the step to its left is done. */}
-      <ol className="mx-auto flex w-full max-w-3xl items-start px-6 sm:px-8">
-        {STEPS.map((step, idx) => {
-          const s = states[step.key];
-          const prevState = idx > 0 ? states[STEPS[idx - 1].key] : null;
-          const labelTone =
-            s === 'done'
-              ? 'text-blue-600'
-              : s === 'active'
-                ? 'text-gray-900'
-                : 'text-gray-400';
-
-          return (
-            <Fragment key={step.key}>
-              {idx > 0 ? (
-                <li
-                  aria-hidden
-                  className="min-w-0 flex-1 self-start pt-2.5"
-                >
-                  <span
-                    className={`block h-px w-full ${
-                      prevState === 'done' ? 'bg-blue-300' : 'bg-gray-200'
-                    }`}
-                  />
-                </li>
-              ) : null}
-              <li className="flex shrink-0 flex-col items-center gap-0.5">
-                <StepDot state={s} index={idx + 1} />
-                <span
-                  className={`whitespace-nowrap text-center text-[10px] font-black uppercase leading-none tracking-[0.12em] ${labelTone}`}
-                >
-                  {step.label}
-                </span>
-              </li>
-            </Fragment>
-          );
-        })}
-      </ol>
-    </nav>
+    <div className={`${receivingScanBandClass} bg-white`}>
+      <LinearWorkflowStepper
+        steps={STEPS}
+        states={states}
+        ariaLabel="Receiving progress"
+        className="mx-auto w-full max-w-3xl px-6 sm:px-8"
+      />
+    </div>
   );
 }
 
-function StepDot({ state, index }: { state: StepState; index: number }) {
+function StepDot({
+  state,
+  index,
+  compact = false,
+}: {
+  state: LinearStepState;
+  index: number;
+  compact?: boolean;
+}) {
+  const sizeClass = compact ? 'h-4 w-4 text-[9px]' : 'h-5 w-5 text-[10px]';
+  const checkClass = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
   if (state === 'done') {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm shadow-blue-200">
-        <Check className="h-3 w-3" aria-hidden />
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full bg-blue-600 text-white ${sizeClass} ${
+          compact ? '' : 'shadow-sm shadow-blue-200'
+        }`}
+      >
+        <Check className={checkClass} aria-hidden />
       </span>
     );
   }
   if (state === 'active') {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-blue-700 ring-2 ring-blue-500">
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-full bg-white font-black text-blue-700 ring-2 ring-blue-500 ${sizeClass}`}
+      >
         {index}
       </span>
     );
   }
   return (
-    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black text-gray-400 ring-2 ring-gray-200">
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-full bg-white font-black text-gray-400 ring-2 ring-gray-200 ${sizeClass}`}
+    >
       {index}
     </span>
   );

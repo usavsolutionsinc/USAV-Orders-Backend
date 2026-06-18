@@ -26,7 +26,10 @@ async function fetchConfig(): Promise<NasConfig | null> {
     if (!res.ok) return null;
     const data = await res.json();
     const cfg: NasConfig = {
-      baseUrl: String(data?.baseUrl || ''),
+      baseUrl:
+        process.env.NODE_ENV !== 'production'
+          ? '/api/nas-dev'
+          : String(data?.baseUrl || ''),
       folder: String(data?.folder || ''),
     };
     cached = cfg;
@@ -42,9 +45,15 @@ export function useNasConfig(): NasConfig | null {
 
   useEffect(() => {
     let alive = true;
+    const devProxy = process.env.NODE_ENV !== 'production' ? '/api/nas-dev' : null;
     if (cached) {
-      setNasBaseUrl(cached.baseUrl);
-      setConfig(cached);
+      const cfg =
+        devProxy && cached.baseUrl !== devProxy
+          ? { ...cached, baseUrl: devProxy }
+          : cached;
+      setNasBaseUrl(cfg.baseUrl);
+      setConfig(cfg);
+      if (cfg !== cached) cached = cfg;
       return;
     }
     if (!inflight) inflight = fetchConfig();

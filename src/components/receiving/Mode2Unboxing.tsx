@@ -4,6 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, Check, ChevronRight, Loader2, Package, RefreshCw, X } from '@/components/Icons';
+import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAuth } from '@/contexts/AuthContext';
+import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { formatTimePST, getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getActiveStaff } from '@/lib/staffCache';
 import { staffHasRole } from '@/utils/staff';
@@ -180,9 +183,22 @@ function useStaff() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function PhotoGrid({ receivingId }: { receivingId: string }) {
+function PhotoGrid({ receivingId, staffId }: { receivingId: string; staffId: number }) {
     const { data: photos = [], isFetching } = usePhotos(receivingId, true);
     const queryClient = useQueryClient();
+    const { user } = useAuth();
+    const orgId = user?.organizationId;
+    const rid = Number(receivingId);
+    const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
+    const handlePhoneMessage = useCallback(
+        (msg: { data?: { receiving_id?: number } }) => {
+            const incoming = Number(msg?.data?.receiving_id);
+            if (!Number.isFinite(incoming) || incoming !== rid) return;
+            queryClient.invalidateQueries({ queryKey: ['receiving-photos', receivingId] });
+        },
+        [receivingId, rid, queryClient],
+    );
+    useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
 
     const handleDelete = async (photoId: number) => {
         await fetch(`/api/receiving-photos?id=${photoId}`, { method: 'DELETE' });
@@ -499,7 +515,10 @@ export default function Mode2Unboxing({ staffId }: Mode2UnboxingProps) {
                         {/* Scrollable body */}
                         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
                             {/* Photos */}
-                            <PhotoGrid receivingId={selectedEntry.id} />
+                            <PhotoGrid
+                              receivingId={selectedEntry.id}
+                              staffId={staffId ? Number(staffId) : 0}
+                            />
 
                             {/* PO Lines & Serial Capture */}
                             {poLines.length > 0 && (

@@ -19,7 +19,12 @@ export function isBrowser(): boolean {
  */
 export async function copyToClipboard(
   text: string,
-  opts?: { recordHistory?: boolean; historyKind?: string; historyDisplay?: string },
+  opts?: {
+    recordHistory?: boolean;
+    historyKind?: string;
+    historyDisplay?: string;
+    historySellerMessageId?: number;
+  },
 ): Promise<boolean> {
   if (!isBrowser()) return false;
   try {
@@ -27,7 +32,11 @@ export async function copyToClipboard(
     if (opts?.recordHistory !== false) {
       // Lazy import keeps this SSR-safe helper free of a static React dep.
       const { recordCopy } = await import('@/lib/clipboard-history');
-      recordCopy(text, { kind: opts?.historyKind, display: opts?.historyDisplay });
+      recordCopy(text, {
+        kind: opts?.historyKind,
+        display: opts?.historyDisplay,
+        sellerMessageId: opts?.historySellerMessageId,
+      });
     }
     return true;
   } catch {

@@ -1,15 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
-import { Camera, X, Check, Trash2 } from '@/components/Icons';
+import { Camera, X, Check } from '@/components/Icons';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import {
+  MobileSwipePhotoViewer,
+  type SwipePhotoSlide,
+} from '@/components/mobile/station/MobileSwipePhotoViewer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,6 +22,18 @@ export interface CapturedShot {
   blob: Blob;
   previewUrl: string;
 }
+
+/** Already-saved photos for this PO/line — shown in the bottom-left gallery bubble. */
+export interface PriorPhoto {
+  id: string;
+  previewUrl: string;
+  /** DB id — when set, delete removes the committed photo from the server. */
+  photoId?: number;
+}
+
+type GallerySlide =
+  | { kind: 'prior'; id: string; previewUrl: string }
+  | { kind: 'capture'; id: string; previewUrl: string; blob: Blob };
 
 export interface MobilePackerSpamCameraProps {
   /** Called when the user finishes capturing and confirms. Parent owns the blobs after this. */
@@ -30,12 +46,11 @@ export interface MobilePackerSpamCameraProps {
   jpegQuality?: number;
   /** Optional header label above the viewfinder. */
   header?: React.ReactNode;
+  /** Committed photos for this scope — merged into the swipe gallery (read-only). */
+  priorPhotos?: PriorPhoto[];
+  /** Remove a previously saved photo (by DB id) from the swipe gallery. */
+  onDeletePrior?: (photoId: number) => void | Promise<void>;
 }
-
-// Horizontal drag distance (px) past which a swipe pages to the next/prev shot.
-// The image itself does NOT animate between frames (no slide/cross-fade) — the
-// swipe just snaps back and the index changes, so paging feels instant.
-const SWIPE_THRESHOLD = 70;
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -62,6 +77,8 @@ export function MobilePackerSpamCamera({
   maxPhotos = 5,
   jpegQuality = 0.85,
   header,
+  priorPhotos = [],
+  onDeletePrior,
 }: MobilePackerSpamCameraProps) {
   const { videoRef, startCamera, stopCamera, cameraError } = useCamera();
   const viewfinderRef = useRef<HTMLDivElement>(null);
@@ -69,12 +86,38 @@ export function MobilePackerSpamCamera({
   const [flash, setFlash] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [startError, setStartError] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   // Track whether the parent took ownership — if so, skip revoke-on-unmount.
   const handedOffRef = useRef(false);
-  // Always-current shots reference for unmount cleanup + paging bounds.
+  // Always-current shots reference for unmount cleanup.
   const shotsRef = useRef<CapturedShot[]>([]);
   shotsRef.current = shots;
+
+  const gallerySlides = useMemo<GallerySlide[]>(
+    () => [
+      ...priorPhotos.map((p) => ({ kind: 'prior' as const, id: p.id, previewUrl: p.previewUrl })),
+      ...shots.map((s) => ({
+        kind: 'capture' as const,
+        id: s.id,
+        previewUrl: s.previewUrl,
+        blob: s.blob,
+      })),
+    ],
+    [priorPhotos, shots],
+  );
+  const slidesRef = useRef(gallerySlides);
+  slidesRef.current = gallerySlides;
+
+  useEffect(() => {
+    setPreviewIndex((idx) => {
+      if (idx === null) return idx;
+      if (gallerySlides.length === 0) return null;
+      return Math.min(idx, gallerySlides.length - 1);
+    });
+  }, [gallerySlides.length]);
 
   // ── Camera start with resolution fallback ────────────────────────────────
   const attemptStart = useCallback(async () => {
@@ -164,40 +207,56 @@ export function MobilePackerSpamCamera({
 
   // ── Gallery paging ────────────────────────────────────────────────────────
   const openGallery = useCallback(() => {
-    if (shotsRef.current.length === 0) return;
-    setPreviewIndex(shotsRef.current.length - 1);
+    if (slidesRef.current.length === 0) return;
+    setPreviewIndex(slidesRef.current.length - 1);
   }, []);
 
-  const paginate = useCallback((step: number) => {
-    setPreviewIndex((idx) => {
-      if (idx === null) return idx;
-      const next = idx + step;
-      if (next < 0 || next >= shotsRef.current.length) return idx;
-      return next;
-    });
-  }, []);
-
-  const handleDragEnd = useCallback(
-    (_e: unknown, info: PanInfo) => {
-      if (info.offset.x < -SWIPE_THRESHOLD) paginate(1);
-      else if (info.offset.x > SWIPE_THRESHOLD) paginate(-1);
-    },
-    [paginate],
-  );
-
-  // ── Remove a shot (from the gallery) ──────────────────────────────────────
   const removeShot = useCallback((id: string) => {
     setShots((prev) => {
       const target = prev.find((s) => s.id === id);
       if (target) URL.revokeObjectURL(target.previewUrl);
       const next = prev.filter((s) => s.id !== id);
       setPreviewIndex((idx) => {
-        if (idx === null || next.length === 0) return null;
-        return Math.min(idx, next.length - 1);
+        if (idx === null) return idx;
+        const priorCount = priorPhotos.length;
+        const captureCount = next.length;
+        const total = priorCount + captureCount;
+        if (total === 0) return null;
+        return Math.min(idx, total - 1);
       });
       return next;
     });
-  }, []);
+  }, [priorPhotos.length]);
+
+  const swipeSlides = useMemo<SwipePhotoSlide[]>(
+    () =>
+      gallerySlides.map((slide) => {
+        if (slide.kind === 'capture') {
+          return { id: slide.id, previewUrl: slide.previewUrl, deletable: true };
+        }
+        const prior = priorPhotos.find((p) => p.id === slide.id);
+        return {
+          id: slide.id,
+          previewUrl: slide.previewUrl,
+          deletable: prior?.photoId != null && typeof onDeletePrior === 'function',
+        };
+      }),
+    [gallerySlides, onDeletePrior, priorPhotos],
+  );
+
+  const handleViewerDelete = useCallback(
+    (slide: SwipePhotoSlide) => {
+      const match = gallerySlides.find((s) => s.id === slide.id);
+      if (!match) return;
+      if (match.kind === 'capture') {
+        removeShot(match.id);
+        return;
+      }
+      const prior = priorPhotos.find((p) => p.id === match.id);
+      if (prior?.photoId != null && onDeletePrior) void onDeletePrior(prior.photoId);
+    },
+    [gallerySlides, onDeletePrior, priorPhotos, removeShot],
+  );
 
   // ── Done ─────────────────────────────────────────────────────────────────
   const handleDone = useCallback(() => {
@@ -252,17 +311,8 @@ export function MobilePackerSpamCamera({
 
   const remaining = maxPhotos - shots.length;
   const atCap = remaining <= 0;
-  const lastShot = shots[shots.length - 1];
+  const lastSlide = gallerySlides[gallerySlides.length - 1];
   const cameraLive = !startError && !cameraError;
-
-  // Portal to <body> so the fullscreen camera escapes the mobile shell's
-  // animated (transformed) page wrapper. A transformed ancestor becomes the
-  // containing block for this `fixed inset-0` overlay, which would otherwise
-  // clip it to the content area and let the bottom nav show through.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
-  const activeShot = previewIndex !== null ? shots[previewIndex] : undefined;
 
   const cameraUi = (
     <motion.div
@@ -372,15 +422,15 @@ export function MobilePackerSpamCamera({
             <button
               type="button"
               onClick={openGallery}
-              disabled={shots.length === 0}
-              aria-label="View captured photos"
+              disabled={gallerySlides.length === 0}
+              aria-label="View photos"
               className="relative h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/40 bg-black/40 shadow-lg active:scale-95 transition-transform disabled:opacity-0 disabled:pointer-events-none"
             >
-              {lastShot && (
+              {lastSlide && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={lastShot.previewUrl}
-                  alt="Last photo"
+                  src={lastSlide.previewUrl}
+                  alt="Latest photo"
                   className="w-full h-full object-cover"
                 />
               )}
@@ -415,74 +465,13 @@ export function MobilePackerSpamCamera({
         </div>
       </div>
 
-      {/* ── Swipeable gallery overlay — full-bleed so the preview frames the shot
-          at the EXACT dimensions the viewfinder did (object-cover, same crop).
-          The 1/1 counter + delete float over the photo; there's no X — a
-          floating Dismiss pill (no bottom bar) is the single close affordance. ── */}
-      <AnimatePresence>
-        {activeShot && previewIndex !== null && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            // Exit instantly (no fade): the overlay sits at z-30 over the
-            // shutter, so a lingering fade-out would swallow the first shutter
-            // tap after Dismiss. Unmounting at once keeps the camera live.
-            exit={{ opacity: 0, transition: { duration: 0 } }}
-            transition={{ duration: 0.18 }}
-            className="absolute inset-0 z-30 bg-black"
-          >
-            {/* Full-bleed photo. Swipe pages between shots with NO frame
-                transition (the drag snaps back, the image swaps instantly). */}
-            <motion.div
-              drag="x"
-              dragConstraints={{ left: 0, right: 0 }}
-              dragSnapToOrigin
-              dragElastic={0.35}
-              onDragEnd={handleDragEnd}
-              className="absolute inset-0"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activeShot.previewUrl}
-                alt={`Photo ${previewIndex + 1}`}
-                draggable={false}
-                className="w-full h-full object-cover pointer-events-none"
-              />
-            </motion.div>
-
-            {/* No prev/next arrows — swipe pages between shots, and the N / M
-                counter (top-left) shows position. */}
-
-            {/* Top scrim: 1/1 counter (left) + delete (right), over the photo. */}
-            <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
-              <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
-                <span className="text-sm font-black tracking-wider text-white/90 tabular-nums">
-                  {previewIndex + 1} / {shots.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeShot(activeShot.id)}
-                  aria-label="Delete photo"
-                  className="w-11 h-11 rounded-full bg-red-600 text-white flex items-center justify-center active:bg-red-700 transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Floating Dismiss — no bottom bar; the pill floats over the photo. */}
-            <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-6 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pointer-events-none">
-              <button
-                type="button"
-                onClick={() => setPreviewIndex(null)}
-                className="pointer-events-auto h-12 px-8 rounded-full bg-black/55 text-white text-caption font-black uppercase tracking-[0.18em] backdrop-blur-md shadow-lg active:bg-black/70 transition-colors"
-              >
-                Dismiss
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <MobileSwipePhotoViewer
+        open={previewIndex !== null}
+        initialIndex={previewIndex ?? 0}
+        slides={swipeSlides}
+        onClose={() => setPreviewIndex(null)}
+        onDelete={handleViewerDelete}
+      />
     </motion.div>
   );
 

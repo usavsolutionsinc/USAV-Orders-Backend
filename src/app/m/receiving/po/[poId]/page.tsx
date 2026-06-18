@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ChevronRight, Camera } from '@/components/Icons';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { PhotoFab } from '@/components/mobile/receiving/PhotoFab';
-import { ReceivingPhotoStrip } from '@/components/sidebar/ReceivingPhotoStrip';
+import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
@@ -243,9 +243,16 @@ function PoPhotosTab({ header, staffId }: { header: PoHeader | undefined; staffI
       </p>
     );
   }
+  const poSlug = encodeURIComponent(header.po_id);
+  const galleryHref = `/m/receiving/po/${poSlug}/gallery`;
   return (
     <div className="px-4 py-4">
-      <ReceivingPhotoStrip receivingId={header.receiving_id} staffId={staffId} />
+      <MobileReceivingPhotoStrip
+        receivingId={header.receiving_id}
+        staffId={staffId}
+        galleryHref={galleryHref}
+        countHint={header.total_photo_count}
+      />
     </div>
   );
 }

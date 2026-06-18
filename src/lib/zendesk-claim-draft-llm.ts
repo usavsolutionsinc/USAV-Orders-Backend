@@ -45,7 +45,6 @@ const TOOL_NAME = 'report_claim_draft';
 
 export interface ClaimDraftInput {
   claimTypeLabel: string;
-  severityLabel: string;
   /** The deterministic template — authoritative facts the model must preserve. */
   template: { subject: string; description: string };
   /** Operator's raw "what happened" note (may be empty). */
@@ -72,7 +71,6 @@ function buildUserText(input: ClaimDraftInput): string {
   const reason = String(input.reason ?? '').trim();
   return [
     `Claim type: ${input.claimTypeLabel}`,
-    `Severity: ${input.severityLabel}`,
     '',
     "Operator's note (what happened):",
     reason || '(none provided)',

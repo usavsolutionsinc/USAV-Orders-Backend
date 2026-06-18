@@ -10,6 +10,7 @@ import { formatAnalysisForPrompt, resolveLocalAiAnswer } from '@/lib/ai/ops-assi
 import { queryNemoClawRag } from '@/lib/ai/nemoclaw-rag';
 import { checkRateLimit } from '@/lib/api-guard';
 import { persistChatMessage } from '@/lib/ai/chat-persistence';
+import { getHermesApiUrl, getHermesHeaders, getHermesModel } from '@/lib/ai/hermes-client';
 import type { AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
 import { withAuth } from '@/lib/auth/withAuth';
 
@@ -22,9 +23,6 @@ type AiChatBody = {
 
 // Local Hermes gateway — OpenAI-compatible API server exposed by
 // NousResearch/hermes-agent (gateway/platforms/api_server.py).
-const HERMES_API_URL = process.env.HERMES_API_URL || 'http://127.0.0.1:8642/v1';
-const HERMES_API_KEY = process.env.HERMES_API_KEY || '';
-
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({
     headers: req.headers,
@@ -160,16 +158,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Session continuity is handled via the X-Hermes-Session-Id header —
     // Hermes persists the conversation in ~/.hermes-usav/state.db so
     // follow-up turns ("and yesterday?") see the prior context.
-    const hermesRes = await fetch(`${HERMES_API_URL}/chat/completions`, {
+    const hermesRes = await fetch(`${getHermesApiUrl()}/chat/completions`, {
       method: 'POST',
-      headers: {
+      headers: getHermesHeaders({
         'Content-Type': 'application/json',
-        ...(HERMES_API_KEY && { 'Authorization': `Bearer ${HERMES_API_KEY}` }),
         'X-Hermes-Session-Id': sessionId,
         'X-Source': 'usav',
-      },
+      }),
       body: JSON.stringify({
-        model: process.env.HERMES_MODEL || 'hermes-agent',
+        model: getHermesModel(),
         messages: [
           {
             role: 'system',

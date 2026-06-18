@@ -55,7 +55,18 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
 // of the form `slug.<root>` is extracted as a tenant slug and stamped onto
 // the request headers so downstream handlers can resolve the org without a
 // per-request hit on the DB at the edge.
-const RESERVED_SUBDOMAINS = new Set<string>(['www', 'app', 'api', 'admin', 'docs', 'status', 'staging', 'preview']);
+const RESERVED_SUBDOMAINS = new Set<string>([
+  'www',
+  'app',
+  'api',
+  'admin',
+  'docs',
+  'status',
+  'staging',
+  'preview',
+  // Named Cloudflare dev tunnel (pnpm dev:tunnel:named) — not a tenant slug.
+  'usav-dev',
+]);
 
 function extractTenantSlug(host: string | null): string | null {
   if (!host) return null;

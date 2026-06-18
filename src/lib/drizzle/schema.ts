@@ -2368,6 +2368,23 @@ export type NewAiChatSession = typeof aiChatSessions.$inferInsert;
 export type AiChatMessage = typeof aiChatMessages.$inferSelect;
 export type NewAiChatMessage = typeof aiChatMessages.$inferInsert;
 
+export const receivingClaimSellerMessages = pgTable('receiving_claim_seller_messages', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
+  receivingLineId: integer('receiving_line_id').references(() => receivingLines.id, { onDelete: 'cascade' }),
+  zendeskTicketId: bigint('zendesk_ticket_id', { mode: 'number' }),
+  sellerMessage: text('seller_message').notNull(),
+  subjectSnapshot: text('subject_snapshot'),
+  model: text('model'),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type ReceivingClaimSellerMessage = typeof receivingClaimSellerMessages.$inferSelect;
+export type NewReceivingClaimSellerMessage = typeof receivingClaimSellerMessages.$inferInsert;
+
 // SKU Catalog type exports
 export type SkuCatalog = typeof skuCatalog.$inferSelect;
 export type NewSkuCatalog = typeof skuCatalog.$inferInsert;
