@@ -7,7 +7,7 @@ import { outboundOrderByIdQuery } from '@/lib/queries/outbound-queries';
 import { LabelsOrderWorkspace } from '@/components/outbound/labels/LabelsOrderWorkspace';
 import { LabelsQueueTable } from '@/components/outbound/labels/LabelsQueueTable';
 import { StagedQueueTable } from '@/components/outbound/scan-out/StagedQueueTable';
-import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
+import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useOutboundUrlState } from '@/hooks/useOutboundUrlState';
 import { bustScanOutCaches } from '@/lib/outbound/outbound-cache-keys';
@@ -38,7 +38,14 @@ function StagedOrderDetail({
 
   if (isError || !order) return null;
 
-  return <UnshippedDetailsPanel shipped={order} onClose={onClose} onUpdate={handleUpdate} />;
+  return (
+    <ShippedDetailsPanel
+      shipped={order}
+      onClose={onClose}
+      onUpdate={handleUpdate}
+      context="staged"
+    />
+  );
 }
 
 export function OutboundWorkspace() {

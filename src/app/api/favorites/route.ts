@@ -23,7 +23,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ error: 'workspace is required' }, { status: 400 });
     }
 
-    const favorites = await listFavoriteSkus(workspaceKey, false, ctx.organizationId ?? undefined);
+    const favorites = await listFavoriteSkus(workspaceKey, false, ctx.organizationId);
     return NextResponse.json({ favorites, count: favorites.length, workspaceKey });
   } catch (error: any) {
     console.error('GET /api/favorites error:', error);
@@ -55,7 +55,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       sortOrder: body?.sortOrder,
       isActive: body?.isActive,
       staffId: ctx.staffId,
-    }, ctx.organizationId ?? undefined);
+    }, ctx.organizationId);
 
     return NextResponse.json({ success: true, favorite });
   } catch (error: any) {

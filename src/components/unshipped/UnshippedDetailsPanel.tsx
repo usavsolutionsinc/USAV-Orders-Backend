@@ -10,5 +10,5 @@ interface UnshippedDetailsPanelProps {
 }
 
 export function UnshippedDetailsPanel(props: UnshippedDetailsPanelProps) {
-  return <ShippedDetailsPanel {...props} context="queue" />;
+  return <ShippedDetailsPanel {...props} context="fulfillment" />;
 }

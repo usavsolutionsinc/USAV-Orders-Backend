@@ -11,10 +11,10 @@ export function ConnectionsCard() {
   return (
     <StatusCard
       icon={Link2}
-      title="Connections"
+      title="Sync tools"
       primary="—"
-      secondary="Marketplace · shipping · sheets"
-      tertiary="Open to review provider status"
+      secondary="Run syncs · Zoho tools · activity"
+      tertiary="Credential connect lives in Settings → Integrations"
       href="/admin?section=connections"
     />
   );

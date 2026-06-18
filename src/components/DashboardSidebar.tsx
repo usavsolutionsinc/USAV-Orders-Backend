@@ -26,7 +26,7 @@ import { SourcingSidebarPanel } from '@/components/sidebar/SourcingSidebarPanel'
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
 import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
-import { SettingsSidebarPanel } from '@/components/sidebar/SettingsSidebarPanel';
+import { SettingsSidebar } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
 import { MasterNav, MasterNavProvider, useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
@@ -195,6 +195,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
           searchValue={dashboardSearch.searchQuery}
           onSearchChange={dashboardSearch.setSearch}
           onOpenShippedMatches={dashboardSearch.openShippedMatches}
+          onOpenLabelsMatches={dashboardSearch.openOutboundLabels}
         />
       );
     }
@@ -246,7 +247,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   if (routeKey === 'studio') return <StudioSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'ai-chat') return <AiChatSidebarPanel />;
-  if (routeKey === 'settings') return <SettingsSidebarPanel />;
+  if (routeKey === 'settings') return <SettingsSidebar />;
   if (routeKey === 'audit-log') return <AuditLogSidebarPanel />;
   if (routeKey === 'receiving') return <ReceivingSidebarPanel />;
   if (routeKey === 'fba') return <FbaSidebarPanel />;

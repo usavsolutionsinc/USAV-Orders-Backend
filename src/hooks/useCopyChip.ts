@@ -37,9 +37,11 @@ interface ChipTooltipInternals extends ChipTooltipAnchor {
 export function useChipTooltip({
   enabled,
   tooltipValue,
+  tooltipAction = 'copy',
 }: {
   enabled: boolean;
   tooltipValue: string;
+  tooltipAction?: 'copy' | 'external-link';
 }): ChipTooltipInternals {
   const anchorId = useId();
   const chipRef = useRef<HTMLDivElement | null>(null);
@@ -57,7 +59,7 @@ export function useChipTooltip({
 
   const openTooltip = () => {
     if (!enabled || !tooltipCtx) return;
-    tooltipCtx.activate({ anchorId, value: tooltipValue, getRect });
+    tooltipCtx.activate({ anchorId, value: tooltipValue, getRect, action: tooltipAction });
   };
 
   const closeTooltip = () => {
@@ -86,6 +88,10 @@ export interface CopyChipBehavior extends ChipTooltipAnchor {
   /** Disable the button only when copy is wanted but there is nothing to copy. */
   isDisabled: boolean;
   handleCopy: (e: MouseEvent<HTMLButtonElement>) => void;
+  /** Show / refresh the site tooltip bubble (copy flash or external-link preview). */
+  flashTooltip: () => void;
+  /** Open the site tooltip without the copied flash (external-link preview). */
+  showTooltipPreview: () => void;
 }
 
 /**
@@ -97,28 +103,37 @@ export function useCopyChip({
   value,
   disableCopy = false,
   disableTooltip = false,
+  tooltipTrigger = 'hover',
   onCopy,
   historyKind,
   historyDisplay,
+  tooltipAction = 'copy',
 }: {
   value: string | null | undefined;
   disableCopy?: boolean;
   disableTooltip?: boolean;
+  /** `click` — bubble only on chip click (pairs with a separate hover action menu). */
+  tooltipTrigger?: 'hover' | 'click';
   /** Called after a successful clipboard write. Use for side-effects (e.g. dispatch a custom event). */
   onCopy?: (value: string) => void;
   /** Chip tone, logged to the device clipboard history for typed re-rendering. */
   historyKind?: string;
   /** Short chip label, logged to the device clipboard history. */
   historyDisplay?: string;
+  /** Trailing icon in the hover bubble — external-link for open-in-tab chips. */
+  tooltipAction?: 'copy' | 'external-link';
 }): CopyChipBehavior {
   const normalizedValue = normalizeCopyText(value);
   const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
   const isDisabled = !canCopy && !disableCopy;
 
-  const { anchorId, tooltipCtxRef, ...tooltip } = useChipTooltip({
-    enabled: !disableTooltip && canCopy,
+  const { anchorId, tooltipCtxRef, chipRef, ...tooltip } = useChipTooltip({
+    enabled: !disableTooltip && !!normalizedValue && normalizedValue !== '---',
     tooltipValue: normalizedValue,
+    tooltipAction,
   });
+
+  const getRect = useCallback(() => chipRef.current?.getBoundingClientRect() ?? null, [chipRef]);
 
   useEffect(() => {
     tooltipCtxRef.current?.syncValueIfActive(anchorId, normalizedValue);
@@ -130,16 +145,38 @@ export function useCopyChip({
     }
   }, [canCopy, anchorId, tooltipCtxRef]);
 
+  const flashTooltip = () => {
+    if (disableTooltip || !tooltipCtxRef.current) return;
+    const ctx = tooltipCtxRef.current;
+    if (!ctx.isActiveAnchor(anchorId)) {
+      ctx.activate({ anchorId, value: normalizedValue, getRect, action: tooltipAction });
+    }
+    ctx.notifyCopied(anchorId);
+  };
+
+  const showTooltipPreview = () => {
+    if (disableTooltip || !tooltipCtxRef.current) return;
+    if (!normalizedValue || normalizedValue === '---') return;
+    tooltipCtxRef.current.activate({
+      anchorId,
+      value: normalizedValue,
+      getRect,
+      action: tooltipAction,
+    });
+  };
+
   const handleCopy = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (!canCopy) return;
     navigator.clipboard.writeText(normalizedValue);
     recordCopy(normalizedValue, { kind: historyKind, display: historyDisplay });
     onCopy?.(normalizedValue);
-    if (tooltipCtxRef.current?.isActiveAnchor(anchorId)) {
+    if (tooltipTrigger === 'click') {
+      flashTooltip();
+    } else if (tooltipCtxRef.current?.isActiveAnchor(anchorId)) {
       tooltipCtxRef.current.notifyCopied(anchorId);
     }
   };
 
-  return { ...tooltip, normalizedValue, canCopy, isDisabled, handleCopy };
+  return { ...tooltip, chipRef, normalizedValue, canCopy, isDisabled, handleCopy, flashTooltip, showTooltipPreview };
 }

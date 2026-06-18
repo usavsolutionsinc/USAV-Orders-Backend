@@ -7,11 +7,9 @@ import { SidebarSectionList, type SidebarSection } from '@/components/sidebar/Si
 import { useAuth } from '@/contexts/AuthContext';
 import { ADMIN_SECTION_OPTIONS, type AdminSection } from './admin-sections';
 
-import { AccessSidebarPanel } from './AccessSidebarPanel';
-import { RolesSidebarPanel } from './RolesSidebarPanel';
 import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
-import { StaffAdminSidebarPanel } from '@/components/sidebar/StaffAdminSidebarPanel';
+import { StaffScheduleSidebarPanel } from './StaffScheduleSidebarPanel';
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
 import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
@@ -28,18 +26,16 @@ const ICON_CLS = 'h-4 w-4 shrink-0';
 
 function panelFor(section: AdminSection): JSX.Element | null {
   switch (section) {
-    case 'goals':        return <GoalsSidebarPanel />;
-    case 'staff':        return <StaffAdminSidebarPanel />;
-    case 'access':       return <AccessSidebarPanel />;
-    case 'roles':        return <RolesSidebarPanel />;
-    case 'fba':          return <FbaCatalogSidebarPanel />;
-    case 'bose_models':  return <BoseModelsSidebarPanel />;
-    case 'compatibility': return <CompatibilitySidebarPanel />;
-    case 'suppliers':    return <SuppliersSidebarPanel />;
-    case 'connections':  return <ConnectionsSidebarPanel />;
-    case 'architecture': return <OperationsSidebarPanel />;
-    case 'logs':         return <LogsSidebarPanel />;
-    default:             return null;
+    case 'goals':           return <GoalsSidebarPanel />;
+    case 'staff_schedule':  return <StaffScheduleSidebarPanel />;
+    case 'fba':             return <FbaCatalogSidebarPanel />;
+    case 'bose_models':     return <BoseModelsSidebarPanel />;
+    case 'compatibility':   return <CompatibilitySidebarPanel />;
+    case 'suppliers':       return <SuppliersSidebarPanel />;
+    case 'connections':     return <ConnectionsSidebarPanel />;
+    case 'architecture':    return <OperationsSidebarPanel />;
+    case 'logs':            return <LogsSidebarPanel />;
+    default:                return null;
   }
 }
 
@@ -79,7 +75,6 @@ export function AdminSidebar({ activeSection, onSectionChange }: AdminSidebarPro
             active={activeSection}
             onSelect={(next) => onSectionChange(next)}
             ariaLabel="Admin sections"
-            // px-3 lines the rows' icons up with the MasterNavHeader above.
             gutterClassName="px-3"
           />
         </div>

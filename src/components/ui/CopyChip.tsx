@@ -132,6 +132,8 @@ export interface CopyChipProps {
   outerPad?: 'chip' | 'flush';
   /** When true, skip the global hover copy tooltip (e.g. chip has its own action menu). */
   disableTooltip?: boolean;
+  /** `click` — site tooltip only on chip click; hover reserved for a separate action menu. */
+  tooltipTrigger?: 'hover' | 'click';
   /** Smaller label + icons (mobile rows that must keep all chips on one line). */
   dense?: boolean;
   /** Replaces copy-on-click while preserving the standard chip presentation. */
@@ -139,6 +141,8 @@ export interface CopyChipProps {
   activationLabel?: string;
   activationTitle?: string;
   activationDisabled?: boolean;
+  /** Hover-bubble trailing icon; defaults to external-link when `onActivate` is set. */
+  tooltipAction?: 'copy' | 'external-link';
 }
 
 export function CopyChip({
@@ -155,12 +159,15 @@ export function CopyChip({
   onCopy,
   outerPad = 'chip',
   disableTooltip = false,
+  tooltipTrigger = 'hover',
   dense = false,
   onActivate,
   activationLabel,
   activationTitle,
   activationDisabled = false,
+  tooltipAction,
 }: CopyChipProps) {
+  const resolvedTooltipAction = tooltipAction ?? (onActivate ? 'external-link' : 'copy');
   const {
     chipRef,
     hasTooltipProvider,
@@ -171,13 +178,16 @@ export function CopyChip({
     canCopy,
     isDisabled,
     handleCopy,
+    showTooltipPreview,
   } = useCopyChip({
     value,
     disableCopy,
     disableTooltip,
+    tooltipTrigger,
     onCopy,
     historyKind: tone,
     historyDisplay: display,
+    tooltipAction: resolvedTooltipAction,
   });
 
   const toneDef = tone ? CHIP_TONES[tone] : undefined;
@@ -188,13 +198,14 @@ export function CopyChip({
   const normalizedDisplay = normalizeCopyText(display);
   const displayOverflowClass = truncateDisplay ? 'truncate' : 'whitespace-nowrap';
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
+  const hoverTooltipEnabled = !disableTooltip && tooltipTrigger === 'hover';
 
   return (
     <div
       ref={chipRef}
       className={`relative flex items-center justify-start ${outerPx} ${width}`}
-      onMouseEnter={openTooltip}
-      onMouseLeave={closeTooltip}
+      onMouseEnter={hoverTooltipEnabled ? openTooltip : undefined}
+      onMouseLeave={hoverTooltipEnabled ? closeTooltip : undefined}
     >
       <button
         type="button"
@@ -204,18 +215,23 @@ export function CopyChip({
             return;
           }
           e.stopPropagation();
-          if (!activationDisabled) onActivate();
+          if (!activationDisabled) {
+            if (tooltipTrigger === 'click') showTooltipPreview();
+            onActivate();
+          }
         }}
-        onFocus={openTooltip}
-        onBlur={closeTooltipImmediate}
+        onFocus={!disableTooltip && tooltipTrigger !== 'click' ? openTooltip : undefined}
+        onBlur={!disableTooltip && tooltipTrigger !== 'click' ? closeTooltipImmediate : undefined}
         disabled={onActivate ? activationDisabled : isDisabled}
         aria-label={onActivate ? activationLabel : undefined}
         title={
-          onActivate
-            ? activationTitle
-            : !disableTooltip && !hasTooltipProvider && canCopy
-              ? normalizedValue
-              : undefined
+          !disableTooltip && hasTooltipProvider && canCopy
+            ? undefined
+            : onActivate
+              ? activationTitle
+              : !disableTooltip && canCopy
+                ? normalizedValue
+                : undefined
         }
         className={
           fitDisplayWidth
@@ -593,23 +609,39 @@ export function AddValueChipFace({
 /** Platform chip — opens product page via item number on click, does NOT copy. */
 export const PlatformChip = ({
   label,
+  tooltipValue,
+  labelTransform = 'lowercase',
   underlineClass,
   iconClass,
   onClick,
 }: {
   label: string;
+  /** Full URL shown in the site tooltip; defaults to `Product Page`. */
+  tooltipValue?: string;
+  /** Preserve caller casing (e.g. `Product Page`) vs legacy lowercase platform slugs. */
+  labelTransform?: 'lowercase' | 'none';
   underlineClass: string;
   iconClass: string;
   onClick: (e: MouseEvent<HTMLButtonElement>) => void;
 }) => {
   const isEmpty = isEmptyChipDisplay(label);
+  const resolvedTooltipValue = (tooltipValue ?? 'Product Page').trim();
   const { chipRef, openTooltip, closeTooltip } = useChipTooltip({
-    enabled: !isEmpty,
-    tooltipValue: 'product page',
+    enabled: !isEmpty && !!resolvedTooltipValue,
+    tooltipValue: resolvedTooltipValue,
+    tooltipAction: 'external-link',
   });
 
   const resolvedUnderline = isEmpty ? 'border-gray-500' : underlineClass;
   const resolvedIconClass = isEmpty ? 'text-gray-500' : iconClass;
+  const labelClass =
+    labelTransform === 'none'
+      ? isEmpty
+        ? 'text-transparent select-none'
+        : 'text-black'
+      : isEmpty
+        ? 'text-transparent select-none'
+        : 'lowercase text-black';
 
   return (
     <div
@@ -632,9 +664,7 @@ export const PlatformChip = ({
           <ExternalLink className="h-4 w-4 shrink-0" />
         </span>
         <span
-          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-sm font-bold leading-none tracking-tight ${resolvedUnderline} ${
-            isEmpty ? 'text-transparent select-none' : 'lowercase text-black'
-          }`}
+          className={`min-w-[60px] whitespace-nowrap border-b-2 pb-0.5 text-center font-dm-sans text-sm font-bold leading-none tracking-tight ${resolvedUnderline} ${labelClass}`}
           aria-hidden={isEmpty}
         >
           {isEmpty ? '\u00a0' : label}

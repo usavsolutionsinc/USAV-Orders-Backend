@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /admin?section=access — thin shell.
+ * Settings → Access — thin shell.
  *
  * The picker now lives in the sidebar (AccessSidebarPanel). This component
  * just reads `?staffId=` from the URL and renders the StaffAccessDetail for

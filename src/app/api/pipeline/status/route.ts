@@ -5,7 +5,6 @@
  * sample counts, and active model version.
  */
 
-import { db } from '@/lib/drizzle/db';
 import {
   pipelineCycles,
   trainingSamples,
@@ -13,61 +12,69 @@ import {
   modelVersions,
   pipelineTasks,
 } from '@/lib/drizzle/schema';
-import { desc, eq, sql, count } from 'drizzle-orm';
+import { and, desc, eq, sql, count } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const runtime = 'nodejs';
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
+  const orgId: OrgId = ctx.organizationId;
   try {
+    return await withTenantDrizzle(orgId, async (tx) => {
     // Recent cycles (last 10)
-    const recentCycles = await db
+    const recentCycles = await tx
       .select()
       .from(pipelineCycles)
+      .where(eq(pipelineCycles.organizationId, orgId))
       .orderBy(desc(pipelineCycles.startedAt))
       .limit(10);
 
     // Sample counts by status
-    const sampleCounts = await db
+    const sampleCounts = await tx
       .select({
         status: trainingSamples.status,
         count: count(),
       })
       .from(trainingSamples)
+      .where(eq(trainingSamples.organizationId, orgId))
       .groupBy(trainingSamples.status);
 
     // Task counts by status
-    const taskCounts = await db
+    const taskCounts = await tx
       .select({
         status: pipelineTasks.status,
         count: count(),
       })
       .from(pipelineTasks)
+      .where(eq(pipelineTasks.organizationId, orgId))
       .groupBy(pipelineTasks.status);
 
     // Latest training run
-    const latestRun = await db
+    const latestRun = await tx
       .select()
       .from(trainingRuns)
+      .where(eq(trainingRuns.organizationId, orgId))
       .orderBy(desc(trainingRuns.createdAt))
       .limit(1);
 
     // Active model version
-    const activeModel = await db
+    const activeModel = await tx
       .select()
       .from(modelVersions)
-      .where(eq(modelVersions.promoted, true))
+      .where(and(eq(modelVersions.organizationId, orgId), eq(modelVersions.promoted, true)))
       .limit(1);
 
     // Total samples and average rating
-    const stats = await db
+    const stats = await tx
       .select({
         totalSamples: count(),
         avgRating: sql<number>`ROUND(AVG(${trainingSamples.rating}), 2)`,
       })
       .from(trainingSamples)
-      .where(sql`${trainingSamples.rating} IS NOT NULL`);
+      .where(and(eq(trainingSamples.organizationId, orgId), sql`${trainingSamples.rating} IS NOT NULL`));
 
     return NextResponse.json({
       ok: true,
@@ -83,6 +90,7 @@ export const GET = withAuth(async () => {
         activeModel: activeModel[0] ?? null,
       },
       timestamp: new Date().toISOString(),
+    });
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

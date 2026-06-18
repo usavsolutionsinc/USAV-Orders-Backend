@@ -3,22 +3,22 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { outboundOrderByIdQuery } from '@/lib/queries/outbound-queries';
-import { UnshippedDetailsPanel } from '@/components/unshipped/UnshippedDetailsPanel';
+import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { bustScanOutCaches } from '@/lib/outbound/outbound-cache-keys';
+import { bustLabelsCaches } from '@/lib/outbound/outbound-cache-keys';
 
 interface LabelsOrderWorkspaceProps {
   orderId: number;
   onClose: () => void;
 }
 
-/** Right-pane order detail for Labels mode (label attach lives in the Shipping tab). */
+/** Right-pane order detail for Outbound · Labels (tracking + label attach). */
 export function LabelsOrderWorkspace({ orderId, onClose }: LabelsOrderWorkspaceProps) {
   const queryClient = useQueryClient();
   const { data: order, isLoading, isError, refetch } = useQuery(outboundOrderByIdQuery(orderId));
 
   const handleUpdate = useCallback(() => {
-    bustScanOutCaches(queryClient);
+    bustLabelsCaches(queryClient);
     void refetch();
   }, [queryClient, refetch]);
 
@@ -46,6 +46,11 @@ export function LabelsOrderWorkspace({ orderId, onClose }: LabelsOrderWorkspaceP
   }
 
   return (
-    <UnshippedDetailsPanel shipped={order} onClose={onClose} onUpdate={handleUpdate} />
+    <ShippedDetailsPanel
+      shipped={order}
+      onClose={onClose}
+      onUpdate={handleUpdate}
+      context="labels"
+    />
   );
 }

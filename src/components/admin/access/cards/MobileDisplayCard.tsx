@@ -88,7 +88,7 @@ export function MobileDisplayCard({
           <h2 className="text-sm font-semibold text-gray-900">Mobile display</h2>
           <p className="mt-0.5 text-caption text-gray-500">
             Controls what this staff sees on their phone. Defaults inherit from <b>{primaryRoleLabel}</b>.
-            Edit role defaults in <a href="/admin?section=roles" className="text-blue-600 hover:underline">Roles</a>.
+            Edit role defaults in <a href="/settings/roles" className="text-blue-600 hover:underline">Roles</a>.
           </p>
         </div>
         {hasOverride && (

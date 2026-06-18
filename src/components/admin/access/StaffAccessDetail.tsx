@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /admin?section=access&staffId=N — focused detail view for one staff.
+ * Admin → Access lives at /settings/access&staffId=N — focused detail view for one staff.
  *
  * Cards (single column, max-w-3xl): Identity, Roles, Stations, Landing page,
  * .access (page permissions), Credentials, Mobile display, Audit.

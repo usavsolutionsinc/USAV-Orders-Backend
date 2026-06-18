@@ -1,19 +1,19 @@
 {
   "summary": {
-    "total": 606,
-    "withAuth": 462,
+    "total": 609,
+    "withAuth": 465,
     "tenantWrapped": 242,
-    "orgIdRef": 484,
-    "rawPool": 182,
+    "orgIdRef": 486,
+    "rawPool": 183,
     "drizzle": 14,
     "transitional": 11,
     "cron": 30,
     "byRisk": {
-      "critical": 29,
+      "critical": 30,
       "high": 29,
-      "medium": 213,
+      "medium": 214,
       "low": 240,
-      "info": 95
+      "info": 96
     }
   },
   "routes": [
@@ -338,6 +338,7 @@
       "isPathParam": true,
       "mutates": true,
       "touched": [
+        "packages",
         "photos",
         "staff"
       ],
@@ -444,6 +445,27 @@
       "touched": [
         "receiving",
         "photos"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/receiving/touch-scan",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.scan_po",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_scans",
+        "receiving"
       ],
       "risk": "critical"
     },
@@ -2478,6 +2500,7 @@
       "touched": [
         "order_unit_allocations",
         "station_activity_logs",
+        "tech_serial_numbers",
         "inventory_events",
         "audit_logs",
         "orders",
@@ -2636,6 +2659,27 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
+        "orders"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/outbound/mark-staged",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "shipping.mark_shipped",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "packages",
         "orders"
       ],
       "risk": "medium"
@@ -11632,6 +11676,25 @@
       ],
       "withAuth": true,
       "permission": "admin.manage_features",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/admin/organization/profile",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": "admin.view",
       "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": false,

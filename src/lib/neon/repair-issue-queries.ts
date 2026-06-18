@@ -1,4 +1,5 @@
-import pool from '../db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export interface RepairIssueTemplate {
   id: number;
@@ -10,58 +11,61 @@ export interface RepairIssueTemplate {
   created_at: string;
 }
 
+const COLS = `id, favorite_sku_id, label, category, sort_order, active, created_at`;
+
 /**
  * Fetch issue templates: global (favorite_sku_id IS NULL) + SKU-specific when a favoriteSkuId is provided.
  */
-export async function getIssuesForFavorite(favoriteSkuId?: number | null): Promise<RepairIssueTemplate[]> {
-  const client = await pool.connect();
-  try {
-    if (favoriteSkuId) {
-      const { rows } = await client.query<RepairIssueTemplate>(
-        `SELECT id, favorite_sku_id, label, category, sort_order, active, created_at
+export async function getIssuesForFavorite(
+  favoriteSkuId: number | null | undefined,
+  orgId: OrgId,
+): Promise<RepairIssueTemplate[]> {
+  if (favoriteSkuId) {
+    const r = await tenantQuery<RepairIssueTemplate>(
+      orgId,
+      `SELECT ${COLS}
          FROM repair_issue_templates
-         WHERE (favorite_sku_id = $1 OR favorite_sku_id IS NULL) AND active = true
+         WHERE organization_id = $1 AND (favorite_sku_id = $2 OR favorite_sku_id IS NULL) AND active = true
          ORDER BY sort_order, id`,
-        [favoriteSkuId],
-      );
-      return rows;
-    }
-
-    const { rows } = await client.query<RepairIssueTemplate>(
-      `SELECT id, favorite_sku_id, label, category, sort_order, active, created_at
-       FROM repair_issue_templates
-       WHERE favorite_sku_id IS NULL AND active = true
-       ORDER BY sort_order, id`,
+      [orgId, favoriteSkuId],
     );
-    return rows;
-  } finally {
-    client.release();
+    return r.rows;
   }
+
+  const r = await tenantQuery<RepairIssueTemplate>(
+    orgId,
+    `SELECT ${COLS}
+       FROM repair_issue_templates
+       WHERE organization_id = $1 AND favorite_sku_id IS NULL AND active = true
+       ORDER BY sort_order, id`,
+    [orgId],
+  );
+  return r.rows;
 }
 
-export async function createIssueTemplate(input: {
-  favoriteSkuId?: number | null;
-  label: string;
-  category?: string | null;
-  sortOrder?: number;
-}): Promise<RepairIssueTemplate> {
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query<RepairIssueTemplate>(
-      `INSERT INTO repair_issue_templates (favorite_sku_id, label, category, sort_order)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, favorite_sku_id, label, category, sort_order, active, created_at`,
-      [input.favoriteSkuId ?? null, input.label.trim(), input.category?.trim() || null, input.sortOrder ?? 0],
-    );
-    return rows[0];
-  } finally {
-    client.release();
-  }
+export async function createIssueTemplate(
+  input: {
+    favoriteSkuId?: number | null;
+    label: string;
+    category?: string | null;
+    sortOrder?: number;
+  },
+  orgId: OrgId,
+): Promise<RepairIssueTemplate> {
+  const r = await tenantQuery<RepairIssueTemplate>(
+    orgId,
+    `INSERT INTO repair_issue_templates (favorite_sku_id, label, category, sort_order, organization_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING ${COLS}`,
+    [input.favoriteSkuId ?? null, input.label.trim(), input.category?.trim() || null, input.sortOrder ?? 0, orgId],
+  );
+  return r.rows[0];
 }
 
 export async function updateIssueTemplate(
   id: number,
   updates: Partial<Pick<RepairIssueTemplate, 'label' | 'category' | 'sort_order' | 'active'>>,
+  orgId: OrgId,
 ): Promise<RepairIssueTemplate | null> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -86,27 +90,25 @@ export async function updateIssueTemplate(
 
   if (sets.length === 0) return null;
 
-  values.push(id);
+  const idParam = idx++;
+  const orgParam = idx;
+  values.push(id, orgId);
 
-  const client = await pool.connect();
-  try {
-    const { rows } = await client.query<RepairIssueTemplate>(
-      `UPDATE repair_issue_templates SET ${sets.join(', ')} WHERE id = $${idx}
-       RETURNING id, favorite_sku_id, label, category, sort_order, active, created_at`,
-      values,
-    );
-    return rows[0] ?? null;
-  } finally {
-    client.release();
-  }
+  const r = await tenantQuery<RepairIssueTemplate>(
+    orgId,
+    `UPDATE repair_issue_templates SET ${sets.join(', ')}
+       WHERE id = $${idParam} AND organization_id = $${orgParam}
+       RETURNING ${COLS}`,
+    values,
+  );
+  return r.rows[0] ?? null;
 }
 
-export async function deleteIssueTemplate(id: number): Promise<boolean> {
-  const client = await pool.connect();
-  try {
-    const { rowCount } = await client.query('DELETE FROM repair_issue_templates WHERE id = $1', [id]);
-    return (rowCount ?? 0) > 0;
-  } finally {
-    client.release();
-  }
+export async function deleteIssueTemplate(id: number, orgId: OrgId): Promise<boolean> {
+  const r = await tenantQuery(
+    orgId,
+    'DELETE FROM repair_issue_templates WHERE id = $1 AND organization_id = $2',
+    [id, orgId],
+  );
+  return (r.rowCount ?? 0) > 0;
 }

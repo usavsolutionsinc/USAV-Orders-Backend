@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getIssuesForFavorite, createIssueTemplate } from '@/lib/neon/repair-issue-queries';
-import { withAuth } from '@/lib/auth/withAuth';
+import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
+import type { OrgId } from '@/lib/tenancy/constants';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
     const { searchParams } = new URL(req.url);
     const rawFavId = searchParams.get('favoriteSkuId');
@@ -12,7 +13,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Invalid favoriteSkuId' }, { status: 400 });
     }
 
-    const issues = await getIssuesForFavorite(favoriteSkuId);
+    const issues = await getIssuesForFavorite(favoriteSkuId, ctx.organizationId as OrgId);
     return NextResponse.json({ issues, count: issues.length });
   } catch (error: any) {
     console.error('GET /api/repair/issues error:', error);
@@ -23,7 +24,7 @@ export const GET = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'repair.view' });
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
     const body = await req.json();
     const label = String(body?.label || '').trim();
@@ -42,7 +43,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       label,
       category: body?.category || null,
       sortOrder: body?.sortOrder ?? 0,
-    });
+    }, ctx.organizationId as OrgId);
 
     return NextResponse.json({ success: true, issue });
   } catch (error: any) {

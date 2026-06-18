@@ -6,6 +6,7 @@
  * mode where the chip remains the primary action and Open/Edit move below it.
  */
 
+import { useState } from 'react';
 import { Copy, ExternalLink, Pencil } from '@/components/Icons';
 import { CopyChip, type ChipTone } from '@/components/ui/CopyChip';
 import { RECEIVING_CHIP_EDIT_BTN_CLASS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
@@ -60,6 +61,7 @@ export function IdentityLinkChip({
   /** First menu row. Listing uses Copy; PO/tracking use Open. */
   menuFirstAction?: 'open' | 'copy';
 }) {
+  const [menuHover, setMenuHover] = useState(false);
   const normalizedValue = normalizeCopyText(value);
   const canCopy = !disableCopy && !!normalizedValue && normalizedValue !== '---';
   const openExternal = () => {
@@ -71,12 +73,17 @@ export function IdentityLinkChip({
     recordCopy(normalizedValue, { kind: tone, display });
   };
   const hasMenuActions = actionsInMenu && (!!onEdit || menuFirstAction === 'copy' || !!openHref);
+  const showActionMenu = hasMenuActions && !editOpen;
 
   return (
     <div
       className={`group relative flex items-center gap-0.5 ${grow ? 'min-w-0 flex-1' : 'shrink-0'}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
+      onMouseEnter={() => {
+        if (showActionMenu) setMenuHover(true);
+      }}
+      onMouseLeave={() => setMenuHover(false)}
     >
       {!actionsInMenu ? (
         <button
@@ -102,7 +109,6 @@ export function IdentityLinkChip({
         disableCopy={disableCopy}
         fitDisplayWidth={!grow}
         truncateDisplay={grow}
-        disableTooltip={actionsInMenu}
         onActivate={chipAction === 'open' ? openExternal : undefined}
         activationLabel={chipAction === 'open' ? openTitle : undefined}
         activationTitle={
@@ -126,12 +132,19 @@ export function IdentityLinkChip({
           <Pencil className="h-3 w-3" />
         </button>
       ) : null}
-      {hasMenuActions ? (
+      {showActionMenu ? (
         <div
           // Local hover menu matching SerialChipWithMenu; it is intentionally
-          // outside the app-wide portal/overlay stack.
+          // outside the app-wide portal/overlay stack. Hidden while editOpen so
+          // anchored previews (ticket history) are the only panel shown.
+          // Hover-only visibility — focus-within kept menus stuck open after a
+          // chip click (especially chips on the wrapped second row).
           // eslint-disable-next-line no-restricted-syntax
-          className="invisible pointer-events-none absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 opacity-0 transition-opacity duration-100 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+            menuHover
+              ? 'visible pointer-events-auto opacity-100'
+              : 'invisible pointer-events-none opacity-0'
+          }`}
         >
           <div
             role="menu"

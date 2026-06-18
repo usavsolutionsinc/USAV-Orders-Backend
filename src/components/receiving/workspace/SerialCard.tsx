@@ -365,12 +365,17 @@ export function SerialChipWithMenu({
 }) {
   const sn = serial.serial_number;
   const hasActions = !!(onEdit || onDelete || onSetCondition);
+  const [menuHover, setMenuHover] = useState(false);
 
   return (
     <div
       className="group relative inline-flex"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
+      onMouseEnter={() => {
+        if (hasActions) setMenuHover(true);
+      }}
+      onMouseLeave={() => setMenuHover(false)}
     >
       <div
         className={`inline-flex items-center gap-1 rounded-md transition-colors ${
@@ -384,8 +389,13 @@ export function SerialChipWithMenu({
           // Intentional exception (memory: z-index-scale-sot): a purely in-flow
           // CSS hover tooltip stacking within this card's local context — not
           // part of the global portal/overlay system, so it stays a raw z-[100].
+          // Hover-only — focus-within kept menus stuck after chip click.
           // eslint-disable-next-line no-restricted-syntax
-          className="invisible pointer-events-none absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 opacity-0 transition-opacity duration-100 group-hover:visible group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:visible group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className={`absolute left-1/2 top-full z-[100] -translate-x-1/2 pt-1 transition-opacity duration-100 ${
+            menuHover
+              ? 'visible pointer-events-auto opacity-100'
+              : 'invisible pointer-events-none opacity-0'
+          }`}
         >
           <div
             role="menu"

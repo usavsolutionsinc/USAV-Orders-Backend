@@ -1047,11 +1047,14 @@ export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<Sk
   const catalog = await getSkuCatalogById(id, orgId);
   if (!catalog) return null;
 
-  // Only sku_platform_ids gets an org filter here — product_manuals and
-  // qc_check_templates are out of this migration's scope (qc/manual helpers
-  // left unchanged), and the catalog row is already org-verified above. When
+  // sku_platform_ids and qc_check_templates are tenant-owned — both get an org
+  // filter + GUC wrapper when orgId is provided (qc_check_templates must be
+  // GUC-safe so FORCE row-level security can be enabled on it). product_manuals
+  // has NO organization_id column (child-scoped to sku_catalog, already
+  // org-verified by getSkuCatalogById above), so it stays on the raw pool. When
   // orgId is omitted, behavior is identical to before.
   const platformSql = `SELECT * FROM sku_platform_ids WHERE sku_catalog_id = $1 AND is_active = true${orgId ? ' AND organization_id = $2' : ''} ORDER BY platform, created_at`;
+  const qcSql = `SELECT * FROM qc_check_templates WHERE sku_catalog_id = $1${orgId ? ' AND organization_id = $2' : ''} ORDER BY sort_order, id`;
   const [platformResult, manualResult, qcResult] = await Promise.all([
     orgId
       ? tenantQuery<SkuPlatformIdRow>(orgId, platformSql, [id, orgId])
@@ -1061,10 +1064,9 @@ export async function getSkuCatalogDetail(id: number, orgId?: OrgId): Promise<Sk
        FROM product_manuals WHERE sku_catalog_id = $1 AND is_active = true ORDER BY updated_at DESC`,
       [id],
     ),
-    pool.query(
-      `SELECT * FROM qc_check_templates WHERE sku_catalog_id = $1 ORDER BY sort_order, id`,
-      [id],
-    ),
+    orgId
+      ? tenantQuery<QcCheckTemplateRow>(orgId, qcSql, [id, orgId])
+      : pool.query<QcCheckTemplateRow>(qcSql, [id]),
   ]);
 
   return {

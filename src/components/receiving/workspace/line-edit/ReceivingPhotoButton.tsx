@@ -149,11 +149,13 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
       {/* Hover popover. `pt-1.5` is inside the group so the gap between button
           and card doesn't drop the hover. Only rendered when photos exist. */}
       <div className="invisible absolute right-0 top-full z-30 pt-1.5 opacity-0 transition-opacity duration-100 group-hover/photos:visible group-hover/photos:opacity-100">
-        <div className="w-[18rem] max-w-[80vw] rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+        <div className="w-fit max-w-[80vw] rounded-xl border border-gray-200 bg-white p-1 shadow-xl">
           <PhotoGallery
             photos={photos}
             orderId={`RCV-${receivingId}`}
             launcherLayout="toolbar"
+            showCopyLinks={false}
+            toolbarShowLabel={false}
             compact
             onPhotoDeleted={refresh}
             onAddPhotos={canAdd ? () => setPickerOpen(true) : undefined}

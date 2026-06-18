@@ -955,28 +955,26 @@ export async function logLocationTransfer(data: {
   toLocation: string;
   staffId?: number | null;
   notes?: string | null;
-}, orgId?: OrgId): Promise<LocationTransfer> {
-  const sql = `INSERT INTO location_transfers (entity_type, entity_id, sku, from_location, to_location, staff_id, notes${orgId ? ', organization_id' : ''})
-     VALUES ($1, $2, $3, $4, $5, $6, $7${orgId ? ', $8' : ''})
+}, orgId: OrgId): Promise<LocationTransfer> {
+  // location_transfers is RLS-bound: always run through the GUC-setting
+  // tenant wrapper and stamp organization_id on the INSERT.
+  const sql = `INSERT INTO location_transfers (entity_type, entity_id, sku, from_location, to_location, staff_id, notes, organization_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`;
-  const baseParams = [data.entityType, data.entityId, data.sku, data.fromLocation, data.toLocation, data.staffId || null, data.notes?.trim() || null];
-  const params = orgId ? [...baseParams, orgId] : baseParams;
-  const result = orgId
-    ? await tenantQuery<LocationTransfer>(orgId, sql, params)
-    : await pool.query<LocationTransfer>(sql, params);
+  const params = [data.entityType, data.entityId, data.sku, data.fromLocation, data.toLocation, data.staffId || null, data.notes?.trim() || null, orgId];
+  const result = await tenantQuery<LocationTransfer>(orgId, sql, params);
   return result.rows[0];
 }
 
-export async function getTransfersForSku(sku: string, limit = 25, orgId?: OrgId): Promise<LocationTransfer[]> {
-  // `sku` is a tenant-scoped string key — org-scope when provided.
+export async function getTransfersForSku(sku: string, limit = 25, orgId: OrgId): Promise<LocationTransfer[]> {
+  // `sku` is a tenant-scoped string key — always org-scope the read and run
+  // it through the GUC-setting tenant wrapper.
   const sql = `SELECT * FROM location_transfers
-     WHERE sku = $1${orgId ? ' AND organization_id = $3' : ''}
+     WHERE sku = $1 AND organization_id = $3
      ORDER BY created_at DESC
      LIMIT $2`;
-  const params = orgId ? [sku.trim(), limit, orgId] : [sku.trim(), limit];
-  const result = orgId
-    ? await tenantQuery<LocationTransfer>(orgId, sql, params)
-    : await pool.query<LocationTransfer>(sql, params);
+  const params = [sku.trim(), limit, orgId];
+  const result = await tenantQuery<LocationTransfer>(orgId, sql, params);
   return result.rows;
 }
 

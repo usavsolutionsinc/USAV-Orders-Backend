@@ -12,21 +12,24 @@
  * new adapter (e.g. via the Crush Code router or manually).
  */
 
-import { db } from '@/lib/drizzle/db';
 import { trainingRuns, modelVersions } from '@/lib/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { and, eq, desc } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const runtime = 'nodejs';
 
 export const POST = withAuth(async (_req, ctx) => {
+  const orgId: OrgId = ctx.organizationId;
   try {
+    return await withTenantDrizzle(orgId, async (tx) => {
     // Get latest completed training run
-    const latestRun = await db
+    const latestRun = await tx
       .select()
       .from(trainingRuns)
-      .where(eq(trainingRuns.status, 'completed'))
+      .where(and(eq(trainingRuns.organizationId, orgId), eq(trainingRuns.status, 'completed')))
       .orderBy(desc(trainingRuns.completedAt))
       .limit(1);
 
@@ -41,19 +44,19 @@ export const POST = withAuth(async (_req, ctx) => {
     const run = latestRun[0];
 
     // Get currently promoted model
-    const currentModel = await db
+    const currentModel = await tx
       .select()
       .from(modelVersions)
-      .where(eq(modelVersions.promoted, true))
+      .where(and(eq(modelVersions.organizationId, orgId), eq(modelVersions.promoted, true)))
       .limit(1);
 
     const current = currentModel[0];
 
     // Check if this run already has a version registered
-    const existingVersion = await db
+    const existingVersion = await tx
       .select()
       .from(modelVersions)
-      .where(eq(modelVersions.runId, run.id))
+      .where(and(eq(modelVersions.organizationId, orgId), eq(modelVersions.runId, run.id)))
       .limit(1);
 
     // Decision: promote if no current model, or if new loss is lower
@@ -71,20 +74,20 @@ export const POST = withAuth(async (_req, ctx) => {
 
     // Demote current model
     if (current) {
-      await db.update(modelVersions)
+      await tx.update(modelVersions)
         .set({ promoted: false })
-        .where(eq(modelVersions.id, current.id));
+        .where(and(eq(modelVersions.organizationId, orgId), eq(modelVersions.id, current.id)));
     }
 
     // Promote new version (create if needed, or update existing)
     if (existingVersion[0]) {
-      await db.update(modelVersions)
+      await tx.update(modelVersions)
         .set({
           promoted: true,
           promotedAt: new Date(),
           evalScore: run.trainLoss,
         })
-        .where(eq(modelVersions.id, existingVersion[0].id));
+        .where(and(eq(modelVersions.organizationId, orgId), eq(modelVersions.id, existingVersion[0].id)));
 
       return NextResponse.json({
         ok: true,
@@ -104,8 +107,8 @@ export const POST = withAuth(async (_req, ctx) => {
       : 1;
     const version = `v${versionNum}`;
 
-    await db.insert(modelVersions).values({
-      organizationId: ctx.organizationId,
+    await tx.insert(modelVersions).values({
+      organizationId: orgId,
       runId: run.id,
       version,
       baseModel: run.baseModel,
@@ -124,6 +127,7 @@ export const POST = withAuth(async (_req, ctx) => {
       reason: current
         ? `Improved: ${newLoss.toFixed(4)} < ${currentLoss.toFixed(4)}`
         : 'First model promoted',
+    });
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

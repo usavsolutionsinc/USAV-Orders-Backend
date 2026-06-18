@@ -43,8 +43,8 @@ export function RecentAuditCard() {
     <StatusCard
       icon={FileText}
       title="Recent activity"
-      href="/admin?section=logs"
-      linkLabel="View full log →"
+      href="/settings/audit"
+      linkLabel="View audit log →"
       loading={loading}
       error={error}
       empty={entries && entries.length === 0 ? 'No recent admin activity.' : null}

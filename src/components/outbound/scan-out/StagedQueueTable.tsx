@@ -54,6 +54,7 @@ export function StagedQueueTable({
   return (
     <OrdersQueueTable
       records={records}
+      queueMode="staged"
       loading={query.isLoading}
       isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}

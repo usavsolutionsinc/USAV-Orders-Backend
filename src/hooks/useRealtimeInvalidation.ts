@@ -13,6 +13,14 @@ import { useAblyClient } from '@/contexts/AblyContext';
 import { useAblyChannel } from './useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
 import { qk } from '@/queries/keys';
+import { OUTBOUND_QUERY_PREFIXES } from '@/lib/outbound/outbound-cache-keys';
+
+function invalidateOutboundQueues(queryClient: ReturnType<typeof useQueryClient>) {
+  for (const queryKey of OUTBOUND_QUERY_PREFIXES) {
+    queryClient.invalidateQueries({ queryKey: [...queryKey] });
+  }
+  queryClient.invalidateQueries({ queryKey: ['outbound-search', 'labels-count'] });
+}
 
 interface UseRealtimeInvalidationOptions {
   dashboard?: boolean;
@@ -59,6 +67,7 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+      invalidateOutboundQueues(queryClient);
     },
     !!ordersChannel && dashboard,
   );
@@ -75,6 +84,7 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+      invalidateOutboundQueues(queryClient);
     },
     !!ordersChannel && dashboard,
   );
@@ -89,6 +99,7 @@ export function useRealtimeInvalidation({
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table-fba'] });
+      invalidateOutboundQueues(queryClient);
     },
     !!ordersChannel && dashboard,
   );
@@ -99,6 +110,7 @@ export function useRealtimeInvalidation({
     ordersChannel,
     'order.tested',
     () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'shipped-fba'] });
       queryClient.invalidateQueries({ queryKey: ['shipped-table'] });

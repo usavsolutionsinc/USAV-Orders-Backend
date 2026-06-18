@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { bustFulfillmentCaches, bustLabelsCaches } from '@/lib/outbound/outbound-cache-keys';
 
 export type OrderAssignPayload = {
   orderId?: number;
@@ -145,6 +146,10 @@ export function useOrderAssignment() {
       });
     },
     onSuccess: (_data, payload) => {
+      if (payload.shippingTrackingNumber !== undefined) {
+        bustLabelsCaches(queryClient);
+        bustFulfillmentCaches(queryClient);
+      }
       if (typeof window === 'undefined') return;
       const orderIds = payload.orderId ? [payload.orderId] : payload.orderIds || [];
       window.dispatchEvent(

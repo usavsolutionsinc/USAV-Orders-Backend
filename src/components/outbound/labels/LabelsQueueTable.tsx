@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { AddTrackingNavProvider } from '@/components/outbound/labels/add-tracking-context';
 import { awaitingLabelsQuery } from '@/lib/queries/outbound-queries';
 import type { OutboundSort } from '@/components/outbound/outbound-sidebar-shared';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
@@ -43,22 +44,27 @@ export function LabelsQueueTable({
     return rows;
   }, [query.data, sort]);
 
+  const awaitingOrderIds = records.map((r) => Number(r.id));
+
   return (
-    <OrdersQueueTable
-      records={records}
-      loading={query.isLoading}
-      isRefreshing={query.isFetching && !query.isLoading}
-      searchValue={searchQuery}
-      onClearSearch={() => undefined}
-      emptyMessage="No orders awaiting labels"
-      searchEmptyTitle="No matching orders"
-      searchResultLabel="orders awaiting labels"
-      clearSearchLabel="Show all awaiting labels"
-      bannerTitle="Awaiting label"
-      bannerSubtitle={`${records.length} order${records.length === 1 ? '' : 's'} need a carrier label`}
-      sort={sort}
-      onOpenRecord={(record) => onOpenOrder(record)}
-      onCloseRecord={() => onCloseOrder()}
-    />
+    <AddTrackingNavProvider orderedIds={awaitingOrderIds}>
+      <OrdersQueueTable
+        records={records}
+        queueMode="labels"
+        loading={query.isLoading}
+        isRefreshing={query.isFetching && !query.isLoading}
+        searchValue={searchQuery}
+        onClearSearch={() => undefined}
+        emptyMessage="No orders awaiting labels"
+        searchEmptyTitle="No matching orders"
+        searchResultLabel="orders awaiting labels"
+        clearSearchLabel="Show all awaiting labels"
+        bannerTitle="Awaiting label"
+        bannerSubtitle={`${records.length} order${records.length === 1 ? '' : 's'} need a carrier label`}
+        sort={sort}
+        onOpenRecord={(record) => onOpenOrder(record)}
+        onCloseRecord={() => onCloseOrder()}
+      />
+    </AddTrackingNavProvider>
   );
 }

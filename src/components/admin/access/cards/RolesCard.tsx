@@ -70,7 +70,7 @@ export function RolesCard({ roles, availableRoles, borderClass, busyRoles, onSet
         Primary role: <b>{roles[0]?.label ?? '—'}</b>
         {roles.length > 1 && ` · ${roles.length - 1} additional`}
         {' · '}
-        <span className="text-gray-500">Edit role permissions in <a href="/admin?section=roles" className="text-blue-600 hover:underline">Roles</a>.</span>
+        <span className="text-gray-500">Edit role permissions in <a href="/settings/roles" className="text-blue-600 hover:underline">Roles</a>.</span>
       </div>
     </section>
   );

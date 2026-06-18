@@ -103,12 +103,13 @@ export function InlinePillPicker({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.1 }}
             style={{ originX: 0 }}
-            className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5"
+            className="flex min-w-0 flex-1 items-center gap-1.5"
           >
             <span className="mr-0.5 shrink-0 select-none text-eyebrow font-black uppercase tracking-widest text-slate-400">
               {ariaLabel}
             </span>
-            {options.map((opt, i) => {
+            <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-hide">
+              {options.map((opt, i) => {
               const isActive = opt.value === value;
               return (
                 <motion.button
@@ -134,6 +135,7 @@ export function InlinePillPicker({
                 </motion.button>
               );
             })}
+            </div>
           </motion.div>
         ) : (
           <motion.button

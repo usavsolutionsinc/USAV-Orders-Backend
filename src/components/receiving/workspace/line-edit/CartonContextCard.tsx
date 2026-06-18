@@ -361,8 +361,8 @@ export function CartonContextCard({
 
             {/* Claim → flips to the filed ticket# chip once a claim exists.
                 Same IdentityLinkChip primitive as PO#/tracking (flush spacing,
-                tone-driven `#` icon); its pencil opens a history popover with
-                an Unlink action rather than the full claim modal. */}
+                tone-driven `#` icon): chip copies, hover menu opens Zendesk or
+                shows ticket history (with Unlink) via Edit. */}
             {showStaffPhotoRow ? (
               zendeskTrimmed ? (
                 <ReceivingTicketChip
@@ -377,10 +377,11 @@ export function CartonContextCard({
                 <button
                   type="button"
                   onClick={onMakeClaim}
-                  className="inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-full bg-orange-500 px-3 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-orange-600"
+                  className="inline-flex h-8 w-[50.32px] shrink-0 items-center justify-center self-center rounded-full bg-orange-500 px-0 text-[10px] font-black uppercase leading-none tracking-wide text-white shadow-sm transition-colors hover:bg-orange-600"
                   title="File a damage / wrong-item / missing claim for this package"
+                  aria-label="File claim"
                 >
-                  Claim →
+                  Claim
                 </button>
               ) : null
             ) : null}

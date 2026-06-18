@@ -1,6 +1,8 @@
 import { db } from '@/lib/drizzle/db';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
 import { entityNotes, salesOrders } from '@/lib/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { and, eq } from 'drizzle-orm';
 
 export interface InsertSalesOrder {
   organizationId: string;
@@ -31,7 +33,7 @@ export interface InsertSalesOrder {
 export interface SalesOrderRepository {
   findByReference(referenceNumber: string): Promise<typeof salesOrders.$inferSelect | null>;
   create(input: InsertSalesOrder): Promise<typeof salesOrders.$inferSelect>;
-  markZohoError(referenceNumber: string, errorMessage: string): Promise<void>;
+  markZohoError(orgId: OrgId, referenceNumber: string, errorMessage: string): Promise<void>;
 }
 
 export class DrizzleSalesOrderRepository implements SalesOrderRepository {
@@ -69,23 +71,34 @@ export class DrizzleSalesOrderRepository implements SalesOrderRepository {
     return rows[0];
   }
 
-  async markZohoError(referenceNumber: string, errorMessage: string) {
+  async markZohoError(orgId: OrgId, referenceNumber: string, errorMessage: string) {
     const existing = await this.findByReference(referenceNumber);
     if (!existing) return;
+    // The caller (OrderSyncService.ingestExternalOrder) supplies the session
+    // org. Guard against a reference number that resolves to a different
+    // tenant's sales order — never write an audit note across tenants.
+    if (existing.organizationId !== orgId) return;
 
-    await db.update(salesOrders)
-      .set({ status: 'zoho_error', updatedAt: new Date() })
-      .where(eq(salesOrders.id, existing.id));
+    // entity_notes will be FORCE-RLS'd (Phase E) and neon-http `db` cannot
+    // carry the app.current_org GUC, so the salesOrders UPDATE + the
+    // entity_notes INSERT both run inside withTenantDrizzle's GUC-bearing
+    // connection. organization_id is stamped explicitly (defense in depth)
+    // and the UPDATE is org-scoped.
+    await withTenantDrizzle(orgId, async (tx) => {
+      await tx.update(salesOrders)
+        .set({ status: 'zoho_error', updatedAt: new Date() })
+        .where(and(
+          eq(salesOrders.id, existing.id),
+          eq(salesOrders.organizationId, orgId),
+        ));
 
-    await db.insert(entityNotes).values({
-      // Inherit org from the sales order the note is attached to —
-      // markZohoError is called by the Zoho sync flow, the existing row's
-      // organization_id is the authoritative tenant for any audit note.
-      organizationId: existing.organizationId,
-      entityType: 'sales_order',
-      entityId: existing.id,
-      body: errorMessage,
-      createdAt: new Date(),
+      await tx.insert(entityNotes).values({
+        organizationId: orgId,
+        entityType: 'sales_order',
+        entityId: existing.id,
+        body: errorMessage,
+        createdAt: new Date(),
+      });
     });
   }
 }

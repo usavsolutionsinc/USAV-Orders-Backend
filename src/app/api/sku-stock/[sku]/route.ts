@@ -18,6 +18,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 
 /**
  * Build a lightweight AuthContext from the session cookie without going
@@ -64,6 +65,11 @@ export async function GET(
   }
 
   try {
+    // location_transfers is RLS-bound — resolve the tenant for the GUC wrapper.
+    // Legacy QR scans can predate sign-in (null org), so fall back to USAV.
+    const ctx = await resolveCtx(_req);
+    const orgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+
     // Run all queries in parallel
     const [stockResult, historyResult, catalogResult, photosResult, ledgerResult, allLocations, transfers] =
       await Promise.all([
@@ -108,7 +114,7 @@ export async function GET(
         // 6. All defined locations
         getActiveLocations().catch(() => []),
         // 7. Location transfer history for this SKU
-        getTransfersForSku(skuValue).catch(() => []),
+        getTransfersForSku(skuValue, 25, orgId).catch(() => []),
       ]);
 
     const stock = stockResult.rows[0] ?? null;
@@ -398,7 +404,9 @@ export async function PATCH(
         [toLocation, skuValue],
       );
 
-      // Log the transfer
+      // Log the transfer. location_transfers is RLS-bound — pass the tenant so
+      // the write runs through the GUC wrapper. Legacy QR scans can predate
+      // sign-in (null org), so fall back to USAV.
       if (entityId) {
         await logLocationTransfer({
           entityType: 'SKU_STOCK',
@@ -407,7 +415,7 @@ export async function PATCH(
           fromLocation,
           toLocation,
           staffId: staffId || null,
-        }).catch(() => {});
+        }, ctx.organizationId ?? USAV_ORG_ID).catch(() => {});
       }
 
       await recordAudit(pool, ctx, request, {

@@ -562,7 +562,16 @@ export function DashboardShippedTable({
         </div>
         {(() => {
           const platformNode = !orderIsFbaMeta ? (
-            <PlatformChip label={platformLabel} underlineClass={getOrderPlatformBorderColor(platformLabel)} iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'} onClick={() => { if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer'); }} />
+            <PlatformChip
+              label="Product Page"
+              labelTransform="none"
+              tooltipValue={productPageUrl ?? ''}
+              underlineClass={getOrderPlatformBorderColor(platformLabel)}
+              iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'}
+              onClick={() => {
+                if (productPageUrl) window.open(productPageUrl, '_blank', 'noopener,noreferrer');
+              }}
+            />
           ) : null;
           const orderIdNode = hideOrderIdChip ? <OrderIdChipPlaceholder /> : <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />;
           const serialNode = <SerialChip value={String(record.serial_number || '').trim()} width="w-fit max-w-full" />;

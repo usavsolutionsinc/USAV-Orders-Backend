@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Sidebar for /admin?section=access — the picker side of the new access
+ * Sidebar for /settings/access — the picker side of the access
  * workflow. Search + filter + stats + add-staff + a scrollable list of
  * staff rows whose selection drives `?staffId=` in the URL.
  *
@@ -62,7 +62,7 @@ function asStatusFilter(raw: string | null | undefined): StatusFilter {
   return 'all';
 }
 
-export function AccessSidebarPanel() {
+export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get('search') ?? '';
@@ -107,8 +107,8 @@ export function AccessSidebarPanel() {
   const setParam = useCallback((mutator: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(searchParams.toString());
     mutator(params);
-    router.replace(`/admin?${params.toString()}`);
-  }, [router, searchParams]);
+    router.replace(`${basePath}?${params.toString()}`);
+  }, [router, searchParams, basePath]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

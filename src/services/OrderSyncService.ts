@@ -176,7 +176,7 @@ export class OrderSyncService {
           internalNotes: message,
         });
       }
-      await salesOrderRepository.markZohoError(referenceNumber, message);
+      await salesOrderRepository.markZohoError(orgId, referenceNumber, message);
       throw error;
     }
   }

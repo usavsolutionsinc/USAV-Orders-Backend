@@ -20,6 +20,7 @@ export function WeeklyScheduleTable({
   onCancelEdit,
   onSaveEdit,
   onDeleteStaff,
+  showStaffActions = true,
 }: {
   thisWeekDays: StaffScheduleMatrixDay[];
   filteredStaff: Staff[];
@@ -33,11 +34,16 @@ export function WeeklyScheduleTable({
   onCancelEdit: () => void;
   onSaveEdit: (payload: StaffUpdatePayload) => void;
   onDeleteStaff: (id: number) => void;
+  showStaffActions?: boolean;
 }) {
+  const gridCols = showStaffActions
+    ? 'grid-cols-[minmax(320px,1fr)_repeat(5,minmax(54px,1fr))_120px]'
+    : 'grid-cols-[minmax(320px,1fr)_repeat(5,minmax(54px,1fr))]';
+
   return (
     <div className="overflow-x-auto border border-gray-200 bg-white">
       <div className="min-w-[980px]">
-        <div className="grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(54px,1fr))_120px] items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5">
+        <div className={`grid ${gridCols} items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5`}>
           <span className={tableHeader}>Staff</span>
           {thisWeekDays.map((day) => (
             <span
@@ -49,7 +55,7 @@ export function WeeklyScheduleTable({
               {day.label} {day.date.slice(5)}
             </span>
           ))}
-          <span className={`${tableHeader} text-right`}>Actions</span>
+          {showStaffActions ? <span className={`${tableHeader} text-right`}>Actions</span> : null}
         </div>
 
         {filteredStaff.map((member) => {
@@ -68,7 +74,7 @@ export function WeeklyScheduleTable({
           return (
             <div
               key={member.id}
-              className={`grid grid-cols-[minmax(320px,1fr)_repeat(5,minmax(54px,1fr))_120px] items-center border-b border-gray-100 px-4 py-2.5 ${
+              className={`grid ${gridCols} items-center border-b border-gray-100 px-4 py-2.5 ${
                 !member.active ? 'bg-gray-50 text-gray-500' : 'bg-white'
               }`}
             >
@@ -130,15 +136,17 @@ export function WeeklyScheduleTable({
                 );
               })}
 
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={() => onStartEdit(member)}
-                  className={`${tableHeader} h-8 border border-gray-300 px-3 text-gray-700 transition-colors hover:bg-gray-50`}
-                >
-                  Edit
-                </button>
-              </div>
+              {showStaffActions ? (
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onStartEdit(member)}
+                    className={`${tableHeader} h-8 border border-gray-300 px-3 text-gray-700 transition-colors hover:bg-gray-50`}
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : null}
             </div>
           );
         })}

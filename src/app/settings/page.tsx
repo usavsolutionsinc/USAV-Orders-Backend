@@ -8,22 +8,37 @@ import { QuickAccessSection } from '@/components/settings/sections/QuickAccessSe
 import { AppearanceSection } from '@/components/settings/sections/AppearanceSection';
 import { AboutSection } from '@/components/settings/sections/AboutSection';
 import { SecuritySection } from '@/components/settings/sections/SecuritySection';
-import { StaffSection } from '@/components/settings/sections/StaffSection';
 import { SessionsSection } from '@/components/settings/sections/SessionsSection';
-import { AuditSection } from '@/components/settings/sections/AuditSection';
-import { OperationsLogSection } from '@/components/settings/sections/OperationsLogSection';
 import { CatalogSection } from '@/components/settings/sections/CatalogSection';
-import { getActiveSettingsSection } from '@/components/sidebar/SettingsSidebarPanel';
+import { getActiveSettingsSection } from '@/components/settings/settings-sections';
+
+const LEGACY_REDIRECTS: Record<string, string> = {
+  staff: '/settings/staff',
+  team: '/settings/staff',
+  billing: '/settings/billing',
+  integrations: '/settings/integrations',
+  audit: '/settings/audit',
+  organization: '/settings/organization',
+  roles: '/settings/roles',
+  access: '/settings/access',
+  'operations-log': '/admin?section=logs',
+};
 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const active = getActiveSettingsSection(searchParams?.get('section'));
+  const rawSection = searchParams?.get('section');
+  const active = getActiveSettingsSection(rawSection);
 
-  // Billing lives at its own route; ?section=billing is just a deep-link alias.
   useEffect(() => {
-    if (active === 'billing') router.replace('/settings/billing');
-  }, [active, router]);
+    if (!rawSection) return;
+    const target = LEGACY_REDIRECTS[rawSection.toLowerCase()];
+    if (target) router.replace(target);
+  }, [rawSection, router]);
+
+  if (rawSection && LEGACY_REDIRECTS[rawSection.toLowerCase()]) {
+    return null;
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-gray-50">
@@ -34,10 +49,7 @@ export default function SettingsPage() {
           {active === 'quick-access' && <QuickAccessSection />}
           {active === 'appearance' && <AppearanceSection />}
           {active === 'security' && <SecuritySection />}
-          {active === 'staff' && <StaffSection />}
           {active === 'sessions' && <SessionsSection />}
-          {active === 'audit' && <AuditSection />}
-          {active === 'operations-log' && <OperationsLogSection />}
           {active === 'catalog' && <CatalogSection />}
           {active === 'about' && <AboutSection />}
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /admin?section=roles&roleId=N — Discord-style role editor.
+ * Settings → Roles&roleId=N — Discord-style role editor.
  *
  * Four cards (single column, max-w-3xl):
  *   A. Identity      — color, inline-editable label, key (read-only), duplicate, delete
@@ -546,7 +546,7 @@ function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, busy, on
         <div>
           <h2 className="text-sm font-semibold text-gray-900">Mobile defaults</h2>
           <p className="mt-0.5 text-caption text-gray-500">
-            Every staff with the <b style={{ color: roleColor }}>{roleLabel}</b> role inherits these — unless overridden in <a href="/admin?section=access" className="text-blue-600 hover:underline">Access</a>.
+            Every staff with the <b style={{ color: roleColor }}>{roleLabel}</b> role inherits these — unless overridden in <a href="/settings/access" className="text-blue-600 hover:underline">Access</a>.
           </p>
         </div>
         {hasDefaults && (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateIssueTemplate, deleteIssueTemplate } from '@/lib/neon/repair-issue-queries';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export async function PUT(
   req: NextRequest,
@@ -22,7 +23,7 @@ export async function PUT(
       category: body?.category,
       sort_order: body?.sortOrder,
       active: body?.active,
-    });
+    }, gate.ctx.organizationId as OrgId);
 
     if (!issue) {
       return NextResponse.json({ error: 'Issue template not found' }, { status: 404 });
@@ -52,7 +53,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid issue id' }, { status: 400 });
     }
 
-    const deleted = await deleteIssueTemplate(id);
+    const deleted = await deleteIssueTemplate(id, gate.ctx.organizationId as OrgId);
     if (!deleted) {
       return NextResponse.json({ error: 'Issue template not found' }, { status: 404 });
     }

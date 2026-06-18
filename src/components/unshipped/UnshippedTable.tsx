@@ -11,7 +11,7 @@ import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
 import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
-import { deriveUnshippedState } from '@/lib/unshipped-state';
+import { deriveFulfillmentState, type FulfillmentState } from '@/lib/unshipped-state';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
   packedBy?: number;
@@ -72,22 +72,28 @@ export function UnshippedTable({
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const searchQuery = String(searchParams.get('search') || '').trim();
-  // Merged Unshipped mode covers stages: Awaiting (no shipment_id → needs
-  // tracking), Pending (has shipment, not yet packed), and Tested (the pending
-  // subset already tech-tested / currently packing). The FilterRefinementBar
-  // writes `?stage`; default `all` shows everything.
+  // Fulfillment queue stages: pending (not tested) and tested (packing now).
   const stageParam = String(searchParams.get('stage') || 'all').toLowerCase();
-  const stageFilter: 'all' | 'awaiting' | 'pending' | 'tested' =
-    stageParam === 'awaiting' ? 'awaiting'
-      : stageParam === 'pending' ? 'pending'
-        : stageParam === 'tested' ? 'tested'
-          : 'all';
+
+  // Legacy `?stage=awaiting` → Outbound · Labels (awaiting moved off Unshipped).
+  useEffect(() => {
+    if (stageParam !== 'awaiting') return;
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('q', searchQuery);
+    const qs = params.toString();
+    router.replace(qs ? `/outbound?${qs}` : '/outbound', { scroll: false });
+  }, [stageParam, searchQuery, router]);
+
+  const stageFilter: 'all' | 'pending' | 'tested' =
+    stageParam === 'pending' ? 'pending'
+      : stageParam === 'tested' ? 'tested'
+        : 'all';
   // Sort order from the sidebar Sort control (`?sort`); default keeps priority.
   const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
   const sortOrder: 'priority' | 'newest' = sortParam === 'newest' ? 'newest' : 'priority';
   // Click-to-filter from the status legend (`?ustatus`) — exact derived pre-dock
   // state. Composes on top of the coarse `?stage` facet.
-  const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase();
+  const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase() as FulfillmentState | '';
   const query = useQuery({
     ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
     placeholderData: (previousData) => previousData,
@@ -228,27 +234,19 @@ export function UnshippedTable({
   const allRecords = query.data || [];
   const stageRecords = (() => {
     switch (stageFilter) {
-      case 'awaiting':
-        return allRecords.filter((r) => r.shipment_id == null);
       case 'pending':
-        return allRecords.filter((r) => r.shipment_id != null);
+        return allRecords.filter((r) => !Boolean((r as { has_tech_scan?: boolean }).has_tech_scan));
       case 'tested':
-        // Pending subset that's already tech-tested (has_tech_scan) → "currently packing".
-        return allRecords.filter(
-          (r) => r.shipment_id != null && Boolean((r as { has_tech_scan?: boolean }).has_tech_scan),
-        );
+        return allRecords.filter((r) => Boolean((r as { has_tech_scan?: boolean }).has_tech_scan));
       default:
         return allRecords;
     }
   })();
-  // Legend chip filter: keep only rows whose exact derived state matches.
   const records = statusFilter
     ? stageRecords.filter((r) => {
-        const row = r as { shipment_id?: number | string | null; has_tech_scan?: boolean; packed_at?: string | null; out_of_stock?: string | null };
-        return deriveUnshippedState({
-          shipmentId: row.shipment_id,
+        const row = r as { has_tech_scan?: boolean; out_of_stock?: string | null };
+        return deriveFulfillmentState({
           hasTechScan: Boolean(row.has_tech_scan),
-          packedAt: row.packed_at,
           outOfStock: row.out_of_stock,
         }) === statusFilter;
       })
@@ -257,6 +255,7 @@ export function UnshippedTable({
   return (
     <OrdersQueueTable
       records={records}
+      queueMode="fulfillment"
       sort={sortOrder}
       selectMode={selectMode}
       selectionScope={DASHBOARD_ORDERS_SELECTION_SCOPE}

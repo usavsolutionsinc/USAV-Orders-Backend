@@ -20,6 +20,8 @@ import {
   appRolePool,
   enforcedRoleInvariant,
   proveRlsIsolatesScratch,
+  TEST_ORG_A,
+  TEST_ORG_B,
 } from './cross-org-harness';
 
 const HAS_DB = !!process.env.DATABASE_URL;
@@ -47,5 +49,73 @@ test('RLS canary: policy isolates without a WHERE filter (needs app_tenant role)
     ok(r.loudFail, 'insert with the GUC cleared must fail (loud-fail default / policy)');
   } finally {
     await pool!.end();
+  }
+});
+
+// Per-table enforcement canary for the reason_codes slice. Self-arms: it skips
+// until the table is actually FORCEd (the 2026-06-16 enforce template is
+// promoted), so it lives in CI now and tightens automatically when the slice
+// lands. Proves isolation on the REAL table with no permanent writes: insert
+// under org A, flip the GUC to org B mid-transaction (RLS re-evaluates
+// current_setting per statement), assert invisibility, then ROLLBACK.
+test('reason_codes slice: RLS isolates the real table (arms once FORCEd)', { skip: !HAS_APP_ROLE }, async () => {
+  const pool = await appRolePool();
+  ok(pool, 'TENANT_APP_DATABASE_URL must resolve to a pool');
+  try {
+    const forced = await pool!.query(
+      `SELECT relforcerowsecurity FROM pg_class WHERE oid = 'reason_codes'::regclass`,
+    );
+    if (!forced.rows[0]?.relforcerowsecurity) return; // slice not yet promoted — skip cleanly
+    await ensureTestOrgs(pool!);
+    const c = await pool!.connect();
+    try {
+      await c.query('BEGIN');
+      await c.query("SELECT set_config('app.current_org', $1, true)", [TEST_ORG_A]);
+      // organization_id auto-stamps from the GUC-reading column default.
+      await c.query(
+        `INSERT INTO reason_codes (code, label, category, direction)
+         VALUES ('__CANARY__', 'canary', 'adjustment', 'either')`,
+      );
+      const ownA = await c.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM reason_codes WHERE code = '__CANARY__'`,
+      );
+      strictEqual(ownA.rows[0].n, 1, 'org A sees its own reason_codes row');
+
+      await c.query("SELECT set_config('app.current_org', $1, true)", [TEST_ORG_B]);
+      const crossB = await c.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM reason_codes WHERE code = '__CANARY__'`,
+      );
+      strictEqual(crossB.rows[0].n, 0, "org B must see 0 of org A's reason_codes (RLS, no WHERE filter)");
+    } finally {
+      await c.query('ROLLBACK').catch(() => {});
+      c.release();
+    }
+  } finally {
+    await pool!.end();
+  }
+});
+
+// Generic structural guard — maintenance-free, covers EVERY slice automatically.
+// Any table that is FORCEd must carry a complete tenant_isolation policy (both
+// USING and WITH CHECK), so a half-applied enforce_tenant_isolation() (FORCE on,
+// policy missing/partial → the table is locked to everyone) fails CI loudly.
+// Passes vacuously today (0 FORCEd) and tightens as each slice promotes.
+test('every FORCEd table has a complete tenant_isolation policy', { skip: !HAS_DB }, async () => {
+  const { default: pool } = await import('@/lib/db');
+  const forced = await pool.query<{ relname: string }>(
+    `SELECT c.relname
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relforcerowsecurity = true`,
+  );
+  for (const { relname } of forced.rows) {
+    const pol = await pool.query<{ qual: string | null; with_check: string | null }>(
+      `SELECT qual, with_check FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = $1 AND policyname = 'tenant_isolation'`,
+      [relname],
+    );
+    strictEqual(pol.rows.length, 1, `FORCEd table '${relname}' is missing its tenant_isolation policy`);
+    ok(pol.rows[0].qual, `'${relname}' tenant_isolation policy has no USING clause`);
+    ok(pol.rows[0].with_check, `'${relname}' tenant_isolation policy has no WITH CHECK clause`);
   }
 });

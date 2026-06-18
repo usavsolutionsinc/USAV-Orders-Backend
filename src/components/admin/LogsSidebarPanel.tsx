@@ -141,13 +141,17 @@ export function LogsSidebarPanel() {
         onChange: (v) => {
           setOffset(0);
           setParam((p) => {
+            p.set('section', 'logs');
             if (v.trim()) p.set('search', v.trim());
             else p.delete('search');
           });
         },
         onClear: () => {
           setOffset(0);
-          setParam((p) => p.delete('search'));
+          setParam((p) => {
+            p.set('section', 'logs');
+            p.delete('search');
+          });
         },
         placeholder: 'Search action, source, entity',
         variant: 'blue',
@@ -159,6 +163,7 @@ export function LogsSidebarPanel() {
           onChange={(next) => {
             setOffset(0);
             setParam((p) => {
+              p.set('section', 'logs');
               if (next === 'all') p.delete('logKind');
               else p.set('logKind', next);
             });
@@ -173,6 +178,7 @@ export function LogsSidebarPanel() {
           onChange={(e) => {
             setOffset(0);
             setParam((p) => {
+              p.set('section', 'logs');
               if (e.target.value.trim()) p.set('actorStaffId', e.target.value.trim());
               else p.delete('actorStaffId');
             });
@@ -205,7 +211,7 @@ export function LogsSidebarPanel() {
                     <li key={row.event_id}>
                       <AdminPickerRow
                         selected={selected === row.event_id}
-                        onPick={() => setParam((p) => p.set('eventId', row.event_id))}
+                        onPick={() => setParam((p) => { p.set('section', 'logs'); p.set('eventId', row.event_id); })}
                         title={row.action}
                         subtitle={`${formatTime(row.created_at)} · ${actor}`}
                         trailing={

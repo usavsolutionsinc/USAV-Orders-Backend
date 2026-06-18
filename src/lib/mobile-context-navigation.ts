@@ -2,8 +2,10 @@ import type { ReadonlyURLSearchParams } from 'next/navigation';
 import { APP_SIDEBAR_NAV, getSidebarRouteKey, type SidebarRouteKey } from '@/lib/sidebar-navigation';
 import {
   getActiveSettingsSection,
+  resolveSettingsSectionFromPath,
+  SETTINGS_SECTION_OPTIONS as SETTINGS_REGISTRY,
   type SettingsSection,
-} from '@/components/sidebar/SettingsSidebarPanel';
+} from '@/components/settings/settings-sections';
 import {
   getDashboardOrderViewFromSearch,
   normalizeDashboardOrderViewParams,
@@ -51,21 +53,20 @@ const WALK_IN_MODE_OPTIONS: MobileContextOption[] = [
   { id: 'sales', label: 'Sales' },
 ];
 
-const SETTINGS_SECTION_OPTIONS: MobileContextOption[] = [
-  { id: 'hardware', label: 'Hardware' },
-  { id: 'quick-access', label: 'Quick Access' },
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'security', label: 'Security' },
-  { id: 'staff', label: 'Staff' },
-  { id: 'sessions', label: 'Sessions' },
-  { id: 'operations-log', label: 'Operations log' },
-  { id: 'about', label: 'About' },
-];
+const SETTINGS_SECTION_OPTIONS: MobileContextOption[] = SETTINGS_REGISTRY.map((s) => ({
+  id: s.id,
+  label: s.label,
+}));
 
 const SETTINGS_REQUIRES: Partial<Record<SettingsSection, string>> = {
-  staff: 'admin.manage_staff',
+  team: 'admin.manage_staff',
+  roles: 'admin.manage_roles',
+  organization: 'admin.view',
+  billing: 'admin.view',
+  integrations: 'admin.view',
+  catalog: 'admin.manage_features',
   sessions: 'admin.view_sessions',
-  'operations-log': 'admin.view_logs',
+  audit: 'admin.view_logs',
 };
 
 export function getMobileContextRowConfig(
@@ -94,7 +95,9 @@ export function getMobileContextRowConfig(
       };
     }
     case 'settings': {
-      const activeId = getActiveSettingsSection(searchParams.get('section'));
+      const activeId =
+        resolveSettingsSectionFromPath(pathname)
+        ?? getActiveSettingsSection(searchParams.get('section'));
       const visible = SETTINGS_SECTION_OPTIONS.filter((opt) => {
         const requires = SETTINGS_REQUIRES[opt.id as SettingsSection];
         if (opt.id === 'security' && (!isAuthLoaded || !isSignedIn)) return false;
@@ -108,6 +111,11 @@ export function getMobileContextRowConfig(
         activeId: active?.id ?? activeId,
         options: visible,
         onSelect: (id) => {
+          const def = SETTINGS_REGISTRY.find((s) => s.id === id);
+          if (def?.href) {
+            navigate(def.href);
+            return;
+          }
           const params = new URLSearchParams(searchParams.toString());
           params.set('section', id);
           navigate(`/settings?${params.toString()}`);

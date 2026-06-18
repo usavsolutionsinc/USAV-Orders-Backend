@@ -88,6 +88,14 @@ export function useDashboardSearchController() {
     }, '/dashboard');
   }, [updateSearch]);
 
+  const openOutboundLabels = useCallback((nextValue: string) => {
+    const trimmed = nextValue.trim();
+    const params = new URLSearchParams();
+    if (trimmed) params.set('q', trimmed);
+    const qs = params.toString();
+    router.replace(qs ? `/outbound?${qs}` : '/outbound', { scroll: false });
+  }, [router]);
+
   const setShippedFilter = useCallback((value: ShippedTypeFilter) => {
     writeShippedFilterPreference(value);
     updateSearch((params) => {
@@ -139,6 +147,7 @@ export function useDashboardSearchController() {
     setSearch,
     setOrderView,
     openShippedMatches,
+    openOutboundLabels,
     setShippedFilter,
     setShippedSearchField,
     setDetailsOpenBehavior,

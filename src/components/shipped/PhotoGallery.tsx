@@ -41,11 +41,15 @@ interface PhotoGalleryProps {
   /** Main label on the launcher button (default: packing copy). Viewer/modal unchanged. */
   launcherTitle?: string;
   /**
-   * `toolbar` — slim row with download-all, copy links, and fullscreen (shipped UX uses `default`).
+   * `toolbar` — slim row with download-all, optional copy links, and fullscreen (shipped UX uses `default`).
    * `thumbnails` — a clickable thumbnail strip (no launcher button); each opens the
    * fullscreen viewer at that photo. Used to promote photos inline into a timeline row.
    */
   launcherLayout?: 'default' | 'toolbar' | 'thumbnails';
+  /** Toolbar + fullscreen viewer copy-links affordance. Receiving sets false. */
+  showCopyLinks?: boolean;
+  /** Toolbar row label (`N photos`). Off when the parent already shows the count. */
+  toolbarShowLabel?: boolean;
   /**
    * Called after a successful DELETE /api/photos/[id]. Parents typically use
    * this to invalidate their react-query cache so a refetch picks up the
@@ -75,6 +79,8 @@ export function PhotoGallery({
   compact = false,
   launcherTitle = 'View Packing Photos',
   launcherLayout = 'default',
+  showCopyLinks = true,
+  toolbarShowLabel = true,
   onPhotoDeleted,
   onAddPhotos,
 }: PhotoGalleryProps) {
@@ -438,22 +444,24 @@ export function PhotoGallery({
           </button>
 
           {/* Copy-Links Button — copies every photo URL to the clipboard. */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void copyAllPhotoUrls();
-            }}
-            disabled={photoItems.length === 0}
-            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label={linksCopied ? 'Links copied' : 'Copy all photo links'}
-            title={linksCopied ? 'Copied' : 'Copy all photo links'}
-          >
-            {linksCopied ? (
-              <Check className="h-5 w-5 text-emerald-300" />
-            ) : (
-              <LinkIcon className="h-5 w-5" />
-            )}
-          </button>
+          {showCopyLinks ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                void copyAllPhotoUrls();
+              }}
+              disabled={photoItems.length === 0}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+              aria-label={linksCopied ? 'Links copied' : 'Copy all photo links'}
+              title={linksCopied ? 'Copied' : 'Copy all photo links'}
+            >
+              {linksCopied ? (
+                <Check className="h-5 w-5 text-emerald-300" />
+              ) : (
+                <LinkIcon className="h-5 w-5" />
+              )}
+            </button>
+          ) : null}
 
           {/* Delete Button — only rendered when this photo has a DB id. */}
           {canDeleteCurrent && (
@@ -664,27 +672,12 @@ export function PhotoGallery({
         </div>
       )}
 
-      {/* Keyboard Shortcuts Hint */}
-      <div className="absolute bottom-8 right-8 bg-black/30 backdrop-blur-md rounded-xl p-3 border border-white/10 text-white/60 text-xs space-y-1 z-10">
-        <div className="flex items-center gap-2">
-          <kbd className="px-2 py-0.5 bg-white/10 rounded">←→</kbd>
-          <span>Navigate</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <kbd className="px-2 py-0.5 bg-white/10 rounded">±</kbd>
-          <span>Zoom</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <kbd className="px-2 py-0.5 bg-white/10 rounded">Esc</kbd>
-          <span>Close</span>
-        </div>
-      </div>
     </motion.div>
     );
   };
 
-  const toolbarIconBtn =
-    `${compact ? 'p-1.5' : 'p-2'} rounded-lg bg-white/90 border border-blue-200/90 text-blue-700 shadow-sm hover:bg-blue-50 hover:border-blue-300 transition-all disabled:opacity-40 disabled:pointer-events-none`;
+  const toolbarIconBtnInner =
+    `${compact ? 'p-1.5' : 'p-2'} text-blue-700 transition-all hover:bg-blue-50 disabled:opacity-40 disabled:pointer-events-none`;
 
   return (
     <>
@@ -713,18 +706,20 @@ export function PhotoGallery({
         </div>
       ) : launcherLayout === 'toolbar' ? (
         <div
-          className={`flex w-full items-stretch gap-1 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 pl-2 pr-1 ${
-            compact ? 'min-h-9 py-0.5' : 'min-h-[3.25rem] py-1'
+          className={`flex w-fit max-w-full items-stretch gap-0 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 ${
+            compact ? 'min-h-9 py-0.5 pl-1 pr-0.5' : 'min-h-[3.25rem] py-1 pl-2 pr-1'
           } ${className}`}
         >
           <button
             type="button"
             onClick={() => openViewer(0)}
-            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-2 py-0.5 text-left transition-all hover:bg-blue-100/50 active:scale-[0.995]"
+            className="flex min-w-0 shrink-0 items-center rounded-lg py-0.5 pl-0 pr-0.5 text-left transition-all hover:bg-blue-100/50 active:scale-[0.995]"
             aria-label="View photos fullscreen"
             title="View photos fullscreen"
           >
-            <div className="flex min-w-0 items-center gap-2">
+            <div
+              className={`flex min-w-0 items-center ${toolbarShowLabel ? 'gap-2' : 'gap-1'}`}
+            >
               <div
                 className={`flex shrink-0 items-center justify-center rounded-lg bg-blue-500 shadow-sm ${
                   compact ? 'h-7 w-7' : 'h-9 w-9'
@@ -732,21 +727,25 @@ export function PhotoGallery({
               >
                 <ImageIcon className={compact ? 'h-3.5 w-3.5 text-white' : 'h-4 w-4 text-white'} />
               </div>
-              <div className="flex min-w-0 flex-col">
-                <span className="text-micro font-black uppercase tracking-wider text-blue-600">
-                  {photoItems.length} {photoItems.length === 1 ? 'photo' : 'photos'}
-                </span>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-micro font-semibold">
-                  {loadedCount < photoItems.length && errorCount === 0 ? (
-                    <span className="text-amber-600">Loading…</span>
-                  ) : null}
-                  {errorCount > 0 ? <span className="text-red-600">{errorCount} failed</span> : null}
+              {toolbarShowLabel ? (
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-micro font-black uppercase tracking-wider text-blue-600">
+                    {photoItems.length} {photoItems.length === 1 ? 'photo' : 'photos'}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-micro font-semibold">
+                    {loadedCount < photoItems.length && errorCount === 0 ? (
+                      <span className="text-amber-600">Loading…</span>
+                    ) : null}
+                    {errorCount > 0 ? (
+                      <span className="text-red-600">{errorCount} failed</span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              ) : null}
+              <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
             </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
           </button>
-          <div className="flex shrink-0 items-center gap-0.5 self-center">
+          <div className="flex shrink-0 items-stretch self-center overflow-hidden rounded-lg border border-blue-200/90 bg-white/90 shadow-sm">
             {onAddPhotos && (
               <button
                 type="button"
@@ -754,7 +753,7 @@ export function PhotoGallery({
                   e.stopPropagation();
                   onAddPhotos();
                 }}
-                className={toolbarIconBtn}
+                className={`${toolbarIconBtnInner} border-r border-blue-200/90`}
                 aria-label="Add photos"
                 title="Add photos"
               >
@@ -772,29 +771,31 @@ export function PhotoGallery({
                 photoItems.length === 0 ||
                 photoItems.every((p) => p.status === 'error')
               }
-              className={toolbarIconBtn}
+              className={toolbarIconBtnInner}
               aria-label="Download all photos"
               title="Download all photos"
             >
               <Download className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                void copyAllPhotoUrls();
-              }}
-              disabled={photoItems.length === 0}
-              className={toolbarIconBtn}
-              aria-label="Copy all photo links"
-              title={linksCopied ? 'Copied' : 'Copy all photo links'}
-            >
-              {linksCopied ? (
-                <Check className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <Copy className="h-4 w-4" />
-              )}
-            </button>
+            {showCopyLinks ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void copyAllPhotoUrls();
+                }}
+                disabled={photoItems.length === 0}
+                className={`${toolbarIconBtnInner} border-l border-blue-200/90`}
+                aria-label="Copy all photo links"
+                title={linksCopied ? 'Copied' : 'Copy all photo links'}
+              >
+                {linksCopied ? (
+                  <Check className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, memo } from 'react';
+import { useCallback, useEffect, useRef, useState, memo, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, SkeletonList } from '@/design-system';
@@ -19,8 +19,6 @@ import { CollapsibleGroupRow } from '@/components/ui/CollapsibleGroupRow';
 import { groupRowsBy, type RowGroup } from '@/lib/group-rows';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { useTableSelectMode } from '@/hooks/useTableSelectMode';
-import { AddTrackingPopover } from '@/components/unshipped/AddTrackingPopover';
-import { AddTrackingNavProvider } from '@/components/unshipped/add-tracking-context';
 import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import WeekHeader from '@/components/ui/WeekHeader';
@@ -31,7 +29,10 @@ import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { OrderSearchEmptyState } from '@/components/dashboard/OrderSearchEmptyState';
 import { getOpenShippedDetailsPayload } from '@/utils/events';
 import { isSkuSourceRecord } from '@/utils/source-dot';
-import { deriveUnshippedState, UNSHIPPED_STATE_META, type UnshippedState } from '@/lib/unshipped-state';
+import { deriveFulfillmentState, FULFILLMENT_STATE_META } from '@/lib/unshipped-state';
+import { OUTBOUND_STATE_META } from '@/lib/outbound-state';
+import { UNSHIPPED_STATE_META } from '@/lib/unshipped-state';
+import { AddTrackingPopover } from '@/components/outbound/labels/AddTrackingPopover';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import {
   dashboardOrderRowShellClass,
@@ -76,6 +77,33 @@ interface WeekRange {
 
 type QueueRowRecord = ShippedOrder & Record<string, unknown>;
 
+/** Which surface owns this table — drives status dots and tracking affordances. */
+export type OrdersQueueMode = 'fulfillment' | 'labels' | 'staged';
+
+interface RowStatusMeta {
+  dot: string;
+  label: string;
+  description: string;
+}
+
+function resolveRowStatus(record: QueueRowRecord, queueMode: OrdersQueueMode): RowStatusMeta {
+  if (queueMode === 'labels') {
+    const meta = UNSHIPPED_STATE_META.AWAITING_LABEL;
+    return { dot: meta.dot, label: meta.label, description: meta.description };
+  }
+  if (queueMode === 'staged') {
+    const meta = OUTBOUND_STATE_META.PACKED_STAGED;
+    return { dot: meta.dot, label: meta.label, description: meta.description };
+  }
+  const state = deriveFulfillmentState({
+    shipmentId: record.shipment_id,
+    hasTechScan: Boolean(record.has_tech_scan),
+    outOfStock: record.out_of_stock as string | null | undefined,
+  });
+  const meta = FULFILLMENT_STATE_META[state];
+  return { dot: meta.dot, label: meta.label, description: meta.description };
+}
+
 /** Memoized row: when React Query merges one updated order, unrelated rows skip re-render. */
 const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   record,
@@ -87,7 +115,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   packerDisplay,
   testerId,
   packerId,
-  unshippedState,
+  rowStatus,
+  trackingAction,
   hasOutOfStock,
   outOfStockValue,
   daysLate,
@@ -106,8 +135,9 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   packerDisplay: string;
   testerId: number | null;
   packerId: number | null;
-  /** Derived pre‑dock pipeline state — drives the status dot color/tooltip. */
-  unshippedState: UnshippedState;
+  rowStatus: RowStatusMeta;
+  /** Optional trailing chip action (Outbound · Labels add-tracking popover). */
+  trackingAction?: React.ReactNode;
   hasOutOfStock: boolean;
   outOfStockValue: string;
   daysLate: number | null;
@@ -176,8 +206,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
               </span>
             ) : undefined
           }
-          dot={UNSHIPPED_STATE_META[unshippedState].dot}
-          dotTitle={`${UNSHIPPED_STATE_META[unshippedState].label} — ${UNSHIPPED_STATE_META[unshippedState].description}`}
+          dot={rowStatus.dot}
+          dotTitle={`${rowStatus.label} — ${rowStatus.description}`}
           title={record.product_title || 'Unknown Product'}
         />
         <RowMetaColumns
@@ -215,7 +245,7 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
         orderId={record.order_id || ''}
         hideOrderId={hideOrderIdChip}
         tracking={trackingRaw}
-        trackingAction={<AddTrackingPopover record={record} />}
+        trackingAction={trackingAction}
         isMobile={isMobile}
       />
     </motion.div>
@@ -231,7 +261,8 @@ const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.packerDisplay !== next.packerDisplay) return false;
   if (prev.testerId !== next.testerId) return false;
   if (prev.packerId !== next.packerId) return false;
-  if (prev.unshippedState !== next.unshippedState) return false;
+  if (prev.rowStatus.dot !== next.rowStatus.dot) return false;
+  if (prev.rowStatus.label !== next.rowStatus.label) return false;
   if (prev.hasOutOfStock !== next.hasOutOfStock) return false;
   if (prev.outOfStockValue !== next.outOfStockValue) return false;
   if (prev.daysLate !== next.daysLate) return false;
@@ -415,6 +446,8 @@ export interface OrdersQueueTableProps {
   /** Selection scope shared with the page's useTableSelection + action bar.
    *  Required when `selectMode` is on. */
   selectionScope?: string;
+  /** Surface-specific row chrome (fulfillment / labels / staged). */
+  queueMode?: OrdersQueueMode;
 }
 
 export function OrdersQueueTable({
@@ -442,6 +475,7 @@ export function OrdersQueueTable({
   sort = 'priority',
   selectMode = false,
   selectionScope = 'orders-queue',
+  queueMode = 'fulfillment',
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
@@ -525,12 +559,11 @@ export function OrdersQueueTable({
         const tb = new Date(b.created_at || b.deadline_at || 0).getTime();
         return tb - ta;
       }
-      // Priority: within a day, Awaiting (no shipment/tracking yet) sorts before
-      // Pending so the "needs a label" work surfaces first. No-op for
-      // single-stage tables (e.g. shipped — all have a shipment).
-      const stageA = a.shipment_id == null ? 0 : 1;
-      const stageB = b.shipment_id == null ? 0 : 1;
-      if (stageA !== stageB) return stageA - stageB;
+      if (queueMode === 'fulfillment') {
+        const testedA = Boolean((a as QueueRowRecord).has_tech_scan) ? 0 : 1;
+        const testedB = Boolean((b as QueueRowRecord).has_tech_scan) ? 0 : 1;
+        if (testedA !== testedB) return testedA - testedB;
+      }
       const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
       const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
       return timeA - timeB;
@@ -554,12 +587,6 @@ export function OrdersQueueTable({
   );
 
   const displayedRecords = orderGroupsByDate.flatMap(([, groups]) => groups.flatMap((g) => g.rows));
-
-  // Awaiting (no-tracking) order ids in display order — drives the add-tracking
-  // popover's prev/next worklist navigation.
-  const awaitingOrderIds = displayedRecords
-    .filter((r) => r.shipment_id == null)
-    .map((r) => Number(r.id));
 
   // Pencil multi-select wiring (off by default → no-op for non-select callers).
   const getRowId = useCallback((r: ShippedOrder) => Number(r.id), []);
@@ -603,12 +630,7 @@ export function OrdersQueueTable({
           getStaffName(r.packed_by as number | null | undefined) ||
           getStaffName(r.packer_id as number | null | undefined);
       const outOfStockValue = String(r.out_of_stock || '').trim();
-      const unshippedState = deriveUnshippedState({
-        shipmentId: r.shipment_id as number | string | null | undefined,
-        hasTechScan: Boolean(r.has_tech_scan),
-        packedAt: r.packed_at as string | null | undefined,
-        outOfStock: outOfStockValue,
-      });
+      const rowStatus = resolveRowStatus(r, queueMode);
       return (
         <OrdersQueueTableRow
           key={record.id}
@@ -622,7 +644,8 @@ export function OrdersQueueTable({
           packerDisplay={normalizePersonName(packerName)}
           testerId={useWaForDisplay ? (r.tester_id as number | null) : (r.tested_by as number | null) ?? (r.tester_id as number | null)}
           packerId={useWaForDisplay ? (r.packer_id as number | null) : (r.packed_by as number | null) ?? (r.packer_id as number | null)}
-          unshippedState={unshippedState}
+          rowStatus={rowStatus}
+          trackingAction={queueMode === 'labels' ? <AddTrackingPopover record={record} /> : undefined}
           hasOutOfStock={outOfStockValue !== ''}
           outOfStockValue={outOfStockValue}
           daysLate={getDaysLateNullable(r.deadline_at as string | null | undefined)}
@@ -630,7 +653,7 @@ export function OrdersQueueTable({
         />
       );
     },
-    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction],
+    [getStaffName, useWaForDisplay, selectMode, selectedIds, selectedRecord, isMobile, handleRowAction, queueMode],
   );
 
   useEffect(() => {
@@ -678,7 +701,6 @@ export function OrdersQueueTable({
   }
 
   return (
-    <AddTrackingNavProvider orderedIds={awaitingOrderIds}>
     <div className="flex h-full min-w-0 flex-1 bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
         {bannerTitle ? (
@@ -774,6 +796,5 @@ export function OrdersQueueTable({
         </div>
       </div>
     </div>
-    </AddTrackingNavProvider>
   );
 }

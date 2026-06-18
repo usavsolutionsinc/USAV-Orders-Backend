@@ -1,8 +1,6 @@
 'use client';
 
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
-import { fetchUnshippedOrdersData } from '@/lib/dashboard-table-data';
-import { deriveUnshippedState } from '@/lib/unshipped-state';
 import { isFbaOrder } from '@/utils/order-platform';
 
 const FRESH_FETCH_OPTIONS: RequestInit = { cache: 'no-store' };
@@ -33,31 +31,26 @@ function dedupeByOrderId(records: ShippedOrder[]): ShippedOrder[] {
   return Array.from(seen.values());
 }
 
-/** Orders sold but not yet labeled (`AWAITING_LABEL`). */
+/** Orders sold but not yet labeled — Outbound · Labels queue (`awaitingOnly`). */
 export async function fetchAwaitingLabelsData({
   searchQuery = '',
 }: {
   searchQuery?: string;
 } = {}): Promise<ShippedOrder[]> {
-  const rows = await fetchUnshippedOrdersData({
-    searchQuery,
-    strictSearchScope: Boolean(searchQuery.trim()),
-  });
-  return rows.filter((record) => {
-    const r = record as ShippedOrder & {
-      has_tech_scan?: boolean;
-      out_of_stock?: string | null;
-    };
-    return deriveUnshippedState({
-      shipmentId: r.shipment_id,
-      hasTechScan: Boolean(r.has_tech_scan),
-      packedAt: r.packed_at,
-      outOfStock: r.out_of_stock,
-    }) === 'AWAITING_LABEL';
-  });
+  const params = new URLSearchParams();
+  params.set('awaitingOnly', 'true');
+  if (searchQuery.trim()) params.set('q', searchQuery.trim());
+
+  const res = await fetch(`/api/orders?${params.toString()}`, FRESH_FETCH_OPTIONS);
+  if (!res.ok) throw new Error('Failed to fetch awaiting-label orders');
+
+  const data = await res.json();
+  return dedupeByOrderId(
+    ((data.orders || []).map(mapApiOrder) as ShippedOrder[]).filter(isNonFbaRecord),
+  );
 }
 
-/** Packed + staged at the dock, not yet scanned out. */
+/** Packed + staged at the dock, not yet scanned out — Outbound · Scan-out queue. */
 export async function fetchStagedOrdersData({
   searchQuery = '',
 }: {

@@ -22,3 +22,19 @@ export function bustScanOutCaches(queryClient: QueryClient) {
     queryClient.invalidateQueries({ queryKey: [...queryKey] });
   }
 }
+
+/** Invalidate Outbound · Labels caches after tracking/label writes. */
+export function bustLabelsCaches(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['outbound', 'labels'] });
+  queryClient.invalidateQueries({ queryKey: ['outbound-search', 'labels-count'] });
+  queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+}
+
+/** Invalidate fulfillment + outbound queues after assignment changes. */
+export function bustFulfillmentCaches(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'unshipped'] });
+  queryClient.invalidateQueries({ queryKey: ['dashboard-table', 'pending'] });
+  for (const queryKey of OUTBOUND_QUERY_PREFIXES) {
+    queryClient.invalidateQueries({ queryKey: [...queryKey] });
+  }
+}

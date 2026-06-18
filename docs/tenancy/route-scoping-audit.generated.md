@@ -9,22 +9,22 @@
 
 | metric | count |
 |---|---|
-| total route files | 606 |
-| withAuth | 462 |
+| total route files | 609 |
+| withAuth | 465 |
 | GUC-wrapped (tenantQuery/withTenantConnection/withTenantTransaction) | 242 |
-| references organizationId | 484 |
-| raw @/lib/db pool import | 182 |
+| references organizationId | 486 |
+| raw @/lib/db pool import | 183 |
 | drizzle / neon-http | 14 |
 | uses USAV_ORG_ID / transitionalUsavOrgId | 11 |
 | cron routes | 30 |
 
 | risk | count |
 |---|---|
-| critical | 29 |
+| critical | 30 |
 | high | 29 |
-| medium | 213 |
+| medium | 214 |
 | low | 240 |
-| info | 95 |
+| info | 96 |
 
 ## Routes by risk (critical + high first)
 
@@ -45,12 +45,13 @@
 | critical | `/api/auth/switch` | POST | — | — | — | staff |
 | critical | `/api/bose-models` | GET/POST | ✅ | — | — | items |
 | critical | `/api/manual-server/assign` | POST | ✅ | — | — | sku_stock |
-| critical | `/api/nas-dev/[[...path]]` | GET/PUT | — | — | — | photos, staff |
+| critical | `/api/nas-dev/[[...path]]` | GET/PUT | — | — | — | packages, photos, staff |
 | critical | `/api/orders/skip` | POST | ✅ | — | — | orders |
 | critical | `/api/orders/start` | POST | ✅ | — | — | tech_serial_numbers, orders |
 | critical | `/api/receiving-lines/incoming/zoho-refresh` | POST | ✅ | — | — | receiving_lines, zoho_po_mirror, receiving |
 | critical | `/api/receiving/disposition-suggest` | POST | ✅ | — | — | receiving |
 | critical | `/api/receiving/nas-archive-test` | POST | ✅ | — | — | receiving, photos |
+| critical | `/api/receiving/touch-scan` | POST | ✅ | — | — | receiving_scans, receiving |
 | critical | `/api/receiving/zendesk-claim/classify` | POST | ✅ | — | — | receiving |
 | critical | `/api/shipping/track/register` | POST | ✅ | — | — | types |
 | critical | `/api/webhooks/square` | POST/GET | — | — | — | square_transactions, orders, items, sku |
@@ -145,7 +146,7 @@
 | medium | `/api/orders` | GET | ✅ | ✅ | — | replenishment_order_lines, shipping_tracking_numbers, replenishment_requests, station_activity_logs, order_shipment_links, work_assignments +5 |
 | medium | `/api/orders/[id]` | GET/PATCH/DELETE | — | ✅ | — | orders |
 | medium | `/api/orders/[id]/allocate` | POST | ✅ | ✅ | — | order_unit_allocations, serial_units, orders, sku |
-| medium | `/api/orders/[id]/timeline` | GET | — | ✅ | — | order_unit_allocations, station_activity_logs, inventory_events, audit_logs, orders, staff |
+| medium | `/api/orders/[id]/timeline` | GET | — | ✅ | — | order_unit_allocations, station_activity_logs, tech_serial_numbers, inventory_events, audit_logs, orders +1 |
 | medium | `/api/orders/[id]/tracking` | POST/PATCH/DELETE | — | ✅ | — | shipping_tracking_numbers, order_shipment_links, orders |
 | medium | `/api/orders/add` | POST | ✅ | ✅ | — | sku_catalog, orders, sku |
 | medium | `/api/orders/assign` | POST | ✅ | ✅ | — | order_shipment_links, work_assignments, sku_catalog, audit_logs, orders, staff +1 |
@@ -153,6 +154,7 @@
 | medium | `/api/orders/delete` | POST | ✅ | ✅ | — | orders, sku |
 | medium | `/api/orders/missing-parts` | POST | ✅ | ✅ | — | orders, staff |
 | medium | `/api/orders/set-item-number` | POST | ✅ | ✅ | — | orders |
+| medium | `/api/outbound/mark-staged` | POST | ✅ | ✅ | — | packages, orders |
 | medium | `/api/pack/ship` | POST | ✅ | ✅ | — | order_unit_allocations, station_activity_logs, inventory_events, sku_stock_ledger, serial_units, packer_logs +3 |
 | medium | `/api/packerlogs` | GET/POST/PUT/DELETE | ✅ | ✅ | — | station_activity_logs, packer_logs, orders, photos, sku |
 | medium | `/api/packing-logs` | GET/POST | ✅ | ✅ | — | shipping_tracking_numbers, fba_shipment_tracking, fba_shipment_items, sku_platform_ids, work_assignments, fba_shipments +8 |
@@ -1071,7 +1073,7 @@
 - ⛔ `/api/serial-units/lookup` (medium)
 - ✅ `/api/webhooks/zoho/orders` (low)
 
-### `orders` — 126 routes, 70 not yet GUC-safe
+### `orders` — 127 routes, 71 not yet GUC-safe
 
 - ✅ `/api/admin/fix-status` (low)
 - ✅ `/api/admin/po-gmail/missing-orders` (low)
@@ -1135,6 +1137,7 @@
 - ⛔ `/api/orders/skip` (critical)
 - ⛔ `/api/orders/start` (critical)
 - ✅ `/api/orders/verify` (low)
+- ⛔ `/api/outbound/mark-staged` (medium)
 - ⛔ `/api/pack/ship` (medium)
 - ⛔ `/api/packerlogs` (medium)
 - ⛔ `/api/packing-logs` (medium)
@@ -1212,8 +1215,10 @@
 - ⛔ `/api/shipped/scan-out` (medium)
 - ✅ `/api/tech/scan` (low)
 
-### `packages` — 5 routes, 2 not yet GUC-safe
+### `packages` — 7 routes, 4 not yet GUC-safe
 
+- ⛔ `/api/nas-dev/[[...path]]` (critical)
+- ⛔ `/api/outbound/mark-staged` (medium)
 - ⛔ `/api/receiving-lines/incoming/refresh` (medium)
 - ✅ `/api/receiving-lines/incoming/refresh/stream` (low)
 - ✅ `/api/receiving-lines/incoming/summary` (low)
@@ -1351,7 +1356,7 @@
 - ✅ `/api/reason-codes` (low)
 - ⛔ `/api/warranty/reports/export` (medium)
 
-### `receiving` — 106 routes, 74 not yet GUC-safe
+### `receiving` — 107 routes, 75 not yet GUC-safe
 
 - ⛔ `/api/admin/po-gmail/reconcile` (medium)
 - ⛔ `/api/ai/chat` (medium)
@@ -1423,6 +1428,7 @@
 - ✅ `/api/receiving/po/list` (low)
 - ⛔ `/api/receiving/scan-serial` (medium)
 - ⛔ `/api/receiving/serials` (medium)
+- ⛔ `/api/receiving/touch-scan` (critical)
 - ⛔ `/api/receiving/unfound-queue` (medium)
 - ⛔ `/api/receiving/unfound-queue/[kind]/[id]` (medium)
 - ⛔ `/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk` (medium)
@@ -1509,7 +1515,7 @@
 - ⛔ `/api/zoho/purchase-orders/sync` (critical)
 - ⛔ `/api/zoho/purchase-receives/sync` (critical)
 
-### `receiving_scans` — 8 routes, 5 not yet GUC-safe
+### `receiving_scans` — 9 routes, 6 not yet GUC-safe
 
 - ✅ `/api/receiving-lines` (low)
 - ✅ `/api/receiving-lines/incoming/delivered-unscanned` (low)
@@ -1518,6 +1524,7 @@
 - ⛔ `/api/receiving-photos` (medium)
 - ⛔ `/api/receiving/[id]` (medium)
 - ⛔ `/api/receiving/lookup-po` (medium)
+- ⛔ `/api/receiving/touch-scan` (critical)
 - ⛔ `/api/tracking-exceptions/[id]/refresh` (medium)
 
 ### `repair_actions` — 2 routes, 2 not yet GUC-safe
@@ -2426,7 +2433,7 @@
 - ✅ `/api/admin/po-mirror/health` (low)
 - ⛔ `/api/cron/zoho/incoming-po-sync` (high)
 
-### `tech_serial_numbers` — 23 routes, 10 not yet GUC-safe
+### `tech_serial_numbers` — 24 routes, 11 not yet GUC-safe
 
 - ✅ `/api/admin/logs` (low)
 - ✅ `/api/audit-log/report` (low)
@@ -2434,6 +2441,7 @@
 - ✅ `/api/fba/logs/summary` (low)
 - ✅ `/api/google-sheets/execute-script` (low)
 - ✅ `/api/labels/recent` (low)
+- ⛔ `/api/orders/[id]/timeline` (medium)
 - ✅ `/api/orders/batch` (low)
 - ✅ `/api/orders/lookup/[orderId]` (low)
 - ⛔ `/api/orders/start` (critical)

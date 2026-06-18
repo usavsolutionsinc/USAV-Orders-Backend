@@ -61,9 +61,10 @@ function useTicketThread(ticketId: number | null, open: boolean) {
 
 /**
  * Filed-ticket chip for the carton identity row. Renders the same
- * {@link IdentityLinkChip} primitive as PO#/tracking (orange `#` tone), and its
- * pencil opens an anchored popover showing the ticket's history (live Zendesk
- * comments) with an Unlink action — instead of re-opening the full claim modal.
+ * {@link IdentityLinkChip} primitive as PO#/tracking (orange `#` tone): chip
+ * click copies, hover menu offers Open then Edit. The Edit row opens an
+ * anchored popover showing the ticket's history (live Zendesk comments) with
+ * an Unlink action — instead of re-opening the full claim modal.
  */
 export function ReceivingTicketChip({
   value,
@@ -99,9 +100,10 @@ export function ReceivingTicketChip({
         tone="ticket"
         underlineClass="border-orange-500"
         disableCopy={!value.trim()}
-        onEdit={() => setOpen((o) => !o)}
+        onEdit={() => setOpen(true)}
         editOpen={open}
         editLabel="View ticket history"
+        actionsInMenu
       />
       <AnchoredLayer
         open={open}
@@ -175,19 +177,19 @@ function TicketThreadPanel({
       aria-label="Ticket history"
       className="flex max-h-[460px] w-[360px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <MessageSquare className="h-4 w-4 shrink-0 text-orange-500" />
+      <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 border-b border-gray-100 px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
           <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-gray-800">
+            <div className="break-words text-[13px] font-semibold leading-snug text-gray-800">
               {ticketId ? `Ticket #${ticketId}` : 'Ticket'}
             </div>
             {data?.ticket.subject ? (
-              <div className="truncate text-[10px] text-gray-400">{data.ticket.subject}</div>
+              <div className="break-words text-[10px] leading-snug text-gray-400">{data.ticket.subject}</div>
             ) : null}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {data?.ticket.status ? (
             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
               {data.ticket.status}
@@ -240,15 +242,17 @@ function TicketThreadPanel({
                     {formatDateTimePST(c.createdAt)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap text-[13px] leading-snug text-gray-800">{c.body}</p>
+                <p className="whitespace-pre-wrap break-words text-[13px] leading-snug text-gray-800">{c.body}</p>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      <footer className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-        <span className="text-[11px] text-gray-400">Unlinking only removes our reference — the ticket stays in Zendesk.</span>
+      <footer className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
+        <span className="min-w-0 flex-1 text-[11px] leading-snug text-gray-400">
+          Unlinking only removes our reference — the ticket stays in Zendesk.
+        </span>
         <button
           type="button"
           disabled={unlink.isPending || receivingId == null}

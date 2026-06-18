@@ -12,17 +12,20 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Copy } from '@/components/Icons';
+import { Check, Copy, ExternalLink } from '@/components/Icons';
 
 const CLOSE_DELAY_MS = 100;
 const MARGIN = 8;
 const CARET_PAD = 10;
 const MAX_PLACEMENT_RETRIES = 8;
 
+type SiteTooltipAction = 'copy' | 'external-link';
+
 type SiteTooltipSession = {
   anchorId: string;
   value: string;
   copied: boolean;
+  action: SiteTooltipAction;
   getRect: () => DOMRect | null;
 };
 
@@ -31,6 +34,7 @@ export type SiteTooltipContextValue = {
     anchorId: string;
     value: string;
     getRect: () => DOMRect | null;
+    action?: SiteTooltipAction;
   }) => void;
   scheduleClose: (anchorId: string) => void;
   closeNow: (anchorId: string) => void;
@@ -63,7 +67,12 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const activate = useCallback(
-    (args: { anchorId: string; value: string; getRect: () => DOMRect | null }) => {
+    (args: {
+      anchorId: string;
+      value: string;
+      getRect: () => DOMRect | null;
+      action?: SiteTooltipAction;
+    }) => {
       clearCloseTimer();
       placementRetryRef.current = 0;
       activeAnchorIdRef.current = args.anchorId;
@@ -72,6 +81,7 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
         anchorId: args.anchorId,
         value: args.value,
         copied: false,
+        action: args.action ?? 'copy',
         getRect: args.getRect,
       });
     },
@@ -269,7 +279,9 @@ export function SiteTooltipProvider({ children }: { children: React.ReactNode })
                     <span className="font-mono whitespace-nowrap leading-tight">
                       {session.value}
                     </span>
-                    {session.copied ? (
+                    {session.action === 'external-link' ? (
+                      <ExternalLink className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+                    ) : session.copied ? (
                       <Check className="h-3 w-3 shrink-0 text-emerald-400" />
                     ) : (
                       <Copy className="h-3 w-3 shrink-0 text-gray-500" />

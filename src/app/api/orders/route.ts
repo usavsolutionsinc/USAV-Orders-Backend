@@ -78,8 +78,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const packedOnly         = searchParams.get('packedOnly') === 'true';
     /** excludePacked=true → exclude orders with any station_activity_logs row (pending view) */
     const excludePacked      = searchParams.get('excludePacked') === 'true';
-    /** awaitingOnly=true → only orders without shipment_id (Awaiting tab: no tracking yet) */
+    /** awaitingOnly=true → only orders without shipment_id (Outbound Labels queue) */
     const awaitingOnly       = searchParams.get('awaitingOnly') === 'true';
+    /**
+     * fulfillmentScope=true → labeled, not-yet-packed fulfillment queue (Dashboard
+     * Unshipped). Requires shipment_id and excludes PACK events — the mirror of
+     * awaitingOnly (no label) and stagedOnly (already packed).
+     */
+    const fulfillmentScope   = searchParams.get('fulfillmentScope') === 'true';
     /** stagedOnly=true → packed (PACK event) but not yet dock scan-out (no SHIP_CONFIRM) */
     const stagedOnly         = searchParams.get('stagedOnly') === 'true';
     /** exceptionsOnly=true → only orders whose shipment has an exception or has been stalled (no carrier scan in >stallHours, default 72h) */
@@ -115,6 +121,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       packedOnly,
       excludePacked,
       awaitingOnly,
+      fulfillmentScope,
       stagedOnly,
       exceptionsOnly,
       stallHours,
@@ -509,6 +516,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     if (awaitingOnly) {
       sql += ` AND o.shipment_id IS NULL`;
+    }
+
+    if (fulfillmentScope) {
+      sql += ` AND o.shipment_id IS NOT NULL`;
+      sql += ` AND NOT EXISTS (
+        SELECT 1 FROM station_activity_logs sal
+        WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
+      )`;
     }
 
     if (stagedOnly) {

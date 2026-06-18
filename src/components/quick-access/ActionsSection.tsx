@@ -44,7 +44,7 @@ export function ActionsSection({
             icon={<Bell className="h-4 w-4" />}
             iconBg="bg-gray-900"
             label="Recent activity"
-            subLabel="Reversible updates — undo within 60s"
+            subLabel="Notifications and updates"
             trailing={
               unreadCount > 0 ? (
                 <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1.5 text-mini font-bold text-white">

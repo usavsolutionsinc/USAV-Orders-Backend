@@ -42,7 +42,7 @@ interface ShippedDetailsPanelProps {
   shipped: ShippedOrder;
   onClose: () => void;
   onUpdate: () => void;
-  context?: 'dashboard' | 'queue' | 'shipped' | 'station' | 'packer';
+  context?: 'dashboard' | 'queue' | 'fulfillment' | 'labels' | 'staged' | 'shipped' | 'station' | 'packer';
 }
 
 function buildAssignmentRow(shipped: ShippedOrder): WorkOrderRow {
@@ -84,6 +84,9 @@ export function ShippedDetailsPanel({
   onUpdate: _onUpdate,
   context = 'dashboard'
 }: ShippedDetailsPanelProps) {
+  const isFulfillmentPanel = context === 'queue' || context === 'fulfillment';
+  const isLabelsPanel = context === 'labels';
+  const isStagedPanel = context === 'staged';
   const [shipped, setShipped] = useState<ShippedOrder>(initialShipped);
   const [durationData] = useState<DetailsStackDurationData>({});
   // Tab state — Return is the default when the order is packed (it leads with
@@ -92,7 +95,9 @@ export function ShippedDetailsPanel({
   const hasReturnContent =
     !!initialShipped.packed_at &&
     initialShipped.packed_at !== '1' &&
-    context !== 'queue';
+    !isFulfillmentPanel &&
+    !isLabelsPanel &&
+    !isStagedPanel;
   const [activeSection, setActiveSection] = useState<ShippedActiveSection>(
     hasReturnContent ? 'return' : 'shipping',
   );
@@ -259,7 +264,7 @@ export function ShippedDetailsPanel({
       notes: () => setActiveInput((prev) => prev === 'notes' ? 'none' : 'notes'),
     },
   );
-  const showPanelActions = context === 'dashboard' || context === 'queue';
+  const showPanelActions = context === 'dashboard' || isFulfillmentPanel || isLabelsPanel;
 
   // Compose the action list directly (assign + entity actions) so the bar can
   // render in PaneHeader.belowSlot with flat full-width styling. We bypass
@@ -414,10 +419,10 @@ export function ShippedDetailsPanel({
                   : []),
                 { value: 'shipping' as const, label: 'Shipping' },
                 { value: 'product' as const, label: 'Product' },
-                ...(context === 'dashboard' || context === 'queue' || context === 'shipped'
+                ...(context === 'dashboard' || isFulfillmentPanel || isLabelsPanel || context === 'shipped'
                   ? [{ value: 'timeline' as const, label: 'Timeline' }]
                   : []),
-                ...(context === 'dashboard' || context === 'queue'
+                ...(context === 'dashboard' || isFulfillmentPanel || isLabelsPanel
                   ? [{ value: 'customer' as const, label: 'Customer' }]
                   : []),
               ]}
@@ -437,7 +442,7 @@ export function ShippedDetailsPanel({
             <div className="flex min-h-full flex-col pb-8 pt-2">
               <OrderTimelineSection orderId={Number(shipped.id)} />
             </div>
-          ) : context === 'dashboard' || context === 'queue' ? (
+          ) : context === 'dashboard' || isFulfillmentPanel || isLabelsPanel ? (
             <DashboardDetailsStack
               shipped={shipped}
               durationData={durationData}
@@ -445,7 +450,7 @@ export function ShippedDetailsPanel({
               onCopyAll={handleCopyAll}
               onUpdate={_onUpdate}
               showShippingTimestamp={false}
-              showReturnInformation={context !== 'queue'}
+              showReturnInformation={!isFulfillmentPanel && !isLabelsPanel}
               activeSection={activeSection}
               activeInput={activeInput}
               setActiveInput={setActiveInput}
@@ -530,7 +535,7 @@ export function ShippedDetailsPanel({
           {/* Shipping-label drop-zone is UNSHIPPED-only (`queue`): a shipped order
               has already left with its label printed, so the shipped/dashboard
               stacks don't repeat it (the label still lives under its own tab). */}
-          {context === 'queue' && shipped?.id && activeSection !== 'timeline' ? (
+          {isLabelsPanel && shipped?.id && activeSection !== 'timeline' ? (
             <OrderLabelsSection orderId={Number(shipped.id)} orderRef={shipped.order_id || `order-${shipped.id}`} />
           ) : null}
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /admin?section=roles — thin shell. Reads ?roleId from URL and renders
+ * /settings/roles — thin shell. Reads ?roleId from URL and renders
  * RoleEditor or an empty state.
  */
 

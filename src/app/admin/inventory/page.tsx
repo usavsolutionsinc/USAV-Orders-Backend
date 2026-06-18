@@ -1,5 +1,7 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
@@ -224,16 +226,20 @@ interface DriftAlertRow {
   notes: string | null;
 }
 
-async function loadOpenDriftAlerts(): Promise<DriftAlertRow[]> {
+async function loadOpenDriftAlerts(orgId: OrgId): Promise<DriftAlertRow[]> {
   try {
-    return await queryRaw<DriftAlertRow>(
+    const r = await tenantQuery<DriftAlertRow>(
+      orgId,
       `SELECT id, sku, qty_at_trigger, triggered_at, notes
          FROM stock_alerts
         WHERE alert_type = 'DRIFT'
           AND resolved_at IS NULL
+          AND organization_id = $1
         ORDER BY triggered_at DESC, id DESC
         LIMIT 25`,
+      [orgId],
     );
+    return r.rows;
   } catch {
     return [];
   }
@@ -257,7 +263,7 @@ async function loadRecentEvents(): Promise<RecentEventRow[]> {
 }
 
 export default async function InventoryAdminPage() {
-  await requirePermission('admin.view', { enforce: true });
+  const user = await requirePermission('admin.view', { enforce: true });
 
   const [flags, schema, backfill, drift, allocations, events, gtinCoverage, openDriftAlerts] = await Promise.all([
     loadFlags(),
@@ -267,7 +273,7 @@ export default async function InventoryAdminPage() {
     loadAllocations(),
     loadRecentEvents(),
     loadGtinCoverage(),
-    loadOpenDriftAlerts(),
+    loadOpenDriftAlerts(user.organizationId),
   ]);
 
   const allFlagsOff = flags.every((f) => !f.on);

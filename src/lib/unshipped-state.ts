@@ -1,6 +1,12 @@
 /**
- * Unshipped (pre‑dock) package state — the single source of truth for "where is
- * this order in the sold → tested → packed → leaves‑the‑dock pipeline".
+ * Unshipped (pre‑dock) package state — shared derivation helpers for the full
+ * sold → label → test → pack → dock pipeline.
+ *
+ * **Surface ownership (2026-06):**
+ * - `AWAITING_LABEL` → Outbound · Labels (`/outbound`)
+ * - `PENDING` / `TESTED` / `BLOCKED` → Dashboard · Unshipped (`deriveFulfillmentState`)
+ * - `PACKED_STAGED` → Outbound · Scan-out; seam color shared with `outbound-state.ts`
+ * - Post-dock states → `outbound-state.ts` on Dashboard · Shipped
  *
  * This is the inbound mirror of {@link OUTBOUND_STATE_META} in `outbound-state.ts`.
  * The two models meet at ONE shared seam state, `PACKED_STAGED`: it is the
@@ -49,6 +55,44 @@ export function deriveUnshippedState(input: UnshippedStateInput): UnshippedState
   if (input.hasTechScan) return 'TESTED';
   if (input.shipmentId != null && String(input.shipmentId) !== '') return 'PENDING';
   return 'AWAITING_LABEL';
+}
+
+/** Pre-pack fulfillment states shown on Dashboard · Unshipped (excludes label + dock). */
+export type FulfillmentState = 'PENDING' | 'TESTED' | 'BLOCKED';
+
+/** Derive fulfillment-queue state for orders that already have a label/tracking. */
+export function deriveFulfillmentState(input: UnshippedStateInput): FulfillmentState {
+  if (String(input.outOfStock ?? '').trim() !== '') return 'BLOCKED';
+  if (input.hasTechScan) return 'TESTED';
+  return 'PENDING';
+}
+
+export type FulfillmentCounts = Record<FulfillmentState, number>;
+
+export const ZERO_FULFILLMENT_COUNTS: FulfillmentCounts = {
+  PENDING: 0,
+  TESTED: 0,
+  BLOCKED: 0,
+};
+
+/** Bucket fulfillment-queue rows for the Unshipped status legend. */
+export function countFulfillmentStates(
+  rows: ReadonlyArray<{
+    shipment_id?: number | string | null;
+    has_tech_scan?: boolean | null;
+    out_of_stock?: string | null;
+  }>,
+): FulfillmentCounts {
+  const counts: FulfillmentCounts = { ...ZERO_FULFILLMENT_COUNTS };
+  for (const r of rows) {
+    const state = deriveFulfillmentState({
+      shipmentId: r.shipment_id,
+      hasTechScan: Boolean(r.has_tech_scan),
+      outOfStock: r.out_of_stock,
+    });
+    counts[state] += 1;
+  }
+  return counts;
 }
 
 /** True when the deadline has passed. Overlay flag (the days‑late chip), not a dot. */
@@ -109,4 +153,11 @@ export const UNSHIPPED_STATE_META: Record<UnshippedState, UnshippedStateMeta> = 
   TESTED:         { label: 'Tested',         description: 'Passed the tech scan — ready to pack.',                          pill: 'bg-teal-50 text-teal-700 ring-teal-200',       dot: 'bg-teal-500' },
   PACKED_STAGED:  { label: 'Packed · Staged', description: 'Packed and staged at the dock — awaiting scan‑out.',            pill: OUTBOUND_STATE_META.PACKED_STAGED.pill,         dot: OUTBOUND_STATE_META.PACKED_STAGED.dot },
   BLOCKED:        { label: 'Blocked',        description: 'Out of stock / can’t fulfill — needs attention.',                pill: 'bg-red-50 text-red-700 ring-red-200',          dot: 'bg-red-500' },
+};
+
+/** Legend meta for Dashboard · Unshipped only (PENDING / TESTED / BLOCKED). */
+export const FULFILLMENT_STATE_META: Record<FulfillmentState, UnshippedStateMeta> = {
+  PENDING: UNSHIPPED_STATE_META.PENDING,
+  TESTED: UNSHIPPED_STATE_META.TESTED,
+  BLOCKED: UNSHIPPED_STATE_META.BLOCKED,
 };

@@ -27,8 +27,7 @@ interface StaffTableProps {
 }
 
 // Initial role for the invite modal. Editing existing staff happens in
-// Admin → Access (which writes to staff_roles); this list is only used to
-// seed the very first role on a newly invited staffer.
+// Settings → Access (staff_roles); this list seeds the first role on invite.
 const ROLE_OPTIONS: ReadonlyArray<string> = [
   'admin', 'receiver', 'packer', 'technician', 'shipper',
   'inventory_manager', 'sales', 'viewer',
@@ -130,9 +129,9 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
                       the access detail page where the Roles card is the
                       authoritative editor. */}
                   <a
-                    href={`/admin?section=access&staffId=${s.id}`}
+                    href={`/settings/access?staffId=${s.id}`}
                     className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-[12px] font-medium text-gray-700 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
-                    title="Edit roles in Admin → Access"
+                    title="Edit roles in Settings → Access"
                   >
                     {s.role}
                     <span className="text-gray-400">›</span>

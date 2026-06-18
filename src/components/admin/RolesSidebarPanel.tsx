@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Sidebar for /admin?section=roles — vertical role list with drag-to-reorder
+ * Sidebar for /settings/roles — vertical role list with drag-to-reorder
  * priority and a "+ Create role" button at the top.
  *
  * Selection drives `?roleId=<id>` in the URL. Listens for `admin-roles-refresh`
@@ -39,7 +39,7 @@ interface RoleRow {
   member_count: number;
 }
 
-export function RolesSidebarPanel() {
+export function RolesSidebarPanel({ basePath = '/settings/roles' }: { basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedRaw = searchParams.get('roleId');
@@ -80,8 +80,8 @@ export function RolesSidebarPanel() {
   const selectRole = useCallback((id: number) => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('roleId', String(id));
-    router.replace(`/admin?${params.toString()}`);
-  }, [router, searchParams]);
+    router.replace(`${basePath}?${params.toString()}`);
+  }, [router, searchParams, basePath]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),

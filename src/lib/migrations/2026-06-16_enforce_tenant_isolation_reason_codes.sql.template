@@ -1,0 +1,34 @@
+-- ============================================================================
+-- 2026-06-16_enforce_tenant_isolation_reason_codes.sql.template
+--
+-- Tenant-isolation slice (reason_codes), step 2 of 2 — ENFORCEMENT.
+--
+-- ⚠️  .sql.template — NOT auto-applied by run-pending-migrations.mjs (it only
+--     picks up *.sql). This is intentional: enforcement is a COORDINATED step,
+--     not a routine migration.
+--
+-- WHY GATED:
+--   enforce_tenant_isolation('reason_codes') sets FORCE ROW LEVEL SECURITY +
+--   flips the org_id default to loud-fail. FORCE only *bites* under a
+--   non-BYPASSRLS role. The app's tenant pool (TENANT_APP_DATABASE_URL →
+--   app_tenant) is already non-bypass, and EVERY reason_codes consumer runs
+--   through that pool with the GUC set (verified 2026-06-16):
+--       - src/lib/neon/reason-codes-queries.ts      (tenantQuery, all 4 fns)
+--       - src/app/api/reason-codes/route.ts          (tenantQuery)
+--       - src/app/api/reason-codes/[id]/route.ts     (org-aware query helpers)
+--       - src/lib/warranty/reports.ts                (GUC pool + rc.org = wc.org)
+--   So reason_codes is consumer-ready. The remaining gate is the CI guard:
+--   scripts/tenancy-guard.ts fails the build if a table is FORCEd while the
+--   DEFAULT connection role (DATABASE_URL = neondb_owner) still has BYPASSRLS.
+--
+-- HOW TO PROMOTE (owner-only, coordinated with Phase E1):
+--   1. Confirm app_tenant role exists + TENANT_APP_DATABASE_URL is live.
+--   2. Rename this file: drop the `.template` suffix so the runner applies it.
+--   3. `npm run db:migrate` (apply), then `npm run tenancy:guard:check`.
+--   4. The reason_codes canary in cross-org-isolation.test.ts arms itself
+--      automatically once the table is FORCEd (it self-skips until then).
+--
+-- ROLLBACK: SELECT relax_tenant_isolation('reason_codes');  -- NO FORCE, default restored
+-- ============================================================================
+
+SELECT enforce_tenant_isolation('reason_codes');
