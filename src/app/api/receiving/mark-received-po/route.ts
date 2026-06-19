@@ -884,7 +884,20 @@ export const POST = withAuth(async (request, ctx) => {
               ].join(' | ');
               const newLine = noteTail ? `${noteHead} · ${noteTail}` : noteHead;
 
-              if (!currentNotes.includes(newLine)) {
+              // Skip if the exact line is already present (same-second duplicate).
+              // Also skip if every serial in this batch was already noted by a
+              // prior per-scan write (e.g. scan-serial's syncSerialToZohoPo ran
+              // concurrently). That check is content-based (ignores timestamp)
+              // so it catches the common case where the timestamps differ.
+              const currentNotesUpper = currentNotes.toUpperCase();
+              const allSerialsAlreadyNoted =
+                serialsForNote.length > 0 &&
+                serialsForNote.every((sn) => {
+                  const snUpper = sn.toUpperCase();
+                  return currentNotesUpper.includes(`SN: ${snUpper}`) ||
+                    (currentNotesUpper.includes('SNS:') && currentNotesUpper.includes(snUpper));
+                });
+              if (!allSerialsAlreadyNoted && !currentNotes.includes(newLine)) {
                 patch.notes = currentNotes ? `${newLine}\n${currentNotes}` : newLine;
               }
             }

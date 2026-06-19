@@ -463,16 +463,42 @@ export async function getReceivingAuditPO(
         ? orgId
           ? tenantQuery(
               orgId,
-              `SELECT * FROM photos
-                WHERE entity_type = 'RECEIVING' AND entity_id = ANY($1::int[])
-                  AND organization_id = $2
-                ORDER BY created_at DESC, id DESC`,
+              `SELECT
+                 p.id,
+                 l.entity_type,
+                 l.entity_id,
+                 '/api/photos/' || p.id::text || '/content' AS url,
+                 p.taken_by_staff_id,
+                 p.photo_type,
+                 p.created_at
+               FROM photos p
+               INNER JOIN photo_entity_links l
+                 ON l.photo_id = p.id
+                AND l.organization_id = p.organization_id
+              WHERE l.entity_type = 'RECEIVING'
+                AND l.entity_id = ANY($1::int[])
+                AND l.link_role = 'primary'
+                AND p.organization_id = $2
+              ORDER BY p.created_at DESC, p.id DESC`,
               [cartonIds, orgId],
             )
           : pool.query(
-              `SELECT * FROM photos
-                WHERE entity_type = 'RECEIVING' AND entity_id = ANY($1::int[])
-                ORDER BY created_at DESC, id DESC`,
+              `SELECT
+                 p.id,
+                 l.entity_type,
+                 l.entity_id,
+                 '/api/photos/' || p.id::text || '/content' AS url,
+                 p.taken_by_staff_id,
+                 p.photo_type,
+                 p.created_at
+               FROM photos p
+               INNER JOIN photo_entity_links l
+                 ON l.photo_id = p.id
+                AND l.organization_id = p.organization_id
+              WHERE l.entity_type = 'RECEIVING'
+                AND l.entity_id = ANY($1::int[])
+                AND l.link_role = 'primary'
+              ORDER BY p.created_at DESC, p.id DESC`,
               [cartonIds],
             )
         : Promise.resolve({ rows: [] }),

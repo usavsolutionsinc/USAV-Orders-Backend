@@ -2,9 +2,8 @@
 
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
@@ -59,16 +58,12 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
     staleTime: 10_000,
   });
 
-  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
-  const handlePhoneMessage = useCallback(
-    (msg: { data?: { receiving_id?: number } }) => {
-      const incoming = Number(msg?.data?.receiving_id);
-      if (!Number.isFinite(incoming) || incoming !== receivingId) return;
-      queryClient.invalidateQueries({ queryKey });
-    },
-    [receivingId, queryClient, queryKey],
-  );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
+  const refreshPhotos = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+    invalidateReceivingFeeds(queryClient);
+  }, [queryClient, queryKey]);
+
+  useReceivingPhotosRealtimeRefresh(receivingId, staffId, refreshPhotos, staffId > 0 && !!orgId);
 
   const photos = useMemo(
     () =>

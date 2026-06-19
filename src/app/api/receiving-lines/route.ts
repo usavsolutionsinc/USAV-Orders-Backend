@@ -18,6 +18,7 @@ import { parseReceivingView } from '@/lib/receiving/receiving-views';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
+import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 
 type LineSerial = {
   id: number;
@@ -242,9 +243,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
                   LIMIT 1)                   AS zoho_item_title,
                 sc.id                        AS sku_catalog_id,
-                (SELECT COUNT(*) FROM photos p
-                  WHERE p.entity_type = 'RECEIVING'
-                    AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
+                ${sqlReceivingPhotoCount('rl.receiving_id', 'rl.organization_id')} AS photo_count
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback. Partial
          -- unique index ux_receiving_zoho_po_matched (source='zoho_po') ensures
@@ -348,9 +347,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
                   LIMIT 1)                   AS zoho_item_title,
                   sc.id                        AS sku_catalog_id,
-                  (SELECT COUNT(*) FROM photos p
-                    WHERE p.entity_type = 'RECEIVING'
-                      AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
+                  ${sqlReceivingPhotoCount('rl.receiving_id', 'rl.organization_id')} AS photo_count
            FROM receiving_lines rl
            LEFT JOIN receiving r                   ON r.id  = rl.receiving_id AND r.organization_id = rl.organization_id
            LEFT JOIN LATERAL (
@@ -944,9 +941,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   WHERE zoho_item_id = rl.zoho_item_id AND status = 'active'
                   LIMIT 1)                   AS zoho_item_title,
                 sc.id                        AS sku_catalog_id,
-                (SELECT COUNT(*) FROM photos p
-                  WHERE p.entity_type = 'RECEIVING'
-                    AND p.entity_id = rl.receiving_id AND p.organization_id = rl.organization_id) AS photo_count
+                ${sqlReceivingPhotoCount('rl.receiving_id', 'rl.organization_id')} AS photo_count
                 ${lastScanSelect}
                 ${testedAggSelect}
                 ${incomingExtrasSelect}
@@ -1093,9 +1088,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   stn.is_delivered             AS shipment_is_delivered,
                   stn.delivered_at::text       AS shipment_delivered_at,
                   rs_agg.last_scan::text       AS last_scan_at,
-                  (SELECT COUNT(*) FROM photos p
-                     WHERE p.entity_type = 'RECEIVING'
-                       AND p.entity_id = r.id AND p.organization_id = r.organization_id) AS photo_count
+                ${sqlReceivingPhotoCount('r.id', 'r.organization_id')} AS photo_count
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
            LEFT JOIN LATERAL (

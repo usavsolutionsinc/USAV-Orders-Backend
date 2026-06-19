@@ -163,13 +163,8 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
       page.getByRole('button', { name: /Platform/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
 
-    // The floating primary action in TestingPanel is always one of:
-    //   "Pass · Print N× Label(s)"  — ready state
-    //   "Pass · No Serial"           — no serial scanned yet
-    //   "Pass · No SKU"              — SKU not linked
-    //   "Printing N×…"              — printing in flight
-    // All share the /^Pass\s*[·•]/ prefix except "Printing" — match both.
-    const passBtn = page.getByRole('button', { name: /^Pass\s*[·•]|^Printing\s+\d+/i });
+    // The Pass · Print FloatingButton — the testing terminal action.
+    const passBtn = page.getByRole('button', { name: /^Pass\s*[·•]|^Printing/i });
     await expect(passBtn).toBeVisible({ timeout: PANEL_TIMEOUT });
   });
 
@@ -215,9 +210,9 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
       page.getByRole('button', { name: /Platform/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
 
-    // The Pass · Print StickyActionBar — the testing terminal action.
+    // The Pass · Print FloatingButton — the testing terminal action.
     await expect(
-      page.getByRole('button', { name: /^Pass\s*[·•]|^Printing\s+\d+/i }),
+      page.getByRole('button', { name: /^Pass\s*[·•]|^Printing/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
   });
 });

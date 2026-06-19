@@ -11,6 +11,7 @@ import { useQuickAccessHotkey } from '@/lib/quick-access/use-hotkey';
 import { QuickAccessPopover } from '@/components/quick-access/QuickAccessPopover';
 import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopover';
 import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
+import { FeedbackPopover } from '@/components/quick-access/FeedbackWidget';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/utils/_cn';
 
@@ -39,6 +40,7 @@ export function QuickAccessButton({
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [inboxOpen, setInboxOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const authStaffId = authUser?.staffId ?? null;
@@ -65,6 +67,7 @@ export function QuickAccessButton({
     setMenuOpen(false);
     setHistoryOpen(false);
     setInboxOpen(false);
+    setFeedbackOpen(false);
   }, [pathname]);
 
   const toggleMenu = useCallback(() => {
@@ -73,6 +76,7 @@ export function QuickAccessButton({
       if (next) {
         setHistoryOpen(false);
         setInboxOpen(false);
+        setFeedbackOpen(false);
       }
       return next;
     });
@@ -83,13 +87,22 @@ export function QuickAccessButton({
   const handleOpenHistory = useCallback(() => {
     setMenuOpen(false);
     setInboxOpen(false);
+    setFeedbackOpen(false);
     setHistoryOpen(true);
   }, []);
 
   const handleOpenInbox = useCallback(() => {
     setMenuOpen(false);
     setHistoryOpen(false);
+    setFeedbackOpen(false);
     setInboxOpen(true);
+  }, []);
+
+  const handleOpenFeedback = useCallback(() => {
+    setMenuOpen(false);
+    setHistoryOpen(false);
+    setInboxOpen(false);
+    setFeedbackOpen(true);
   }, []);
 
   if (!settings.enabled) return null;
@@ -112,6 +125,7 @@ export function QuickAccessButton({
           onClose={() => setMenuOpen(false)}
           onOpenHistoryPopover={handleOpenHistory}
           onOpenInboxPopover={handleOpenInbox}
+          onOpenFeedbackPopover={handleOpenFeedback}
         />
       </AnchoredLayer>
 
@@ -133,6 +147,16 @@ export function QuickAccessButton({
         gap={2}
       >
         <ActivityInboxPopover onClose={() => setInboxOpen(false)} />
+      </AnchoredLayer>
+
+      <AnchoredLayer
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        anchorRef={wrapperRef}
+        placement={popoverPlacement}
+        gap={2}
+      >
+        <FeedbackPopover onClose={() => setFeedbackOpen(false)} />
       </AnchoredLayer>
 
       <button

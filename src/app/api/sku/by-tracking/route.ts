@@ -56,14 +56,20 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
          COALESCE(
            (
              SELECT JSONB_AGG(
-                      JSONB_BUILD_OBJECT('id', p.id, 'url', p.url)
+                      JSONB_BUILD_OBJECT(
+                        'id', p.id,
+                        'url', '/api/photos/' || p.id::text || '/content'
+                      )
                       ORDER BY p.created_at ASC
                     )
              FROM photos p
-             WHERE p.entity_type = 'SKU'
-               AND p.entity_id = s.id
+             INNER JOIN photo_entity_links l
+               ON l.photo_id = p.id
+              AND l.organization_id = p.organization_id
+             WHERE l.entity_type = 'SKU'
+               AND l.entity_id = s.id
+               AND l.link_role = 'primary'
                AND p.organization_id = $3
-               AND p.url IS NOT NULL
            ),
            '[]'::jsonb
          ) AS photos
@@ -171,7 +177,14 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
       }
 
       const photoDelete = await client.query(
-        `DELETE FROM photos WHERE entity_type = 'SKU' AND entity_id = $1 AND organization_id = $2 RETURNING id`,
+        `DELETE FROM photos p
+           USING photo_entity_links l
+          WHERE l.photo_id = p.id
+            AND l.organization_id = p.organization_id
+            AND l.entity_type = 'SKU'
+            AND l.entity_id = $1
+            AND p.organization_id = $2
+         RETURNING p.id`,
         [id, ctx.organizationId],
       );
 

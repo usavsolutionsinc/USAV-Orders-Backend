@@ -144,7 +144,14 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
   }, [itemsByShipment]);
 
   const saveShipment = useCallback(async (row: ShipmentRow) => {
-    const draft = shipmentDrafts[row.id] || { amazon: '', ups: '' };
+    // Fall back to the row's current values when the user opens the form but
+    // hasn't typed anything yet — avoids accidentally clearing amazon_shipment_id
+    // or skipping the tracking update on an unchanged save.
+    const primaryUps = getPrimaryUps(row.tracking_numbers || []);
+    const draft = shipmentDrafts[row.id] ?? {
+      amazon: String(row.amazon_shipment_id || '').toUpperCase(),
+      ups: String(primaryUps?.tracking_number || '').toUpperCase(),
+    };
     const amazon = String(draft.amazon || '').trim().toUpperCase();
     const ups = String(draft.ups || '').trim().toUpperCase();
 

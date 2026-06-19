@@ -56,7 +56,7 @@ export const GET = withAuth(
         return NextResponse.json({ success: true, entity: null, photos: [] });
       }
 
-      const photos = await getEntityPhotos(entity);
+      const photos = await getEntityPhotos(ctx.organizationId, entity);
       return NextResponse.json({
         success: true,
         entity: { type: entity.type, id: entity.id, source: entity.source },

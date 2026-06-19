@@ -204,14 +204,37 @@ function rehydrate(): void {
 }
 
 // ─── Upload pipeline ────────────────────────────────────────────────────────
-// Capture flow now writes straight to the office NAS over WebDAV (no Vercel
-// Blob): the browser PUTs the downscaled JPEG to the NAS, then links the
-// resulting URL to the receiving row via POST /api/receiving-photos. A stable
-// per-entry filename makes a Retry overwrite the same path instead of duping.
+function useAdapterUpload(): boolean {
+  const mode = (process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER || 'adapter').toLowerCase();
+  return mode !== 'legacy';
+}
+
+async function postPhotoViaAdapter(
+  entry: UploadEntry,
+  blob: Blob,
+): Promise<{ id: number; url: string }> {
+  const entityType = entry.scope.receivingLineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
+  const entityId = entry.scope.receivingLineId ?? entry.scope.receivingId;
+  const { uploadPhotoClient } = await import('@/lib/photos/upload-client');
+  const result = await uploadPhotoClient({
+    file: blob,
+    entityType,
+    entityId,
+    photoType: entityType === 'RECEIVING_LINE' ? 'receiving_item' : 'receiving',
+    poRef: entry.scope.poRef ?? undefined,
+  });
+  return { id: result.id, url: result.url };
+}
+
+// Capture flow: adapter upload (GCS) when enabled, otherwise NAS WebDAV PUT + URL attach.
 async function postPhoto(
   entry: UploadEntry,
   blob: Blob,
 ): Promise<{ id: number; url: string }> {
+  if (useAdapterUpload()) {
+    return postPhotoViaAdapter(entry, blob);
+  }
+
   const baseUrl = getClientNasProxyBase() || nasUploadConfig?.baseUrl || getNasBaseUrl();
   if (!baseUrl) {
     throw new Error('NAS not configured — set the NAS address in Admin → Receiving Photos.');

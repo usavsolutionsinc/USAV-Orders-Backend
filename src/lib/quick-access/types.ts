@@ -16,6 +16,8 @@ export interface ActionToggles {
   installDesktopApp?: boolean;
   /** Show "Switch staff" in the popover action list. Default true. */
   switchStaff?: boolean;
+  /** Show "Log warranty claim" quick-action row (shown only for warranty.manage holders). */
+  warrantyCheckin?: boolean;
 }
 
 export interface PinnedPage {

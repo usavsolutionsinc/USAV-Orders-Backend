@@ -39,9 +39,13 @@ export interface WorkflowStageMeta {
 /**
  * Phase-grouped dot palette:
  *   • Receiving  → blue family   (sky → blue → indigo as it advances)
- *   • Testing    → amber/violet  (awaiting → in-test)
- *   • Success    → emerald       (passed → done, light → dark)
+ *   • Testing    → amber/violet/teal (awaiting → in-test → passed)
+ *   • Success    → emerald       (done, fully finalized)
  *   • Terminal   → rose/slate/purple for failed / scrap / RTV
+ *
+ * PASSED is teal (not emerald) so "tested/passed" reads visually distinct from
+ * "received/done" (emerald-600) in the rail — both hues are "positive" but
+ * teal ≠ emerald at a glance, which is the signal operators need.
  */
 export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
   EXPECTED: {
@@ -76,7 +80,7 @@ export const WORKFLOW_STAGES: Record<string, WorkflowStageMeta> = {
   },
   PASSED: {
     status: 'PASSED', order: 6, phase: 'TESTING', label: 'Passed',
-    dot: 'bg-emerald-500', badge: 'bg-emerald-100 text-emerald-700',
+    dot: 'bg-teal-500', badge: 'bg-teal-100 text-teal-700',
     description: 'Passed testing — ready to finalize.',
   },
   FAILED: {

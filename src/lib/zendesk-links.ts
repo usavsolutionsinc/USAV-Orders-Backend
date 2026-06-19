@@ -7,6 +7,9 @@
  */
 import pool from '@/lib/db';
 import { getTicket, updateTicket } from './zendesk';
+import { photoContentUrl } from '@/lib/photos/display-url';
+import { listPhotosForEntity } from '@/lib/photos/service';
+import type { PhotoEntityType } from '@/lib/photos/types';
 
 export interface TicketEntityRef {
   type: string;
@@ -151,46 +154,73 @@ export interface EntityPhoto {
 }
 
 /**
- * Fetch Blob photos for an entity. For a RECEIVING_LINE we also include the
- * parent receiving's PO-level photos (entity_type='RECEIVING'), mirroring how
- * the receiving workspace surfaces both line and package shots.
+ * Fetch photos for an entity via photo_entity_links dual-read.
+ * For RECEIVING_LINE, includes parent PO-level photos (not other lines).
  */
-export async function getEntityPhotos(entity: TicketEntityRef): Promise<EntityPhoto[]> {
-  const pairs: Array<[string, number]> = [[entity.type, entity.id]];
+export async function getEntityPhotos(
+  organizationId: string,
+  entity: TicketEntityRef,
+): Promise<EntityPhoto[]> {
+  const byId = new Map<number, EntityPhoto>();
+
+  const addRows = (
+    rows: Awaited<ReturnType<typeof listPhotosForEntity>>,
+  ) => {
+    for (const row of rows) {
+      if (byId.has(row.id)) continue;
+      byId.set(row.id, {
+        id: row.id,
+        url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),
+        caption: row.photoType,
+        takenByStaffId: row.takenByStaffId,
+        createdAt: row.createdAt,
+      });
+    }
+  };
 
   if (entity.type === 'RECEIVING_LINE') {
+    addRows(
+      await listPhotosForEntity({
+        organizationId,
+        entityType: 'RECEIVING_LINE',
+        entityId: entity.id,
+      }),
+    );
     const parent = await pool.query<{ receiving_id: number | null }>(
       `SELECT receiving_id FROM receiving_lines WHERE id = $1 LIMIT 1`,
       [entity.id],
     );
     const receivingId = parent.rows[0]?.receiving_id;
-    if (receivingId != null) pairs.push(['RECEIVING', Number(receivingId)]);
+    if (receivingId != null) {
+      addRows(
+        await listPhotosForEntity({
+          organizationId,
+          entityType: 'RECEIVING',
+          entityId: Number(receivingId),
+        }),
+      );
+    }
+  } else if (entity.type === 'RECEIVING') {
+    addRows(
+      await listPhotosForEntity({
+        organizationId,
+        entityType: 'RECEIVING',
+        entityId: entity.id,
+        receivingId: entity.id,
+      }),
+    );
+  } else {
+    const entityType = entity.type as PhotoEntityType;
+    addRows(
+      await listPhotosForEntity({
+        organizationId,
+        entityType,
+        entityId: entity.id,
+      }),
+    );
   }
 
-  const where = pairs
-    .map((_, i) => `(entity_type = $${i * 2 + 1} AND entity_id = $${i * 2 + 2})`)
-    .join(' OR ');
-  const params = pairs.flat();
-
-  const res = await pool.query<{
-    id: string;
-    url: string;
-    photo_type: string | null;
-    taken_by_staff_id: number | null;
-    created_at: string;
-  }>(
-    `SELECT id, url, photo_type, taken_by_staff_id, created_at
-       FROM photos
-      WHERE ${where}
-      ORDER BY created_at DESC`,
-    params,
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
-
-  return res.rows.map((r) => ({
-    id: Number(r.id),
-    url: r.url,
-    caption: r.photo_type,
-    takenByStaffId: r.taken_by_staff_id,
-    createdAt: r.created_at,
-  }));
 }

@@ -1,19 +1,47 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
 import StationPacking from '@/components/station/StationPacking';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useAuth } from '@/contexts/AuthContext';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { useActiveStaffDirectory } from './hooks';
 
+/** Pack modes the operator can switch between at the top of the sidebar. */
+type PackMode = 'standard' | 'fragile' | 'multi';
+
+const PACK_MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'fragile',  label: 'Fragile' },
+  { id: 'multi',    label: 'Multi-Item' },
+];
+
 export function PackerSidebarPanel() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [history, setHistory] = useState<any[]>([]);
   const [dailyGoal, setDailyGoal] = useState(50);
   const { user } = useAuth();
   const staffIdNum = user?.staffId ?? 0;
   const packerId = String(staffIdNum);
   const staffDirectory = useActiveStaffDirectory();
+
+  // Pack mode — persisted via ?packMode= URL param so refresh/sharing preserves it.
+  const rawMode = searchParams.get('packMode') ?? 'standard';
+  const packMode: PackMode = rawMode === 'fragile' ? 'fragile' : rawMode === 'multi' ? 'multi' : 'standard';
+
+  const setPackMode = (next: PackMode) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'standard') params.delete('packMode');
+    else params.set('packMode', next);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
+  };
 
   const packerMember = staffDirectory.find((m) => String(m.id) === packerId);
   const packerName = packerMember?.name || 'Packer';
@@ -61,6 +89,17 @@ export function PackerSidebarPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Mode rail — Standard / Fragile / Multi-Item */}
+      <div className={`shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5`}>
+        <HorizontalButtonSlider
+          items={PACK_MODE_ITEMS}
+          value={packMode}
+          onChange={(id) => setPackMode(id as PackMode)}
+          variant="segmented"
+          aria-label="Pack mode"
+          className="w-full"
+        />
+      </div>
       <div className="flex-1 overflow-hidden">
         <StationPacking
           embedded
@@ -70,6 +109,7 @@ export function PackerSidebarPanel() {
           todayCount={todayCount}
           goal={dailyGoal}
           onComplete={refreshHistory}
+          packMode={packMode}
         />
       </div>
     </div>

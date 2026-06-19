@@ -16,7 +16,7 @@
  * `PACKED_STAGED` dot/pill colors here are re‑used from the outbound meta.
  *
  * Color rule: no two status dots across BOTH models share a hue. The unshipped
- * states claim slate / violet / teal / red; `PACKED_STAGED` is the shared amber;
+ * states claim slate / yellow / teal / red; `PACKED_STAGED` is the shared amber;
  * the outbound states own blue / indigo / emerald / rose / orange / pink.
  *
  * Pure + isomorphic (no React, no DOM, no Date.now): safe on client and server.
@@ -149,7 +149,7 @@ export interface UnshippedStateMeta {
 // meta to keep the two models locked together.
 export const UNSHIPPED_STATE_META: Record<UnshippedState, UnshippedStateMeta> = {
   AWAITING_LABEL: { label: 'Awaiting Label', description: 'Sold — no tracking or label attached yet.',                      pill: 'bg-slate-50 text-slate-600 ring-slate-200',    dot: 'bg-slate-400' },
-  PENDING:        { label: 'Pending',        description: 'Labeled and queued — waiting for test/pack.',                    pill: 'bg-violet-50 text-violet-700 ring-violet-200', dot: 'bg-violet-500' },
+  PENDING:        { label: 'Pending',        description: 'Labeled and queued — waiting for test/pack.',                    pill: 'bg-yellow-50 text-yellow-700 ring-yellow-200', dot: 'bg-yellow-500' },
   TESTED:         { label: 'Tested',         description: 'Passed the tech scan — ready to pack.',                          pill: 'bg-teal-50 text-teal-700 ring-teal-200',       dot: 'bg-teal-500' },
   PACKED_STAGED:  { label: 'Packed · Staged', description: 'Packed and staged at the dock — awaiting scan‑out.',            pill: OUTBOUND_STATE_META.PACKED_STAGED.pill,         dot: OUTBOUND_STATE_META.PACKED_STAGED.dot },
   BLOCKED:        { label: 'Blocked',        description: 'Out of stock / can’t fulfill — needs attention.',                pill: 'bg-red-50 text-red-700 ring-red-200',          dot: 'bg-red-500' },

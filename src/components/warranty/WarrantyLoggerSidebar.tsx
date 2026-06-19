@@ -1,8 +1,7 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { FilterBar } from '@/design-system/components/FilterBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { Plus } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
@@ -42,10 +41,26 @@ export function WarrantyLoggerSidebar({
     expiringSoon,
   });
 
-  const activeFilterCount = (status ? 1 : 0) + (expiringSoon ? 1 : 0);
+  const refinements = useMemo(() => {
+    const out: Array<{ id: string; label: string; onRemove: () => void }> = [];
+    if (expiringSoon) {
+      out.push({
+        id: 'soon',
+        label: `${WARRANTY_EXPIRING_SOON_DAYS} days out`,
+        onRemove: () => setExpiringSoon(false),
+      });
+    }
+    if (status) {
+      out.push({
+        id: 'status',
+        label: WARRANTY_STATUS_LABEL[status],
+        onRemove: () => setStatus(null),
+      });
+    }
+    return out;
+  }, [expiringSoon, setExpiringSoon, setStatus, status]);
 
-  // Popover body: the "30 days out" sort bar pinned on top, status filter below.
-  const renderFilters = () => (
+  const renderFilters = (onClose: () => void) => (
     <div className="space-y-3">
       <div>
         <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Expiry</p>
@@ -81,13 +96,20 @@ export function WarrantyLoggerSidebar({
           ))}
         </div>
       </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-2 w-full rounded-2xl bg-gray-900 py-3 text-sm font-black uppercase tracking-widest text-white"
+      >
+        Done
+      </button>
     </div>
   );
 
   const exportHref = `/api/warranty/reports/export${status ? `?status=${status}` : ''}`;
 
   const actionButtons = (
-    <div className="flex items-stretch gap-2 px-1.5 pt-1.5">
+    <div className="flex items-stretch gap-2 border-t border-gray-100 px-3 py-2">
       <a
         href={exportHref}
         className="inline-flex flex-1 items-center justify-center rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
@@ -115,22 +137,17 @@ export function WarrantyLoggerSidebar({
         placeholder: 'Search claim #, serial, SKU, order, customer…',
         isSearching: isFetching && !isLoading,
       }}
-      headerBelow={
-        <>
-          <div className="px-1.5 pt-1.5">
-            <FilterBar
-              className="w-full"
-              advanced={{
-                fullWidth: true,
-                label: 'Filters',
-                activeCount: activeFilterCount,
-                render: renderFilters,
-              }}
-            />
-          </div>
-          {actionButtons}
-        </>
-      }
+      filter={{
+        label: 'Filters',
+        refinements,
+        activeCount: refinements.length,
+        onClearAll: () => {
+          setStatus(null);
+          setExpiringSoon(false);
+        },
+        renderDropdown: renderFilters,
+      }}
+      footer={actionButtons}
     >
       {error ? (
         <div className="px-1 py-6 text-sm text-rose-600">

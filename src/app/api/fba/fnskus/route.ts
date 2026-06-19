@@ -29,10 +29,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_fnskus.sku),
-             condition     = COALESCE(EXCLUDED.condition, fba_fnskus.condition),
+             condition     = EXCLUDED.condition,
              is_active     = true,
              updated_at    = NOW()
-       WHERE fba_fnskus.organization_id = $6
+       WHERE fba_fnskus.organization_id = $6 OR fba_fnskus.organization_id IS NULL
        RETURNING fnsku, product_title, asin, sku, condition, is_active, created_at`,
       [fnsku, product_title, asin, sku, condition, ctx.organizationId]
     );

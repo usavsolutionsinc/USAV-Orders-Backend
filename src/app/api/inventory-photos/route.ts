@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
+import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
+import { photoContentUrl } from '@/lib/photos/display-url';
 
 /**
  * POST /api/inventory-photos
@@ -58,30 +60,33 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // storage so they aren't lost; the audit linkage is just missing.
     let inserted: { id: number } | null = null;
     if (ledgerId != null) {
-      inserted = await withTenantTransaction(ctx.organizationId, async (client) => {
-        const rows = await client.query<{ id: number }>(
-          `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type, organization_id)
-           VALUES ('BIN_ADJUSTMENT', $1, $2, $3, $4, $5)
-           RETURNING id`,
-          [ledgerId, blob.url, staffId, photoType, ctx.organizationId],
-        );
-        const row = rows.rows[0] ?? null;
+      const attached = await attachPhotoWithLegacyUrl({
+        organizationId: ctx.organizationId,
+        staffId,
+        entityType: 'BIN_ADJUSTMENT',
+        entityId: ledgerId,
+        legacyUrl: blob.url,
+        photoType,
+      });
+      inserted = { id: attached.id };
 
+      inserted = await withTenantTransaction(ctx.organizationId, async (client) => {
         // Best-effort: stamp the photo url into an adjacent inventory_events
         // payload so the audit timeline shows the link without an extra join.
         try {
+          const displayUrl = photoContentUrl(attached.id);
           await client.query(
             `UPDATE inventory_events
              SET payload = COALESCE(payload, '{}'::jsonb) || jsonb_build_object('photo_url', $1::text, 'photo_id', $2::int)
              WHERE stock_ledger_id = $3
                AND organization_id = $4`,
-            [blob.url, row?.id ?? null, ledgerId, ctx.organizationId],
+            [displayUrl, attached.id, ledgerId, ctx.organizationId],
           );
         } catch {
           /* non-fatal */
         }
 
-        return row;
+        return { id: attached.id };
       });
     }
 

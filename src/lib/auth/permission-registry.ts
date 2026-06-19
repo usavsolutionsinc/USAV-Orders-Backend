@@ -136,6 +136,8 @@ export const PERMISSIONS = [
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },
   { id: 'operations.view',          category: 'ops', label: 'View operations' },
+  { id: 'photos.view',              category: 'ops', label: 'View photo library' },
+  { id: 'photos.share',             category: 'ops', label: 'Create photo share links' },
   { id: 'work_orders.view',         category: 'ops', label: 'View work orders' },
   { id: 'work_orders.claim',        category: 'ops', label: 'Claim work order' },
   { id: 'work_orders.complete',     category: 'ops', label: 'Complete work order' },

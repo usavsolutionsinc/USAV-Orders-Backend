@@ -79,7 +79,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             ),
             tenantQuery(
                 orgId,
-                `SELECT id, sku, product_title, image_url, gtin
+                `SELECT id, sku, product_title, image_url, gtin, notes
                    FROM sku_catalog
                   WHERE organization_id = $2
                     AND (
@@ -117,7 +117,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         if (!catalogRow && ecwidRow?.sku_catalog_id) {
             const linked = await tenantQuery(
                 orgId,
-                `SELECT id, sku, product_title, image_url, gtin
+                `SELECT id, sku, product_title, image_url, gtin, notes
                    FROM sku_catalog WHERE id = $1 AND organization_id = $2 LIMIT 1`,
                 [ecwidRow.sku_catalog_id, orgId],
             );
@@ -127,7 +127,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         if (!zohoRow && !ecwidRow && !catalogRow && !stockRow) {
             return NextResponse.json({
                 sku: trimmedSku, title: '', stock: '0', location: '',
-                imageUrl: '', skuCatalogId: null, gtin: null,
+                imageUrl: '', skuCatalogId: null, gtin: null, packNotes: null,
             });
         }
 
@@ -161,6 +161,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                       ''),
             skuCatalogId: catalogRow?.id ?? ecwidRow?.sku_catalog_id ?? null,
             gtin: catalogRow?.gtin || null,
+            packNotes: catalogRow?.notes || null,
         });
     } catch (error: any) {
         console.error('API error', error);

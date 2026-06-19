@@ -9,6 +9,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { withAuth } from '@/lib/auth/withAuth';
 import { fetchPackerLogRows, type PackerLogsTrackingFilter } from '@/lib/neon/packer-logs-week';
+import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
@@ -94,12 +95,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         if (packerLogId && Array.isArray(body.packerPhotosUrl) && body.packerPhotosUrl.length > 0) {
             for (const url of body.packerPhotosUrl) {
                 if (typeof url === 'string' && url.trim()) {
-                    await pool.query(
-                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                        [packerLogId, url, packedBy]
-                    );
+                    await attachPhotoWithLegacyUrl({
+                        organizationId: ctx.organizationId,
+                        staffId: packedBy,
+                        entityType: 'PACKER_LOG',
+                        entityId: packerLogId,
+                        legacyUrl: url,
+                        photoType: 'box_label',
+                        idempotent: true,
+                    });
                 }
             }
         }

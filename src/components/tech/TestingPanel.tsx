@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { Loader2, Printer } from '@/components/Icons';
-import { deriveColorFromTitle, printProductLabel } from '@/lib/print/printProductLabel';
-import { StickyActionBar } from '@/design-system/components/StickyActionBar';
+import { deriveColorFromTitle, resolveTestingLineTitle } from '@/lib/print/printProductLabel';
+import { FloatingButton } from '@/design-system/primitives';
 import { CartonContextCard } from '@/components/receiving/workspace/line-edit/CartonContextCard';
 import { LineEditToolbar } from '@/components/receiving/workspace/line-edit/LineEditToolbar';
 import { PoLinesAccordion } from '@/components/receiving/workspace/PoLinesAccordion';
@@ -22,40 +22,23 @@ import {
   dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
-import {
-  useTestingLineController,
-  TESTING_PRINT_QTY_OPTIONS,
-} from '@/components/tech/hooks/useTestingLineController';
-
-const SECTION = 'rounded-2xl bg-white p-4 ring-1 ring-gray-200/70';
+import { useTestingLineController } from '@/components/tech/hooks/useTestingLineController';
 
 /**
  * Right-pane TESTING display. Anchored on LineEditPanel's composition — the same
  * shared cards (CartonContextCard header, PoLinesAccordion) and the unified
  * mode-driven toolbar — but the active-row slot renders verdict pills instead of
  * condition, and the terminal action is Pass + Print instead of Print · receive.
- * Receives a non-null `row` from TestingLineWorkspace; all logic lives in
- * useTestingLineController (which composes the shared useReceivingLineCore).
  */
 export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId: string }) {
-  // Display title always comes from the Zoho SKU's own title (items.name, the
-  // canonical SoT) — NOT the PO line's listing-style item_name. Fall back to the
-  // marketplace catalog title, then item_name, only when there's no Zoho item.
-  const rowTitle =
-    (row.zoho_item_title ?? '').trim() ||
-    (row.catalog_product_title ?? '').trim() ||
-    (row.item_name ?? '').trim();
-  // Label-face overrides set from the Edit-label popover. Color prefills from the
-  // SKU title (manual + title-derived, per the v1 plan); title can be shortened.
+  const rowTitle = resolveTestingLineTitle(row);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
   const labelColor = (colorOverride ?? deriveColorFromTitle(rowTitle)).trim();
   const productTitle = titleOverride ?? rowTitle;
   const c = useTestingLineController(row, staffId, { labelColor });
   const {
-    // toolbar / sync
     saving, copyingAll, handleCopyAll, setAuditOpen,
-    // carton identity (from core)
     listingLink, setListingLink, listingEditorOpen, setListingEditorOpen, listingOpenHref,
     poOpenHref, trackingOpenHref, poNumber,
     poEditorOpen, setPoEditorOpen, poNumberEdit, setPoNumberEdit, persistPoNumber,
@@ -65,13 +48,11 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
     sourcePlatform, setSourcePlatform, savePlatform,
     receivingType, setReceivingType, saveType,
     priorityTier, handlePrioritySelect, patch,
-    // testing
     notes, setNotes, serialSubmitting, headerSerialEdit, setHeaderSerialEdit, isMutating,
-    activeSlot, activeSerial, activeAllocation, previewPayload, printQty, setPrintQty, isPrinting,
+    activeSlot, activeSerial, activeAllocation, previewPayload, isPrinting,
     activeSlotByLine, setActiveSlotByLine,
     handleSlotVerdict, applyLineVerdict, deriveLineVerdict,
-    enqueueSerial, deleteSerial, replaceSerial, setLineNeedsTest, handlePrimary,
-    // modals
+    enqueueSerial, deleteSerial, replaceSerial, handlePrimary, handleApplyAndPrint,
     auditOpen, claimOpen, setClaimOpen, pairOpen, setPairOpen,
   } = c;
 
@@ -90,14 +71,38 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
           ? 'Pick a testing verdict for this unit first'
           : activeVerdict !== 'PASS'
             ? 'Only Pass produces a label — Test Again re-queues; Testing Failed opens claim'
-            : `Print ${printQty}× tested-OK label${printQty === 1 ? '' : 's'} for this unit`;
+            : 'Print one tested-OK label for this unit (Enter)';
   const primaryLabel = isPrinting
-    ? `Printing ${printQty}×…`
+    ? 'Printing…'
     : !hasSku
       ? 'Pass · No SKU'
       : !hasActiveSerial
         ? 'Pass · No Serial'
-        : `Pass · Print ${printQty}× Label${printQty === 1 ? '' : 's'}`;
+        : 'Pass · Print Label';
+
+  const confirmDeleteSerial = (serialNumber: string) =>
+    window.confirm(`Remove serial ${serialNumber}?`);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.defaultPrevented) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (primaryDisabled || isPrinting) return;
+      event.preventDefault();
+      void handlePrimary();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [primaryDisabled, isPrinting, handlePrimary]);
 
   return (
     <>
@@ -177,8 +182,6 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
             onPrioritySelect={(tier) => void handlePrioritySelect(tier)}
           />
 
-          {/* PO Items — verdict pills + serial scan per unit. Same accordion as
-              receiving; only the active-row slot differs (verdict vs condition). */}
           {row.receiving_id != null ? (
             row.receiving_source === 'unmatched' ? (
               <UnmatchedItemsSection
@@ -201,7 +204,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
                       onAddSerial={(sn) => enqueueSerial(line.id, sn)}
                       onDeleteSerial={(s) => {
                         if (s.id == null) return;
-                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                        if (!confirmDeleteSerial(s.serial_number)) return;
                         void deleteSerial(line.id, s.id);
                       }}
                       onReplaceSerial={(original, next) => void replaceSerial(line.id, original, next)}
@@ -219,7 +222,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
                   onEdit: (s) => setHeaderSerialEdit(s as UnitSlotSerial),
                   onDelete: (s, lineId) => {
                     if (s.id == null) return;
-                    if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                    if (!confirmDeleteSerial(s.serial_number)) return;
                     if (headerSerialEdit?.id === s.id) setHeaderSerialEdit(null);
                     void deleteSerial(lineId, s.id);
                   },
@@ -246,7 +249,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
                       onAddSerial={(sn) => enqueueSerial(row.id, sn)}
                       onDeleteSerial={(s) => {
                         if (s.id == null) return;
-                        if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+                        if (!confirmDeleteSerial(s.serial_number)) return;
                         void deleteSerial(row.id, s.id);
                       }}
                       onReplaceSerial={(original, next) => void replaceSerial(row.id, original, next)}
@@ -257,7 +260,6 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
             )
           ) : null}
 
-          {/* SKU testing panel — checklist edit + manuals. */}
           {row.sku ? (
             <SkuTestingPanel
               receivingLineId={row.id}
@@ -267,23 +269,6 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
             />
           ) : null}
 
-          {/* Needs-test toggle (per-line). Priority is the urgency pill in the
-              header now (shared with unbox), so it's no longer duplicated here. */}
-          {row.receiving_id ? (
-            <section className={SECTION}>
-              <label className="flex cursor-pointer items-center gap-2 text-caption font-bold text-gray-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-blue-600"
-                  checked={row.needs_test !== false}
-                  onChange={(e) => setLineNeedsTest(e.target.checked)}
-                />
-                Needs test <span className="font-medium text-gray-400">(this item)</span>
-              </label>
-            </section>
-          ) : null}
-
-          {/* Notes (per-line) — same shared card the unbox panel uses. */}
           <LineNotesCard
             value={notes}
             onChange={setNotes}
@@ -307,14 +292,10 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
                 if ((draft.condition || '') !== (row.condition_grade || '')) {
                   patch({ condition_grade: draft.condition });
                 }
-                printProductLabel({
-                  sku: activeAllocation?.unitId || row.sku || '',
+                void handleApplyAndPrint({
                   title: draft.title,
-                  serialNumber: activeSerial?.serial_number,
-                  gtin: activeAllocation?.gtin ?? undefined,
-                  qrPayload: activeAllocation?.qrUrl ?? undefined,
-                  condition: draft.condition,
                   color: draft.color,
+                  condition: draft.condition,
                 });
               }}
             />
@@ -322,26 +303,16 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
         </div>
       </div>
 
-      <StickyActionBar
-        floating
-        primary={{
-          label: primaryLabel,
-          onClick: () => void handlePrimary(),
-          disabled: primaryDisabled,
-          isLoading: isPrinting,
-          icon: isPrinting ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Printer className="h-4 w-4 shrink-0" />,
-          toneClasses: { bg: 'bg-emerald-600', hover: 'hover:bg-emerald-700' },
-          tone: 'emerald',
-          menuLabel: 'Pick print quantity',
-          menuTitle: 'Print quantity',
-          menu: TESTING_PRINT_QTY_OPTIONS.map((qty) => ({
-            label: `Print ${qty}× label${qty === 1 ? '' : 's'}`,
-            icon: <Printer className="h-3.5 w-3.5 shrink-0" />,
-            onClick: () => setPrintQty(qty),
-            title: printQty === qty ? 'Currently selected' : `Set quantity to ${qty}`,
-          })),
-              title: primaryTitle,
-        }}
+      <FloatingButton
+        label={primaryLabel}
+        onClick={() => void handlePrimary()}
+        disabled={primaryDisabled}
+        loading={isPrinting}
+        title={primaryTitle}
+        icon={<Printer className="h-4 w-4 shrink-0" />}
+        tone="emerald"
+        maxWidth="max-w-[45rem]"
+        fullWidth
       />
     </div>
 

@@ -3,19 +3,19 @@
 import React, { useEffect, useState } from 'react';
 import { getActiveStaff } from '@/lib/staffCache';
 import { staffHasRole } from '@/utils/staff';
-import { ChevronLeft, Loader2, X, Check } from '../Icons';
+import { ChevronLeft, Wrench, X, Check } from '../Icons';
 import { ProductSelector, type SelectedItem } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
-import { CustomerInfoForm } from './CustomerInfoForm';
+import { CustomerInfoForm, CONTACT_FIELDS, type ContactFieldKey } from './CustomerInfoForm';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import RepairServiceForm from './RepairServiceForm';
-import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
-import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 import {
-    SidebarIntakeFormField,
-    getSidebarIntakeInputClass,
-    getSidebarIntakeSubmitButtonClass,
-} from '@/design-system/components';
+    RepairIntakeStepper,
+    type RepairIntakeStepKey,
+} from './RepairIntakeStepper';
+import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
+import { TextField, FloatingButton } from '@/design-system/primitives';
+import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 
 interface RepairIntakeFormProps {
     onClose: () => void;
@@ -59,13 +59,24 @@ interface ExistingCustomer {
     updated_at: string | null;
 }
 
-type FormStep = 'product' | 'customer' | 'agreement';
+const REPAIR_INTAKE_MAX_WIDTH = 'max-w-[720px]';
+const REPAIR_INTAKE_COLUMN_CLASS = `mx-auto w-full ${REPAIR_INTAKE_MAX_WIDTH}`;
 
-const STEPS: { key: FormStep; label: string }[] = [
-    { key: 'product', label: 'Product & Issue' },
-    { key: 'customer', label: 'Customer Info' },
-    { key: 'agreement', label: 'Review & Sign' },
-];
+function isContactFieldValid(field: ContactFieldKey, data: RepairFormData): boolean {
+    switch (field) {
+        case 'name':
+            return !!data.customer.name.trim();
+        case 'phone':
+            return !!data.customer.phone.trim();
+        case 'email':
+        case 'notes':
+            return true;
+        case 'serial':
+            return !!data.serialNumber.trim();
+        case 'price':
+            return !!data.price.trim();
+    }
+}
 
 function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairFormData {
     return {
@@ -92,30 +103,12 @@ function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairForm
 }
 
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
-    const [currentStep, setCurrentStep] = useState<FormStep>('product');
+    const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState<RepairFormData>(() => buildInitialFormData(initialData));
     const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
-
-    const totalPrice = selectedItems.reduce((sum, i) => sum + (i.price ?? 0), 0);
-
-    const handleSelectedItemsChange = (items: SelectedItem[]) => {
-        setSelectedItems(items);
-        const model = items.map((i) => i.name).join(', ');
-        const sku = items.map((i) => String(i.sku || '').trim()).find(Boolean) || null;
-        const price = items.reduce((sum, i) => sum + (i.price ?? 0), 0);
-        setFormData(prev => ({
-            ...prev,
-            product: { type: items.length > 0 ? 'Bose Repair Service' : '', model, sourceSku: sku },
-            price: price > 0 ? price.toFixed(2) : prev.price,
-        }));
-    };
-
-    const removeSelectedItem = (id: string) => {
-        handleSelectedItemsChange(selectedItems.filter(i => i.id !== id));
-    };
 
     const [techs, setTechs] = useState<TechStaff[]>([]);
     const [loadingTechs, setLoadingTechs] = useState(true);
@@ -126,32 +119,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const [loadingCustomers, setLoadingCustomers] = useState(false);
     const [customerSearchError, setCustomerSearchError] = useState('');
     const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
-
-    const orangeSubmitButtonClass = getSidebarIntakeSubmitButtonClass('orange');
-    const orangeInputClass = getSidebarIntakeInputClass('orange');
-
-    const stepAccent = currentStep === 'product'
-        ? {
-            label: 'text-sky-600',
-            counter: 'text-sky-500',
-            progress: 'bg-gradient-to-r from-sky-500 to-cyan-400',
-            continueBtn: 'w-full px-4 py-3 disabled:bg-gray-300 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 shadow-sky-500/20',
-        }
-        : currentStep === 'customer'
-        ? {
-            label: 'text-indigo-600',
-            counter: 'text-indigo-500',
-            progress: 'bg-gradient-to-r from-indigo-500 to-violet-400',
-            continueBtn: 'w-full px-4 py-3 disabled:bg-gray-300 text-white rounded-xl transition-all text-xs font-black uppercase tracking-wide disabled:cursor-not-allowed shadow-lg bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-indigo-500/20',
-        }
-        : {
-            label: 'text-orange-500',
-            counter: 'text-orange-500',
-            progress: 'bg-gradient-to-r from-orange-500 to-amber-400',
-            continueBtn: orangeSubmitButtonClass,
-        };
-
-    /* ── Data fetching ── */
+    const [contactFieldIndex, setContactFieldIndex] = useState(0);
 
     useEffect(() => {
         let active = true;
@@ -185,7 +153,17 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     }, [initialData]);
 
     useEffect(() => {
-        if (currentStep !== 'customer' || customerMode !== 'existing') return;
+        if (currentStep !== 'contact') {
+            setContactFieldIndex(0);
+        }
+    }, [currentStep]);
+
+    useEffect(() => {
+        setContactFieldIndex(0);
+    }, [customerMode]);
+
+    useEffect(() => {
+        if (currentStep !== 'contact' || customerMode !== 'existing') return;
 
         let active = true;
         const controller = new AbortController();
@@ -204,10 +182,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                 if (!active) return;
                 const rows = Array.isArray(payload?.customers) ? payload.customers : [];
                 setCustomerResults(rows);
-            } catch (error: any) {
+            } catch (error: unknown) {
                 if (!active || controller.signal.aborted) return;
                 setCustomerResults([]);
-                setCustomerSearchError(String(error?.message || 'Failed to fetch customers'));
+                setCustomerSearchError(error instanceof Error ? error.message : 'Failed to fetch customers');
             } finally {
                 if (active) setLoadingCustomers(false);
             }
@@ -220,20 +198,20 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         };
     }, [currentStep, customerMode, customerQuery]);
 
-    /* ── Derived state ── */
-
     const productSelected = !!(formData.product.type && formData.product.model);
 
-    const canProceedFromProduct =
-        productSelected &&
-        (formData.repairReasons.length > 0 || formData.repairNotes.trim().length > 0);
+    const canProceedFromProduct = productSelected;
 
-    const canProceedFromCustomer =
-        !!(formData.customer.name && formData.customer.phone && formData.serialNumber && formData.price);
+    const canProceedFromIssue =
+        formData.repairReasons.length > 0 || formData.repairNotes.trim().length > 0;
 
-    const canSubmit = canProceedFromCustomer && !!signatureData;
+    const activeContactField = CONTACT_FIELDS[contactFieldIndex] ?? CONTACT_FIELDS[0];
+    const isExistingSearch = currentStep === 'contact' && customerMode === 'existing';
+    const canProceedFromContactField = isContactFieldValid(activeContactField, formData);
+    const canProceedFromContact = CONTACT_FIELDS.every((field) => isContactFieldValid(field, formData));
+    const isLastContactField = contactFieldIndex >= CONTACT_FIELDS.length - 1;
 
-    const currentStepIndex = STEPS.findIndex(s => s.key === currentStep);
+    const canSubmit = canProceedFromContact && !!signatureData;
 
     const issueText =
         [...formData.repairReasons, formData.repairNotes ? formData.repairNotes : null]
@@ -254,7 +232,17 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         return phone;
     };
 
-    /* ── Handlers ── */
+    const handleSelectedItemsChange = (items: SelectedItem[]) => {
+        setSelectedItems(items);
+        const model = items.map((i) => i.name).join(', ');
+        const sku = items.map((i) => String(i.sku || '').trim()).find(Boolean) || null;
+        const price = items.reduce((sum, i) => sum + (i.price ?? 0), 0);
+        setFormData(prev => ({
+            ...prev,
+            product: { type: items.length > 0 ? 'Bose Repair Service' : '', model, sourceSku: sku },
+            price: price > 0 ? price.toFixed(2) : prev.price,
+        }));
+    };
 
     const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
         const syntheticItem: SelectedItem = {
@@ -269,21 +257,55 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             ...prev,
             repairNotes: notes,
         }));
-        // Auto-advance to customer step
-        setCurrentStep('customer');
+        setCurrentStep('issue');
     };
 
     const handleNext = () => {
         if (currentStep === 'product' && canProceedFromProduct) {
-            setCurrentStep('customer');
-        } else if (currentStep === 'customer' && canProceedFromCustomer) {
-            setCurrentStep('agreement');
+            setCurrentStep('issue');
+        } else if (currentStep === 'issue' && canProceedFromIssue) {
+            setCurrentStep('contact');
+        } else if (currentStep === 'contact') {
+            if (isExistingSearch) return;
+            if (!isLastContactField) {
+                setContactFieldIndex((prev) => prev + 1);
+            } else if (canProceedFromContact) {
+                setCurrentStep('review');
+            }
         }
     };
 
     const handleBack = () => {
-        if (currentStep === 'customer') setCurrentStep('product');
-        else if (currentStep === 'agreement') setCurrentStep('customer');
+        if (currentStep === 'issue') setCurrentStep('product');
+        else if (currentStep === 'contact') {
+            if (contactFieldIndex > 0) {
+                setContactFieldIndex((prev) => prev - 1);
+            } else {
+                setCurrentStep('issue');
+            }
+        } else if (currentStep === 'review') {
+            setContactFieldIndex(CONTACT_FIELDS.length - 1);
+            setCurrentStep('contact');
+        }
+    };
+
+    const handleStepClick = (key: RepairIntakeStepKey) => {
+        if (key === 'product') {
+            setCurrentStep('product');
+            return;
+        }
+        if (key === 'issue' && canProceedFromProduct) {
+            setCurrentStep('issue');
+            return;
+        }
+        if (key === 'contact' && canProceedFromProduct && canProceedFromIssue) {
+            setContactFieldIndex(0);
+            setCurrentStep('contact');
+            return;
+        }
+        if (key === 'review' && canProceedFromContact) {
+            setCurrentStep('review');
+        }
     };
 
     const handleSubmit = async () => {
@@ -308,6 +330,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const applyExistingCustomer = (customer: ExistingCustomer) => {
         setSelectedCustomerId(customer.id);
         setCustomerMode('new');
+        setContactFieldIndex(0);
         setFormData((prev) => ({
             ...prev,
             customer: {
@@ -318,14 +341,6 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         }));
     };
 
-    const formatUpdatedAt = (value: string | null) => {
-        if (!value) return '—';
-        const date = new Date(value);
-        if (Number.isNaN(date.getTime())) return '—';
-        return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-    };
-
-    /* ── Paper receipt props (shared by steps 2 & 3) ── */
     const receiptProps = {
         repairServiceId: '—',
         ticketNumber: '',
@@ -341,138 +356,210 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         startDateTime: today,
     };
 
-    /* ── Render ── */
+    const stepTitle =
+        currentStep === 'product'
+            ? 'Select repair service'
+            : currentStep === 'issue'
+                ? 'Issue / reason for repair'
+                : currentStep === 'contact'
+                    ? 'Contact information'
+                    : 'Review & sign';
+
+    const stepSubtitle =
+        currentStep === 'product'
+            ? 'Choose the product or pick a common repair.'
+            : currentStep === 'issue'
+                ? 'Describe what needs to be repaired.'
+                : currentStep === 'contact'
+                    ? 'Enter customer details for the repair ticket.'
+                    : 'Confirm all details with the customer before submitting.';
+
+    const isReviewStep = currentStep === 'review';
+
+    const primaryDisabled = isReviewStep
+        ? !canSubmit || isSubmitting
+        : currentStep === 'product'
+            ? !canProceedFromProduct
+            : currentStep === 'issue'
+                ? !canProceedFromIssue
+                : isExistingSearch
+                    ? true
+                    : !canProceedFromContactField;
+
+    const primaryLabel = isReviewStep
+        ? isSubmitting
+            ? 'Submitting…'
+            : 'Submit repair'
+        : 'Continue';
+
+    const primaryTitle = isReviewStep && !signatureData
+        ? 'Signature required to submit'
+        : primaryDisabled
+            ? 'Complete the required fields to continue'
+            : undefined;
 
     return (
-        <div className="flex h-full w-full bg-gray-100">
+        <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
+            {/* Header — title row + stepper aligned to the 720px content column */}
+            <header className="shrink-0 border-b border-gray-100">
+                <div className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-3`}>
+                    <div className="relative flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
+                            {currentStep !== 'product' ? (
+                                <button
+                                    type="button"
+                                    onClick={handleBack}
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-gray-900 hover:text-gray-900"
+                                    aria-label="Go back"
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                            ) : (
+                                <div
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-900"
+                                    aria-hidden
+                                >
+                                    <Wrench className="h-4 w-4" />
+                                </div>
+                            )}
+                            <div className="min-w-0">
+                                <h1 className="truncate text-xs font-black uppercase tracking-[0.12em] text-gray-900 sm:text-sm">
+                                    Repair Intake
+                                </h1>
+                                <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-[0.16em] text-gray-400 sm:text-[10px]">
+                                    {stepTitle}
+                                </p>
+                            </div>
+                        </div>
 
-            {/* ════════════════════════════════════════════════
-                LEFT SIDEBAR (360px) — Form Inputs
-               ════════════════════════════════════════════════ */}
-            <aside className="flex w-[360px] shrink-0 flex-col border-r border-gray-200 bg-white">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-                    <div>
-                        <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
-                            Repair Intake
-                        </h2>
-                        <p className={`mt-0.5 text-eyebrow font-black uppercase tracking-widest ${stepAccent.label}`}>
-                            {STEPS[currentStepIndex].label}
-                        </p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-
-                {/* Progress bar + step indicator */}
-                <div className="border-b border-gray-100 px-5 py-3 space-y-2">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-                        <div
-                            className={`h-full rounded-full ${stepAccent.progress} transition-all duration-500 ease-out`}
-                            style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }}
-                        />
-                    </div>
-                    <div className="flex items-center justify-between">
                         <button
                             type="button"
-                            onClick={handleBack}
-                            disabled={currentStep === 'product'}
-                            className="flex items-center gap-1 text-micro font-black text-gray-500 transition-colors hover:text-gray-900 disabled:invisible"
+                            onClick={onClose}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
+                            aria-label="Close"
                         >
-                            <ChevronLeft className="h-3.5 w-3.5" />
-                            Back
+                            <X className="h-4 w-4" />
                         </button>
-                        <span className={`text-micro font-black ${stepAccent.counter}`}>
-                            {currentStepIndex + 1}/{STEPS.length}
-                        </span>
+                    </div>
+
+                    <div className="mt-4">
+                        <RepairIntakeStepper
+                            spread
+                            currentStep={currentStep}
+                            onStepClick={handleStepClick}
+                            canNavigateTo={(key) => {
+                                if (key === 'product') return true;
+                                if (key === 'issue') return canProceedFromProduct;
+                                if (key === 'contact') return canProceedFromProduct && canProceedFromIssue;
+                                return canProceedFromContact;
+                            }}
+                        />
                     </div>
                 </div>
+            </header>
 
-                {/* Step-specific sidebar content */}
-                <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-hide">
+            {/* Step body — single centered column, no sidebar split */}
+            <main className="min-h-0 flex-1 overflow-y-auto pb-28">
+                <div className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-8`}>
+                    <p className="mb-8 text-center text-sm leading-relaxed text-gray-500">
+                        {stepSubtitle}
+                    </p>
 
-                    {/* ── STEP 1: Reasons + Tech ── */}
                     {currentStep === 'product' && (
-                        <div className="space-y-4">
-                            <div className={`transition-all duration-300 origin-top ${
-                                productSelected
-                                    ? 'opacity-100 translate-y-0'
-                                    : 'opacity-0 -translate-y-2 pointer-events-none h-0 overflow-hidden'
-                            }`}>
-                                {productSelected && (
-                                    <div className="space-y-4">
-                                        <ReasonSelector
-                                            selectedReasons={formData.repairReasons}
-                                            notes={formData.repairNotes}
-                                            onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
-                                            onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
-                                            skuIssues={skuIssues}
-                                        />
-
-                                        <SidebarIntakeFormField label="Assign Technician" optionalHint="(Optional)">
-                                            <select
-                                                value={formData.assignedTechId ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (!val) {
-                                                        setFormData(prev => ({ ...prev, assignedTechId: null, assignedTechName: '' }));
-                                                        return;
-                                                    }
-                                                    const tech = techs.find(t => t.id === Number(val));
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        assignedTechId: Number(val),
-                                                        assignedTechName: tech?.name ?? '',
-                                                    }));
-                                                }}
-                                                disabled={loadingTechs}
-                                                className={orangeInputClass}
-                                            >
-                                                <option value="">-- Unassigned --</option>
-                                                {techs.map(tech => (
-                                                    <option key={tech.id} value={tech.id}>{tech.name}</option>
-                                                ))}
-                                            </select>
-                                        </SidebarIntakeFormField>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Favorites — always visible */}
+                        <div className="space-y-8">
                             <FavoritesWorkspaceSection
+                                variant="quick-pick"
                                 workspaceKey="repair"
                                 accent="blue"
                                 title="Common Repairs"
                                 description=""
                                 emptyLabel="No repair favorites yet"
-                                useLabel="Use"
+                                useLabel="Start repair"
                                 allowRepairDefaults
-                                inlineRows
-                                buttonAccent="blue"
                                 onUseFavorite={handleUseFavorite}
                                 searchSkuSuffixFilter="-RS"
                                 fuzzyTitleSearch
-                                searchResultsMaxHeightClass="max-h-48"
                             />
+
+                            <div className="rounded-2xl border border-gray-200 p-4">
+                                <ProductSelector
+                                    onSelect={(product) => setFormData(prev => ({ ...prev, product }))}
+                                    selectedProduct={formData.product.type ? formData.product : null}
+                                    onPriceChange={(price) => setFormData(prev => ({ ...prev, price }))}
+                                    fillHeight
+                                    selectedItems={selectedItems}
+                                    onSelectedItemsChange={handleSelectedItemsChange}
+                                />
+                            </div>
                         </div>
                     )}
 
-                    {/* ── STEP 2: Customer form inputs ── */}
-                    {currentStep === 'customer' && (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-1.5">
+                    {currentStep === 'issue' && (
+                        <div className="w-full space-y-6">
+                            {productSelected && (
+                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">
+                                        Selected product
+                                    </p>
+                                    <p className="mt-1 text-sm font-bold text-gray-900">{formData.product.model}</p>
+                                </div>
+                            )}
+
+                            <div className="rounded-2xl border border-gray-200 p-5">
+                                <ReasonSelector
+                                    selectedReasons={formData.repairReasons}
+                                    notes={formData.repairNotes}
+                                    onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
+                                    onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
+                                    skuIssues={skuIssues}
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    htmlFor="repair-tech-select"
+                                    className="mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-gray-500"
+                                >
+                                    Assign technician <span className="font-bold text-gray-300">(optional)</span>
+                                </label>
+                                <select
+                                    id="repair-tech-select"
+                                    value={formData.assignedTechId ?? ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (!val) {
+                                            setFormData(prev => ({ ...prev, assignedTechId: null, assignedTechName: '' }));
+                                            return;
+                                        }
+                                        const tech = techs.find(t => t.id === Number(val));
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            assignedTechId: Number(val),
+                                            assignedTechName: tech?.name ?? '',
+                                        }));
+                                    }}
+                                    disabled={loadingTechs}
+                                    className="h-11 w-full rounded-xl border border-gray-200 bg-white px-3.5 text-sm font-semibold text-gray-900 outline-none transition-all focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:opacity-50"
+                                >
+                                    <option value="">Unassigned</option>
+                                    {techs.map(tech => (
+                                        <option key={tech.id} value={tech.id}>{tech.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {currentStep === 'contact' && (
+                        <div className="w-full space-y-6">
+                            <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1">
                                 <button
                                     type="button"
                                     onClick={() => setCustomerMode('existing')}
-                                    className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
+                                    className={`rounded-lg py-2.5 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
                                         customerMode === 'existing'
-                                            ? 'bg-indigo-600 text-white shadow-sm'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            ? 'bg-gray-900 text-white'
+                                            : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
                                     Existing
@@ -480,10 +567,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 <button
                                     type="button"
                                     onClick={() => setCustomerMode('new')}
-                                    className={`rounded-lg px-2 py-2 text-eyebrow font-black uppercase tracking-wide transition-colors ${
+                                    className={`rounded-lg py-2.5 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
                                         customerMode === 'new'
-                                            ? 'bg-indigo-600 text-white shadow-sm'
-                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                            ? 'bg-gray-900 text-white'
+                                            : 'text-gray-500 hover:text-gray-900'
                                     }`}
                                 >
                                     New
@@ -491,44 +578,43 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             </div>
 
                             {customerMode === 'existing' && (
-                                <div className="space-y-2">
-                                    <input
-                                        type="text"
+                                <div className="space-y-3">
+                                    <TextField
+                                        label="Search customer"
                                         value={customerQuery}
-                                        onChange={(e) => setCustomerQuery(e.target.value)}
-                                        placeholder="Search by name, phone, or email..."
-                                        className={orangeInputClass}
+                                        onChange={setCustomerQuery}
+                                        tone="neutral"
                                     />
-                                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                        <div className="grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-mini font-black uppercase tracking-wider text-slate-600">
+                                    <div className="overflow-hidden rounded-xl border border-gray-200">
+                                        <div className="grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.12em] text-gray-500">
                                             <span>Name</span>
                                             <span>Phone</span>
                                             <span className="text-right">Action</span>
                                         </div>
-                                        <div className="max-h-36 overflow-y-auto">
+                                        <div className="max-h-40 overflow-y-auto">
                                             {loadingCustomers && (
-                                                <div className="px-3 py-3 text-micro font-bold text-gray-500">Loading...</div>
+                                                <div className="px-3 py-3 text-xs font-semibold text-gray-400">Loading…</div>
                                             )}
                                             {!loadingCustomers && customerSearchError && (
-                                                <div className="px-3 py-3 text-micro font-bold text-red-600">{customerSearchError}</div>
+                                                <div className="px-3 py-3 text-xs font-semibold text-red-600">{customerSearchError}</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.length === 0 && (
-                                                <div className="px-3 py-3 text-micro font-bold text-gray-500">No customers found.</div>
+                                                <div className="px-3 py-3 text-xs font-semibold text-gray-400">No customers found.</div>
                                             )}
                                             {!loadingCustomers && !customerSearchError && customerResults.map((customer) => (
                                                 <div
                                                     key={customer.id}
-                                                    className={`grid grid-cols-[1fr_1fr_0.6fr] gap-2 border-b border-gray-100 px-3 py-2 text-micro text-gray-700 ${
-                                                        selectedCustomerId === customer.id ? 'bg-indigo-50' : 'bg-white'
+                                                    className={`grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-50 px-3 py-2.5 text-xs ${
+                                                        selectedCustomerId === customer.id ? 'bg-gray-50' : 'bg-white'
                                                     }`}
                                                 >
                                                     <span className="truncate font-bold text-gray-900">{customer.name}</span>
-                                                    <span className="truncate">{customer.phone || '—'}</span>
+                                                    <span className="truncate text-gray-600">{customer.phone || '—'}</span>
                                                     <div className="text-right">
                                                         <button
                                                             type="button"
                                                             onClick={() => applyExistingCustomer(customer)}
-                                                            className="rounded-md bg-orange-600 px-2 py-1 text-mini font-black uppercase tracking-wide text-white hover:bg-orange-700 transition-colors"
+                                                            className="rounded-lg bg-gray-900 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-white hover:bg-black"
                                                         >
                                                             Select
                                                         </button>
@@ -540,204 +626,72 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 </div>
                             )}
 
-                            <CustomerInfoForm
-                                customer={formData.customer}
-                                serialNumber={formData.serialNumber}
-                                price={formData.price}
-                                notes={formData.notes}
-                                onCustomerChange={updateCustomer}
-                                onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
-                                onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
-                                onNotesChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
-                                tone="orange"
-                            />
-                        </div>
-                    )}
-
-                    {/* ── STEP 3: Agreement text ── */}
-                    {currentStep === 'agreement' && (
-                        <div className="space-y-4">
-                            <div className="space-y-2 text-caption text-gray-700 leading-relaxed border-l-4 border-orange-600 pl-4">
-                                <p>
-                                    Your Bose product has been received into our repair center. Under normal circumstances it will
-                                    be repaired within the next <span className="font-black text-gray-900">3-10 working days</span> and returned to you.
-                                </p>
-                                <p className="font-black text-gray-900 uppercase tracking-wide text-micro">
-                                    30-Day Warranty on all repair services.
-                                </p>
-                            </div>
-
-                            <p className="text-micro text-gray-500 italic leading-relaxed bg-gray-50 p-3 border border-gray-200 rounded-xl">
-                                By signing below, I consent to conduct this transaction electronically
-                                and agree to the listed repair price, terms, and any unexpected delays in the repair process.
-                            </p>
-
-                            {signatureData && (
-                                <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
-                                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500">
-                                        <Check className="h-2.5 w-2.5 text-white" />
-                                    </div>
-                                    <span className="text-eyebrow font-black uppercase tracking-wide text-green-600">
-                                        Signature captured
-                                    </span>
-                                </div>
+                            {!isExistingSearch && (
+                                <CustomerInfoForm
+                                    customer={formData.customer}
+                                    serialNumber={formData.serialNumber}
+                                    price={formData.price}
+                                    notes={formData.notes}
+                                    activeField={activeContactField}
+                                    fieldIndex={contactFieldIndex}
+                                    fieldCount={CONTACT_FIELDS.length}
+                                    onCustomerChange={updateCustomer}
+                                    onSerialNumberChange={(value) => setFormData(prev => ({ ...prev, serialNumber: value }))}
+                                    onPriceChange={(value) => setFormData(prev => ({ ...prev, price: value }))}
+                                    onNotesChange={(value) => setFormData(prev => ({ ...prev, notes: value }))}
+                                />
                             )}
                         </div>
                     )}
-                </div>
 
-                {/* Footer navigation */}
-                <div className="border-t border-gray-100 px-5 py-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                        {currentStep !== 'product' && (
-                            <button
-                                type="button"
-                                onClick={handleBack}
-                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
-                            >
-                                <ChevronLeft className="h-3 w-3" />
-                                Back
-                            </button>
-                        )}
+                    {currentStep === 'review' && (
+                        <div className="space-y-8">
+                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                                <RepairServiceForm {...receiptProps} variant="preview" />
+                            </div>
 
-                        {currentStep === 'agreement' ? (
-                            <button
-                                type="button"
-                                onClick={handleSubmit}
-                                disabled={!canSubmit || isSubmitting}
-                                className={`flex-1 ${orangeSubmitButtonClass}`}
-                            >
-                                {isSubmitting ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Submitting...
-                                    </span>
-                                ) : (
-                                    'Submit Repair'
+                            <div className="w-full space-y-2 rounded-xl border border-gray-200 bg-gray-50/80 px-5 py-4 text-center">
+                                <p className="text-xs leading-relaxed text-gray-600">
+                                    By signing below, the customer consents to conduct this transaction electronically
+                                    and agrees to the listed repair price, terms, and any unexpected delays.
+                                </p>
+                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-900">
+                                    30-Day Warranty on all repair services
+                                </p>
+                            </div>
+
+                            <div className="w-full space-y-3">
+                                <p className="text-center text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">
+                                    Customer signature
+                                </p>
+                                <div className="h-[220px] overflow-hidden rounded-2xl border-2 border-gray-900 bg-white">
+                                    <SignaturePad onSignatureChange={setSignatureData} fillHeight />
+                                </div>
+                                {signatureData && (
+                                    <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
+                                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
+                                            <Check className="h-2.5 w-2.5 text-white" />
+                                        </span>
+                                        Signature captured
+                                    </div>
                                 )}
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleNext}
-                                disabled={
-                                    currentStep === 'product'
-                                        ? !canProceedFromProduct
-                                        : !canProceedFromCustomer
-                                }
-                                className={`flex-1 ${stepAccent.continueBtn}`}
-                            >
-                                Continue
-                            </button>
-                        )}
-                    </div>
-
-                    {currentStep === 'agreement' && !signatureData && (
-                        <p className="text-center text-mini font-black uppercase tracking-wide text-amber-600">
-                            Signature required to submit
-                        </p>
-                    )}
-                </div>
-            </aside>
-
-            {/* ════════════════════════════════════════════════
-                RIGHT MAIN — Display / Selection Area
-               ════════════════════════════════════════════════ */}
-            <main className="flex-1 flex flex-col overflow-hidden">
-
-                {/* ── STEP 1: Full-width product grid ── */}
-                {currentStep === 'product' && (
-                    <div className="flex-1 flex flex-col overflow-hidden p-5">
-                        <ProductSelector
-                            onSelect={(product) => setFormData(prev => ({ ...prev, product }))}
-                            selectedProduct={formData.product.type ? formData.product : null}
-                            onPriceChange={(price) => setFormData(prev => ({ ...prev, price }))}
-                            fillHeight
-                            selectedItems={selectedItems}
-                            onSelectedItemsChange={handleSelectedItemsChange}
-                        />
-                    </div>
-                )}
-
-                {/* ── STEP 2: Paper receipt (live preview) ── */}
-                {currentStep === 'customer' && (
-                    <div className="flex-1 overflow-y-auto flex items-start justify-center p-5">
-                        <div className="rounded-lg border border-gray-200 shadow-sm overflow-hidden bg-white">
-                            <div style={{ zoom: 0.7 }}>
-                                <RepairServiceForm {...receiptProps} />
                             </div>
                         </div>
-                    </div>
-                )}
-
-                {/* Step 3 main area is replaced by full-screen signature below */}
+                    )}
+                </div>
             </main>
 
-            {/* ════════════════════════════════════════════════
-                STEP 3: Full-screen signature overlay
-               ════════════════════════════════════════════════ */}
-            {currentStep === 'agreement' && (
-                <div className="fixed inset-0 z-panelOverlay flex flex-col overflow-hidden bg-white">
-                    {/* Header */}
-                    <div className="shrink-0 flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                        <div>
-                            <h2 className="text-sm font-black uppercase tracking-tight text-gray-900">
-                                Customer Signature
-                            </h2>
-                            <p className="mt-0.5 text-micro font-bold text-gray-500">
-                                {formData.customer.name} — {formData.product.model} — <span className="text-emerald-600">${formData.price}</span>
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setCurrentStep('customer')}
-                                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
-                            >
-                                <ChevronLeft className="h-3 w-3" />
-                                Back
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSubmit}
-                                disabled={!canSubmit || isSubmitting}
-                                className={orangeSubmitButtonClass}
-                            >
-                                {isSubmitting ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        Submitting...
-                                    </span>
-                                ) : (
-                                    'Submit Repair'
-                                )}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Agreement text */}
-                    <div className="shrink-0 border-b border-gray-100 px-6 py-3">
-                        <p className="text-caption text-gray-500 italic leading-relaxed">
-                            By signing below, I consent to conduct this transaction electronically
-                            and agree to the listed repair price, terms, and any unexpected delays in the repair process.
-                            <span className="ml-2 font-black text-gray-900 not-italic uppercase text-micro">30-Day Warranty</span>
-                        </p>
-                    </div>
-
-                    {/* Signature pad — capped height so the customer signs near the visible baseline */}
-                    <div className="flex-1 min-h-0 flex items-start justify-center px-6 pt-4 pb-2">
-                        <div className="w-full max-w-3xl h-[260px]">
-                            <SignaturePad onSignatureChange={setSignatureData} fillHeight />
-                        </div>
-                    </div>
-
-                    <div className="shrink-0 border-t border-gray-100 px-6 py-3 text-center">
-                        <p className={`text-eyebrow font-black uppercase tracking-wide transition-opacity ${signatureData ? 'opacity-0' : 'text-amber-600'}`}>
-                            Signature required to submit
-                        </p>
-                    </div>
-                </div>
-            )}
+            <FloatingButton
+                label={primaryLabel}
+                onClick={isReviewStep ? handleSubmit : handleNext}
+                disabled={primaryDisabled}
+                loading={isSubmitting}
+                title={primaryTitle}
+                tone="gray"
+                maxWidth={REPAIR_INTAKE_MAX_WIDTH}
+                fullWidth
+                className="px-0 sm:px-0"
+            />
         </div>
     );
 }

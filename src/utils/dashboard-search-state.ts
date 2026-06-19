@@ -3,11 +3,13 @@
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import type { ShippedDetailsContext } from '@/utils/events';
 
-export type DashboardOrderView = 'pending' | 'unshipped' | 'shipped' | 'fba' | 'warranty';
+// 'pending' removed — Awaiting+Pending merged into 'unshipped' (2026-06-13).
+// getDashboardOrderViewFromSearch never returns 'pending'; all legacy ?pending
+// URLs resolve to 'unshipped' at the URL-read layer.
+export type DashboardOrderView = 'unshipped' | 'shipped' | 'fba' | 'warranty';
 /**
- * UI grouping for the dashboard view pills. Pending / Shipped / Awaiting are all
- * the same underlying orders data, so they collapse under a single "Shipping"
- * group; FBA is a distinct data source and stays its own group.
+ * UI grouping for the dashboard view pills. Unshipped / Shipped are all
+ * the same underlying orders data; FBA is a distinct data source and stays its own group.
  */
 export type DashboardViewGroup = 'orders' | 'fba';
 export type DashboardCacheEntry = readonly [unknown, unknown];

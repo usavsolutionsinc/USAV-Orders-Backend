@@ -1,0 +1,63 @@
+name: Claude Fix Issue
+
+# Fires when someone adds the "user-reported" label to an issue.
+# The API route POST /api/user-issues creates issues with this label automatically.
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  fix:
+    name: Implement fix
+    if: github.event.label.name == 'user-reported'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write       # commit changes
+      pull-requests: write  # open PR
+      issues: write         # comment on issue
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Use a PAT so the resulting PR can trigger CI
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Additional instructions prepended to the issue context
+          prompt: |
+            You are fixing a user-reported issue in the USAV Operations Backend (Next.js 15, TypeScript, Drizzle ORM, Neon/Postgres, Tailwind CSS, Framer Motion).
+
+            DESIGN SYSTEM RULES — enforce every time, no exceptions:
+            - Buttons: use Button (5 variants) from src/design-system/primitives/Button.tsx — never hand-roll
+            - Tabs: use TabSwitch from src/components/ui/TabSwitch.tsx only
+            - Chips: TrackingChip=blue, FnskuChip=purple, SerialChip=emerald, OrderIdChip=gray, TicketChip=orange — semantically bound, never swap
+            - Motion: use framerTransition.* and framerPresence.* from src/design-system/foundations/motion-framer.ts
+            - New sidebar modes: must use HorizontalButtonSlider + ?mode= URL + SidebarShell
+            - Condition labels: conditionLabel() from src/lib/conditions.ts only
+            - Z-index: named tokens from src/design-system/tokens/z-index.ts only — never z-[NNN]
+            - Typography: typographyPresets.* from src/design-system/DESIGN_SYSTEM.md over hand-rolled Tailwind
+
+            BEFORE WRITING ANY UI CODE:
+            1. Grep src/design-system/ and src/components/ for an existing component that covers the need
+            2. Prefer editing existing files over creating new ones
+            3. If a DB migration is needed, write it to src/lib/migrations/ with today's date prefix — do NOT apply it
+
+            AFTER IMPLEMENTING:
+            1. Run: npx tsc --noEmit (fix any errors before committing)
+            2. The PR title should be: "fix: [one-line summary] (closes #ISSUE_NUMBER)"
+            3. Leave a comment on the issue describing exactly which file(s) changed and why

@@ -105,6 +105,7 @@ export function IncomingAttachTrackingPopover({
   );
 
   const [internalOpen, setInternalOpen] = useState(false);
+  const [stationPreset, setStationPreset] = useState<PoHit | null>(null);
   const open = controlledOpen ?? internalOpen;
   // Where focus was before we opened — restored on close for keyboard users.
   const lastFocusedRef = useRef<HTMLElement | null>(null);
@@ -130,12 +131,35 @@ export function IncomingAttachTrackingPopover({
       if (controlledOpen === undefined) setInternalOpen(next);
       if (!next) {
         reset();
+        setStationPreset(null);
         // Return focus to the launching control.
         lastFocusedRef.current?.focus?.();
       }
     },
     [controlledOpen, onOpenChange, reset],
   );
+
+  // Listen for station-builder attach-tracking events (fired when the
+  // `incoming.attach_tracking` action is run from a station block row).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ poId: string | null; poNumber: string | null }>).detail;
+      if (!detail?.poId) return;
+      const hit: PoHit = {
+        po_id: detail.poId,
+        po_number: detail.poNumber ?? '',
+        receiving_id: null,
+        item_count: 0,
+        qty_expected: 0,
+      };
+      setStationPreset(hit);
+      setSelected(hit);
+      setOpen(true);
+    };
+    window.addEventListener('station:attach-tracking', handler as EventListener);
+    return () => window.removeEventListener('station:attach-tracking', handler as EventListener);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: hits, isFetching } = useQuery<PoHit[]>({
     queryKey: ['incoming-attach-po-search', query],

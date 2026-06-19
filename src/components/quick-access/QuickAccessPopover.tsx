@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { ActionsSection } from './ActionsSection';
-import { DesktopAppInstallBanner } from './DesktopAppInstallBanner';
 import { PinnedSection } from './PinnedSection';
 import { RecentSection } from './RecentSection';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
@@ -26,6 +25,8 @@ interface QuickAccessPopoverProps {
   /** Admin-only: opens the system/cron sync-status popover. Omitted for
    *  non-admins, hiding the Sync status action row. */
   onOpenSyncPopover?: () => void;
+  /** Opens the report-an-issue feedback popover. */
+  onOpenFeedbackPopover?: () => void;
   /**
    * Mobile: collapse the popover to just the staff identity row (avatar, name,
    * settings, sign-out). The actions / pinned / recent / install-app sections
@@ -39,10 +40,10 @@ interface QuickAccessPopoverProps {
  * The signed-in staff card lives at the very bottom, just above the
  * "Manage in Settings" footer, with sign-out only (no staff switch).
  */
-export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, onOpenSyncPopover, compact = false }: QuickAccessPopoverProps) {
+export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxPopover, onOpenSyncPopover, onOpenFeedbackPopover, compact = false }: QuickAccessPopoverProps) {
   const { settings } = useQuickAccess();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, has } = useAuth();
 
   const queryClient = useQueryClient();
   // Subscribes to the module-level color cache. When self or admin updates
@@ -90,27 +91,40 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
       aria-label="Quick access"
       className="flex max-h-[calc(100vh-6rem)] w-[340px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl"
     >
+      {/* Mobile: staff card only, plus report-an-issue when available. */}
+      {compact && onOpenFeedbackPopover ? (
+        <ActionsSection
+          actions={{ phoneHistory: false }}
+          onAction={onClose}
+          onOpenHistoryPopover={() => {}}
+          onOpenInboxPopover={() => {}}
+          onOpenFeedbackPopover={onOpenFeedbackPopover}
+        />
+      ) : null}
+
       {/* Desktop-only sections — hidden on mobile, where the staff row below is
           the only relevant content. */}
       {!compact && (
         <>
           <div className="min-h-0 flex-1 divide-y divide-gray-100 overflow-y-auto overscroll-contain">
             <ActionsSection
-              actions={settings.actions}
+              actions={{
+                ...settings.actions,
+                warrantyCheckin: has('warranty.manage'),
+              }}
               onAction={onClose}
               onOpenHistoryPopover={onOpenHistoryPopover}
               onOpenInboxPopover={onOpenInboxPopover}
               onOpenSyncPopover={onOpenSyncPopover}
+              onWarrantyCheckin={() => {
+                router.push('/dashboard?warranty=');
+                onClose();
+              }}
+              onOpenFeedbackPopover={onOpenFeedbackPopover}
             />
             <PinnedSection onNavigate={onClose} />
             {settings.showRecent && <RecentSection onNavigate={onClose} />}
           </div>
-
-          {/* Bright "Install desktop app" CTA — only renders when viewing in a
-              browser (not Electron) and the user hasn't disabled it in settings. */}
-          {settings.actions.installDesktopApp !== false && (
-            <DesktopAppInstallBanner onAction={onClose} />
-          )}
         </>
       )}
 

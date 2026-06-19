@@ -2,9 +2,8 @@
 
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasReceivingAttach, NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
@@ -70,17 +69,13 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
     staleTime: 10_000,
   });
 
-  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
-  const handlePhoneMessage = useCallback(
-    (msg: { data?: { receiving_id?: number } }) => {
-      const incoming = Number(msg?.data?.receiving_id);
-      if (!Number.isFinite(incoming) || incoming !== receivingId) return;
-      queryClient.invalidateQueries({ queryKey });
-    },
+  const refreshPhotos = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+    invalidateReceivingFeeds(queryClient);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [receivingId, queryClient],
-  );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
+  }, [queryClient, receivingId]);
+
+  useReceivingPhotosRealtimeRefresh(receivingId, staffId, refreshPhotos, staffId > 0 && !!orgId);
 
   const galleryPhotos = useMemo(
     () =>
@@ -146,7 +141,8 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
   // With photos present, the gallery's own toolbar (and the fullscreen viewer)
   // surface an "Add photos" button when the NAS is configured. The picker dialog
   // is rendered here so it layers above the gallery's fullscreen viewer.
-  const canAdd = nasConfigured();
+  const canAdd =
+    nasConfigured() || process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER === 'adapter';
   return (
     <>
       <PhotoGallery
@@ -154,6 +150,7 @@ export const ReceivingPhotoStrip = memo(function ReceivingPhotoStrip({
         orderId={`RCV-${receivingId}`}
         launcherLayout="toolbar"
         compact
+        libraryHref={`/ops/photos?receivingId=${receivingId}`}
         onPhotoDeleted={refresh}
         onAddPhotos={canAdd ? () => setPickerOpen(true) : undefined}
       />

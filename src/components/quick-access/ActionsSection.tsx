@@ -1,6 +1,6 @@
 'use client';
 
-import { Activity, Bell, Smartphone } from '@/components/Icons';
+import { Activity, Bell, MessageSquare, ShieldCheck, Smartphone } from '@/components/Icons';
 import { Row } from './Row';
 import { PhoneSignInQrButton } from './PhoneSignInQrButton';
 import { useActivityInbox } from '@/contexts/ActivityInboxContext';
@@ -14,6 +14,10 @@ interface ActionsSectionProps {
   /** Admin-only: opens the system/cron sync-status popover. Omitted for
    *  non-admins, in which case the Sync status row is hidden. */
   onOpenSyncPopover?: () => void;
+  /** warranty.manage holders: navigate to the warranty check-in logger. */
+  onWarrantyCheckin?: () => void;
+  /** Opens the report-an-issue feedback popover. */
+  onOpenFeedbackPopover?: () => void;
 }
 
 /**
@@ -26,14 +30,18 @@ export function ActionsSection({
   onOpenHistoryPopover,
   onOpenInboxPopover,
   onOpenSyncPopover,
+  onWarrantyCheckin,
+  onOpenFeedbackPopover,
 }: ActionsSectionProps) {
   const { items } = useActivityInbox();
   const unreadCount = items.filter((it) => !it.undone || it.undoFailed).length;
   const showInbox = items.length > 0;
   const showPhoneHistory = !!actions.phoneHistory;
   const showSync = !!onOpenSyncPopover;
+  const showWarranty = !!actions.warrantyCheckin && !!onWarrantyCheckin;
+  const showFeedback = !!onOpenFeedbackPopover;
 
-  if (!showInbox && !showPhoneHistory && !showSync) return null;
+  if (!showInbox && !showPhoneHistory && !showSync && !showWarranty && !showFeedback) return null;
 
   return (
     <div className="px-2 pb-2 pt-1">
@@ -72,6 +80,24 @@ export function ActionsSection({
             label="Sync status"
             subLabel="System & cron health"
             onClick={onOpenSyncPopover}
+          />
+        ) : null}
+        {showWarranty ? (
+          <Row
+            icon={<ShieldCheck className="h-4 w-4" />}
+            iconBg="bg-violet-600"
+            label="Log warranty claim"
+            subLabel="Check in a warranty repair or return"
+            onClick={onWarrantyCheckin}
+          />
+        ) : null}
+        {showFeedback ? (
+          <Row
+            icon={<MessageSquare className="h-4 w-4" />}
+            iconBg="bg-indigo-600"
+            label="Report an issue"
+            subLabel="Bug, suggestion, or question"
+            onClick={onOpenFeedbackPopover}
           />
         ) : null}
       </div>

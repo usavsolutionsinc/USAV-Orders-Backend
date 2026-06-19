@@ -18,17 +18,12 @@
 
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  getPhoneBridgeChannelName,
-  getStationChannelName,
-  safeChannelName,
-} from '@/lib/realtime/channels';
+import { useNasConfig } from '@/hooks/useNasConfig';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
 import { nasConfigured } from '@/lib/nas-photos';
-import { useNasConfig } from '@/hooks/useNasConfig';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
 
@@ -81,30 +76,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryClient, receivingId]);
 
-  const handlePhotoMessage = useCallback(
-    (msg: { data?: { receiving_id?: number } }) => {
-      const incoming = Number(msg?.data?.receiving_id);
-      if (!Number.isFinite(incoming) || incoming !== receivingId) return;
-      refresh();
-    },
-    [receivingId, refresh],
-  );
-
-  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
-  useAblyChannel(
-    phoneChannel,
-    'receiving_photo_uploaded',
-    handlePhotoMessage,
-    !!phoneChannel && staffId > 0,
-  );
-
-  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
-  useAblyChannel(
-    stationChannel,
-    'receiving-photo.changed',
-    handlePhotoMessage,
-    !!stationChannel,
-  );
+  useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
   const photos = useMemo(
     () =>
@@ -114,7 +86,9 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     [data],
   );
 
-  const canAdd = nasConfigured();
+  const adapterUpload =
+    process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER === 'adapter';
+  const canAdd = nasConfigured() || adapterUpload;
   const count = photos.length;
   const poCreatedAt = data?.receivingCreatedAt ?? null;
   const initialFolder = data?.initialNasFolder ?? '';
@@ -173,6 +147,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
             showCopyLinks={false}
             toolbarShowLabel={false}
             compact
+            libraryHref={`/ops/photos?receivingId=${receivingId}`}
             onPhotoDeleted={refresh}
             onAddPhotos={canAdd ? () => setPickerOpen(true) : undefined}
           />

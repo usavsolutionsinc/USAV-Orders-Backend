@@ -2,6 +2,7 @@ import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import type { IntentDomain, IntentParams } from '@/lib/ai/intent-router';
+import { searchPhotos, formatPhotoSearchForPrompt } from '@/lib/photos/queries/search';
 import { normalizeTrackingCanonical } from '@/lib/tracking-format';
 
 function pct(value: number, total: number): string {
@@ -562,6 +563,17 @@ export async function fetchShippedContext(params: IntentParams): Promise<string>
   ].join('\n');
 }
 
+async function fetchPhotosContext(params: IntentParams, orgId: OrgId): Promise<string> {
+  const rows = await searchPhotos({
+    organizationId: orgId,
+    poRef: params.poRef,
+    damageDetected: params.damageDetected ?? null,
+    q: params.rawQuery ?? params.poRef ?? null,
+    limit: 15,
+  });
+  return formatPhotoSearchForPrompt(rows);
+}
+
 export async function buildContextBlock(
   intents: IntentDomain[],
   params: IntentParams,
@@ -584,6 +596,8 @@ export async function buildContextBlock(
         return fetchInventoryContext(params);
       case 'exceptions':
         return fetchExceptionsContext();
+      case 'photos':
+        return fetchPhotosContext(params, orgId);
       case 'shipped':
         if (!params.orderId && !params.trackingNumber) return '';
         return fetchShippedContext(params);

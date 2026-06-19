@@ -16,22 +16,98 @@
  * editing — blocks render real data from the draft config as you compose.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/design-system/primitives';
-import { Pencil, Plus, Settings, X, ChevronUp, ChevronDown } from '@/components/Icons';
+import { GripVertical, Pencil, Plus, Settings, X } from '@/components/Icons';
 import { getBlock } from '@/lib/stations';
 import type { BlockInstanceConfig, SlotId, StationConfig } from '@/lib/stations/contract';
 import {
   stationDefinitionsQuery,
   invalidateStationDefinitions,
 } from '@/lib/queries/station-queries';
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { BlockRenderer } from './BlockRenderer';
 import { BlockPaletteOverlay } from './BlockPaletteOverlay';
 import { BlockConfigSheet } from './BlockConfigSheet';
 import { StationIcon } from './station-icons';
+
+// ── Sortable block row (edit mode only) ──────────────────────────────────────
+
+interface SortableBlockRowProps {
+  inst: BlockInstanceConfig;
+  onConfigure: (inst: BlockInstanceConfig) => void;
+  onRemove: (id: string) => void;
+}
+
+function SortableBlockRow({ inst, onConfigure, onRemove }: SortableBlockRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: inst.id });
+  const blockDef = getBlock(inst.block);
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: 'relative',
+    zIndex: isDragging ? 1 : undefined,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-md bg-white ring-1 ring-gray-200">
+      <div className="flex items-center gap-1.5 border-b border-gray-100 px-2 py-1">
+        {/* Drag handle */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          className="flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+        <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-gray-400" />
+        <span className="flex-1 truncate text-mini font-bold text-gray-600">
+          {blockDef?.label ?? inst.block}
+        </span>
+        <button
+          type="button"
+          onClick={() => onConfigure(inst)}
+          title="Configure source, display & actions"
+          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(inst.id)}
+          title="Remove block"
+          className="rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <BlockRenderer instance={inst} />
+    </div>
+  );
+}
 
 interface StationSlotProps {
   pageKey: string;
@@ -132,6 +208,25 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
     [patchSlot],
   );
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const onDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      patchSlot((list) => {
+        const oldIdx = list.findIndex((i) => i.id === active.id);
+        const newIdx = list.findIndex((i) => i.id === over.id);
+        if (oldIdx < 0 || newIdx < 0) return list;
+        return arrayMove(list, oldIdx, newIdx);
+      });
+    },
+    [patchSlot],
+  );
+
   const saveDraft = useCallback(async (): Promise<number | null> => {
     if (!draftConfig) return null;
     setSaving(true);
@@ -195,6 +290,8 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
     [editing, draftConfig, active, slot],
   );
 
+  const sortableIds = useMemo(() => instances.map((i) => i.id), [instances]);
+
   // Nothing configured and the viewer can't customize → invisible mount.
   if (!editing && instances.length === 0 && !canManage) return null;
 
@@ -235,59 +332,26 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
       )}
 
       <div className="space-y-2 px-1 pb-1">
-        {instances.map((inst, idx) => {
-          const blockDef = getBlock(inst.block);
-          return (
-            <div
-              key={inst.id}
-              className={editing ? 'rounded-md bg-white ring-1 ring-gray-200' : ''}
-            >
-              {editing ? (
-                <div className="flex items-center gap-1.5 border-b border-gray-100 px-2 py-1">
-                  <StationIcon name={blockDef?.icon ?? 'Box'} className="h-3.5 w-3.5 text-gray-400" />
-                  <span className="flex-1 truncate text-mini font-bold text-gray-600">
-                    {blockDef?.label ?? inst.block}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => moveInstance(inst.id, -1)}
-                    disabled={idx === 0}
-                    title="Move up"
-                    className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveInstance(inst.id, 1)}
-                    disabled={idx === instances.length - 1}
-                    title="Move down"
-                    className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfiguring(inst)}
-                    title="Configure source, display & actions"
-                    className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                  >
-                    <Settings className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeInstance(inst.id)}
-                    title="Remove block"
-                    className="rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : null}
+        {editing ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+              {instances.map((inst) => (
+                <SortableBlockRow
+                  key={inst.id}
+                  inst={inst}
+                  onConfigure={setConfiguring}
+                  onRemove={removeInstance}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          instances.map((inst) => (
+            <div key={inst.id}>
               <BlockRenderer instance={inst} />
             </div>
-          );
-        })}
+          ))
+        )}
 
         {editing ? (
           <button

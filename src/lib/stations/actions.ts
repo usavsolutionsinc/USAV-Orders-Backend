@@ -92,6 +92,27 @@ const startSourcing: ActionDefinition = {
   confirm: 'none',
 };
 
+/**
+ * Attach a carrier tracking number to a PO. Fires a custom window event
+ * (`station:attach-tracking`) carrying the row's `po_id` + `po_number` so the
+ * IncomingAttachTrackingPopover can pick it up and open pre-filled for this PO.
+ *
+ * The popover handles validation, the actual POST to /api/receiving/po/:id/attach-box,
+ * and cache invalidation — the action descriptor only advertises the intent.
+ */
+const attachTracking: ActionDefinition = {
+  id: 'incoming.attach_tracking',
+  label: 'Attach tracking',
+  icon: 'Link2',
+  endpoint: { method: 'POST', path: '/api/receiving/po/:id/attach-box' },
+  // body is omitted — BlockRenderer detects `station:attach-tracking` event actions
+  // and dispatches the window event instead of calling fetch directly.
+  permission: 'receiving.mark_received',
+  appliesTo: ['po_ref'],
+  integration: 'receiving',
+  confirm: 'none',
+};
+
 let builtinsRegistered = false;
 export function registerBuiltinActions(): void {
   if (builtinsRegistered) return;
@@ -99,4 +120,5 @@ export function registerBuiltinActions(): void {
   registerAction(dismissEmail);
   registerAction(markEmailDone);
   registerAction(startSourcing);
+  registerAction(attachTracking);
 }

@@ -563,9 +563,7 @@ export function DashboardShippedTable({
         {(() => {
           const platformNode = !orderIsFbaMeta ? (
             <PlatformChip
-              label="Product Page"
-              labelTransform="none"
-              tooltipValue={productPageUrl ?? ''}
+              label={platformLabel}
               underlineClass={getOrderPlatformBorderColor(platformLabel)}
               iconClass={platformLabel && productPageUrl ? getOrderPlatformColor(platformLabel) : 'text-gray-500'}
               onClick={() => {

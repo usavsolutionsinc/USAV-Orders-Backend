@@ -23,10 +23,14 @@ import {
 import { priorityBadge, statusBadge } from '@/components/support/zendesk/badges';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
+import { resolvePhotoThumbUrl } from '@/lib/photos/display-url';
 
 // Small preview for the selection grid. Dev proxy supports ?thumb; prod loads
 // the full image through the same-origin /api/nas proxy (session cookie).
-function claimThumb(url: string): string {
+function claimThumb(url: string, photoId?: number): string {
+  if (photoId != null && photoId > 0) {
+    return resolvePhotoThumbUrl({ id: photoId, url }, normalizePhotoDisplayUrl);
+  }
   const normalized = normalizePhotoDisplayUrl(url);
   if (normalized.startsWith('/api/nas-dev/')) {
     return normalized + (normalized.includes('?') ? '&' : '?') + 'thumb=96';
@@ -223,9 +227,7 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
             url: normalizePhotoDisplayUrl(p.photoUrl),
           }));
         setPhotos(list);
-        // Start with none selected — the operator picks exactly which photos go
-        // to Zendesk. (All PO photos are still archived to the ticket folder.)
-        setSelectedPhotoIds(new Set());
+        setSelectedPhotoIds(new Set(list.map((p) => p.id)));
       })
       .catch(() => {
         /* best-effort — claim can still be filed without photos */
@@ -448,6 +450,16 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
       }
       if (data.archiveWarning) {
         toast.warning(String(data.archiveWarning), { duration: 8000 });
+      }
+      if (typeof data.sharePackUrl === 'string' && data.sharePackUrl) {
+        const shareUrl = data.sharePackUrl;
+        toast.success('Share pack ready for vendor', {
+          duration: 10000,
+          action: {
+            label: 'Copy link',
+            onClick: () => void navigator.clipboard.writeText(shareUrl),
+          },
+        });
       }
 
       advanceToSellerStep({
@@ -686,9 +698,9 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
     <RightPaneOverlay
       open={open}
       onClose={onClose}
-      align="center"
+      align="right"
+      width={672}
       aria-label="File a claim"
-      className="w-[min(92%,42rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
     >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-gradient-to-r from-rose-50 to-amber-50 px-5 py-4">
@@ -816,7 +828,7 @@ export function ReceivingClaimModal({ open, row, prefillReason, onClose, onTicke
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={claimThumb(p.url)}
+                            src={claimThumb(p.url, p.id)}
                             alt=""
                             loading="lazy"
                             decoding="async"

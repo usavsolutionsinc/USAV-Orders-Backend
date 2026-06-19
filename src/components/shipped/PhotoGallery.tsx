@@ -8,6 +8,7 @@ import { useBodyScrollLock } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
+import { resolvePhotoDisplayUrl } from '@/lib/photos/display-url';
 import {
   X,
   Download,
@@ -22,6 +23,7 @@ import {
   Trash2,
   Link2 as LinkIcon,
   Plus,
+  ExternalLink,
 } from '../Icons';
 
 /**
@@ -64,6 +66,8 @@ interface PhotoGalleryProps {
    * attach. Omit to keep the gallery view-only.
    */
   onAddPhotos?: () => void;
+  /** Opens the ops photo library filtered to this entity/receiving scope. */
+  libraryHref?: string;
 }
 
 interface PhotoItem {
@@ -84,6 +88,7 @@ export function PhotoGallery({
   toolbarShowLabel = true,
   onPhotoDeleted,
   onAddPhotos,
+  libraryHref,
 }: PhotoGalleryProps) {
   const [photoItems, setPhotoItems] = useState<PhotoItem[]>([]);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -118,7 +123,10 @@ export function PhotoGallery({
         if (!photo?.url?.trim()) return null;
         const idNum =
           typeof photo.id === 'number' && Number.isFinite(photo.id) ? photo.id : null;
-        return { id: idNum, url: normalizePhotoDisplayUrl(photo.url) };
+        return {
+          id: idNum,
+          url: resolvePhotoDisplayUrl({ id: idNum, url: photo.url }, normalizePhotoDisplayUrl),
+        };
       })
       .filter((p): p is { id: number | null; url: string } => p !== null);
 
@@ -797,6 +805,19 @@ export function PhotoGallery({
                   <Copy className="h-4 w-4" />
                 )}
               </button>
+            ) : null}
+            {libraryHref ? (
+              <a
+                href={libraryHref}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className={`${toolbarIconBtnInner} border-l border-blue-200/90`}
+                aria-label="Open in photo library"
+                title="Open in photo library"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
             ) : null}
           </div>
         </div>

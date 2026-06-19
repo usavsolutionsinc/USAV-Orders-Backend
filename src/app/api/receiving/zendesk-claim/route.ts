@@ -7,8 +7,15 @@ import {
   CLAIM_TYPE_LABEL,
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
-import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError } from '@/lib/zendesk';
+import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError, addTicketComment } from '@/lib/zendesk';
 import { readPhotoBytes, archiveClaimToFolder, archiveClaimViaAgent, poReceivingLink } from '@/lib/receiving-claim-photos';
+import { readPhotoBytesById } from '@/lib/photos/read-bytes';
+import {
+  getReceivingPhotosByIds,
+  listAllReceivingPhotoIds,
+} from '@/lib/photos/queries/receiving-list';
+import { createSharePack } from '@/lib/photos/share-packs';
+import { linkPhoto } from '@/lib/photos/service';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
@@ -99,16 +106,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           ? body.attachPhotoIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)
           : [];
         if (ids.length > 0) {
-          const photoRows = await pool.query<{ id: number; url: string | null }>(
-            `SELECT id, url FROM photos
-              WHERE id = ANY($1::int[])
-                AND ((entity_type = 'RECEIVING'      AND entity_id = $2)
-                  OR (entity_type = 'RECEIVING_LINE' AND entity_id IN
-                        (SELECT id FROM receiving_lines WHERE receiving_id = $2)))`,
-            [ids, receivingId],
-          );
-          for (const row of photoRows.rows) {
-            const pb = await readPhotoBytes(String(row.url || ''));
+          const photoRows = await getReceivingPhotosByIds({
+            organizationId: ctx.organizationId,
+            receivingId,
+            photoIds: ids,
+          });
+          for (const row of photoRows) {
+            let pb = await readPhotoBytesById(row.id, ctx.organizationId);
+            if (!pb) pb = await readPhotoBytes(String(row.url || ''));
             if (!pb) continue;
             try {
               uploads.push(await uploadFileToZendesk(pb.filename, pb.bytes, pb.contentType));
@@ -159,16 +164,25 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // claim whose photos silently didn't archive is visible to the operator.
         let archiveWarning: string | null = null;
         try {
-          const allPhotosRes = await pool.query<{ url: string | null }>(
-            `SELECT url FROM photos
-              WHERE ((entity_type = 'RECEIVING'      AND entity_id = $1)
-                  OR (entity_type = 'RECEIVING_LINE' AND entity_id IN
-                        (SELECT id FROM receiving_lines WHERE receiving_id = $1)))
-              ORDER BY created_at ASC`,
-            [receivingId],
+          const allPhotosRes = await pool.query<{ legacy_url: string | null }>(
+            `SELECT ps.legacy_url
+               FROM photos p
+               JOIN photo_entity_links l
+                 ON l.photo_id = p.id AND l.organization_id = p.organization_id
+               JOIN photo_storage ps
+                 ON ps.photo_id = p.id AND ps.organization_id = p.organization_id AND ps.is_primary
+               LEFT JOIN receiving_lines rl
+                      ON l.entity_type = 'RECEIVING_LINE' AND rl.id = l.entity_id
+              WHERE p.organization_id = $1
+                AND (
+                  (l.entity_type = 'RECEIVING' AND l.entity_id = $2)
+                  OR (l.entity_type = 'RECEIVING_LINE' AND rl.receiving_id = $2)
+                )
+              ORDER BY p.created_at ASC`,
+            [ctx.organizationId, receivingId],
           );
           const allPhotos = allPhotosRes.rows
-            .map((r) => ({ url: String(r.url || '') }))
+            .map((r) => ({ url: String(r.legacy_url || '') }))
             .filter((p) => p.url);
           const info = [
             `Zendesk Ticket: ${ticketNumber}`,
@@ -261,9 +275,60 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           }
         }
 
+        let sharePackUrl: string | null = null;
+        try {
+          const sharePhotoIds =
+            ids.length > 0
+              ? ids
+              : await listAllReceivingPhotoIds(ctx.organizationId, receivingId);
+
+          if (sharePhotoIds.length > 0) {
+            const pack = await createSharePack(
+              {
+                organizationId: ctx.organizationId,
+                staffId: ctx.staffId,
+                photoIds: sharePhotoIds,
+                title: `Claim ${ticketNumber}`,
+                packType: 'claim',
+                receivingId,
+                zendeskTicketId: ticket.id,
+                filenamePrefix: `Claim_${ticket.id}`,
+              },
+              req.nextUrl.origin,
+            );
+            sharePackUrl = pack.shareUrl;
+            for (const photoId of sharePhotoIds) {
+              await linkPhoto({
+                organizationId: ctx.organizationId,
+                photoId,
+                entityType: 'ZENDESK_TICKET',
+                entityId: ticket.id,
+                linkRole: 'claim_evidence',
+              });
+            }
+            try {
+              await addTicketComment(ticket.id, {
+                body: `Photo share pack: ${sharePackUrl}`,
+                html_body: `<p>Photo share pack: <a href="${sharePackUrl}">${sharePackUrl}</a></p>`,
+                public: false,
+              });
+            } catch (commentErr) {
+              console.warn('[zendesk-claim] share pack comment failed', commentErr);
+            }
+          }
+        } catch (shareErr) {
+          console.warn('[zendesk-claim] share pack failed', shareErr);
+        }
+
         return {
           status: 200,
-          body: { success: true, ticketNumber, ticketUrl: zendeskTicketUrl(ticket.id), archiveWarning },
+          body: {
+            success: true,
+            ticketNumber,
+            ticketUrl: zendeskTicketUrl(ticket.id),
+            archiveWarning,
+            sharePackUrl,
+          },
         };
       },
     );

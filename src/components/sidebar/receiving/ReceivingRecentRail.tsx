@@ -28,6 +28,11 @@ export function getReceivingStatusDot(row: ReceivingLineRow): string {
 
   const stage = workflowStage(status);
 
+  // Testing-phase items (AWAITING_TEST, IN_TEST, PASSED) always use their own
+  // stage color — never override to the receiving-green. This keeps "tested"
+  // visually distinct from "received" (DONE) in the rail.
+  if (stage.phase === 'TESTING') return workflowStageDot(status);
+
   // Zoho is the source of truth for "received": once its PO reads
   // received/billed/closed the box is physically in, even if this line's local
   // workflow_status still sits at an earlier unbox-pipeline stage (EXPECTED /

@@ -50,11 +50,21 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const logIds = result.rows.map((r: any) => r.packer_log_id);
     const photosResult = await tenantQuery(
       ctx.organizationId,
-      `SELECT id, entity_id, url, photo_type, created_at
-       FROM photos
-       WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])
-         AND organization_id = $2
-       ORDER BY created_at ASC`,
+      `SELECT
+         p.id,
+         l.entity_id,
+         '/api/photos/' || p.id::text || '/content' AS url,
+         p.photo_type,
+         p.created_at
+       FROM photos p
+       INNER JOIN photo_entity_links l
+         ON l.photo_id = p.id
+        AND l.organization_id = p.organization_id
+       WHERE l.entity_type = 'PACKER_LOG'
+         AND l.entity_id = ANY($1::int[])
+         AND l.link_role = 'primary'
+         AND p.organization_id = $2
+       ORDER BY p.created_at ASC`,
       [logIds, ctx.organizationId],
     );
 

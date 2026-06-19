@@ -2,9 +2,8 @@
 
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
 import { Camera, Smartphone } from '@/components/Icons';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
@@ -58,18 +57,13 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
     staleTime: 10_000,
   });
 
-  // Phone uploads → invalidate the cache so the strip reflects new shots.
-  const phoneChannel = safeChannelName(() => getPhoneBridgeChannelName(orgId!, staffId));
-  const handlePhoneMessage = useCallback(
-    (msg: { data?: { receiving_id?: number } }) => {
-      const incoming = Number(msg?.data?.receiving_id);
-      if (!Number.isFinite(incoming) || incoming !== receivingId) return;
-      queryClient.invalidateQueries({ queryKey });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- queryKey identity is stable per receivingId
-    [receivingId, queryClient],
-  );
-  useAblyChannel(phoneChannel, 'receiving_photo_uploaded', handlePhoneMessage, !!phoneChannel && staffId > 0);
+  const refreshPhotos = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey });
+    invalidateReceivingFeeds(queryClient);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receivingId, queryClient]);
+
+  useReceivingPhotosRealtimeRefresh(receivingId, staffId, refreshPhotos, enabled && staffId > 0 && !!orgId);
 
   const galleryPhotos = useMemo(
     () =>
@@ -134,6 +128,7 @@ export function PhotosCard({ receivingId, staffId, onMakeClaim }: Props) {
           photos={galleryPhotos}
           orderId={`RCV-${receivingId}`}
           launcherLayout="toolbar"
+          libraryHref={`/ops/photos?receivingId=${receivingId}`}
           onPhotoDeleted={() => {
             queryClient.invalidateQueries({ queryKey });
             invalidateReceivingFeeds(queryClient);

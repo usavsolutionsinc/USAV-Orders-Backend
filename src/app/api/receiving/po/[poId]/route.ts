@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import {
+  sqlLineIdsPhotoCount,
+  sqlLinePhotoCount,
+  sqlPoLevelPhotoCount,
+} from '@/lib/photos/queries/receiving-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,10 +59,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
               rl.updated_at::text  AS updated_at,
               rl.created_at::text  AS created_at,
               sc.image_url,
-              (SELECT COUNT(*)::int FROM photos p
-                 WHERE p.entity_type = 'RECEIVING_LINE'
-                   AND p.entity_id   = rl.id
-                   AND p.organization_id = rl.organization_id) AS item_photo_count
+              ${sqlLinePhotoCount('rl.id', 'rl.organization_id')}::int AS item_photo_count
          FROM receiving_lines rl
          LEFT JOIN receiving r ON (
               (r.id = rl.receiving_id
@@ -90,13 +92,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ? await tenantQuery(
           orgId,
           `SELECT
-             (SELECT COUNT(*)::int FROM photos
-               WHERE entity_type = 'RECEIVING' AND entity_id = $1
-                 AND organization_id = $3)                                    AS po_photo_count,
-             (SELECT COUNT(*)::int FROM photos
-               WHERE entity_type = 'RECEIVING_LINE'
-                 AND entity_id = ANY($2::int[])
-                 AND organization_id = $3)                                    AS item_photo_count`,
+             ${sqlPoLevelPhotoCount('$1', '$3')}::int AS po_photo_count,
+             ${sqlLineIdsPhotoCount('$2::int[]', '$3')}::int AS item_photo_count`,
           [receivingId, lineIds, orgId],
         )
       : null;

@@ -28,6 +28,7 @@ import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
 import { SettingsSidebar } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
+import { PhotoLibrarySidebarPanel } from '@/components/photos/PhotoLibrarySidebarPanel';
 import { MasterNav, MasterNavProvider, useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +36,8 @@ import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
 import type { ShippedFormData } from '@/components/shipped';
 import { dispatchCloseShippedDetails, DASHBOARD_SHIPPED_FOCUS_SEARCH_PARAM } from '@/utils/events';
 import { useDashboardSearchController } from '@/hooks/useDashboardSearchController';
+import { useQuery } from '@tanstack/react-query';
+import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 const MOBILE_SIDEBAR_MIN_WIDTH = 420;
 
 // Pages that use the master-nav L2 ModeRail (flush segmented). Panels for these
@@ -66,6 +69,7 @@ function getSidebarTitle(pathname: string | null) {
   const titles: Record<string, string> = {
     dashboard: 'Orders / Shipping',
     operations: 'Operations',
+    'ops-photos': 'Photo library',
     studio: 'Operations Studio',
     fba: 'Amazon FBA',
     receiving: 'Receiving',
@@ -98,6 +102,20 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
   const routeKey = getSidebarRouteKey(pathname);
   const dashboardSearch = useDashboardSearchController();
   const masterNavEnabled = useMasterNavEnabled();
+
+  // Unshipped count badge — reuses the same query the UnshippedTable/Sidebar
+  // mounts, so React Query deduplicates the fetch (no extra request).
+  const { data: unshippedRows } = useQuery({
+    ...unshippedOrdersQuery({ searchQuery: '', strictSearchScope: true }),
+    enabled: routeKey === 'dashboard',
+  });
+  const unshippedCount = unshippedRows?.length ?? 0;
+
+  const dashboardOrdersSubviewItems: HorizontalSliderItem[] = [
+    { id: 'unshipped', label: 'Unshipped', icon: Inbox, count: unshippedCount > 0 ? unshippedCount : undefined },
+    { id: 'shipped',   label: 'Shipped',   icon: PackageCheck },
+    { id: 'warranty',  label: 'Warranty Logger', icon: ShieldCheck },
+  ];
 
   const updateSearch = (mutate: (params: URLSearchParams) => void, nextPathname?: string) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -152,7 +170,7 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
     const filterControl = masterNavEnabled ? null : (
       <SidebarSection band>
         <HorizontalButtonSlider
-          items={DASHBOARD_ORDERS_SUBVIEW_ITEMS}
+          items={dashboardOrdersSubviewItems}
           value={dashboardSearch.orderView}
           onChange={(view) => dashboardSearch.setOrderView(view as typeof dashboardSearch.orderView)}
           variant="segmented"
@@ -274,6 +292,8 @@ function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () => void }
       />
     );
   }
+
+  if (routeKey === 'ops-photos') return <PhotoLibrarySidebarPanel />;
 
   if (routeKey === 'packer') {
     return <PackerSidebarPanel />;

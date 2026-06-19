@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { photoContentUrl } from '@/lib/photos/display-url';
+import { attachPhotoWithLegacyUrl, listPhotosForEntity } from '@/lib/photos/service';
 
 /**
  * GET  /api/sku/[id]/photos        — list integrity photos for a SKU record
@@ -22,27 +24,23 @@ export async function GET(
   }
 
   try {
-    const result = await tenantQuery(
-      orgId,
-      `SELECT id, entity_id AS sku_id, url, photo_type, taken_by_staff_id, created_at
-       FROM photos
-       WHERE entity_type = 'SKU' AND entity_id = $1
-         AND organization_id = $2
-       ORDER BY created_at ASC`,
-      [skuId, orgId],
-    );
+    const rows = await listPhotosForEntity({
+      organizationId: orgId,
+      entityType: 'SKU',
+      entityId: skuId,
+    });
 
     return NextResponse.json({
-      photos: result.rows.map((row: any) => ({
-        id: Number(row.id),
-        skuId: Number(row.sku_id),
-        url: row.url,
-        photoType: row.photo_type ?? null,
-        takenByStaffId: row.taken_by_staff_id ? Number(row.taken_by_staff_id) : null,
-        createdAt: row.created_at,
+      photos: rows.map((row) => ({
+        id: row.id,
+        skuId,
+        url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),
+        photoType: row.photoType,
+        takenByStaffId: row.takenByStaffId,
+        createdAt: row.createdAt,
       })),
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[sku/[id]/photos GET] error:', err);
     return NextResponse.json({ error: 'Failed to fetch SKU photos' }, { status: 500 });
   }
@@ -66,7 +64,6 @@ export async function POST(
     const photoBase64: string | undefined = body?.photoBase64;
     const photoUrl: string | undefined = body?.photoUrl;
     const photoType = String(body?.photoType || '').trim() || null;
-    // Server-trusted actor — body.takenByStaffId is ignored.
     const takenByStaffId = gate.ctx.staffId;
 
     if (!photoBase64 && !photoUrl) {
@@ -76,8 +73,6 @@ export async function POST(
       );
     }
 
-    // Verify the SKU row exists AND belongs to this org — a cross-tenant id
-    // finds no row and 404s (never 403), gating the write to owned rows.
     const skuCheck = await tenantQuery(
       orgId,
       'SELECT id FROM sku WHERE id = $1 AND organization_id = $2',
@@ -103,31 +98,30 @@ export async function POST(
       return NextResponse.json({ error: 'Could not determine photo URL' }, { status: 400 });
     }
 
-    const inserted = await withTenantTransaction(orgId, (client) =>
-      client.query(
-        `INSERT INTO photos (entity_type, entity_id, url, photo_type, taken_by_staff_id, organization_id)
-         VALUES ('SKU', $1, $2, $3, $4, $5)
-         ON CONFLICT (entity_type, entity_id, url) DO NOTHING
-         RETURNING id, entity_id AS sku_id, url, photo_type, taken_by_staff_id, created_at`,
-        [skuId, finalUrl, photoType, takenByStaffId, orgId],
-      ),
-    );
+    const attached = await attachPhotoWithLegacyUrl({
+      organizationId: orgId,
+      staffId: takenByStaffId,
+      entityType: 'SKU',
+      entityId: skuId,
+      legacyUrl: finalUrl,
+      photoType,
+      idempotent: true,
+    });
 
-    const row = inserted.rows[0];
     return NextResponse.json({
       success: true,
-      photo: row
+      photo: attached.created
         ? {
-            id: Number(row.id),
-            skuId: Number(row.sku_id),
-            url: row.url,
-            photoType: row.photo_type ?? null,
-            takenByStaffId: row.taken_by_staff_id ? Number(row.taken_by_staff_id) : null,
-            createdAt: row.created_at,
+            id: attached.id,
+            skuId,
+            url: photoContentUrl(attached.id),
+            photoType,
+            takenByStaffId,
+            createdAt: new Date().toISOString(),
           }
         : null,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[sku/[id]/photos POST] error:', err);
     return NextResponse.json({ error: 'Failed to save SKU photo' }, { status: 500 });
   }

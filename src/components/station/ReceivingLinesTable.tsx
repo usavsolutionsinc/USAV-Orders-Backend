@@ -11,7 +11,7 @@ import { conditionGradeTableLabel, workflowStatusTableLabel, getStatusDotBg, get
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import { OrderIdChip, TrackingChip, SerialChip, SkuCountChip, SerialCountChip, getLast4, AddValueChipFace } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
-import { SOURCE_PLATFORM_LABELS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { usePlatformMeta } from '@/hooks/useCatalog';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { CollapsibleGroupRow } from '@/components/ui/CollapsibleGroupRow';
 import { groupRowsBy } from '@/lib/group-rows';
@@ -529,6 +529,7 @@ function ReceivingPoSummary({
   isHistory?: boolean;
 }) {
   const first = rows[0];
+  const resolvePlatformMeta = usePlatformMeta();
 
   const received = rows.reduce((sum, r) => sum + (r.quantity_received || 0), 0);
   const expected = rows.reduce((sum, r) => sum + (r.quantity_expected ?? 0), 0);
@@ -550,9 +551,7 @@ function ReceivingPoSummary({
   // Title = the group's shared identity: platform + PO. Falls back gracefully
   // when either is missing (e.g. an un-platformed Zoho carton → just "PO 3715").
   const platformRaw = (first?.source_platform || '').trim().toLowerCase();
-  const platformLabel = platformRaw
-    ? (SOURCE_PLATFORM_LABELS[platformRaw] ?? (platformRaw === 'zoho' ? 'Zoho' : platformRaw))
-    : '';
+  const platformLabel = platformRaw ? resolvePlatformMeta(platformRaw).label : '';
   const title =
     [platformLabel, poValue ? `PO ${poValue}` : '']
       .filter(Boolean)

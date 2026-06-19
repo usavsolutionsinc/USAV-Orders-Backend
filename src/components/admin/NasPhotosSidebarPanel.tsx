@@ -11,7 +11,7 @@ export function NasPhotosSidebarPanel() {
     <AdminSidebarShell
       stats={
         <p className="text-micro font-bold uppercase tracking-wider text-gray-500">
-          Endpoint · workflows · stations
+          Endpoint · workflows · stations · platform
         </p>
       }
     >

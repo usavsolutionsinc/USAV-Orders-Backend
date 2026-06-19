@@ -9,14 +9,13 @@ import { markConditionSet } from '../../ReceivingProgressStepper';
 import { useSerialLookup, type SerialMatchedOrder } from '../../SerialMatchResult';
 import { takeSerialEditHandoff } from '../../serialEditHandoff';
 import { printProductLabel } from '@/lib/print/printProductLabel';
-import { SOURCE_PLATFORM_LABELS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { useLineSerials } from './useLineSerials';
 import { useReceiveAction } from './useReceiveAction';
 import { useZohoLinePrefill } from './useZohoLinePrefill';
 import { useReceivingLineCore } from './useReceivingLineCore';
 import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unbox-rail-events';
-import { useReceivingTypeLabel } from '@/hooks/useCatalog';
+import { useReceivingTypeLabel, usePlatformMeta } from '@/hooks/useCatalog';
 import type { LabelEditDraft } from '../LabelEditPopover';
 
 /**
@@ -40,6 +39,8 @@ export function useUnboxLineController(
   });
   // Resolve a receiving-type code → its org-catalog label for the printed face.
   const resolveTypeLabel = useReceivingTypeLabel();
+  // Resolve a source_platform slug → its org-catalog label for the printed face.
+  const resolvePlatformMeta = usePlatformMeta();
 
   const [qa, setQa] = useState(
     !row.qa_status || row.qa_status === 'PENDING' ? 'PASSED' : row.qa_status,
@@ -93,6 +94,28 @@ export function useUnboxLineController(
       : '';
     setSerialInput(latest);
   }, [row.id, row.serials]);
+
+  // Quick-return hotkey: Escape re-focuses the serial scan input from anywhere
+  // in the unbox panel, so the operator can resume scanning without reaching for
+  // the mouse. Only fires when no modal/dialog/select is currently active
+  // (avoids intercepting Escape from popovers, search fields, select elements).
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const active = document.activeElement;
+      if (active === serialRef.current) return;
+      const tag = (active as HTMLElement | null)?.tagName ?? '';
+      // Let Escape do its natural job inside text inputs and selects — only
+      // intercept when focus is on a button, icon, or neutral element.
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // Aria-modal or role=dialog above us → a popover is open, let it handle the key.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      serialRef.current?.focus();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Clear any RETURN match when switching lines.
   useEffect(() => {
@@ -158,7 +181,7 @@ export function useUnboxLineController(
   const trackingHint = (row.tracking_number || core.trackingEdit || '').trim();
   // Platform precedence on the printed label.
   const derivedPlatform = core.sourcePlatform
-    ? (SOURCE_PLATFORM_LABELS[core.sourcePlatform] ?? core.sourcePlatform)
+    ? resolvePlatformMeta(core.sourcePlatform).label
     : String(core.receivingType || 'PO').toUpperCase() === 'PICKUP'
       ? 'Local pickup'
       : row.receiving_source === 'unmatched'

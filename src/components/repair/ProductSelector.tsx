@@ -264,15 +264,8 @@ export function ProductSelector({
   return (
     <div className={fillHeight ? 'flex h-full flex-col gap-4' : 'space-y-4'}>
 
-      {/* Search + Back */}
+      {/* Back + Search */}
       <div className="flex items-center gap-2">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={showAllProducts ? 'Search all repairs...' : isAtRoot ? 'Search categories...' : 'Search products...'}
-          className={`flex-1 ${blueInputClass}`}
-        />
         <button
           type="button"
           onClick={() => {
@@ -289,10 +282,18 @@ export function ProductSelector({
             );
           }}
           disabled={loading || (isAtRoot && !showAllProducts)}
-          className="flex h-[46px] w-[46px] items-center justify-center rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Go back"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={showAllProducts ? 'Search all repairs...' : isAtRoot ? 'Search categories...' : 'Search products...'}
+          className={`flex-1 ${blueInputClass}`}
+        />
       </div>
 
       {/* Manual Entry + SKU pairing */}
@@ -381,7 +382,7 @@ export function ProductSelector({
 
       {/* Content */}
       {!loading && !error && (
-        <div className={`${fillHeight ? 'flex-1' : 'max-h-[50vh]'} space-y-4 overflow-y-auto pr-1`}>
+        <div className={`${fillHeight ? 'flex-1' : 'max-h-[50vh]'} space-y-4 overflow-y-auto p-0.5`}>
 
           {/* Sub-categories */}
           {!showAllProducts && filteredCategories.length > 0 && (
@@ -437,10 +438,10 @@ export function ProductSelector({
                         key={product.id}
                         type="button"
                         onClick={() => toggleProduct(product)}
-                        className={`relative flex flex-col overflow-hidden rounded-xl text-left transition-all ${
+                        className={`relative flex flex-col overflow-hidden rounded-xl border-2 text-left transition-all ${
                           selected
-                            ? 'ring-2 ring-blue-500 shadow-md shadow-blue-500/20'
-                            : 'border border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                            ? 'border-blue-500 shadow-md shadow-blue-500/20'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm'
                         }`}
                       >
                         {/* Square image */}

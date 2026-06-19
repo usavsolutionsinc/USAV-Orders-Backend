@@ -12,6 +12,7 @@ import { emitToggleAll } from '@/lib/selection/table-selection';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { ReceivingClaimModal } from './receiving/workspace/ReceivingClaimModal';
+import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import { printProductLabel, printProductLabels } from '@/lib/print/printProductLabel';
 import { Copy, Printer, MessageSquare, User, Smartphone } from '@/components/Icons';
 import { toast } from '@/lib/toast';
@@ -390,6 +391,7 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
         <div className="relative flex h-full w-full flex-col">
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="relative min-h-0 flex-1 overflow-hidden">
+                <RightPaneOverlayHost className="relative flex h-full min-h-0 flex-col overflow-hidden">
                     {rightPane}
                     {isTestingHistory ? (
                         <ContextualSelectionBar
@@ -398,7 +400,8 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
                             actions={testingBulkActions}
                         />
                     ) : null}
-                </div>
+                </RightPaneOverlayHost>
+            </div>
             </div>
 
             <StationDetailsHandler viewMode="history" />

@@ -3,6 +3,7 @@ import {
   Archive,
   Barcode,
   Boxes,
+  Camera,
   DoorOpen,
   Calendar,
   Check,
@@ -40,6 +41,7 @@ import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 export type SidebarRouteKey =
   | 'dashboard'
   | 'operations'
+  | 'ops-photos'
   | 'studio'
   | 'fba'
   | 'receiving'
@@ -119,9 +121,10 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
-  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'station', requires: 'fba.view' },
+  { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'main',    requires: 'fba.view' },
+  { id: 'ops-photos',        label: 'Photo library', href: '/ops/photos',       icon: Camera,          kind: 'main',    requires: 'photos.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Packer,          kind: 'station', requires: 'packing.view' },
-  { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'station', requires: 'integrations.zendesk' },
+  { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom', requires: 'integrations.zendesk' },
   { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
   { id: 'previous-quarters', label: 'Quarters',    href: '/previous-quarters',  icon: Calendar,        kind: 'bottom', requires: 'reports.view' },
@@ -167,6 +170,7 @@ export function getSidebarRouteKey(pathname: string | null): SidebarRouteKey {
   if (!pathname) return 'unknown';
   if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) return 'dashboard';
   if (pathname === '/operations' || pathname.startsWith('/operations/')) return 'operations';
+  if (pathname === '/ops/photos' || pathname.startsWith('/ops/photos/')) return 'ops-photos';
   if (pathname === '/studio' || pathname.startsWith('/studio/')) return 'studio';
   if (pathname === '/fba' || pathname.startsWith('/fba/')) return 'fba';
   if (pathname === '/receiving' || pathname.startsWith('/receiving/')) return 'receiving';
@@ -222,6 +226,7 @@ export function isSidebarNavActive(pathname: string | null, href: string): boole
 export const ROUTE_PERMISSIONS: ReadonlyArray<{ prefix: string; permission: string }> = [
   { prefix: '/audit-log',          permission: 'admin.view_logs' },
   { prefix: '/admin',              permission: 'admin.view' },
+  { prefix: '/ops/photos',           permission: 'photos.view' },
   { prefix: '/operations',         permission: 'operations.view' },
   { prefix: '/dashboard',          permission: 'dashboard.view' },
   { prefix: '/fba',                permission: 'fba.view' },
@@ -396,7 +401,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Amazon FBA ────────────────────────────────────────────────────────────
   // `?mode=plan|combine|shipped`; default `combine` (param cleared).
   {
-    id: 'fba', label: 'Amazon FBA', href: FBA, icon: Boxes, kind: 'station', requires: 'fba.view',
+    id: 'fba', label: 'Amazon FBA', href: FBA, icon: Boxes, kind: 'main', requires: 'fba.view',
     modes: [
       { id: 'plan',    label: 'Plan',    icon: ClipboardList, to: () => ({ pathname: FBA, params: { mode: 'plan' } }) },
       { id: 'combine', label: 'Combine', icon: Package,       to: () => ({ pathname: FBA, params: { mode: null } }) },

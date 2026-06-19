@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
@@ -48,6 +49,13 @@ export default function NasPhotosPreviewPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      <div className="border-b border-amber-500/30 bg-amber-950/40 px-4 py-2 text-center text-sm text-amber-100">
+        NAS preview only — photos here are not attached to POs. For searchable attached photos, use{' '}
+        <Link href="/ops/photos" className="font-semibold underline underline-offset-2">
+          Photo library
+        </Link>
+        .
+      </div>
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-white/10 bg-black/90 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">

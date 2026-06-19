@@ -94,6 +94,17 @@ export function BlockRenderer({ instance }: { instance: BlockInstanceConfig }) {
         run: async (row: SourceRow) => {
           setPendingAction({ actionId: a.id, rowId: row.id });
           try {
+            // The attach-tracking action requires user input (tracking number) so
+            // it delegates to the IncomingAttachTrackingPopover via a custom event
+            // rather than calling the API directly.
+            if (a.id === 'incoming.attach_tracking') {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('station:attach-tracking', {
+                  detail: { poId: row.po_id ?? null, poNumber: row.po_number ?? null },
+                }));
+              }
+              return true;
+            }
             const res = await fetch(a.endpoint.path.replace(':id', encodeURIComponent(row.id)), {
               method: a.endpoint.method,
               headers: { 'Content-Type': 'application/json' },

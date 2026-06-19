@@ -9,6 +9,7 @@ export type IntentDomain =
   | 'fba'
   | 'inventory'
   | 'exceptions'
+  | 'photos'
   | 'bose_manual';
 
 export type IntentParams = {
@@ -18,6 +19,8 @@ export type IntentParams = {
   sku?: string;
   ticketNumber?: string;
   repairStatus?: string;
+  poRef?: string;
+  damageDetected?: boolean;
   rawQuery?: string;
   modelNumber?: string;
 };
@@ -111,6 +114,18 @@ const DOMAIN_RULES: Array<{
       /\bquantity\b/i,
       /\bqty\b/i,
       /\bunit(s)?\b/i,
+    ],
+  },
+  {
+    domain: 'photos',
+    patterns: [
+      /\bphoto(s)?\b/i,
+      /\bpicture(s)?\b/i,
+      /\bimage(s)?\b/i,
+      /\bclaim evidence\b/i,
+      /\bdamage(d)?\b/i,
+      /\bshare pack\b/i,
+      /\bphoto library\b/i,
     ],
   },
   {
@@ -247,6 +262,16 @@ export function extractParams(message: string, intents: IntentDomain[]): IntentP
       params.repairStatus = value;
       break;
     }
+  }
+
+  if (intents.includes('photos') || intents.includes('receiving')) {
+    const poMatch = text.match(/\bpo\s*#?\s*(\d[\d-]{0,20})\b/i);
+    if (poMatch?.[1]) params.poRef = poMatch[1].trim();
+  }
+
+  if (intents.includes('photos')) {
+    params.rawQuery = text;
+    if (/\bdamage(d)?\b/i.test(text)) params.damageDetected = true;
   }
 
   if (intents.includes('bose_manual')) {

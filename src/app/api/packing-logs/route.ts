@@ -14,6 +14,7 @@ import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged, pu
 import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
+import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
     '1': 4,
@@ -420,12 +421,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
                 if (notFoundPackerLogId && photoUrls.length > 0) {
                     for (const url of photoUrls) {
-                        await pool.query(
-                            `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-                             VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-                             ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                            [notFoundPackerLogId, url, staffId]
-                        );
+                        await attachPhotoWithLegacyUrl({
+                            organizationId: ctx.organizationId,
+                            staffId,
+                            entityType: 'PACKER_LOG',
+                            entityId: notFoundPackerLogId,
+                            legacyUrl: url,
+                            photoType: 'box_label',
+                            idempotent: true,
+                        });
                     }
                 }
 
@@ -580,12 +584,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
             if (foundPackerLogId && photoUrls.length > 0) {
                 for (const url of photoUrls) {
-                    await pool.query(
-                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                        [foundPackerLogId, url, staffId]
-                    );
+                    await attachPhotoWithLegacyUrl({
+                        organizationId: ctx.organizationId,
+                        staffId,
+                        entityType: 'PACKER_LOG',
+                        entityId: foundPackerLogId,
+                        legacyUrl: url,
+                        photoType: 'box_label',
+                        idempotent: true,
+                    });
                 }
             }
 
@@ -786,12 +793,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         }
         if (nonOrderPackerLogId && photoUrls.length > 0) {
             for (const url of photoUrls) {
-                    await pool.query(
-                        `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-                         VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-                         ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-                        [nonOrderPackerLogId, url, staffId]
-                    );
+                    await attachPhotoWithLegacyUrl({
+                        organizationId: ctx.organizationId,
+                        staffId,
+                        entityType: 'PACKER_LOG',
+                        entityId: nonOrderPackerLogId,
+                        legacyUrl: url,
+                        photoType: 'box_label',
+                        idempotent: true,
+                    });
             }
         }
 

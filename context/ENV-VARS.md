@@ -60,6 +60,37 @@ SQUARE_LOCATION_ID=
 BLOB_READ_WRITE_TOKEN=  # Vercel Blob
 ```
 
+## Photos platform (GCS catalog — docs/photos-platform-plan.md)
+
+Primary photo bytes land in Google Cloud Storage; Neon holds the catalog (`photos`, `photo_entity_links`, `photo_storage`).
+
+**Platform fallback (orgs without `photo_storage_providers` row):**
+```
+PHOTOS_GCS_BUCKET=usav-photos-dev          # use usav-photos-prod in production
+PHOTOS_GCS_PROJECT_ID=
+GOOGLE_APPLICATION_CREDENTIALS_JSON=       # full service-account JSON, single line
+PHOTOS_DEFAULT_PROVIDER=gcs
+PHOTOS_UPLOAD_PROVIDER=adapter             # adapter | legacy — legacy keeps NAS/Blob capture paths
+PHOTOS_SIGNED_URL_TTL_SECONDS=3600
+PHOTOS_SHARE_DEFAULT_TTL_DAYS=30
+PHOTOS_THUMB_MAX_PX=256
+PHOTOS_UPLOAD_MAX_BYTES=8388608            # 8 MB
+PHOTOS_NAS_MIRROR_AFTER_DAYS=90          # future NAS cold-mirror cron
+NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER=adapter
+PHOTOS_ANALYZE_ENABLED=false
+PHOTOS_ANALYZE_ON_UPLOAD=false
+PHOTOS_ANALYZE_PROVIDER=hermes          # hermes (default) | vision | catalog
+PHOTOS_JOB_MAX_ATTEMPTS=5
+```
+
+**Client:** when `NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER=adapter`, mobile/desktop capture POSTs multipart to `/api/photos/upload` instead of NAS WebDAV PUT + URL attach.
+
+**Analysis (opt-in):** set `PHOTOS_ANALYZE_ENABLED=true` to process `photo_jobs` via cron. Default provider is **Hermes** (`HERMES_API_URL`) — no GCP Vision required. Set `PHOTOS_ANALYZE_PROVIDER=vision` only if you want Cloud Vision OCR instead. Cron: `/api/cron/photos/analyze`.
+
+**NAS cold mirror:** `/api/cron/photos/nas-mirror` runs daily; requires `NAS_AGENT_URL` + `NAS_AGENT_TOKEN` (or `NAS_DEV_ROOT` locally).
+
+**Legacy URL attach:** `POST /api/receiving-photos` with `photoUrl` still works for NAS picker flows but returns a `Deprecation` header — prefer `POST /api/photos/upload`.
+
 ## NAS (Synology — receiving / shipping photos)
 
 Storage lives on the **Synology NAS**, mounted on the office Mac at `/Volumes/USAV Media`.

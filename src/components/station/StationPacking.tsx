@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Barcode, AlertCircle, Loader2, Package } from '../Icons';
 import { getLast4 } from '../ui/CopyChip';
@@ -31,6 +31,14 @@ interface ActiveFbaScan {
   isNew: boolean; // true if no existing fba_shipment_items row was found (added on-the-fly)
 }
 
+type PackMode = 'standard' | 'fragile' | 'multi';
+
+const PACK_MODE_LABELS: Record<PackMode, string> = {
+  standard: 'Standard',
+  fragile: 'Fragile — extra bubble wrap, double-box if needed',
+  multi: 'Multi-Item — verify ALL items before sealing',
+};
+
 interface StationPackingProps {
   userId: string;
   userName: string;
@@ -39,6 +47,8 @@ interface StationPackingProps {
   goal?: number;
   onComplete?: () => void;
   embedded?: boolean;
+  /** Current pack mode selected in the sidebar mode rail. */
+  packMode?: PackMode;
 }
 
 export default function StationPacking({
@@ -49,13 +59,27 @@ export default function StationPacking({
   goal = 50,
   onComplete,
   embedded = false,
+  packMode = 'standard',
 }: StationPackingProps) {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
+  const [skuPackNotes, setSkuPackNotes] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch per-SKU pack notes whenever the active order's SKU changes.
+  useEffect(() => {
+    const sku = activeOrder?.sku?.trim();
+    if (!sku) { setSkuPackNotes(null); return; }
+    let cancelled = false;
+    fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(sku)}`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setSkuPackNotes(data?.packNotes || null); })
+      .catch(() => { if (!cancelled) setSkuPackNotes(null); });
+    return () => { cancelled = true; };
+  }, [activeOrder?.sku]);
 
   const { theme: themeColor, colors: themeColors, inputBorder, inputTheme: activeColor } = useStationTheme({ staffId });
   const { normalizeTrackingQuery, normalizeTracking } = useLast8TrackingSearch();
@@ -214,6 +238,12 @@ export default function StationPacking({
             theme={themeColor}
           />
 
+          {packMode !== 'standard' ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-caption font-semibold text-amber-800">
+              {PACK_MODE_LABELS[packMode]}
+            </div>
+          ) : null}
+
           <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -353,6 +383,14 @@ export default function StationPacking({
                     </p>
                   </div>
                 </div>
+
+                {/* Per-SKU pack instructions from sku_catalog.notes */}
+                {skuPackNotes ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-eyebrow font-black text-amber-700 uppercase tracking-wider mb-1">Pack instructions</p>
+                    <p className="text-caption font-semibold text-amber-900 whitespace-pre-wrap">{skuPackNotes}</p>
+                  </div>
+                ) : null}
               </motion.div>
             )}
           </AnimatePresence>

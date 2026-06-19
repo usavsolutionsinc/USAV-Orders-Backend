@@ -240,18 +240,24 @@ export async function getPackingTrackingDetail(
 
   const packerLogIds = packerLogsRes.rows.map((r: Record<string, unknown>) => r.id as number);
 
-  // Pack photos live in the shared `photos` table (entity_type='PACKER_LOG'),
-  // not a column on packer_logs. Group them by packer_log id.
+  // Pack photos are linked through photo_entity_links; group by packer_log id.
   const packerPhotosRes =
     packerLogIds.length > 0
       ? await runQuery(
           orgId,
-          `SELECT entity_id, url
-             FROM photos
-            WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1::int[])${
-              orgId ? ' AND organization_id = $2::uuid' : ''
+          `SELECT
+             l.entity_id,
+             '/api/photos/' || p.id::text || '/content' AS url
+           FROM photos p
+           INNER JOIN photo_entity_links l
+             ON l.photo_id = p.id
+            AND l.organization_id = p.organization_id
+          WHERE l.entity_type = 'PACKER_LOG'
+            AND l.entity_id = ANY($1::int[])
+            AND l.link_role = 'primary'${
+              orgId ? ' AND p.organization_id = $2::uuid' : ''
             }
-            ORDER BY created_at ASC, id ASC`,
+          ORDER BY p.created_at ASC, p.id ASC`,
           orgId ? [packerLogIds, orgId] : [packerLogIds],
         )
       : { rows: [] as Record<string, unknown>[] };

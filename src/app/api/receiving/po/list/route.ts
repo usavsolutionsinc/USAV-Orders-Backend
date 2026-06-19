@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,23 +100,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
               COALESCE(p.photo_count, 0) AS photo_count
          FROM grouped g
          LEFT JOIN LATERAL (
-              -- PO-level photos for this receiving package PLUS item-level
-              -- photos for every receiving_lines row under it. Item-level
-              -- photos live as (entity_type='RECEIVING_LINE', entity_id=line.id)
-              -- and pivot back to receiving_id via the receiving_lines join.
-              -- $1 is the tenant orgId (first positional param) — scope both
-              -- photo buckets and the rl2 pivot to it.
-              SELECT
-                (SELECT COUNT(*)::int FROM photos
-                  WHERE entity_type = 'RECEIVING' AND entity_id = g.receiving_id
-                    AND organization_id = $1)
-                +
-                (SELECT COUNT(*)::int FROM photos pl
-                   JOIN receiving_lines rl2 ON (rl2.id = pl.entity_id
-                        AND rl2.organization_id = pl.organization_id)
-                  WHERE pl.entity_type = 'RECEIVING_LINE'
-                    AND pl.organization_id = $1
-                    AND rl2.receiving_id = g.receiving_id) AS photo_count
+              SELECT ${sqlReceivingPhotoCount('g.receiving_id', '$1')}::int AS photo_count
          ) p ON TRUE
          ${
            view === 'open'

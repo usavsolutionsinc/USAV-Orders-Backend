@@ -26,8 +26,8 @@ BEGIN
     WHERE conrelid = 'reason_codes'::regclass
       AND conname = 'reason_codes_code_key'
   ) THEN
-    ALTER TABLE reason_codes DROP CONSTRAINT reason_codes_code_key;
-    RAISE NOTICE 'dropped global unique reason_codes_code_key';
+    ALTER TABLE reason_codes DROP CONSTRAINT reason_codes_code_key CASCADE;
+    RAISE NOTICE 'dropped global unique reason_codes_code_key (CASCADE)';
   END IF;
 
   -- Add the tenant-scoped natural key. The POST /api/reason-codes 409-on-dup

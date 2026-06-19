@@ -13,9 +13,10 @@ import { PhoneHistoryPopover } from '@/components/quick-access/PhoneHistoryPopov
 import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPopover';
 import { ClipboardHistoryPopover } from '@/components/quick-access/ClipboardHistoryPopover';
 import { SyncStatusPopover } from '@/components/quick-access/SyncStatusPopover';
+import { FeedbackPopover } from '@/components/quick-access/FeedbackWidget';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
-type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync' | 'clipboard';
+type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync' | 'clipboard' | 'feedback';
 
 function initials(name: string): string {
   return name
@@ -213,6 +214,7 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
             onOpenHistoryPopover={() => setPopover('history')}
             onOpenInboxPopover={() => setPopover('inbox')}
             onOpenSyncPopover={isAdmin && !isMobile ? () => setPopover('sync') : undefined}
+            onOpenFeedbackPopover={() => setPopover('feedback')}
             compact={isMobile}
           />
         </AnchoredLayer>
@@ -233,6 +235,15 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           gap={4}
         >
           <SyncStatusPopover onClose={() => setPopover('none')} />
+        </AnchoredLayer>
+        <AnchoredLayer
+          open={popover === 'feedback'}
+          onClose={() => setPopover('none')}
+          anchorRef={accountAnchorRef}
+          placement="bottom-end"
+          gap={4}
+        >
+          <FeedbackPopover onClose={() => setPopover('none')} />
         </AnchoredLayer>
       </div>
     </div>

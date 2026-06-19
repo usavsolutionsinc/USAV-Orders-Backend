@@ -419,9 +419,7 @@ export function ShippedDetailsPanel({
                   : []),
                 { value: 'shipping' as const, label: 'Shipping' },
                 { value: 'product' as const, label: 'Product' },
-                ...(context === 'dashboard' || isFulfillmentPanel || isLabelsPanel || context === 'shipped'
-                  ? [{ value: 'timeline' as const, label: 'Timeline' }]
-                  : []),
+                { value: 'timeline' as const, label: 'Timeline' },
                 ...(context === 'dashboard' || isFulfillmentPanel || isLabelsPanel
                   ? [{ value: 'customer' as const, label: 'Customer' }]
                   : []),

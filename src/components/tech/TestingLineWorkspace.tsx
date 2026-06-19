@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Loader2 } from '@/components/Icons';
 import {
   dispatchSelectLine,
   type ReceivingLineRow,
@@ -18,31 +19,20 @@ interface Props {
   onSelectedLineChange: (id: number | null) => void;
 }
 
-/**
- * Mirrors the receiving page's restore key but on its own namespace — testers
- * and receivers often work different lines at once on the same browser, so
- * sharing the key would yank one role's view into the other's.
- */
 const LAST_TESTING_LINE_KEY = 'usav:testing:last-line-id';
 
-/**
- * Owns the testing workspace's selected `row` (the receiving page's
- * ReceivingLineWorkspace plays the same role for unbox). Listens for
- * `receiving-select-line` (rail + scan), restores the last line on mount, and
- * merges `receiving-line-updated` patches — then hands a non-null row to
- * TestingPanel, which composes the shared cards + verdict flow.
- */
 export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineChange }: Props) {
   const [row, setRow] = useState<ReceivingLineRow | null>(null);
+  const [restoring, setRestoring] = useState(true);
   const lastSelectedRef = useRef<number | null>(null);
 
-  // Listen for `receiving-select-line` — same event the rail + scan resolver fire.
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<ReceivingSelectLineDetail>).detail;
       const { row: next } = readSelectLineDetail(detail);
       if (next) {
         setRow(next);
+        setRestoring(false);
         onSelectedLineChange(next.id);
         lastSelectedRef.current = next.id;
         try {
@@ -60,9 +50,6 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
     return () => window.removeEventListener('receiving-select-line', handler);
   }, [onSelectedLineChange]);
 
-  // Restore the last opened testing line on mount (localStorage → most-recent),
-  // dispatched through `receiving-select-line` so the handler above + the
-  // sidebar's rail highlight both pick it up.
   const rowRef = useRef<ReceivingLineRow | null>(null);
   rowRef.current = row;
   useEffect(() => {
@@ -107,8 +94,12 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
         const restored = await fetchById(storedId);
         if (cancelled) return;
         if (restored) {
-          if (rowRef.current) return;
+          if (rowRef.current) {
+            setRestoring(false);
+            return;
+          }
           dispatchSelectLine(restored);
+          setRestoring(false);
           return;
         }
         try {
@@ -117,10 +108,19 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
           /* non-fatal */
         }
       }
-      if (cancelled || rowRef.current) return;
+      if (cancelled || rowRef.current) {
+        setRestoring(false);
+        return;
+      }
       const recent = await fetchMostRecent();
-      if (cancelled || !recent || rowRef.current) return;
-      dispatchSelectLine(recent);
+      if (cancelled) {
+        setRestoring(false);
+        return;
+      }
+      if (recent && !rowRef.current) {
+        dispatchSelectLine(recent);
+      }
+      setRestoring(false);
     })();
 
     return () => {
@@ -128,8 +128,6 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
     };
   }, []);
 
-  // Optimistic updates from elsewhere (rail patches, controller mutations, sibling
-  // switch). Merge into the held row.
   useEffect(() => {
     const handler = (event: Event) => {
       const patch = (event as CustomEvent<Partial<ReceivingLineRow>>).detail;
@@ -144,10 +142,26 @@ export function TestingLineWorkspace({ staffId, selectedLineId, onSelectedLineCh
     return () => window.removeEventListener('receiving-line-updated', handler);
   }, []);
 
-  // Mount-time restore handles the no-row case, so there's no operator-facing
-  // empty prompt — just a quiet holding area until the restored row lands.
+  if (restoring && !row) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gray-50">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400" aria-hidden />
+        <p className="text-caption font-bold uppercase tracking-widest text-gray-400">
+          Loading testing workspace…
+        </p>
+      </div>
+    );
+  }
+
   if (!row) {
-    return <div className="h-full w-full bg-gray-50" aria-hidden />;
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gray-50 px-6 text-center">
+        <p className="text-sm font-bold text-gray-700">No line selected</p>
+        <p className="max-w-sm text-caption text-gray-500">
+          Scan a unit or PO from the sidebar, or pick a line from the testing rail to begin.
+        </p>
+      </div>
+    );
   }
 
   return <TestingPanel key={row.id} row={row} staffId={staffId} />;

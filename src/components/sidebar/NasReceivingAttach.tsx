@@ -27,10 +27,10 @@ function NasPickerShell({
       <RightPaneOverlay
         open
         onClose={onClose}
-        align="center"
+        align="right"
+        width={672}
         closeOnEscape={false}
         aria-label="Select from NAS, pair to PO"
-        className="w-[min(92%,42rem)] rounded-2xl border-0 shadow-2xl ring-1 ring-gray-200"
       >
         {children}
       </RightPaneOverlay>

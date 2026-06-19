@@ -3,7 +3,8 @@
 import React, { useRef } from 'react';
 import { PaneHeader, PaneHeaderTitle } from '@/components/ui/pane-header';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
-import { Printer, Package, Link2, Sparkles } from '@/components/Icons';
+import { Printer, Package, Link2, Sparkles, Camera } from '@/components/Icons';
+import Link from 'next/link';
 import {
   InventoryLinkagePopover,
   CompatibilityPopover,
@@ -75,6 +76,16 @@ export function UnitDetailHeader({
             active={popover.open === 'similar'}
             onClick={() => popover.toggle('similar')}
           />
+          <Link
+            href={`/ops/photos?entityType=SERIAL_UNIT&entityId=${unit.id}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Photos in library"
+            aria-label="Photos in library"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <Camera className="h-4 w-4" />
+          </Link>
 
           {popover.open === 'inventory' && (
             <InventoryLinkagePopover

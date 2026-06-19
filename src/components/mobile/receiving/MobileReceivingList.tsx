@@ -7,6 +7,7 @@ import {
   safeChannelName,
   getPhoneBridgeChannelName,
   getStaffStationBridgeChannelName,
+  getStationChannelName,
 } from '@/lib/realtime/channels';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useNasConfig } from '@/hooks/useNasConfig';
@@ -88,6 +89,14 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
     'receiving_photo_uploaded',
     refetch,
     !!phoneChannel && staffId > 0,
+  );
+
+  const stationChannel = safeChannelName(() => getStationChannelName(orgId!));
+  useAblyChannel(
+    stationChannel,
+    'receiving-photo.changed',
+    refetch,
+    !!stationChannel,
   );
 
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });

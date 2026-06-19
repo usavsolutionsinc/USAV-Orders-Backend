@@ -6,7 +6,12 @@ import { getOrganization } from '@/lib/tenancy/organizations';
 import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
-import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
+import {
+  getReceivingPhotoDeleteMeta,
+  listReceivingPhotos,
+} from '@/lib/photos/queries/receiving-list';
+import { resolvePoRef } from '@/lib/photos/resolve-po-ref';
+import { attachPhotoWithLegacyUrl, deletePhoto } from '@/lib/photos/service';
 import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 
 export const dynamic = 'force-dynamic';
@@ -45,44 +50,27 @@ interface PhotoRow {
   createdAt: string;
 }
 
-interface DbRow {
+function mapRow(row: {
   id: number;
-  entity_type: string;
-  entity_id: number;
-  receiving_id_resolved: number | null;
+  entityType: string;
+  entityId: number;
+  receivingIdResolved: number | null;
   url: string;
   caption: string | null;
-  uploaded_by: number | null;
-  created_at: string;
-}
-
-function mapRow(row: DbRow): PhotoRow {
-  const isLine = row.entity_type === 'RECEIVING_LINE';
+  uploadedBy: number | null;
+  createdAt: string;
+}): PhotoRow {
+  const isLine = row.entityType === 'RECEIVING_LINE';
   return {
-    id: Number(row.id),
-    receivingId: row.receiving_id_resolved != null ? Number(row.receiving_id_resolved) : null,
-    receivingLineId: isLine ? Number(row.entity_id) : null,
-    photoUrl: normalizePhotoDisplayUrl(row.url),
+    id: row.id,
+    receivingId: row.receivingIdResolved,
+    receivingLineId: isLine ? row.entityId : null,
+    photoUrl: row.url,
     caption: row.caption || null,
-    uploadedBy: row.uploaded_by != null ? Number(row.uploaded_by) : null,
-    createdAt: row.created_at,
+    uploadedBy: row.uploadedBy,
+    createdAt: row.createdAt,
   };
 }
-
-// Resolve receiving_id whether the row is scoped to RECEIVING or RECEIVING_LINE.
-// For RECEIVING rows it's entity_id itself; for RECEIVING_LINE rows we look it
-// up through receiving_lines so callers can still pivot by PO/receiving package.
-const SELECT_WITH_RID = `
-  p.id, p.entity_type, p.entity_id,
-  CASE
-    WHEN p.entity_type = 'RECEIVING'      THEN p.entity_id
-    WHEN p.entity_type = 'RECEIVING_LINE' THEN rl.receiving_id
-    ELSE NULL
-  END AS receiving_id_resolved,
-  p.url, p.photo_type AS caption,
-  p.taken_by_staff_id AS uploaded_by,
-  p.created_at
-`;
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
@@ -95,38 +83,23 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const lineIdRaw = params.get('receivingLineId');
     const scope = params.get('scope');
 
-    let where: string;
-    const values: unknown[] = [];
+    const lineId =
+      lineIdRaw != null
+        ? (() => {
+            const n = Number(lineIdRaw);
+            if (!Number.isFinite(n) || n <= 0) {
+              throw ApiError.badRequest('Valid receivingLineId is required');
+            }
+            return n;
+          })()
+        : null;
 
-    if (lineIdRaw != null) {
-      const lineId = Number(lineIdRaw);
-      if (!Number.isFinite(lineId) || lineId <= 0) {
-        throw ApiError.badRequest('Valid receivingLineId is required');
-      }
-      where = `p.entity_type = 'RECEIVING_LINE' AND p.entity_id = $1`;
-      values.push(lineId);
-    } else if (scope === 'po') {
-      where = `p.entity_type = 'RECEIVING' AND p.entity_id = $1`;
-      values.push(receivingId);
-    } else {
-      // Combined: PO-level photos for this receiving package + item-level
-      // photos for every receiving_lines row under it.
-      where =
-        `(p.entity_type = 'RECEIVING'      AND p.entity_id = $1) OR ` +
-        `(p.entity_type = 'RECEIVING_LINE' AND rl.receiving_id = $1)`;
-      values.push(receivingId);
-    }
-
-    const result = await pool.query<DbRow>(
-      `SELECT ${SELECT_WITH_RID}
-         FROM photos p
-         LEFT JOIN receiving_lines rl
-                ON p.entity_type = 'RECEIVING_LINE'
-               AND rl.id = p.entity_id
-        WHERE ${where}
-        ORDER BY p.created_at ASC`,
-      values,
-    );
+    const rows = await listReceivingPhotos({
+      organizationId: ctx.organizationId,
+      receivingId,
+      lineId,
+      scope: scope === 'po' ? 'po' : 'all',
+    });
 
     // Surface when this carton was physically scanned/received so the NAS picker
     // can anchor the "PO scan time" sort on the moment the photos were actually
@@ -169,7 +142,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     }
 
     return NextResponse.json({
-      photos: result.rows.map(mapRow),
+      photos: rows.map(mapRow),
       receivingCreatedAt: cartonRes.rows[0]?.created_at ?? null,
       initialNasFolder,
       nasBaseUrl,
@@ -224,34 +197,44 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       throw ApiError.badRequest('photoUrl must point at the configured NAS address');
     }
 
+    // Phase C: NAS URL attach is legacy — prefer POST /api/photos/upload (adapter path).
+    console.warn(
+      '[POST /api/receiving-photos] photoUrl attach is deprecated; use POST /api/photos/upload',
+      { receivingId, receivingLineId },
+    );
+
     const entityType = receivingLineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = receivingLineId ?? receivingId;
-
-    const finalUrl = photoUrl;
+    const poRef = await resolvePoRef(entityType, entityId);
     const photoType = caption || (receivingLineId != null ? 'receiving_item' : 'receiving');
 
-    const inserted = await pool.query(
-      `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (entity_type, entity_id, url) DO NOTHING
-       RETURNING id`,
-      [entityType, entityId, finalUrl, uploadedBy, photoType],
-    );
+    let attached;
+    try {
+      attached = await attachPhotoWithLegacyUrl({
+        organizationId: ctx.organizationId,
+        staffId: uploadedBy,
+        entityType,
+        entityId,
+        legacyUrl: photoUrl,
+        photoType,
+        poRef,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Photo already exists') {
+        throw ApiError.conflict('Photo already exists');
+      }
+      throw err;
+    }
 
-    if (inserted.rowCount === 0) throw ApiError.conflict('Photo already exists');
-
-    // Re-read with the receiving_id resolver so the response matches GET shape.
-    const read = await pool.query<DbRow>(
-      `SELECT ${SELECT_WITH_RID}
-         FROM photos p
-         LEFT JOIN receiving_lines rl
-                ON p.entity_type = 'RECEIVING_LINE'
-               AND rl.id = p.entity_id
-        WHERE p.id = $1`,
-      [inserted.rows[0].id],
-    );
-
-    const photo = mapRow(read.rows[0]);
+    const photo: PhotoRow = {
+      id: attached.id,
+      receivingId,
+      receivingLineId,
+      photoUrl: attached.url,
+      caption,
+      uploadedBy,
+      createdAt: new Date().toISOString(),
+    };
     await publishReceivingPhotoChanged({
       organizationId: ctx.organizationId as OrgId,
       action: 'insert',
@@ -261,7 +244,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       source: 'receiving-photos.post',
     });
 
-    return NextResponse.json({ success: true, photo });
+    return NextResponse.json(
+      { success: true, photo },
+      {
+        headers: {
+          Deprecation: 'photoUrl attach — prefer POST /api/photos/upload with multipart bytes',
+        },
+      },
+    );
   } catch (error) {
     return errorResponse(error, 'POST /api/receiving-photos');
   }
@@ -274,41 +264,17 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
       throw ApiError.badRequest('Valid id is required');
     }
 
-    const existing = await pool.query<{
-      entity_type: string;
-      entity_id: number;
-      receiving_id_resolved: number | null;
-    }>(
-      `SELECT p.entity_type, p.entity_id,
-              CASE
-                WHEN p.entity_type = 'RECEIVING'      THEN p.entity_id
-                WHEN p.entity_type = 'RECEIVING_LINE' THEN rl.receiving_id
-                ELSE NULL
-              END AS receiving_id_resolved
-         FROM photos p
-         LEFT JOIN receiving_lines rl
-                ON p.entity_type = 'RECEIVING_LINE'
-               AND rl.id = p.entity_id
-        WHERE p.id = $1
-          AND p.entity_type IN ('RECEIVING', 'RECEIVING_LINE')`,
-      [id],
-    );
-    if (existing.rowCount === 0) throw ApiError.notFound('photo', id);
-    const existingPhoto = existing.rows[0];
+    const existingPhoto = await getReceivingPhotoDeleteMeta(id, ctx.organizationId);
+    if (!existingPhoto) throw ApiError.notFound('photo', id);
 
-    // Photos live on the NAS now. Deleting just unlinks the DB row; the file
-    // stays on the NAS share (same behavior the NAS picker has always had).
-    // Legacy rows may still hold a Vercel Blob URL from before the migration —
-    // those are left untouched too.
-    await pool.query(`DELETE FROM photos WHERE id = $1`, [id]);
+    await deletePhoto(id, ctx.organizationId);
 
-    if (existingPhoto?.receiving_id_resolved) {
+    if (existingPhoto.receivingId) {
       await publishReceivingPhotoChanged({
         organizationId: ctx.organizationId as OrgId,
         action: 'delete',
-        receivingId: Number(existingPhoto.receiving_id_resolved),
-        receivingLineId:
-          existingPhoto.entity_type === 'RECEIVING_LINE' ? Number(existingPhoto.entity_id) : null,
+        receivingId: existingPhoto.receivingId,
+        receivingLineId: existingPhoto.receivingLineId,
         photoId: id,
         source: 'receiving-photos.delete',
       });

@@ -9,6 +9,7 @@ import { createAuditLog } from '@/lib/audit-logs';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
+import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
 
 const LEGACY_PACKER_ALIAS_TO_STAFF_ID: Record<string, number> = {
   '1': 4,
@@ -111,8 +112,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             AND EXISTS (
               SELECT 1
                 FROM photos p
-               WHERE p.entity_type = 'PACKER_LOG'
-                 AND p.entity_id = pl.id
+                INNER JOIN photo_entity_links l
+                  ON l.photo_id = p.id
+                 AND l.organization_id = p.organization_id
+               WHERE l.entity_type = 'PACKER_LOG'
+                 AND l.entity_id = pl.id
+                 AND l.link_role = 'primary'
+                 AND p.organization_id = pl.organization_id
             )
           ORDER BY pl.id DESC
           LIMIT 1`,
@@ -193,12 +199,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       // 2. Insert photo URLs into the unified photos table
       if (packerLogId && photoUrlList.length > 0) {
         for (const url of photoUrlList) {
-          await client.query(
-            `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-             VALUES ('PACKER_LOG', $1, $2, $3, 'box_label')
-             ON CONFLICT (entity_type, entity_id, url) DO NOTHING`,
-            [packerLogId, url, staffId]
-          );
+          await attachPhotoWithLegacyUrl({
+            organizationId: ctx.organizationId,
+            staffId,
+            entityType: 'PACKER_LOG',
+            entityId: packerLogId,
+            legacyUrl: url,
+            photoType: 'box_label',
+            idempotent: true,
+          });
         }
         console.log(`Inserted ${photoUrlList.length} photo(s) into photos table`);
       }

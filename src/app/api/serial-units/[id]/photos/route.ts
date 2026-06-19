@@ -5,15 +5,16 @@ import { recordInventoryEvent } from '@/lib/inventory/events';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
 import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
+import { photoContentUrl } from '@/lib/photos/display-url';
+import { attachPhotoWithLegacyUrl, listPhotosForEntity } from '@/lib/photos/service';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Serial-unit photo endpoint — photos a packer captures when scanning a
- * pre-packed product's QR at the pack station. Stored polymorphically on the
- * `photos` table like every other scope:
- *   (entity_type='SERIAL_UNIT', entity_id=serial_units.id)
+ * pre-packed product's QR at the pack station. Linked via photo_entity_links
+ * (entity_type='SERIAL_UNIT', entity_id=serial_units.id).
  *
  * Photos live on the office NAS (browser-direct WebDAV PUT), not Vercel Blob —
  * the same model receiving uses. This route never handles bytes; the browser
@@ -29,32 +30,6 @@ export const dynamic = 'force-dynamic';
  *        then emit ONE `NOTE` inventory_event so the capture shows on the unit's
  *        timeline (the detail panel already renders inventory_events).
  */
-
-interface PhotoRow {
-  id: number;
-  url: string;
-  photoType: string | null;
-  uploadedBy: number | null;
-  createdAt: string;
-}
-
-interface DbRow {
-  id: number;
-  url: string;
-  photo_type: string | null;
-  uploaded_by: number | null;
-  created_at: string;
-}
-
-function mapRow(row: DbRow): PhotoRow {
-  return {
-    id: Number(row.id),
-    url: row.url,
-    photoType: row.photo_type || null,
-    uploadedBy: row.uploaded_by != null ? Number(row.uploaded_by) : null,
-    createdAt: row.created_at,
-  };
-}
 
 function extractIdSegment(pathname: string): string {
   const m = /\/api\/serial-units\/([^/]+)\/photos/.exec(pathname);
@@ -83,8 +58,6 @@ async function resolveUnit(raw: string): Promise<{ id: number; sku: string | nul
   return byUid.rows[0] ?? null;
 }
 
-const SELECT_COLS = `id, url, photo_type, taken_by_staff_id AS uploaded_by, created_at`;
-
 export const GET = withAuth(
   async (request: NextRequest, ctx) => {
     try {
@@ -93,13 +66,11 @@ export const GET = withAuth(
         return NextResponse.json({ success: false, error: 'Serial unit not found' }, { status: 404 });
       }
 
-      const result = await pool.query<DbRow>(
-        `SELECT ${SELECT_COLS}
-           FROM photos
-          WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1
-          ORDER BY created_at ASC`,
-        [unit.id],
-      );
+      const rows = await listPhotosForEntity({
+        organizationId: ctx.organizationId,
+        entityType: 'SERIAL_UNIT',
+        entityId: unit.id,
+      });
 
       // The active NAS base + this operator's folder, so the capture surface can
       // PUT photos straight to the share. Best-effort — never let a settings
@@ -121,7 +92,13 @@ export const GET = withAuth(
 
       return NextResponse.json({
         success: true,
-        photos: result.rows.map(mapRow),
+        photos: rows.map((row) => ({
+          id: row.id,
+          url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),
+          photoType: row.photoType,
+          uploadedBy: row.takenByStaffId,
+          createdAt: row.createdAt,
+        })),
         nasBaseUrl,
         initialNasFolder,
       });
@@ -172,6 +149,7 @@ export const POST = withAuth(
       const isAllowed = (url: string) =>
         allowedBases.length === 0 ||
         url.startsWith('/') ||
+        url.startsWith('/api/photos/') ||
         allowedBases.some((base) => url === base || url.startsWith(`${base}/`));
       const bad = urls.find((u) => !isAllowed(u));
       if (bad) {
@@ -183,14 +161,18 @@ export const POST = withAuth(
 
       const insertedIds: number[] = [];
       for (const url of urls) {
-        const ins = await pool.query<{ id: number }>(
-          `INSERT INTO photos (entity_type, entity_id, url, taken_by_staff_id, photo_type)
-           VALUES ('SERIAL_UNIT', $1, $2, $3, $4)
-           ON CONFLICT (entity_type, entity_id, url) DO NOTHING
-           RETURNING id`,
-          [unit.id, url, ctx.staffId ?? null, stage],
-        );
-        if (ins.rows[0]?.id) insertedIds.push(ins.rows[0].id);
+        const attached = await attachPhotoWithLegacyUrl({
+          organizationId: ctx.organizationId,
+          staffId: ctx.staffId ?? null,
+          entityType: 'SERIAL_UNIT',
+          entityId: unit.id,
+          legacyUrl: url,
+          photoType: stage,
+          idempotent: true,
+        });
+        if (attached.created) {
+          insertedIds.push(attached.id);
+        }
       }
 
       // One timeline marker per capture batch (not per photo) so the unit detail
@@ -211,19 +193,23 @@ export const POST = withAuth(
         }
       }
 
-      const read = await pool.query<DbRow>(
-        `SELECT ${SELECT_COLS}
-           FROM photos
-          WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1
-          ORDER BY created_at ASC`,
-        [unit.id],
-      );
+      const read = await listPhotosForEntity({
+        organizationId: ctx.organizationId,
+        entityType: 'SERIAL_UNIT',
+        entityId: unit.id,
+      });
 
       return NextResponse.json({
         success: true,
         unit_id: unit.id,
         inserted: insertedIds.length,
-        photos: read.rows.map(mapRow),
+        photos: read.map((row) => ({
+          id: row.id,
+          url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),
+          photoType: row.photoType,
+          uploadedBy: row.takenByStaffId,
+          createdAt: row.createdAt,
+        })),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to attach unit photos';

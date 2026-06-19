@@ -3,6 +3,7 @@ import { readTimeline } from '@/lib/inventory/events';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { listPhotosForEntity } from '@/lib/photos/service';
 
 /**
  * GET /api/serial-units/:id
@@ -225,15 +226,20 @@ export async function GET(
         // Photos captured against THIS unit (entity_type='SERIAL_UNIT') — the
         // packer's scan-the-QR + take-photos set. Surfaced so the detail panel
         // can render them alongside the timeline (one screen, full evidence).
-        tenantQuery(
-            orgId,
-            `SELECT id, url, photo_type, taken_by_staff_id AS uploaded_by, created_at
-               FROM photos
-              WHERE entity_type = 'SERIAL_UNIT' AND entity_id = $1 AND organization_id = $2
-              ORDER BY created_at ASC`,
-            [unitId, orgId],
+        listPhotosForEntity({
+          organizationId: orgId,
+          entityType: 'SERIAL_UNIT',
+          entityId: unitId,
+        })
+          .then((rows) =>
+            rows.map((row) => ({
+              id: row.id,
+              url: row.url,
+              photo_type: row.photoType,
+              uploaded_by: row.takenByStaffId,
+              created_at: row.createdAt,
+            })),
           )
-          .then((r) => r.rows)
           .catch(() => [] as unknown[]),
       ]);
       fullDetail = {

@@ -98,6 +98,8 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@google-cloud/storage": "^7.21.0",
+    "@google-cloud/vision": "^4.3.3",
     "@googleapis/sheets": "^13.0.1",
     "@nangohq/frontend": "^0.70.6",
     "@nangohq/node": "^0.70.6",

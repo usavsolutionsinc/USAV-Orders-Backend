@@ -8,17 +8,21 @@ import path from 'path';
  *
  * Run only against the `mobile` project:
  *   npx playwright test mobile-photos.spec.ts --project=mobile
+ *
+ * Note: mobile entry route varies by deployment — set PW_MOBILE_ENTRY_PATH
+ * (default `/m/receiving`) when the pick flow is not the photo capture surface.
  */
 test.use({ ...test.info().project.use, hasTouch: true });
 
 const TEST_TRACKING = process.env.PW_TEST_TRACKING || '1ZA8337B0325514010';
+const MOBILE_ENTRY = process.env.PW_MOBILE_ENTRY_PATH || '/m/receiving';
 const FIXTURE_DIR = path.resolve(__dirname, 'fixtures');
 
 test.describe('Mobile pipeline → photo upload → Zendesk attachment', () => {
   test('uploads photos and surfaces them in the Zendesk claim body', async ({ page }) => {
     test.skip(test.info().project.name !== 'mobile', 'mobile-only');
 
-    await page.goto('/m/pick'); // mobile packing/pick entry — adapt to your route
+    await page.goto(MOBILE_ENTRY);
     await page.getByPlaceholder(/Scan tracking/i).fill(TEST_TRACKING);
     await page.keyboard.press('Enter');
 

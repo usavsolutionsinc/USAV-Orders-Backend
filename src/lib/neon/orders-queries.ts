@@ -285,10 +285,20 @@ const ORDER_SERIALS_CTE = `
         pl.created_at AS packed_at,
         pl.tracking_type,
         COALESCE((
-          SELECT jsonb_agg(jsonb_build_object('id', p.id, 'url', p.url) ORDER BY p.created_at ASC)
+          SELECT jsonb_agg(
+                   jsonb_build_object(
+                     'id', p.id,
+                     'url', '/api/photos/' || p.id::text || '/content'
+                   )
+                   ORDER BY p.created_at ASC
+                 )
           FROM photos p
-          WHERE p.entity_type = 'PACKER_LOG'
-            AND p.entity_id = pl.id
+          INNER JOIN photo_entity_links l
+            ON l.photo_id = p.id
+           AND l.organization_id = p.organization_id
+          WHERE l.entity_type = 'PACKER_LOG'
+            AND l.entity_id = pl.id
+            AND l.link_role = 'primary'
         ), '[]'::jsonb) AS packer_photos_url
       FROM packer_logs pl
       WHERE pl.shipment_id IS NOT NULL
@@ -677,10 +687,20 @@ export async function getShippedOrderById(id: number, orgId?: OrgId): Promise<Sh
             pl.created_at AS packed_at,
             pl.tracking_type,
             COALESCE((
-              SELECT jsonb_agg(jsonb_build_object('id', p.id, 'url', p.url) ORDER BY p.created_at ASC)
+              SELECT jsonb_agg(
+                       jsonb_build_object(
+                         'id', p.id,
+                         'url', '/api/photos/' || p.id::text || '/content'
+                       )
+                       ORDER BY p.created_at ASC
+                     )
               FROM photos p
-              WHERE p.entity_type = 'PACKER_LOG'
-                AND p.entity_id = pl.id
+              INNER JOIN photo_entity_links l
+                ON l.photo_id = p.id
+               AND l.organization_id = p.organization_id
+              WHERE l.entity_type = 'PACKER_LOG'
+                AND l.entity_id = pl.id
+                AND l.link_role = 'primary'
             ), '[]'::jsonb) AS packer_photos_url
           FROM packer_logs pl
           WHERE pl.shipment_id IS NOT NULL

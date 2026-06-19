@@ -17,6 +17,7 @@ import {
 } from "@/components/nas/NasBrowserChrome";
 import { Layer } from "@/design-system";
 import { getNasPhotosPanel } from "./nas-photos-navigation";
+import { PhotosPlatformPanel } from "./PhotosPlatformPanel";
 
 /**
  * Admin → Receiving Photos.
@@ -524,6 +525,8 @@ export function StationNasFoldersTab({ mode }: StationNasFoldersTabProps) {
             </div>
           </>
         ) : null}
+
+        {panel === "platform" ? <PhotosPlatformPanel /> : null}
       </div>
 
       {picking ? (

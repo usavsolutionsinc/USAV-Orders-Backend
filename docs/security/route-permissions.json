@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-15T15:47:46Z",
-  "totalRoutes": 607,
+  "generatedAt": "2026-06-19T04:21:48Z",
+  "totalRoutes": 626,
   "summary": {
-    "permissionGated": 524,
-    "authenticatedNoPermission": 24,
-    "anonymousIntentional": 50,
+    "permissionGated": 536,
+    "authenticatedNoPermission": 27,
+    "anonymousIntentional": 52,
     "serviceToService": 3,
-    "ungatedRead": 6,
+    "ungatedRead": 8,
     "ungatedWrite": 0
   },
   "routes": [
@@ -144,10 +144,38 @@
       "exemptReason": null
     },
     {
+      "path": "/api/admin/organization/profile/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/admin/organization/settings/route.ts",
       "methods": [
         "GET",
         "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/photos/mirror/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/admin/photos/stats/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "admin.view",
@@ -1098,6 +1126,25 @@
     },
     {
       "path": "/api/cron/inventory/drift-check/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/photos/analyze/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/photos/nas-mirror/route.ts",
       "methods": [
         "GET"
       ],
@@ -2303,6 +2350,17 @@
       "exemptReason": "dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)"
     },
     {
+      "path": "/api/nas-target/[target]/[[...path]]/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "gate": "requireRoutePerm (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
       "path": "/api/nas/[[...path]]/route.ts",
       "methods": [
         "DELETE",
@@ -2697,11 +2755,93 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/[id]/content/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/[id]/route.ts",
       "methods": [
         "DELETE"
       ],
       "gate": "requireRoutePerm (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/analyze/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/library/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/nas-backup/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/links/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/share-packs/[token]/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/share-packs/[token]/zip/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/share-packs/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.share",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/upload/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
       "permission": null,
       "exemptReason": null
     },
@@ -3463,6 +3603,24 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/zendesk-claim/assist-seller/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/assist/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/zendesk-claim/classify/route.ts",
       "methods": [
         "POST"
@@ -3504,6 +3662,17 @@
       "path": "/api/receiving/zendesk-claim/route.ts",
       "methods": [
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/zendesk-claim/seller-message/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",
@@ -4549,6 +4718,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/sourcing/research/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sourcing.search",
+      "exemptReason": null
+    },
+    {
       "path": "/api/sourcing/saved-searches/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -5063,6 +5241,15 @@
       ],
       "gate": "withAuth",
       "permission": "bin.set",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/user-issues/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {

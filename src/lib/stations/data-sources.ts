@@ -122,9 +122,14 @@ const receivingAwaitingTrackingPos: DataSourceDefinition = {
       const key = po ?? `line-${l.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      const zohoPoId =
+        (l.zoho_purchaseorder_id as string | null) ??
+        (l.receiving_zoho_purchaseorder_id as string | null) ??
+        null;
       rows.push({
         id: String(l.id),
         po_number: po,
+        po_id: zohoPoId,
         vendor_name: l.vendor_name ?? null,
         sku: l.sku ?? null,
         po_date: l.po_date ?? null,

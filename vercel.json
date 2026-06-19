@@ -119,6 +119,14 @@
     {
       "path": "/api/cron/cleanup",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/photos/analyze?limit=15",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/photos/nas-mirror?limit=25",
+      "schedule": "30 4 * * *"
     }
   ]
 }

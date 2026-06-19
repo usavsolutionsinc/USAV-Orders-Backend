@@ -75,6 +75,16 @@ test('regression: sourcing.manage gates the compatibility mutation route', () =>
   );
 });
 
+test('regression: photos.view gates the photo library route', () => {
+  const paths = routesGatedBy('photos.view').map((r) => r.path);
+  assert.ok(paths.includes('/api/photos/library/route.ts'), 'photos.view should gate /api/photos/library');
+});
+
+test('regression: photos.share gates share pack creation', () => {
+  const paths = routesGatedBy('photos.share').map((r) => r.path);
+  assert.ok(paths.includes('/api/photos/share-packs/route.ts'), 'photos.share should gate share pack POST');
+});
+
 test('regression: handling_unit.view gates the handling-units read routes', () => {
   // Handling units (LPN) — docs/handling-unit-lpn-plan.md. The manifest records
   // the first-declared method's permission per file, so the read-first

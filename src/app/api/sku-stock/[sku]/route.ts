@@ -95,10 +95,21 @@ export async function GET(
         ),
         // 4. Photos for SKU records with this static_sku
         pool.query(
-          `SELECT p.id, p.entity_id AS sku_id, p.url, p.photo_type, p.taken_by_staff_id, p.created_at
+          `SELECT
+             p.id,
+             l.entity_id AS sku_id,
+             '/api/photos/' || p.id::text || '/content' AS url,
+             p.photo_type,
+             p.taken_by_staff_id,
+             p.created_at
            FROM photos p
-           JOIN sku s ON s.id = p.entity_id
-           WHERE p.entity_type = 'SKU' AND s.static_sku = $1
+           INNER JOIN photo_entity_links l
+             ON l.photo_id = p.id
+            AND l.organization_id = p.organization_id
+           JOIN sku s ON s.id = l.entity_id
+          WHERE l.entity_type = 'SKU'
+            AND l.link_role = 'primary'
+            AND s.static_sku = $1
            ORDER BY p.created_at DESC`,
           [skuValue],
         ),
