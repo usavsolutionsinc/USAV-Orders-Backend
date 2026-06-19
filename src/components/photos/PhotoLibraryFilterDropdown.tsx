@@ -1,22 +1,22 @@
 'use client';
 
+import { Calendar, Clock, History } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import {
-  DATE_PRESET_LABELS,
   datePresetFromFilters,
-} from '@/lib/photos/library-refinements';
-import {
-  PHOTO_ENTITY_TYPE_LABELS,
+  formatPhotoLibraryDateRange,
   type PhotoLibraryDatePreset,
   type PhotoLibraryFilterState,
 } from '@/lib/photos/library-filter-state';
+import { DATE_PRESET_LABELS } from '@/lib/photos/library-refinements';
+import { StaffRecipientList, type StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
 const DATE_PRESET_ITEMS: HorizontalSliderItem[] = [
-  { id: 'all', label: 'All' },
-  { id: 'today', label: 'Today' },
-  { id: 'yesterday', label: 'Yest.' },
-  { id: 'last7', label: '7d' },
-  { id: 'custom', label: 'Custom' },
+  { id: 'all', label: 'All', icon: Calendar },
+  { id: 'today', label: 'Today', icon: Clock },
+  { id: 'yesterday', label: 'Yesterday', icon: History },
+  { id: 'last7', label: '7d', icon: Calendar },
+  { id: 'custom', label: 'Custom', icon: Calendar },
 ];
 
 const fieldClass =
@@ -28,6 +28,7 @@ interface PhotoLibraryFilterDropdownProps {
   onPatch: (next: Partial<PhotoLibraryFilterState>) => void;
   onDatePreset: (preset: PhotoLibraryDatePreset) => void;
   onClose: () => void;
+  staffOptions: ReadonlyArray<StaffRecipient>;
 }
 
 export function PhotoLibraryFilterDropdown({
@@ -35,21 +36,26 @@ export function PhotoLibraryFilterDropdown({
   onPatch,
   onDatePreset,
   onClose,
+  staffOptions,
 }: PhotoLibraryFilterDropdownProps) {
   const datePreset = datePresetFromFilters(filters);
+  const dateRangeLabel = formatPhotoLibraryDateRange(filters);
 
   return (
     <div className="space-y-6">
       <div>
-        <p className={labelClass}>Date range</p>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className={labelClass}>Date range</p>
+          <p className="truncate text-[11px] font-semibold text-gray-500">{dateRangeLabel}</p>
+        </div>
         <HorizontalButtonSlider
           items={DATE_PRESET_ITEMS}
           value={datePreset}
           onChange={(id) => onDatePreset(id as PhotoLibraryDatePreset)}
-          variant="segmented"
+          variant="nav"
           dense
-          aria-label="Photo date range"
           className="w-full"
+          aria-label="Photo date range"
         />
         {datePreset === 'custom' ? (
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -73,66 +79,36 @@ export function PhotoLibraryFilterDropdown({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>PO #</span>
-          <input
-            className={fieldClass}
-            value={filters.poRef ?? ''}
-            onChange={(e) => onPatch({ poRef: e.target.value || undefined })}
-            placeholder="4421"
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className={labelClass}>Staff</span>
+          <span className="truncate text-[11px] font-semibold text-gray-500">
+            {filters.staffId
+              ? staffOptions.find((opt) => String(opt.id) === filters.staffId)?.name ??
+                `Staff #${filters.staffId}`
+              : 'Any staff'}
+          </span>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-2">
+          <StaffRecipientList
+            staff={staffOptions}
+            onPick={(staff) => onPatch({ staffId: String(staff.id) })}
+            currentStaffId={filters.staffId ? Number(filters.staffId) : null}
+            emptyLabel="No staff available."
+            title="Select staff"
+            className="max-h-[220px]"
           />
-        </label>
-        <label className="block">
-          <span className={labelClass}>Receiving ID</span>
-          <input
-            className={fieldClass}
-            aria-label="Receiving ID"
-            value={filters.receivingId ?? ''}
-            onChange={(e) => onPatch({ receivingId: e.target.value || undefined })}
-            placeholder="1987"
-          />
-        </label>
+          {filters.staffId ? (
+            <button
+              type="button"
+              onClick={() => onPatch({ staffId: undefined })}
+              className="mt-2 w-full rounded-lg border border-dashed border-gray-200 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 hover:bg-white hover:text-gray-900"
+            >
+              Clear staff
+            </button>
+          ) : null}
+        </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <label className="block">
-          <span className={labelClass}>Entity</span>
-          <select
-            className={fieldClass}
-            aria-label="Entity"
-            value={filters.entityType ?? ''}
-            onChange={(e) => onPatch({ entityType: e.target.value || undefined })}
-          >
-            <option value="">Any</option>
-            {Object.entries(PHOTO_ENTITY_TYPE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className={labelClass}>Entity ID</span>
-          <input
-            className={fieldClass}
-            aria-label="Entity ID"
-            value={filters.entityId ?? ''}
-            onChange={(e) => onPatch({ entityId: e.target.value || undefined })}
-            placeholder="Unit / line id"
-          />
-        </label>
-      </div>
-
-      <label className="block">
-        <span className={labelClass}>Staff ID</span>
-        <input
-          className={fieldClass}
-          value={filters.staffId ?? ''}
-          onChange={(e) => onPatch({ staffId: e.target.value || undefined })}
-          placeholder="Taken by staff"
-        />
-      </label>
 
       <div className="grid grid-cols-2 gap-3">
         <label className="block">

@@ -16,7 +16,6 @@ import {
 } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
-import { useNasConfig } from '@/hooks/useNasConfig';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { safeChannelName, getPhoneBridgeChannelName } from '@/lib/realtime/channels';
@@ -30,8 +29,9 @@ interface PhotoCaptureSurfaceProps {
   /** Subtitle line for the camera header ("PO 4421" or "PO 4421 · Item SG350-10"). */
   headerLabel: string;
   /**
-   * Human PO reference (Zoho PO number / id) used to name the saved NAS file —
-   * the photo lands as `{poRef}__….jpg`. Falls back to the package id when unset.
+   * Human PO reference (Zoho PO number / id) used to name the saved photo
+   * object — the photo lands as `{poRef}__….jpg`. Falls back to the package id
+   * when unset.
    */
   poRef?: string | null;
   /** Where to send the user after they tap Done — typically the previous detail screen. */
@@ -46,11 +46,11 @@ interface PhotoCaptureSurfaceProps {
  * Shared photo capture surface for PO-level and line-level scopes.
  *
  * On the green check-mark, shots enqueue into {@link PhotoUploadQueue}
- * (downscale → PUT /api/nas or /api/nas-dev → POST /api/receiving-photos)
+ * (downscale → POST /api/photos/upload → GCS)
  * and the operator returns to the unbox/detail screen immediately while uploads
  * finish in the background.
  *
- * Each committed upload publishes `receiving_photo_uploaded` so the NAS photo
+ * Each committed upload publishes `receiving_photo_uploaded` so the photo
  * strip and Take Photos `x{n}` count refresh on this device and the desktop.
  */
 export function PhotoCaptureSurface({
@@ -65,11 +65,6 @@ export function PhotoCaptureSurface({
   const router = useRouter();
   const queryClient = useQueryClient();
   useClearDoneOnUnmount();
-
-  const nas = useNasConfig();
-  useEffect(() => {
-    if (nas) photoUploadQueue.configureNas(nas);
-  }, [nas]);
 
   const { getClient } = useAblyClient();
   const { user } = useAuth();
@@ -174,7 +169,7 @@ export function PhotoCaptureSurface({
         );
       });
       toast.message(`Uploading ${shots.length} photo${shots.length === 1 ? '' : 's'}…`, {
-        description: 'Saving to NAS in the background.',
+        description: 'Saving to GCS in the background.',
         position: 'top-center',
         duration: 5000,
       });

@@ -1,16 +1,46 @@
 {
-  "generatedAt": "2026-06-18T01:34:27.095Z",
+  "generatedAt": "2026-06-19T19:05:05.035Z",
   "count": 200,
   "commits": [
     {
-      "sha": "ce107c2f14166323937f4040fd2a5181d37ed79d",
-      "shortSha": "ce107c2f",
+      "sha": "46f90b7ec09447eed480aab33ddf97bc190a4d9a",
+      "shortSha": "46f90b7e",
+      "date": "2026-06-17T13:34:57-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(integrations): platform_listings + connector reconcile groundwork",
+      "body": "- platform_listings: first-class per-channel listing (price/qty/condition,\n  own sync state + sync_hash for idempotent skip, nullable sku_catalog_id so\n  unresolved listings persist). Migration + drizzle schema + repo +\n  sync-hash util/test. Additive, RLS armed (not enforced).\n- connectors: add reconcile()/pushInventory() to the connector contract,\n  runReconcileAllOrgs orchestrator, and a daily /api/cron/integrations/reconcile\n  cron (CRON_SECRET-guarded, no-op until providers wire reconcile()).\n- receiving: photo capture/upload UX (mobile + line-edit), seller-message chip,\n  NAS attach, realtime invalidation, nas-photos/claim-photos tweaks.\n\nNote: .env.local intentionally not committed (contains a live Cloudflare\ntunnel token + provider secrets).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "platform_listings + connector reconcile groundwork"
+    },
+    {
+      "sha": "e820f9f2e842659b33362735e787e5a07e24b057",
+      "shortSha": "e820f9f2",
+      "date": "2026-06-19T08:46:36-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(photos): GCS-backed photos platform with library, share packs, and entity links",
+      "body": "Migrate photo capture and display across receiving, packing, testing, and claims to a unified GCS storage layer with Neon entity links, ops Photo Library UI, public share packs, NAS mirror cron, and analysis jobs. Includes DB migrations, backfill scripts, route permissions, E2E coverage, repair intake stepper, and print label refactors.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "feature",
+      "title": "GCS-backed photos platform with library, share packs, and entity links"
+    },
+    {
+      "sha": "98aa3284ed8a66d9703dcd53512921fd69c0e313",
+      "shortSha": "98aa3284",
       "date": "2026-06-17T18:24:29-07:00",
       "author": "DENSENSE8",
       "subject": "updates to the admin and settings and carton context card",
       "body": "",
       "type": "other",
       "title": "updates to the admin and settings and carton context card"
+    },
+    {
+      "sha": "5064c4c61ceb2f163f2750c4c31480efb537c08c",
+      "shortSha": "5064c4c6",
+      "date": "2026-06-17T09:15:01-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat(nas): Synology media agent, mobile photo UX, and claim seller assist",
+      "body": "Route NAS writes through /api/nas-target and the office NAS Media Agent;\nadd mobile gallery/swipe capture, admin NAS sidebar, Hermes client + sourcing\nresearch, and Zendesk claim seller-message drafting with guardrails.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "feature",
+      "title": "Synology media agent, mobile photo UX, and claim seller assist"
     },
     {
       "sha": "8a757a0f145200bd5b7b52b99a015ed9c251750c",
@@ -1971,36 +2001,6 @@
       "body": "Per context/inventory_system_upgrade_plan.md §6.2 and §10 Phase 3.\nBehind INVENTORY_V2_TECH_LIFECYCLE (OFF by default). Off-flag, every\ntech-scan flow is byte-identical to today.\n\nPhase 3 has two prongs:\n\nA) Passive linkage (insertTechSerialForTracking.ts):\n   Every tech-scanned serial that lands a tech_serial_numbers row also\n   gets a matching serial_units master row + the new serial_unit_id FK\n   stamped + an inventory_events NOTE entry so the unit's timeline\n   reflects the scan. Emits 'NOTE' (not TEST_START) because a tech\n   add-serial does not necessarily imply testing intent — many scans\n   are outbound-order association.\n\n   - linkTechSerialToInventoryV2(db, args): upsert serial_units by\n     normalized_serial (fill-in only via COALESCE), stamp FK on the\n     just-inserted TSN row, append inventory_events with payload\n     carrying source='tech.add-serial' + tech_serial_number_id.\n   - Wrapped in try/catch so any failure logs and the legacy write\n     path (tech_serial_numbers + SAL + orders.status_history) remains\n     authoritative.\n\nB) Active state transitions (new /api/tech/test-result):\n   POST endpoint that records explicit test outcomes for a single\n   serialized unit. Three actions:\n     'start' → TEST_START event, unit → IN_TEST\n     'pass'  → TEST_PASS event,  unit → GRADED  (optional grade update\n                writes serial_unit_condition_history row referencing\n                the new inventory_event)\n     'fail'  → TEST_FAIL event,  unit → IN_REPAIR\n\n   Body: serial_unit_id | serial_number, action, condition_grade?,\n   notes?, client_event_id? (UUID for idempotent retries).\n\n   Single transaction. Gated on the flag — off-flag returns 503 so\n   callers can fall back to legacy tech-station flows. Permission gate:\n   tech.scan_serial (existing technician permission).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)"
-    },
-    {
-      "sha": "14ebb811e2e037994c42ccb40d2fd8a9db75ffd7",
-      "shortSha": "14ebb811",
-      "date": "2026-05-17T22:33:10-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.1 and §10 Phase 2.\nBehind INVENTORY_V2_RECEIVING_PUTAWAY (OFF by default). Off-flag\nbehavior is byte-identical to the previous mark-received flow.\n\nFeature flag helper (src/lib/feature-flags.ts):\n- Central env-var reader for all inventory v2 phase flags. Truthy parser\n  accepts true|1|on|yes. Snapshot helper for admin/debug pages.\n- One flag per phase (RECEIVING_PUTAWAY, TECH_LIFECYCLE, ALLOCATION,\n  PACKING, FBA_SERIAL_LINK, RETURNS) so each rollout flips\n  independently.\n\nReceive + putaway transaction (src/app/api/receiving/mark-received/route.ts):\n- New helper applyInventoryV2Effects() wraps four writes in one\n  transaction() (from @/lib/neon-client):\n    1. serial_units upsert (Tier 3) with current_location set when a\n       destination bin is provided. Replaces the standalone upsert in\n       the flagged path; off-flag path keeps the original upsert.\n    2. sku_stock_ledger row +qtyReceived (reason='RECEIVED',\n       dimension='WAREHOUSE') when sku is set, qty > 0, and\n       disposition is ACCEPT. The trg_sku_stock_from_ledger trigger\n       projects this onto sku_stock.stock atomically.\n    3. inventory_events RECEIVED — always emitted on the flagged path,\n       even when qty=0 or disposition=SCRAP/RTV, so the lifecycle\n       timeline reflects every intake.\n    4. inventory_events PUTAWAY — only when destination_bin_id is set\n       AND disposition=ACCEPT. Also flips serial_units.current_status\n       to STOCKED.\n- New optional request fields:\n    destination_bin_id   — locations.id of the bin scanned at receive time\n    client_event_id      — UUID from the scanner UI for idempotent retries\n                           (suffixed :RECEIVED / :PUTAWAY internally so\n                           one client token covers both events).\n- Response carries the inventory_v2 result block when the flag is on,\n  so the scanner UI can confirm the events landed.\n\nBest-effort overlay design: the line update commits independently\n(unchanged). If the new transaction fails, we log and continue rather\nthan failing the whole receive — matches existing Zoho-failure handling\nin the same route.\n\nZero new tsc errors (baseline of 2 pre-existing TS2347 unchanged).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 2: receive + putaway in one transaction (flagged)"
-    },
-    {
-      "sha": "4fdada3d0f3d47e1ceba083b8659c7adbfc754ba",
-      "shortSha": "4fdada3d",
-      "date": "2026-05-17T22:28:29-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes",
-      "body": "Per context/inventory_system_upgrade_plan.md §7 (scan + labels) and §10\nPhase 1. Additive only — no existing scan flow is altered.\n\nScan resolver (src/lib/scan-resolver.ts):\n- Add parseScannedUrl() recognizing GS1 Digital Link (/01/{gtin}/21/{serial},\n  /01/{gtin}/10/{lot}, /01/{gtin}) plus internal short prefixes (/l, /p,\n  /o, /s, /q). Returns a discriminated ScannedUrlEntity or null so callers\n  can fall through to the legacy classifyInput pattern cascade.\n- Tolerant of scheme-less inputs (\"inv.example.com/01/...\") via a URL\n  placeholder fallback.\n- buildGs1UnitUrl + buildInternalEntityUrl helpers for the inverse direction\n  (label generation).\n\nLabel printing (src/lib/print/zpl-templates.ts, /api/print/dispatch):\n- buildUnitZpl: new template for Tier-3 GS1 unit labels (2x1\" / 406x203\n  dots, same stock as existing carton/product/bin). QR encodes the GS1\n  Digital Link URL via the new builder.\n- Extend LabelClass union with 'unit' and add the switch case in\n  POST /api/print/dispatch.\n- Migration 2026-05-17_inventory_v2_phase1.sql: replace\n  printer_profiles.default_for CHECK to allow 'unit'.\n\nInternal scan resolver API (src/app/api/scan/resolve/route.ts):\n- GET|POST /api/scan/resolve accepts {input} and returns a typed\n  {kind, source, entity, redirectTo} payload. URL branch first, then\n  classifyInput fallback. Resolves serial_units.id and sku_catalog.sku\n  lookups when possible so the scanner UI doesn't need a second hop.\n\nPublic scan-URL landings (src/app/{l,p,o,s,q}/...):\n- /l/[ref]   redirects to /sku-stock/location/{barcode} on match.\n- /s/[sku]   redirects to /sku-stock/{sku}.\n- /p/[tracking] redirects to /shipped?tracking=...\n- /o/[orderId]  redirects to /dashboard?orderId=...\n- /q/[payload]  redirects to /m/signin?scan=... (mobile UA) or\n                /dashboard?scan=... (desktop). Generic landing for\n                opaque scanner tokens.\n- The existing /01/[gtin]/21/[serial] and /01/[gtin] pages already\n  cover GS1 Digital Link unit + product paths; left unchanged.\n\nDatabase queries in new files use the typed @/lib/neon-client helpers\n(queryOne) rather than the loosely-typed default pool, so my Phase 1\nadditions add zero new TS2347 errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 1: GS1 Digital Link scan resolver + unit labels + scan routes"
-    },
-    {
-      "sha": "2a8fc962147ddea5d3ab6c077e065e985a52d966",
-      "shortSha": "2a8fc962",
-      "date": "2026-05-17T11:20:14-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 0: schema declarations + migration + repositories",
-      "body": "Pure-foundation phase. Zero behavior change to existing routes; all\nexisting reads/writes continue to work. Sets up the typed Drizzle layer\nand the new tables the application code will start using in Phase 1+.\n\nPer context/inventory_system_upgrade_plan.md §5 (Schema decisions) and\n§10 (Phase 0 — Schema and ORM alignment).\n\nDrizzle schema (src/lib/drizzle/schema.ts):\n- New pgEnum serialStatusEnum with original 2026-04-10 set plus Phase 0\n  expansion (TRIAGED, IN_REPAIR, REPAIR_DONE, IN_TEST, GRADED,\n  ALLOCATED, PACKED, LABELED, STAGED, ON_HOLD).\n- Declare existing-but-undeclared inventory tables: locations,\n  binContents, locationTransfers, serialUnits, skuStockLedger,\n  inventoryEvents, reasonCodes, printerProfiles, stockAlerts,\n  cycleCountCampaigns, cycleCountLines. All previously accessed via\n  raw SQL only; now typed.\n- Add Phase 0 NEW tables: serialUnitConditionHistory,\n  orderUnitAllocations, fbaShipmentItemUnits, unitIdSequences.\n- Re-export $inferSelect/$inferInsert types for every new table.\n\nMigration (src/lib/migrations/2026-05-17_inventory_v2_phase0.sql):\n- ALTER TYPE serial_status_enum ADD VALUE × 10 (idempotent DO blocks).\n- CREATE TABLE serial_unit_condition_history with chk_grade_changed\n  CHECK (prev_grade IS DISTINCT FROM new_grade).\n- CREATE TABLE order_unit_allocations with partial UNIQUE INDEX\n  idx_oua_open_unit on serial_unit_id WHERE state != 'RELEASED'\n  (enforces one open allocation per unit; released history preserved).\n- CREATE TABLE fba_shipment_item_units (Tier-3 FBA serial linkage).\n- CREATE TABLE unit_id_sequences with fn_next_unit_seq() function for\n  atomic per-SKU-per-year sequence allocation.\n\nBackfill (scripts/backfill-tech-serial-unit-id.mjs):\n- Idempotent: stamps tech_serial_numbers.serial_unit_id by find-or-create\n  on serial_units.normalized_serial. Skips FNSKU-type and empty serials.\n- Supports --dry-run, --limit N, --batch-size N. Safe to run repeatedly.\n\nRepositories (src/lib/repositories/inventory/):\n- serialUnits: upsertSerialUnit (fill-in only via COALESCE on conflict),\n  findBy{Normalized,Serial}, getById, normalizeSerial.\n- inventoryEvents: appendInventoryEvent with clientEventId idempotency\n  (returns {event, created}); typed InventoryEventType union;\n  listEventsFor{SerialUnit,Sku,ReceivingLine}; listRecentEventsByType.\n- stockLedger: appendLedgerRow with delta != 0 guard; listLedgerForSku;\n  ledgerSum (validates trigger projection).\n- locations: findLocationBy{Barcode,Name}; listBins (room/binType filter,\n  skips room-header rows); listBinContentsBy{Location,Sku};\n  totalBinQtyForSku.\n- allocations: allocate (relies on idx_oua_open_unit for collision);\n  advanceState (rejects RELEASED rows); release (idempotent);\n  findOpenAllocationForUnit; listAllocationsForOrder.\n- conditionHistory: recordChange (DB CHECK rejects no-op); listHistoryForUnit.\n- index.ts: namespaced barrel exports.\n\nWhat this commit does NOT do:\n- Touch any existing API route or workflow.\n- Run the migration or backfill (those are deploy-time / ops actions).\n- Wire the new repositories into receiving / tech / pack / FBA flows\n  (that's Phase 1–5, gated behind feature flags per the plan).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 0: schema declarations + migration + repositories"
     }
   ]
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { del } from '@vercel/blob';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';

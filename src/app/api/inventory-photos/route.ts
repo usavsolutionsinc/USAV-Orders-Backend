@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
-import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
+import { uploadPhoto } from '@/lib/photos/service';
 import { photoContentUrl } from '@/lib/photos/display-url';
 
 /**
@@ -49,24 +49,22 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ error: 'photoBase64 is required' }, { status: 400 });
     }
 
-    const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
-    const slot = ledgerId ?? 'orphan';
-    const filename = `bin_adjustments/${slot}/${Date.now()}.jpg`;
-    const blob = await put(filename, buffer, { access: 'public', contentType: 'image/jpeg' });
-
     // photos.entity_id is NOT NULL — only insert when we have a ledgerId to
     // hang the photo on. Orphan uploads (no ledger row) still land in Blob
     // storage so they aren't lost; the audit linkage is just missing.
     let inserted: { id: number } | null = null;
+    const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
     if (ledgerId != null) {
-      const attached = await attachPhotoWithLegacyUrl({
+      const attached = await uploadPhoto({
         organizationId: ctx.organizationId,
         staffId,
         entityType: 'BIN_ADJUSTMENT',
         entityId: ledgerId,
-        legacyUrl: blob.url,
         photoType,
+        fileBuffer: buffer,
+        contentType: 'image/jpeg',
+        poRef: sku,
       });
       inserted = { id: attached.id };
 
@@ -90,11 +88,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       });
     }
 
+    const slot = ledgerId ?? 'orphan';
+    const filename = `bin_adjustments/${slot}/${Date.now()}.jpg`;
+    const blob = ledgerId != null ? null : await put(filename, buffer, { access: 'public', contentType: 'image/jpeg' });
+
     return NextResponse.json({
       success: true,
       photo: {
         id: inserted?.id ?? null,
-        url: blob.url,
+        url: inserted?.id ? photoContentUrl(inserted.id) : blob?.url ?? null,
         ledgerId,
         alertId,
         sku,

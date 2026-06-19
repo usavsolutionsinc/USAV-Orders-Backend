@@ -12,6 +12,7 @@ import {
   sqlReceivingPhotoCount,
 } from '@/lib/photos/queries/receiving-list';
 import { resolvePoRef } from '@/lib/photos/resolve-po-ref';
+import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
 import { attachPhotoWithLegacyUrl, deletePhoto } from '@/lib/photos/service';
 import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 
@@ -150,8 +151,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       nasBaseUrl = '';
     }
 
+    const photos = await Promise.all(
+      rows.map(async (row) => ({
+        ...mapRow(row),
+        photoUrl: await resolvePhotoAccessUrl(row.id, ctx.organizationId, 'full'),
+      })),
+    );
+
     return NextResponse.json({
-      photos: rows.map(mapRow),
+      photos,
       receivingCreatedAt: cartonRes.rows[0]?.created_at ?? null,
       initialNasFolder,
       nasBaseUrl,
@@ -255,7 +263,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
 
     return NextResponse.json(
-      { success: true, photo },
+      {
+        success: true,
+        photo: {
+          ...photo,
+          photoUrl: await resolvePhotoAccessUrl(photo.id, ctx.organizationId, 'full'),
+        },
+      },
       {
         headers: {
           Deprecation: 'photoUrl attach — prefer POST /api/photos/upload with multipart bytes',

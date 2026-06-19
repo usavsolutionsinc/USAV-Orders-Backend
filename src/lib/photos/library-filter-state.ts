@@ -8,20 +8,22 @@
 export interface PhotoLibraryFilterState {
   dateFrom?: string;
   dateTo?: string;
+  sourceScope?: PhotoLibrarySourceScope;
+  sort?: PhotoLibrarySortMode;
   poRef?: string;
   receivingId?: string;
-  entityType?: string;
-  entityId?: string;
   staffId?: string;
   q?: string;
   damageDetected?: string;
   hasAnalysis?: string;
 }
 
-/** Sidebar source folders — mapped to `entityType` filters on the API. */
+/** Sidebar source folders — mapped to API entity types internally. */
 export type PhotoLibrarySourceScope = 'all' | 'unboxing' | 'packing' | 'claims';
 
 export type PhotoLibraryDatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'custom';
+
+export type PhotoLibrarySortMode = 'recent' | 'oldest';
 
 export type PhotoLibraryViewMode = 'grid-sm' | 'grid-lg' | 'list';
 
@@ -43,11 +45,7 @@ export const PHOTO_ENTITY_TYPE_LABELS: Record<string, string> = {
 };
 
 export function sourceScopeFromFilters(filters: PhotoLibraryFilterState): PhotoLibrarySourceScope {
-  const t = filters.entityType;
-  if (t === 'RECEIVING' || t === 'RECEIVING_LINE') return 'unboxing';
-  if (t === 'PACKER_LOG') return 'packing';
-  if (t === 'ZENDESK_TICKET') return 'claims';
-  return 'all';
+  return filters.sourceScope ?? 'all';
 }
 
 export function entityTypeForSourceScope(scope: PhotoLibrarySourceScope): string | undefined {
@@ -70,6 +68,11 @@ export function parsePhotoLibraryViewMode(raw: string | null): PhotoLibraryViewM
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function parseSourceScope(raw: string | null): PhotoLibrarySourceScope | undefined {
+  if (raw === 'all' || raw === 'unboxing' || raw === 'packing' || raw === 'claims') return raw as PhotoLibrarySourceScope;
+  return undefined;
 }
 
 export function datePresetFromFilters(filters: PhotoLibraryFilterState): PhotoLibraryDatePreset {
@@ -114,18 +117,45 @@ export function applyDatePreset(preset: PhotoLibraryDatePreset): Pick<PhotoLibra
   return {};
 }
 
+function formatShortDatePst(dateKey: string): string {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+export function formatPhotoLibraryDateRange(filters: PhotoLibraryFilterState): string {
+  const preset = datePresetFromFilters(filters);
+  if (preset === 'all') return 'All dates';
+  if (preset === 'today') return 'Today';
+  if (preset === 'yesterday') return 'Yesterday';
+  if (preset === 'last7') return 'Last 7 days';
+  if (filters.dateFrom && filters.dateTo) {
+    const from = formatShortDatePst(filters.dateFrom);
+    const to = formatShortDatePst(filters.dateTo);
+    return filters.dateFrom === filters.dateTo ? from : `${from} to ${to}`;
+  }
+  if (filters.dateFrom) return `From ${formatShortDatePst(filters.dateFrom)}`;
+  if (filters.dateTo) return `Until ${formatShortDatePst(filters.dateTo)}`;
+  return 'Custom range';
+}
+
 export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryFilterState {
   const next: PhotoLibraryFilterState = {};
-  const set = (key: keyof PhotoLibraryFilterState, param: string) => {
+  const set = (key: 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q' | 'damageDetected' | 'hasAnalysis', param: string) => {
     const v = params.get(param)?.trim();
     if (v) next[key] = v;
   };
   set('dateFrom', 'dateFrom');
   set('dateTo', 'dateTo');
+  const sourceScope = parseSourceScope(params.get('sourceScope'));
+  if (sourceScope) next.sourceScope = sourceScope;
+  const sort = params.get('sort');
+  if (sort === 'recent' || sort === 'oldest') next.sort = sort as PhotoLibrarySortMode;
   set('poRef', 'poRef');
   set('receivingId', 'receivingId');
-  set('entityType', 'entityType');
-  set('entityId', 'entityId');
   set('staffId', 'staffId');
   set('q', 'q');
   set('damageDetected', 'damageDetected');
@@ -154,13 +184,18 @@ export function photoLibraryFiltersToParams(
     'dateTo',
     'poRef',
     'receivingId',
-    'entityType',
-    'entityId',
     'staffId',
     'q',
     'damageDetected',
     'hasAnalysis',
   ];
+  if (filters.sourceScope && filters.sourceScope !== 'all') {
+    params.set('sourceScope', filters.sourceScope);
+  } else {
+    params.delete('sourceScope');
+  }
+  if (filters.sort && filters.sort !== 'recent') params.set('sort', filters.sort);
+  else params.delete('sort');
   for (const key of keys) {
     const val = filters[key]?.trim();
     if (val) params.set(key, val);
@@ -186,8 +221,6 @@ export function countActivePhotoLibraryFilters(filters: PhotoLibraryFilterState)
   let n = 0;
   if (filters.poRef) n++;
   if (filters.receivingId) n++;
-  if (filters.entityType) n++;
-  if (filters.entityId) n++;
   if (filters.staffId) n++;
   if (filters.damageDetected) n++;
   if (filters.hasAnalysis) n++;
@@ -204,8 +237,6 @@ export function clearStructuredPhotoFilters(
     dateTo: undefined,
     poRef: undefined,
     receivingId: undefined,
-    entityType: undefined,
-    entityId: undefined,
     staffId: undefined,
     damageDetected: undefined,
     hasAnalysis: undefined,

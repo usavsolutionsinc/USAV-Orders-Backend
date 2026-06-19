@@ -1,32 +1,34 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import {
   buildPhotoLibraryRefinements,
-  datePresetFromFilters,
   photoLibraryStructuredFilterCount,
 } from '@/lib/photos/library-refinements';
 import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoLibrarySidebarNav } from './PhotoLibrarySidebarNav';
-
-const DATE_QUICK_ITEMS: HorizontalSliderItem[] = [
-  { id: 'all', label: 'All dates' },
-  { id: 'today', label: 'Today' },
-  { id: 'last7', label: '7d' },
-];
+import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
 export function PhotoLibrarySidebarPanel() {
-  const router = useRouter();
   const { filters, patch, setDatePreset, setSourceScope, clearStructured, clearAll } =
     usePhotoLibraryUrlState();
   const { query } = usePhotoLibrary(filters);
+  const { data: staffRows = [] } = useQuery<StaffRecipient[]>({
+    queryKey: ['staff-picker'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/staff-picker', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load staff');
+      const data = (await res.json()) as { staff?: StaffRecipient[] };
+      return data.staff ?? [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
 
   const [searchInput, setSearchInput] = useState(filters.q ?? '');
   const debouncedQ = useDebounce(searchInput, 250);
@@ -43,30 +45,14 @@ export function PhotoLibrarySidebarPanel() {
   }, [debouncedQ]);
 
   const refinements = useMemo(
-    () => buildPhotoLibraryRefinements(filters, { patch, setDatePreset, clearStructured }),
-    [filters, patch, setDatePreset, clearStructured],
+    () =>
+      buildPhotoLibraryRefinements(filters, { patch, setDatePreset, clearStructured }, {
+        staffNameForId: (id) => staffRows.find((row) => String(row.id) === id)?.name,
+      }),
+    [clearStructured, filters, patch, setDatePreset, staffRows],
   );
 
   const structuredCount = photoLibraryStructuredFilterCount(filters);
-  const datePreset = datePresetFromFilters(filters);
-  const dateQuickValue =
-    datePreset === 'today' ? 'today' : datePreset === 'last7' ? 'last7' : 'all';
-
-  const handleDateQuick = useCallback(
-    (id: string) => {
-      if (id === 'all') setDatePreset('all');
-      else if (id === 'today') setDatePreset('today');
-      else if (id === 'last7') setDatePreset('last7');
-    },
-    [setDatePreset],
-  );
-
-  const handleNavigateRecent = useCallback(
-    (href: string) => {
-      router.push(href);
-    },
-    [router],
-  );
 
   return (
     <SidebarShell
@@ -90,21 +76,10 @@ export function PhotoLibrarySidebarPanel() {
             onPatch={patch}
             onDatePreset={setDatePreset}
             onClose={onClose}
+            staffOptions={staffRows}
           />
         ),
       }}
-      headerRows={[
-        <HorizontalButtonSlider
-          key="date-quick"
-          items={DATE_QUICK_ITEMS}
-          value={dateQuickValue}
-          onChange={handleDateQuick}
-          variant="nav"
-          dense
-          aria-label="Quick date range"
-          className="w-full"
-        />,
-      ]}
       bodyClassName="scrollbar-hide pb-2 pt-2"
       footer={
         <div className="border-t border-gray-100 px-3 py-2">
@@ -124,9 +99,10 @@ export function PhotoLibrarySidebarPanel() {
         </div>
       ) : null}
       <PhotoLibrarySidebarNav
-        filters={filters}
+        sourceScope={filters.sourceScope ?? 'all'}
+        sort={filters.sort ?? 'recent'}
         onSelectScope={setSourceScope}
-        onNavigateRecent={handleNavigateRecent}
+        onSelectSort={(sort) => patch({ sort })}
       />
     </SidebarShell>
   );

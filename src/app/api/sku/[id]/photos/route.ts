@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { photoContentUrl } from '@/lib/photos/display-url';
-import { attachPhotoWithLegacyUrl, listPhotosForEntity } from '@/lib/photos/service';
+import { attachPhotoWithLegacyUrl, listPhotosForEntity, uploadPhoto } from '@/lib/photos/service';
 
 /**
  * GET  /api/sku/[id]/photos        — list integrity photos for a SKU record
- * POST /api/sku/[id]/photos        — add a photo (base64 or URL) to a SKU record
+ * POST /api/sku/[id]/photos        — add a photo (bytes to GCS, URL for legacy imports)
  */
 
 export async function GET(
@@ -34,7 +33,7 @@ export async function GET(
       photos: rows.map((row) => ({
         id: row.id,
         skuId,
-        url: row.url?.startsWith('/api/photos/') ? row.url : photoContentUrl(row.id),
+        url: photoContentUrl(row.id),
         photoType: row.photoType,
         takenByStaffId: row.takenByStaffId,
         createdAt: row.createdAt,
@@ -82,19 +81,33 @@ export async function POST(
       return NextResponse.json({ error: 'SKU not found' }, { status: 404 });
     }
 
-    let finalUrl = photoUrl;
-
-    if (photoBase64 && !finalUrl) {
+    if (photoBase64) {
       const base64Data = photoBase64.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
-      const blob = await put(`sku-photos/${skuId}/${Date.now()}.jpg`, buffer, {
-        access: 'public',
+      const uploaded = await uploadPhoto({
+        organizationId: orgId,
+        staffId: takenByStaffId,
+        entityType: 'SKU',
+        entityId: skuId,
+        photoType,
+        fileBuffer: buffer,
         contentType: 'image/jpeg',
+        poRef: String(skuId),
       });
-      finalUrl = blob.url;
+      return NextResponse.json({
+        success: true,
+        photo: {
+          id: uploaded.id,
+          skuId,
+          url: photoContentUrl(uploaded.id),
+          photoType,
+          takenByStaffId,
+          createdAt: new Date().toISOString(),
+        },
+      });
     }
 
-    if (!finalUrl) {
+    if (!photoUrl) {
       return NextResponse.json({ error: 'Could not determine photo URL' }, { status: 400 });
     }
 
@@ -103,7 +116,7 @@ export async function POST(
       staffId: takenByStaffId,
       entityType: 'SKU',
       entityId: skuId,
-      legacyUrl: finalUrl,
+      legacyUrl: photoUrl,
       photoType,
       idempotent: true,
     });

@@ -3,27 +3,16 @@
 /**
  * Compact carton-photos control for the condensed CartonContextCard row.
  *
- * Replaces the full-width "Click to add photos" strip with a single camera
- * affordance:
- *   • No photos  → camera + "+" button; click opens the NAS picker.
- *   • N photos   → camera + "×N" button; hovering reveals a popover that hosts
- *     the existing PhotoGallery toolbar (thumbnail → fullscreen viewer, delete,
- *     download) plus "Add photos". Per the spec, the hover panel only appears
- *     when photos are actually attached.
- *
- * Shares the `['receiving-photos', receivingId]` query key + the NAS picker /
- * PhotoGallery with {@link ReceivingPhotoStrip} (still used on mobile), so the
- * data and viewer behaviour are identical — this is purely a denser launcher.
+ * The control is view-only in the desktop unbox workspace: the mobile capture
+ * flow owns uploads now, and this button just shows the current count plus the
+ * gallery toolbar when photos exist.
  */
 
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNasConfig } from '@/hooks/useNasConfig';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
-import { NasPickerDialog } from '@/components/sidebar/NasReceivingAttach';
-import { nasConfigured } from '@/lib/nas-photos';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
 
@@ -49,13 +38,10 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   receivingId: number;
   staffId: number;
 }) {
-  // Seed the runtime NAS base URL so nasConfigured() reads true on first paint.
-  useNasConfig();
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
   const queryKey = ['receiving-photos', receivingId];
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
@@ -86,43 +72,28 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     [data],
   );
 
-  const canAdd = nasConfigured() || process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER === 'adapter';
   const count = photos.length;
-  const poCreatedAt = data?.receivingCreatedAt ?? null;
-  const initialFolder = data?.initialNasFolder ?? '';
 
   const btnBase =
     'inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-lg px-2.5 text-caption font-black tabular-nums shadow-sm transition-colors';
 
-  // Empty state — camera + "+", click opens the picker (no hover panel).
+  // Empty state — camera + "+", display only. Capture now happens on mobile.
   if (count === 0) {
     return (
-      <>
-        <button
-          type="button"
-          disabled={!canAdd}
-          onClick={() => canAdd && setPickerOpen(true)}
-          title={canAdd ? 'Add photos to this package' : 'No photos — NAS not configured'}
-          aria-label="Add photos"
-          className={`${btnBase} border border-dashed border-gray-300 bg-white text-gray-500 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40`}
-        >
-          <Camera className="h-4 w-4" />
-          <Plus className="h-3 w-3" />
-        </button>
-        {canAdd && pickerOpen ? (
-          <NasPickerDialog
-            receivingId={receivingId}
-            poCreatedAt={poCreatedAt}
-            initialFolder={initialFolder}
-            onClose={() => setPickerOpen(false)}
-            onAttached={refresh}
-          />
-        ) : null}
-      </>
+      <button
+        type="button"
+        disabled
+        title="Photos are captured on mobile"
+        aria-label="Photo count"
+        className={`${btnBase} border border-dashed border-gray-300 bg-white text-gray-500 opacity-60`}
+      >
+        <Camera className="h-4 w-4" />
+        <Plus className="h-3 w-3" />
+      </button>
     );
   }
 
-  // With photos — camera + ×N; hovering reveals the gallery toolbar + add.
+  // With photos — camera + ×N; hovering reveals the gallery toolbar.
   return (
     <div className="group/photos relative shrink-0">
       <button
@@ -147,19 +118,9 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
             compact
             libraryHref={`/ops/photos?receivingId=${receivingId}`}
             onPhotoDeleted={refresh}
-            onAddPhotos={canAdd ? () => setPickerOpen(true) : undefined}
           />
         </div>
       </div>
-      {canAdd && pickerOpen ? (
-        <NasPickerDialog
-          receivingId={receivingId}
-          poCreatedAt={poCreatedAt}
-          initialFolder={initialFolder}
-          onClose={() => setPickerOpen(false)}
-          onAttached={refresh}
-        />
-      ) : null}
     </div>
   );
 });

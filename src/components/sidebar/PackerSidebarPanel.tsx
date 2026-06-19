@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import StationPacking from '@/components/station/StationPacking';
+import { AlertTriangle, Box, Boxes } from '@/components/Icons';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,9 +16,9 @@ import { useActiveStaffDirectory } from './hooks';
 type PackMode = 'standard' | 'fragile' | 'multi';
 
 const PACK_MODE_ITEMS: HorizontalSliderItem[] = [
-  { id: 'standard', label: 'Standard' },
-  { id: 'fragile',  label: 'Fragile' },
-  { id: 'multi',    label: 'Multi-Item' },
+  { id: 'standard', label: 'Standard', icon: Box },
+  { id: 'fragile',  label: 'Fragile', icon: AlertTriangle },
+  { id: 'multi',    label: 'Multi-Item', icon: Boxes },
 ];
 
 export function PackerSidebarPanel() {

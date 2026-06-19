@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import { uploadPhoto, isAdapterUploadEnabled, attachPhotoWithLegacyUrl } from '@/lib/photos/service';
+import { uploadPhoto } from '@/lib/photos/service';
+import { photoContentUrl } from '@/lib/photos/display-url';
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
@@ -16,50 +17,26 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const buffer = Buffer.from(base64Data, 'base64');
         const filename = `${orderId}_${photoIndex + 1}.jpg`;
 
-        if (packerLogId && isAdapterUploadEnabled()) {
-            const result = await uploadPhoto({
-                organizationId: ctx.organizationId,
-                staffId: Number(packerId),
-                entityType: 'PACKER_LOG',
-                entityId: Number(packerLogId),
-                photoType: photoType ?? 'packer_photo',
-                fileBuffer: buffer,
-                contentType: 'image/jpeg',
-                poRef: String(orderId),
-            });
-            return NextResponse.json({
-                success: true,
-                path: result.url,
-                filename,
-                photoId: result.id,
-            });
+        if (!packerLogId) {
+            return NextResponse.json({ error: 'packerLogId is required' }, { status: 400 });
         }
 
-        const { put } = await import('@vercel/blob');
-        const pathname = `packer_photos/packer_${packerId}/${filename}`;
-        const blob = await put(pathname, buffer, {
-            access: 'public',
+        const result = await uploadPhoto({
+            organizationId: ctx.organizationId,
+            staffId: Number(packerId),
+            entityType: 'PACKER_LOG',
+            entityId: Number(packerLogId),
+            photoType: photoType ?? 'packer_photo',
+            fileBuffer: buffer,
             contentType: 'image/jpeg',
+            poRef: String(orderId),
         });
-
-        let photoId: number | null = null;
-        if (packerLogId) {
-            const attached = await attachPhotoWithLegacyUrl({
-                organizationId: ctx.organizationId,
-                staffId: Number(packerId),
-                entityType: 'PACKER_LOG',
-                entityId: Number(packerLogId),
-                legacyUrl: blob.url,
-                photoType: photoType ?? 'packer_photo',
-            });
-            photoId = attached.id;
-        }
 
         return NextResponse.json({
             success: true,
-            path: blob.url,
+            path: photoContentUrl(result.id),
             filename,
-            photoId,
+            photoId: result.id,
         });
     } catch (error: unknown) {
         console.error('Error saving photo:', error);

@@ -7,12 +7,33 @@ function getStorage(): import('@google-cloud/storage').Storage {
   if (storageClient) return storageClient;
   const json = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON?.trim();
   if (json) {
-    const credentials = JSON.parse(json) as Record<string, unknown>;
+    try {
+      const credentials = JSON.parse(json) as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { Storage } = require('@google-cloud/storage') as typeof import('@google-cloud/storage');
+      storageClient = new Storage({
+        projectId: process.env.PHOTOS_GCS_PROJECT_ID || (credentials.project_id as string),
+        credentials,
+      });
+      return storageClient;
+    } catch (err) {
+      console.warn(
+        '[gcs-adapter] GOOGLE_APPLICATION_CREDENTIALS_JSON is invalid; falling back to GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL?.trim() || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.trim();
+  if (clientEmail && privateKey) {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Storage } = require('@google-cloud/storage') as typeof import('@google-cloud/storage');
     storageClient = new Storage({
-      projectId: process.env.PHOTOS_GCS_PROJECT_ID || (credentials.project_id as string),
-      credentials,
+      projectId: process.env.PHOTOS_GCS_PROJECT_ID,
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey,
+      },
     });
     return storageClient;
   }
@@ -27,7 +48,8 @@ function getStorage(): import('@google-cloud/storage').Storage {
 export function isGcsConfigured(): boolean {
   return Boolean(
     process.env.PHOTOS_GCS_BUCKET?.trim() ||
-      process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON?.trim(),
+      process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON?.trim() ||
+      (process.env.GOOGLE_CLIENT_EMAIL?.trim() && process.env.GOOGLE_PRIVATE_KEY?.trim()),
   );
 }
 

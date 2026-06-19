@@ -10,16 +10,10 @@ import {
   clearClipboardHistory,
   type ClipboardEntry,
 } from '@/lib/clipboard-history';
+import { StaffRecipientList, type StaffRecipient } from './StaffRecipientList';
 
 interface ClipboardHistoryPopoverProps {
   onClose: () => void;
-}
-
-interface PickerStaff {
-  id: number;
-  name: string;
-  role: string;
-  color_hex: string;
 }
 
 /** Accent dot color per chip tone, mirroring CHIP_TONES so a copied serial /
@@ -58,7 +52,7 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Which entry is in "pick a recipient" mode (null = none).
   const [sendingId, setSendingId] = useState<string | null>(null);
-  const [staff, setStaff] = useState<PickerStaff[] | null>(null);
+  const [staff, setStaff] = useState<StaffRecipient[] | null>(null);
   const [sentToId, setSentToId] = useState<string | null>(null);
 
   // Lazy-load the staff list the first time a send picker opens.
@@ -67,7 +61,7 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
     let cancelled = false;
     fetch('/api/auth/staff-picker', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { staff?: PickerStaff[] } | null) => {
+      .then((data: { staff?: StaffRecipient[] } | null) => {
         if (cancelled) return;
         const list = (data?.staff ?? []).filter((s) => s.id !== user?.staffId);
         setStaff(list);
@@ -94,7 +88,7 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
   }, []);
 
   const handleSend = useCallback(
-    async (entry: ClipboardEntry, recipient: PickerStaff) => {
+    async (entry: ClipboardEntry, recipient: StaffRecipient) => {
       try {
         const isSellerClaim =
           entry.kind === 'seller_claim' &&
@@ -234,34 +228,14 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
                         <div className="flex items-center justify-center py-3">
                           <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-gray-500" />
                         </div>
-                      ) : staff.length === 0 ? (
-                        <p className="px-1 py-2 text-center text-micro italic text-gray-400">
-                          No other staff to send to.
-                        </p>
                       ) : (
-                        <div className="max-h-[180px] overflow-y-auto">
-                          {staff.map((s) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onClick={() => handleSend(entry, s)}
-                              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white active:bg-gray-100"
-                            >
-                              <span
-                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-eyebrow font-black text-white"
-                                style={{ backgroundColor: s.color_hex || '#10b981' }}
-                              >
-                                {s.name.charAt(0).toUpperCase()}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-900">
-                                {s.name}
-                              </span>
-                              <span className="shrink-0 text-micro uppercase tracking-wide text-gray-400">
-                                {s.role}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
+                        <StaffRecipientList
+                          staff={staff}
+                          onPick={(recipient) => handleSend(entry, recipient)}
+                          currentStaffId={null}
+                          emptyLabel="No other staff to send to."
+                          title="Send to…"
+                        />
                       )}
                     </div>
                   )}

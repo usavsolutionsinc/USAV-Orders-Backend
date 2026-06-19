@@ -16,6 +16,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const receivingId = params.get('receivingId') ? Number(params.get('receivingId')) : null;
     const entityId = params.get('entityId') ? Number(params.get('entityId')) : null;
     const staffId = params.get('staffId') ? Number(params.get('staffId')) : null;
+    const sort = params.get('sort');
     const hasAnalysisRaw = params.get('hasAnalysis');
     const q = params.get('q')?.trim() || null;
     const damageRaw = params.get('damageDetected');
@@ -47,14 +48,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       });
     }
 
-    const { items, nextCursor, hasMore } = await listPhotoLibrary({
-      organizationId: ctx.organizationId,
-      cursor,
-      limit,
-      dateFrom: params.get('dateFrom'),
-      dateTo: params.get('dateTo'),
-      entityType: params.get('entityType'),
-      entityId,
+      const { items, nextCursor, hasMore } = await listPhotoLibrary({
+        organizationId: ctx.organizationId,
+        cursor,
+        limit,
+        dateFrom: params.get('dateFrom'),
+        dateTo: params.get('dateTo'),
+        sort: sort === 'oldest' ? 'oldest' : 'recent',
+        entityType: params.get('entityType'),
+        entityId,
       linkRole: params.get('linkRole'),
       poRef: params.get('poRef'),
       receivingId,

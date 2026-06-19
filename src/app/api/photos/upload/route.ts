@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { ApiError, errorResponse } from '@/lib/api';
-import { uploadPhoto, isAdapterUploadEnabled } from '@/lib/photos/service';
+import { uploadPhoto } from '@/lib/photos/service';
 import { uploadPermissionFor } from '@/lib/photos/entity-permissions';
 import type { PhotoEntityType, PhotoLinkRole } from '@/lib/photos/types';
 import { PHOTO_ENTITY_TYPES, PHOTO_LINK_ROLES } from '@/lib/photos/types';
 import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,8 +66,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       poRef,
       fileBuffer: buffer,
       contentType,
-      useStorageAdapter: isAdapterUploadEnabled(),
+      useStorageAdapter: true,
     });
+
+    const displayUrl = await resolvePhotoAccessUrl(result.id, ctx.organizationId, 'full');
+    const thumbUrl = await resolvePhotoAccessUrl(result.id, ctx.organizationId, 'thumb');
 
     if (entityType === 'RECEIVING' || entityType === 'RECEIVING_LINE') {
       const receivingId =
@@ -85,7 +89,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      url: displayUrl,
+      thumbUrl,
+    });
   } catch (error) {
     return errorResponse(error, 'POST /api/photos/upload');
   }

@@ -57,7 +57,10 @@ export interface AttachLegacyPhotoInput {
 }
 
 export async function uploadPhoto(input: UploadPhotoInput): Promise<UploadPhotoResult> {
-  if (input.useStorageAdapter !== false && isAdapterUploadEnabled() && isGcsConfigured()) {
+  if (input.useStorageAdapter !== false) {
+    if (!isGcsConfigured()) {
+      throw new Error('GCS photo storage is not configured');
+    }
     return uploadPhotoToAdapter(input);
   }
   return uploadPhotoLegacyUrl(input);

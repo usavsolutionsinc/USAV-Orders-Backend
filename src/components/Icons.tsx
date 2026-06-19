@@ -1,3 +1,5 @@
+import { Box as LucideBox, ShelvingUnit as LucideShelvingUnit, Warehouse as LucideWarehouse } from 'lucide-react';
+
 export const ChevronLeft = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -44,6 +46,14 @@ export const Boxes = ({ className = "w-6 h-6" }: { className?: string }) => (
         <path d="m12 8 4.74-2.85" />
         <path d="M12 13.5V8" />
     </svg>
+);
+
+export const Warehouse = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <LucideWarehouse className={className} />
+);
+
+export const ShelvingUnit = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <LucideShelvingUnit className={className} />
 );
 
 // Open box — the "unbox" icon for the receiving flow (lucide package-open).
@@ -305,15 +315,10 @@ export const User = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
-// 3D cube — Products / box glyph (lucide box). Previously a copy of the
-// Database cylinder, so the Products nav row rendered as a DB barrel identical
-// to Database; this is the real cube.
+// 3D cube — standard box glyph from Lucide. Used by Packing and other box
+// surfaces so the icon stays clean and recognizable at small sizes.
 export const Box = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-        <path d="m3.3 7 8.7 5 8.7-5" />
-        <path d="M12 22V12" />
-    </svg>
+    <LucideBox className={className} />
 );
 
 // Stacked product tags — the Products catalog master-nav glyph (lucide tags).

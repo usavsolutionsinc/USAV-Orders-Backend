@@ -7,6 +7,7 @@ export interface LibraryFilters {
   limit?: number;
   dateFrom?: string | null;
   dateTo?: string | null;
+  sort?: 'recent' | 'oldest' | null;
   entityType?: string | null;
   entityId?: number | null;
   linkRole?: string | null;
@@ -33,6 +34,7 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
     params.push(filters.dateTo);
     clauses.push(`p.created_at <= $${params.length}::timestamptz`);
   }
+  const sortDir = filters.sort === 'oldest' ? 'ASC' : 'DESC';
   if (filters.poRef) {
     params.push(`%${filters.poRef}%`);
     clauses.push(`p.po_ref ILIKE $${params.length}`);
@@ -93,7 +95,7 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
        LEFT JOIN photo_entity_links l ON l.photo_id = p.id
        LEFT JOIN photo_analysis a ON a.photo_id = p.id
       WHERE ${clauses.join(' AND ')}
-      ORDER BY p.id DESC, p.created_at DESC
+      ORDER BY p.created_at ${sortDir}, p.id ${sortDir}
       LIMIT ${limitParam}`,
     params,
   );

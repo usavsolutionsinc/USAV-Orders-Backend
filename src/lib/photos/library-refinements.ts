@@ -3,7 +3,6 @@ import {
   applyDatePreset,
   countActivePhotoLibraryFilters,
   datePresetFromFilters,
-  PHOTO_ENTITY_TYPE_LABELS,
   type PhotoLibraryDatePreset,
   type PhotoLibraryFilterState,
 } from './library-filter-state';
@@ -12,6 +11,10 @@ export interface PhotoLibraryRefinementActions {
   patch: (next: Partial<PhotoLibraryFilterState>) => void;
   setDatePreset: (preset: PhotoLibraryDatePreset) => void;
   clearStructured: () => void;
+}
+
+export interface PhotoLibraryRefinementContext {
+  staffNameForId?: (id: string) => string | null | undefined;
 }
 
 const DATE_PRESET_LABELS: Record<PhotoLibraryDatePreset, string> = {
@@ -25,6 +28,7 @@ const DATE_PRESET_LABELS: Record<PhotoLibraryDatePreset, string> = {
 export function buildPhotoLibraryRefinements(
   filters: PhotoLibraryFilterState,
   actions: PhotoLibraryRefinementActions,
+  context: PhotoLibraryRefinementContext = {},
 ): FilterRefinement[] {
   const out: FilterRefinement[] = [];
 
@@ -53,26 +57,11 @@ export function buildPhotoLibraryRefinements(
     });
   }
 
-  if (filters.entityType) {
-    const kind = PHOTO_ENTITY_TYPE_LABELS[filters.entityType] ?? filters.entityType;
-    const suffix = filters.entityId ? ` #${filters.entityId}` : '';
-    out.push({
-      id: 'entityType',
-      label: `${kind}${suffix}`,
-      onRemove: () => actions.patch({ entityType: undefined, entityId: undefined }),
-    });
-  } else if (filters.entityId) {
-    out.push({
-      id: 'entityId',
-      label: `Entity #${filters.entityId}`,
-      onRemove: () => actions.patch({ entityId: undefined }),
-    });
-  }
-
   if (filters.staffId) {
+    const staffLabel = context.staffNameForId?.(filters.staffId) ?? `Staff #${filters.staffId}`;
     out.push({
       id: 'staffId',
-      label: `Staff #${filters.staffId}`,
+      label: staffLabel,
       onRemove: () => actions.patch({ staffId: undefined }),
     });
   }

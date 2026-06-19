@@ -5,13 +5,6 @@ import {
   blobToBase64DataUrl,
   downscaleImageTo720,
 } from '@/lib/image/downscale';
-import {
-  attachNasPhoto,
-  buildNasPhotoUrl,
-  getClientNasProxyBase,
-  getNasBaseUrl,
-  putNasPhoto,
-} from '@/lib/nas-photos';
 
 /**
  * Module-singleton store for in-flight receiving photo uploads.
@@ -38,9 +31,9 @@ export interface PhotoScope {
   receivingId: number;
   receivingLineId?: number | null;
   /**
-   * Human PO reference (Zoho PO number / id) used ONLY to name the file on the
-   * NAS — e.g. `4421__photo_….jpg` instead of `PO_1987__photo_….jpg`. Not sent
-   * to the attach endpoint (that still keys off receivingId/receivingLineId).
+   * Human PO reference (Zoho PO number / id) used ONLY to name the file
+   * object — e.g. `4421__photo_….jpg` instead of `PO_1987__photo_….jpg`. Not
+   * sent to the attach endpoint (that still keys off receivingId/receivingLineId).
    * Falls back to `PO_{receivingId}` when absent.
    */
   poRef?: string | null;
@@ -79,12 +72,7 @@ interface PersistedEntry {
 }
 
 // ─── State + subscribers ────────────────────────────────────────────────────
-// Active NAS upload target (base URL + this operator's folder), pushed in from
-// the capture surface via configureNas() once GET /api/nas-config resolves.
-// Falls back to the nas-photos module base URL (env seed) if never configured.
-let nasUploadConfig: { baseUrl: string; folder: string } | null = null;
-
-// Fired once per photo the moment it's committed (NAS PUT + DB attach both
+// Fired once per photo the moment it's committed (GCS upload + DB attach both
 // succeeded). The capture surface wires this to an Ably publish on
 // `phone:{staffId}` so open photo strips and feed counts refresh — on this
 // device AND the paired desktop — without the requestId camera flow. Set via
@@ -206,11 +194,6 @@ function rehydrate(): void {
 }
 
 // ─── Upload pipeline ────────────────────────────────────────────────────────
-function useAdapterUpload(): boolean {
-  const mode = (process.env.NEXT_PUBLIC_PHOTOS_UPLOAD_PROVIDER || 'adapter').toLowerCase();
-  return mode !== 'legacy';
-}
-
 async function postPhotoViaAdapter(
   entry: UploadEntry,
   blob: Blob,
@@ -228,36 +211,11 @@ async function postPhotoViaAdapter(
   return { id: result.id, url: result.url };
 }
 
-// Capture flow: adapter upload (GCS) when enabled, otherwise NAS WebDAV PUT + URL attach.
 async function postPhoto(
   entry: UploadEntry,
   blob: Blob,
 ): Promise<{ id: number; url: string }> {
-  if (useAdapterUpload()) {
-    return postPhotoViaAdapter(entry, blob);
-  }
-
-  const baseUrl = getClientNasProxyBase() || nasUploadConfig?.baseUrl || getNasBaseUrl();
-  if (!baseUrl) {
-    throw new Error('NAS not configured — set the NAS address in Admin → Receiving Photos.');
-  }
-  const folder = nasUploadConfig?.folder ?? '';
-  const targetUrl = buildNasPhotoUrl({
-    baseUrl,
-    folder,
-    scope: entry.scope,
-    filename: entry.scope.fileIndex != null
-      ? `${Math.max(1, Math.floor(Number(entry.scope.fileIndex)))}.jpg`
-      : `photo_${entry.id}.jpg`,
-  });
-
-  const put = await putNasPhoto(targetUrl, blob);
-  if (!put.ok) throw new Error(put.error || 'NAS write failed');
-
-  const attach = await attachNasPhoto(entry.scope, put.url);
-  if (!attach.ok) throw new Error(attach.error || 'Failed to link photo to PO');
-
-  return { id: attach.photoId ?? 0, url: put.url };
+  return postPhotoViaAdapter(entry, blob);
 }
 
 async function processEntry(id: string, blob: Blob): Promise<void> {
@@ -318,13 +276,6 @@ async function prepareAndUpload(id: string, rawBlob: Blob): Promise<void> {
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 export const photoUploadQueue = {
-  /**
-   * Point the queue at the active NAS (base URL + the operator's folder). Called
-   * by the capture surface once GET /api/nas-config resolves. Pass null to clear.
-   */
-  configureNas(cfg: { baseUrl: string; folder: string } | null) {
-    nasUploadConfig = cfg;
-  },
   /**
    * Register the post-upload notifier (e.g. an Ably publisher). Set by the
    * capture surface; intentionally NOT cleared on unmount so background

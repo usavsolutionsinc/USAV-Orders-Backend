@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   applyDatePreset,
   clearStructuredPhotoFilters,
-  entityTypeForSourceScope,
   parsePhotoLibraryDisplayParams,
   parsePhotoLibraryFilters,
   photoLibraryUrlParams,
@@ -66,11 +65,9 @@ export function usePhotoLibraryUrlState() {
 
   const setSourceScope = useCallback(
     (scope: PhotoLibrarySourceScope) => {
-      const entityType = entityTypeForSourceScope(scope);
       replaceFilters({
         ...filters,
-        entityType,
-        entityId: entityType ? filters.entityId : undefined,
+        sourceScope: scope,
       });
     },
     [filters, replaceFilters],

@@ -7,6 +7,7 @@ import {
   DoorOpen,
   Calendar,
   Check,
+  Clipboard,
   ClipboardList,
   Clock,
   DollarSign,
@@ -23,7 +24,6 @@ import {
   Package,
   PackageCheck,
   PackageOpen,
-  Packer,
   Printer,
   Search,
   Settings,
@@ -35,6 +35,9 @@ import {
   Truck,
   Wrench,
   Zap,
+  Warehouse,
+  ShelvingUnit,
+  Box,
 } from '@/components/Icons';
 import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 
@@ -116,14 +119,14 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'walk-in',           label: 'Walk-In',     href: '/walk-in',            icon: ShoppingCart,    kind: 'main',    requires: 'walk_in.view' },
   { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
   { id: 'products',          label: 'Products',    href: '/products',           icon: Tags,            kind: 'main',    requires: 'sku_stock.view' },
-  { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: Package,         kind: 'main',    requires: 'sku_stock.view' },
+  { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: ShelvingUnit,    kind: 'main',    requires: 'sku_stock.view' },
   { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'main',    requires: 'fba.view' },
   { id: 'ops-photos',        label: 'Photo library', href: '/ops/photos',       icon: Camera,          kind: 'main',    requires: 'photos.view' },
-  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Packer,          kind: 'station', requires: 'packing.view' },
+  { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Box,             kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom', requires: 'integrations.zendesk' },
   { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },
   { id: 'ai-chat',           label: 'AI Chat',     href: '/ai-chat',            icon: MessageSquare,   kind: 'bottom',  requires: 'dashboard.view' },
@@ -425,11 +428,11 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Inventory ─────────────────────────────────────────────────────────────
   // `?mode=triage|pulse` or `?section=replenish`; default `ledger`.
   {
-    id: 'inventory', label: 'Inventory', href: INVENTORY, icon: Package, kind: 'main', requires: 'sku_stock.view',
+    id: 'inventory', label: 'Inventory', href: INVENTORY, icon: ShelvingUnit, kind: 'main', requires: 'sku_stock.view',
     modes: [
       // `open: null` on every switch so a selection (exception/unit id) from one
       // mode never leaks into another's right pane.
-      { id: 'ledger',    label: 'Ledger',    icon: Package,    to: () => ({ pathname: INVENTORY, params: { mode: null, section: null, open: null } }) },
+      { id: 'ledger',    label: 'Ledger',    icon: Clipboard,  to: () => ({ pathname: INVENTORY, params: { mode: null, section: null, open: null } }) },
       { id: 'triage',    label: 'Triage',    icon: Zap,        to: () => ({ pathname: `${INVENTORY}/triage`, params: { mode: null, section: null, open: null } }) },
       { id: 'pulse',     label: 'Pulse',     icon: TrendingUp, to: () => ({ pathname: `${INVENTORY}/pulse`, params: { mode: null, section: null, open: null } }) },
       { id: 'graph',     label: 'Graph',     icon: Layers,     to: () => ({ pathname: `${INVENTORY}/graph`, params: { mode: null, section: null, open: null } }) },
