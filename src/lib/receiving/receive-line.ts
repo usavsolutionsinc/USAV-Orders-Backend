@@ -317,6 +317,7 @@ export async function receiveLineUnits(
         target_status: 'RECEIVED',
       },
       { dbClient: client },
+      input.organizationId,
     );
     if (!upserted) continue; // invalid serial — skip
 

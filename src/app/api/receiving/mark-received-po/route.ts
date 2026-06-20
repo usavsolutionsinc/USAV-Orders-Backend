@@ -198,6 +198,7 @@ export const POST = withAuth(async (request, ctx) => {
     if (idempotencyKey) {
       const cached = await getApiIdempotencyResponse(
         pool,
+        ctx.organizationId,
         idempotencyKey,
         IDEMPOTENCY_ROUTE,
       );
@@ -215,6 +216,7 @@ export const POST = withAuth(async (request, ctx) => {
       const status = init?.status ?? 200;
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId: ctx.organizationId,
           idempotencyKey,
           route: IDEMPOTENCY_ROUTE,
           staffId,
@@ -417,7 +419,7 @@ export const POST = withAuth(async (request, ctx) => {
             staff_id: staffId,
             station,
             client_event_id: lineClientEventId,
-          });
+          }, ctx.organizationId);
           // Queue the workflow-engine tap for the after() block below — the
           // engine mirror must never sit in the receive request path.
           // Re-scans (already_attached) tapped on their original scan.

@@ -62,6 +62,7 @@ test('recordUnitEvent sequences upsert → tech → ledger → event, linking th
   const client = mockClient();
   const result = await recordUnitEvent(
     {
+      organizationId: '00000000-0000-0000-0000-000000000001',
       serialNumber: 'sn1',
       sku: 'SKU1',
       originSource: 'receiving',
@@ -97,6 +98,7 @@ test('recordUnitEvent skips lineage + ledger when not requested', async () => {
   const client = mockClient();
   const result = await recordUnitEvent(
     {
+      organizationId: '00000000-0000-0000-0000-000000000001',
       serialNumber: 'sn1',
       sku: 'SKU1',
       originSource: 'manual',
@@ -122,7 +124,12 @@ test('recordUnitEvent throws on an invalid serial (rolls back via caller txn)', 
   let threw = false;
   try {
     await recordUnitEvent(
-      { serialNumber: '   ', originSource: 'manual', eventType: 'NOTE' },
+      {
+        organizationId: '00000000-0000-0000-0000-000000000001',
+        serialNumber: '   ',
+        originSource: 'manual',
+        eventType: 'NOTE',
+      },
       client as unknown as PoolClient,
     );
   } catch {

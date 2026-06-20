@@ -163,7 +163,7 @@ export const POST = withAuth(
           condition_grade: condition,
           location,
           target_status: 'LABELED',
-        });
+        }, undefined, ctx.organizationId);
       } catch (err) {
         console.error('[post-multi-sn] upsertSerialUnit failed', { serial, err });
         continue;

@@ -108,11 +108,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
     const inserted = await pool.query<SerialRow>(
       `INSERT INTO tech_serial_numbers
-         (serial_number, serial_type, tested_by, station_source, receiving_line_id, shipment_id, scan_ref)
-       VALUES ($1, $2, $3, 'RECEIVING', $4, NULL, NULL)
+         (serial_number, serial_type, tested_by, station_source, receiving_line_id, shipment_id, scan_ref, organization_id)
+       VALUES ($1, $2, $3, 'RECEIVING', $4, NULL, NULL, $5::uuid)
        RETURNING id, serial_number, serial_type, tested_by, station_source, receiving_line_id,
                  created_at::text, updated_at::text`,
-      [serialNumber, serialType, testedBy, receivingLineId],
+      [serialNumber, serialType, testedBy, receivingLineId, ctx.organizationId],
     );
 
     await invalidateCacheTags([
@@ -142,7 +142,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       station_source: tsnRow.station_source,
       tested_by: tsnRow.tested_by,
       receiving_line_id: tsnRow.receiving_line_id,
-    });
+    }, undefined, ctx.organizationId);
 
     return NextResponse.json(
       { success: true, serial: normalizeRow(inserted.rows[0]) },

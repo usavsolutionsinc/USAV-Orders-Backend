@@ -29,6 +29,7 @@ import {
   type SerialStatus,
   type SerialUnitRow,
 } from '@/lib/neon/serial-units-queries';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { attachTechSerial, type TechSerialStationSource } from '@/lib/inventory/tech-serial';
 import {
   recordInventoryEvent,
@@ -48,6 +49,10 @@ export interface UnitEventLedger {
 }
 
 export interface RecordUnitEventInput {
+  // ── tenant ──
+  /** Owning tenant — required so the org-scoped serial_units upsert can stamp it. */
+  organizationId: OrgId;
+
   // ── unit identity (upsert) ──
   serialNumber: string;
   sku?: string | null;
@@ -115,6 +120,7 @@ export async function recordUnitEvent(
       target_status: input.targetStatus,
     },
     { dbClient: client },
+    input.organizationId,
   );
   if (!upserted) throw new Error('recordUnitEvent: invalid serial number');
 

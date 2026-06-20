@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { transaction } from '@/lib/neon-client';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -91,6 +91,8 @@ async function suggestPutawayBinIdForSku(sku: string | null): Promise<number | n
  * ids for the response payload.
  */
 async function applyInventoryV2Effects(input: {
+  /** Tenant scope — stamped on the serial_units fallback upsert so the per-org natural key resolves. */
+  organizationId: string;
   receivingId: number | null;
   receivingLineId: number;
   sku: string | null;
@@ -131,11 +133,12 @@ async function applyInventoryV2Effects(input: {
         `INSERT INTO serial_units (
           serial_number, normalized_serial, sku, zoho_item_id,
           current_status, current_location, origin_source,
-          origin_receiving_line_id, received_at, received_by, condition_grade
+          origin_receiving_line_id, received_at, received_by, condition_grade,
+          organization_id
         )
         VALUES ($1, UPPER(TRIM($1)), $2, $3, 'RECEIVED'::serial_status_enum,
-                $8, 'receiving', $4, $5, $6, $7::condition_grade_enum)
-        ON CONFLICT (normalized_serial) DO UPDATE SET
+                $8, 'receiving', $4, $5, $6, $7::condition_grade_enum, $9::uuid)
+        ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
           current_status = 'RECEIVED'::serial_status_enum,
           current_location = COALESCE(EXCLUDED.current_location, serial_units.current_location),
           received_at = EXCLUDED.received_at,
@@ -153,6 +156,7 @@ async function applyInventoryV2Effects(input: {
           input.staffId > 0 ? input.staffId : null,
           input.conditionGrade,
           input.destinationBinId != null ? String(input.destinationBinId) : null,
+          input.organizationId,
         ],
       );
       serialUnitId = upsert.rows[0]?.id ?? null;
@@ -500,7 +504,7 @@ export const POST = withAuth(async (request, ctx) => {
         condition_grade: conditionGrade,
         target_status: 'RECEIVED',
         location: destinationBinId != null ? String(destinationBinId) : null,
-      });
+      }, undefined, ctx.organizationId);
       serialUnitId = serialResult?.unit.id ?? null;
       isReturn = serialResult?.is_return ?? false;
     }
@@ -508,6 +512,7 @@ export const POST = withAuth(async (request, ctx) => {
     let v2Effects: Awaited<ReturnType<typeof applyInventoryV2Effects>> | null = null;
     try {
       v2Effects = await applyInventoryV2Effects({
+        organizationId: ctx.organizationId,
         receivingId,
         receivingLineId,
         sku: line.sku ?? null,
@@ -607,7 +612,7 @@ export const POST = withAuth(async (request, ctx) => {
         const shipment = await registerShipmentPermissive({
           trackingNumber: localTracking,
           sourceSystem: 'receiving.mark-received',
-        });
+        }, ctx.organizationId);
         if (shipment?.id) {
           await pool.query(
             `UPDATE receiving
