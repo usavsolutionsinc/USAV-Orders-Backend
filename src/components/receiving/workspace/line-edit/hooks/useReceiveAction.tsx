@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { dispatchLineUpdated } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 

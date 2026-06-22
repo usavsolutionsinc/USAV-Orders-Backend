@@ -157,17 +157,19 @@ export async function attachBoxToReceiving(params: {
 export async function ensureReceivingForPo(params: {
   poId: string;
   poNumber?: string | null;
+  organizationId: string;
 }): Promise<number> {
   const result = await pool.query<{ id: number }>(
     `INSERT INTO receiving
-       (source, zoho_purchaseorder_id, zoho_purchaseorder_number, qa_status, needs_test, updated_at)
-     VALUES ('zoho_po', $1, $2, 'PENDING', true, NOW())
+       (source, zoho_purchaseorder_id, zoho_purchaseorder_number, qa_status, needs_test, updated_at, organization_id)
+     VALUES ('zoho_po', $1, $2, 'PENDING', true, NOW(), $3::uuid)
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = NOW(),
-       zoho_purchaseorder_number = COALESCE(receiving.zoho_purchaseorder_number, EXCLUDED.zoho_purchaseorder_number)
+       zoho_purchaseorder_number = COALESCE(receiving.zoho_purchaseorder_number, EXCLUDED.zoho_purchaseorder_number),
+       organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
      RETURNING id`,
-    [params.poId, params.poNumber ?? null],
+    [params.poId, params.poNumber ?? null, params.organizationId],
   );
   return Number(result.rows[0].id);
 }

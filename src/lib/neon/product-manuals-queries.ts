@@ -130,16 +130,20 @@ export async function getProductManualByRelativePath(relativePath: string, orgId
   const safeRelativePath = String(relativePath || '').trim();
   if (!safeRelativePath) return null;
 
-  // NEEDS-COL: no organization_id; GUC-wrap when orgId present. Body unchanged.
+  // product_manuals now HAS organization_id (nullable, GUC-default). When orgId
+  // is present we GUC-wrap (tenantQuery) AND add the explicit predicate — the
+  // load-bearing isolation pre-E1, since RLS is inert under the BYPASSRLS owner.
+  // Legacy callers (orgId omitted) pass NULL → the predicate is a no-op (back-compat).
   const sql = `SELECT *
      FROM product_manuals
      WHERE is_active = TRUE
        AND relative_path = $1
+       AND ($2::uuid IS NULL OR organization_id = $2)
      ORDER BY updated_at DESC NULLS LAST, id DESC
      LIMIT 1`;
   const result = orgId
-    ? await tenantQuery<ProductManual>(orgId, sql, [safeRelativePath])
-    : await pool.query(sql, [safeRelativePath]);
+    ? await tenantQuery<ProductManual>(orgId, sql, [safeRelativePath, orgId])
+    : await pool.query(sql, [safeRelativePath, null]);
   return result.rows[0] ?? null;
 }
 
@@ -306,8 +310,9 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
          FROM product_manuals
          WHERE is_active = TRUE
            AND relative_path = $1
+           AND ($2::uuid IS NULL OR organization_id = $2)
          LIMIT 1`,
-        [relativePath],
+        [relativePath, orgId ?? null],
       )
       : await client.query(
         `SELECT id
@@ -318,8 +323,9 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
              ($2::text IS NULL AND item_number IS NULL)
              OR regexp_replace(UPPER(TRIM(COALESCE(item_number, ''))), '[^A-Z0-9]', '', 'g') = $2
            )
+           AND ($3::uuid IS NULL OR organization_id = $3)
          LIMIT 1`,
-        [googleDocId, normalizedItemNumber],
+        [googleDocId, normalizedItemNumber, orgId ?? null],
       );
 
     if ((existing.rowCount ?? 0) > 0) {
@@ -342,6 +348,7 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
              is_active = TRUE,
              updated_at = NOW()
          WHERE id = $1
+           AND ($25::uuid IS NULL OR organization_id = $25)
          RETURNING *`,
         [
           existing.rows[0].id,
@@ -368,6 +375,7 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
           hasType,
           thumbnailUrl,     // $23
           hasThumbnailUrl,  // $24 — explicit-set flag
+          orgId ?? null,    // $25 — org predicate (load-bearing pre-E1)
         ],
       );
 
@@ -377,8 +385,8 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
     // Insert new active record
     const insertResult = await client.query(
       `INSERT INTO product_manuals
-         (sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, is_active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, TRUE, NOW())
+         (sku, item_number, product_title, display_name, google_file_id, source_url, thumbnail_url, relative_path, folder_path, file_name, status, assigned_at, assigned_by, type, organization_id, is_active, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13, $14, $15, TRUE, NOW())
        RETURNING *`,
       [
         null,
@@ -395,6 +403,7 @@ export async function upsertProductManual(params: UpsertProductManualParams, org
         assignedAt,
         params.assignedBy ?? null,
         params.type ?? null,
+        orgId ?? null,        // $15 — stamp org (GUC default also fills it under tenant tx)
       ],
     );
 
@@ -509,6 +518,7 @@ export async function updateProductManual(params: UpdateProductManualParams, org
          is_active = COALESCE($14, is_active),
          updated_at = NOW()
      WHERE id = $1
+       AND ($24::uuid IS NULL OR organization_id = $24)
      RETURNING *`;
   const updateParams = [
       params.id,
@@ -534,6 +544,7 @@ export async function updateProductManual(params: UpdateProductManualParams, org
       params.type !== undefined && !params.type,
       params.thumbnailUrl ?? null,                                    // $22
       params.thumbnailUrl !== undefined && !params.thumbnailUrl,      // $23 explicit-null flag
+      orgId ?? null,                                                  // $24 — org predicate (load-bearing pre-E1)
     ];
   const result = orgId
     ? await withTenantTransaction(orgId, (client) => client.query(updateSql, updateParams))

@@ -267,3 +267,146 @@ test('composition rules stay quiet when no summaries are supplied (client re-lin
   const diags = runDiagnostics(input({ nodes: [node('test', 'inspection', 'TECH')], edges: [] }));
   assert.equal(diags.filter((d) => d.rule.startsWith('station-')).length, 0);
 });
+
+// ── Ambiguity guard + decision-node rules (Track 1, Stage 1) ──
+
+test('port-fan-out: two edges off the same port warns (does not block publish)', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        node('test', 'inspection', 'TECH'),
+        node('list', 'list_ebay', 'ADMIN'),
+        node('repair', 'repair', 'TECH'),
+      ],
+      edges: [
+        // pass fans to TWO targets — only the first fires at runtime.
+        edge('e1', 'test', 'pass', 'list'),
+        edge('e2', 'test', 'pass', 'repair'),
+        edge('e3', 'test', 'fail', 'repair'),
+      ],
+    }),
+  );
+  const fan = diags.find((d) => d.rule === 'port-fan-out');
+  assert.ok(fan, 'expected a port-fan-out diagnostic');
+  assert.equal(fan?.severity, 'warning');
+  assert.equal(fan?.nodeId, 'test');
+  assert.match(fan!.message, /pass/);
+});
+
+/** A decision node — ports live in config.outputs, not the static registry. */
+const decisionNode = (
+  id: string,
+  config: Record<string, unknown>,
+  station: string | null = 'TECH',
+) => ({
+  id,
+  type: 'decision',
+  config: { ...(station ? { station } : {}), ...config },
+});
+
+test('decision-no-rules: an empty table with no default errors', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [decisionNode('d', { outputs: [{ id: 'a', label: 'A' }], rules: [], defaultPort: null })],
+      edges: [],
+    }),
+  );
+  const err = diags.find((d) => d.rule === 'decision-no-rules');
+  assert.ok(err, 'expected a decision-no-rules diagnostic');
+  assert.equal(err?.severity, 'error');
+  assert.equal(err?.nodeId, 'd');
+});
+
+test('decision-no-rules: a default port alone satisfies the rule', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        decisionNode('d', { outputs: [{ id: 'a', label: 'A' }], rules: [], defaultPort: 'a' }),
+        node('x', 'ship', 'PACK'),
+      ],
+      edges: [edge('e1', 'd', 'a', 'x')],
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule === 'decision-no-rules').length, 0);
+});
+
+test('decision-port-undeclared: a rule pointing at an undeclared port errors', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        decisionNode('d', {
+          outputs: [{ id: 'a', label: 'A' }],
+          rules: [{ id: 'r1', when: { grade: 'A' }, thenPort: 'ghost' }],
+        }),
+      ],
+      edges: [],
+    }),
+  );
+  const err = diags.find((d) => d.rule === 'decision-port-undeclared');
+  assert.ok(err, 'expected a decision-port-undeclared diagnostic');
+  assert.equal(err?.severity, 'error');
+  assert.match(err!.message, /ghost/);
+});
+
+test('decision-port-undeclared also catches an undeclared defaultPort', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        decisionNode('d', {
+          outputs: [{ id: 'a', label: 'A' }],
+          rules: [{ id: 'r1', when: { grade: 'A' }, thenPort: 'a' }],
+          defaultPort: 'nowhere',
+        }),
+      ],
+      edges: [],
+    }),
+  );
+  assert.ok(diags.some((d) => d.rule === 'decision-port-undeclared' && /nowhere/.test(d.message)));
+});
+
+test('a fully-wired decision with valid ports lints clean (no decision errors)', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        decisionNode('d', {
+          outputs: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+          rules: [{ id: 'r1', when: { grade: 'A' }, thenPort: 'a' }],
+          defaultPort: 'b',
+        }),
+        node('lane-a', 'ship', 'PACK'),
+        node('lane-b', 'ship', 'PACK'),
+      ],
+      edges: [edge('e1', 'd', 'a', 'lane-a'), edge('e2', 'd', 'b', 'lane-b')],
+    }),
+  );
+  assert.equal(diags.filter((d) => d.rule.startsWith('decision-')).length, 0);
+  // both config.outputs wired → no dead-end-port either.
+  assert.equal(diags.filter((d) => d.rule === 'dead-end-port' && d.nodeId === 'd').length, 0);
+});
+
+test('decision dead-end-port uses config.outputs: an unwired declared port errors', () => {
+  const diags = runDiagnostics(
+    input({
+      nodes: [
+        decisionNode('d', {
+          outputs: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+          rules: [
+            { id: 'r1', when: { grade: 'A' }, thenPort: 'a' },
+            { id: 'r2', when: { grade: 'B' }, thenPort: 'b' },
+          ],
+        }),
+        node('lane-a', 'ship', 'PACK'),
+      ],
+      edges: [edge('e1', 'd', 'a', 'lane-a')], // 'b' declared but unwired
+    }),
+  );
+  const deadEnd = diags.find((d) => d.rule === 'dead-end-port' && d.nodeId === 'd');
+  assert.ok(deadEnd, 'expected dead-end-port on the unwired b lane');
+  assert.match(deadEnd!.message, /b/);
+});

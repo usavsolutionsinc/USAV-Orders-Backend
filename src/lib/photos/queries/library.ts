@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { mapPhotoRow, PHOTO_SELECT } from './list-for-entity';
+import { mapPhotoRow } from './list-for-entity';
 
 export interface LibraryFilters {
   organizationId: string;
@@ -53,6 +53,20 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
            AND l.entity_type = $${params.length - 1}
            AND l.entity_id = $${params.length}
       )`);
+  } else if (filters.entityType) {
+    // Scope filter (no specific entity): keep ONLY photos linked to this entity
+    // type — e.g. claims = ZENDESK_TICKET, packing = PACKER_LOG. Receiving
+    // photos link as RECEIVING or RECEIVING_LINE, so unboxing matches both.
+    const types =
+      filters.entityType === 'RECEIVING' ? ['RECEIVING', 'RECEIVING_LINE'] : [filters.entityType];
+    params.push(types);
+    clauses.push(`
+      EXISTS (
+        SELECT 1 FROM photo_entity_links l
+         WHERE l.photo_id = p.id
+           AND l.organization_id = p.organization_id
+           AND l.entity_type = ANY($${params.length}::text[])
+      )`);
   }
   if (filters.receivingId) {
     params.push(filters.receivingId);
@@ -86,25 +100,43 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
   params.push(limit + 1);
   const limitParam = `$${params.length}`;
 
+  // All filters are self-contained EXISTS/scalar subqueries on `p`, so we select
+  // straight from `photos` — no row-multiplying joins, hence no DISTINCT ON
+  // (which Postgres would require to lead the ORDER BY, breaking date sort).
   const res = await pool.query(
-    `SELECT DISTINCT ON (p.id) p.id, p.organization_id, p.photo_type, p.taken_by_staff_id,
+    `SELECT p.id, p.organization_id, p.photo_type, p.taken_by_staff_id,
             p.po_ref, p.created_at,
+            (SELECT s.name FROM staff s
+              WHERE s.id = p.taken_by_staff_id
+                AND s.organization_id = p.organization_id
+              LIMIT 1) AS taken_by_staff_name,
             EXISTS (SELECT 1 FROM photo_analysis a WHERE a.photo_id = p.id) AS has_analysis,
-            (a.metadata->>'damage_detected')::boolean AS damage_detected
+            (SELECT (a.metadata->>'damage_detected')::boolean
+               FROM photo_analysis a WHERE a.photo_id = p.id LIMIT 1) AS damage_detected,
+            (SELECT lz.entity_id FROM photo_entity_links lz
+              WHERE lz.photo_id = p.id
+                AND lz.organization_id = p.organization_id
+                AND lz.entity_type = 'ZENDESK_TICKET'
+              LIMIT 1) AS ticket_id
        FROM photos p
-       LEFT JOIN photo_entity_links l ON l.photo_id = p.id
-       LEFT JOIN photo_analysis a ON a.photo_id = p.id
       WHERE ${clauses.join(' AND ')}
       ORDER BY p.created_at ${sortDir}, p.id ${sortDir}
       LIMIT ${limitParam}`,
     params,
   );
 
-  const rows = res.rows.map((row) => ({
-    ...mapPhotoRow(row as Parameters<typeof mapPhotoRow>[0]),
-    hasAnalysis: Boolean((row as { has_analysis?: boolean }).has_analysis),
-    damageDetected: (row as { damage_detected?: boolean | null }).damage_detected ?? null,
-  }));
+  const rows = res.rows.map((row) => {
+    const ticketRaw = (row as { ticket_id?: number | string | null }).ticket_id;
+    const ticketId = ticketRaw != null ? Number(ticketRaw) : null;
+    const staffName = (row as { taken_by_staff_name?: string | null }).taken_by_staff_name;
+    return {
+      ...mapPhotoRow(row as Parameters<typeof mapPhotoRow>[0]),
+      takenByStaffName: staffName ?? null,
+      hasAnalysis: Boolean((row as { has_analysis?: boolean }).has_analysis),
+      damageDetected: (row as { damage_detected?: boolean | null }).damage_detected ?? null,
+      ticketId: ticketId != null && Number.isFinite(ticketId) ? ticketId : null,
+    };
+  });
   const hasMore = rows.length > limit;
   const items = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null;

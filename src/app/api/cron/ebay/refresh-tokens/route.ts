@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { runEbayRefreshTokensJob } from '@/lib/jobs/ebay-refresh-tokens';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await withCronRun('ebay.refresh_tokens', runEbayRefreshTokensJob);
+    const locked = await withCronLock('ebay.refresh_tokens', () =>
+      withCronRun('ebay.refresh_tokens', runEbayRefreshTokensJob),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const result = locked.result!;
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('[ebay/refresh-tokens]', error);

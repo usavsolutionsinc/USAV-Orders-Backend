@@ -20,6 +20,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { createAuditLog, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 
@@ -32,12 +34,15 @@ export interface ZohoReceivedReconcileResult {
 }
 
 export async function reconcileZohoReceivedLines(
+  orgId: OrgId,
   opts: { zohoPurchaseOrderId?: string } = {},
 ): Promise<ZohoReceivedReconcileResult> {
   const scopedPoId = (opts.zohoPurchaseOrderId || '').trim() || null;
 
   const statusesSql = ZOHO_RECEIVED_LIKE_STATUSES.map((s) => `'${s}'`).join(',');
-  const res = await pool.query<{
+  // org-scoped: only this tenant's mirror rows drive its own receiving_lines,
+  // and the write runs under the tenant GUC (FORCE-ready).
+  const res = await tenantQuery<{
     id: number;
     before_workflow: string | null;
     before_qty: number | null;
@@ -46,6 +51,7 @@ export async function reconcileZohoReceivedLines(
     zoho_status: string | null;
     zoho_purchaseorder_id: string | null;
   }>(
+    orgId,
     `WITH candidates AS (
        SELECT rl.id,
               rl.workflow_status   AS before_workflow,
@@ -54,9 +60,11 @@ export async function reconcileZohoReceivedLines(
          FROM receiving_lines rl
          JOIN zoho_po_mirror mirror
            ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id
+          AND mirror.organization_id = $2
         -- No COALESCE on status: NULL can't match, and the bare column keeps
         -- idx_zoho_po_mirror_status (partial, status IS NOT NULL) usable.
         WHERE mirror.status IN (${statusesSql})
+          AND rl.organization_id = $2
           AND COALESCE(rl.quantity_received, 0) = 0
           AND (rl.workflow_status IS NULL
                OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))
@@ -70,6 +78,7 @@ export async function reconcileZohoReceivedLines(
             SELECT 1 FROM receiving r
              WHERE r.received_at IS NOT NULL
                AND r.unboxed_at IS NULL
+               AND r.organization_id = $2
                AND (r.id = rl.receiving_id
                     OR (rl.receiving_id IS NULL
                         AND r.source = 'zoho_po'
@@ -93,7 +102,7 @@ export async function reconcileZohoReceivedLines(
                 rl.quantity_expected,
                 c.zoho_status,
                 rl.zoho_purchaseorder_id`,
-    [scopedPoId],
+    [scopedPoId, orgId],
   );
 
   const rows = res.rows;

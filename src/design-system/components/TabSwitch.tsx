@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 
 interface Tab {
   id: string;
@@ -198,7 +199,7 @@ export function TabSwitch({
                   scale: isActive ? 1 : upNext || highContrast ? 0.98 : 0.93,
                   opacity: isActive ? 1 : upNext ? 1 : highContrast ? 0.9 : 0.52,
                 }}
-                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.18, ease: motionBezier.easeOut }}
               >
                 {tab.label}
                 {tab.count !== undefined && tab.count > 0 && (

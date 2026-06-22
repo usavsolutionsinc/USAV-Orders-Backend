@@ -1,7 +1,207 @@
 {
-  "generatedAt": "2026-06-19T19:05:05.035Z",
+  "generatedAt": "2026-06-22T06:12:13.181Z",
   "count": 200,
   "commits": [
+    {
+      "sha": "725c0d39376ccd9efdcbb1b5f97130d18df4a1ba",
+      "shortSha": "725c0d39",
+      "date": "2026-06-21T21:46:18-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(fba): route ship-units SHIPPED through guarded transition() (Phase 1.3)",
+      "body": "fba/ship-units no longer hand-writes serial_units→SHIPPED. The status change +\nthe SHIPPED event go through transition(input, client, ctx.organizationId) — which\nalso fixes the previously org-unscoped serial UPDATE. The PACKED/LABELED audit\nevents + the sku_stock_ledger SOLD decrement are untouched (the money side does\nnot move through transition).\n\nAllow-list: add FBA direct-ship edges STOCKED/GRADED/TESTED→SHIPPED (ALLOCATED/\nPICKED→SHIPPED already existed) — FBA ships sellable units straight to Amazon\n(link-unit normally allocates first). A non-sellable source (IN_REPAIR/SCRAPPED/…)\nis NOT modeled and is now correctly rejected rather than force-shipped (a latent\nbug — you should never ship a broken unit to FBA).\n\nReview-driven hardening: pre-validate ALL units against the guard BEFORE mutating\nany, returning a 409 listing every unshippable unit — true all-or-nothing with\nclear observability, instead of an opaque mid-loop 500. (Idempotency is preserved\nby the existing `current_status <> 'SHIPPED'` query filter, which excludes\nalready-shipped units on retry.)\n\nUnconditional transition()-only (SoT hook forbids a raw fallback). +guard tests.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route ship-units SHIPPED through guarded transition() (Phase 1.3)"
+    },
+    {
+      "sha": "d5cad04352e810221b4effc61f7062cdf3f1ce45",
+      "shortSha": "d5cad043",
+      "date": "2026-06-21T21:28:59-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(inventory): route returns-intake through guarded transition() (Phase 1.3)",
+      "body": "processReturnsIntake no longer hand-writes serial_units→RETURNED + a manual\nRETURNED INSERT. The status change + the RETURNED event (scan_token=tracking,\nstock_ledger_id=ledger, rich payload all preserved) go through transition()\n(executor pattern on the tx client, org-scoped via input.organizationId). The\nallocation flip (SHIPPED→RETURNED) and the +1 RETURN_CUSTOMER ledger stay outside\nit. SHIPPED/STOCKED/RMA→RETURNED are modeled; an unmodeled source throws and rolls\nback the whole batch — consistent with the existing all-or-nothing intake\ncontract (zero mutations committed, operator fixes input and retries).\n\nUnconditional transition()-only (SoT hook forbids a raw fallback). Reviewed clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route returns-intake through guarded transition() (Phase 1.3)"
+    },
+    {
+      "sha": "8a3a59bd7ccfd67d33d7fbf850cea1992597c45d",
+      "shortSha": "8a3a59bd",
+      "date": "2026-06-21T21:28:59-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(orders): route order-release through guarded transition() (Phase 1.3)",
+      "body": "orders/[id]/release no longer hand-writes serial_units.current_status. Per\nallocation, the status return to STOCKED + the RELEASED event go through the\nguarded transition() (executor pattern on the withTenantTransaction client,\norg-scoped); the allocation-close UPDATE stays outside it. The non-outbound\ndefensive case (no status change) keeps recordInventoryEvent. Exactly one\ninventory_event per unit either way.\n\nAllow-list: add the order-release rewind edges PICKED/PACKED/LABELED/STAGED →\nSTOCKED (ALLOCATED→STOCKED already existed) so cancelling an order mid-fulfilment\nreturns each unit to stock without the guard rejecting. +guard test.\n\nUnconditional transition()-only (SoT hook forbids a raw fallback). Reviewed clean.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route order-release through guarded transition() (Phase 1.3)"
+    },
+    {
+      "sha": "58e77ceeb5c65ce4dfe601a364af1e0e943da646",
+      "shortSha": "58e77cee",
+      "date": "2026-06-21T21:15:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(inventory): parts-sort status+location in one tx; narrow transition db param",
+      "body": "Adversarial review of the parts-sort conversion found an atomicity regression:\ntransition() committed the STOCKED status+event in its own tx, then the\ncurrent_location move ran as a separate autocommit — a failure between them left\nthe unit STOCKED but not relocated. Wrap both in ONE transaction (the caller's\nclient when provided, else our own via neon-client transaction()), so status +\nevent + location commit together.\n\nAlso narrow transition()'s db param from PoolClient to Pick<PoolClient,'query'>\n(the executor path only uses .query) — removes the unsafe cast in parts-sort and\nlets any caller thread a partial tx client without one. Backward-compatible: a\nfull PoolClient still satisfies the narrower type.\n\n(hold conversion reviewed clean — no findings.)\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "parts-sort status+location in one tx; narrow transition db param"
+    },
+    {
+      "sha": "54d18a0f177fbf4203227a8bf90f866444f0af0f",
+      "shortSha": "54d18a0f",
+      "date": "2026-06-21T21:04:35-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(inventory): route parts-sort through guarded transition() (Phase 1.3)",
+      "body": "sortSerialUnitToParts no longer hand-writes serial_units.current_status + a\nmanual PUTAWAY INSERT. Split per the SoT rule:\n  - transition() owns the STOCKED status change + the PUTAWAY event (binId,\n    prevBinId, payload preserved; it adds prev_status the legacy event omitted).\n  - a separate location-only UPDATE sets current_location (not part of the\n    status transition; no current_status, so the SoT guard permits it).\n\nBest-effort contract preserved: the common from-states\n(GRADED/RECEIVED/TESTED/RETURNED → STOCKED) are guard-clean; an odd source\n(e.g. mid-repair) is declined → returns {sorted:false, reason:'blocked'} +\nlog, so the caller's grade write still succeeds. DB errors still propagate to\nthe caller's existing try/catch exactly as before. Unconditional (no flag) —\nsame SoT-hook constraint as the hold conversion.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route parts-sort through guarded transition() (Phase 1.3)"
+    },
+    {
+      "sha": "00b6f9cb0b0a960ebde37c418a70c3882d75d0f5",
+      "shortSha": "00b6f9cb",
+      "date": "2026-06-21T20:55:17-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(inventory): route hold/release through guarded transition() (Phase 1.3)",
+      "body": "First Phase 1.3 conversion (the strangler backlog of ~20 raw current_status\nUPDATEs). holdUnit + releaseUnit no longer hand-write serial_units.current_status\n+ a manual inventory_events INSERT — they go through the guarded transition()\nchokepoint on the helper's own tx client (executor pattern). transition() emits\nthe HELD / RELEASED_HOLD event itself.\n\n- state-machine: model ON_HOLD's outgoing edges as exactly hold.ts'\n  RESTORABLE_STATUSES, so guarded release never rejects (entry to ON_HOLD stays\n  universal via the to===ON_HOLD special-case). +guard tests.\n- events: add HELD / RELEASED_HOLD to InventoryEventType (additive — already in\n  the DB via the old raw INSERTs; lets transition() emit them).\n\nNOTE — deviation from the flag-gated pattern, forced by the source-of-truth hook\n(.claude/hooks/sot-guard.sh): the rule forbids ANY raw current_status UPDATE in a\nfile, so a flag-OFF raw fallback is impossible. This conversion is therefore\nUNCONDITIONAL (not behind UNIFIED_ENGINE_APPLY_TRANSITION). It is behavior-\nequivalent for legitimate flows: hold's to=ON_HOLD is universal-entry and\nrelease's destination is always a RESTORABLE_STATUSES member (now modeled), so\nthe guard never rejects; the HELD/RELEASED_HOLD events match the legacy shape.\nOrg-scoping of hold.ts stays a tracked tenancy follow-up (no orgId threaded yet).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route hold/release through guarded transition() (Phase 1.3)"
+    },
+    {
+      "sha": "12a0af3d4fc209b1bee0cc17b090e0dd0bd4275b",
+      "shortSha": "12a0af3d",
+      "date": "2026-06-21T20:31:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(workflow): applyTransition preserves receiving_id + scan_token on the event",
+      "body": "Review found the chokepoint event dropped receiving_id (carton linkage) and\nscan_token vs the legacy recordInventoryEvent path — an audit-trail divergence\non the flag-ON path. transition() already supports both; thread them through\napplyTransition (happy + identity paths) and pass them from the receiving\nline-status route. +test assertions.\n\n(Reviewer also flagged the decline-path as a 'double-write' — that's a false\npremise: transition() runs the guard BEFORE its UPDATE and returns ok:false\nwithout writing, so the fallback writes exactly once. The guard-bypass-on-decline\nis the intentional strangler parity-net: preserve the legacy outcome + log,\nobserve, then tighten — returning 409 on flag-flip would wedge unmodeled flows.)\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "applyTransition preserves receiving_id + scan_token on the event"
+    },
+    {
+      "sha": "be0481d3513b9698ce816c27e3de11843f5eece0",
+      "shortSha": "be0481d3",
+      "date": "2026-06-21T20:21:57-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(receiving): route lines/[id]/status through the guarded chokepoint (Phase 1.2)",
+      "body": "This was the clearest dual-spine drift (DISCOVERY §6): a raw, unguarded\nserial_units UPDATE + a separate non-atomic inventory_event + a receiving_lines\nwrite, all over the BYPASSRLS owner pool with no org scoping and no tap.\n\n- Serial status change now routes through applyTransition(skipTap) behind\n  UNIFIED_ENGINE_APPLY_TRANSITION: guard + atomic event in one tx. skipTap\n  because recordTestVerdict is the canonical test-verdict tapper (no double\n  advance). On guard-decline (e.g. RTV RETURNED from a receiving state isn't\n  modeled) it logs + falls back to the legacy raw write (strangler parity-net),\n  so nothing wedges.\n- Org-scope EVERY query (line load, prior-serial load, receiving_lines UPDATE,\n  legacy serial UPDATE, inventory_event) — closes the same pre-existing\n  cross-tenant gap the review flagged elsewhere. Byte-identical for legitimate\n  single-org traffic when the flag is off.\n- applyTransition: tapEvent is now optional (omit with skipTap for write-only\n  call sites) so skipTap callers don't pass a misleading placeholder event.\n\nmark-received-po + scan-serial are NOT dual-spine routes — they delegate status\nwrites to helpers (attachSerialToLine / receiveLineUnits) and already tap\nunit_received; their helper-level consolidation belongs to Phase 1.3.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route lines/[id]/status through the guarded chokepoint (Phase 1.2)"
+    },
+    {
+      "sha": "bb8583d5366c0741362fcc19e79c974eca977c8e",
+      "shortSha": "bb8583d5",
+      "date": "2026-06-21T20:17:44-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(workflow): applyTransition skipTap (guarded write + event, no graph advance)",
+      "body": "Adds an opt-out of the engine tap for call sites that mutate a unit's status but\naren't the canonical driver of its graph position (the receiving line-status\nroute — its test pass/fail is already tapped by recordTestVerdict, so a second\ntap would be redundant). Still does the guarded transition() write + atomic\ninventory_event + idempotent-identity handling; just suppresses tapWorkflow. +2 tests.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "applyTransition skipTap (guarded write + event, no graph advance)"
+    },
+    {
+      "sha": "a4a66fab2e823d8692dfeaf4a3188c89b36a984b",
+      "shortSha": "a4a66fab",
+      "date": "2026-06-21T20:01:13-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(tenancy): org-scope recordTestVerdict + engine store reads/writes",
+      "body": "Adversarial review surfaced a pre-existing cross-tenant gap (the BYPASSRLS class\ntracked by the Phase C sweep): recordTestVerdict and the workflow store query\nserial_units / item_workflow_state by id alone over the owner `pool`/neon-http\nconnection, so RLS is inert and a cross-org id is accepted. The Phase 1.1\nconversion made it flag-asymmetric (the new chokepoint path scopes via\ntransition(); the default legacy path didn't). Close it consistently:\n\n- recordTestVerdict: thread organizationId (conditional, like transition()) into\n  the step-1 SELECT (the gate — cross-org id now reads as 404), the legacy\n  UPDATE, the line tally, and the rollup UPDATE. Fetch organization_id up front\n  and stamp testing_results directly instead of a re-SELECT subquery (which\n  raced a concurrent delete to the fallback org).\n- store.ts loadState/moveTo/setStatus: add the org predicate (orgId already in\n  the closure; matches the established recordRun stamp) so a cross-org id reads\n  as not-enrolled rather than leaking/mutating another tenant's position.\n\ntap.ts's pre-read stays unscoped by design — it discovers the unit's org for\nlib-level taps; advance() then uses that org, which loadState now re-scopes.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "org-scope recordTestVerdict + engine store reads/writes"
+    },
+    {
+      "sha": "9da4573d3af75b7c1feb247e866e67785676ac29",
+      "shortSha": "9da4573d",
+      "date": "2026-06-21T19:48:04-07:00",
+      "author": "DENSENSE8",
+      "subject": "fix(workflow): applyTransition idempotency must not swallow expectedFrom drift",
+      "body": "transition() runs the expectedFrom drift check BEFORE the guard's identity\ncheck, so with optimistic concurrency a 409 — even one where from===to — is a\ndrift rejection the caller asked to fail on, not an idempotent re-entry. Only\ntreat from===to as an idempotent re-entry when no expectedFrom was supplied;\notherwise surface the 409 (no event, no tap). recordTestVerdict doesn't use\nexpectedFrom, so this is a latent-edge hardening for future callers + a test.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "fix",
+      "title": "applyTransition idempotency must not swallow expectedFrom drift"
+    },
+    {
+      "sha": "518bea7365aa46c052b9ce9b9adb2fe93a9de612",
+      "shortSha": "518bea73",
+      "date": "2026-06-21T19:45:34-07:00",
+      "author": "DENSENSE8",
+      "subject": "test(tech-serial): repoint stale TSN call-site assertion to recordTestVerdict",
+      "body": "The per-unit test verdict's tech_serial_numbers write moved from the route into\nthe extracted recordTestVerdict lib (relational-reuse refactor), but this guard's\nCALL_SITES still pointed at the thin HTTP route — a pre-existing failure (the\nroute only delegates and never calls attachTechSerial directly). Repoint to\nsrc/lib/tech/recordTestVerdict.ts where the canonical TSN write actually lives.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "test",
+      "title": "repoint stale TSN call-site assertion to recordTestVerdict"
+    },
+    {
+      "sha": "b8e54313356533dacc9ffb5b0a6ae7abbae87bc0",
+      "shortSha": "b8e54313",
+      "date": "2026-06-21T19:43:27-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tech): route recordTestVerdict through applyTransition behind a flag (Phase 1.1)",
+      "body": "recordTestVerdict is the reference call site for the unified-engine chokepoint.\nBehind UNIFIED_ENGINE_APPLY_TRANSITION (default OFF → byte-identical legacy path):\n\n- ON  → status write + inventory_event + engine tap go through one guarded\n        applyTransition() call. The tsn audit, testing_results feed, and line\n        rollup stay as domain side-effects around it.\n- OFF → the existing raw UPDATE + appendInventoryEvent + end-of-fn tap, unchanged.\n\nA guard rejection (held/shipped/illegal source state) now throws GuardRejectedError\n→ the route returns 409 instead of silently force-writing; 404 (vanished unit)\nreturns null as before. Idempotent re-entry (unit already at target) still records\nthe event + taps via applyTransition's identity path.\n\nGuard: add GRADED→TESTED so a PASS on an already-graded unit is allowed (TESTED\nand GRADED are sibling test-result states) — completes the test-bench from-state\ncoverage so legitimate verdicts never 409.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route recordTestVerdict through applyTransition behind a flag (Phase 1.1)"
+    },
+    {
+      "sha": "f5a25632009204c0677a7ec41f01ca92dcdb69e1",
+      "shortSha": "f5a25632",
+      "date": "2026-06-21T19:38:03-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(workflow): applyTransition() mutate-and-tap chokepoint (Phase 1.1)",
+      "body": "The single helper that collapses load→decide→guard→write-status→record-event→\ntap (the ~26-handler shotgun). It COMPOSES the pieces that already exist rather\nthan reinventing them:\n  transition()  -> FOR UPDATE · guard · UPDATE serial_units · inventory_event (atomic, org-aware)\n  tapWorkflow() -> fire-and-forget engine observe / graph advance\n\n- Idempotent re-entry: from===to (transition's 'identity' 409) still records the\n  event (client_event_id de-dupes) and taps -> idempotent:true. Genuine guard\n  rejections (409) / not-found (404) do NOT tap.\n- Collaborators injected (default = real impls) so it's unit-tested with fakes.\n\nGuard widening (state-machine.ts): add the real test-bench edges recordTestVerdict\nperforms so PASS/TEST_AGAIN flow THROUGH the guard instead of a raw UPDATE —\nIN_TEST→TESTED (the PASS happy path), REPAIR_DONE→TESTED, TESTED→IN_TEST. Resolves\nthe brief-divergence in favor of TESTED (the established pass state; condition\nGRADED is a separate axis). Additive = strictly more permissive, no caller affected.\n\nTests: applyTransition (happy/identity/reject/404) + guard allow-list edges.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "applyTransition() mutate-and-tap chokepoint (Phase 1.1)"
+    },
+    {
+      "sha": "d91674281cf85277362114ae74cf47270f21f73c",
+      "shortSha": "d9167428",
+      "date": "2026-06-21T19:34:49-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(studio): recovery panel surfaces + unparks stuck workflow items (Phase 1.0)",
+      "body": "Self-contained StudioRecoveryPanel rendered in the Inspector's workflow-summary\n(no-node) view: lists blocked|error items for the active definition (GET\n/api/studio/items/stuck) with a one-click Recover (POST .../recover). Stays\nquiet when nothing is parked; optimistically drops a recovered row and lets the\nengine's db-event reconcile the Live counts. The richer triage view (filters,\nbulk) remains the Studio §2 roadmap item.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "recovery panel surfaces + unparks stuck workflow items (Phase 1.0)"
+    },
+    {
+      "sha": "707dcaa3399be361e474be10c5aac4eecb3e3d7f",
+      "shortSha": "707dcaa3",
+      "date": "2026-06-21T19:32:22-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(workflow): unpark/recovery path for stuck items (Phase 1.0)",
+      "body": "advanceItem() parks units as blocked (await) or error (throw/unknown type),\nbut nothing reset them — errored units silently died. Adds the recovery path:\n\n- recoverItem() (src/lib/workflow/recover.ts): tenant-scoped reset of one\n  blocked|error item_workflow_state row back to active. Writes an\n  inventory_events NOTE (timeline) + a workflow_runs 'unpark' row (engine log),\n  then a best-effort emitWorkflowEvent so the Live lens refetches. Leaves\n  serial_units.current_status untouched — only the engine's position was stuck.\n- POST /api/studio/items/[id]/recover — HTTP shell + formal audit row\n  (action 'workflow.item.recover' as a string literal; no audit-logs constant\n  churn while that file is mid-edit by concurrent work).\n- GET  /api/studio/items/stuck — the per-item triage feed (blocked|error) the\n  Live lens only counts in aggregate.\n- New permission studio.recover (non-destructive, no step-up: a re-park is one\n  scan away) so a floor lead can unpark without graph-edit rights.\n\nManifest regen (docs/security/route-permissions.json) is left to the owning\naudit-route-auth:emit flow (concurrently mid-regen), not bundled here.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "unpark/recovery path for stuck items (Phase 1.0)"
+    },
+    {
+      "sha": "bc004f89057dc1f34f9325afd6338d0845d952dc",
+      "shortSha": "bc004f89",
+      "date": "2026-06-21T19:24:05-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(workflow): real per-unit AdvanceLock replacing NULL_LOCK (Phase 1.0)",
+      "body": "Best-effort Upstash Redis mutex keyed wf:advance:{serialUnitId}, wired into\nthe production advance() path. Mirrors api-guard.ts's REST /pipeline shape.\n\nFailure policy (the lock narrows races; engine idempotency is the backstop):\n- Redis unconfigured -> acquire() true / release() no-op (== NULL_LOCK), so\n  dev/CI/preview are unaffected.\n- SET NX miss (already held) -> acquire() false -> 2nd concurrent advance noops.\n- Redis error/timeout -> acquire() true (fail OPEN), never stalls a tap.\n\nShort TTL auto-expires a crashed holder; release is a token-checked\ncompare-and-delete (Lua) so we never free a lock a later advance re-acquired.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "real per-unit AdvanceLock replacing NULL_LOCK (Phase 1.0)"
+    },
+    {
+      "sha": "86fd9a36164533b73fc1c2713d0d7126bf51f602",
+      "shortSha": "86fd9a36",
+      "date": "2026-06-20T13:32:22-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): make serial_units writer org-required + FORCE RLS migration",
+      "body": "upsertSerialUnit now takes a REQUIRED orgId: the unscoped SELECT/INSERT/UPDATE\nbranches and the raw-pool dispatcher are deleted, so the canonical writer always\nstamps organization_id (or sets app.current_org on an external client). This\nremoves the FORCE-RLS footgun (relying on the column default, which loud-fails\nwithout the GUC) and the latent cross-tenant FOR UPDATE lock bug.\n\nsyncTsnToSerialUnit / syncSkuToSerialUnit also require orgId. Threaded callers:\npost-multi-sn, mark-received (ctx.organizationId), receive-line\n(input.organizationId), serial-attach attachSerialToLine (now requires orgId,\nlegacy raw-pool path removed) + its route callers scan-serial and\nmark-received-po, and the serials route. recordUnitEvent (test-only) gains\norganizationId on its input.\n\nAdds 2026-06-20b_enforce_tenant_isolation_serial_units.sql (FORCE phase E) and\nscripts/verify-serial-units-force.mjs (app_tenant baseline -> apply -> reread ->\nauto-relax harness). Apply ONLY after this code deploys.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "make serial_units writer org-required + FORCE RLS migration"
+    },
+    {
+      "sha": "4f19d69c5204c93e42a5780846e386c6784f2b92",
+      "shortSha": "4f19d69c",
+      "date": "2026-06-19T12:18:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Allow protobufjs build scripts for pnpm",
+      "body": "",
+      "type": "other",
+      "title": "Allow protobufjs build scripts for pnpm"
+    },
+    {
+      "sha": "fb19e196a0f19b0a0c59728c17f345cddcc18fee",
+      "shortSha": "fb19e196",
+      "date": "2026-06-19T12:14:08-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Fix photo library typings and release notes",
+      "body": "",
+      "type": "fix",
+      "title": "Fix photo library typings and release notes"
+    },
     {
       "sha": "46f90b7ec09447eed480aab33ddf97bc190a4d9a",
       "shortSha": "46f90b7e",
@@ -1801,206 +2001,6 @@
       "body": "Operationalizes the Phase 0 cycle_count_campaigns + cycle_count_lines\ntables (2026-05-14 migration). No UI existed; this lands the full\noperator + admin workflow.\n\nsrc/lib/inventory/cycle-count.ts (NEW):\n  - createCampaign(name, varianceTol, createdByStaffId) — INSERTs\n    the campaign + snapshots every bin_contents row (qty > 0 OR\n    last_counted IS NULL) into cycle_count_lines (status='pending').\n    Returns {campaignId, lineCount}.\n  - submitCount(lineId, countedQty) — auto-routes to status='counted'\n    when within campaign.variance_tol, status='pending_review' when\n    outside. Computes variance + variance fraction inline.\n  - approveLine(lineId) — for variance != 0, INSERTs sku_stock_ledger\n    with reason='CYCLE_COUNT_ADJ'; updates bin_contents.qty +\n    last_counted to match counted_qty; flips line to 'approved'.\n  - rejectLine(lineId) — line → 'rejected'; no stock changes.\n  - closeCampaign(campaignId) — auto-approves remaining 'counted'\n    lines (inline to keep one transaction, since pg disallows nested\n    transactions); leaves 'pending_review' alone; flips campaign\n    status to 'closed' + stamps closed_at.\n\nsrc/app/admin/inventory-v2/cycle-counts/page.tsx (NEW):\n  - Create-campaign form (name + variance_tol).\n  - Last-50 campaigns table with per-status counts (total / counted\n    / pending_review / approved). Pending-review counter goes amber\n    when > 0 so it grabs attention.\n\nsrc/app/admin/inventory-v2/cycle-counts/[id]/page.tsx (NEW):\n  - Header with status badge + \"Close campaign\" action (open-only).\n  - Status filter pills (all / pending / counted / pending_review /\n    approved / rejected) drive the lines query via ?status=...\n  - Per-line: bin name (linked) + SKU (linked) + expected/counted\n    qty + colored variance + status badge.\n  - Inline action per status:\n      pending      → number input + Submit button\n      pending_review or counted → Approve / Reject buttons\n      approved/rejected → audit text (\"by Tuan\")\n  - All actions are server actions calling the helper; pages\n    revalidatePath after each so the new state lands in the same\n    render cycle.\n  - Variance color codes: gray when 0; red when > tolerance; amber\n    otherwise.\n\nDashboard \"Quick links\" row gains \"Cycle counts →\".\n\nZero new tsc errors in any new file. (Four pre-existing TS2347 errors\nin /api/cycle-counts/* routes are untouched.)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "inventory v2 #2: cycle count admin UI"
-    },
-    {
-      "sha": "c90635eaae4afa42b8ca03a31103a5263825c0ec",
-      "shortSha": "c90635ea",
-      "date": "2026-05-18T07:53:09-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 #3: throughput dashboard",
-      "body": "Diagnostic aggregation over inventory_events. Lives at\n/admin/inventory-v2/throughput.\n\nTime-range selector pills (24h / 72h / 7d) drive the same query band.\nAll four sections re-run in parallel on range change:\n\n  - Totals: events count, distinct actors, distinct units touched.\n    Three tiles with semantic colors (blue / emerald / purple).\n  - By event type: horizontal-bar list with magnitude proportional\n    to the leader. Useful at-a-glance to spot which phases are\n    actively flowing (e.g. lots of RECEIVED but no SHIPPED means\n    Phase 2 is on but Phase 5 hasn't been activated yet).\n  - Station × hour heatmap: 6-column grid (RECEIVING / TECH / PACK /\n    SHIP / MOBILE / SYSTEM) by hour bucket, intensity ∝ count.\n    Hover for tooltip with the exact bucket + station + count.\n    Hidden when no rows match the range.\n  - By actor: top-50 staff by event count + last-active timestamp.\n\nPure read; no flag gate. Numbers stay sparse until the flagged paths\nemit; the panel still renders cleanly with zero rows.\n\nDashboard \"Quick links\" gains \"Throughput →\".\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 #3: throughput dashboard"
-    },
-    {
-      "sha": "4d69d80d9891d4eb5f695ba2694f2c20ad66299a",
-      "shortSha": "4d69d80d",
-      "date": "2026-05-18T07:50:54-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 #1: returns intake admin tool + shared helper",
-      "body": "Phase 7 returns operations get a UI. Extracts the transaction into\nsrc/lib/inventory/returns.ts; /api/returns/intake and the new admin\npage share the same code path.\n\nsrc/lib/inventory/returns.ts (NEW):\n  - processReturnsIntake(input) → ReturnsIntakeResult (success |\n    400/404 failure with missing serials/ids).\n  - Per resolved unit: ledger +1 RETURN_CUSTOMER, unit → RETURNED,\n    inventory_events RETURNED with stock_ledger_id linked.\n  - Caller pre-extracts GS1 URLs from raw scans via parseScannedUrl\n    so the helper takes normalized serials.\n\nAPI route slimmed 190 → 100 lines. Behavior unchanged; response shape\nunchanged (snake_case keys preserved for existing callers).\n\nsrc/app/admin/inventory-v2/returns/page.tsx (NEW):\n  - Top form: textarea for serials (newline OR comma separated),\n    plus optional tracking number + reason. Server action splits\n    numeric entries (id), GS1 URLs (parsed), bare strings (uppercased).\n  - Recent returns table: last 50 RETURNED inventory_events with\n    unit + sku links, prev status, tracking, reason, actor.\n  - URL query params drive flash messages: ?ok=1 (green banner)\n    or ?error=... + ?missing=... (red banner listing the IDs that\n    didn't match). Preview-mode banner when flag is off.\n\nDashboard \"Quick links\" row gains a \"Returns intake →\" button.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 #1: returns intake admin tool + shared helper"
-    },
-    {
-      "sha": "e18cb4d292b21971a71883de489ae8f9fa6b117e",
-      "shortSha": "e18cb4d2",
-      "date": "2026-05-18T07:47:09-07:00",
-      "author": "DENSENSE8",
-      "subject": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview",
-      "body": "Lands the operator-facing half of the QR-only label migration. The\nin-app preview and the data-fetching path now match the print template\nlanded in 86e6d3b.\n\nThis commit bundles my surgical edits on top of an in-flight parallel\nrestructure of these two files (condition picker, NotesCard split,\nProductContextCard slimmed, etc. — pre-existing work). The QR-specific\nchanges are isolated to:\n\nsrc/components/MultiSkuSnBarcode.tsx — data + render:\n  - Drop loadBarcodeLibrary/renderBarcode imports + the\n    window.JsBarcode global ambient type. Add loadQrLibrary/renderQr.\n  - New state: gtin + qrUrl alongside uniqueSku. Both populated by\n    the new fetchNextUnitId() helper that calls /api/units/next-id\n    (introduced in d6e7326) and stashes the response triple.\n  - All four /api/sku-manager?action=current call sites swap to\n    fetchNextUnitId(). The /api/sku-manager?action=increment call in\n    handleFinalAction is GONE — /api/units/next-id is atomic, so\n    every call returns a fresh unit id with no separate commit step.\n  - renderBarcodeCanvas → renderQrCanvas (async; pulls in the qrcode\n    library dynamically via loadQrLibrary). The downstream useEffect\n    that drives canvas redraws now reacts to qrUrl OR uniqueSku and\n    void-fires the async render.\n  - handleSkuChange + handleChangeSku reset the new gtin/qrUrl too.\n  - printProductLabels invocation in handleFinalAction passes\n    { gtin, qrPayloads: [qrUrl ⨉ serialNumbers.length] } so the\n    print template renders the GS1 Digital Link QR from\n    src/lib/print/printProductLabel.ts (which already handles\n    that case from the prior commit).\n\nsrc/components/MultiSkuSnBarcode.tsx — PreviewCardModern layout:\n  - Print-mode preview redesigned. Was: centered canvas-then-text\n    stack. Now: title + unit id + (optional) SN/LOC on the left,\n    QR canvas (160×160) on the right. Matches the ZPL template\n    visually.\n\nsrc/components/barcode/BarcodePreview.tsx — vertical-mode preview:\n  - Same layout flip for the sidebar/mobile compact mode. Comfy\n    (horizontal) renders a 128×128 QR; compact renders 96×96.\n  - Drops the centered text block under the (formerly 1D) canvas.\n\nWhat's preserved from the parallel work:\n  - ConditionGrade state + the new <SerialScanCard> condition select\n  - NotesCard split out of the preview\n  - ProductContextCard slimmed (no currentLocation/onChangeSku)\n  - StickyActionBar + ModernSkuField + WorkspaceCard structure\n\nZero new tsc errors. Reprint mode still works (no GTIN/QR override —\nfalls back to the legacy URL form in the print template).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "QR label UI surgery on MultiSkuSnBarcode + BarcodePreview"
-    },
-    {
-      "sha": "91169695c8714654dbe06daa3aa025f9713d701a",
-      "shortSha": "91169695",
-      "date": "2026-05-18T01:06:18-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2: hold/release helpers + admin page",
-      "body": "Extracts the Phase 7 hold + release transactions into\nsrc/lib/inventory/hold.ts. /api/serial-units/[id]/{hold,release} now\ndelegate. New /admin/inventory-v2/holds page exposes the same\noperations via server actions.\n\nsrc/lib/inventory/hold.ts (NEW):\n  - holdUnit(input) — 409 if already ON_HOLD; stashes prev status in\n    inventory_events.payload.restore_status; idempotent via\n    clientEventId. Returns HoldUnitResult (success | failure with\n    HTTP-style status).\n  - releaseUnit(input) — 409 if not ON_HOLD; recovers restore_status\n    from the most recent HELD event's payload; force_status override\n    (validated against the RESTORABLE_STATUSES set).\n  - isRestorableStatus(value) type guard.\n  - No feature-flag check here — caller decides.\n\nRoute slimming:\n  - /api/serial-units/[id]/hold/route.ts: 107 → 49 lines.\n  - /api/serial-units/[id]/release/route.ts: 124 → 55 lines.\n  - Behavior unchanged; response shapes identical.\n\nsrc/app/admin/inventory-v2/holds/page.tsx (NEW):\n  - Top form: place a unit on hold. Accepts numeric id OR normalized\n    serial; server action looks up by either. Required reason.\n    Server-side validation returns ?error= codes that render as a\n    red banner.\n  - Held-units table: every serial_units row where current_status =\n    'ON_HOLD'. LATERAL join pulls the matching HELD inventory_event\n    for reason, restore_status, held_at, held_by_name.\n  - Per-row Release: server action with an optional force_status\n    select (blank = auto-recover from payload). Disabled when the\n    INVENTORY_V2_RETURNS flag is off; preview-mode banner shown.\n  - All rows link to /admin/inventory-v2/units/{id} for the full\n    timeline.\n\nDashboard: adds a \"Quick links\" nav row below preflight with buttons\nfor Events explorer, Bulk allocate, and Holds.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2: hold/release helpers + admin page"
-    },
-    {
-      "sha": "ccc06043b9aa9a51a86ff8301838c0fe02e34d90",
-      "shortSha": "ccc06043",
-      "date": "2026-05-18T01:01:45-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2: bulk-allocate admin page + shared allocation helper",
-      "body": "Extracts the Phase 4 allocation transaction into\nsrc/lib/inventory/allocate.ts so /api/orders/[id]/allocate and the\nnew bulk-allocate admin page share one code path. FIFO selection,\nSKIP LOCKED contention, per-unit event emission, idx_oua_open_unit\nguard — all in one place.\n\nsrc/lib/inventory/allocate.ts (NEW):\n  - allocateOrder(input) returns AllocateOrderResult (discriminated\n    success vs failure). Success carries the per-unit list with\n    allocationId + eventId; failure carries the HTTP-style status\n    (400/404/409) for the API caller to forward.\n  - isValidConditionGrade type guard.\n  - Helper does NOT check the feature flag — callers decide so test\n    harnesses can bypass.\n\nsrc/app/api/orders/[id]/allocate/route.ts:\n  - Slimmed from 186 lines to 74. Delegates the body of the request\n    to allocateOrder(). Response shape unchanged.\n  - Still gated by INVENTORY_V2_ALLOCATION and permission orders.view.\n\nsrc/app/admin/inventory-v2/bulk-allocate/page.tsx (NEW):\n  - Lists every orders row with a non-empty sku, no open\n    order_unit_allocations row, and a non-shipped status.\n  - LEFT JOIN LATERAL counts STOCKED serial_units for the matching\n    SKU so each row shows \"available_stocked vs qty\" at a glance.\n    Color-codes green (eligible), amber (partial), red (zero).\n  - Per-row Allocate button is a <form> with a server action that\n    calls allocateOrder() and revalidatePath()s the page so the\n    result lands in the same render. Disabled when:\n      * available_stocked < requested qty (label \"Insufficient\"), or\n      * INVENTORY_V2_ALLOCATION flag is off (preview mode banner)\n  - Pagination: 100 per page, ?page=N offset cursor.\n  - Footer explains the underlying mechanism + links to the helper\n    file so operators can find the source of truth.\n\nDashboard: the existing \"Order unit allocations\" section grows a\n\"Bulk allocate →\" link in its header. Off-flag, the bulk-allocate\npage still renders the candidate list in preview mode — useful for\nseeing what would happen before flipping the flag.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2: bulk-allocate admin page + shared allocation helper"
-    },
-    {
-      "sha": "85cca78f8183c64bbb0f57a2d3a6449453cf5700",
-      "shortSha": "85cca78f",
-      "date": "2026-05-18T00:56:18-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 admin: events explorer page + dashboard link",
-      "body": "New page at /admin/inventory-v2/events. Server-rendered, paginated\n(100 per page), filterable browse of the inventory_events stream.\n\nFilters (URL-driven, GET form so deep links are shareable):\n  event_type   exact match from the canonical EVENT_TYPES list\n  station      RECEIVING | TECH | PACK | SHIP | MOBILE | SYSTEM\n  sku          exact match\n  unit         serial_units.id\n  actor        staff.id (dropdown of active staff)\n  since/until  YYYY-MM-DD; until is inclusive (treated as\n               < $until+1 day in the query)\n  page         zero-indexed pagination cursor\n\nAll filters compose into a single WHERE clause via parameterized SQL.\nCOUNT(*) runs first so the header shows total + page-of-pages; the\nLIMIT/OFFSET pull uses the same params array extended with page-size\n+ offset.\n\nResult rows are mini-versions of the per-unit timeline row: clickable\nunit id → /admin/inventory-v2/units/{id}, clickable sku →\n/admin/inventory-v2/sku/{sku}, plus the prev→next status diff and\nbin name when present.\n\nDashboard tweak: the \"Recent inventory events\" section header now\ncarries an \"Open explorer →\" button linking through to the new page.\nThe recent-50 inline view stays as the at-a-glance pulse; deep\ninvestigation goes to /events.\n\nZero new tsc errors. Read-only, gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 admin: events explorer page + dashboard link"
-    },
-    {
-      "sha": "6ad1979408590e112d167a37da79561f27f37178",
-      "shortSha": "6ad19794",
-      "date": "2026-05-18T00:52:18-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 admin: preflight panel + open DRIFT alerts surface",
-      "body": "Two new sections on /admin/inventory-v2 that pair with the drift-check\ncron landed in c040e55.\n\nPreflight panel (PASS / WARN / FAIL per check):\n  1. Schema artifacts — every Phase 0/1 table, enum value, and the\n     fn_next_unit_seq function present.\n  2. tech_serial_numbers backfill — eligible-but-unlinked count is 0.\n     WARN with a pointer to scripts/backfill-tech-serial-unit-id.mjs\n     if any remain.\n  3. sku_catalog GTIN coverage — every row has a gtin value. WARN\n     with a pointer to scripts/backfill-internal-gtins.mjs otherwise.\n  4. sku_stock ↔ ledger drift — v_sku_stock_drift empty AND no open\n     DRIFT alerts. PASS when both clean; WARN when alerts are open\n     but the view is clean (cron will resolve on next tick); FAIL\n     when the view is non-empty (a writer bypassed the ledger).\n\nHeader pill flips between \"all green — safe to flip flags\" and\n\"attention required\". Footer notes the one phase-specific\nprecondition that doesn't fit a universal check: Phase 5 (PACKING)\nneeds Phase 4 (ALLOCATION) flipped first so order_unit_allocations\nrows exist.\n\nOpen DRIFT alerts section: only renders when stock_alerts has open\nrows of alert_type='DRIFT'. Red background to grab attention, table\nshows SKU (clickable → /admin/inventory-v2/sku/{sku}), worst |Δ|,\ntriggered_at, the detail line built by the drift-check route.\n\nTwo new loaders:\n  - loadGtinCoverage — single SELECT counting sku_catalog rows\n    with/without gtin.\n  - loadOpenDriftAlerts — last 25 open DRIFT alerts ordered newest.\n\nZero new tsc errors. Read-only, gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 admin: preflight panel + open DRIFT alerts surface"
-    },
-    {
-      "sha": "c040e55107f3a2212f2fd5871e1c0b63d862e458",
-      "shortSha": "c040e551",
-      "date": "2026-05-18T00:44:43-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2: drift-check cron + DRIFT stock-alert type",
-      "body": "Catches the moment sku_stock.stock (or .boxed_stock) disagrees with\nSUM(sku_stock_ledger) per dimension — the canary that a writer\nbypassed the ledger trigger and quantities went out of sync.\n\nsrc/lib/migrations/2026-05-18_stock_alerts_drift.sql:\n  - Extends stock_alerts_type_chk to permit a fourth alert_type:\n    'DRIFT'. Pure CHECK rewrite, idempotent. Applied vs Neon\n    (neondb) at deploy time — constraint now reads\n    CHECK (alert_type IN ('LOW_STOCK','NEVER_COUNTED','STALE_COUNT','DRIFT')).\n\nsrc/app/api/qstash/inventory/drift-check/route.ts:\n  POST handler (isQStashOrigin gated):\n    1. INSERT stock_alerts rows of alert_type='DRIFT' for every SKU\n       in v_sku_stock_drift. ON CONFLICT DO NOTHING dedupes against\n       the idx_stock_alerts_open partial unique idx so one open\n       alert per SKU. qty_at_trigger = max(|warehouse Δ|, |boxed Δ|).\n    2. Resolve any open DRIFT alerts whose SKU is no longer drifted\n       (the trigger projection caught up).\n    3. Return { opened, resolved, worst[5], elapsed_ms } so QStash\n       logs are useful at a glance.\n  GET handler: tiny health probe { ok: true, queue: 'qstash',\n  job: 'inventory-drift-check' }.\n\nsrc/config/qstash-schedules.json:\n  Adds inventory-drift-check-daily-1100-utc at \"0 11 * * *\" (between\n  the existing refresh-reports 10:30 UTC and stock-alerts 14:00 UTC).\n  Run /api/qstash/schedules/bootstrap (or scripts/bootstrap-qstash-\n  schedules.mjs) after this deploys to register the schedule.\n\nDesigned as a passive safety net — drift should always be empty when\nthe trigger is healthy. If it's ever non-empty, the alert surfaces\nin /admin/inventory-v2's drift section AND in stock_alerts so the\nexisting alerting pipeline catches it.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2: drift-check cron + DRIFT stock-alert type"
-    },
-    {
-      "sha": "86e6d3b9dde0951f41ddf54ca809a6cbcc1fb20d",
-      "shortSha": "86e6d3b9",
-      "date": "2026-05-18T00:37:49-07:00",
-      "author": "DENSENSE8",
-      "subject": "QR label migration: QR-only print template + GTIN backfill ran",
-      "body": "Two more pieces of the QR-only / title-left / QR-right unit-label\nmigration. Lands the print-template surgery and the one-time GTIN\nbackfill for every existing sku_catalog row.\n\nsrc/lib/print/printProductLabel.ts — QR-only template:\n  - Drops the JsBarcode CDN script + 1D barcode-row entirely. The\n    1D barcode under the SKU code is gone.\n  - Layout: title + serial + sku stacked on the LEFT, QR on the\n    RIGHT (0.88in × 0.88in, was 0.86in to give the SVG a touch more\n    bleed). Title font promoted (12px bold), serial promoted (14px\n    monospace bold) since it's now the primary visual identifier.\n  - QR is pre-rendered as inline SVG via react-qr-code (already a\n    dep). No remote script wait; popup waitMs dropped from 600 → 200.\n  - PrintProductLabelInput extended with optional { qrPayload, gtin }.\n    Resolution order: qrPayload (e.g. from /api/units/next-id) →\n    GS1 Digital Link via buildGs1UnitUrl(QR_BASE_URL, gtin, serial)\n    → legacy /m/u/{serial} → /sku-stock/{sku}. Callers that don't\n    know the GTIN still work — the GS1 form just doesn't apply.\n  - PrintProductLabelsInput extended with { gtin, qrPayloads[] }\n    so the multi-print path passes the shared GTIN once and per-\n    label QR payloads index-aligned with serialNumbers.\n\nscripts/backfill-internal-gtins.mjs — one-time stamper:\n  - For every sku_catalog row where gtin IS NULL OR '': generate the\n    deterministic GTIN-14 ('02' + 11-digit zero-padded id + check\n    digit) and persist via UPDATE … SET gtin = COALESCE(NULLIF(gtin,\n    ''), $candidate). Concurrent /api/units/next-id calls take their\n    own COALESCE path; the first writer wins, conflicts are counted\n    as a non-error.\n  - --dry-run and --limit N flags. Idempotent; re-running processes\n    only remaining unstamped rows.\n\nBackfill ran against Neon (neondb): 1194 sku_catalog rows stamped,\n0 conflicts, 0 failures, 0 remaining without GTIN. Every existing\nSKU is now QR-printable without an extra round-trip.\n\nStill pending (was paused due to active edits): MultiSkuSnBarcode.tsx +\nBarcodePreview.tsx rewrite to call /api/units/next-id and render QR\nin the in-app preview. Will land after the parallel edits there settle.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "QR label migration: QR-only print template + GTIN backfill ran"
-    },
-    {
-      "sha": "d6e7326df6a8e8615d6ff695fe344055ac90a9fa",
-      "shortSha": "d6e7326d",
-      "date": "2026-05-18T00:30:16-07:00",
-      "author": "DENSENSE8",
-      "subject": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)",
-      "body": "Lands the supporting infrastructure for the upcoming QR-only / title-\nleft / QR-right unit-label format. Zero existing-flow change; the UI\nsurgery on MultiSkuSnBarcode + BarcodePreview + printProductLabel\nfollows in a separate commit so it doesn't collide with parallel work\non those files.\n\nDecisions baked in (2026-05-18):\n  - QR-only labels, no 1D barcode in the unit-label preview / print path.\n  - Title-left / QR-right preview layout.\n  - Internal pseudo-GTIN-14 per SKU (prefix `02` reserved-internal range).\n  - New unit-id format {SKU_SHORT}-{YEAR}-{SEQ6} replaces legacy `:A01`.\n  - Condition is database-only; QR encodes only the unit identity.\n  - Internal-only QR scanning; production app URL is the QR origin.\n\nNew files:\n  src/lib/inventory/internal-gtin.ts\n    - gs1CheckDigit(13-digit body) — mod-10 algorithm with alternating\n      3/1 weights right-to-left. Validated against known GS1 demo\n      00614141999996 (computes check digit 6).\n    - generateInternalGtin(skuCatalogId) — deterministic 14-digit:\n      \"02\" + 11-digit zero-padded id + check digit.\n    - getOrCreateInternalGtin — read sku_catalog.gtin; if empty, mint\n      one and persist via UPDATE … SET gtin = COALESCE(NULLIF(gtin,''),\n      $candidate). Safe under concurrency (first writer wins).\n    - isValidGtin14 sanity helper.\n\n  src/lib/inventory/unit-id.ts\n    - shortSku(text) — uppercase + strip non-[A-Z0-9-] + 20-char cap.\n    - formatUnitId(short, year, seq) — `{short}-{year}-{seq6}`.\n    - allocateNextUnitId(skuCatalogId, skuText, yearOverride?) — uses\n      Phase 0's fn_next_unit_seq for atomic per-(sku, year) allocation.\n\n  src/app/api/units/next-id/route.ts\n    - POST endpoint. Body: { sku } or { sku_catalog_id }.\n    - Resolves sku_catalog row → ensures GTIN → allocates unit-id →\n      builds buildGs1UnitUrl(origin, gtin, unitId). Returns\n      { unitId, gtin, qrUrl, skuCatalogId, sku, productTitle, year, seq, skuShort }.\n    - Single round trip from the printer UI; replaces the legacy\n      /api/sku-manager?action=current then ?action=increment dance.\n    - Permission gate: print.label.\n\nModified:\n  src/app/api/get-title-by-sku/route.ts\n    - Response now includes skuCatalogId + gtin (additive — existing\n      callers reading title/stock/location/imageUrl are unaffected).\n\n  src/utils/barcode.ts\n    - Adds loadQrLibrary / renderQr / generateQrDataUrl using the\n      `qrcode` npm package. Dynamic import so the ~30KB doesn't land\n      in pages that don't print labels.\n    - Existing JsBarcode loaders + renderers KEPT — receiving labels,\n      walk-in receipts, and ProductLabelPreview still use 1D barcodes;\n      only the unit-label preview drops to QR-only.\n\nDependencies:\n  package.json — adds qrcode + @types/qrcode.\n\nZero new tsc errors in any of these files.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "QR label migration: internal-GTIN + unit-ID + /api/units/next-id (infra)"
-    },
-    {
-      "sha": "f9005d2331082aacc63794e04dff5bd96e7c4b87",
-      "shortSha": "f9005d23",
-      "date": "2026-05-17T23:57:58-07:00",
-      "author": "DENSENSE8",
-      "subject": "QStash: bootstrap script + sync replenishment entry back to config",
-      "body": "While running the cron migration to QStash I noticed\nqstash-schedules.json was already missing replenishment-sync-daily-\n6am-pacific even though it had been registered with QStash live.\nRunning the bootstrap would have pruned it (the bootstrap deletes\nany QStash schedule not in the config). Adding the entry back so\nthe config mirrors reality and no schedule gets dropped on the\nnext bootstrap.\n\nNew script scripts/bootstrap-qstash-schedules.mjs:\n- Mirrors POST /api/qstash/schedules/bootstrap so you can register\n  schedules from a dev machine without waiting for a Vercel deploy\n  (useful when you've just pushed a config change and need the\n  schedule live before the deploy finishes building).\n- `--list` flag for a read-only inventory.\n- Reads QSTASH_TOKEN + NEXT_PUBLIC_APP_URL from .env.\n\nBootstrap was run against production QStash: 10 schedules now\nregistered, including the two cron-migration entries from this\nsession (stock-alerts, refresh-reports) and an orphaned\nshipping-sync-all-carriers-5pm-weekdays-pacific that was in the\nconfig but had never been bootstrapped.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "QStash: bootstrap script + sync replenishment entry back to config"
-    },
-    {
-      "sha": "8085f0bed3d41d9b7d89037add424e55bf18d993",
-      "shortSha": "8085f0be",
-      "date": "2026-05-17T23:40:43-07:00",
-      "author": "DENSENSE8",
-      "subject": "Move Vercel crons to QStash (zero Vercel cron billing)",
-      "body": "Removes both jobs from vercel.json so Vercel stops invoicing for cron\ninvocations. The same two jobs continue to run on the same daily UTC\nschedule via QStash, which we already pay for.\n\nvercel.json:\n- crons array emptied. The file stays in place; future Vercel-specific\n  settings (rewrites, headers) can land here without re-creating it.\n\nsrc/config/qstash-schedules.json — two new entries:\n- stock-alerts-daily-1400-utc      cron \"0 14 * * *\"  → /api/cron/stock-alerts\n- refresh-reports-daily-1030-utc   cron \"30 10 * * *\" → /api/cron/refresh-reports\n  (same UTC times the Vercel crons used, so no behavior change.)\n\nsrc/app/api/cron/stock-alerts/route.ts &\nsrc/app/api/cron/refresh-reports/route.ts:\n- Convert the cron logic from GET to POST so QStash can drive it\n  (QStash publishJSON always POSTs). Auth-gate the POST with\n  isQStashOrigin (signature or Bearer $QSTASH_TOKEN).\n- Add a trivial GET health probe — no auth, no work, just returns\n  { ok: true, queue: 'qstash', job: ... }. Matches the pattern used\n  by every other route under /api/qstash/.\n- Add `export const dynamic = 'force-dynamic'` and `maxDuration` so\n  the routes don't get statically rendered and have enough runtime\n  budget for the materialized-view refresh.\n\nActivation:\nAfter this deploys, POST /api/qstash/schedules/bootstrap to register\nthe two new schedules in QStash. The bootstrap route deletes obsolete\nschedules automatically, so the previous Vercel cron entries (now\ngone) have no equivalent to remove on the QStash side.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "Move Vercel crons to QStash (zero Vercel cron billing)"
-    },
-    {
-      "sha": "058b7771599626782667d077e27508904cefa82f",
-      "shortSha": "058b7771",
-      "date": "2026-05-17T23:31:15-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 8.4: SKU detail page + cross-links",
-      "body": "New /admin/inventory-v2/sku/[sku]:\n- sku_catalog row (title, category, GTIN, UPC, EAN, active flag).\n- Current stock: sku_stock.stock (WAREHOUSE) + .boxed_stock + serial\n  unit total, plus a breakdown by current_status badge.\n- Bin distribution: bin_contents rows joined to locations with qty,\n  min/max thresholds, last_counted timestamp.\n- Recent serial units (last 25 of total): serial number → link to\n  per-unit timeline, status badge, condition grade, location,\n  updated_at.\n- Open allocations: order id, unit id (→ per-unit), state, when, by.\n- Stock ledger (last 100): delta with color, reason, dimension,\n  refs (ord# / rl# / su#), actor.\n- Recent inventory events (last 50) with unit links.\n\nCross-linking:\n- Dashboard /admin/inventory-v2 grows a second search form for SKU\n  lookup beside the existing unit lookup. Both are server-action\n  forms — no client bundle.\n- Recent-events table on the dashboard now linkifies the unit id\n  and SKU cells so each event row is a starting point into either\n  detail page.\n- Per-unit page header linkifies the SKU value.\n\nRead-only across the board. Gated by admin.view.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 8.4: SKU detail page + cross-links"
-    },
-    {
-      "sha": "b04c75a7eb67639ecd3699f7c5f537cccf4fd01f",
-      "shortSha": "b04c75a7",
-      "date": "2026-05-17T23:17:24-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form",
-      "body": "Phase 8.2 — /admin/inventory-v2/units/[ref]:\n- Read-only per-unit page. The `ref` segment accepts either a numeric\n  serial_units.id or a serial number (case-insensitive, trimmed).\n- Sections (parallel queries, fault-isolated):\n    * Current state — sku, status, condition, location, origin/receiving\n      line, shipment, tracking, timestamps, notes.\n    * inventory_events timeline — every event for the unit, oldest first.\n      Renders prev→next status diff, station, bin name, actor name,\n      JSON payload, client_event_id + stock_ledger_id footer.\n    * serial_unit_condition_history — grade transitions with notes.\n      Section hidden if empty.\n    * Order allocations — every allocation (open + RELEASED).\n      Section hidden if empty.\n    * tech_serial_numbers cross-refs — legacy audit linkage.\n      Section hidden if empty.\n- StatusBadge component with palette for all 19 serial_status_enum\n  values so the timeline reads at a glance.\n- Gated by admin.view.\n\nPhase 8.3 — Search box on /admin/inventory-v2:\n- Server-action form at the top of the dashboard. Reads `ref` from\n  the submit and redirect()s to /admin/inventory-v2/units/{ref}.\n- Uses Next 16 form action attribute (server action), no client\n  bundle added.\n\nTogether: operators can paste any serial into the dashboard search,\nland on the unit's full lifecycle timeline, and trace every event\nback to the actor + payload that produced it.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 8.2/8.3: per-unit timeline + lookup form"
-    },
-    {
-      "sha": "b4b01225206c70ba17465f90988fcc2f376617a3",
-      "shortSha": "b4b01225",
-      "date": "2026-05-17T23:14:05-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 8.1: admin status page + backfill fix",
-      "body": "Activation status:\n- Phase 0 migration applied to Neon (neondb).\n- Phase 1 migration applied (printer_profiles.default_for CHECK extended).\n- Backfill ran successfully: 353 tech_serial_numbers rows linked to\n  serial_units (75 reused, 278 created); 0 eligible rows remaining.\n  Final state: 417 TSN with serial, 373 linked, 425 serial_units total.\n\nBackfill fix (scripts/backfill-tech-serial-unit-id.mjs):\n- tech_serial_numbers has no direct sku column; first run failed with\n  \"column sku does not exist\" (42703). Fixed by LEFT JOIN to the legacy\n  sku table via source_sku_id so the serial_units upsert can fill in\n  sku for those rows. FNSKU-type TSN rows continue to be skipped.\n\nNew admin dashboard (src/app/admin/inventory-v2/page.tsx):\n- Server-rendered, read-only. Gated by admin.view.\n- Six sections in parallel queries (one slow query doesn't block):\n    1. Feature flag snapshot — reads inventoryV2FlagSnapshot(),\n       maps each env var to its phase.\n    2. Schema artifacts — verifies all 7 expected tables, 10 new enum\n       values, and fn_next_unit_seq() are present.\n    3. Backfill progress — total / linked / unlinked-eligible TSN\n       counts + serial_units row count.\n    4. SKU stock drift — queries v_sku_stock_drift; empty means the\n       trg_sku_stock_from_ledger trigger is healthy.\n    5. Order unit allocations — count + oldest per state.\n    6. Recent inventory_events — last 50 events with status diff +\n       actor name.\n- Tailwind, status pills, monospace IDs, dynamic page (no caching).\n\nThis is the first piece of Phase 8 (reporting / polish). Reachable at\n/admin/inventory-v2; not yet wired into the admin tab nav (the user\nis touching that file in parallel — adding a tab entry can come in a\nfollow-up commit).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 8.1: admin status page + backfill fix"
-    },
-    {
-      "sha": "caadad3c4530b39d67e804dabd304924dd9119fd",
-      "shortSha": "caadad3c",
-      "date": "2026-05-17T22:59:17-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 7: returns intake + hold/release (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.7, §6.8 and §10 Phase 7.\nThree new endpoints behind INVENTORY_V2_RETURNS (OFF by default).\n\nPOST /api/returns/intake:\n  - For each scanned/identified unit (serials raw or GS1 URLs, or\n    explicit serial_unit_ids):\n      * sku_stock_ledger row +1 reason='RETURN_CUSTOMER' (trigger\n        projects the qty back onto sku_stock.stock automatically).\n      * serial_units.current_status → RETURNED.\n      * inventory_events RETURNED with prev_status reflecting the actual\n        prior lifecycle state, stock_ledger_id linked.\n  - All in one transaction; rejects with the missing serials/ids if any\n    input cannot be resolved, leaving zero mutations committed.\n  - Body: { tracking_number?, order_id?, reason?, serials?[],\n            serial_unit_ids?[], client_event_id? }.\n  - Permission: receiving.mark_received (returns physically arrive at\n    the receiving dock).\n\nPOST /api/serial-units/[id]/hold:\n  - Transitions any non-ON_HOLD unit to ON_HOLD.\n  - Stashes the previous lifecycle state in the HELD inventory_event's\n    payload.restore_status so the release endpoint can roll it back.\n  - Requires a `reason` body field.\n  - Returns 409 if the unit is already ON_HOLD (no double-hold).\n  - Permission: sku_stock.adjust.\n\nPOST /api/serial-units/[id]/release:\n  - Companion to hold. Reads the most recent HELD event's payload.\n    restore_status to recover the pre-hold state; falls back to\n    STOCKED if absent/invalid.\n  - `force_status` body field overrides the auto-recovery — e.g. send\n    'TRIAGED' to push a held unit back into the refurb flow instead of\n    straight to STOCKED.\n  - Returns 409 if the unit isn't currently ON_HOLD.\n  - Emits RELEASED_HOLD event with prev='ON_HOLD', next=restored.\n  - Permission: sku_stock.adjust.\n\nAll single-transaction. Zero new tsc errors.\n\nThis is the last functional phase. Phase 8 in the plan is \"Reporting,\ncycle counts, polish (ongoing)\" — UI work + dashboards that build on\nthe inventory_events / sku_stock_ledger primitives all six prior\nphases just wired up.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 7: returns intake + hold/release (flagged)"
-    },
-    {
-      "sha": "426ff893817e7df650b401e7704c79fc17dde01b",
-      "shortSha": "426ff893",
-      "date": "2026-05-17T22:57:08-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.6 and §10 Phase 6.\nTwo new endpoints behind INVENTORY_V2_FBA_SERIAL_LINK (OFF by default).\n\nPOST /api/fba/items/[id]/link-unit:\n  - Resolves a scanned serial (raw or GS1 Digital Link URL) or\n    explicit serial_unit_id.\n  - INSERT fba_shipment_item_units (composite PK provides idempotency\n    on retry) tying the unit to the FBA shipment item line.\n  - If the unit is currently STOCKED, transitions it → ALLOCATED and\n    emits an ALLOCATED inventory_events row (station='PACK',\n    payload.source='fba.link-unit'). Already-ALLOCATED units (e.g.\n    re-scanned after a brief pause) stay put.\n  - Body: { scan? | serial_unit_id?, client_event_id? }.\n\nPOST /api/fba/shipments/[id]/ship-units:\n  - For every linked serial_unit on the shipment (joined through\n    fba_shipment_items → fba_shipment_item_units) NOT already SHIPPED:\n      * inventory_events PACKED (prev=current, next='PACKED')\n      * inventory_events LABELED (prev='PACKED', next='LABELED')\n      * sku_stock_ledger row delta=-1 reason='SOLD' dimension='WAREHOUSE'\n      * serial_units.current_status → SHIPPED\n      * inventory_events SHIPPED with stock_ledger_id linked\n  - All in one transaction; FOR UPDATE OF su locks each unit row.\n  - Idempotent — re-running after success finds zero non-SHIPPED units\n    and returns { shipped_unit_count: 0 }.\n  - Body: { client_event_id? }.\n\nThe existing /api/fba/shipments/close endpoint is untouched. It\ncontinues to drive the FBA shipment status machine for non-serialized\nlines. Phase 6's two new endpoints add the per-unit decrement that\nthe legacy close never performed — Tier-3 FBA shipments now produce\nthe same sku_stock_ledger trail as direct orders.\n\nPermission gate: fba.stage_shipments (existing). Zero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 6: FBA serial linkage + per-unit decrement (flagged)"
-    },
-    {
-      "sha": "24a7e4f58b441b4c8bb62b96ca4f92c653c4b3eb",
-      "shortSha": "24a7e4f5",
-      "date": "2026-05-17T22:55:03-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.5 and §10 Phase 5.\nThis is THE CORE FIX. Behind INVENTORY_V2_PACKING (OFF by default).\n\nPOST /api/pack/ship is a single transaction that:\n\n  1. Resolves every input serial (raw text or GS1 Digital Link URL via\n     Phase 1's parseScannedUrl) and serial_unit_id explicitly, then\n     FOR UPDATEs the matching serial_units rows.\n  2. Validates that EVERY unit has an open (non-RELEASED) allocation\n     for THIS order in a pre-SHIPPED state. On any mismatch the\n     transaction returns 409 with the offending units and ZERO writes\n     are committed.\n  3. Per unit, in order:\n       - order_unit_allocations.state → SHIPPED\n       - inventory_events PACKED  (idempotent via clientEventId:unit:PACKED)\n       - inventory_events LABELED (idempotent via :LABELED suffix)\n       - sku_stock_ledger row delta=-1 reason='SOLD' dimension='WAREHOUSE'\n         (the trg_sku_stock_from_ledger trigger projects this onto\n          sku_stock.stock atomically — THE DECREMENT)\n       - serial_units.current_status → SHIPPED\n       - inventory_events SHIPPED (idempotent, stock_ledger_id linked)\n  4. Writes ONE packer_logs row (ORDERS type) keyed to the shipment so\n     the existing shipped-dashboard query keeps working unchanged.\n  5. Writes ONE station_activity_logs row (PACK / PACK_SHIPPED) for\n     cross-station visibility.\n  6. Flips orders.status='shipped' LAST so any concurrent reader sees\n     the event-side state before the order flag changes.\n\nOff-flag: returns 503 immediately so callers fall back to the legacy\n/api/packing-logs path. No production behavior changes until the flag\nflips and operators are running the v2 receive → triage → test →\nallocate → pick → ship flow end-to-end.\n\nBody:\n  {\n    order_id: number,\n    serials?: string[],\n    serial_unit_ids?: number[],\n    tracking_number?: string,\n    carrier?: string,\n    client_event_id?: string\n  }\n\nPermission gate: packing.complete_order (existing packer permission).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 5: pack/ship single-decrement transaction (flagged)"
-    },
-    {
-      "sha": "1735fec158d97427f4dc930840143b8903afd9a0",
-      "shortSha": "1735fec1",
-      "date": "2026-05-17T22:53:00-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 4: order allocation + pick scan (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.3, §6.4 and §10 Phase 4.\nThree new endpoints behind INVENTORY_V2_ALLOCATION (OFF by default).\n\nThis is the phase that fixes the double-counting problem described in\nthe plan: from here on, an order does not consume \"available\" stock at\nhandoff — it reserves a specific unit via order_unit_allocations, and\nthe unit stays in the same physical state machine while the order\nwalks ALLOCATED → PICKED → PACKED → SHIPPED. The single decrement\nevent lands in Phase 5.\n\nPOST /api/orders/[id]/allocate:\n  - Loads orders.{sku, quantity, condition}.\n  - SELECT serial_units WHERE current_status='STOCKED' AND sku=$\n      [AND condition_grade=$], ORDER BY id ASC, LIMIT $qty,\n      FOR UPDATE SKIP LOCKED (concurrent allocators get disjoint sets).\n  - INSERT order_unit_allocations row per unit (state='ALLOCATED').\n    idx_oua_open_unit (partial UNIQUE on serial_unit_id WHERE state\n    != 'RELEASED') from Phase 0 guarantees no double-allocation.\n  - UPDATE serial_units SET current_status='ALLOCATED'.\n  - INSERT inventory_events ALLOCATED (prev='STOCKED', next='ALLOCATED',\n    payload.allocation_id, payload.ordinal).\n  - Returns partial=true with the actual count when fewer units are\n    available than requested.\n  - Body: { quantity?, condition_grade?, client_event_id? }.\n\nPOST /api/orders/[id]/release:\n  - Snapshots every non-RELEASED order_unit_allocations row for the order\n    via FOR UPDATE.\n  - UPDATE state='RELEASED', released_at, released_reason per row.\n  - Returns unit to STOCKED only if current_status is an outbound state\n    (ALLOCATED/PICKED/PACKED/LABELED/STAGED) — defensive against\n    SHIPPED units that shouldn't have an open allocation.\n  - Emits RELEASED events with prev_status reflecting the unit's pre-release\n    state. Idempotent: re-running after release is a no-op.\n  - Body: { reason?, client_event_id? }.\n\nPOST /api/pick/scan:\n  - Accepts either { scan: rawSerial | GS1DigitalLinkUrl } or\n    { serial_unit_id }. Uses Phase 1's parseScannedUrl() so QR scans\n    work natively.\n  - Resolves the unit + finds an open ALLOCATED row (optionally\n    constrained to order_id when supplied — needed when the same SKU\n    has multiple open allocations).\n  - On mismatch (no open ALLOCATED for the unit, or allocation already\n    advanced): returns 409 with mismatch=true. Operator can retry with\n    override_mismatch=true; the override is recorded in the\n    inventory_events payload for audit.\n  - Transitions allocation → PICKED, unit → PICKED. Emits PICKED event\n    with prev_status reflecting the actual previous unit state.\n  - Body: { scan? | serial_unit_id?, order_id?, bin_id?,\n            client_event_id?, override_mismatch? }.\n\nAll three are single-transaction. Off-flag, each returns 503 so callers\ncan fall back to legacy flows without ambiguity.\n\nPermission gate: orders.view on all three. A dedicated pick.scan\npermission can land in a follow-up if the warehouse wants tighter\nRBAC at the pick station.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 4: order allocation + pick scan (flagged)"
-    },
-    {
-      "sha": "19f7154524a23b79a5cfcc6ce07794b9fd73a0bd",
-      "shortSha": "19f71545",
-      "date": "2026-05-17T22:49:30-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)",
-      "body": "Per context/inventory_system_upgrade_plan.md §6.2 and §10 Phase 3.\nBehind INVENTORY_V2_TECH_LIFECYCLE (OFF by default). Off-flag, every\ntech-scan flow is byte-identical to today.\n\nPhase 3 has two prongs:\n\nA) Passive linkage (insertTechSerialForTracking.ts):\n   Every tech-scanned serial that lands a tech_serial_numbers row also\n   gets a matching serial_units master row + the new serial_unit_id FK\n   stamped + an inventory_events NOTE entry so the unit's timeline\n   reflects the scan. Emits 'NOTE' (not TEST_START) because a tech\n   add-serial does not necessarily imply testing intent — many scans\n   are outbound-order association.\n\n   - linkTechSerialToInventoryV2(db, args): upsert serial_units by\n     normalized_serial (fill-in only via COALESCE), stamp FK on the\n     just-inserted TSN row, append inventory_events with payload\n     carrying source='tech.add-serial' + tech_serial_number_id.\n   - Wrapped in try/catch so any failure logs and the legacy write\n     path (tech_serial_numbers + SAL + orders.status_history) remains\n     authoritative.\n\nB) Active state transitions (new /api/tech/test-result):\n   POST endpoint that records explicit test outcomes for a single\n   serialized unit. Three actions:\n     'start' → TEST_START event, unit → IN_TEST\n     'pass'  → TEST_PASS event,  unit → GRADED  (optional grade update\n                writes serial_unit_condition_history row referencing\n                the new inventory_event)\n     'fail'  → TEST_FAIL event,  unit → IN_REPAIR\n\n   Body: serial_unit_id | serial_number, action, condition_grade?,\n   notes?, client_event_id? (UUID for idempotent retries).\n\n   Single transaction. Gated on the flag — off-flag returns 503 so\n   callers can fall back to legacy tech-station flows. Permission gate:\n   tech.scan_serial (existing technician permission).\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 Phase 3: tech-station lifecycle wiring (flagged)"
     }
   ]
 }

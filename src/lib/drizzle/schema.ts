@@ -1,4 +1,4 @@
-import { pgTable, serial, text, varchar, boolean, timestamp, integer, date, primaryKey, json, jsonb, pgEnum, bigserial, bigint, uuid, numeric, uniqueIndex, index, customType } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, varchar, boolean, timestamp, integer, smallint, date, primaryKey, jsonb, pgEnum, bigserial, bigint, uuid, numeric, uniqueIndex, index, customType } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // ─── Multi-tenancy Helper ─────────────
@@ -187,6 +187,11 @@ export const staff = pgTable('staff', {
   // Tenant attachment (2026-05-22_organizations_tenancy.sql). NOT NULL after
   // backfill; USAV staff carry the well-known USAV org id.
   organizationId: uuid('organization_id').notNull(),
+  // Identity layer (2026-06-20e_identity_layer_phase1.sql). `staff` is now the
+  // per-org operational PROFILE; the global human is `accounts`, and membership
+  // in this org is `memberships`. Nullable until backfill completes.
+  accountId: uuid('account_id').references(() => accounts.id),
+  membershipId: uuid('membership_id').references(() => memberships.id),
 });
 
 // Editable roles taxonomy. is_system rows are seeded built-ins and cannot
@@ -1066,6 +1071,28 @@ export const receiving = pgTable('receiving', {
    * `intake_type` (denormalized cache) — type_id is the normalized link.
    */
   typeId: bigint('type_id', { mode: 'number' }),
+  // ── Drift reconciliation (2026-06-19): columns added via raw-SQL migrations
+  //    that were missing from this Drizzle model. Types/defaults mirror the DB.
+  organizationId: orgIdCol(),
+  /** FK → shipping_tracking_numbers.id (managed outside this file; plain bigint). 2026-04-15 / 2026-06-08. */
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  /** zoho_po | unmatched | local_pickup | sourcing_import (CHECK-constrained TEXT). 2026-04-14. */
+  source: text('source'),
+  /** ebay|amazon|fba|aliexpress|walmart|goodwill|ecwid|square|other (CHECK-constrained TEXT). 2026-04-14. */
+  sourcePlatform: text('source_platform'),
+  /** Carton-default intake type (denormalized cache; normalized link is type_id). 2026-06-13b. */
+  intakeType: text('intake_type'),
+  /** NO_PO|CARRIER_MISMATCH|SHORT|OVER|DAMAGED|WRONG_ITEM. 2026-06-08. */
+  exceptionCode: text('exception_code'),
+  /** Manual priority override 0..3 (NULL = Auto). 2026-06-09. */
+  priorityTier: smallint('priority_tier'),
+  zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
+  zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
+  listingUrl: text('listing_url'),
+  /** License plate — stable carton identity (unified inbound model Phase 3). 2026-06-08. */
+  lpn: text('lpn'),
+  /** Legacy denormalized intake timestamp. 2026-03-05. */
+  receivingDateTime: timestamp('receiving_date_time', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1174,6 +1201,35 @@ export const receivingLines = pgTable('receiving_lines', {
   notes: text('notes'),
   /** Filed Zendesk ticket # for a line-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
+  // ── Drift reconciliation (2026-06-19): DB columns added via raw-SQL
+  //    migrations that were missing from this Drizzle model.
+  organizationId: orgIdCol(),
+  /** Direct line→shipment link (retires the LATERAL PO#-guess). FK shipping_tracking_numbers (plain bigint). 2026-06-08. */
+  shipmentId: bigint('shipment_id', { mode: 'number' }),
+  zohoReferenceNumber: text('zoho_reference_number'),
+  zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
+  /** PO | RETURN | TRADE_IN | PICKUP (line-level override of carton intake_type). 2026-04-13. */
+  receivingType: text('receiving_type').default('PO'),
+  skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
+  skuPlatformIdRow: integer('sku_platform_id_row').references(() => skuPlatformIds.id, { onDelete: 'set null' }),
+  /** Operator source-platform override for unmatched lines. 2026-05-22. */
+  sourcePlatformPill: text('source_platform_pill'),
+  intakeType: text('intake_type'),
+  listingUrl: text('listing_url'),
+  listingReference: text('listing_reference'),
+  /** Warehouse bin code. 2026-05-22. */
+  locationCode: text('location_code'),
+  /** Set when an operator manually added an unmatched line. 2026-05-22. */
+  manualEntryAt: timestamp('manual_entry_at', { withTimezone: true }),
+  /** When the line reached DONE. 2026-06-11. */
+  receivedDoneAt: timestamp('received_done_at', { withTimezone: true }),
+  sourceSystem: text('source_system'),
+  sourceOrderId: text('source_order_id'),
+  isRepairService: boolean('is_repair_service').notNull().default(false),
+  // NOTE: DB also has GENERATED column `zoho_purchaseorder_number_norm` (2026-05-21,
+  // GENERATED ALWAYS from zoho_purchaseorder_number). Intentionally omitted from the
+  // model — it is read via raw SQL in the reconciler; adding it as a managed column
+  // risks drizzle-kit mishandling the generated expression.
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -1309,12 +1365,16 @@ export const fbaFnskus = pgTable('fba_fnskus', {
   productTitle: text('product_title'),
   asin: text('asin'),
   sku: text('sku'),
+  /** Catalog-level condition grade — single source of truth for FBA condition (live column). */
+  condition: text('condition'),
   isActive: boolean('is_active').notNull().default(true),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   /** FK to sku_catalog — central product hub */
   skuCatalogId: integer('sku_catalog_id'),
+  /** Tenant owner (live column; nullable for legacy global rows). */
+  organizationId: uuid('organization_id'),
 });
 
 export const fbaShipments = pgTable('fba_shipments', {
@@ -1364,6 +1424,8 @@ export const fbaShipmentTracking = pgTable('fba_shipment_tracking', {
   trackingId: bigint('tracking_id', { mode: 'number' }).notNull(),
   label: text('label'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Tenant owner (live column). */
+  organizationId: uuid('organization_id'),
 }, (table) => ({
   shipmentTrackingUnique: uniqueIndex('ux_fba_shipment_tracking_plan_tracking').on(table.shipmentId, table.trackingId),
 }));
@@ -1669,6 +1731,8 @@ export const skuCatalog = pgTable('sku_catalog', {
   sourcingNotes: text('sourcing_notes'),
   /** Per-SKU replenish price point (cents); the watcher alerts below this. Added 2026-06-06. */
   replenishTargetCents: integer('replenish_target_cents'),
+  /** Per-SKU pack/handling guidance shown to the packer before confirm (P1-PCK-02). Added 2026-06-21. */
+  notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -2009,7 +2073,13 @@ export const locationTransfers = pgTable('location_transfers', {
 export const serialUnits = pgTable('serial_units', {
   id: serial('id').primaryKey(),
   serialNumber: text('serial_number').notNull(),
-  normalizedSerial: text('normalized_serial').notNull().unique(),
+  /**
+   * Per-org natural key. The unique is PER-TENANT — ux_serial_units_org_normalized_serial
+   * on (organization_id, normalized_serial), 2026-06-19 — NOT a global unique, because a
+   * serial string only identifies a unit within one tenant's inventory. (Index lives in
+   * SQL migrations, this table's source of truth; not re-expressed here.)
+   */
+  normalizedSerial: text('normalized_serial').notNull(),
   sku: text('sku'),
   skuCatalogId: integer('sku_catalog_id').references(() => skuCatalog.id, { onDelete: 'set null' }),
   zohoItemId: text('zoho_item_id'),
@@ -2099,6 +2169,15 @@ export const inventoryEvents = pgTable('inventory_events', {
   clientEventId: text('client_event_id').unique(),
   notes: text('notes'),
   payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+  /**
+   * Per-tenant scope. Added to the live table by 2026-05-23_org_id_on_business_tables.sql
+   * (column + RLS); declared here so the Drizzle model matches the DB and the
+   * column isn't silently dropped by `db:push`. Defaults from the GUC so raw-SQL
+   * callers that don't pass orgId still tenant-stamp via `app.current_org`.
+   */
+  organizationId: orgIdCol(),
+  /** Optional multi-warehouse scope (2026-05-14_multi_warehouse.sql). */
+  warehouseId: integer('warehouse_id'),
 });
 
 /**
@@ -2507,6 +2586,127 @@ export const organizations = pgTable('organizations', {
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
 
+// ─── Identity layer (2026-06-20e_identity_layer_phase1.sql) ──────────────────
+// GLOBAL, tenant-agnostic tables. They are read at login, before any
+// app.current_org GUC exists, so they intentionally carry NO tenant_isolation
+// policy. See docs/identity-layer-plan.md.
+
+// The human / global login identity.
+export const accounts = pgTable('accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  primaryEmail: text('primary_email'),
+  displayName: text('display_name'),
+  status: text('status').notNull().default('active'),     // active | suspended | deleted
+  kind: text('kind').notNull().default('human'),          // human | service
+  passwordHash: text('password_hash'),
+  ssoProvider: text('sso_provider'),
+  ssoSubject: text('sso_subject'),
+  mfaEnabled: boolean('mfa_enabled').notNull().default(false),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+});
+
+// Verified emails — the cross-org match key (lower(email) unique).
+export const accountEmails = pgTable('account_emails', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accountId: uuid('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  emailUniq: uniqueIndex('uq_account_emails_email').on(sql`lower(${table.email})`),
+  accountIdx: index('idx_account_emails_account').on(table.accountId),
+}));
+
+// Federated logins (google/microsoft/saml/oidc/password).
+export const accountIdentities = pgTable('account_identities', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accountId: uuid('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  provider: text('provider').notNull(),
+  subject: text('subject').notNull(),
+  emailAtLink: text('email_at_link'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  providerSubjectUniq: uniqueIndex('uq_account_identities_provider_subject').on(table.provider, table.subject),
+  accountIdx: index('idx_account_identities_account').on(table.accountId),
+}));
+
+// Passkeys, lifted from per-staff to per-account.
+export const webauthnCredentials = pgTable('webauthn_credentials', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accountId: uuid('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  credentialId: text('credential_id').notNull().unique(),
+  publicKey: text('public_key').notNull(),
+  signCount: bigint('sign_count', { mode: 'number' }).notNull().default(0),
+  transports: text('transports').array(),
+  aaguid: uuid('aaguid'),
+  label: text('label'),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  accountIdx: index('idx_webauthn_credentials_account').on(table.accountId),
+}));
+
+// TOTP + recovery codes.
+export const accountMfa = pgTable('account_mfa', {
+  accountId: uuid('account_id').primaryKey().references(() => accounts.id, { onDelete: 'cascade' }),
+  totpSecret: text('totp_secret'),
+  recoveryCodes: text('recovery_codes').array(),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+});
+
+// Append-only auth audit.
+export const authEvents = pgTable('auth_events', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  accountId: uuid('account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  orgId: uuid('org_id'),
+  event: text('event').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  accountIdx: index('idx_auth_events_account').on(table.accountId, table.createdAt),
+}));
+
+// account × org bridge — the authoritative "who belongs where".
+export const memberships = pgTable('memberships', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  accountId: uuid('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('active'),  // invited | active | suspended | removed
+  invitedBy: uuid('invited_by').references(() => accounts.id),
+  joinedAt: timestamp('joined_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  accountOrgUniq: uniqueIndex('uq_memberships_account_org').on(table.accountId, table.orgId),
+  orgIdx: index('idx_memberships_org').on(table.orgId),
+  accountIdx: index('idx_memberships_account').on(table.accountId),
+}));
+
+// Invite-by-email on-ramp (the account may not exist yet).
+export const orgInvitations = pgTable('org_invitations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  roleKey: text('role_key'),
+  tokenHash: text('token_hash').notNull(),
+  invitedBy: uuid('invited_by').references(() => accounts.id),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgIdx: index('idx_org_invitations_org').on(table.orgId),
+  emailIdx: index('idx_org_invitations_email').on(sql`lower(${table.email})`),
+}));
+
+export type Account = typeof accounts.$inferSelect;
+export type NewAccount = typeof accounts.$inferInsert;
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+export type OrgInvitation = typeof orgInvitations.$inferSelect;
+
 // eBay API Calls audit logger table
 export const ebayApiCalls = pgTable('ebay_api_calls', {
   id: serial('id').primaryKey(),
@@ -2583,6 +2783,10 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
   name: text('name').notNull(),
   version: integer('version').notNull().default(1),
   isActive: boolean('is_active').notNull().default(false),
+  // Canvas sticky-note decorations (Studio ST6 / Phase E3): array of
+  // { id, text, x, y, color? }. NOT engine nodes — a pure canvas layer that
+  // rides with the definition row (copied on draft-fork, published atomically).
+  annotations: jsonb('annotations').notNull().default(sql`'[]'::jsonb`),
   createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -2629,6 +2833,25 @@ export const workflowEdges = pgTable('workflow_edges', {
     table.sourceNode,
     table.sourcePort,
   ),
+}));
+
+// workflow_templates — system-owned graph blueprints (Studio ST6 / Phase E4).
+// DELIBERATELY GLOBAL / cross-tenant: no organization_id, not RLS-enforced —
+// these are shared default flows a tenant CLONES into its own
+// workflow_definitions (re-minted ids, org-stamped) as an editable draft. The
+// `graph` JSONB is the same { nodes, edges } shape the studio canvas paints.
+export const workflowTemplates = pgTable('workflow_templates', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  slug: text('slug').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  category: text('category'),
+  // { nodes:[{id,type,x,y,config}], edges:[{id,source,sourcePort,target}] }
+  graph: jsonb('graph').notNull().default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
+  isSystem: boolean('is_system').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  slugIdx: uniqueIndex('ux_workflow_templates_slug').on(table.slug),
 }));
 
 // item_workflow_state — where a given serial unit currently sits in its active

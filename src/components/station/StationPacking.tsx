@@ -11,6 +11,14 @@ import StationGoalBar from './StationGoalBar';
 import { StationScanBar } from './StationScanBar';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
+import { InlineNotice } from '@/design-system/components';
+import { PackChecklist, type PackKitPart } from './PackChecklist';
+
+interface SkuQcFlag {
+  id: number;
+  label: string;
+  category: string | null;
+}
 
 interface ActivePackingOrder {
   orderId: string;
@@ -67,19 +75,32 @@ export default function StationPacking({
   const [activeOrder, setActiveOrder] = useState<ActivePackingOrder | null>(null);
   const [activeFba, setActiveFba] = useState<ActiveFbaScan | null>(null);
   const [skuPackNotes, setSkuPackNotes] = useState<string | null>(null);
+  const [skuQcFlags, setSkuQcFlags] = useState<SkuQcFlag[]>([]);
+  const [skuKitParts, setSkuKitParts] = useState<PackKitPart[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch per-SKU pack notes whenever the active order's SKU changes.
+  // Fetch per-SKU pack notes + QA flags + kit-parts BOM whenever the active
+  // order's SKU changes. All three are surfaced to the packer BEFORE the pack is
+  // confirmed (P1-PCK-02 notes/flags; P1-PCK-03 the kit-parts checklist). The
+  // BOM is condition-gated by the order's condition.
   useEffect(() => {
     const sku = activeOrder?.sku?.trim();
-    if (!sku) { setSkuPackNotes(null); return; }
+    if (!sku) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); return; }
+    const condition = activeOrder?.condition?.trim();
     let cancelled = false;
-    fetch(`/api/get-title-by-sku?sku=${encodeURIComponent(sku)}`)
+    const qs = new URLSearchParams({ sku });
+    if (condition && condition !== 'N/A') qs.set('condition', condition);
+    fetch(`/api/get-title-by-sku?${qs.toString()}`)
       .then((r) => r.json())
-      .then((data) => { if (!cancelled) setSkuPackNotes(data?.packNotes || null); })
-      .catch(() => { if (!cancelled) setSkuPackNotes(null); });
+      .then((data) => {
+        if (cancelled) return;
+        setSkuPackNotes(data?.packNotes || null);
+        setSkuQcFlags(Array.isArray(data?.qcFlags) ? data.qcFlags : []);
+        setSkuKitParts(Array.isArray(data?.kitParts) ? data.kitParts : []);
+      })
+      .catch(() => { if (!cancelled) { setSkuPackNotes(null); setSkuQcFlags([]); setSkuKitParts([]); } });
     return () => { cancelled = true; };
-  }, [activeOrder?.sku]);
+  }, [activeOrder?.sku, activeOrder?.condition]);
 
   const { theme: themeColor, colors: themeColors, inputBorder, inputTheme: activeColor } = useStationTheme({ staffId });
   const { normalizeTrackingQuery, normalizeTracking } = useLast8TrackingSearch();
@@ -221,24 +242,34 @@ export default function StationPacking({
   return (
     <div className={`flex flex-col h-full bg-white overflow-hidden ${embedded ? '' : 'border-r border-gray-100'}`}>
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className={`${SIDEBAR_GUTTER} pt-4 pb-2 space-y-4`}>
-          <div className="space-y-0.5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
-              <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
-                <Package className="w-4 h-4" />
+        <div className={`${SIDEBAR_GUTTER} ${embedded ? 'pt-2 pb-1' : 'pt-4 pb-2'} space-y-4`}>
+          {/* Welcome header + goal bar — chrome for the standalone station page only.
+              In the embedded sidebar we keep it minimal (scan bar only), matching the
+              other dashboard sidebars. */}
+          {!embedded && (
+            <>
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-xl font-black text-gray-900 tracking-tighter">Welcome, {userName}</h2>
+                  <div className={`p-3 ${themeColors.bg} text-white rounded-2xl shadow-lg ${themeColors.shadow}`}>
+                    <Package className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <StationGoalBar
-            count={todayCount}
-            goal={goal}
-            label="PACKED"
-            theme={themeColor}
-          />
+              <StationGoalBar
+                count={todayCount}
+                goal={goal}
+                label="PACKED"
+                theme={themeColor}
+              />
+            </>
+          )}
 
-          {packMode !== 'standard' ? (
+          {/* Mode reminder banner (Fragile / Multi-Item) — standalone station page
+              only. The embedded sidebar stays minimal: the active mode already shows
+              in the master-nav mode rail, so we don't repeat it here. */}
+          {!embedded && packMode !== 'standard' ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-caption font-semibold text-amber-800">
               {PACK_MODE_LABELS[packMode]}
             </div>
@@ -254,30 +285,24 @@ export default function StationPacking({
               onChange={setInputValue}
               onSubmit={handleSubmit}
               inputRef={inputRef}
-              placeholder="Scan Tracking, FNSKU, FBA, or SKU..."
-              icon={<Barcode className="w-4 h-4" />}
+              placeholder="Tracking, FNSKU, FBA, SKU"
+              icon={<Barcode className="h-[17px] w-[17px]" />}
               iconClassName={activeColor.text}
               inputBorderClassName={inputBorder}
               inputClassName={activeColor.ring}
               autoFocus
-              rightContent={(
-                <>
-                  {isLoading ? (
-                    <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
-                  ) : (
-                    <div className="h-6 min-w-6 px-1 bg-white rounded border border-gray-100 shadow-sm flex items-center justify-center">
-                      <span className="text-mini font-black text-gray-400">ENTER</span>
-                    </div>
-                  )}
-                </>
-              )}
+              rightContent={isLoading ? (
+                <Loader2 className={`w-4 h-4 animate-spin ${activeColor.text}`} />
+              ) : null}
             />
           </motion.div>
 
-          <p className="text-micro font-bold text-gray-400 px-1">
-            Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}
-            <code className="font-mono">SKU:VALUE</code> scans.
-          </p>
+          {!embedded && (
+            <p className="text-micro font-bold text-gray-400 px-1">
+              Supports tracking, FNSKU/ASIN (10 chars: <code className="font-mono">X00</code> or <code className="font-mono">B0</code> prefix), FBA, and{' '}
+              <code className="font-mono">SKU:VALUE</code> scans.
+            </p>
+          )}
         </div>
 
         <div className={`flex-1 overflow-y-auto no-scrollbar ${SIDEBAR_GUTTER} pb-6 space-y-3`}>
@@ -384,20 +409,29 @@ export default function StationPacking({
                   </div>
                 </div>
 
-                {/* Per-SKU pack instructions from sku_catalog.notes */}
+                {/* Per-SKU pack instructions from sku_catalog.notes (P1-PCK-02 §A) */}
                 {skuPackNotes ? (
-                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                    <p className="text-eyebrow font-black text-amber-700 uppercase tracking-wider mb-1">Pack instructions</p>
-                    <p className="text-caption font-semibold text-amber-900 whitespace-pre-wrap">{skuPackNotes}</p>
-                  </div>
+                  <InlineNotice
+                    tone="info"
+                    size="sm"
+                    title="How to pack this product"
+                    className="mt-3 whitespace-pre-wrap"
+                  >
+                    {skuPackNotes}
+                  </InlineNotice>
                 ) : null}
+
+                {/* Per-SKU pack checklist: kit-parts BOM ("in the box") + QA
+                    verify steps, ticked off as the packer confirms each
+                    (P1-PCK-03). Advisory in Phase 1 — never blocks completion. */}
+                <PackChecklist
+                  kitParts={skuKitParts}
+                  checks={skuQcFlags}
+                  resetKey={activeOrder.sku}
+                />
               </motion.div>
             )}
           </AnimatePresence>
-
-          <div className="mt-auto pt-6 border-t border-gray-50 text-center">
-            <p className="text-eyebrow font-black text-gray-300 uppercase tracking-[0.3em]">USAV PACK v2.6</p>
-          </div>
         </div>
       </div>
     </div>

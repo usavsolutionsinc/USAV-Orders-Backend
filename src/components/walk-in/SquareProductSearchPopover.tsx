@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Package, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { microBadge } from '@/design-system/tokens/typography/presets';
@@ -168,7 +169,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 4 }}
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.18, ease: motionBezier.easeOut }}
         className="pointer-events-none fixed inset-0 z-panelPopover flex items-start justify-center p-4 pt-[8vh] md:pl-[360px]"
       >
         <div

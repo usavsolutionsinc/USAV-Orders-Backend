@@ -1,0 +1,89 @@
+'use client';
+
+/**
+ * Carton-context section of the LineEditPanel — photos + claim + shipment
+ * context (listing, PO#, tracking, platform + type + priority pills) in one
+ * WorkspaceCard. Pure wiring from the controller bag to {@link CartonContextCard};
+ * extracted from LineEditPanel so the panel stays a short composition surface.
+ */
+
+import { CartonContextCard } from './CartonContextCard';
+import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { WorkspaceCapabilities } from '../workspace-capabilities';
+import type { UnboxLineController } from './unbox-line-controller';
+
+interface LineCartonContextSectionProps {
+  row: ReceivingLineRow;
+  staffId: string;
+  caps: WorkspaceCapabilities;
+  c: UnboxLineController;
+}
+
+export function LineCartonContextSection({ row, staffId, caps, c }: LineCartonContextSectionProps) {
+  return (
+    <CartonContextCard
+      receivingId={row.receiving_id ?? null}
+      staffId={staffId}
+      isUnmatched={row.receiving_source === 'unmatched'}
+      showStaffPhotoRow={caps.photos}
+      onMakeClaim={caps.claim ? () => c.setClaimModalOpen(true) : undefined}
+      listingLink={c.listingLink}
+      setListingLink={c.setListingLink}
+      listingEditorOpen={c.listingEditorOpen}
+      setListingEditorOpen={c.setListingEditorOpen}
+      listingOpenHref={c.listingOpenHref}
+      poOpenHref={c.poOpenHref}
+      trackingOpenHref={c.trackingOpenHref}
+      poDisplay={c.poNumber}
+      poEditorOpen={c.poEditorOpen}
+      setPoEditorOpen={c.setPoEditorOpen}
+      poNumberEdit={c.poNumberEdit}
+      setPoNumberEdit={c.setPoNumberEdit}
+      onCommitPoNumber={(v) => {
+        const trimmed = v.trim();
+        const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+        if (trimmed !== current) void c.persistPoNumber(trimmed);
+      }}
+      lineId={row.id ?? null}
+      zendeskTrimmed={c.zendeskTrimmed}
+      zendeskHref={c.zendeskHref}
+      zendeskChipDisplay={c.zendeskChipDisplay}
+      onTicketUnlinked={() => {
+        // Clear the in-memory ticket so the chip flips back to "Claim →" (the
+        // DELETE already nulled receiving_lines.zendesk_ticket), and mirror to
+        // other surfaces holding this row.
+        c.setZendesk('');
+        dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
+      }}
+      primaryTrackingTrimmed={c.primaryTrackingTrimmed}
+      filledExtraTrackingsCount={c.filledExtraTrackingsCount}
+      trackingEditorsOpen={c.trackingEditorsOpen}
+      onToggleTrackingEditors={c.toggleTrackingEditors}
+      trackingEdit={c.trackingEdit}
+      setTrackingEdit={c.setTrackingEdit}
+      onCommitTracking={(v) => {
+        const trimmed = v.trim();
+        if (trimmed !== (row.tracking_number || '').trim()) {
+          c.patch({ zoho_reference_number: trimmed || null });
+        }
+      }}
+      extraTrackings={c.extraTrackings}
+      setExtraTrackings={c.setExtraTrackings}
+      onCommitExtraTracking={(v, i) => void c.attachExtraBox(v, i)}
+      platformValue={c.sourcePlatform}
+      onPlatformSelect={(next) => {
+        c.setSourcePlatform(next);
+        void c.savePlatform(next);
+      }}
+      receivingType={c.receivingType}
+      onTypeSelect={(next) => {
+        // Carton default now — persists to receiving.intake_type. Per-line
+        // overrides (receiving_lines.receiving_type) are set in the PO-items row.
+        c.setReceivingType(next);
+        void c.saveType(next);
+      }}
+      priorityTier={c.priorityTier}
+      onPrioritySelect={(tier) => void c.handlePrioritySelect(tier)}
+    />
+  );
+}

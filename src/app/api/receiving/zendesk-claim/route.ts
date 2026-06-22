@@ -96,7 +96,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const idempotencyKey = readIdempotencyKey(req);
     const result = await withIdempotentResponse(
       pool,
-      { idempotencyKey, route: 'POST /api/receiving/zendesk-claim', staffId: ctx.staffId },
+      { orgId: ctx.organizationId, idempotencyKey, route: 'POST /api/receiving/zendesk-claim', staffId: ctx.staffId },
       async (): Promise<{ status: number; body: Record<string, unknown> }> => {
         // Upload the operator's selected photos to Zendesk as real file
         // attachments (not links). Scoped to this carton's photos for safety;

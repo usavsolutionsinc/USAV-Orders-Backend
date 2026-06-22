@@ -67,6 +67,8 @@ export interface FindShippedOrdersOptions {
   includeFba?: boolean;
   /** Restrict to a single order_id (used by the manual single-order trigger). */
   referenceNumber?: string;
+  /** Tenant scope — only this org's shipped orders. Omit = all orgs (legacy). */
+  orgId?: string;
 }
 
 interface AggRow {
@@ -128,6 +130,10 @@ export async function findShippedOrdersForFulfillment(
   if (opts.referenceNumber) {
     params.push(opts.referenceNumber);
     conditions.push(`o.order_id = $${params.length}`);
+  }
+  if (opts.orgId) {
+    params.push(opts.orgId);
+    conditions.push(`o.organization_id = $${params.length}`);
   }
 
   const havingParts: string[] = [];

@@ -519,6 +519,24 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       conditions.push(`rl.workflow_status = $${idx++}::inbound_workflow_status_enum`);
       values.push(workflowFilter);
     }
+    // Universal staff filter (P1-WORK-02): narrow the carton list to one staff —
+    // who received, unboxed, or first-scanned it. Absent = ALL staff (default).
+    const staffFilterRaw = String(searchParams.get('staff') || '').trim();
+    const staffFilterId = Number(staffFilterRaw);
+    if (staffFilterRaw && Number.isFinite(staffFilterId) && staffFilterId > 0) {
+      // Alias-independent: the COUNT query has no `scan_first` LATERAL, so the
+      // scanned-by term is expressed as a correlated EXISTS over receiving_scans
+      // (matching the LATERAL's `rs.receiving_id = r.id` correlation) — valid in
+      // both the main SELECT and the COUNT query.
+      conditions.push(
+        `(r.received_by = $${idx} OR r.unboxed_by = $${idx} OR EXISTS (
+           SELECT 1 FROM receiving_scans rs_staff
+           WHERE rs_staff.receiving_id = r.id AND rs_staff.scanned_by = $${idx}
+         ))`,
+      );
+      values.push(staffFilterId);
+      idx++;
+    }
     // `view` overrides week-range scoping. Otherwise week range still applies.
     if (view === 'recent') {
       // Recently scanned, not yet matched to a PO or received. MATCHED and
@@ -596,6 +614,30 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         conditions.push(
           `EXISTS (SELECT 1 FROM testing_results tr WHERE tr.receiving_line_id = rl.id)`,
         );
+      }
+    } else if (view === 'needs-test') {
+      // "Needs-test" = the testing TO-DO feed. A unit qualifies once it is
+      // PHYSICALLY received (workflow advanced to UNBOXED/AWAITING_TEST/IN_TEST,
+      // or quantity_received > 0) AND flagged needs_test, but has NOT reached a
+      // terminal verdict yet (PASSED/DONE/FAILED/RTV/SCRAP drop off — they're
+      // done). Ordered newest-received-first below so freshly-unboxed units
+      // surface at the top for real-time pickup. When a tester is supplied we
+      // scope to that tech's own assignments (assigned_tech_id) so each tech's
+      // queue is theirs; unassigned units still show in the all-staff feed.
+      conditions.push(
+        `rl.needs_test = true
+         AND (rl.workflow_status IS NULL
+              OR rl.workflow_status NOT IN ('PASSED','DONE','FAILED','RTV','SCRAP'))
+         AND (
+           rl.workflow_status IN ('UNBOXED','AWAITING_TEST','IN_TEST')
+           OR COALESCE(rl.quantity_received, 0) > 0
+           OR r.unboxed_at IS NOT NULL
+         )`,
+      );
+      if (Number.isFinite(testerId) && testerId > 0) {
+        conditions.push(`rl.assigned_tech_id = $${idx}`);
+        values.push(testerId);
+        idx++;
       }
     } else if (view === 'viewed') {
       // "Viewed" = lines THIS operator recently opened in the receiving
@@ -777,6 +819,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             // rl.updated_at instead let a non-test edit (or another tester's
             // verdict) bump a line above items this tester verified more recently.
             ? `ORDER BY tr_agg.tested_at DESC NULLS LAST, rl.id DESC`
+            : view === 'needs-test'
+              // Newest-received first — the testing to-do reads like an inbox
+              // with the freshest units at the top. Unbox time is the truest
+              // "just arrived for testing" axis; fall back to the door scan,
+              // then the line's own write/create time.
+              ? `ORDER BY COALESCE(r.unboxed_at, r.received_at, rl.updated_at, rl.created_at)::text DESC NULLS LAST, rl.id DESC`
             : view === 'viewed'
               // Newest-opened first — your recents read like a back button.
               ? (viewedParamIdx > 0
@@ -824,6 +872,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const scopeTester = view === 'testing' && Number.isFinite(testerId) && testerId > 0;
     const testedAggSelect = view === 'testing'
       ? `, tr_agg.tested_at::text AS tested_at, tr_agg.tested_count::int AS tested_count`
+      : '';
+    // Needs-test (testing to-do) sort axis: surface the same received-time the
+    // feed is ordered by so the rail renders "received Xm ago" matching the sort
+    // order (mapRow folds needs_test_at into last_activity_at first).
+    const needsTestSelect = view === 'needs-test'
+      ? `, COALESCE(r.unboxed_at, r.received_at, rl.updated_at, rl.created_at)::text AS needs_test_at`
       : '';
     const testedAggJoin = view === 'testing'
       ? `LEFT JOIN LATERAL (
@@ -944,6 +998,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 ${sqlReceivingPhotoCount('rl.receiving_id', 'rl.organization_id')} AS photo_count
                 ${lastScanSelect}
                 ${testedAggSelect}
+                ${needsTestSelect}
                 ${incomingExtrasSelect}
                 ${zohoStatusSelect}
                 ${viewedAtSelect}
@@ -1437,7 +1492,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         ? await registerShipmentPermissive({
             trackingNumber: tracking,
             sourceSystem: 'receiving_lines_patch',
-          })
+          }, ctx.organizationId)
         : null;
       let receivingIdForLine = updatedRow?.receiving_id ?? null;
       if (receivingIdForLine == null) {
@@ -1933,6 +1988,7 @@ function normalizeRow(row: Record<string, unknown>) {
     // field regardless of view.
     last_activity_at:         (row.viewed_at as string | null)
                               ?? (row.tested_at as string | null)
+                              ?? (row.needs_test_at as string | null)
                               ?? (row.last_scan_at as string | null)
                               ?? (row.receiving_received_at as string | null)
                               ?? (row.created_at as string | null)

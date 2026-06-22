@@ -53,7 +53,7 @@ export async function PATCH(
 
     const result = await tenantQuery(
       gate.ctx.organizationId,
-      `UPDATE fba_fnskus SET ${sets.join(', ')} WHERE fnsku = $${fnskuIdx} AND organization_id = $${idx} RETURNING fnsku, product_title, asin, sku`,
+      `UPDATE fba_fnskus SET ${sets.join(', ')} WHERE fnsku = $${fnskuIdx} AND organization_id = $${idx} RETURNING fnsku, product_title, asin, sku, condition`,
       vals,
     );
 
@@ -98,7 +98,7 @@ export async function GET(
 
     const result = await tenantQuery(
       gate.ctx.organizationId,
-      `SELECT fnsku, product_title, asin, sku, is_active, created_at, updated_at FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2`,
+      `SELECT fnsku, product_title, asin, sku, condition, is_active, created_at, updated_at FROM fba_fnskus WHERE fnsku = $1 AND organization_id = $2`,
       [fnsku, gate.ctx.organizationId],
     );
 

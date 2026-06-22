@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Layout, LayoutDashboard, List } from '@/components/Icons';
+import { ChevronLeft, ChevronRight, Folder, Layers, Layout, LayoutDashboard, List } from '@/components/Icons';
 import {
   mainStickyHeaderClass,
   mainStickyHeaderCompactRowClass,
@@ -28,6 +28,8 @@ const VIEW_OPTIONS: Array<{
 }> = [
   { id: 'grid-sm', label: 'Small grid', icon: Layout },
   { id: 'grid-lg', label: 'Large grid', icon: LayoutDashboard },
+  { id: 'folders', label: 'Folders', icon: Folder },
+  { id: 'grid-ticket', label: 'Group by ticket', icon: Layers },
   { id: 'list', label: 'List', icon: List },
 ];
 

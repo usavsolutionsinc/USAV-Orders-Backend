@@ -15,9 +15,9 @@
  */
 
 import { useMemo } from 'react';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-import { getReceivingStatusDot } from './ReceivingRecentRail';
+import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
 
 interface UnfoundQueueRow {
   kind: string;
@@ -121,9 +121,9 @@ export function TriageUnfoundList({
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Unfound"
-      eyebrowSuffix="To identify"
       autoSelectFirstWhenEmpty
       getStatusDot={getReceivingStatusDot}
+      getStatusDotLabel={getReceivingStatusDotLabel}
       renderQuantity={(row) => (
         <span className="text-gray-600">
           {row.quantity_received}/{row.quantity_expected ?? '?'}

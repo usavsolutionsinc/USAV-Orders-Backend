@@ -1,4 +1,4 @@
-import { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/types/orders';
 import { getStaffName } from './staff';
 import { formatDateTimePST } from '@/utils/date';
 

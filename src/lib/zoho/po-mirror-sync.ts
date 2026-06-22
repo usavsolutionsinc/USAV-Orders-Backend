@@ -22,10 +22,12 @@
  * PO header. Returns a SyncReport with counts + timing.
  */
 
-import pool from '@/lib/db';
 import { paginateZohoList, getPurchaseOrderById } from '@/lib/zoho';
 import type { ZohoPurchaseOrder } from '@/lib/zoho';
 import { reconcileZohoReceivedLines } from '@/lib/receiving/zoho-received-reconcile';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { withZohoCredential } from '@/lib/zoho/with-zoho-credential';
 
 export interface SyncReport {
   mode: 'delta' | 'full';
@@ -85,17 +87,22 @@ function asTimestamptz(value: unknown): string | null {
   return s;
 }
 
-async function upsertOne(po: ZohoPurchaseOrder): Promise<boolean> {
+async function upsertOne(po: ZohoPurchaseOrder, orgId: OrgId): Promise<boolean> {
   const id = asString(po.purchaseorder_id);
   const number = asString(po.purchaseorder_number);
   if (!id || !number) return false; // skip rows missing identity
 
-  await pool.query(
+  // organization_id stamped explicitly (data-correct regardless of GUC) and the
+  // write runs under the tenant GUC via tenantQuery so it's FORCE-ready. ON
+  // CONFLICT target stays the global zoho_purchaseorder_id (per-org Zoho ids
+  // don't collide across tenants); per-org unique is a deploy-coupled follow-up.
+  await tenantQuery(
+    orgId,
     `INSERT INTO zoho_po_mirror
        (zoho_purchaseorder_id, zoho_purchaseorder_number, vendor_id, vendor_name,
         status, po_date, expected_delivery_date, reference_number, total, currency,
-        raw, last_modified_zoho, last_synced_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NOW())
+        raw, last_modified_zoho, organization_id, last_synced_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW())
      ON CONFLICT (zoho_purchaseorder_id) DO UPDATE
        SET zoho_purchaseorder_number = EXCLUDED.zoho_purchaseorder_number,
            vendor_id                 = EXCLUDED.vendor_id,
@@ -108,6 +115,7 @@ async function upsertOne(po: ZohoPurchaseOrder): Promise<boolean> {
            currency                  = EXCLUDED.currency,
            raw                       = EXCLUDED.raw,
            last_modified_zoho        = EXCLUDED.last_modified_zoho,
+           organization_id           = COALESCE(zoho_po_mirror.organization_id, EXCLUDED.organization_id),
            last_synced_at            = NOW()`,
     [
       id,
@@ -122,6 +130,7 @@ async function upsertOne(po: ZohoPurchaseOrder): Promise<boolean> {
       asString(po.currency_code),
       JSON.stringify(po),
       asTimestamptz((po as unknown as Record<string, unknown>).last_modified_time),
+      orgId,
     ],
   );
   return true;
@@ -136,16 +145,17 @@ async function upsertOne(po: ZohoPurchaseOrder): Promise<boolean> {
  */
 export async function syncOnePoMirror(
   zohoPurchaseOrderId: string,
+  orgId: OrgId,
 ): Promise<{ found: boolean; status: string | null }> {
   const id = (zohoPurchaseOrderId || '').trim();
   if (!id) return { found: false, status: null };
-  const res = await getPurchaseOrderById(id);
+  const res = await withZohoCredential(orgId, 'purchaseorders.read', () => getPurchaseOrderById(id));
   const po = res?.purchaseorder;
   if (!po) return { found: false, status: null };
-  const ok = await upsertOne(po);
+  const ok = await upsertOne(po, orgId);
   if (ok) {
     try {
-      await reconcileZohoReceivedLines({ zohoPurchaseOrderId: id });
+      await reconcileZohoReceivedLines(orgId, { zohoPurchaseOrderId: id });
     } catch (err) {
       console.warn('syncOnePoMirror: received-reconcile failed (non-fatal)', err);
     }
@@ -153,7 +163,7 @@ export async function syncOnePoMirror(
   return { found: ok, status: asString(po.status) };
 }
 
-export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {
+export async function syncZohoPoMirror(opts: SyncOptions, orgId: OrgId): Promise<SyncReport> {
   const start = Date.now();
   const report: SyncReport = {
     mode: opts.mode,
@@ -174,25 +184,31 @@ export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {
   const maxItems = opts.maxItems ?? 20000;
 
   try {
-    for await (const page of paginateZohoList<ZohoPurchaseOrder>(
-      '/api/v1/purchaseorders',
-      'purchaseorders',
-      params,
-    )) {
-      report.pages += 1;
-      for (const po of page) {
-        if (report.fetched >= maxItems) break;
-        report.fetched += 1;
-        try {
-          if (await upsertOne(po)) report.upserted += 1;
-        } catch (err) {
-          const id = (po as { purchaseorder_id?: string }).purchaseorder_id ?? '(unknown)';
-          report.errors.push(`po ${id}: ${err instanceof Error ? err.message : String(err)}`);
+    // Bind the whole paginated pull to this org's Zoho credential (allowlisted
+    // + audited). Wrapping the entire for-await keeps the AsyncLocalStorage org
+    // binding active across every page fetch (the generator resumes inside the
+    // run scope); upsertOne stamps + GUC-scopes each write to the same org.
+    await withZohoCredential(orgId, 'purchaseorders.read', async () => {
+      for await (const page of paginateZohoList<ZohoPurchaseOrder>(
+        '/api/v1/purchaseorders',
+        'purchaseorders',
+        params,
+      )) {
+        report.pages += 1;
+        for (const po of page) {
+          if (report.fetched >= maxItems) break;
+          report.fetched += 1;
+          try {
+            if (await upsertOne(po, orgId)) report.upserted += 1;
+          } catch (err) {
+            const id = (po as { purchaseorder_id?: string }).purchaseorder_id ?? '(unknown)';
+            report.errors.push(`po ${id}: ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
+        if (report.fetched >= maxItems) break;
+        if (report.pages >= maxPages) break;
       }
-      if (report.fetched >= maxItems) break;
-      if (report.pages >= maxPages) break;
-    }
+    });
   } catch (err) {
     report.errors.push(`fetch: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -206,7 +222,7 @@ export async function syncZohoPoMirror(opts: SyncOptions): Promise<SyncReport> {
   // Failure here must not fail the sync or stall the callers' cursor advance,
   // so it logs instead of pushing to errors.
   try {
-    const { updated } = await reconcileZohoReceivedLines();
+    const { updated } = await reconcileZohoReceivedLines(orgId);
     report.reconciled = updated;
   } catch (err) {
     console.warn('syncZohoPoMirror: received-reconcile failed (non-fatal)', err);

@@ -9,6 +9,7 @@ import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { cn } from '@/utils/_cn';
+import { triageStatusChipClass } from '@/lib/inventory-triage-status';
 
 /** Subset of the `tracking_exceptions` row the triage queue needs. */
 export interface TriageRow {
@@ -31,12 +32,6 @@ const STATUS_ITEMS: HorizontalSliderItem[] = [
     { id: 'resolved', label: 'Resolved' },
     { id: 'all', label: 'All' },
 ];
-
-const STATUS_TONE: Record<string, string> = {
-    open: 'bg-amber-50 text-amber-700 ring-amber-200',
-    resolved: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    discarded: 'bg-gray-100 text-gray-500 ring-gray-200',
-};
 
 function relativeTime(iso: string | null): string {
     if (!iso) return '';
@@ -171,7 +166,7 @@ export function InventoryTriageSidebar() {
                                     <span
                                         className={cn(
                                             'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset',
-                                            STATUS_TONE[row.status] ?? 'bg-gray-100 text-gray-500 ring-gray-200',
+                                            triageStatusChipClass(row.status),
                                         )}
                                     >
                                         {row.status}

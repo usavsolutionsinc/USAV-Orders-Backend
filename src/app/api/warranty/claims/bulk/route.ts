@@ -41,6 +41,7 @@ export const POST = withAuth(async (request, ctx) => {
   return idempotentJson({
     request,
     staffId: ctx.staffId,
+    orgId: ctx.organizationId,
     route: 'POST /api/warranty/claims/bulk',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {
@@ -146,6 +147,7 @@ export const DELETE = withAuth(async (request, ctx) => {
   return idempotentJson({
     request,
     staffId: ctx.staffId ?? null,
+    orgId: ctx.organizationId,
     route: 'DELETE /api/warranty/claims/bulk',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {

@@ -29,11 +29,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     const packerIdNum = packerIdParam ? parseInt(packerIdParam) : null;
     const testedByNum = testedByParam ? parseInt(testedByParam) : null;
+    // Universal staff filter (P1-WORK-02): packed OR tested by this staff.
+    const staffParam = searchParams.get('staff');
+    const staffNum = staffParam ? parseInt(staffParam) : null;
 
     try {
         const { rows, cacheTTL, cacheHit } = await fetchPackerLogRows({
             packerId: packerIdNum != null && !Number.isNaN(packerIdNum) ? packerIdNum : null,
             testedBy: testedByNum != null && !Number.isNaN(testedByNum) ? testedByNum : null,
+            staffId: staffNum != null && !Number.isNaN(staffNum) ? staffNum : null,
             limit,
             offset,
             weekStart,

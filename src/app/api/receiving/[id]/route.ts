@@ -475,7 +475,7 @@ export async function PATCH(
         const shipment = await registerShipmentPermissive({
           trackingNumber: trackingStr,
           sourceSystem: 'receiving.link-po',
-        });
+        }, ctx.organizationId);
         if (shipment?.id) {
           registeredShipmentId = Number(shipment.id);
           updates.push(`shipment_id = $${idx++}`);

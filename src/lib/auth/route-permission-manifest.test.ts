@@ -85,6 +85,16 @@ test('regression: photos.share gates share pack creation', () => {
   assert.ok(paths.includes('/api/photos/share-packs/route.ts'), 'photos.share should gate share pack POST');
 });
 
+test('regression: inventory.list_unit gates the per-unit listing route (engine Phase 1.4)', () => {
+  // The 'listed' fulfillment-tail seam — marks a serial unit live on a sales
+  // channel (src/lib/inventory/markUnitListed.ts), then fires tapWorkflow('listed').
+  const paths = routesGatedBy('inventory.list_unit').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/serial-units/[id]/list/route.ts'),
+    'inventory.list_unit should gate the serial-unit list route',
+  );
+});
+
 test('regression: handling_unit.view gates the handling-units read routes', () => {
   // Handling units (LPN) — docs/handling-unit-lpn-plan.md. The manifest records
   // the first-declared method's permission per file, so the read-first
@@ -115,6 +125,14 @@ test('regression: studio.view gates the Operations Studio graph feed (ST1)', () 
   );
 });
 
+test('regression: studio.view gates the People lens feed (ST6 / Phase E1)', () => {
+  const paths = routesGatedBy('studio.view').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/studio/people/route.ts'),
+    'studio.view should gate the People-lens staffing-coverage read',
+  );
+});
+
 test('regression: studio.manage gates the draft/publish lifecycle (ST4)', () => {
   const paths = routesGatedBy('studio.manage').map((r) => r.path);
   assert.ok(
@@ -129,6 +147,54 @@ test('regression: studio.manage gates the draft/publish lifecycle (ST4)', () => 
     paths.includes('/api/studio/definitions/[id]/publish/route.ts'),
     'studio.manage should gate publish',
   );
+  // Phase C.2 — draft hygiene: discarding a never-published draft is studio.manage.
+  assert.ok(
+    paths.includes('/api/studio/definitions/[id]/discard/route.ts'),
+    'studio.manage should gate draft discard',
+  );
+});
+
+test('regression: the template library is studio.view to list/preview, studio.manage to import (ST6 / Phase E4)', () => {
+  // System-owned default workflow graphs a tenant clones into its own
+  // definitions. Listing/previewing a (global) template is studio.view;
+  // importing CLONES it into a draft, which is the studio.manage authoring gate.
+  const view = routesGatedBy('studio.view').map((r) => r.path);
+  assert.ok(
+    view.includes('/api/studio/templates/route.ts'),
+    'studio.view should gate the template library list',
+  );
+  assert.ok(
+    view.includes('/api/studio/templates/[id]/route.ts'),
+    'studio.view should gate the template detail/preview',
+  );
+  const manage = routesGatedBy('studio.manage').map((r) => r.path);
+  assert.ok(
+    manage.includes('/api/studio/templates/[id]/import/route.ts'),
+    'studio.manage should gate template import (it writes a draft)',
+  );
+});
+
+test('regression: node-bound station writes are studio.manage (ST5 / Phase D)', () => {
+  // The node-scoped station binding (Operations Studio L2). The read
+  // (GET .../station) stays studio.view; the manifest records the first-declared
+  // method's permission per file, so that GET-first file lands on studio.view —
+  // but its PUT (draft write) and the dedicated publish sub-route are
+  // studio.manage at runtime.
+  const view = routesGatedBy('studio.view').map((r) => r.path);
+  assert.ok(
+    view.includes('/api/studio/nodes/[id]/station/route.ts'),
+    'the node-station read (GET) is gated studio.view',
+  );
+  const manage = routesGatedBy('studio.manage').map((r) => r.path);
+  assert.ok(
+    manage.includes('/api/studio/nodes/[id]/station/publish/route.ts'),
+    'studio.manage should gate the node-station publish',
+  );
+  // The write file declares a PUT (defense-in-depth: the route itself gates it
+  // studio.manage even though the manifest records the file under the GET).
+  const writeFile = routeByPath('/api/studio/nodes/[id]/station/route.ts');
+  assert.ok(writeFile);
+  assert.ok(writeFile!.methods.includes('PUT'), 'the node-station file exposes a PUT write');
 });
 
 test('regression: integrations.amazon gates the Amazon connection routes', () => {

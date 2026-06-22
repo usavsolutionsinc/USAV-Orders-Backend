@@ -5,6 +5,8 @@ import { useHeader } from '@/contexts/HeaderContext';
 import { useAuth, isClientPublicPath } from '@/contexts/AuthContext';
 import { GlobalHeaderActions } from './GlobalHeaderActions';
 import { HeaderGoalChip } from './HeaderGoalChip';
+// P1-WORK-01 (shared header): additive top-priority work-order chip.
+import { HeaderTopWorkOrderChip } from './HeaderTopWorkOrderChip';
 
 /**
  * Global desktop header — one persistent bar mounted once in
@@ -77,6 +79,10 @@ export function GlobalHeader({
 
       {/* Daily goal — pinned right of the sidebar toggle, persistent across pages. */}
       <HeaderGoalChip />
+
+      {/* Top-priority work order for the signed-in operator (P1-WORK-01).
+          Renders nothing when there's no actionable assigned work. */}
+      <HeaderTopWorkOrderChip />
 
       {/* Contextual zone — fed per page via useHeader()/usePageHeader(). */}
       <div className="flex min-w-0 flex-1 items-center">{panelContent}</div>

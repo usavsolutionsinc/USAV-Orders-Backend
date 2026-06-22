@@ -19,6 +19,8 @@ export interface SkuCatalogRow {
   last_known_cost_cents: number | null;
   sourcing_notes: string | null;
   replenish_target_cents: number | null;
+  /** Per-SKU pack/handling guidance shown to the packer (P1-PCK-02). */
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -158,6 +160,8 @@ export async function upsertSkuCatalog(params: {
   sourcingNotes?: string | null;
   /** Per-SKU replenish target price (cents). Below this, the watcher alerts. */
   replenishTargetCents?: number | null;
+  /** Per-SKU pack/handling guidance shown to the packer (P1-PCK-02). */
+  notes?: string | null;
 }, orgId?: OrgId): Promise<SkuCatalogRow> {
   // The lifecycle params are referenced directly ($8–$11) rather than via
   // EXCLUDED so that omitting them (null) preserves the existing row on update
@@ -180,13 +184,18 @@ export async function upsertSkuCatalog(params: {
     params.lastKnownCostCents ?? null,
     params.sourcingNotes?.trim() || null,
     params.replenishTargetCents ?? null,
+    // notes ($13): pack guidance. `notes === undefined` (omitted) preserves the
+    // existing row via COALESCE; an explicit null also preserves (we don't clear
+    // on upsert here — clearing goes through the PATCH null path), so trim-or-null
+    // is the right normalization.
+    params.notes !== undefined ? (params.notes?.trim() || null) : null,
   ];
   if (orgId) values.push(orgId);
   const sql = `INSERT INTO sku_catalog
        (sku, product_title, category, upc, ean, image_url, is_active,
         lifecycle_status, reorder_threshold, last_known_cost_cents, sourcing_notes,
-        replenish_target_cents${orgId ? ', organization_id' : ''})
-     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12${orgId ? ', $13' : ''})
+        replenish_target_cents, notes${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'active'), $9, $10, $11, $12, $13${orgId ? ', $14' : ''})
      ON CONFLICT (sku) DO UPDATE SET
        product_title = EXCLUDED.product_title,
        category = COALESCE(EXCLUDED.category, sku_catalog.category),
@@ -199,6 +208,7 @@ export async function upsertSkuCatalog(params: {
        last_known_cost_cents = COALESCE($10, sku_catalog.last_known_cost_cents),
        sourcing_notes = COALESCE($11, sku_catalog.sourcing_notes),
        replenish_target_cents = COALESCE($12, sku_catalog.replenish_target_cents),
+       notes = COALESCE($13, sku_catalog.notes),
        updated_at = NOW()
      RETURNING *`;
   const result = orgId

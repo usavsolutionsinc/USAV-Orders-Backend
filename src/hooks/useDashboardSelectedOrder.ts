@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/types/orders';
 import { fetchDashboardOrderRowById } from '@/lib/dashboard-table-data';
 import {
   patchDashboardSelectedOrderFromAssignment,

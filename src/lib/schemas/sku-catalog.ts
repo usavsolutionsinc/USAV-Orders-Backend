@@ -9,6 +9,8 @@ const optNullableText = trimmed.min(1).nullable().optional();
 /** Sourcing lifecycle signal shared by create + update bodies (Bose engine). */
 const lifecycleStatusEnum = z.enum(['active', 'eol', 'discontinued', 'nrnd', 'unknown']);
 const optNonNegInt = z.number().int().nonnegative().nullable().optional();
+/** Per-SKU pack/handling guidance (multi-line, may be cleared with null). */
+const optPackNotes = trimmed.max(4000).nullable().optional();
 
 // ─── POST /api/sku-catalog ──────────────────────────────────────────────────
 
@@ -32,6 +34,8 @@ export const SkuCatalogCreateBody = z
     lastKnownCostCents: optNonNegInt,
     sourcingNotes: optNullableText,
     replenishTargetCents: optNonNegInt,
+    /** "How to pack this product" guidance shown to the packer (P1-PCK-02). */
+    packNotes: optPackNotes,
     idempotencyKey: z.string().trim().min(1).optional(),
   })
   .strict();
@@ -56,8 +60,33 @@ export const SkuCatalogUpdateBody = z
     lastKnownCostCents: optNonNegInt,
     sourcingNotes: optNullableText,
     replenishTargetCents: optNonNegInt,
+    /** "How to pack this product" guidance shown to the packer (P1-PCK-02). */
+    packNotes: optPackNotes,
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, {
     message: 'At least one field must be provided',
   });
+
+// ─── POST /api/sku-catalog/flag-missing ─────────────────────────────────────
+
+/**
+ * Flag an item that was identified (e.g. OCR'd off a local-pickup label) but is
+ * NOT in the system yet, into the `pending_skus` "needs creating in Zoho" queue.
+ *
+ * Used by the OCR local-pickup intake (P2-AI-01) as the one-step alternative to
+ * creating a SKU outright: the operator read a real product but doesn't have a
+ * SKU for it yet, so it goes on the to-do list instead of being dropped.
+ *
+ * `sku` is the dedup key (normalized server-side). When the operator only has a
+ * title (no SKU), they pass a placeholder/raw label string as `sku` — the queue
+ * is keyed on whatever raw token uniquely names the unfound item. `suggestedTitle`
+ * seeds the eventual Zoho item.
+ */
+export const SkuCatalogFlagMissingBody = z
+  .object({
+    sku: trimmed.min(1, 'sku is required'),
+    suggestedTitle: optNullableText,
+    source: trimmed.min(1).max(64).optional(),
+  })
+  .strict();

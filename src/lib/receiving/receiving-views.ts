@@ -26,6 +26,12 @@
  *                line). The triage "to-do" between the door scan and the unbox
  *                step. Disjoint from `activity` (which requires qty>0 / unboxed).
  * - `testing`  — lines with at least one recorded testing verdict.
+ * - `needs-test` — units physically received and flagged `needs_test`, NOT yet
+ *                tested (no terminal verdict). The testing TO-DO feed, ordered
+ *                newest-received first so freshly-unboxed units surface at the
+ *                top for real-time pickup. Distinct from `testing` (the
+ *                already-tested log). Optional `?tester=` filters to a tech's
+ *                own assigned units (assigned_tech_id).
  * - `viewed`   — lines the requesting staff recently OPENED in the receiving
  *                workspace, newest-opened first. Per-staff, backed by
  *                receiving_line_views (upserted on open). Powers the unbox
@@ -39,6 +45,7 @@ export const RECEIVING_VIEWS = [
   'activity',
   'scanned',
   'testing',
+  'needs-test',
   'viewed',
 ] as const;
 

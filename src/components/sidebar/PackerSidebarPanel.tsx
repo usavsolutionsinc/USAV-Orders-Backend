@@ -10,6 +10,7 @@ import { getStaffGoalById } from '@/lib/staffGoalsCache';
 import { useAuth } from '@/contexts/AuthContext';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useActiveStaffDirectory } from './hooks';
 
 /** Pack modes the operator can switch between at the top of the sidebar. */
@@ -31,6 +32,7 @@ export function PackerSidebarPanel() {
   const staffIdNum = user?.staffId ?? 0;
   const packerId = String(staffIdNum);
   const staffDirectory = useActiveStaffDirectory();
+  const masterNavEnabled = useMasterNavEnabled();
 
   // Pack mode — persisted via ?packMode= URL param so refresh/sharing preserves it.
   const rawMode = searchParams.get('packMode') ?? 'standard';
@@ -90,17 +92,20 @@ export function PackerSidebarPanel() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Mode rail — Standard / Fragile / Multi-Item */}
-      <div className={`shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5`}>
-        <HorizontalButtonSlider
-          items={PACK_MODE_ITEMS}
-          value={packMode}
-          onChange={(id) => setPackMode(id as PackMode)}
-          variant="segmented"
-          aria-label="Pack mode"
-          className="w-full"
-        />
-      </div>
+      {/* Mode rail — Standard / Fragile / Multi-Item. Hidden when the master-nav
+          L2 ModeRail is the single switcher (see MASTER_NAV_RAIL_PAGES). */}
+      {!masterNavEnabled && (
+        <div className={`shrink-0 border-b border-gray-100 ${SIDEBAR_GUTTER} py-1.5`}>
+          <HorizontalButtonSlider
+            items={PACK_MODE_ITEMS}
+            value={packMode}
+            onChange={(id) => setPackMode(id as PackMode)}
+            variant="segmented"
+            aria-label="Pack mode"
+            className="w-full"
+          />
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         <StationPacking
           embedded

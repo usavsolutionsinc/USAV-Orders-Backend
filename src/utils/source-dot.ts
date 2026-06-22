@@ -35,6 +35,20 @@ export function isSkuSourceRecord(params: Parameters<typeof getSourceDotType>[0]
   return getSourceDotType(params) === 'sku';
 }
 
+/**
+ * Resolve a station row's source in ONE pass — the dot type and whether it's a
+ * SKU-scan row (which hides the internal order-id chip). Station rows previously
+ * computed these separately, calling {@link getSourceDotType} twice (once
+ * directly, once inside {@link isSkuSourceRecord}); this does it once. Callers
+ * still OR in any record-specific extras (e.g. tech's `has_sku_serial_source`).
+ */
+export function resolveStationSource(
+  params: Parameters<typeof getSourceDotType>[0],
+): { dotType: SourceDotType; isSku: boolean } {
+  const dotType = getSourceDotType(params);
+  return { dotType, isSku: dotType === 'sku' };
+}
+
 /** Tailwind background class for each dot type. */
 export const SOURCE_DOT_BG: Record<SourceDotType, string> = {
   fba: 'bg-purple-500',

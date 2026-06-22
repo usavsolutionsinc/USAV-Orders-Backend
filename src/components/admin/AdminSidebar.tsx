@@ -11,7 +11,6 @@ import { ConnectionsSidebarPanel } from '@/components/sidebar/ConnectionsSidebar
 import { GoalsSidebarPanel } from '@/components/sidebar/GoalsSidebarPanel';
 import { StaffScheduleSidebarPanel } from './StaffScheduleSidebarPanel';
 import { FbaCatalogSidebarPanel } from './FbaCatalogSidebarPanel';
-import { OperationsSidebarPanel } from './workflow/OperationsSidebarPanel';
 import { LogsSidebarPanel } from './LogsSidebarPanel';
 import { NasPhotosSidebarPanel } from './NasPhotosSidebarPanel';
 import { BoseModelsSidebarPanel } from './sourcing/BoseModelsSidebarPanel';
@@ -34,7 +33,6 @@ function panelFor(section: AdminSection): JSX.Element | null {
     case 'compatibility':   return <CompatibilitySidebarPanel />;
     case 'suppliers':       return <SuppliersSidebarPanel />;
     case 'connections':     return <ConnectionsSidebarPanel />;
-    case 'architecture':    return <OperationsSidebarPanel />;
     case 'logs':            return <LogsSidebarPanel />;
     case 'station_photos':  return <NasPhotosSidebarPanel />;
     default:                return null;

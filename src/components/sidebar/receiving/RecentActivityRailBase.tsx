@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { Camera } from '@/components/Icons';
@@ -9,7 +10,8 @@ import { conditionGradeTableLabel, workflowStatusTableLabel, WORKFLOW_BADGE } fr
 import {
   OrderIdChip, TrackingChip, SkuScanRefChip, SerialChip, getLast4,
 } from '@/components/ui/CopyChip';
-import { dispatchSelectLine, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { dispatchSelectLine } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   SidebarRailShell, railRelativeTime, type SidebarRailRowContext,
 } from '@/components/sidebar/SidebarRailShell';
@@ -54,6 +56,7 @@ export interface RecentActivityRailBaseProps {
    */
   getActivityAt?: (row: ReceivingLineRow) => string | null | undefined;
   getStatusDot: (row: ReceivingLineRow) => string;
+  getStatusDotLabel?: (row: ReceivingLineRow) => string;
   renderQuantity: (row: ReceivingLineRow) => ReactNode;
   previewQtyLabel: string;
   getPreviewQty: (row: ReceivingLineRow) => { current: number; total: number | null };
@@ -102,6 +105,7 @@ export function RecentActivityRailBase({
   autoSelectFirstWhenEmpty = false,
   getActivityAt = getRowActivityAt,
   getStatusDot,
+  getStatusDotLabel,
   renderQuantity,
   previewQtyLabel,
   getPreviewQty,
@@ -131,6 +135,7 @@ export function RecentActivityRailBase({
       getActivityAt={getActivityAt}
       onSelect={selectRow}
       getStatusDot={getStatusDot}
+      getStatusDotLabel={getStatusDotLabel}
       renderRowMain={(row, ctx) => <ReceivingRowMain row={row} ctx={ctx} renderQuantity={renderQuantity} />}
       renderPopover={(row, p) => (
         <ReceivingPopoverContent
@@ -258,7 +263,7 @@ function ReceivingPopoverContent({
           </span>
         </div>
         <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-gray-100">
-          <motion.div initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className={`h-full ${isComplete ? 'bg-emerald-500' : 'bg-blue-500'}`} />
+          <motion.div initial={{ width: 0 }} animate={{ width: `${progressPct}%` }} transition={{ duration: 0.35, ease: motionBezier.easeOut }} className={`h-full ${isComplete ? 'bg-emerald-500' : 'bg-blue-500'}`} />
         </div>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { format, parseISO } from 'date-fns';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import type { TimelineItem, TimelineTone, TimelineRef } from '@/lib/timeline/types';
 import {
   TrackingChip,
@@ -69,6 +70,15 @@ function fmt(value: string | null | undefined, pattern: string): string {
   }
 }
 
+/** Short kind label shown before the identifier chip in the serial-grouped view. */
+const REF_KIND_LABEL: Record<TimelineRef['kind'], string> = {
+  serial: 'Serial',
+  tracking: 'Tracking',
+  fnsku: 'FNSKU',
+  sku: 'SKU',
+  id: 'Order',
+};
+
 /** Render an identifier through the shared CopyChip family (last-4 + copy). */
 function TimelineRefChip({ refItem }: { refItem: TimelineRef }) {
   const v = String(refItem.value || '').trim();
@@ -88,15 +98,70 @@ function TimelineRefChip({ refItem }: { refItem: TimelineRef }) {
   }
 }
 
+/**
+ * How the rows are grouped:
+ *   • `time`   — chronological day bands ("order-based" view: the merged trail in
+ *                time order — the default everywhere).
+ *   • `serial` — one band per identifier (serial/tracking/sku/order id), each
+ *                holding that unit's events in time order ("serial-based" view).
+ *                Rows with no `ref` collapse under a single "Order events" band so
+ *                nothing is dropped.
+ *
+ * The data already carries a per-row {@link TimelineRef} from every adapter, so
+ * the serial↔order toggle is a pure presentation switch over the same items —
+ * no second fetch, no second component.
+ */
+export type TimelineGroupMode = 'time' | 'serial';
+
 export interface EventTimelineProps {
   items: TimelineItem[];
   emptyMessage?: string;
-  /** Group rows under "EEE, MMM d" day bands (default true). */
+  /** Group rows under "EEE, MMM d" day bands (default true). Ignored when
+   *  `groupMode === 'serial'` (serial bands replace day bands). */
   groupByDay?: boolean;
   /** Ring + highlight the first (latest) row (default true). */
   highlightLatest?: boolean;
   /** Vertical rhythm — `compact` for sidebars, `comfortable` (default) for panels. */
   density?: Density;
+  /** Identifier grouping (the serial↔order toggle). Default `time`. */
+  groupMode?: TimelineGroupMode;
+}
+
+/** A serial-view band: an identifier header + that identifier's rows. */
+interface SerialGroup {
+  key: string;
+  ref: TimelineRef | null;
+  label: string;
+  items: TimelineItem[];
+}
+
+/**
+ * Bucket items by their `ref` identifier, preserving the incoming (sorted) order
+ * both for the rows inside a band and for the bands themselves (first-seen wins),
+ * so the serial view stays newest-first like the time view. Ref-less rows fall
+ * into one trailing "Order events" band rather than vanishing.
+ */
+function groupBySerial(items: TimelineItem[]): SerialGroup[] {
+  const map = new Map<string, SerialGroup>();
+  const NO_REF = '__order__';
+  for (const it of items) {
+    const key = it.ref ? `${it.ref.kind}:${it.ref.value}` : NO_REF;
+    let group = map.get(key);
+    if (!group) {
+      group = {
+        key,
+        ref: it.ref ?? null,
+        label: it.ref ? it.ref.value : 'Order events',
+        items: [],
+      };
+      map.set(key, group);
+    }
+    group.items.push(it);
+  }
+  // Keep the ref-less "Order events" band last so identifiers lead the view.
+  const groups = [...map.values()];
+  groups.sort((a, b) => Number(a.key === NO_REF) - Number(b.key === NO_REF));
+  return groups;
 }
 
 export function EventTimeline({
@@ -105,6 +170,7 @@ export function EventTimeline({
   groupByDay = true,
   highlightLatest = true,
   density = 'comfortable',
+  groupMode = 'time',
 }: EventTimelineProps) {
   const reduce = useReducedMotion();
   const d = DENSITY[density];
@@ -117,6 +183,43 @@ export function EventTimeline({
     );
   }
 
+  // Serial-based view: render one EventTimeline band per identifier, reusing the
+  // exact same row rendering (time grouping off inside a band). This keeps a
+  // single timeline primitive — the serial view is the time view, re-bucketed.
+  if (groupMode === 'serial') {
+    const groups = groupBySerial(items);
+    return (
+      <div className="space-y-5">
+        {groups.map((g) => (
+          <div key={g.key}>
+            <div className="mb-2 flex items-center gap-2 pl-px">
+              <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+                {g.ref ? `${REF_KIND_LABEL[g.ref.kind]} ` : ''}
+              </span>
+              {g.ref ? (
+                <TimelineRefChip refItem={g.ref} />
+              ) : (
+                <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+                  {g.label}
+                </span>
+              )}
+              <span className="text-micro font-medium text-gray-300">
+                {g.items.length} {g.items.length === 1 ? 'event' : 'events'}
+              </span>
+            </div>
+            <EventTimeline
+              items={g.items}
+              groupByDay={false}
+              highlightLatest={false}
+              density={density}
+              groupMode="time"
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const container: Variants = {
     hidden: {},
     show: { transition: { staggerChildren: reduce ? 0 : 0.035, delayChildren: 0.02 } },
@@ -125,7 +228,7 @@ export function EventTimeline({
     ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.2 } } }
     : {
         hidden: { opacity: 0, y: 3 },
-        show: { opacity: 1, y: 0, transition: { duration: 0.34, ease: [0.22, 1, 0.36, 1] } },
+        show: { opacity: 1, y: 0, transition: { duration: 0.34, ease: motionBezier.easeOut } },
       };
 
   return (

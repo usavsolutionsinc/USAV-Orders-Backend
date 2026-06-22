@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Search } from '@/components/Icons';
 import { sectionLabel } from '@/design-system';
 
@@ -23,7 +24,7 @@ export function OrderSearchEmptyState({
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.3, ease: motionBezier.easeOut }}
       className="max-w-xs mx-auto text-center"
     >
       <motion.div

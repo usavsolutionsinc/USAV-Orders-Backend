@@ -11,11 +11,15 @@ Wraps the project's existing `db:migrate` pipeline with a forced dry-run + confi
 
 ## Steps
 
-1. **Show what's pending** — list migration files newer than the current applied state:
+1. **Show what's pending** — the runner (`scripts/run-pending-migrations.mjs`) applies the
+   hand-written SQL files in `src/lib/migrations/*.sql` (NOT Drizzle) and tracks applied
+   ones in `schema_migrations`. List the files and the untracked/new ones:
    ```bash
-   ls -1 src/lib/drizzle/migrations 2>/dev/null || ls -1 drizzle 2>/dev/null
-   git status --short src/lib/drizzle drizzle 2>/dev/null
+   ls -1 src/lib/migrations/*.sql 2>/dev/null | tail -10
+   git status --short src/lib/migrations 2>/dev/null
    ```
+   (The `--dry` run in step 2 is the authoritative "what's pending" — it reads
+   `schema_migrations` and prints exactly which files would apply.)
 
 2. **Dry run** — always:
    ```bash

@@ -27,6 +27,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 
 const ROUTE_LOCATION_PATCH = 'locations.barcode.patch';
 
@@ -136,21 +137,24 @@ export async function PATCH(
     const parsed = parseBody(LocationsPatchBody, body);
     if (parsed instanceof NextResponse) return parsed;
 
-    // ─── Idempotency: replay cached responses for the same key ──────────────
-    const idempotencyKey = readIdempotencyKey(request, body?.clientEventId ?? body?.idempotencyKey);
-    const idempotencyStaffId = Number(body?.staffId);
-    if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_LOCATION_PATCH);
-      if (cached) {
-        return NextResponse.json(cached.response_body, { status: cached.status_code });
-      }
-    }
-
     // Resolve session org up-front so the lookup + every write below is
     // tenant-scoped. Anonymous callers (no session) fall back to legacy
     // un-scoped behavior (orgId undefined).
     const ctx = await resolveCtx(request);
     const orgId = ctx.organizationId ?? undefined;
+    // The idempotency cache requires a concrete tenant; anonymous (legacy QR)
+    // callers fall back to USAV so the org-scoped cache row still resolves.
+    const idempotencyOrgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+
+    // ─── Idempotency: replay cached responses for the same key ──────────────
+    const idempotencyKey = readIdempotencyKey(request, body?.clientEventId ?? body?.idempotencyKey);
+    const idempotencyStaffId = Number(body?.staffId);
+    if (idempotencyKey) {
+      const cached = await getApiIdempotencyResponse(pool, idempotencyOrgId, idempotencyKey, ROUTE_LOCATION_PATCH);
+      if (cached) {
+        return NextResponse.json(cached.response_body, { status: cached.status_code });
+      }
+    }
 
     const loc = await getLocationByBarcode(code, orgId);
     if (!loc) {
@@ -190,6 +194,7 @@ export async function PATCH(
     const respond = async (payload: Record<string, unknown>, status = 200) => {
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId: idempotencyOrgId,
           idempotencyKey,
           route: ROUTE_LOCATION_PATCH,
           staffId:

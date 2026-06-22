@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { cn } from '@/utils/_cn';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
@@ -50,7 +51,7 @@ export function useRightPaneHost(): HTMLElement | null {
 // ─── Overlay shell ──────────────────────────────────────────────────────────────
 
 const SPRING = { type: 'spring', stiffness: 350, damping: 28, mass: 0.6 } as const;
-const FADE = { duration: 0.16, ease: [0.22, 1, 0.36, 1] } as const;
+const FADE = { duration: 0.16, ease: motionBezier.easeOut } as const;
 
 export type RightPaneOverlayAlign = 'center' | 'right';
 

@@ -48,11 +48,8 @@ export const CRON_JOBS: CronJobDef[] = [
   // Inventory
   { job: 'inventory.drift_check', label: 'Inventory drift check', category: 'Inventory', schedule: 'daily 11:00', expectedEveryMs: DAY },
   { job: 'stock_alerts', label: 'Stock alerts', category: 'Inventory', schedule: 'daily 14:00', expectedEveryMs: DAY },
-  { job: 'replenishment.detect', label: 'Replenishment detect', category: 'Inventory', schedule: 'every 4h', expectedEveryMs: 4 * HOUR },
-  { job: 'replenishment.sync', label: 'Replenishment sync', category: 'Inventory', schedule: 'daily 13:00', expectedEveryMs: DAY },
   // Sourcing
   { job: 'sourcing.scan', label: 'Sourcing scan', category: 'Sourcing', schedule: 'daily 06:00', expectedEveryMs: DAY },
-  { job: 'sourcing.replenish', label: 'Sourcing replenish', category: 'Sourcing', schedule: 'daily 07:00', expectedEveryMs: DAY },
   // Integrations
   { job: 'ebay.refresh_tokens', label: 'eBay token refresh', category: 'Integrations', schedule: 'hourly', expectedEveryMs: 1 * HOUR },
   { job: 'google_sheets.transfer_orders', label: 'Google Sheets transfer orders', category: 'Integrations', schedule: '3× daily (weekdays)', expectedEveryMs: DAY },
@@ -83,10 +80,7 @@ export const CRON_JOB_TRIGGER_PATH: Record<string, string> = {
   'shipping.metrics': '/api/cron/shipping/metrics',
   'inventory.drift_check': '/api/cron/inventory/drift-check',
   'stock_alerts': '/api/cron/stock-alerts',
-  'replenishment.detect': '/api/cron/replenishment-detect',
-  'replenishment.sync': '/api/cron/replenishment/sync',
   'sourcing.scan': '/api/cron/sourcing/scan',
-  'sourcing.replenish': '/api/cron/sourcing/replenish',
   'ebay.refresh_tokens': '/api/cron/ebay/refresh-tokens',
   'google_sheets.transfer_orders': '/api/cron/google-sheets/transfer-orders',
   'staff_goals.history': '/api/cron/staff-goals/history',

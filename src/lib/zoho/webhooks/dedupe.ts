@@ -1,4 +1,5 @@
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import type { NormalizedZohoEvent } from './types';
 
 export interface DedupeReserveResult {
@@ -7,18 +8,25 @@ export interface DedupeReserveResult {
 }
 
 /**
- * Reserve an event_id slot. Inserts the row in a single statement so two
- * concurrent webhook deliveries can't both think they're the first. The
- * `processed_at` column stays NULL until handlers complete successfully.
+ * Reserve an (org, event_id) slot. Inserts the row in a single statement so two
+ * concurrent deliveries can't both think they're the first. Org-scoped (Wave 3)
+ * so a replay is deduped within its own tenant and two tenants can never collide
+ * on a synthetic (payload-hashed) event_id. Runs under the tenant GUC.
+ * `processed_at` stays NULL until handlers complete successfully.
  */
-export async function reserveWebhookEvent(event: NormalizedZohoEvent): Promise<DedupeReserveResult> {
-  const result = await pool.query<{ event_id: string }>(
+export async function reserveWebhookEvent(
+  event: NormalizedZohoEvent,
+  orgId: OrgId,
+): Promise<DedupeReserveResult> {
+  const result = await tenantQuery<{ event_id: string }>(
+    orgId,
     `INSERT INTO zoho_webhook_events
-       (event_id, event_type, object_id, event_time, raw_payload)
-     VALUES ($1, $2, $3, $4::timestamptz, $5::jsonb)
-     ON CONFLICT (event_id) DO NOTHING
+       (organization_id, event_id, event_type, object_id, event_time, raw_payload)
+     VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb)
+     ON CONFLICT (organization_id, event_id) DO NOTHING
      RETURNING event_id`,
     [
+      orgId,
       event.eventId,
       event.eventType,
       event.objectId,
@@ -29,25 +37,28 @@ export async function reserveWebhookEvent(event: NormalizedZohoEvent): Promise<D
   return { isFresh: result.rowCount === 1 };
 }
 
-export async function markWebhookEventProcessed(eventId: string): Promise<void> {
-  await pool.query(
+export async function markWebhookEventProcessed(orgId: OrgId, eventId: string): Promise<void> {
+  await tenantQuery(
+    orgId,
     `UPDATE zoho_webhook_events
         SET processed_at = NOW(), processing_error = NULL
-      WHERE event_id = $1`,
-    [eventId],
+      WHERE organization_id = $1 AND event_id = $2`,
+    [orgId, eventId],
   );
 }
 
 export async function markWebhookEventFailed(
+  orgId: OrgId,
   eventId: string,
   error: unknown,
 ): Promise<void> {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-  await pool.query(
+  await tenantQuery(
+    orgId,
     `UPDATE zoho_webhook_events
-        SET processing_error = $2,
+        SET processing_error = $3,
             processed_at = NULL
-      WHERE event_id = $1`,
-    [eventId, message.slice(0, 2000)],
+      WHERE organization_id = $1 AND event_id = $2`,
+    [orgId, eventId, message.slice(0, 2000)],
   );
 }

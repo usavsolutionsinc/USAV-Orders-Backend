@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type ApiIdempotencyHit = {
   status_code: number;
@@ -12,15 +13,18 @@ function isIdempotencyTableMissing(err: unknown): boolean {
 
 export async function getApiIdempotencyResponse(
   db: Pick<Pool, 'query'>,
+  orgId: OrgId,
   idempotencyKey: string,
   route: string,
 ): Promise<ApiIdempotencyHit | null> {
   try {
+    // org-filtered: a key collision across tenants can never serve another
+    // tenant's cached body (the cross-tenant idempotency-cache leak).
     const r = await db.query(
       `SELECT status_code, response_body
        FROM api_idempotency_responses
-       WHERE idempotency_key = $1 AND route = $2`,
-      [idempotencyKey, route],
+       WHERE organization_id = $1 AND idempotency_key = $2 AND route = $3`,
+      [orgId, idempotencyKey, route],
     );
     const row = r.rows[0];
     if (!row) return null;
@@ -37,6 +41,7 @@ export async function getApiIdempotencyResponse(
 export async function saveApiIdempotencyResponse(
   db: Pick<Pool, 'query'>,
   params: {
+    orgId: OrgId;
     idempotencyKey: string;
     route: string;
     staffId: number | null;
@@ -45,12 +50,16 @@ export async function saveApiIdempotencyResponse(
   },
 ): Promise<void> {
   try {
+    // organization_id stamped so the cache row is owned by its tenant. ON
+    // CONFLICT target stays (idempotency_key, route) — see the migration header
+    // for why the PK isn't flipped to composite yet (deploy-ordering safety).
     await db.query(
       `INSERT INTO api_idempotency_responses
-         (idempotency_key, route, staff_id, status_code, response_body)
-       VALUES ($1, $2, $3, $4, $5::jsonb)
+         (organization_id, idempotency_key, route, staff_id, status_code, response_body)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
        ON CONFLICT (idempotency_key, route) DO NOTHING`,
       [
+        params.orgId,
         params.idempotencyKey,
         params.route,
         params.staffId,
@@ -80,6 +89,7 @@ export function readIdempotencyKey(req: Request, bodyKey?: string | null): strin
 export async function withIdempotentResponse<B extends Record<string, unknown>>(
   db: Pick<Pool, 'query'>,
   params: {
+    orgId: OrgId;
     idempotencyKey: string | null;
     route: string;
     staffId: number | null;
@@ -89,6 +99,7 @@ export async function withIdempotentResponse<B extends Record<string, unknown>>(
   if (params.idempotencyKey) {
     const cached = await getApiIdempotencyResponse(
       db,
+      params.orgId,
       params.idempotencyKey,
       params.route,
     );
@@ -105,6 +116,7 @@ export async function withIdempotentResponse<B extends Record<string, unknown>>(
 
   if (params.idempotencyKey && out.status < 500) {
     await saveApiIdempotencyResponse(db, {
+      orgId: params.orgId,
       idempotencyKey: params.idempotencyKey,
       route: params.route,
       staffId: params.staffId,

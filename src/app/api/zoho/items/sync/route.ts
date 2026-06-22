@@ -18,7 +18,6 @@ async function runItemSync(orgId: string, mode: 'full' | 'incremental') {
   return {
     success: true,
     mode,
-    queue: 'qstash',
     ...result,
   };
 }
@@ -48,7 +47,6 @@ export const GET = withAuth(async (request: NextRequest) => {
 
   return NextResponse.json({
     success: true,
-    queue: 'qstash',
     job: 'zoho-items-sync',
   });
 }, { permission: 'integrations.zoho' });

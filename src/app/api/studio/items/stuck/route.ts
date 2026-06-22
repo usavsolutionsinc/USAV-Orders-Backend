@@ -87,5 +87,5 @@ export const GET = withAuth(
       return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
   },
-  { permission: 'studio.view' },
+  { permission: 'studio.view', feature: 'studio' },
 );

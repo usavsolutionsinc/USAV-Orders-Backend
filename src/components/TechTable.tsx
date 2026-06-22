@@ -1,352 +1,83 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { SkeletonList } from '@/design-system';
-import { Loader2 } from './Icons';
-import {
-  FnskuChip,
-  OrderIdChip,
-  OrderIdChipPlaceholder,
-  TrackingOrSkuScanChip,
-  SerialChip,
-  PlatformChip,
-  getLast4,
-} from './ui/CopyChip';
-import { DateGroupHeader } from './ui/DateGroupHeader';
-import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/order-platform';
-import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
-import WeekHeader from './ui/WeekHeader';
-import { dispatchCloseShippedDetails } from '@/utils/events';
-import { getOrderDisplayValues } from '@/utils/order-display';
-import { getSourceDotType, isSkuSourceRecord, SOURCE_DOT_BG, SOURCE_DOT_LABEL } from '@/utils/source-dot';
-import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { useCallback, useMemo } from 'react';
+import { useEventBridge } from '@/hooks';
 import { type TechRecord } from '@/hooks/useTechLogs';
-import { normalizeTrackingKey } from '@/lib/tracking-format';
-import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
-import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
-import { useTechTableController, hasUsableProductTitle, isFbaTechRecord } from '@/hooks/station/useTechTableController';
+import { useTechTableController } from '@/hooks/station/useTechTableController';
+import { useStationDetailsSelection } from '@/hooks/station/useStationDetailsSelection';
+import { StationWeekTable } from '@/components/station/StationWeekTable';
+import { TechRecordRow } from '@/components/station/TechRecordRow';
+import { techRecordToDetail, getTechDetailId } from '@/components/station/tech-record-mappers';
 
 interface TechTableProps {
   testedBy: number;
 }
 
-
-
-function normalizeProductTitle(value: string | null | undefined): string {
-  return String(value || '').trim();
+/** Newest-first by pack/test time (created_at). */
+function byNewestCreated(a: TechRecord, b: TechRecord): number {
+  return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
 }
 
 export function TechTable({ testedBy }: TechTableProps) {
-  const [selectedDetailId, setSelectedDetailId] = useState<number | null>(null);
-
   const {
     weekOffset, setWeekOffset, weekRange,
-    visibleRecords, groupedRecords, loading, isRefreshing,
-    getRowKey, removedRowKeys, setRemovedRowKeys,
+    groupedRecords, loading, isRefreshing,
+    getRowKey, setRemovedRowKeys,
     scrollRef,
   } = useTechTableController({ staffId: testedBy });
 
-  const weekHeaderCountClass = stationThemeColors[getStaffThemeById(testedBy)].text;
-
-  useEffect(() => {
-    const handleOpenDetails = (e: any) => {
-      const nextId = Number(e?.detail?.id);
-      setSelectedDetailId(Number.isFinite(nextId) ? nextId : null);
-    };
-    const handleCloseDetails = () => setSelectedDetailId(null);
-
-    window.addEventListener('open-shipped-details', handleOpenDetails as any);
-    window.addEventListener('close-shipped-details', handleCloseDetails as any);
-
-    return () => {
-      window.removeEventListener('open-shipped-details', handleOpenDetails as any);
-      window.removeEventListener('close-shipped-details', handleCloseDetails as any);
-    };
-  }, []);
-
-  const toDetailRecord = (record: TechRecord) => {
-    // Normalize deadline to YYYY-MM-DD — field is sourced from work_assignments.deadline_at (TIMESTAMPTZ)
-    const shipByDate = record.ship_by_date
-      ? String(record.ship_by_date).split('T')[0]
-      : '';
-
-    return {
-      id: record.order_db_id ?? record.id,
-      ship_by_date: shipByDate,
-      order_id: record.order_id || '',
-      product_title: hasUsableProductTitle(record.product_title) ? normalizeProductTitle(record.product_title) : '',
-      item_number: record.item_number || null,
-      condition: record.condition || '',
-      shipping_tracking_number: record.shipping_tracking_number || '',
-      tracking_numbers: record.tracking_numbers || [],
-      tracking_number_rows: record.tracking_number_rows || [],
-      serial_number: record.serial_number || '',
-      sku: record.sku || '',
-      tester_id: null,
-      tested_by: record.tested_by || null,
-      test_date_time: record.created_at || null,
-      packer_id: null,
-      packed_by: null,
-      packed_at: null,
-      packer_photos_url: [],
-      tracking_type: record.fnsku ? 'FNSKU' : null,
-      account_source: record.account_source || null,
-      notes: record.notes || '',
-      status_history: record.status_history || [],
-      is_shipped: !!record.is_shipped,
-      created_at: record.created_at || null,
-      quantity: record.quantity || '1',
-      shipment_id: record.shipment_id ?? null,
-      status: record.status ?? null,
-      tech_serial_id: record.tech_serial_id ?? (record.source_kind === 'tech_serial' ? record.id : undefined),
-      source_row_id: record.source_row_id ?? null,
-      source_kind: record.source_kind ?? null,
-      fnsku: record.fnsku || null,
-      fnsku_log_id: record.fnsku_log_id ?? null,
-      sal_id: record.source_row_id ?? record.id,
-    };
-  };
-
-  const getDetailId = (record: TechRecord) => {
-    const detail = toDetailRecord(record);
-    return Number(detail.id ?? detail.shipment_id ?? record.id);
-  };
-
-
-  const openDetails = (record: TechRecord) => {
-    const detail = toDetailRecord(record);
-
-    const detailId = getDetailId(record);
-    if (selectedDetailId !== null && detailId === selectedDetailId) {
-      dispatchCloseShippedDetails();
-      setSelectedDetailId(null);
-      return;
-    }
-
-    window.dispatchEvent(new CustomEvent('open-shipped-details', { detail }));
-    setSelectedDetailId(detailId);
-  };
-
-  const filteredGroupedRecords = Object.fromEntries(
-    Object.entries(groupedRecords).filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
+  // Week-scoped day bands (newest day first, each day newest-first).
+  const daySections = useMemo<[string, TechRecord[]][]>(
+    () =>
+      Object.entries(groupedRecords)
+        .filter(([date]) => date >= weekRange.startStr && date <= weekRange.endStr)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([date, recs]) => [date, [...recs].sort(byNewestCreated)] as [string, TechRecord[]]),
+    [groupedRecords, weekRange.startStr, weekRange.endStr],
   );
+  const orderedRecords = useMemo(() => daySections.flatMap(([, recs]) => recs), [daySections]);
 
-  const orderedRecords = Object.entries(filteredGroupedRecords)
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .flatMap(([, dateRecords]) =>
-      [...dateRecords].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
-        return timeB - timeA;
-      })
-    );
+  const { openDetails, clearSelection } = useStationDetailsSelection<TechRecord>({
+    orderedRecords,
+    toDetailRecord: techRecordToDetail,
+    getDetailId: getTechDetailId,
+  });
 
-  useEffect(() => {
-    const handleNavigateDetails = (e: CustomEvent<{ direction?: 'up' | 'down' }>) => {
-      if (selectedDetailId === null || orderedRecords.length === 0) return;
-
-      const currentIndex = orderedRecords.findIndex((record) => getDetailId(record) === selectedDetailId);
-      if (currentIndex < 0) return;
-
-      const step = e.detail?.direction === 'up' ? -1 : 1;
-      const nextRecord = orderedRecords[currentIndex + step];
-      if (!nextRecord) return;
-
-      const nextDetail = toDetailRecord(nextRecord);
-      window.dispatchEvent(new CustomEvent('open-shipped-details', { detail: nextDetail }));
-      setSelectedDetailId(getDetailId(nextRecord));
-    };
-
-    window.addEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
-    return () => {
-      window.removeEventListener('navigate-shipped-details' as any, handleNavigateDetails as any);
-    };
-  }, [orderedRecords, selectedDetailId]);
-
-  useEffect(() => {
-    const handleTechLogRemoved = (e: any) => {
-      const sourceKind = String(e?.detail?.sourceKind || '').trim();
-      const sourceRowId = Number(e?.detail?.sourceRowId);
+  // A removed tech log drops out optimistically and closes any open detail.
+  useEventBridge({
+    'tech-log-removed': (e) => {
+      const detail = (e as CustomEvent<{ sourceKind?: unknown; sourceRowId?: unknown }>).detail;
+      const sourceKind = String(detail?.sourceKind || '').trim();
+      const sourceRowId = Number(detail?.sourceRowId);
       if (!sourceKind || !Number.isFinite(sourceRowId) || sourceRowId <= 0) return;
-
       setRemovedRowKeys((current) => {
         const next = new Set(current);
         next.add(`${sourceKind}:${sourceRowId}`);
         return next;
       });
-      setSelectedDetailId(null);
-    };
+      clearSelection();
+    },
+  });
 
-    window.addEventListener('tech-log-removed', handleTechLogRemoved as any);
-    return () => window.removeEventListener('tech-log-removed', handleTechLogRemoved as any);
-  }, []);
-
-  const getWeekCount = () =>
-    Object.values(filteredGroupedRecords).reduce((sum, recs) => sum + recs.length, 0);
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
-        <div className="h-10 bg-white border-b border-gray-100 flex items-center px-4">
-          <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
-        </div>
-        <div className="flex-1 overflow-y-auto no-scrollbar">
-          <SkeletonList count={12} />
-        </div>
-      </div>
-    );
-  }
+  const renderRow = useCallback(
+    (record: TechRecord, index: number) => (
+      <TechRecordRow key={getRowKey(record)} record={record} index={index} onOpen={openDetails} />
+    ),
+    [getRowKey, openDetails],
+  );
 
   return (
-    <div className="flex h-full w-full bg-white relative">
-      {isRefreshing && (
-        <div className="absolute right-2 top-2 z-30">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
-        </div>
-      )}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <WeekHeader
-          count={getWeekCount()}
-          weekRange={weekRange}
-          weekOffset={weekOffset}
-          onPrevWeek={() => setWeekOffset(weekOffset + 1)}
-          onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
-        />
-        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
-          {Object.keys(filteredGroupedRecords).length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-40 text-center">
-              <p className="text-gray-500 font-medium italic opacity-20">No tech records found</p>
-            </div>
-          ) : (
-            <div className="flex flex-col w-full">
-              {Object.entries(filteredGroupedRecords)
-                .sort((a, b) => b[0].localeCompare(a[0]))
-                .map(([date, dateRecords]) => {
-                  const sortedRecords = [...dateRecords].sort((a, b) => {
-                    const timeA = new Date(a.created_at || 0).getTime();
-                    const timeB = new Date(b.created_at || 0).getTime();
-                    return timeB - timeA;
-                  });
-                  return (
-                    <div key={date} className="flex flex-col">
-                      <DateGroupHeader date={date} total={dateRecords.length} />
-                      {sortedRecords.map((record, index) => {
-                        const displayValues = getOrderDisplayValues({
-                          sku: record.sku,
-                          condition: record.condition,
-                          trackingNumber: record.shipping_tracking_number,
-                        });
-                        const isFbaRow =
-                          record.account_source === 'fba' ||
-                          record.source_kind === 'fba_scan' ||
-                          String(record.order_id || '').toUpperCase() === 'FBA';
-                        const rawCondition = String(record.condition || '').trim();
-                        const conditionLabel = isFbaRow
-                          ? !rawCondition || /^fba\s*scan$/i.test(rawCondition)
-                            ? 'N/A'
-                            : rawCondition
-                          : displayValues.condition || 'No Condition';
-                        const fnskuValue = String(record.fnsku || '').trim();
-                        const isFnskuRow = Boolean(fnskuValue);
-                        const dotType = getSourceDotType({
-                          orderId: record.order_id,
-                          accountSource: record.account_source,
-                          trackingType: null,
-                          scanRef: record.shipping_tracking_number,
-                        });
-                        const hideOrderIdChip =
-                          isSkuSourceRecord({
-                            orderId: record.order_id,
-                            accountSource: record.account_source,
-                            trackingType: null,
-                            scanRef: record.shipping_tracking_number,
-                          }) || Boolean(record.has_sku_serial_source);
-                        return (
-                          <div
-                            key={getRowKey(record)}
-                            onClick={() => openDetails(record)}
-                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-1.5 transition-colors border-b border-gray-300 cursor-pointer hover:bg-blue-50/40 ${
-                              index % 2 === 0 ? 'bg-white' : 'bg-gray-50/10'
-                            }`}
-                          >
-                            <div className="flex flex-col min-w-0">
-                              <RowTitle
-                                dot={SOURCE_DOT_BG[dotType]}
-                                dotTitle={SOURCE_DOT_LABEL[dotType]}
-                                title={
-                                  hasUsableProductTitle(record.product_title)
-                                    ? normalizeProductTitle(record.product_title)
-                                    : 'Unknown Product'
-                                }
-                              />
-                              <RowMetaColumns
-                                qty={
-                                  <span className={(parseInt(String(record.quantity || '1'), 10) || 1) > 1 ? 'text-yellow-600' : undefined}>
-                                    {parseInt(String(record.quantity || '1'), 10) || 1}
-                                  </span>
-                                }
-                                condition={conditionLabel}
-                              />
-                            </div>
-                            {(() => {
-                              // Same fixed-column chip grid as the shipped table
-                              // so tech rows line up (platform / order-id /
-                              // tracking / serial); FNSKU rows take the
-                              // tracking+serial columns.
-                              const serialNode = <SerialChip value={record.serial_number || ''} width="w-fit max-w-full" />;
-                              if (isFnskuRow) {
-                                const fnskuColumns: ChipColumn[] = [
-                                  { key: 'platform', width: CHIP_COL.platform, node: null },
-                                  { key: 'orderid', width: CHIP_COL.id, node: null },
-                                  { key: 'tracking', width: CHIP_COL.tracking, node: <FnskuChip value={fnskuValue} /> },
-                                  { key: 'serial', width: CHIP_COL.serial, node: serialNode },
-                                ];
-                                return <ChipColumns columns={fnskuColumns} />;
-                              }
-                              const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
-                              const productUrl = getExternalUrlByItemNumber(
-                                String(record.item_number || '').trim() ||
-                                  skuScanPrefixBeforeColon(record.shipping_tracking_number),
-                              );
-                              const columns: ChipColumn[] = [
-                                {
-                                  key: 'platform',
-                                  width: CHIP_COL.platform,
-                                  node: (
-                                    <PlatformChip
-                                      label={plat}
-                                      underlineClass={getOrderPlatformBorderColor(plat)}
-                                      iconClass={plat && productUrl ? getOrderPlatformColor(plat) : 'text-gray-500'}
-                                      onClick={() => {
-                                        if (productUrl) window.open(productUrl, '_blank', 'noopener,noreferrer');
-                                      }}
-                                    />
-                                  ),
-                                },
-                                {
-                                  key: 'orderid',
-                                  width: CHIP_COL.id,
-                                  node: hideOrderIdChip ? (
-                                    <OrderIdChipPlaceholder />
-                                  ) : (
-                                    <OrderIdChip value={record.order_id || ''} display={getLast4(record.order_id)} />
-                                  ),
-                                },
-                                { key: 'tracking', width: CHIP_COL.tracking, node: <TrackingOrSkuScanChip value={record.shipping_tracking_number || ''} /> },
-                                { key: 'serial', width: CHIP_COL.serial, node: serialNode },
-                              ];
-                              return <ChipColumns columns={columns} />;
-                            })()}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <StationWeekTable
+      loading={loading}
+      isRefreshing={isRefreshing}
+      weekRange={weekRange}
+      weekOffset={weekOffset}
+      onPrevWeek={() => setWeekOffset(weekOffset + 1)}
+      onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
+      daySections={daySections}
+      emptyMessage="No tech records found"
+      scrollRef={scrollRef}
+      renderRow={renderRow}
+    />
   );
 }

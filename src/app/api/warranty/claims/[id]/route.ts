@@ -66,6 +66,7 @@ export const PATCH = withAuth(async (request, ctx) => {
   return idempotentJson({
     request,
     staffId: ctx.staffId ?? null,
+    orgId: ctx.organizationId,
     route: 'PATCH /api/warranty/claims/[id]',
     bodyKey: idempotencyKey ?? null,
     produce: async () => {

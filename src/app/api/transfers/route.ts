@@ -58,7 +58,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       body?.clientEventId ?? body?.idempotencyKey,
     );
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_TRANSFERS);
+      const cached = await getApiIdempotencyResponse(pool, orgId, idempotencyKey, ROUTE_TRANSFERS);
       if (cached) {
         return NextResponse.json(cached.response_body, { status: cached.status_code });
       }
@@ -66,6 +66,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const respond = async (payload: Record<string, unknown>, status = 200) => {
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId,
           idempotencyKey,
           route: ROUTE_TRANSFERS,
           staffId,

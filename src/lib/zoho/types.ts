@@ -250,3 +250,59 @@ export interface CreateInvoicePayload {
   notes?: string;
   custom_fields?: unknown[];
 }
+
+// Purchase-order / receive shapes. Moved here out of `./index` so the mock
+// provider can reference them without importing the client barrel (cycle).
+// `./index` re-exports all four for backwards compatibility.
+export interface ZohoPurchaseReceiveLine {
+  line_item_id: string;
+  quantity_received: number;
+  item_id?: string;
+}
+
+export interface ZohoPurchaseReceive {
+  purchase_receive_id: string;
+  purchaseorder_id?: string;
+  purchaseorder_number?: string;
+  date?: string;
+  status?: string;
+  vendor_name?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
+  line_items?: ZohoPurchaseReceiveLine[];
+}
+
+export interface ZohoPurchaseOrderLine {
+  line_item_id: string;
+  item_id: string;
+  name?: string;
+  description?: string;
+  sku?: string;
+  quantity?: number;
+  quantity_received?: number;
+  rate?: number;
+  total?: number;
+  unit?: string;
+  item_order?: number;
+  account_id?: string;
+}
+
+export interface ZohoPurchaseOrder {
+  purchaseorder_id: string;
+  purchaseorder_number?: string;
+  vendor_id?: string;
+  vendor_name?: string;
+  status?: string;
+  date?: string;
+  delivery_date?: string;
+  expected_delivery_date?: string;
+  total?: number;
+  sub_total?: number;
+  currency_code?: string;
+  warehouse_id?: string;
+  warehouse_name?: string;
+  line_items?: ZohoPurchaseOrderLine[];
+  notes?: string;
+  reference_number?: string;
+  bills?: Array<{ bill_id?: string; bill_number?: string; status?: string }>;
+}

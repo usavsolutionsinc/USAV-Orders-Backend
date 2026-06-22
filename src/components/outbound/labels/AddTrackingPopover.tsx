@@ -143,9 +143,12 @@ export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
           title="Add tracking number + complete this order"
-          className="inline-flex shrink-0 items-center transition-colors"
+          // `px-1.5` mirrors CopyChip's `outerPad='chip'` gutter so this empty
+          // state lines up flush with the filled TrackingChip in the ChipColumns
+          // grid (whose `-mr-1.5` cancels that same trailing gutter).
+          className="inline-flex shrink-0 items-center px-1.5 transition-colors"
         >
-          <AddValueChipFace label="Add TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} />
+          <AddValueChipFace label="Add TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} size="chip" />
         </button>
       </Popover.Trigger>
       <Popover.Portal>

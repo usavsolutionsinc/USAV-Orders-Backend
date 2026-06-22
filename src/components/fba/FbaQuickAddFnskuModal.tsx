@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, X } from '@/components/Icons';
-import { Layer } from '@/design-system';
+import { Layer } from '@/design-system/primitives/Layer';
 import { SidebarIntakeFormField } from '@/design-system/components';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import {
   StickyActionBar,
   type StickyActionMenuItem,
@@ -83,7 +84,7 @@ export function SelectionActionBar<T>({
           initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.18, ease: motionBezier.easeOut }}
           className="absolute inset-x-0 bottom-0 z-20"
         >
           <StickyActionBar

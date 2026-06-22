@@ -24,6 +24,14 @@ export const semanticColors = {
     warning: baseColors.orange[500],
     danger: baseColors.red[500],
   },
+  // Pastel functional fills for status pills (text-* + border-* + this surface
+  // = the classic pill look). Exposed as Tailwind `bg-surface-{tone}` aliases.
+  surfaceSubtle: {
+    success: baseColors.green[50],
+    warning: baseColors.orange[50],
+    danger: baseColors.red[50],
+    accent: baseColors.navy[50],
+  },
   surface: {
     background: baseColors.gray[50],
     containerLowest: baseColors.white,

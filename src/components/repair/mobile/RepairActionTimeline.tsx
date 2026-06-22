@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { repairActionTypeToneClass } from '@/lib/repair-action-type-tone';
 
 interface RepairAction {
   id: number;
@@ -40,15 +41,6 @@ const TYPE_EMOJI: Record<string, string> = {
   tested: '✅',
   no_fix: '❌',
   awaiting_part: '⏸',
-};
-
-const TYPE_TONE: Record<string, string> = {
-  replaced: 'bg-blue-50 border-blue-200',
-  repaired: 'bg-emerald-50 border-emerald-200',
-  cleaned: 'bg-sky-50 border-sky-200',
-  tested: 'bg-emerald-50 border-emerald-200',
-  no_fix: 'bg-rose-50 border-rose-200',
-  awaiting_part: 'bg-amber-50 border-amber-200',
 };
 
 function formatAgo(iso: string): string {
@@ -119,7 +111,7 @@ export function RepairActionTimeline({ repairId, refreshKey }: Props) {
       {actions.length > 0 && (
         <ul className="space-y-2">
           {actions.map((a) => {
-            const tone = TYPE_TONE[a.action_type] || 'bg-white border-slate-200';
+            const tone = repairActionTypeToneClass(a.action_type);
             const hasReplacement =
               a.action_type === 'replaced' && (a.old_sku || a.new_sku || a.old_serial || a.new_serial);
             return (

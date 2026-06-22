@@ -84,6 +84,7 @@ export async function PATCH(
       lastKnownCostCents: parsed.lastKnownCostCents !== undefined ? parsed.lastKnownCostCents : before.last_known_cost_cents,
       sourcingNotes: parsed.sourcingNotes !== undefined ? parsed.sourcingNotes : before.sourcing_notes,
       replenishTargetCents: parsed.replenishTargetCents !== undefined ? parsed.replenishTargetCents : before.replenish_target_cents,
+      notes: parsed.packNotes !== undefined ? parsed.packNotes : before.notes,
     }, gate.ctx.organizationId);
 
     await recordAudit(pool, gate.ctx, req, {

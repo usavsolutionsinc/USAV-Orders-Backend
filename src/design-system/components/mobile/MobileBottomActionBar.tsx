@@ -6,6 +6,7 @@ import { Search, X, Camera, Loader2, SlidersHorizontal } from '@/components/Icon
 import {
   framerPresenceMobile,
   framerTransitionMobile,
+  motionBezier,
 } from '../../foundations/motion-framer';
 import { useKeyboard } from '@/hooks/useKeyboard';
 
@@ -131,7 +132,7 @@ export function MobileBottomActionBar({
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.2, ease: motionBezier.easeOut }}
                 className="flex flex-1 items-center gap-2 min-w-0"
               >
                 <button

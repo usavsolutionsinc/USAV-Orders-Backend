@@ -12,6 +12,7 @@ import { getNode, hasNode, listNodeMeta } from '@/lib/workflow';
 import { runDiagnostics } from '@/lib/workflow/diagnostics';
 import { summarizeStations } from '@/lib/studio/station-diagnostics';
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
+import type { StudioGraphResponse } from '@/components/studio/studio-types';
 
 /**
  * GET /api/studio/graph?v=<definitionId>
@@ -53,8 +54,25 @@ export const GET = withAuth(
         : definitions.find((d) => d.isActive) ?? definitions[0] ?? null;
 
       if (!definition) {
-        return NextResponse.json({ ok: true, definitions, definition: null, nodes: [], edges: [] });
+        return NextResponse.json({
+          ok: true,
+          definitions,
+          definition: null,
+          nodes: [],
+          edges: [],
+          annotations: [],
+        });
       }
+
+      // Canvas sticky-note annotations (Phase E3) ride on the definition row —
+      // a separate slim SELECT keeps the list query (above) lean. The column is
+      // a JSONB array of { id, text, x, y, color? }; default '[]'.
+      const annRows = await db
+        .select({ annotations: workflowDefinitions.annotations })
+        .from(workflowDefinitions)
+        .where(eq(workflowDefinitions.id, definition.id))
+        .limit(1);
+      const annotations = (annRows[0]?.annotations ?? []) as StudioGraphResponse['annotations'];
 
       const [nodeRows, edgeRows] = await Promise.all([
         db
@@ -129,12 +147,12 @@ export const GET = withAuth(
         stationsByNode: summarizeStations(stationRows),
       });
 
-      return NextResponse.json({ ok: true, definitions, definition, nodes, edges, palette, diagnostics });
+      return NextResponse.json({ ok: true, definitions, definition, nodes, edges, annotations, palette, diagnostics });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'studio graph failed';
       console.error('[GET /api/studio/graph] error:', err);
       return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
   },
-  { permission: 'studio.view' },
+  { permission: 'studio.view', feature: 'studio' },
 );

@@ -1,4 +1,5 @@
 import { getCurrentPSTDateKey, toPSTDateKey, getDaysLateNumber, getDaysLateTone } from '@/utils/date';
+import { conditionTextColor } from '@/lib/conditions';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { Order, RepairQueueItem, FBAQueueItem } from '@/components/station/upnext/upnext-types';
 
@@ -37,12 +38,8 @@ export { getDaysLateNumber, getDaysLateTone };
 
 // ─── Condition helpers ──────────────────────────────────────────────────────
 
-export function getConditionColor(condition: string | null | undefined) {
-  const c = (condition || '').toLowerCase().trim();
-  if (c.includes('new')) return 'text-yellow-500';
-  if (c.includes('part')) return 'text-amber-800';
-  return 'text-black';
-}
+/** @deprecated thin re-export of `conditionTextColor` (SoT in lib/conditions). */
+export const getConditionColor = conditionTextColor;
 
 export function stripConditionPrefix(title: string | null | undefined, condition: string | null | undefined) {
   const t = (title || '').trimStart();

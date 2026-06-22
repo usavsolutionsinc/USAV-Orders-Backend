@@ -68,6 +68,19 @@ async function resolveForOrg(orgId: OrgId, flag: string, envVar: string): Promis
   return readBoolEnv(envVar);
 }
 
+/**
+ * Public reader for a per-org override flag with no env fallback. Returns the
+ * stored boolean, or `null` when the org has no row for `flag` (so callers can
+ * distinguish "explicitly off" from "unset"). Shares the same 30s cache as
+ * resolveForOrg and is fail-open (returns null, logged) on a DB error.
+ *
+ * Used by the Studio entitlement gate to honor a force-grant override
+ * (organization_feature_flags(flag='studio')) alongside the plan catalog.
+ */
+export async function readOrgFeatureFlag(orgId: OrgId, flag: string): Promise<boolean | null> {
+  return readOrgFlag(orgId, flag);
+}
+
 export function invalidateFeatureFlagCache(orgId?: OrgId, flag?: string): void {
   if (!orgId) {
     flagCache.clear();
@@ -150,5 +163,25 @@ export function isReceivingUnifiedInbound(): boolean {
  */
 export function isUnifiedEngineApplyTransition(): boolean {
   return readBoolEnv('UNIFIED_ENGINE_APPLY_TRANSITION');
+}
+
+/**
+ * Unified-engine fulfillment-tail taps (UNIFIED-ENGINE-MASTER-PLAN §1.4). When
+ * ON, the domain mutations that finish the lifecycle fire their engine taps so a
+ * unit flows past the dormant tail of the graph:
+ *   - /api/serial-units/[id]/list → tapWorkflow('listed')   (list_ebay → pack)
+ *   - /api/pack/ship              → tapWorkflow('packed')   (pack → ship node)
+ *                                 → tapWorkflow('shipped')  (ship → done; terminal)
+ * All are fire-and-forget observers (tapWorkflow never throws, drops unenrolled
+ * units), so this only advances the engine's graph position — it changes no
+ * domain state. The irreversible carrier custody already commits in the pack/ship
+ * transaction; the 'shipped' tap merely records the unit reached the terminal
+ * node. Default OFF: until flipped, the listing fact is still recorded and the
+ * pack still ships, but the engine isn't told, exactly as today. Enable once the
+ * serial_unit_listings migration is applied and parity is verified. Set
+ * UNIFIED_ENGINE_FULFILLMENT_TAPS=true to enable.
+ */
+export function isUnifiedEngineFulfillmentTaps(): boolean {
+  return readBoolEnv('UNIFIED_ENGINE_FULFILLMENT_TAPS');
 }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import {
   claimPendingJobs,
   completePhotoJob,
@@ -25,35 +26,41 @@ export async function GET(request: NextRequest) {
   const limit = Number(new URL(request.url).searchParams.get('limit') || 20);
 
   try {
-    const summary = await withCronRun('photos.nas_mirror', async () => {
-      const candidates = await selectPhotosForNasMirror(limit);
-      for (const c of candidates) {
-        await enqueuePhotoJob({
-          photoId: c.photoId,
-          organizationId: c.organizationId,
-          jobType: 'nas_mirror',
-        });
-      }
-
-      const jobs = await claimPendingJobs('nas_mirror', limit);
-      let completed = 0;
-      let failed = 0;
-      for (const job of jobs) {
-        try {
-          await runNasMirrorJob(job);
-          await completePhotoJob(job.id);
-          completed++;
-        } catch (err) {
-          failed++;
-          await failPhotoJob(
-            job.id,
-            err instanceof Error ? err.message : 'nas mirror failed',
-            job.attempts,
-          );
+    const locked = await withCronLock('photos.nas_mirror', () =>
+      withCronRun('photos.nas_mirror', async () => {
+        const candidates = await selectPhotosForNasMirror(limit);
+        for (const c of candidates) {
+          await enqueuePhotoJob({
+            photoId: c.photoId,
+            organizationId: c.organizationId,
+            jobType: 'nas_mirror',
+          });
         }
-      }
-      return { candidates: candidates.length, claimed: jobs.length, completed, failed };
-    });
+
+        const jobs = await claimPendingJobs('nas_mirror', limit);
+        let completed = 0;
+        let failed = 0;
+        for (const job of jobs) {
+          try {
+            await runNasMirrorJob(job);
+            await completePhotoJob(job.id);
+            completed++;
+          } catch (err) {
+            failed++;
+            await failPhotoJob(
+              job.id,
+              err instanceof Error ? err.message : 'nas mirror failed',
+              job.attempts,
+            );
+          }
+        }
+        return { candidates: candidates.length, claimed: jobs.length, completed, failed };
+      }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
     return NextResponse.json({ success: true, ...summary });
   } catch (err: unknown) {
     console.error('[cron/photos/nas-mirror]', err);

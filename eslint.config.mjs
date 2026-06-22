@@ -188,6 +188,12 @@ export default [
 
   {
     files: ['**/*.test.*', '**/*.spec.*', 'tests/**/*'],
+    // Tests are TypeScript — parse with tsParser so type annotations don't trip
+    // the default (espree) parser when these files are linted directly.
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
     rules: {
       'no-console': 'off',
       'unused-imports/no-unused-imports': 'warn',

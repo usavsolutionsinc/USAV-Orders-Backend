@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import pool from '@/lib/db';
 import { isWarrantyLogger } from '@/lib/feature-flags';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /** Shared 503 when the feature flag is off. */
 export function warrantyFlagOff(): NextResponse {
@@ -32,6 +33,7 @@ export function claimIdFromPath(request: NextRequest, fromEnd = 1): number | nul
  */
 export async function idempotentJson(args: {
   request: NextRequest;
+  orgId: OrgId;
   staffId: number | null;
   route: string;
   bodyKey?: string | null;
@@ -40,7 +42,7 @@ export async function idempotentJson(args: {
   const idempotencyKey = readIdempotencyKey(args.request, args.bodyKey ?? null);
   const out = await withIdempotentResponse(
     pool,
-    { idempotencyKey, route: args.route, staffId: args.staffId },
+    { orgId: args.orgId, idempotencyKey, route: args.route, staffId: args.staffId },
     args.produce,
   );
   return NextResponse.json(out.body, { status: out.status });

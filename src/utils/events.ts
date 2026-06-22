@@ -1,6 +1,7 @@
-import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/types/orders';
 import type { Order } from '@/components/station/upnext/upnext-types';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import type { ReceivingDetailsLog } from '@/components/station/receiving-details-log';
 
 export function dispatchDashboardAndStationRefresh(): void {
   if (typeof window === 'undefined') return;
@@ -165,7 +166,7 @@ export function dispatchReceivingWorkspaceNavState(
 export type ReceivingDetailsOverlayDetail = {
   receivingId: number;
   /** Row/list fields for instant overlay render before the enrich fetch lands. */
-  seed?: Partial<import('@/components/station/ReceivingDetailsStack').ReceivingDetailsLog>;
+  seed?: Partial<ReceivingDetailsLog>;
 };
 
 /**

@@ -70,6 +70,17 @@ export interface ZohoCredentials {
   refreshToken: string;
   orgId: string;
   domain?: string;
+  /**
+   * Per-tenant webhook identity (Wave 3). Minted when the org connects Zoho:
+   *   - webhookToken  — opaque, unguessable id used in the per-tenant webhook
+   *     URL (/api/zoho/webhooks/{webhookToken}); also mirrored to the indexed
+   *     organization_integrations.webhook_token column for O(1) token→org lookup.
+   *   - webhookSecret — this org's OWN HMAC signing secret; the delivery is
+   *     verified against it, so a forged body cannot cross tenants.
+   * Both optional for back-compat with USAV's pre-Wave-3 env-secret connection.
+   */
+  webhookToken?: string;
+  webhookSecret?: string;
 }
 
 export interface UpsCredentials { clientId: string; clientSecret: string; webhookSecret?: string }

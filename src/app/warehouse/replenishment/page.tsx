@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { replenishmentStatusBadgeClass } from '@/lib/replenishment-status';
 
 interface TaskRow {
   id: number;
@@ -22,13 +23,6 @@ interface TaskRow {
   assignedStaffId: number | null;
   qtyMoved: number | null;
 }
-
-const STATUS_TONE: Record<TaskRow['status'], string> = {
-  REQUESTED:   'bg-amber-100   text-amber-800  border-amber-200',
-  IN_PROGRESS: 'bg-blue-100    text-blue-800   border-blue-200',
-  COMPLETE:    'bg-emerald-100 text-emerald-800 border-emerald-200',
-  CANCELED:    'bg-slate-100   text-slate-600  border-slate-200',
-};
 
 export default function ReplenishmentPage() {
   const [tasks, setTasks] = useState<TaskRow[] | null>(null);
@@ -208,7 +202,7 @@ function Section({ title, count, tone, tasks, actionLabel, onAction, onCancel, w
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-sm font-bold text-slate-900">{t.sku}</span>
                   <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${STATUS_TONE[t.status]}`}
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${replenishmentStatusBadgeClass(t.status)}`}
                   >
                     {t.status.replace('_', ' ')}
                   </span>

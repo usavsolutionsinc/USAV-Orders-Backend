@@ -1,0 +1,97 @@
+// Template: collection route (non-dynamic) — src/app/api/<<segments>>/route.ts
+// Uses withAuth(). Replace <<...>> placeholders. Delete methods you don't need.
+import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
+import { parseBody } from '@/lib/schemas/parse';
+import { <<DomainCreateBody>> } from '@/lib/schemas/<<feature>>';
+import {
+  getApiIdempotencyResponse,
+  readIdempotencyKey,
+  saveApiIdempotencyResponse,
+} from '@/lib/api-idempotency';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { <<listFn>>, <<createFn>> } from '@/lib/<<domain-module>>';
+import pool from '@/lib/db';
+
+// Stable key for API-idempotency replay rows. Keep unique per route+method.
+const ROUTE_<<FEATURE>>_POST = '<<feature>>.post';
+
+/**
+ * GET /api/<<segments>> — <<one-line summary>>.
+ */
+export const GET = withAuth(async (req: NextRequest, ctx) => {
+  try {
+    const { searchParams } = new URL(req.url);
+    const q = searchParams.get('q') || '';
+    const limit = Math.max(1, Math.min(500, Number(searchParams.get('limit') || 100)));
+    const offset = Math.max(0, Number(searchParams.get('offset') || 0));
+
+    // orgId from the auth context — never the body.
+    const { items, total } = await <<listFn>>({ q, limit, offset }, ctx.organizationId);
+
+    return NextResponse.json({ success: true, items, total });
+  } catch (error: any) {
+    console.error('Error in GET /api/<<segments>>:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to fetch' },
+      { status: 500 },
+    );
+  }
+}, { permission: '<<read.permission>>' });
+
+/**
+ * POST /api/<<segments>> — create. A retried create with the same
+ * Idempotency-Key replays the original 201 instead of colliding.
+ */
+export const POST = withAuth(async (req: NextRequest, ctx) => {
+  try {
+    const raw = await req.json().catch(() => ({}));
+    const parsed = parseBody(<<DomainCreateBody>>, raw);
+    if (parsed instanceof NextResponse) return parsed;
+
+    // ── Idempotency replay ──────────────────────────────────────────────────
+    const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
+    if (idemKey) {
+      const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE_<<FEATURE>>_POST);
+      if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
+    }
+
+    // Delegate to the domain helper (business logic lives in src/lib/**).
+    const created = await <<createFn>>(parsed, ctx.organizationId);
+    // 409 example: if (existing) return NextResponse.json({ success:false, error:'…' }, { status:409 });
+
+    await recordAudit(pool, ctx, req, {
+      source: '<<feature>>-api',
+      action: AUDIT_ACTION.<<VERB_CREATE>>,
+      entityType: AUDIT_ENTITY.<<TYPE>>,
+      entityId: created.id,
+      after: { ...created },
+    });
+
+    const responseBody = { success: true, item: created };
+    if (idemKey) {
+      await saveApiIdempotencyResponse(pool, {
+        orgId: ctx.organizationId,
+        idempotencyKey: idemKey,
+        route: ROUTE_<<FEATURE>>_POST,
+        staffId: ctx.staffId,
+        statusCode: 201,
+        responseBody,
+      });
+    }
+
+    // Fire-and-forget side-effects (Zoho sync, Ably emit) — never block the response:
+    // after(() => emitChange(created.id));
+
+    return NextResponse.json(responseBody, { status: 201 });
+  } catch (error: any) {
+    if (error?.code === '23505' || /unique/i.test(error?.message || '')) {
+      return NextResponse.json({ success: false, error: 'Already exists' }, { status: 409 });
+    }
+    console.error('Error in POST /api/<<segments>>:', error);
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to create' },
+      { status: 500 },
+    );
+  }
+}, { permission: '<<write.permission>>' });

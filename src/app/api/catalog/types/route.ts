@@ -42,7 +42,7 @@ export const POST = withAuth(
 
       const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
       if (idemKey) {
-        const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE_TYPES_POST);
+        const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE_TYPES_POST);
         if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
       }
 
@@ -74,6 +74,7 @@ export const POST = withAuth(
       const responseBody = { success: true, type };
       if (idemKey) {
         await saveApiIdempotencyResponse(pool, {
+          orgId: ctx.organizationId,
           idempotencyKey: idemKey,
           route: ROUTE_TYPES_POST,
           staffId: ctx.staffId,

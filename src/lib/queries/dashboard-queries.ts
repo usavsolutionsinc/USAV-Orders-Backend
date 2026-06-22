@@ -32,6 +32,8 @@ export interface OrderQueryParams {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  /** Universal staff filter (P1-WORK-02): one staff's assigned work, or all. */
+  staffId?: number;
   strictSearchScope?: boolean;
 }
 
@@ -40,6 +42,8 @@ export interface ShippedQueryParams {
   weekEnd?: string;
   packedBy?: number;
   testedBy?: number;
+  /** Universal staff filter (P1-WORK-02): packed_by OR tested_by this staff. */
+  staffId?: number;
   shippedFilter?: string;
 }
 
@@ -68,11 +72,12 @@ export function unshippedOrdersQuery({
   searchQuery = '',
   packedBy,
   testedBy,
+  staffId,
   strictSearchScope = false,
 }: OrderQueryParams = {}) {
   return queryOptions({
-    queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, strictSearchScope }],
-    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, strictSearchScope }),
+    queryKey: ['dashboard-table', 'unshipped', { searchQuery, packedBy, testedBy, staffId, strictSearchScope }],
+    queryFn: () => fetchUnshippedOrdersData({ searchQuery, packedBy, testedBy, staffId, strictSearchScope }),
     staleTime: 60_000,
     gcTime: 15 * 60 * 1000,
   });
@@ -84,12 +89,13 @@ export function dashboardShippedQuery({
   weekEnd,
   packedBy,
   testedBy,
+  staffId,
   shippedFilter,
 }: ShippedQueryParams = {}) {
   return queryOptions({
-    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, shippedFilter }],
+    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter }],
     queryFn: () =>
-      fetchDashboardPackedRecords({ packedBy, testedBy, weekStart, weekEnd, shippedFilter }),
+      fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });

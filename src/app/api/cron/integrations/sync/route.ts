@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { runOrdersSyncAllOrgs } from '@/lib/integrations/connectors/orchestrator';
 import type { IntegrationProvider } from '@/lib/integrations/credentials';
 
@@ -23,12 +24,18 @@ export async function GET(req: NextRequest) {
   const only = param
     ? (param.split(',').map((s) => s.trim()).filter(Boolean) as IntegrationProvider[])
     : undefined;
-  const summary = await withCronRun('integrations.orders_sync', async () => {
-    const results = await runOrdersSyncAllOrgs(only);
-    const imported = results.reduce((s, r) => s + (r.outcome.imported ?? 0), 0);
-    const updated = results.reduce((s, r) => s + (r.outcome.updated ?? 0), 0);
-    const failures = results.filter((r) => !r.outcome.ok).length;
-    return { ran: results.length, imported, updated, failures, results };
-  });
+  const locked = await withCronLock('integrations.orders_sync', () =>
+    withCronRun('integrations.orders_sync', async () => {
+      const results = await runOrdersSyncAllOrgs(only);
+      const imported = results.reduce((s, r) => s + (r.outcome.imported ?? 0), 0);
+      const updated = results.reduce((s, r) => s + (r.outcome.updated ?? 0), 0);
+      const failures = results.filter((r) => !r.outcome.ok).length;
+      return { ran: results.length, imported, updated, failures, results };
+    }),
+  );
+  if (!locked.ran) {
+    return NextResponse.json({ ok: true, skipped: 'locked' });
+  }
+  const summary = locked.result!;
   return NextResponse.json({ ok: true, summary });
 }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectNextTarget, type WorkflowEdgeLike } from './router';
+import { findPortFanOuts, selectNextTarget, type WorkflowEdgeLike } from './router';
 
 const edges: WorkflowEdgeLike[] = [
   { sourceNode: 'inspect', sourcePort: 'pass', targetNode: 'ship' },
@@ -26,4 +26,21 @@ test('selectNextTarget is deterministic: first matching edge wins', () => {
     { sourceNode: 'a', sourcePort: 'out', targetNode: 'second' },
   ];
   assert.equal(selectNextTarget(dup, 'a', 'out'), 'first');
+});
+
+test('findPortFanOuts flags a port with multiple outbound edges (ambiguity)', () => {
+  const fans = findPortFanOuts([
+    { sourceNode: 'a', sourcePort: 'out', targetNode: 'first' },
+    { sourceNode: 'a', sourcePort: 'out', targetNode: 'second' },
+  ]);
+  assert.equal(fans.length, 1);
+  assert.equal(fans[0].sourceNode, 'a');
+  assert.equal(fans[0].sourcePort, 'out');
+  assert.deepEqual(fans[0].targets, ['first', 'second']); // edge order — first wins at runtime
+});
+
+test('findPortFanOuts is quiet when each port has exactly one edge', () => {
+  // The seeded refurb-v1 shape fans on DIFFERENT ports (pass/fail) — not ambiguous.
+  assert.deepEqual(findPortFanOuts(edges), []);
+  assert.deepEqual(findPortFanOuts([]), []);
 });

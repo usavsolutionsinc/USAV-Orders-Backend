@@ -16,7 +16,7 @@
  * editing — blocks render real data from the draft config as you compose.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,27 +28,18 @@ import {
   stationDefinitionsQuery,
   invalidateStationDefinitions,
 } from '@/lib/queries/station-queries';
-import {
-  DndContext,
-  closestCenter,
-  type DragEndEvent,
-  PointerSensor,
-  KeyboardSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
+import { DndContext, closestCenter } from '@dnd-kit/core';
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { BlockRenderer } from './BlockRenderer';
 import { BlockPaletteOverlay } from './BlockPaletteOverlay';
 import { BlockConfigSheet } from './BlockConfigSheet';
 import { StationIcon } from './station-icons';
+import { slotInstances, useStationEditor } from './useStationEditor';
 
 // ── Sortable block row (edit mode only) ──────────────────────────────────────
 
@@ -117,15 +108,6 @@ interface StationSlotProps {
   stationLabel: string;
 }
 
-function slotInstances(config: StationConfig | undefined, slot: SlotId): BlockInstanceConfig[] {
-  if (!config || config.slots === 'legacy') return [];
-  return config.slots[slot] ?? [];
-}
-
-function newInstanceId(): string {
-  return `blk_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlotProps) {
   const { has } = useAuth();
   const queryClient = useQueryClient();
@@ -135,102 +117,14 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
   const active = data?.definitions.find((d) => d.modeKey === modeKey);
   const serverDraft = data?.drafts.find((d) => d.modeKey === modeKey);
 
-  // ── Edit state ────────────────────────────────────────────────────────────
-  const [editing, setEditing] = useState(false);
-  const [draftConfig, setDraftConfig] = useState<StationConfig | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  const [configuring, setConfiguring] = useState<BlockInstanceConfig | null>(null);
-
-  const enterEdit = useCallback(() => {
-    const base = serverDraft?.config ?? active?.config ?? { slots: {} };
-    setDraftConfig(structuredClone(base));
-    setDirty(false);
-    setEditing(true);
-  }, [serverDraft, active]);
-
-  const exitEdit = useCallback(() => {
-    if (dirty && !window.confirm('Discard unsaved block changes?')) return;
-    setEditing(false);
-    setDraftConfig(null);
-    setDirty(false);
-    setPaletteOpen(false);
-    setConfiguring(null);
-  }, [dirty]);
-
-  const patchSlot = useCallback(
-    (mutate: (instances: BlockInstanceConfig[]) => BlockInstanceConfig[]) => {
-      setDraftConfig((prev) => {
-        const base: StationConfig = prev && prev.slots !== 'legacy' ? prev : { slots: {} };
-        const slots = base.slots === 'legacy' ? {} : { ...base.slots };
-        return { slots: { ...slots, [slot]: mutate(slots[slot] ?? []) } };
-      });
-      setDirty(true);
-    },
-    [slot],
+  // ── Persistence: the page-bound /api/stations endpoints ─────────────────────
+  const getBaseConfig = useCallback(
+    (): StationConfig => serverDraft?.config ?? active?.config ?? { slots: {} },
+    [serverDraft, active],
   );
 
-  const addBlock = useCallback(
-    (blockType: string) => {
-      const instance: BlockInstanceConfig = { id: newInstanceId(), block: blockType };
-      setPaletteOpen(false);
-      patchSlot((list) => [...list, instance]);
-      // Dropping never creates a "blank" block — straight into config.
-      setConfiguring(instance);
-    },
-    [patchSlot],
-  );
-
-  const applyInstance = useCallback(
-    (updated: BlockInstanceConfig) => {
-      patchSlot((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-    },
-    [patchSlot],
-  );
-
-  const removeInstance = useCallback(
-    (id: string) => patchSlot((list) => list.filter((i) => i.id !== id)),
-    [patchSlot],
-  );
-
-  const moveInstance = useCallback(
-    (id: string, dir: -1 | 1) =>
-      patchSlot((list) => {
-        const idx = list.findIndex((i) => i.id === id);
-        const next = idx + dir;
-        if (idx < 0 || next < 0 || next >= list.length) return list;
-        const copy = [...list];
-        [copy[idx], copy[next]] = [copy[next], copy[idx]];
-        return copy;
-      }),
-    [patchSlot],
-  );
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const onDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      patchSlot((list) => {
-        const oldIdx = list.findIndex((i) => i.id === active.id);
-        const newIdx = list.findIndex((i) => i.id === over.id);
-        if (oldIdx < 0 || newIdx < 0) return list;
-        return arrayMove(list, oldIdx, newIdx);
-      });
-    },
-    [patchSlot],
-  );
-
-  const saveDraft = useCallback(async (): Promise<number | null> => {
-    if (!draftConfig) return null;
-    setSaving(true);
-    try {
+  const onSaveDraft = useCallback(
+    async (config: StationConfig): Promise<number | null> => {
       const res = await fetch('/api/stations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -238,7 +132,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
           pageKey,
           modeKey,
           label: serverDraft?.label ?? active?.label ?? stationLabel,
-          config: draftConfig,
+          config,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -246,22 +140,14 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
         const issue = json?.issues?.[0]?.message;
         throw new Error(issue || json?.error || `Save failed (${res.status})`);
       }
-      setDirty(false);
       invalidateStationDefinitions(queryClient, pageKey);
       return json.draft?.id ?? null;
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save the draft');
-      return null;
-    } finally {
-      setSaving(false);
-    }
-  }, [draftConfig, pageKey, modeKey, serverDraft, active, stationLabel, queryClient]);
+    },
+    [pageKey, modeKey, serverDraft, active, stationLabel, queryClient],
+  );
 
-  const publish = useCallback(async () => {
-    setPublishing(true);
-    try {
-      const draftId = await saveDraft();
-      if (draftId == null) return;
+  const onPublish = useCallback(
+    async (draftId: number): Promise<boolean> => {
       const res = await fetch('/api/stations/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -274,23 +160,39 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
       }
       invalidateStationDefinitions(queryClient, pageKey);
       toast.success('Station published — staff pick it up on their next visit.');
-      setEditing(false);
-      setDraftConfig(null);
-      setDirty(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not publish');
-    } finally {
-      setPublishing(false);
-    }
-  }, [saveDraft, queryClient, pageKey]);
-
-  // ── Render ────────────────────────────────────────────────────────────────
-  const instances = useMemo(
-    () => (editing ? slotInstances(draftConfig ?? undefined, slot) : slotInstances(active?.config, slot)),
-    [editing, draftConfig, active, slot],
+      return true;
+    },
+    [queryClient, pageKey],
   );
 
-  const sortableIds = useMemo(() => instances.map((i) => i.id), [instances]);
+  const editor = useStationEditor({ slot, getBaseConfig, onSaveDraft, onPublish });
+  const {
+    editing,
+    saving,
+    publishing,
+    paletteOpen,
+    configuring,
+    sortableIds,
+    sensors,
+    enterEdit,
+    exitEdit,
+    openPalette,
+    closePalette,
+    setConfiguring,
+    addBlock,
+    applyInstance,
+    removeInstance,
+    onDragEnd,
+    saveDraft,
+    publish,
+  } = editor;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  // While editing, render the working copy; otherwise the live (active) config.
+  const instances = useMemo(
+    () => (editing ? editor.instances : slotInstances(active?.config, slot)),
+    [editing, editor.instances, active, slot],
+  );
 
   // Nothing configured and the viewer can't customize → invisible mount.
   if (!editing && instances.length === 0 && !canManage) return null;
@@ -356,7 +258,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
         {editing ? (
           <button
             type="button"
-            onClick={() => setPaletteOpen(true)}
+            onClick={openPalette}
             className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-white px-2 py-2 text-caption font-bold text-gray-500 transition-colors hover:border-blue-400 hover:text-blue-600"
           >
             <Plus className="h-3.5 w-3.5" /> Add block
@@ -378,7 +280,7 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
       <BlockPaletteOverlay
         open={paletteOpen}
         slot={slot}
-        onClose={() => setPaletteOpen(false)}
+        onClose={closePalette}
         onPick={addBlock}
       />
       <BlockConfigSheet

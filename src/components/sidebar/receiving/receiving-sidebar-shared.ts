@@ -16,7 +16,7 @@ import {
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { SOURCE_PLATFORMS } from '@/lib/source-platform';
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
@@ -599,3 +599,55 @@ export const CLAIM_SEVERITY_OPTIONS: ReadonlyArray<{
   { value: 'medium', label: 'Medium', active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
   { value: 'high',   label: 'High',   active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
 ];
+
+/**
+ * Synthesize a ReceivingLineRow for an unmatched carton that has no
+ * receiving_lines rows yet (operator just scanned the tracking; no items
+ * added). UnfoundLineEditPanel only needs receiving_id + receiving_source
+ * to do its work — the rest are placeholders so the row typechecks for
+ * the shared workspace event payload. Mirrors the unmatched-stub shape in
+ * src/app/api/receiving-lines/route.ts.
+ *
+ * `id` is negated so it can't collide with a real receiving_lines.id when
+ * keying motion components downstream.
+ */
+export function buildUnmatchedStubRow(
+  receivingId: number,
+  trackingNumber: string,
+): ReceivingLineRow {
+  return {
+    id: -receivingId,
+    receiving_id: receivingId,
+    tracking_number: trackingNumber,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: null,
+    zoho_purchaseorder_number: null,
+    item_name: null,
+    sku: null,
+    quantity_received: 0,
+    quantity_expected: null,
+    qa_status: 'PENDING',
+    workflow_status: null,
+    disposition_code: 'HOLD',
+    // Leave empty so the workspace stepper's "Condition" step does NOT
+    // auto-mark itself done — the DB column defaults to 'BRAND_NEW' but
+    // for the synthetic carton stub the operator hasn't actively chosen
+    // a grade yet.
+    condition_grade: '',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: 'PO',
+    notes: null,
+    created_at: null,
+    image_url: null,
+    source_platform: null,
+    receiving_source: 'unmatched',
+  };
+}

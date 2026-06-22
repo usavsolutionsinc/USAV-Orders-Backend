@@ -49,15 +49,21 @@ import { getDbTableChannelName, safeChannelName } from '@/lib/realtime/channels'
 import { runDiagnostics } from '@/lib/workflow/diagnostics';
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
 import type {
+  Annotation,
   Diagnostic,
+  PeopleNodeCoverage,
+  StudioFlowResponse,
   StudioGraphEdge,
   StudioGraphNode,
   StudioGraphResponse,
   StudioLens,
   StudioLiveNode,
   StudioLiveResponse,
+  StudioPeopleResponse,
   StudioStationResponse,
   StudioStationView,
+  StudioTemplateSummary,
+  StudioTemplatesResponse,
   StudioZoom,
 } from './studio-types';
 
@@ -70,7 +76,7 @@ const EMPTY_FLOW: ReadonlySet<string> = new Set();
 
 const STATION_KEYS = new Set(STATIONS.map((s) => s.key));
 
-type Busy = null | 'saving' | 'publishing' | 'drafting';
+type Busy = null | 'saving' | 'publishing' | 'drafting' | 'discarding';
 
 export interface StudioWorkspaceValue {
   /** Whether the user is currently on the /studio route (provider is active). */
@@ -88,6 +94,8 @@ export interface StudioWorkspaceValue {
   error: string | null;
   nodes: StudioGraphNode[];
   edges: StudioGraphEdge[];
+  /** Canvas sticky-notes (Phase E3) — working copy while editing, else the published set. */
+  annotations: Annotation[];
   palette: StudioGraphResponse['palette'];
   diagnostics: Diagnostic[];
   focusedNode: StudioGraphNode | null;
@@ -97,9 +105,20 @@ export interface StudioWorkspaceValue {
   liveNodes: Record<string, StudioLiveNode> | null;
   flowEdges: ReadonlySet<string>;
 
+  // ─── Flow² lens ───
+  flow: StudioFlowResponse | null;
+  flowLoading: boolean;
+
+  // ─── People lens ───
+  people: StudioPeopleResponse | null;
+  peopleNodes: Record<string, PeopleNodeCoverage> | null;
+  peopleLoading: boolean;
+
   // ─── L2 station detail ───
   station: StudioStationView | null;
   stationLoading: boolean;
+  /** Force-refetch the focused node's bound station (after an L2 edit/publish). */
+  reloadStation: () => void;
 
   // ─── Draft editing state (ST4) ───
   canManage: boolean;
@@ -109,14 +128,27 @@ export interface StudioWorkspaceValue {
   busy: Busy;
   actionError: string | null;
 
+  // ─── Template library (ST6 / Phase E4) ───
+  templates: StudioTemplateSummary[];
+  /** The template currently being imported (a clone is in flight), else null. */
+  importingTemplateId: number | null;
+
   // ─── Handlers ───
   onGraphChange: (patch: { nodes?: StudioGraphNode[]; edges?: StudioGraphEdge[] }) => void;
   onAddNode: (type: string) => void;
   onUpdateNodeConfig: (nodeId: string, patch: Record<string, unknown>) => void;
   onDeleteNode: (nodeId: string) => void;
+  // ─── Annotation CRUD (Phase E3) — draft-only sticky-note edits ───
+  onAddAnnotation: () => void;
+  onMoveAnnotation: (id: string, x: number, y: number) => void;
+  onUpdateAnnotationText: (id: string, text: string) => void;
+  onDeleteAnnotation: (id: string) => void;
   createDraft: () => Promise<void>;
   saveDraft: () => Promise<boolean>;
   publish: () => Promise<void>;
+  discardDraft: () => Promise<void>;
+  /** Clone a system template into the org as a new draft, then switch to it. */
+  importTemplate: (templateId: number) => Promise<void>;
 }
 
 const StudioWorkspaceContext = createContext<StudioWorkspaceValue | undefined>(undefined);
@@ -136,19 +168,31 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
   const zParam: StudioZoom = zRaw === '0' ? 0 : zRaw === '2' ? 2 : 1;
   const lensRaw = searchParams.get('lens');
   const lens: StudioLens =
-    lensRaw === 'live' || lensRaw === 'gaps' || lensRaw === 'static' ? lensRaw : 'build';
+    lensRaw === 'live' ||
+    lensRaw === 'gaps' ||
+    lensRaw === 'static' ||
+    lensRaw === 'flow' ||
+    lensRaw === 'people'
+      ? lensRaw
+      : 'build';
 
   const [graph, setGraph] = useState<StudioGraphResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<StudioLiveResponse | null>(null);
+  const [flow, setFlow] = useState<StudioFlowResponse | null>(null);
+  const [flowLoading, setFlowLoading] = useState(false);
+  const [people, setPeople] = useState<StudioPeopleResponse | null>(null);
+  const [peopleLoading, setPeopleLoading] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
   // Recently-traversed edges (Live lens), keyed `${sourceNode} ${sourcePort}`.
   const [flowEdges, setFlowEdges] = useState<ReadonlySet<string>>(EMPTY_FLOW);
   const flowTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  // L2 station detail (read-only) for the focused node.
+  // L2 station detail for the focused node.
   const [station, setStation] = useState<StudioStationView | null>(null);
   const [stationLoading, setStationLoading] = useState(false);
+  const [stationReloadNonce, setStationReloadNonce] = useState(0);
   const stationAbort = useRef<AbortController | null>(null);
+  const reloadStation = useCallback(() => setStationReloadNonce((n) => n + 1), []);
 
   // ─── Draft editing state (ST4) ───
   const canManage = has('studio.manage');
@@ -156,9 +200,14 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
   const editing = canManage && isDraft;
   const [draftNodes, setDraftNodes] = useState<StudioGraphNode[]>([]);
   const [draftEdges, setDraftEdges] = useState<StudioGraphEdge[]>([]);
+  const [draftAnnotations, setDraftAnnotations] = useState<Annotation[]>([]);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState<Busy>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // ─── Template library (ST6 / Phase E4): system-owned blueprints to clone ───
+  const [templates, setTemplates] = useState<StudioTemplateSummary[]>([]);
+  const [importingTemplateId, setImportingTemplateId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!active) return;
@@ -177,6 +226,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
         setGraph(data);
         setDraftNodes(data.nodes);
         setDraftEdges(data.edges);
+        setDraftAnnotations(data.annotations ?? []);
         setDirty(false);
         setActionError(null);
       } catch {
@@ -191,8 +241,13 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
   // While editing, the working copy is what every pane renders.
   const nodes = editing ? draftNodes : graph?.nodes ?? [];
   const edges = editing ? draftEdges : graph?.edges ?? [];
-  // L0 is a read-only aggregate; L2 (station detail) needs a focused node.
-  const z: StudioZoom = editing ? 1 : zParam === 2 && !focus ? 1 : zParam;
+  // Sticky-notes follow the same draft-vs-published split (Phase E3).
+  const annotations = editing ? draftAnnotations : graph?.annotations ?? [];
+  // Editing forces L1 (the canvas is the only editable surface). Otherwise the
+  // URL zoom stands on its own: a cold `?z=2` without `?focus` still lands on
+  // L2 — the station pane renders a "pick a node" empty state — so deep links
+  // are reproducible rather than silently demoted to L1.
+  const z: StudioZoom = editing ? 1 : zParam;
 
   const palette = graph?.palette ?? [];
   const paletteByType = useMemo(
@@ -232,6 +287,72 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
     if (!active || lens !== 'live') return;
     void fetchLive();
   }, [active, lens, fetchLive]);
+
+  // ─── Flow² lens: one fetch on activation (data changes ≤ daily — never poll) ───
+  const flowAbort = useRef<AbortController | null>(null);
+  const fetchFlow = useCallback(async () => {
+    flowAbort.current?.abort();
+    const controller = new AbortController();
+    flowAbort.current = controller;
+    setFlowLoading(true);
+    try {
+      const qs = v ? `?v=${encodeURIComponent(v)}` : '';
+      const res = await fetch(`/api/studio/flow${qs}`, { cache: 'no-store', signal: controller.signal });
+      const data = (await res.json()) as StudioFlowResponse;
+      if (!controller.signal.aborted && data.ok) setFlow(data);
+    } catch {
+      /* flow paint is best-effort; the graph stands on its own */
+    } finally {
+      if (!controller.signal.aborted) setFlowLoading(false);
+    }
+  }, [v]);
+
+  useEffect(() => {
+    if (!active || lens !== 'flow') return;
+    void fetchFlow();
+  }, [active, lens, fetchFlow]);
+
+  // ─── People lens: one fetch on activation (staff↔station rarely changes — no poll) ───
+  const peopleAbort = useRef<AbortController | null>(null);
+  const fetchPeople = useCallback(async () => {
+    peopleAbort.current?.abort();
+    const controller = new AbortController();
+    peopleAbort.current = controller;
+    setPeopleLoading(true);
+    try {
+      const qs = v ? `?v=${encodeURIComponent(v)}` : '';
+      const res = await fetch(`/api/studio/people${qs}`, { cache: 'no-store', signal: controller.signal });
+      const data = (await res.json()) as StudioPeopleResponse;
+      if (!controller.signal.aborted && data.ok) setPeople(data);
+    } catch {
+      /* people paint is best-effort; the graph stands on its own */
+    } finally {
+      if (!controller.signal.aborted) setPeopleLoading(false);
+    }
+  }, [v]);
+
+  useEffect(() => {
+    if (!active || lens !== 'people') return;
+    void fetchPeople();
+  }, [active, lens, fetchPeople]);
+
+  // ─── Template library: one fetch on activation (system blueprints rarely change) ───
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch('/api/studio/templates', { cache: 'no-store' });
+        const data = (await res.json()) as StudioTemplatesResponse;
+        if (alive && data.ok) setTemplates(data.templates);
+      } catch {
+        /* the library degrades gracefully without templates */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [active]);
 
   // Light an edge for FLOW_PING_TTL_MS, then let it fade (self-cancelling timer).
   const pingEdge = useCallback((key: string) => {
@@ -285,6 +406,8 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
       liveAbort.current?.abort();
+      flowAbort.current?.abort();
+      peopleAbort.current?.abort();
       stationAbort.current?.abort();
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
@@ -316,7 +439,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
       }
     })();
     return () => controller.abort();
-  }, [active, z, focus]);
+  }, [active, z, focus, stationReloadNonce]);
 
   const setParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -398,6 +521,45 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
     [focus, setParams, markDirty],
   );
 
+  // ─── Annotation CRUD (Phase E3) — sticky-notes on the draft working copy ───
+  // Pure canvas decorations: they never touch nodes/edges/diagnostics. A new
+  // note lands offset from the busiest area so it doesn't bury the graph.
+  const onAddAnnotation = useCallback(() => {
+    setDraftAnnotations((prev) => {
+      const baseX = prev.length ? Math.max(...prev.map((a) => a.x)) + 40 : 80;
+      const baseY = prev.length ? Math.min(...prev.map((a) => a.y)) - 20 : 80;
+      return [
+        ...prev,
+        { id: `a-${crypto.randomUUID()}`, text: '', x: baseX, y: baseY },
+      ];
+    });
+    markDirty();
+  }, [markDirty]);
+
+  const onMoveAnnotation = useCallback(
+    (id: string, x: number, y: number) => {
+      setDraftAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, x, y } : a)));
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const onUpdateAnnotationText = useCallback(
+    (id: string, text: string) => {
+      setDraftAnnotations((prev) => prev.map((a) => (a.id === id ? { ...a, text } : a)));
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  const onDeleteAnnotation = useCallback(
+    (id: string) => {
+      setDraftAnnotations((prev) => prev.filter((a) => a.id !== id));
+      markDirty();
+    },
+    [markDirty],
+  );
+
   // ─── Draft lifecycle: create / save / publish ───
   const definitionId = graph?.definition?.id ?? null;
 
@@ -431,6 +593,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           nodes: draftNodes.map(({ id, type, x, y, config }) => ({ id, type, x, y, config })),
           edges: draftEdges.map(({ id, source, sourcePort, target }) => ({ id, source, sourcePort, target })),
+          annotations: draftAnnotations.map(({ id, text, x, y, color }) => ({ id, text, x, y, color })),
         }),
       });
       const data = await res.json();
@@ -443,7 +606,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
     } finally {
       setBusy(null);
     }
-  }, [definitionId, draftNodes, draftEdges]);
+  }, [definitionId, draftNodes, draftEdges, draftAnnotations]);
 
   const publish = useCallback(async () => {
     if (!definitionId) return;
@@ -475,8 +638,60 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [definitionId, dirty, saveDraft, requestStepUp, setParams]);
 
+  // Discard the draft: DELETE the never-published version, then drop ?v so the
+  // graph reloads to the org's active definition. No step-up (it's destructive
+  // but only ever touches an un-activated draft; the route refuses the active
+  // version + any draft still referenced by in-flight items). Mirrors
+  // createDraft/saveDraft/publish busy + error handling.
+  const discardDraft = useCallback(async () => {
+    if (!definitionId) return;
+    setBusy('discarding');
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/studio/definitions/${definitionId}/discard`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'discard failed');
+      setParams({ v: null, focus: null, z: null });
+      setReloadNonce((n) => n + 1); // v may already be null — force the refetch
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'discard failed');
+    } finally {
+      setBusy(null);
+    }
+  }, [definitionId, setParams]);
+
+  // Import a system template: clone it into the org as a new draft, then switch
+  // the canvas to it (`?v=<newId>`) — editing engages because the new draft is
+  // is_active=false and the user has studio.manage. Mirrors createDraft's
+  // error/param handling, but keyed by a per-template in-flight id so the card
+  // can show its own spinner.
+  const importTemplate = useCallback(
+    async (templateId: number) => {
+      setImportingTemplateId(templateId);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/studio/templates/${templateId}/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'template import failed');
+        setParams({ v: String(data.id), focus: null, z: null });
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'template import failed');
+      } finally {
+        setImportingTemplateId(null);
+      }
+    },
+    [setParams],
+  );
+
   const focusedNode = useMemo(() => nodes.find((n) => n.id === focus) ?? null, [nodes, focus]);
   const liveNodes = lens === 'live' && !editing ? live?.nodes ?? null : null;
+  const flowData = lens === 'flow' && !editing ? flow : null;
+  const peopleData = lens === 'people' && !editing ? people : null;
+  const peopleNodes = peopleData?.nodes ?? null;
 
   const value = useMemo<StudioWorkspaceValue>(
     () => ({
@@ -490,27 +705,42 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
       error,
       nodes,
       edges,
+      annotations,
       palette,
       diagnostics,
       focusedNode,
       live,
       liveNodes,
       flowEdges,
+      flow: flowData,
+      flowLoading,
+      people: peopleData,
+      peopleNodes,
+      peopleLoading,
       station,
       stationLoading,
+      reloadStation,
       canManage,
       isDraft,
       editing,
       dirty,
       busy,
       actionError,
+      templates,
+      importingTemplateId,
       onGraphChange,
       onAddNode,
       onUpdateNodeConfig,
       onDeleteNode,
+      onAddAnnotation,
+      onMoveAnnotation,
+      onUpdateAnnotationText,
+      onDeleteAnnotation,
       createDraft,
       saveDraft,
       publish,
+      discardDraft,
+      importTemplate,
     }),
     [
       active,
@@ -523,27 +753,42 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
       error,
       nodes,
       edges,
+      annotations,
       palette,
       diagnostics,
       focusedNode,
       live,
       liveNodes,
       flowEdges,
+      flowData,
+      flowLoading,
+      peopleData,
+      peopleNodes,
+      peopleLoading,
       station,
       stationLoading,
+      reloadStation,
       canManage,
       isDraft,
       editing,
       dirty,
       busy,
       actionError,
+      templates,
+      importingTemplateId,
       onGraphChange,
       onAddNode,
       onUpdateNodeConfig,
       onDeleteNode,
+      onAddAnnotation,
+      onMoveAnnotation,
+      onUpdateAnnotationText,
+      onDeleteAnnotation,
       createDraft,
       saveDraft,
       publish,
+      discardDraft,
+      importTemplate,
     ],
   );
 

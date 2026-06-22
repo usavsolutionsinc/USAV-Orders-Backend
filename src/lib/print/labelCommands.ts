@@ -9,7 +9,7 @@
  * support is spotty on receipt firmware) carrying the same `R-{id}` value.
  */
 
-import type { ReceivingLabelPayload } from '@/components/receiving/workspace/receiving-label-helpers';
+import type { ReceivingLabelPayload } from '@/lib/print/printReceivingLabel';
 import type { LabelLanguage, PaperSize } from '@/lib/print/browserPrint';
 import { receivingHandle } from '@/lib/barcode-routing';
 import bwipjs from 'bwip-js/browser';

@@ -4,7 +4,7 @@ import { registerAndSyncShipment } from '@/lib/shipping/sync-shipment';
 import type { CarrierCode } from '@/lib/shipping/types';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   const rate = checkRateLimit({
     headers: req.headers,
     routeKey: 'shipping-register',
@@ -41,7 +41,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       trackingNumber,
       carrier,
       sourceSystem: body.sourceSystem,
-    });
+    }, ctx.organizationId);
 
     return NextResponse.json({ ok: true, shipment }, { status: 201 });
   } catch (err: any) {

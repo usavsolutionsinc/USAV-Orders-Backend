@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import type { AnonymousAuthContext, AuthContext } from '@/lib/auth/withAuth';
+import type { AnonymousAuthContext, AuthContext } from '@/lib/auth/auth-context';
 
 type Queryable = {
   query: (text: string, params?: any[]) => Promise<{ rows: any[] }>;
@@ -92,6 +92,7 @@ export const AUDIT_ENTITY = {
   STAFF: 'staff',
   STAFF_TODO: 'staff_todo',
   STAFF_MESSAGE: 'staff_message',
+  STAFF_PREFERENCE: 'staff_preference',
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
@@ -132,6 +133,8 @@ export const AUDIT_ACTION = {
   SERIAL_SCAN:   'serial.scan',
   SERIAL_CREATE: 'serial.create',
   SERIAL_DELETE: 'serial.delete',
+  // Per-unit listing on a sales channel (engine Phase 1.4 'listed' fact)
+  SERIAL_LIST:   'serial.list',
   // Handling units (LPN) — license-plated boxes/trays
   HANDLING_UNIT_CREATE:   'handling_unit.create',
   HANDLING_UNIT_ASSIGN:   'handling_unit.assign',
@@ -159,6 +162,8 @@ export const AUDIT_ACTION = {
   STAFF_TODO_UNARCHIVE:    'staff_todo.unarchive',
   // Staff-to-staff messages (clipboard "send to staff")
   STAFF_MESSAGE_SEND:      'staff_message.send',
+  // Personal UI preferences (e.g. configurable focus-scan hotkey)
+  STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
   // Per-unit repair records
   REPAIR_OPEN:     'unit_repair.open',
   REPAIR_UPDATE:   'unit_repair.update',
@@ -177,6 +182,9 @@ export const AUDIT_ACTION = {
   SKU_CATALOG_CREATE: 'sku_catalog.create',
   SKU_CATALOG_UPDATE: 'sku_catalog.update',
   SKU_CATALOG_DELETE: 'sku_catalog.delete',
+  // OCR local-pickup: item read off a label that isn't in the system yet was
+  // flagged into the pending_skus "needs creating in Zoho" queue (P2-AI-01).
+  SKU_CATALOG_FLAG_MISSING: 'sku_catalog.flag_missing',
   // SKU relationship graph (parent→child edges)
   SKU_RELATIONSHIP_CREATE: 'sku_relationship.create',
   SKU_RELATIONSHIP_UPDATE: 'sku_relationship.update',
@@ -200,6 +208,11 @@ export const AUDIT_ACTION = {
   // Repair service soft-cancel + its reverse (reopen → restore prior status)
   REPAIR_CANCEL: 'repair_service.cancel',
   REPAIR_REOPEN: 'repair_service.reopen',
+  // Repair service ticket CRUD + linkage (manual entry / manual pairing)
+  REPAIR_SERVICE_CREATE: 'repair_service.create',
+  REPAIR_SERVICE_UPDATE: 'repair_service.update',
+  REPAIR_SERVICE_LINK:   'repair_service.link',
+  REPAIR_SERVICE_UNLINK: 'repair_service.unlink',
   // Pack / order (existing callers — keep their literals stable)
   PACK_COMPLETED: 'PACK_COMPLETED',
   // Dock scan-out: the package physically left the warehouse (SHIP_CONFIRM event)
@@ -231,6 +244,8 @@ export const AUDIT_ACTION = {
   WORKFLOW_DRAFT_CREATE: 'workflow.draft.create',
   WORKFLOW_DRAFT_SAVE:   'workflow.draft.save',
   WORKFLOW_PUBLISH:      'workflow.publish',
+  // Cloning a system template into the org's definitions as a draft (Phase E4).
+  WORKFLOW_TEMPLATE_IMPORT: 'workflow.template.import',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];

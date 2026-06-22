@@ -72,6 +72,12 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const shipByDate         = searchParams.get('shipByDate') || '';
     const packedBy           = searchParams.get('packedBy');
     const testedBy           = searchParams.get('testedBy');
+    // Universal staff filter (P1-WORK-02): narrow the queue to one staff's
+    // assigned work — packer OR tech assignee. Absent = ALL staff (default).
+    const staffFilterRaw     = searchParams.get('staff');
+    const staffFilterId      = staffFilterRaw && Number.isFinite(Number(staffFilterRaw)) && Number(staffFilterRaw) > 0
+      ? Number(staffFilterRaw)
+      : null;
     const includeShipped     = searchParams.get('includeShipped') === 'true';
     const shippedOnly        = searchParams.get('shippedOnly') === 'true';
     /** packedOnly=true  → only orders with a matching station_activity_logs row (packed & shipped view) */
@@ -116,6 +122,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       shipByDate,
       packedBy:           packedBy || '',
       testedBy:           testedBy || '',
+      staffFilter:        staffFilterId ?? '',
       includeShipped,
       shippedOnly,
       packedOnly,
@@ -587,6 +594,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     if (testedBy) {
       sql += ` AND wa_t.assigned_tech_id = $${paramCount++}`;
       params.push(Number(testedBy));
+    }
+
+    if (staffFilterId != null) {
+      // OR across the packer + tech assignee so one selected staff sees every
+      // order assigned to them in this queue, regardless of station.
+      sql += ` AND (wa_p.assigned_packer_id = $${paramCount} OR wa_t.assigned_tech_id = $${paramCount})`;
+      params.push(staffFilterId);
+      paramCount++;
     }
 
     if (assignmentStatus === 'unassigned') {

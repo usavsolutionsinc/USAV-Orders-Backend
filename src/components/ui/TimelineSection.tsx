@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { EventTimeline } from './EventTimeline';
+import { EventTimeline, type TimelineGroupMode } from './EventTimeline';
 import type { TimelineItem } from '@/lib/timeline/types';
 
 /**
@@ -22,6 +22,8 @@ export interface TimelineSectionProps {
   loading?: boolean;
   emptyMessage?: string;
   density?: 'comfortable' | 'compact';
+  /** Identifier grouping (serial↔order toggle), forwarded to {@link EventTimeline}. */
+  groupMode?: TimelineGroupMode;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -51,6 +53,7 @@ export function TimelineSection({
   loading = false,
   emptyMessage = 'No activity recorded yet.',
   density = 'comfortable',
+  groupMode = 'time',
   className = 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
@@ -64,7 +67,7 @@ export function TimelineSection({
       {loading ? (
         <TimelineSkeleton />
       ) : (
-        <EventTimeline items={items} emptyMessage={emptyMessage} density={density} />
+        <EventTimeline items={items} emptyMessage={emptyMessage} density={density} groupMode={groupMode} />
       )}
     </section>
   );

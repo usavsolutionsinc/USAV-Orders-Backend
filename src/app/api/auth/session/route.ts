@@ -21,6 +21,8 @@ import {
   cookieMaxAgeForSession,
 } from '@/lib/auth/session';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { resolveEnvelopeMemberships } from '@/lib/identity/memberships';
 
 export const runtime = 'nodejs';
 
@@ -75,11 +77,31 @@ export async function GET() {
   // pushes it forward ~1 year on every heartbeat.
   const slidExpiresAt = (await touchSession(session.sid)) ?? session.expiresAt;
 
+  // Resolve the active tenant's display identity so the client can show which
+  // workspace the user is in (a passive multi-tenant safety signal). Cheap:
+  // getOrganization() is cached in-process for 30s. Best-effort — a lookup
+  // miss must never break session hydration.
+  const org = await getOrganization(user.organizationId).catch(() => null);
+
+  // All workspaces this account can act in. Best-effort + always ≥1 entry
+  // (falls back to the current org pre-migration). Never throws.
+  const memberships = await resolveEnvelopeMemberships({
+    staffId: user.staffId,
+    currentOrgId: user.organizationId,
+    currentOrgName: org?.name ?? 'Workspace',
+    currentOrgSlug: org?.slug ?? null,
+    currentOrgPlan: org?.plan ?? null,
+  });
+
   const res = NextResponse.json(
     {
       user: {
         staffId: user.staffId,
         organizationId: user.organizationId,
+        organizationName: org?.name ?? 'Workspace',
+        organizationSlug: org?.slug ?? null,
+        organizationPlan: org?.plan ?? null,
+        memberships,
         name: user.name,
         role: user.role,
         permissions: Array.from(user.permissions),

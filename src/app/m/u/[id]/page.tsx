@@ -54,6 +54,8 @@ interface TimelineEvent {
   next_status: string | null;
   notes: string | null;
   payload: Record<string, unknown> | null;
+  /** Actor display name, resolved by readTimeline's staff join. */
+  actor_name?: string | null;
 }
 
 interface UnitResponse {
@@ -521,6 +523,9 @@ function Timeline({ events }: { events: TimelineEvent[] }) {
                   {e.event_type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}
                 </span>
                 <span className="text-micro text-gray-400">{timeAgo(e.occurred_at)} ago</span>
+                {e.actor_name ? (
+                  <span className="text-micro font-medium text-gray-500">{e.actor_name}</span>
+                ) : null}
                 {e.station ? (
                   <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                     {e.station}

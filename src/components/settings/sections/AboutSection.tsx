@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import pkg from '../../../../package.json';
+import { Button, Panel, PanelFooter } from '@/design-system/primitives';
 
 interface AppInfo {
   platform: string;
@@ -46,40 +47,39 @@ export function AboutSection() {
     <div className="space-y-6">
       <header>
         <h2 className="sr-only">About</h2>
-        <p className="mt-1 text-sm text-gray-500">Build information for support and troubleshooting.</p>
+        <p className="mt-1 text-sm text-text-muted">Build information for support and troubleshooting.</p>
       </header>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      {/* Migrated to the design-system <Panel> + <Button> primitives (P0-DS-01).
+          Surface/border/radius now come from semantic tokens (theme-aware),
+          replacing the hand-rolled `rounded-2xl border border-gray-200 bg-white`. */}
+      <Panel padding="lg">
         <div className="mb-5">
-          <div className="text-xl font-bold text-gray-900">USAV Orders</div>
-          <div className="text-sm text-gray-500">v{pkg.version}</div>
+          <div className="text-xl font-bold text-text-default">USAV Orders</div>
+          <div className="text-sm text-text-muted">v{pkg.version}</div>
         </div>
 
         <dl className="grid grid-cols-1 gap-y-2 sm:grid-cols-[140px_1fr] sm:gap-x-4">
           {rows.map((r) => (
             <div key={r.label} className="contents">
-              <dt className="text-xs font-medium text-gray-500">{r.label}</dt>
-              <dd className="break-all font-mono text-xs text-gray-800">{r.value}</dd>
+              <dt className="text-xs font-medium text-text-muted">{r.label}</dt>
+              <dd className="break-all font-mono text-xs text-text-default">{r.value}</dd>
             </div>
           ))}
         </dl>
 
-        <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-5">
-          <button
-            type="button"
-            onClick={copyDiagnostics}
-            className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-500"
-          >
+        <PanelFooter>
+          <Button type="button" size="sm" variant="primary" onClick={copyDiagnostics}>
             {copied ? 'Copied ✓' : 'Copy diagnostics'}
-          </button>
+          </Button>
           <a
             href="mailto:support@usavsolutions.com?subject=USAV%20Orders%20support"
-            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-xl border border-border-soft bg-surface-card px-4 py-2 text-xs font-semibold text-text-default hover:bg-surface-canvas"
           >
             Contact support
           </a>
-        </div>
-      </div>
+        </PanelFooter>
+      </Panel>
     </div>
   );
 }

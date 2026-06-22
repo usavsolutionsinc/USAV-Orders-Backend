@@ -57,3 +57,19 @@ export type StationDraftSaveInput = z.infer<typeof StationDraftSaveBody>;
 export const StationPublishBody = z.object({
   id: z.number().int().positive(),
 });
+
+// ─── Node-bound stations (Operations Studio Phase D / ST5) ───────────────────
+// The node id is taken from the request PATH (never the body, like orgId). The
+// body only carries the editable composition: a label + the slots config. The
+// reserved page_key/mode_key are derived server-side from the node id.
+
+export const NodeStationSaveBody = z.object({
+  label: z.string().min(1).max(120),
+  config: StationConfigSchema,
+});
+export type NodeStationSaveInput = z.infer<typeof NodeStationSaveBody>;
+
+export const NodeStationPublishBody = z.object({
+  id: z.number().int().positive(),
+});
+export type NodeStationPublishInput = z.infer<typeof NodeStationPublishBody>;

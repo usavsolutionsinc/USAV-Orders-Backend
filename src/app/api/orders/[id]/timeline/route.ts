@@ -121,13 +121,23 @@ export async function GET(
     // so it runs after that group resolves. Degrades to [] for orders with no
     // serialized allocations.
     const serialUnitIds = alloc.rows.map((r) => Number(r.serial_unit_id)).filter(Number.isFinite);
+    // Pull the FULL unit lifecycle for the order's allocated serials (not just
+    // TEST_* verdicts), so the order timeline is the per-unit chronological
+    // history acceptance requires — receiving → test → putaway → pick → pack →
+    // ship → return — keyed by order number. `inventoryEventsToTimeline`
+    // already renders every type in this vocabulary; PACK/LABEL/SHIP rows that
+    // also surface via `audit_logs`/SAL are de-duplicated client-side in
+    // `OrderTimelineSection`. Org-scoped so a guessed order id can't leak a
+    // foreign tenant's unit events.
     const lifecycle = serialUnitIds.length
-      ? await readInventorySpine({
-          serialUnitIds,
-          eventTypes: ['TEST_PASS', 'TEST_FAIL', 'TEST_START'],
-          order: 'desc',
-          limit: 200,
-        })
+      ? await readInventorySpine(
+          {
+            serialUnitIds,
+            order: 'desc',
+            limit: 200,
+          },
+          gate.ctx.organizationId,
+        )
       : [];
 
     return NextResponse.json({ success: true, events: result.rows, lifecycle, stationEvents: stationEvents.rows });

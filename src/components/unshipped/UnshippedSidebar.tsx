@@ -17,10 +17,12 @@ import { SidebarShell } from '@/components/layout/SidebarShell';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { StatusLegend, type StatusLegendItem } from '@/components/ui/StatusLegend';
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
+import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
+import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { FULFILLMENT_STATE_META, countFulfillmentStates, type FulfillmentState } from '@/lib/unshipped-state';
 
 /** Params that define an Unshipped saved view (filters only — not search text). */
-const UNSHIPPED_VIEW_PARAMS = ['stage', 'sort', 'ustatus'] as const;
+const UNSHIPPED_VIEW_PARAMS = ['stage', 'sort', 'ustatus', 'staff'] as const;
 
 /** Fulfillment-queue status legend — PENDING / TESTED / BLOCKED only. */
 const FULFILLMENT_LEGEND_ITEMS: StatusLegendItem<FulfillmentState>[] = [
@@ -31,10 +33,10 @@ const FULFILLMENT_LEGEND_ITEMS: StatusLegendItem<FulfillmentState>[] = [
 
 /** Stage facets for the fulfillment queue (awaiting labels live on Outbound). */
 type FulfillmentStage = 'all' | 'pending' | 'tested';
-const STAGE_OPTIONS: { id: FulfillmentStage; label: string; hint: string }[] = [
-  { id: 'all', label: 'All fulfillment', hint: 'Pending + tested' },
-  { id: 'pending', label: 'Pending packing', hint: 'Labeled, not tested' },
-  { id: 'tested', label: 'Tested, packing', hint: 'Tech-tested, packing now' },
+const STAGE_OPTIONS: { id: FulfillmentStage; label: string }[] = [
+  { id: 'all', label: 'All fulfillment' },
+  { id: 'pending', label: 'Pending packing' },
+  { id: 'tested', label: 'Tested, packing' },
 ];
 
 /** Sort order for the queue — written to `?sort`, read by UnshippedTable. */
@@ -187,6 +189,9 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     [router, pathname, searchParams],
   );
 
+  // Universal all-staff ↔ single-staff filter (P1-WORK-02), shared across modes.
+  const staffFilter = useStaffFilter();
+
   const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
   const sort: UnshippedSort = sortParam === 'newest' ? 'newest' : 'priority';
 
@@ -207,6 +212,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('stage');
     params.delete('sort');
+    params.delete('staff');
     const qs = params.toString();
     router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
   }, [router, pathname, searchParams]);
@@ -249,8 +255,16 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         pillClassName: 'bg-gray-100 text-gray-700 ring-1 ring-gray-200',
       });
     }
+    if (staffFilter.staffId != null) {
+      out.push({
+        id: 'staff',
+        label: staffFilter.selectedName || `Staff #${staffFilter.staffId}`,
+        onRemove: () => staffFilter.setStaff(null),
+        pillClassName: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+      });
+    }
     return out;
-  }, [stage, sort, setStage, setSort]);
+  }, [stage, sort, setStage, setSort, staffFilter]);
 
   if (showIntakeForm) {
     return (
@@ -336,7 +350,6 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
                         {count}
                       </span>
                       <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">{opt.label}</span>
-                      <span className="shrink-0 text-eyebrow font-medium text-gray-400">{opt.hint}</span>
                     </button>
                   );
                 })}
@@ -365,6 +378,18 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <FilterDropdownSelect
+                label="Staff"
+                value={staffFilter.staffId}
+                onChange={(next) => {
+                  staffFilter.setStaff(next ? Number(next) : null);
+                }}
+                emptyOption={{ value: '', label: 'All staff' }}
+                options={staffFilter.options.map((s) => ({ value: s.id, label: s.name }))}
+              />
             </div>
           </div>
         ),

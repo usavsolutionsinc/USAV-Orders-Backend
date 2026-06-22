@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
@@ -16,7 +17,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const summary = await withCronRun('refresh_reports', execute);
+    const locked = await withCronLock('refresh_reports', () =>
+      withCronRun('refresh_reports', execute),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
     return NextResponse.json({ success: summary.failed.length === 0, ...summary });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'refresh failed';

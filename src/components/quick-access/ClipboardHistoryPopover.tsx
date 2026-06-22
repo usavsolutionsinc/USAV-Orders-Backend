@@ -11,22 +11,23 @@ import {
   type ClipboardEntry,
 } from '@/lib/clipboard-history';
 import { StaffRecipientList, type StaffRecipient } from './StaffRecipientList';
+import { CHIP_TONES } from '@/components/ui/CopyChip';
 
 interface ClipboardHistoryPopoverProps {
   onClose: () => void;
 }
 
-/** Accent dot color per chip tone, mirroring CHIP_TONES so a copied serial /
- *  tracking / sku reads the same here as on the row it came from. */
-const TONE_DOT: Record<string, string> = {
-  id: 'bg-gray-400',
-  tracking: 'bg-blue-500',
-  serial: 'bg-emerald-500',
-  sku: 'bg-yellow-500',
-  fnsku: 'bg-purple-500',
-  ticket: 'bg-orange-500',
+/** Accent dot for non-chip clipboard kinds only; chip kinds (id/tracking/serial/
+ *  sku/fnsku/ticket) read their dot from the CHIP_TONES SoT. */
+const EXTRA_DOT: Record<string, string> = {
   seller_claim: 'bg-blue-600',
 };
+
+function dotForKind(kind: string | null | undefined): string {
+  if (!kind) return 'bg-gray-300';
+  const chip = (CHIP_TONES as Record<string, { dot?: string }>)[kind];
+  return chip?.dot ?? EXTRA_DOT[kind] ?? 'bg-gray-300';
+}
 
 function timeAgo(ts: number): string {
   const diffMin = Math.floor((Date.now() - ts) / 60000);
@@ -169,7 +170,7 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
         ) : (
           <ul className="divide-y divide-gray-50">
             {entries.map((entry) => {
-              const dot = (entry.kind && TONE_DOT[entry.kind]) || 'bg-gray-300';
+              const dot = dotForKind(entry.kind);
               const label = entry.display?.trim() || entry.value;
               const isSending = sendingId === entry.id;
               return (

@@ -121,7 +121,7 @@ export async function PATCH(
     // ─── Idempotency ────────────────────────────────────────────────────────
     const idempotencyKey = readIdempotencyKey(request, body?.clientEventId ?? null);
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_CC_LINE);
+      const cached = await getApiIdempotencyResponse(pool, orgId, idempotencyKey, ROUTE_CC_LINE);
       if (cached) {
         return NextResponse.json(cached.response_body, { status: cached.status_code });
       }
@@ -129,6 +129,7 @@ export async function PATCH(
     const respond = async (payload: Record<string, unknown>, status = 200) => {
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId,
           idempotencyKey,
           route: ROUTE_CC_LINE,
           staffId,

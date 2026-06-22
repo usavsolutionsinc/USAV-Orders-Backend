@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 /** Trimmed PO# for a row — number wins over id. */
 function poValueOf(row: ReceivingLineRow): string {

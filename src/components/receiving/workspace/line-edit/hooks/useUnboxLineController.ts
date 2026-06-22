@@ -9,7 +9,7 @@ import { markConditionSet } from '../../ReceivingProgressStepper';
 import { useSerialLookup, type SerialMatchedOrder } from '../../SerialMatchResult';
 import { takeSerialEditHandoff } from '../../serialEditHandoff';
 import { printProductLabel } from '@/lib/print/printProductLabel';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { useLineSerials } from './useLineSerials';
 import { useReceiveAction } from './useReceiveAction';
 import { useZohoLinePrefill } from './useZohoLinePrefill';

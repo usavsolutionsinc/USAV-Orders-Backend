@@ -6,7 +6,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 /**
  * POST /api/ebay/refresh-tokens
  * Worker endpoint: refreshes all eBay accounts whose token expires within 30 minutes.
- * Intended for internal calls and QStash wrappers.
+ * Intended for internal calls and the /api/cron/ebay/refresh-tokens scheduled worker.
  */
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +37,7 @@ export const POST = withAuth(async (req: NextRequest) => {
 
 export const GET = withAuth(async () => {
   return NextResponse.json(
-    { success: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
+    { success: false, error: 'Method not allowed. Use POST (cron worker route).' },
     { status: 405 }
   );
 }, { permission: 'integrations.ebay' });

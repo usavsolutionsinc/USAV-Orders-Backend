@@ -8,7 +8,7 @@ import { useTableSelection } from '@/hooks/useTableSelection';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
-import { PHOTO_LIBRARY_PAGE_SIZE } from '@/lib/photos/library-filter-state';
+import { PHOTO_LIBRARY_PAGE_SIZE, sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
 import { PHOTO_LIBRARY_SELECTION_SCOPE } from '@/lib/photos/photo-library-selection';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import {
@@ -20,18 +20,10 @@ import { toast } from '@/lib/toast';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
 
-export interface LibraryPhoto {
-  id: number;
-  photoType: string | null;
-  poRef: string | null;
-  takenByStaffId?: number | null;
-  createdAt: string;
-  displayUrl: string;
-  thumbUrl: string;
-  damageDetected?: boolean | null;
-  hasAnalysis?: boolean | null;
-  caption?: string | null;
-}
+// `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
+// without importing this page (cycle). Re-exported here for compatibility.
+export type { LibraryPhoto } from './photo-library-types';
+import type { LibraryPhoto } from './photo-library-types';
 
 /** Right pane: 40px header + photo grid + shared selection bar. Filters live in sidebar. */
 export function PhotoLibraryPage() {
@@ -201,6 +193,8 @@ export function PhotoLibraryPage() {
         <PhotoLibraryGrid
           photos={pagePhotos}
           view={view}
+          sourceScope={sourceScopeFromFilters(filters)}
+          onPhotoDeleted={() => void query.refetch()}
           selectMode={selectMode}
           selected={selected}
           onToggleSelect={toggleSelect}

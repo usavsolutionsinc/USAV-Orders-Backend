@@ -219,17 +219,20 @@ export async function fetchUnshippedOrdersData({
   searchQuery = '',
   packedBy,
   testedBy,
+  staffId,
   strictSearchScope = false,
 }: {
   searchQuery?: string;
   packedBy?: number;
   testedBy?: number;
+  staffId?: number;
   strictSearchScope?: boolean;
 }) {
   const params = new URLSearchParams();
   if (searchQuery.trim()) params.set('q', searchQuery.trim());
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (staffId !== undefined) params.set('staff', String(staffId));
   const scoped = !searchQuery.trim() || strictSearchScope;
   if (scoped) params.set('fulfillmentScope', 'true');
 
@@ -259,12 +262,14 @@ export async function fetchDashboardShippedSearch({
   searchQuery,
   packedBy,
   testedBy,
+  staffId,
   shippedFilter,
   searchField,
 }: {
   searchQuery: string;
   packedBy?: number;
   testedBy?: number;
+  staffId?: number;
   shippedFilter?: string;
   searchField?: ShippedSearchField;
 }): Promise<DashboardShippedSearchResult> {
@@ -273,6 +278,7 @@ export async function fetchDashboardShippedSearch({
   if (searchField && searchField !== 'all') params.set('searchField', searchField);
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (staffId !== undefined) params.set('staff', String(staffId));
   if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
   const res = await fetch(`/api/shipped?${params.toString()}`, FRESH_FETCH_OPTIONS);
@@ -357,6 +363,7 @@ export async function fetchDashboardShippedData({
 export async function fetchDashboardPackedRecords({
   packedBy,
   testedBy,
+  staffId,
   weekStart,
   weekEnd,
   shippedFilter,
@@ -365,6 +372,7 @@ export async function fetchDashboardPackedRecords({
 }: {
   packedBy?: number;
   testedBy?: number;
+  staffId?: number;
   weekStart?: string;
   weekEnd?: string;
   shippedFilter?: string;
@@ -377,6 +385,7 @@ export async function fetchDashboardPackedRecords({
   if (weekEnd) params.set('weekEnd', weekEnd);
   if (packedBy !== undefined) params.set('packedBy', String(packedBy));
   if (testedBy !== undefined) params.set('testedBy', String(testedBy));
+  if (staffId !== undefined) params.set('staff', String(staffId));
   if (shippedFilter) params.set('shippedFilter', shippedFilter);
 
   const res = await fetch(`/api/packerlogs?${params.toString()}`, FRESH_FETCH_OPTIONS);

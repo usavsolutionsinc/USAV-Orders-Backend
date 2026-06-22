@@ -1,4 +1,4 @@
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { classifyInput, parseScannedUrl } from '@/lib/scan-resolver';
 import { routeScan } from '@/lib/barcode-routing';
 
@@ -20,14 +20,19 @@ const PO_NUMBER_RE = /^PO-?\d+$/i;
 const HANDLING_UNIT_RE = /^H-\d+$/i;
 
 /** How a scan was matched — lets the UI tell the operator what it recognised. */
-export type ResolvedVia = 'handle' | 'unit_id' | 'serial' | 'receiving_id' | 'po' | 'tracking' | 'lpn';
+export type ResolvedVia = 'handle' | 'unit_id' | 'serial' | 'receiving_id' | 'po' | 'tracking' | 'lpn' | 'sku';
 
 /**
  * Explicit search type the operator armed via the scan-bar mode buttons. When
  * set, auto-detection is bypassed and ONLY this type is searched — matching the
  * shipping station's "arm a mode, next scan is forced" behaviour.
+ *
+ * `sku` resolves a scanned product SKU (the printed product label / pre-pack
+ * sticker) to its pre-packed receiving line(s) — the row already carries the
+ * pre-pack state (sku, condition grade, saved serial_units) the testing panel
+ * prefills from. Read-only resolve: it never mints or mutates a serial.
  */
-export type ForcedTestingType = 'tracking' | 'po' | 'serial';
+export type ForcedTestingType = 'tracking' | 'po' | 'serial' | 'sku';
 
 export type ResolvedTestingScan =
   | { kind: 'line'; row: ReceivingLineRow; via?: ResolvedVia }
@@ -126,6 +131,37 @@ async function fetchLinesByPoNumber(poNumber: string) {
   });
   // Fall back to the ILIKE results if nothing matched exactly (e.g. the scan
   // was a partial PO the operator expects to fuzzy-match).
+  return exact.length > 0 ? exact : all;
+}
+
+/**
+ * Resolve a scanned product SKU to the receiving line(s) that hold it — the
+ * pre-pack lookup. Uses the receiving-lines `sku` search (ILIKE on rl.sku /
+ * rl.zoho_item_id), then keeps only EXACT SKU matches so "ABC-1" can't drag in
+ * "ABC-12". `include=serials` so the returned row carries the pre-packed
+ * serial_units (sku + condition grade + saved serials) the testing panel
+ * prefills its fields from. Read-only — no serial is minted or mutated.
+ */
+async function fetchLinesBySku(sku: string): Promise<ReceivingLineRow[]> {
+  const params = new URLSearchParams({
+    limit: '50',
+    offset: '0',
+    include: 'serials',
+    view: 'all',
+    search_field: 'sku',
+    search: sku,
+  });
+  const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+  if (!res.ok) throw new Error(`receiving-lines fetch failed (${res.status})`);
+  const data = await res.json();
+  const all = (data?.receiving_lines ?? []) as ReceivingLineRow[];
+  const want = sku.trim().toUpperCase();
+  const exact = all.filter((row) => {
+    const candidates = [row.sku, (row as { zoho_item_id?: string | null }).zoho_item_id];
+    return candidates.some((c) => String(c ?? '').trim().toUpperCase() === want);
+  });
+  // Keep the ILIKE hits when nothing matched exactly so a partial SKU the
+  // operator expects to fuzzy-match still surfaces.
   return exact.length > 0 ? exact : all;
 }
 
@@ -346,6 +382,15 @@ export async function resolveTestingScan(
       }
     }
 
+    // Product SKU (printed product / pre-pack label) — the auto-detect tail.
+    // Reached only when the value isn't a code / PO / tracking / serial-or-PO
+    // suffix above, so a SKU sticker scan resolves to its pre-packed receiving
+    // line(s) and the testing panel prefills from that row's pre-pack state.
+    if (/^[A-Za-z0-9][A-Za-z0-9._/-]{1,39}$/.test(value)) {
+      const skuRows = await fetchLinesBySku(value);
+      if (skuRows.length > 0) return linesToResult(skuRows, 'sku', value);
+    }
+
     return { kind: 'not_found', query: value };
   } catch (err) {
     return {
@@ -380,6 +425,11 @@ async function resolveForcedTestingScan(
 ): Promise<ResolvedTestingScan> {
   if (type === 'tracking') {
     return linesToResult(await fetchLinesByTracking(value), 'tracking', value);
+  }
+  if (type === 'sku') {
+    // Pre-pack lookup — resolve the scanned product SKU to its receiving
+    // line(s) so the panel prefills from the pre-packed state. Read-only.
+    return linesToResult(await fetchLinesBySku(value), 'sku', value);
   }
   // serial + PO share one search; pick the matching bucket (full or last-4).
   const { serialRows, poRows } = await fetchLinesByPartial(value);

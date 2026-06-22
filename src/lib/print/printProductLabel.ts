@@ -6,7 +6,7 @@ import {
 } from '@/lib/print/productLabelCommands';
 import { printHtmlInIframe } from '@/lib/print/iframePrint';
 import { isSilentPrintEnabled } from '@/lib/print/printMode';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   buildUnitPayload,
   productLabelFace,

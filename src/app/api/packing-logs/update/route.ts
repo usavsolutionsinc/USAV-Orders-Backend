@@ -150,10 +150,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           scan_ref,
           tracking_type,
           created_at,
-          packed_by
-        ) VALUES ($1, $2, $3, $4, $5)
+          packed_by,
+          organization_id
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
-      `, [resolvedShipmentId, resolvedScanRef, trackingType, canonicalPackDate, staffId]);
+      `, [resolvedShipmentId, resolvedScanRef, trackingType, canonicalPackDate, staffId, ctx.organizationId]);
 
       const packerLogId = insertResult.rows[0]?.id;
       console.log('Inserted into packer_logs, ID:', packerLogId);

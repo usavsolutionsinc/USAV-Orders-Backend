@@ -4,4 +4,5 @@ export { orderAuditToTimeline, type OrderAuditRow } from './order-events';
 export { inventoryEventsToTimeline, type InventoryTimelineRow } from './inventory-events';
 export { techEventsToTimeline, type TechTimelineRow } from './tech-events';
 export { stationActivityToTimeline, type StationActivityRow } from './station-activity-events';
+export { warrantyEventsToTimeline, type WarrantyEventRow } from './warranty-events';
 export { collapseTimeline } from './collapse';

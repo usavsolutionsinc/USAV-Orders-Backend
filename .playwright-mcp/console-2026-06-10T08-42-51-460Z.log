@@ -1,6 +1,0 @@
-[     854ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/de433_next_dist_287ebc9e._.js:2297
-[     873ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/de433_next_dist_287ebc9e._.js:2297
-[    1023ms] [WARNING] Error while trying to use the following icon from the Manifest: http://localhost:3000/favicon.png (Resource size is not correct - typo in the Manifest?) @ http://localhost:3000/receiving?mode=triage:0
-[    1901ms] [WARNING] You are trying to animate strokeDashoffset from "undefined" to "65.97344572538566". undefined is not an animatable value - to enable this animation set undefined to a value animatable to 65.97344572538566 via the `style` property. @ http://localhost:3000/_next/static/chunks/de433_next_dist_287ebc9e._.js:2297
-[  145299ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/de433_next_dist_287ebc9e._.js:2297
-[  145451ms] [LOG] [Fast Refresh] done in 104ms @ http://localhost:3000/_next/static/chunks/de433_next_dist_287ebc9e._.js:2297

@@ -1,0 +1,39 @@
+-- <<YYYY-MM-DD[letter]>>_<<description>>.sql
+-- <<What this table is for, in one or two lines.>>
+--
+-- Tenant-scoped from birth: organization_id NOT NULL, enforced via the
+-- enforce_tenant_isolation() helper (2026-06-14_rls_enforcement_infra.sql) so the
+-- loud-fail DEFAULT + FORCE RLS + canonical tenant_isolation policy land in one shot.
+-- Safe because the only writer (<<queries module>>) runs inside withTenantConnection
+-- (sets app.current_org) AND stamps organization_id explicitly. RLS stays inert until
+-- the app connects as the non-BYPASSRLS app_tenant role (Phase E1); the loud-fail
+-- default is the immediate backstop.
+--
+-- ROLLBACK: select relax_tenant_isolation('<<table>>'); then DROP TABLE IF EXISTS <<table>>;
+
+CREATE TABLE IF NOT EXISTS <<table>> (
+  id              BIGSERIAL PRIMARY KEY,
+  organization_id UUID NOT NULL,                       -- no DEFAULT here; helper installs the loud-fail GUC default
+  -- <<domain columns>>
+  -- e.g. parent_id INTEGER NOT NULL REFERENCES <<parent>>(id) ON DELETE CASCADE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Per-org uniqueness — ALWAYS lead the natural key with organization_id.
+  CONSTRAINT <<table>>_org_<<key>>_unique UNIQUE (organization_id, <<key_col>>)
+);
+
+CREATE INDEX IF NOT EXISTS idx_<<table>>_org_<<key>>
+  ON <<table>> (organization_id, <<key_col>>);
+
+-- Flip on FORCE RLS + loud-fail org default + canonical policy, if the enforcement
+-- infra is present in this DB. Guarded so a fresh DB without the helper still gets
+-- the table. DO NOT enforce until every writer stamps organization_id / runs under
+-- the GUC (see the org-scope skill) — otherwise prod writes loud-fail.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'enforce_tenant_isolation') THEN
+    PERFORM enforce_tenant_isolation('<<table>>');
+  ELSE
+    RAISE NOTICE 'enforce_tenant_isolation absent — <<table>> left without FORCE RLS';
+  END IF;
+END $$;

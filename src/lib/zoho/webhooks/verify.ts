@@ -60,12 +60,23 @@ function decodeSignature(raw: string, encoding: 'hex' | 'base64'): Buffer | null
   }
 }
 
+export interface VerifyOptions {
+  /**
+   * Per-tenant signing secret (Wave 3). When provided, the delivery is
+   * authenticated against THIS org's secret rather than the global env secret —
+   * so a body forged with one tenant's key can't be replayed against another.
+   * Omitted → falls back to the global `ZOHO_WEBHOOK_SECRET` (USAV/legacy).
+   */
+  secret?: string;
+}
+
 export function verifyZohoWebhookSignature(
   rawBody: string | Buffer,
   headers: Headers,
+  options: VerifyOptions = {},
 ): VerifyResult {
-  const secret = (process.env.ZOHO_WEBHOOK_SECRET || '').trim();
-  if (!secret) return { ok: false, reason: 'ZOHO_WEBHOOK_SECRET not configured' };
+  const secret = (options.secret || process.env.ZOHO_WEBHOOK_SECRET || '').trim();
+  if (!secret) return { ok: false, reason: 'no signing secret available (per-org or ZOHO_WEBHOOK_SECRET)' };
 
   const headerName = (process.env.ZOHO_WEBHOOK_SIGNATURE_HEADER || 'x-zoho-webhook-signature').trim();
   const encoding: 'hex' | 'base64' =

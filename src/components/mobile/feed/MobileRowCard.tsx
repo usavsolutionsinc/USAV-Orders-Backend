@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { MOBILE_GUTTER, MOBILE_GUTTER_X } from '@/components/mobile/redesign/DesignSystem';
 
 /**
@@ -56,7 +57,7 @@ export function MobileRowCard({
           aria-hidden
           initial={{ opacity: 0.55, scale: 1 }}
           animate={{ opacity: 0, scale: 1.04 }}
-          transition={{ duration: 1.8, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 1.8, ease: motionBezier.easeOut }}
           className="pointer-events-none absolute inset-0 z-0 rounded-2xl ring-2 ring-blue-400/70"
         />
       )}

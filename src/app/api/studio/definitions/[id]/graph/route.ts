@@ -82,9 +82,13 @@ export const PUT = withAuth(async (request, ctx) => {
           [e.id, definitionId, e.source, e.sourcePort, e.target],
         );
       }
+      // Canvas sticky-notes ride on the definition row (Phase E3) — replaced
+      // wholesale with the graph (the body is the full desired draft state).
       await client.query(
-        `UPDATE workflow_definitions SET updated_at = NOW() WHERE id = $1 AND organization_id = $2`,
-        [definitionId, ctx.organizationId],
+        `UPDATE workflow_definitions
+            SET annotations = $3::jsonb, updated_at = NOW()
+          WHERE id = $1 AND organization_id = $2`,
+        [definitionId, ctx.organizationId, JSON.stringify(parsed.annotations)],
       );
 
       return {
@@ -101,7 +105,12 @@ export const PUT = withAuth(async (request, ctx) => {
         entityType: AUDIT_ENTITY.WORKFLOW_DEFINITION,
         entityId: definitionId,
         method: 'manual',
-        extra: { nodes: parsed.nodes.length, edges: parsed.edges.length, version: outcome.audit.version },
+        extra: {
+          nodes: parsed.nodes.length,
+          edges: parsed.edges.length,
+          annotations: parsed.annotations.length,
+          version: outcome.audit.version,
+        },
       });
     }
 
@@ -110,4 +119,4 @@ export const PUT = withAuth(async (request, ctx) => {
     console.error('[PUT /api/studio/definitions/[id]/graph] error:', err);
     return errorResponse(err, 'studio.draft.save');
   }
-}, { permission: 'studio.manage' });
+}, { permission: 'studio.manage', feature: 'studio' });

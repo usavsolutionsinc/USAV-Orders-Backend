@@ -1,62 +1,11 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Loader2 } from '@/components/Icons';
-import { toast } from '@/lib/toast';
-import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { parseStaffParam } from '@/hooks/useStaffFilter';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-
-/**
- * Eyebrow refresh: pulls the Zoho received-status (`zoho_po_mirror.status`) via
- * the same operator endpoint the Incoming tab uses, then refetches the scanned
- * list. A PO that Zoho now reports received drops off the list (the `scanned`
- * view's NOT_ZOHO_RECEIVED_PREDICATE guard takes effect on the next read).
- */
-function ScannedZohoRefreshButton() {
-  const queryClient = useQueryClient();
-  const [syncing, setSyncing] = useState(false);
-
-  const onClick = useCallback(async () => {
-    if (syncing) return;
-    setSyncing(true);
-    try {
-      const res = await fetch('/api/receiving-lines/incoming/zoho-refresh', { method: 'POST' });
-      if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json().catch(() => null)) as
-        | { mirror?: { lines_marked_received?: number } }
-        | null;
-      await queryClient.invalidateQueries({ queryKey: ['receiving-lines-table', 'rail', 'scanned'] });
-      const cleared = data?.mirror?.lines_marked_received ?? 0;
-      toast.success(
-        cleared > 0
-          ? `Synced Zoho — ${cleared} item${cleared === 1 ? '' : 's'} marked received`
-          : 'Synced Zoho received status',
-      );
-    } catch {
-      toast.error('Zoho sync failed');
-    } finally {
-      setSyncing(false);
-    }
-  }, [syncing, queryClient]);
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={syncing}
-      title="Sync Zoho received status — clears POs Zoho marks received"
-      // Keep the button's box no taller than the 9px/lh-1.2 eyebrow text so it
-      // doesn't inflate the eyebrow row (which shoved "SCANNED · N" below the
-      // UNFOUND eyebrow): no vertical padding, leading-none, smaller icon, and a
-      // -my-0.5 safety bleed so the hover pill never grows the row height.
-      className="-my-0.5 inline-flex items-center gap-1 rounded-full px-2 py-0 text-[8.5px] font-black uppercase leading-none tracking-widest text-gray-400 transition-colors hover:bg-gray-100 hover:text-blue-600 disabled:opacity-50"
-    >
-      {syncing ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
-      {syncing ? 'Syncing' : 'Sync Zoho'}
-    </button>
-  );
-}
+import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
 
 /**
  * Triage "Found" rail — cartons door-scanned and physically in but NOT yet
@@ -97,22 +46,23 @@ export function ReceivingScannedRail({
   /**
    * Which mode mounts this rail — triage's Prioritize tab or unbox's Queue
    * toggle. Scopes the query key so each mode owns its own cache entry and
-   * one mode's in-flight/stale rows can never flash into the other. The
-   * Sync-Zoho invalidation targets the shared
-   * ['receiving-lines-table','rail','scanned'] prefix, so it covers both.
+   * one mode's in-flight/stale rows can never flash into the other.
    */
   scope?: 'triage' | 'unbox';
 }) {
   const q = filterText.trim().toLowerCase();
+  const searchParams = useSearchParams();
+  const staffId = parseStaffParam(searchParams.get('staff'));
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', 'scanned', scope, 'priority', q] as const,
-    [scope, q],
+    () => ['receiving-lines-table', 'rail', 'scanned', scope, 'priority', q, staffId ?? 'all'] as const,
+    [scope, q, staffId],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
     params.set('view', 'scanned');
+    if (staffId != null) params.set('staff', String(staffId));
     // Prioritize ordering: unfound/untagged first, then amazon → ebay → goodwill
     // (server-side rank on receiving.source_platform). This is the "Prioritize"
     // rail for both the triage tab and the unbox-mode toggle.
@@ -138,17 +88,9 @@ export function ReceivingScannedRail({
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Scanned"
-      eyebrowAction={<ScannedZohoRefreshButton />}
       autoSelectFirstWhenEmpty
-      // Awaiting unbox → blue dot; a partial qty (shouldn't happen in this view)
-      // still reads green so a "fully in" carton is obvious.
-      getStatusDot={(row) =>
-        row.quantity_expected != null &&
-        row.quantity_received >= row.quantity_expected &&
-        row.quantity_expected > 0
-          ? 'bg-emerald-500'
-          : 'bg-blue-400'
-      }
+      getStatusDot={getReceivingStatusDot}
+      getStatusDotLabel={getReceivingStatusDotLabel}
       renderQuantity={(row) => (
         <span className="text-gray-600">
           {row.quantity_received}/{row.quantity_expected ?? '?'}

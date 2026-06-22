@@ -1,188 +1,57 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Loader2, Package } from '@/components/Icons';
-import { StickyActionBar } from '@/design-system/components/StickyActionBar';
-import { stationThemeColors } from '@/utils/staff-colors';
+/**
+ * `/fba` — thin composition layer. Logic lives in focused hooks:
+ *   - useFbaBoard ......... board fetch + FBA event-bus inject/remove/refresh
+ *   - useFbaWeekFilter .... week pagination + per-mode (PLANNED/PACKED) scoping
+ *   - useFbaCombine ....... board selection + combine-workspace open state
+ *   - useFbaDetailPanel ... FNSKU detail panel selection + nav
+ *
+ * Render is composition: the StationFba shell wraps <FbaBoardRegion> (board +
+ * combine bar + workspace), the quick-add / create-plan modals, and the detail
+ * panel.
+ */
+
+import { Suspense } from 'react';
+import { AnimatePresence, useReducedMotion } from 'framer-motion';
+import { Loader2 } from '@/components/Icons';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
 import { FbaCreatePlanModal } from '@/components/fba/FbaCreatePlanModal';
-import { FbaErrorState } from '@/components/fba/FbaStateShells';
-import { FbaBoardTable, type FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import { FbaBoardDetailPanel } from '@/components/fba/FbaBoardDetailPanel';
+import { FbaBoardRegion } from '@/components/fba/FbaBoardRegion';
 import StationFba from '@/components/station/StationFba';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFbaRealtimeInvalidation } from '@/hooks/useFbaRealtimeInvalidation';
-import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
-import { USAV_REFRESH_DATA, FBA_PRINT_SHIPPED, FBA_BOARD_INJECT_ITEM, FBA_BOARD_REMOVE_ITEMS, FBA_BOARD_TOGGLE_ALL, FBA_COMBINE_STARTED } from '@/lib/fba/events';
 import { FbaSidebarPanel } from '@/components/fba/sidebar';
-import { FbaCombineWorkspace } from '@/components/fba/sidebar/FbaCombineWorkspace';
-import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
 import { RouteShell } from '@/design-system/components/RouteShell';
 import { resolveFbaMode } from '@/lib/fba/fba-modes';
-
-/** Compute Monday–Sunday YYYY-MM-DD range for the week containing today shifted by `weekOffset`. */
-function getWeekRange(todayKey: string, weekOffset: number): { startStr: string; endStr: string } {
-  const [y, m, d] = todayKey.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  date.setUTCDate(date.getUTCDate() + weekOffset * 7);
-  const dow = date.getUTCDay(); // 0=Sun
-  const monday = new Date(date);
-  monday.setUTCDate(date.getUTCDate() - ((dow + 6) % 7));
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  const fmt = (dt: Date) =>
-    `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
-  return { startStr: fmt(monday), endStr: fmt(sunday) };
-}
-
-function isItemInWeek(item: FbaBoardItem, start: string, end: string): boolean {
-  const key = item.due_date ? toPSTDateKey(item.due_date) : '';
-  if (!key) return true; // items without a date always show
-  return key >= start && key <= end;
-}
-
-interface CombineData {
-  pending: FbaBoardItem[];
-}
+import { useSearchParams } from 'next/navigation';
+import { useFbaBoard } from './useFbaBoard';
+import { useFbaWeekFilter } from './useFbaWeekFilter';
+import { useFbaCombine } from './useFbaCombine';
+import { useFbaDetailPanel } from './useFbaDetailPanel';
 
 function FbaPageContent() {
   const searchParams = useSearchParams();
   useFbaRealtimeInvalidation();
 
-  const refreshTrigger = Number(searchParams.get('r') || 0);
   const activeMode = resolveFbaMode(searchParams.get('mode'));
-
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
   const { theme: stationTheme } = useStationTheme({ staffId });
-
-  // ── Combine data ─────────────────────────────────────────────────────
-  const [board, setBoard] = useState<CombineData>({ pending: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchBoard = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch('/api/fba/board');
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Failed to fetch board');
-      setBoard({
-        pending: data.pending ?? [...(data.packed ?? []), ...(data.awaiting ?? [])],
-      });
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchBoard(); }, [fetchBoard, refreshTrigger]);
-
-  useEffect(() => {
-    const handler = () => fetchBoard();
-    window.addEventListener(USAV_REFRESH_DATA, handler);
-    window.addEventListener(FBA_PRINT_SHIPPED, handler);
-
-    // Select-mode auto-add: inject a single item without a full board refresh.
-    const injectHandler = (e: Event) => {
-      const item = (e as CustomEvent<FbaBoardItem>).detail;
-      if (!item?.item_id) return;
-      setBoard((prev) => {
-        if (prev.pending.some((i) => i.item_id === item.item_id)) return prev;
-        return { pending: [...prev.pending, item] };
-      });
-    };
-    window.addEventListener(FBA_BOARD_INJECT_ITEM, injectHandler);
-
-    // After combine/ship: remove items from board immediately.
-    const removeHandler = (e: Event) => {
-      const ids = (e as CustomEvent<number[]>).detail;
-      if (!Array.isArray(ids) || ids.length === 0) return;
-      const removeSet = new Set(ids);
-      setBoard((prev) => ({
-        pending: prev.pending.filter((i) => !removeSet.has(i.item_id)),
-      }));
-    };
-    window.addEventListener(FBA_BOARD_REMOVE_ITEMS, removeHandler);
-
-    return () => {
-      window.removeEventListener(USAV_REFRESH_DATA, handler);
-      window.removeEventListener(FBA_PRINT_SHIPPED, handler);
-      window.removeEventListener(FBA_BOARD_INJECT_ITEM, injectHandler);
-      window.removeEventListener(FBA_BOARD_REMOVE_ITEMS, removeHandler);
-    };
-  }, [fetchBoard]);
-
-  // ── Week pagination ──────────────────────────────────────────────────
-  const todayKey = getCurrentPSTDateKey();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const weekRange = useMemo(() => getWeekRange(todayKey, weekOffset), [todayKey, weekOffset]);
-
-  const combineItemsForWeek = useMemo(
-    () => board.pending.filter((i) => isItemInWeek(i, weekRange.startStr, weekRange.endStr)),
-    [board.pending, weekRange],
-  );
-
-  // Each mode scopes the board to its worklist:
-  //   plan    → PLANNED  (still being planned)
-  //   combine → PACKED   (packed and ready to combine under one FBA shipment ID)
-  const filteredPendingItems = useMemo(() => {
-    if (activeMode === 'plan') return combineItemsForWeek.filter((i) => i.item_status === 'PLANNED');
-    if (activeMode === 'combine') return combineItemsForWeek.filter((i) => i.item_status === 'PACKED');
-    return combineItemsForWeek;
-  }, [combineItemsForWeek, activeMode]);
-
-  const boardEmptyMessage =
-    activeMode === 'plan' ? 'No items in planning' : 'No packed items to combine';
-
-  // ── Combine workspace (center crossfade): board selection drives the kanban
-  //    builder; the workspace crossfades over the board, receiving-style.
-  //    Existing/combined shipments are browsed + edited from the sidebar Recent
-  //    tab, so the center is purely the build surface. ──────────────────────
-  const boardSelection = useFbaBoardSelection({ includePairedSelection: true });
   const prefersReducedMotion = useReducedMotion();
 
-  // The combine workspace opens only when the user presses "Combine items" — not
-  // on first selection — so they can multi-select packed items first. Leaving
-  // combine mode resets it.
-  const [combineOpen, setCombineOpen] = useState(false);
-  useEffect(() => {
-    if (activeMode !== 'combine') setCombineOpen(false);
-  }, [activeMode]);
-
-  const selectedUnits = useMemo(
-    () => boardSelection.reduce((sum, i) => sum + Math.max(1, Number(i.actual_qty || 0)), 0),
-    [boardSelection],
+  const { board, loading, error, fetchBoard } = useFbaBoard();
+  const weekFilter = useFbaWeekFilter(board.pending, activeMode);
+  const combine = useFbaCombine(activeMode);
+  const { detailItem, setDetailItem, handleDetailNavigate } = useFbaDetailPanel(
+    weekFilter.filteredPendingItems,
   );
-  const workspaceActive = activeMode === 'combine' && combineOpen;
-  // Action bar shows once items are selected but the workspace isn't open yet.
-  const showCombineBar = activeMode === 'combine' && !combineOpen && boardSelection.length > 0;
 
-  const handleStartCombine = useCallback(() => {
-    setCombineOpen(true);
-    // Flip the sidebar Recent/Packed pills to Packed so more packed items are
-    // easy to select and add while combining.
-    window.dispatchEvent(new CustomEvent(FBA_COMBINE_STARTED));
-  }, []);
-
-  // ── Detail panel ────────────────────────────────────────────────────────
-  const [detailItem, setDetailItem] = useState<FbaBoardItem | null>(null);
-
-  const handleDetailNavigate = useCallback(
-    (direction: 'up' | 'down') => {
-      if (!detailItem) return;
-      const list = filteredPendingItems;
-      const idx = list.findIndex((i) => i.fnsku === detailItem.fnsku);
-      const next = direction === 'up' ? idx - 1 : idx + 1;
-      if (next >= 0 && next < list.length) setDetailItem(list[next]);
-    },
-    [detailItem, filteredPendingItems],
-  );
+  const detailIdx = detailItem
+    ? weekFilter.filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku)
+    : -1;
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">
@@ -190,99 +59,18 @@ function FbaPageContent() {
         <StationFba embedded>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-              {error ? (
-                <FbaErrorState message={error} onRetry={fetchBoard} theme={stationTheme} />
-              ) : activeMode === 'shipped' ? (
-                <div className="flex h-full flex-1 items-center justify-center px-5 text-center">
-                  <p className="max-w-sm text-caption font-black uppercase tracking-widest text-gray-400">
-                    Shipped mode is managed from the sidebar table.
-                  </p>
-                </div>
-              ) : (
-                <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                  {/* Board (PLANNED in plan mode, PACKED queue in combine). Stays
-                      mounted under the combine workspace so the sidebar Packed
-                      rail can keep folding items into the selection. */}
-                  <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-                    <FbaBoardTable
-                      items={filteredPendingItems}
-                      loading={loading && !board.pending.length}
-                      stationTheme={stationTheme}
-                      emptyMessage={boardEmptyMessage}
-                      onDetailOpen={setDetailItem}
-                      weekRange={weekRange}
-                      weekOffset={weekOffset}
-                      onPrevWeek={() => setWeekOffset((o) => o - 1)}
-                      onNextWeek={() => setWeekOffset((o) => Math.min(0, o + 1))}
-                    />
-                  </div>
-
-                  {/* Selection action bar: floats over the board once packed
-                      items are selected. Pressing "Combine items" is what opens
-                      the workspace (not the first selection) so multiple items
-                      can be picked first. */}
-                  <AnimatePresence>
-                    {showCombineBar && (
-                      <motion.div
-                        key="fba-combine-bar"
-                        initial={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 16 }}
-                        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute inset-x-0 bottom-0 z-20"
-                      >
-                        <StickyActionBar
-                          maxWidth="max-w-none"
-                          leading={
-                            <span className="text-micro font-black uppercase tracking-widest tabular-nums text-gray-500">
-                              {boardSelection.length} item{boardSelection.length === 1 ? '' : 's'} · {selectedUnits} unit{selectedUnits === 1 ? '' : 's'} selected
-                            </span>
-                          }
-                          secondary={{
-                            label: 'Clear',
-                            onClick: () =>
-                              window.dispatchEvent(new CustomEvent(FBA_BOARD_TOGGLE_ALL, { detail: 'none' })),
-                          }}
-                          primary={{
-                            label: 'Combine items',
-                            onClick: handleStartCombine,
-                            icon: <Package className="h-4 w-4 shrink-0" />,
-                            toneClasses: {
-                              bg: stationThemeColors[stationTheme].bg,
-                              hover: stationThemeColors[stationTheme].hover,
-                            },
-                          }}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Combine workspace (combine mode only): crossfades over the
-                      board after "Combine items" is pressed — the same in-region
-                      switch receiving uses. Always mounted (opacity-crossfaded)
-                      so FbaActiveShipments keeps listening for open-editor. */}
-                  {activeMode === 'combine' && (
-                    <motion.div
-                      className="absolute inset-0 z-10 bg-white"
-                      initial={false}
-                      animate={
-                        prefersReducedMotion
-                          ? { opacity: workspaceActive ? 1 : 0 }
-                          : { opacity: workspaceActive ? 1 : 0, y: workspaceActive ? 0 : 6 }
-                      }
-                      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                      style={{ pointerEvents: workspaceActive ? 'auto' : 'none' }}
-                      aria-hidden={!workspaceActive}
-                    >
-                      <FbaCombineWorkspace
-                        selectedItems={boardSelection}
-                        stationTheme={stationTheme}
-                        onClose={() => setCombineOpen(false)}
-                      />
-                    </motion.div>
-                  )}
-                </div>
-              )}
+              <FbaBoardRegion
+                error={error}
+                onRetry={fetchBoard}
+                activeMode={activeMode}
+                stationTheme={stationTheme}
+                prefersReducedMotion={prefersReducedMotion}
+                loading={loading}
+                hasBoardItems={board.pending.length > 0}
+                weekFilter={weekFilter}
+                combine={combine}
+                onDetailOpen={setDetailItem}
+              />
             </div>
           </div>
           <FbaQuickAddFnskuModal stationTheme={stationTheme} />
@@ -297,11 +85,8 @@ function FbaPageContent() {
                 onClose={() => setDetailItem(null)}
                 onNavigate={handleDetailNavigate}
                 onSaved={fetchBoard}
-                disableMoveUp={filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku) <= 0}
-                disableMoveDown={
-                  filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku) >=
-                  filteredPendingItems.length - 1
-                }
+                disableMoveUp={detailIdx <= 0}
+                disableMoveDown={detailIdx >= weekFilter.filteredPendingItems.length - 1}
               />
             )}
           </AnimatePresence>

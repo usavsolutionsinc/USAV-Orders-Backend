@@ -73,9 +73,11 @@ function walk(dir: string): string[] {
 
 function classifyExemption(path: string): string | null {
   if (path.includes('/api/auth/')) return 'auth-flow (sign-in / passkey / pin)';
-  if (path.includes('/api/qstash/')) return 'qstash (gated by isQStashOrigin)';
   if (path.includes('/api/webhooks/')) return 'webhook (gated by signature)';
   if (path.includes('/api/billing/webhook')) return 'webhook (gated by signature)';
+  // Zoho webhooks: HMAC-verified (per-tenant secret on /{token}, global env
+  // secret on the legacy path) + org resolved from the URL token, not a session.
+  if (path.includes('/api/zoho/webhooks')) return 'webhook (gated by signature + token-resolved org)';
   if (path.includes('/api/health')) return 'health probe';
   if (path.includes('/api/ready')) return 'readiness probe';
   if (path.includes('/api/cron/')) return 'cron endpoint';
@@ -94,7 +96,6 @@ function detectGate(src: string): { gate: string; permission: string | null } {
   const permMatch = src.match(/withAuth\([^]*?permission\s*:\s*['"]([\w.]+)['"]/);
   if (permMatch) return { gate: 'withAuth', permission: permMatch[1] };
   if (/\bwithAuth\b/.test(src)) return { gate: 'withAuth (no permission)', permission: null };
-  if (/\bisQStashOrigin\b/.test(src)) return { gate: 'isQStashOrigin', permission: null };
   if (/\brequirePermission\b/.test(src)) return { gate: 'requirePermission (page guard)', permission: null };
   const routePermMatch = src.match(/requireRoutePerm\([^,]+,\s*['"]([\w.]+)['"]/);
   if (routePermMatch) return { gate: 'requireRoutePerm', permission: routePermMatch[1] };

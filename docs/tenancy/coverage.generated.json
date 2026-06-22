@@ -1,17 +1,17 @@
 {
   "generatedFrom": "live DB (pg_catalog)",
   "summary": {
-    "total": 181,
-    "with_org": 144,
-    "org_not_null": 105,
-    "rls_enabled": 115,
-    "rls_forced": 0,
-    "has_iso_policy": 115,
-    "needs_col": 7,
-    "child_scoped": 22,
+    "total": 207,
+    "with_org": 167,
+    "org_not_null": 122,
+    "rls_enabled": 126,
+    "rls_forced": 9,
+    "has_iso_policy": 126,
+    "needs_col": 8,
+    "child_scoped": 23,
     "reference_decide": 6,
-    "system_global": 9,
-    "usav_fallback_default": 77
+    "system_global": 10,
+    "usav_fallback_default": 109
   },
   "tables": [
     {
@@ -20,6 +20,68 @@
       "has_org": true,
       "not_null": true,
       "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": []
+    },
+    {
+      "table": "account_emails",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
+      ]
+    },
+    {
+      "table": "account_identities",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
+      ]
+    },
+    {
+      "table": "account_mfa",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
+      ]
+    },
+    {
+      "table": "accounts",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
       "fk_to_orgs": false,
       "rls_enabled": false,
       "rls_forced": false,
@@ -108,16 +170,16 @@
     },
     {
       "table": "api_idempotency_responses",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
-      "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "usav-fallback",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
+      "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 277,
+      "approx_rows": 274,
       "fk_parents": []
     },
     {
@@ -131,7 +193,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 6143,
+      "approx_rows": 7255,
       "fk_parents": [
         "staff",
         "station_activity_logs"
@@ -151,6 +213,22 @@
       "approx_rows": 2163,
       "fk_parents": [
         "staff"
+      ]
+    },
+    {
+      "table": "auth_events",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
       ]
     },
     {
@@ -204,7 +282,7 @@
       "classification": "reference-decide",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -218,7 +296,7 @@
       "classification": "reference-decide",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -271,7 +349,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 13119,
+      "approx_rows": 27929,
       "fk_parents": []
     },
     {
@@ -389,7 +467,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 56,
+      "approx_rows": 74,
       "fk_parents": []
     },
     {
@@ -413,7 +491,7 @@
       "classification": "reference-decide",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -449,7 +527,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 6,
+      "approx_rows": 7,
       "fk_parents": [
         "staff"
       ]
@@ -520,7 +598,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 32,
+      "approx_rows": 42,
       "fk_parents": [
         "fba_shipments",
         "staff",
@@ -596,16 +674,16 @@
     },
     {
       "table": "google_photos_albums",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
-      "approx_rows": -1,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": 6,
       "fk_parents": []
     },
     {
@@ -626,16 +704,16 @@
     },
     {
       "table": "google_photos_settings",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
-      "approx_rows": -1,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": 1,
       "fk_parents": []
     },
     {
@@ -657,29 +735,29 @@
     },
     {
       "table": "hermes_insights",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
-      "approx_rows": -1,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": 1,
       "fk_parents": []
     },
     {
       "table": "hermes_outcomes",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
+      "has_iso_policy": true,
+      "hermes_read": true,
       "approx_rows": -1,
       "fk_parents": [
         "hermes_insights"
@@ -687,30 +765,44 @@
     },
     {
       "table": "hermes_precision_scores",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
-      "default_kind": "none",
-      "fk_to_orgs": false,
-      "rls_enabled": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
       "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
+      "has_iso_policy": true,
+      "hermes_read": true,
       "approx_rows": -1,
       "fk_parents": []
     },
     {
       "table": "hermes_thresholds",
-      "classification": "tenant-owned-NEEDS-COL",
-      "has_org": false,
+      "classification": "tenant-owned",
+      "has_org": true,
       "not_null": false,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": true,
+      "rls_enabled": true,
+      "rls_forced": false,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": 7,
+      "fk_parents": []
+    },
+    {
+      "table": "integration_credential_audit",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
       "default_kind": "none",
       "fk_to_orgs": false,
       "rls_enabled": false,
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": -1,
+      "approx_rows": 235,
       "fk_parents": []
     },
     {
@@ -724,7 +816,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 2462,
+      "approx_rows": 3118,
       "fk_parents": [
         "staff",
         "receiving_lines",
@@ -808,7 +900,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": -1,
+      "approx_rows": 97,
       "fk_parents": [
         "serial_units",
         "workflow_definitions"
@@ -909,11 +1001,27 @@
       ]
     },
     {
+      "table": "memberships",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": true,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
+      ]
+    },
+    {
       "table": "messages",
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -927,7 +1035,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -959,7 +1067,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -973,7 +1081,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -989,7 +1097,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1025,7 +1133,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 2511,
+      "approx_rows": 2643,
       "fk_parents": [
         "orders"
       ]
@@ -1059,12 +1167,13 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 2610,
+      "approx_rows": 2641,
       "fk_parents": [
         "customers",
         "shipping_tracking_numbers",
         "sku_catalog",
-        "staff"
+        "staff",
+        "types"
       ]
     },
     {
@@ -1078,10 +1187,26 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 1668,
+      "approx_rows": 1742,
       "fk_parents": [
         "staff",
         "shipping_tracking_numbers"
+      ]
+    },
+    {
+      "table": "org_invitations",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": true,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
       ]
     },
     {
@@ -1135,10 +1260,10 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": true,
-      "default_kind": "usav-fallback",
+      "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
       "approx_rows": 3376,
@@ -1152,7 +1277,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1172,7 +1297,7 @@
       "classification": "reference-decide",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1234,6 +1359,183 @@
       ]
     },
     {
+      "table": "photo_analysis",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_analysis_runs",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photos",
+        "photo_jobs"
+      ]
+    },
+    {
+      "table": "photo_entity_links",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": 2,
+      "fk_parents": [
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_exports",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photo_share_packs",
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_jobs",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_share_pack_access",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photo_share_packs"
+      ]
+    },
+    {
+      "table": "photo_share_pack_items",
+      "classification": "child-scoped(photo_share_packs,photos)",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photo_share_packs",
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_share_pack_links",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photo_share_packs"
+      ]
+    },
+    {
+      "table": "photo_share_packs",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "staff"
+      ]
+    },
+    {
+      "table": "photo_storage",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_storage_providers",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": []
+    },
+    {
       "table": "photos",
       "classification": "tenant-owned",
       "has_org": true,
@@ -1244,7 +1546,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 85,
+      "approx_rows": 2,
       "fk_parents": [
         "staff"
       ]
@@ -1254,7 +1556,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1311,6 +1613,22 @@
       ]
     },
     {
+      "table": "platform_listings",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": true,
+      "rls_forced": false,
+      "has_iso_policy": true,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "sku_catalog"
+      ]
+    },
+    {
       "table": "platforms",
       "classification": "tenant-owned",
       "has_org": true,
@@ -1343,7 +1661,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1412,7 +1730,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 33,
+      "approx_rows": 45,
       "fk_parents": []
     },
     {
@@ -1420,16 +1738,35 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": true,
-      "default_kind": "usav-fallback",
+      "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 1730,
+      "approx_rows": 1853,
       "fk_parents": [
         "staff",
-        "shipping_tracking_numbers"
+        "shipping_tracking_numbers",
+        "types"
+      ]
+    },
+    {
+      "table": "receiving_claim_seller_messages",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "usav-fallback",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "receiving",
+        "receiving_lines",
+        "staff"
       ]
     },
     {
@@ -1439,11 +1776,11 @@
       "not_null": true,
       "default_kind": "loud-fail",
       "fk_to_orgs": true,
-      "rls_enabled": false,
-      "rls_forced": false,
-      "has_iso_policy": false,
-      "hermes_read": false,
-      "approx_rows": 9,
+      "rls_enabled": true,
+      "rls_forced": true,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": 213,
       "fk_parents": [
         "staff",
         "receiving_lines"
@@ -1454,13 +1791,13 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": true,
-      "default_kind": "usav-fallback",
+      "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 980,
+      "approx_rows": 1100,
       "fk_parents": [
         "receiving",
         "staff",
@@ -1477,10 +1814,10 @@
       "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
-      "hermes_read": false,
-      "approx_rows": 1668,
+      "hermes_read": true,
+      "approx_rows": 1800,
       "fk_parents": [
         "receiving",
         "staff",
@@ -1495,10 +1832,10 @@
       "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
-      "hermes_read": false,
-      "approx_rows": -1,
+      "hermes_read": true,
+      "approx_rows": 1496,
       "fk_parents": [
         "receiving",
         "shipping_tracking_numbers",
@@ -1550,7 +1887,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 60,
+      "approx_rows": 69,
       "fk_parents": [
         "staff",
         "customers"
@@ -1567,7 +1904,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 370,
+      "approx_rows": 461,
       "fk_parents": [
         "replenishment_requests",
         "orders"
@@ -1610,7 +1947,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1627,7 +1964,7 @@
       "classification": "reference-decide",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1646,7 +1983,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1701,7 +2038,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 221,
+      "approx_rows": 292,
       "fk_parents": []
     },
     {
@@ -1723,17 +2060,33 @@
       ]
     },
     {
+      "table": "serial_unit_listings",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": true,
+      "rls_forced": false,
+      "has_iso_policy": true,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "serial_units"
+      ]
+    },
+    {
       "table": "serial_units",
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": true,
-      "default_kind": "usav-fallback",
+      "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 811,
+      "approx_rows": 953,
       "fk_parents": [
         "sku_catalog",
         "receiving_lines",
@@ -1768,7 +2121,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 220,
+      "approx_rows": 293,
       "fk_parents": [
         "shift_templates",
         "staff",
@@ -1798,7 +2151,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1814,13 +2167,13 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 5704,
+      "approx_rows": 6022,
       "fk_parents": []
     },
     {
@@ -1875,7 +2228,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -1907,13 +2260,13 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 1744,
+      "approx_rows": 1859,
       "fk_parents": [
         "sku_catalog",
         "sku_platform_ids"
@@ -1990,7 +2343,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2008,7 +2361,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2027,7 +2380,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2045,7 +2398,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2067,7 +2420,9 @@
       "hermes_read": false,
       "approx_rows": 14,
       "fk_parents": [
-        "warehouses"
+        "warehouses",
+        "accounts",
+        "memberships"
       ]
     },
     {
@@ -2107,7 +2462,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2123,7 +2478,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2183,6 +2538,22 @@
       ]
     },
     {
+      "table": "staff_preferences",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": true,
+      "rls_forced": true,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": -1,
+      "fk_parents": [
+        "staff"
+      ]
+    },
+    {
       "table": "staff_roles",
       "classification": "system-global",
       "has_org": false,
@@ -2226,7 +2597,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 866,
+      "approx_rows": 968,
       "fk_parents": [
         "staff"
       ]
@@ -2236,7 +2607,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2268,7 +2639,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2285,7 +2656,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2339,7 +2710,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 13013,
+      "approx_rows": 14195,
       "fk_parents": [
         "shipping_tracking_numbers",
         "fba_fnskus",
@@ -2394,7 +2765,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 56,
+      "approx_rows": 84,
       "fk_parents": [
         "locations"
       ]
@@ -2410,7 +2781,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": -1,
+      "approx_rows": 17,
       "fk_parents": []
     },
     {
@@ -2418,7 +2789,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2446,13 +2817,13 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": true,
-      "default_kind": "usav-fallback",
+      "default_kind": "loud-fail",
       "fk_to_orgs": true,
       "rls_enabled": true,
-      "rls_forced": false,
+      "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 1250,
+      "approx_rows": 1420,
       "fk_parents": [
         "shipping_tracking_numbers",
         "fba_fnsku_logs",
@@ -2477,7 +2848,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 4,
+      "approx_rows": 5,
       "fk_parents": [
         "sku_catalog",
         "failure_modes"
@@ -2545,7 +2916,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 85,
+      "approx_rows": 113,
       "fk_parents": [
         "staff",
         "shifts"
@@ -2556,13 +2927,13 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 312,
+      "approx_rows": 349,
       "fk_parents": [
         "staff",
         "shipping_tracking_numbers",
@@ -2636,7 +3007,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2662,7 +3033,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 140,
+      "approx_rows": 149,
       "fk_parents": [
         "sku_catalog"
       ]
@@ -2672,7 +3043,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2708,7 +3079,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2750,7 +3121,6 @@
         "serial_units",
         "orders",
         "customers",
-        "reason_codes",
         "rma_authorizations",
         "repair_service",
         "staff"
@@ -2791,6 +3161,22 @@
       ]
     },
     {
+      "table": "webauthn_credentials",
+      "classification": "tenant-owned-NEEDS-COL",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
+      "fk_parents": [
+        "accounts"
+      ]
+    },
+    {
       "table": "work_assignments",
       "classification": "tenant-owned",
       "has_org": true,
@@ -2801,7 +3187,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 5398,
+      "approx_rows": 5682,
       "fk_parents": [
         "staff"
       ]
@@ -2881,6 +3267,20 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
+      "approx_rows": 139,
+      "fk_parents": []
+    },
+    {
+      "table": "workflow_templates",
+      "classification": "system-global",
+      "has_org": false,
+      "not_null": false,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
       "approx_rows": -1,
       "fk_parents": []
     },
@@ -2895,7 +3295,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 266,
+      "approx_rows": 274,
       "fk_parents": []
     },
     {
@@ -2903,7 +3303,7 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
@@ -2931,13 +3331,27 @@
       "classification": "tenant-owned",
       "has_org": true,
       "not_null": false,
-      "default_kind": "loud-fail",
+      "default_kind": "usav-fallback",
       "fk_to_orgs": true,
       "rls_enabled": true,
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 3477,
+      "approx_rows": 3574,
+      "fk_parents": []
+    },
+    {
+      "table": "zoho_webhook_events",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "none",
+      "fk_to_orgs": false,
+      "rls_enabled": false,
+      "rls_forced": false,
+      "has_iso_policy": false,
+      "hermes_read": false,
+      "approx_rows": -1,
       "fk_parents": []
     }
   ]

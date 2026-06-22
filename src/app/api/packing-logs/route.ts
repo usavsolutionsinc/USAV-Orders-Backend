@@ -261,11 +261,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
                     // Log the packer scan
                     const fbaPackerInsert = await pool.query(`
-                        INSERT INTO packer_logs (shipment_id, scan_ref, tracking_type, created_at, packed_by)
-                        VALUES ($1, $2, 'FBA', $3, $4)
+                        INSERT INTO packer_logs (shipment_id, scan_ref, tracking_type, created_at, packed_by, organization_id)
+                        VALUES ($1, $2, 'FBA', $3, $4, $5)
                         ON CONFLICT DO NOTHING
                         RETURNING id, created_at::text
-                    `, [fbaShipId, fbaScanRef ?? scanInput, packDateTime, staffId]);
+                    `, [fbaShipId, fbaScanRef ?? scanInput, packDateTime, staffId, ctx.organizationId]);
 
                     const fbaPackerLogId = fbaPackerInsert.rows[0]?.id ?? null;
                     const fbaCreatedAt = fbaPackerInsert.rows[0]?.created_at ?? packDateTime;
@@ -403,10 +403,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                             scan_ref,
                             tracking_type,
                             created_at,
-                            packed_by
-                        ) VALUES ($1, $2, $3, $4, $5)
+                            packed_by,
+                            organization_id
+                        ) VALUES ($1, $2, $3, $4, $5, $6)
                         RETURNING id, created_at::text
-                    `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId]);
+                    `, [nfShipmentId, nfScanRef, classification.trackingType, packDateTime, staffId, ctx.organizationId]);
                     notFoundPackerLogId = notFoundInsert.rows[0]?.id ?? null;
                     notFoundCreatedAt = notFoundInsert.rows[0]?.created_at ?? packDateTime;
                 }
@@ -566,10 +567,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                         scan_ref,
                         tracking_type,
                         created_at,
-                        packed_by
-                    ) VALUES ($1, NULL, $2, $3, $4)
+                        packed_by,
+                        organization_id
+                    ) VALUES ($1, NULL, $2, $3, $4, $5)
                     RETURNING id, created_at::text
-                `, [orderShipmentId, classification.trackingType, packDateTime, staffId]);
+                `, [orderShipmentId, classification.trackingType, packDateTime, staffId, ctx.organizationId]);
                 foundPackerLogId = foundInsert.rows[0]?.id ?? null;
                 foundCreatedAt = foundInsert.rows[0]?.created_at ?? packDateTime;
             }
@@ -777,10 +779,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 shipment_id,
                 tracking_type,
                 created_at,
-                packed_by
-            ) VALUES ($1, NULL, $2, $3, $4)
+                packed_by,
+                organization_id
+            ) VALUES ($1, NULL, $2, $3, $4, $5)
             RETURNING id, created_at::text
-        `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId]);
+        `, [classification.normalizedInput, classification.trackingType, packDateTime, staffId, ctx.organizationId]);
 
         const nonOrderPackerLogId = nonOrderInsert.rows[0]?.id ?? null;
         if (nonOrderPackerLogId) {

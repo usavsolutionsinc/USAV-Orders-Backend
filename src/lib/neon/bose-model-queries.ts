@@ -59,6 +59,7 @@ export async function getBoseModelList(params: {
       WHERE bm.is_active = true
         AND ($1 = '' OR bm.model_number ILIKE '%' || $1 || '%' OR bm.model_name ILIKE '%' || $1 || '%')
         AND ($2 = '' OR bm.family = $2)
+        AND ($5::uuid IS NULL OR bm.organization_id = $5)
       GROUP BY bm.id
       ORDER BY bm.model_name, bm.model_number
       LIMIT $3 OFFSET $4`;
@@ -67,19 +68,21 @@ export async function getBoseModelList(params: {
        FROM bose_models bm
       WHERE bm.is_active = true
         AND ($1 = '' OR bm.model_number ILIKE '%' || $1 || '%' OR bm.model_name ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR bm.family = $2)`;
+        AND ($2 = '' OR bm.family = $2)
+        AND ($3::uuid IS NULL OR bm.organization_id = $3)`;
 
-  // bose_models / part_compatibility carry no organization_id column (see
-  // docs/tenancy/org-id-coverage.generated.md → reference-decide). When orgId is
-  // present we GUC-wrap via tenantQuery so RLS can backstop once a column lands;
-  // the integer surrogate-PK join (pc.bose_model_id = bm.id) is org-safe bare.
+  // bose_models now HAS organization_id (live coverage: org=✅). When orgId is
+  // present we GUC-wrap via tenantQuery AND add the explicit predicate — the
+  // load-bearing isolation pre-E1 (RLS inert under the BYPASSRLS owner). Legacy
+  // callers (orgId omitted) pass NULL → the predicate is a no-op (back-compat).
+  // The integer surrogate-PK join (pc.bose_model_id = bm.id) stays org-safe bare.
   const result = orgId
-    ? await tenantQuery<BoseModelListRow>(orgId, listSql, [search, family, limit, offset])
-    : await pool.query<BoseModelListRow>(listSql, [search, family, limit, offset]);
+    ? await tenantQuery<BoseModelListRow>(orgId, listSql, [search, family, limit, offset, orgId])
+    : await pool.query<BoseModelListRow>(listSql, [search, family, limit, offset, null]);
 
   const countResult = orgId
-    ? await tenantQuery<{ total: number }>(orgId, countSql, [search, family])
-    : await pool.query<{ total: number }>(countSql, [search, family]);
+    ? await tenantQuery<{ total: number }>(orgId, countSql, [search, family, orgId])
+    : await pool.query<{ total: number }>(countSql, [search, family, null]);
 
   return { items: result.rows, total: countResult.rows[0]?.total || 0 };
 }
@@ -94,10 +97,14 @@ export async function getBoseModelById(id: number, orgId?: OrgId): Promise<BoseM
 }
 
 export async function getBoseModelByModelNumber(modelNumber: string, orgId?: OrgId): Promise<BoseModelRow | null> {
-  const sql = `SELECT * FROM bose_models WHERE model_number = $1 LIMIT 1`;
+  // model_number is a GLOBAL natural key today; scope by org when present so a
+  // caller can't probe another tenant's catalog by model number. (The upsert's
+  // ON CONFLICT (model_number) write-clobber still needs a per-org UNIQUE
+  // migration — tracked as the bose_models slice.)
+  const sql = `SELECT * FROM bose_models WHERE model_number = $1 AND ($2::uuid IS NULL OR organization_id = $2) LIMIT 1`;
   const result = orgId
-    ? await tenantQuery<BoseModelRow>(orgId, sql, [modelNumber.trim()])
-    : await pool.query<BoseModelRow>(sql, [modelNumber.trim()]);
+    ? await tenantQuery<BoseModelRow>(orgId, sql, [modelNumber.trim(), orgId])
+    : await pool.query<BoseModelRow>(sql, [modelNumber.trim(), null]);
   return result.rows[0] ?? null;
 }
 
@@ -114,23 +121,8 @@ export async function upsertBoseModel(params: {
   notes?: string | null;
   isActive?: boolean;
 }, orgId?: OrgId): Promise<BoseModelRow> {
-  const sql =
-    `INSERT INTO bose_models
-       (model_number, model_name, family, product_type, release_year, eol_date, image_url, notes, is_active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (model_number) DO UPDATE SET
-       model_name   = EXCLUDED.model_name,
-       family       = COALESCE(EXCLUDED.family, bose_models.family),
-       product_type = COALESCE(EXCLUDED.product_type, bose_models.product_type),
-       release_year = COALESCE(EXCLUDED.release_year, bose_models.release_year),
-       eol_date     = COALESCE(EXCLUDED.eol_date, bose_models.eol_date),
-       image_url    = COALESCE(EXCLUDED.image_url, bose_models.image_url),
-       notes        = COALESCE(EXCLUDED.notes, bose_models.notes),
-       is_active    = EXCLUDED.is_active,
-       updated_at   = NOW()
-     RETURNING *`;
-  const values = [
-    params.modelNumber.trim(),
+  const modelNumber = params.modelNumber.trim();
+  const updateValues = [
     params.modelName.trim(),
     params.family?.trim() || null,
     params.productType?.trim() || null,
@@ -140,14 +132,63 @@ export async function upsertBoseModel(params: {
     params.notes?.trim() || null,
     params.isActive ?? true,
   ];
-  // bose_models has no organization_id to stamp (reference-decide); when orgId
-  // is present we still GUC-wrap the write so RLS can backstop once a column lands.
-  const result = orgId
-    ? await withTenantTransaction(orgId, (client) =>
-        client.query<BoseModelRow>(sql, values),
-      )
-    : await pool.query<BoseModelRow>(sql, values);
-  return result.rows[0];
+
+  // Org-scoped SELECT-then-INSERT/UPDATE. This REPLACES `INSERT ... ON CONFLICT
+  // (model_number)` — model_number is a GLOBAL natural key, so the old upsert let
+  // a second tenant clobber the first's catalog row (real_leak, 2026-06-19). This
+  // shape is org-correct AND independent of which UNIQUE exists, so it is safe to
+  // deploy before or after 2026-06-19_bose_models_per_org_unique.sql is applied.
+  // (reactivates a soft-deleted row by matching on model_number regardless of is_active.)
+  const runUpsert = async (client: import('pg').PoolClient): Promise<BoseModelRow> => {
+    const existing = await client.query<{ id: number }>(
+      `SELECT id FROM bose_models
+        WHERE model_number = $1 AND ($2::uuid IS NULL OR organization_id = $2)
+        LIMIT 1`,
+      [modelNumber, orgId ?? null],
+    );
+    if (existing.rows[0]) {
+      const updated = await client.query<BoseModelRow>(
+        `UPDATE bose_models SET
+           model_name   = $2,
+           family       = COALESCE($3, family),
+           product_type = COALESCE($4, product_type),
+           release_year = COALESCE($5, release_year),
+           eol_date     = COALESCE($6, eol_date),
+           image_url    = COALESCE($7, image_url),
+           notes        = COALESCE($8, notes),
+           is_active    = $9,
+           updated_at   = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [existing.rows[0].id, ...updateValues],
+      );
+      return updated.rows[0];
+    }
+    const inserted = await client.query<BoseModelRow>(
+      `INSERT INTO bose_models
+         (model_number, model_name, family, product_type, release_year, eol_date, image_url, notes, is_active, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [modelNumber, ...updateValues, orgId ?? null],
+    );
+    return inserted.rows[0];
+  };
+
+  if (orgId) {
+    return withTenantTransaction(orgId, runUpsert);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const row = await runUpsert(client);
+    await client.query('COMMIT');
+    return row;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 // ─── Partial update (dynamic SET; identity column model_number is fixed) ────

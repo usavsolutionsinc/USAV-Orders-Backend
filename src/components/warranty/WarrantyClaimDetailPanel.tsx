@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion';
 import { Loader2, Trash2, X } from '@/components/Icons';
-import { cn } from '@/utils/_cn';
 import { useWarrantyClaim } from '@/hooks/useWarrantyClaims';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 import { WarrantyClockChip, WarrantyStatusBadge } from '@/components/warranty/chips';
@@ -10,6 +9,8 @@ import { WarrantyClaimActions } from '@/components/warranty/WarrantyClaimActions
 import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopover';
 import { WarrantyQuotesSection } from '@/components/warranty/WarrantyQuotesSection';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
+import { EventTimeline } from '@/components/ui/EventTimeline';
+import { warrantyEventsToTimeline } from '@/lib/timeline';
 import { formatDateTimePST } from '@/utils/date';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import type { WarrantyClaimDetail } from '@/lib/warranty/types';
@@ -237,24 +238,12 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
       )}
 
       <Section title="Timeline">
-        {claim.events.length === 0 ? (
-          <p className="text-sm text-gray-400">No events yet.</p>
-        ) : (
-          <ul className="space-y-2">
-            {claim.events.map((e) => (
-              <li key={e.id} className="flex items-start gap-2 text-[12px]">
-                <span className={cn('mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300')} />
-                <div>
-                  <span className="font-medium text-gray-700">
-                    {e.eventType}
-                    {e.toStatus ? ` → ${e.toStatus}` : ''}
-                  </span>
-                  <span className="ml-2 text-gray-400">{formatDateTimePST(e.createdAt)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <EventTimeline
+          items={warrantyEventsToTimeline(claim.events)}
+          density="compact"
+          highlightLatest={false}
+          emptyMessage="No events yet."
+        />
       </Section>
 
       {claim.notes && (

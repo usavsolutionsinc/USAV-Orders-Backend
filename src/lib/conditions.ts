@@ -75,3 +75,18 @@ export function conditionOptions(
 ): Array<{ value: ConditionGrade; label: string }> {
   return CONDITION_GRADES.map((value) => ({ value, label: conditionLabel(value, variant) }));
 }
+
+/**
+ * Inline-TEXT color for a condition — the substring-matched, lenient style used
+ * by the "condition + title" inline text (not chips): new → yellow-500,
+ * for-parts → amber-800, else (used/unknown) → black. Single source of truth;
+ * `ConditionText.getConditionColor` and `upnext-helpers.getConditionColor`
+ * delegate here. (Chip/badge condition tones are a separate, per-surface
+ * concern — see receiving-constants `conditionBadgeTone`.)
+ */
+export function conditionTextColor(condition: string | null | undefined): string {
+  const c = String(condition || '').toLowerCase().trim();
+  if (c.includes('new')) return 'text-yellow-500';
+  if (c.includes('part')) return 'text-amber-800';
+  return 'text-black';
+}

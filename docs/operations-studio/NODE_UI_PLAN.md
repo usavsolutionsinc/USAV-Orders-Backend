@@ -1,7 +1,7 @@
-# Node UI — deferred build plan
+# Node UI — build plan
 
-> **Status:** Plan for later. Captures the node-builder UI that is *not* yet built, so the current read-only Operations board can ship without it.
-> **Companions:** `docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md` (why/what), `docs/operations-studio/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md` (full phasing), `docs/operations-studio/NODE_UI_PLAN.md` (this — the UI that's deferred).
+> **Status:** Largely BUILT. The editable node-builder UI now lives in the Operations Studio (`/studio`): registry-driven nodes, a node palette/Library, an editable canvas (drag/connect/delete), and the full draft → publish lifecycle — including the generic schema-driven node config sheet (Phase C). The remaining deferred items are the live ItemTracker dot, the Audit↔engine toggle, and templates/onboarding.
+> **Companions:** `docs/operations-studio/NODE_WORKFLOW_ARCHITECTURE.md` (why/what), `docs/operations-studio/NODE_WORKFLOW_IMPLEMENTATION_PLAN.md` (full phasing), `docs/operations-studio/NODE_UI_PLAN.md` (this — the UI plan).
 
 ## What already exists (don't rebuild)
 
@@ -14,29 +14,24 @@
 | Operations sidebar | `OperationsSidebarPanel.tsx` | The reference panel; the node **palette** slots in beside it. |
 | `?ops=` selection + board spotlight | board + sidebar | The selection/URL-state plumbing the editable canvas reuses. |
 
-The read-only board renders **lifecycle states** (derived from real data). The deferred work is the **editable engine graph** — user-defined nodes wired to the engine.
+The read-only board rendered **lifecycle states** (derived from real data). The **editable engine graph** — user-defined nodes wired to the engine — is now BUILT inside `/studio` (items 1–5 below). Items 6–8 remain.
 
-## Deferred pieces
+## Pieces
 
-### 1. OperationNode component (registry-driven node)
-`src/components/admin/workflow/nodes/OperationNode.tsx` — one component renders every node type from `/api/workflow/nodes` registry metadata: icon, label, and **one source handle per declared output port** (so `inspection` shows `pass` / `fail` handles). Sketch in architecture doc §4.2.
+### 1. ✅ BUILT — registry-driven node (StudioNode)
+Implemented in the Studio canvas: each node renders from `/api/studio/graph` palette metadata (`listNodeMeta()`) — icon, label, and **one source handle per declared output port** (so `inspection` shows `pass` / `fail`). (`src/components/studio/StudioCanvas.tsx` + the studio node component.)
 
-### 2. Node palette
-`NodePalette.tsx` — draggable list of registered node types (reuse `@dnd-kit`, already a dep), grouped by `category`. Drag onto the canvas to add a `workflow_nodes` row. Lives beside `OperationsSidebarPanel` (or as a 4th lens: "Nodes").
+### 2. ✅ BUILT — node palette / Library
+The Studio's master-nav panel hosts a **Library** of registered node types, registry-driven (new node types appear without touching the UI). Adding from it appends a node via the provider's `onAddNode` → saved on "Save draft". (`StudioSidebarPanel` + `StudioWorkspaceContext.onAddNode`.)
 
-### 3. Editable canvas
-Fork `OperationsFlowBoard` → `WorkflowCanvasTab.tsx`:
-- `nodesDraggable / nodesConnectable / elementsSelectable = true`
-- `onConnect` → create a `workflow_edges` row (validate: one edge per source port)
-- `onNodesChange` (position) → debounced save of `position_x/y`
-- Loads a `workflow_definitions` version instead of the flow-audit aggregate.
+### 3. ✅ BUILT — editable canvas
+The Studio canvas is editable in draft mode: drag/move, connect (`onConnect` → edge), and delete nodes/edges; changes flow through `onGraphChange` and persist via `PUT /api/studio/definitions/[id]/graph`. Loads a `workflow_definitions` version (the active one, or `?v=`).
 
-### 4. Node config panel
-Right-pane form rendered from each node's `configSchema` (architecture doc §3.2). Writes `workflow_nodes.config`. Reuse `src/components/ui/RightPaneOverlay.tsx` (already in the tree).
+### 4. ✅ BUILT (Phase C) — node config sheet
+`src/components/studio/NodeConfigForm.tsx` — a **generic, schema-driven** config sheet rendered in the inspector from each node type's `configSchema` (one input per field, typed by the schema: string→text/select, number→number, boolean→toggle). Writes back through `onUpdateNodeConfig`. Replaces the previous two hardcoded `station`/`slaHours` knobs (the station node's schema now drives those generically). This is the shared seam the decision-node + station editor reuse.
 
-### 5. Definition management
-- `useWorkflowGraph.ts` — TanStack Query hooks: list/load/save definitions (`/api/workflow/definitions*` from impl-plan Phase D).
-- Version + publish UI (`isActive`); in-flight items finish on their old version.
+### 5. ✅ BUILT — definition management (draft → publish lifecycle)
+Full draft lifecycle behind `studio.manage`: create draft (`POST …/draft`), save (`PUT …/graph`), publish with blocking diagnostics + step-up (`POST …/publish`), and **discard** a never-published draft (`DELETE …/discard`, Phase C.2). The draft-copy + publish-flip domain logic lives in `src/lib/studio/definitions.ts` (Deps-injectable, unit-tested DB-free). Version switch + `isActive` UI in `StudioShell`; in-flight items finish on their old version.
 
 ### 6. ItemTracker live dot (Phase F)
 Overlay on either board: subscribe to Ably (`emitWorkflowEvent` already publishes `item_workflow_state` row events), animate a dot to the node a scanned unit just entered. Backfill `item_workflow_state` from latest `station_activity_logs` per unit.

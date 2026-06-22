@@ -5,6 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Loader2, Plus, Wrench, AlertTriangle, Check, ShieldCheck } from '@/components/Icons';
 import { timeAgo } from '@/utils/_date';
+import { qualityRiskToneClass } from '@/lib/quality-risk-tone';
+import { qualitySeverityToneClass } from '@/lib/quality-severity-tone';
+import { repairOutcomeToneClass } from '@/lib/repair-outcome-tone';
 
 /**
  * Quality + failures + repairs for one serial unit — the QC system's read+act
@@ -63,24 +66,6 @@ interface FailureMode {
 
 const CARD = 'rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60';
 const HEAD = 'text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500';
-
-const RISK_TONE: Record<string, string> = {
-  low: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  medium: 'bg-amber-50 text-amber-700 ring-amber-200',
-  high: 'bg-rose-50 text-rose-700 ring-rose-200',
-};
-const SEV_TONE: Record<string, string> = {
-  critical: 'bg-rose-50 text-rose-700 border-rose-200',
-  major: 'bg-amber-50 text-amber-700 border-amber-200',
-  minor: 'bg-gray-50 text-gray-600 border-gray-200',
-};
-const REPAIR_TONE: Record<string, string> = {
-  completed: 'bg-emerald-50 text-emerald-700',
-  in_progress: 'bg-blue-50 text-blue-700',
-  pending: 'bg-gray-100 text-gray-600',
-  failed: 'bg-rose-50 text-rose-700',
-  scrapped: 'bg-rose-50 text-rose-700',
-};
 
 function prettyReason(r: string): string {
   return r.replace(/_/g, ' ');
@@ -145,7 +130,7 @@ export function UnitQualityPanel({ serialUnitId }: { serialUnitId: number }) {
 
 function QualityCard({ quality, grade }: { quality: QualityScore | null; grade: string | null }) {
   if (!quality) return null;
-  const tone = RISK_TONE[quality.risk_level] ?? RISK_TONE.medium;
+  const tone = qualityRiskToneClass(quality.risk_level);
   const barColor =
     quality.risk_level === 'low' ? 'bg-emerald-500' : quality.risk_level === 'medium' ? 'bg-amber-500' : 'bg-rose-500';
   return (
@@ -298,7 +283,7 @@ function FailureTagsCard({
                       {t.label ?? t.code ?? `Mode #${t.failure_mode_id}`}
                     </span>
                     {t.severity && (
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${SEV_TONE[t.severity] ?? SEV_TONE.minor}`}>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${qualitySeverityToneClass(t.severity)}`}>
                         {t.severity}
                       </span>
                     )}
@@ -459,7 +444,7 @@ function RepairRowItem({
   return (
     <li className="px-5 py-3">
       <div className="flex items-center gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${REPAIR_TONE[repair.status] ?? 'bg-gray-100 text-gray-600'}`}>
+        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${repairOutcomeToneClass(repair.status)}`}>
           {repair.status.replace(/_/g, ' ')}
         </span>
         <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-900">{repair.summary}</span>

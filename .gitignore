@@ -84,6 +84,7 @@ scripts/_verify-*
 scripts/_mint-*
 scripts/_fix-*
 .env*
+!.env.example
 
 # Build installers (large artifacts; do not commit)
 context/*.exe

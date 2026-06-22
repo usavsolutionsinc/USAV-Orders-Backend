@@ -1,0 +1,94 @@
+import type { ReactNode } from 'react';
+
+export function railRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return 'now';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d`;
+  return `${Math.floor(d / 7)}w`;
+}
+
+/** DESC sort key for a feed's `getActivityAt` axis; missing/invalid → 0 (last). */
+export function railActivitySortMs(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+export interface SidebarRailRowContext {
+  isSelected: boolean;
+  isFocused: boolean;
+  /** PKG-group chip node (when this row leads a collapsed multi-item group), else null. */
+  pkgChip: ReactNode;
+}
+
+export interface SidebarRailShellProps<TRow> {
+  /** React-query key. */
+  queryKey: ReadonlyArray<unknown>;
+  /** Fetcher returning the rows directly. */
+  fetchFn: () => Promise<TRow[]>;
+  /** Optimistic update event ({ id, ...partial }); merged into the matching row. */
+  updateEvent?: string;
+  /** Optimistic delete event ({ id }); the matching row is dropped immediately. */
+  deleteEvent?: string;
+  /**
+   * Optimistic group-delete event (detail = group id, e.g. a receiving_id).
+   * Every row whose `getGroupId` matches is dropped immediately — used when a
+   * whole carton/log is removed and all its lines should vanish from the rail.
+   */
+  deleteGroupEvent?: string;
+  /** Events that trigger a full query invalidation. */
+  refreshEvents?: string[];
+  /**
+   * When set, a CustomEvent<'prev' | 'next'> on this name steps the selection to
+   * the adjacent rendered row and fires `onSelect` — the wiring behind a detail
+   * pane's up/down header chevrons when there's no separate table to drive
+   * navigation (the Testing workspace has only this rail, not a history table).
+   */
+  navigateEvent?: string;
+
+  selectedId: number | null;
+  selectedRow?: TRow | null;
+  limit?: number;
+
+  eyebrowTitle: string;
+  eyebrowSuffix?: string;
+  /** Right-aligned eyebrow slot (e.g. a refresh button). Takes precedence over `eyebrowSuffix`. */
+  eyebrowAction?: ReactNode;
+  emptyText?: string;
+  /**
+   * When true, selects the first row once data loads if nothing is selected yet.
+   * Re-selects when selection is cleared (e.g. switching back to Receive mode).
+   */
+  autoSelectFirstWhenEmpty?: boolean;
+  /** Optional guard — return false to skip auto-select (deep links, wrong mode). */
+  canAutoSelectFirst?: () => boolean;
+  /**
+   * When true, rows cascade in (stagger reveal) the first time the feed loads,
+   * and freshly-arriving rows slide in individually. Off by default so callers
+   * opt in explicitly.
+   */
+  staggerReveal?: boolean;
+
+  getId: (row: TRow) => number;
+  /** Grouping key (e.g. receiving_id). Return null for no grouping. */
+  getGroupId?: (row: TRow) => number | null;
+  getActivityAt?: (row: TRow) => string | null | undefined;
+  onSelect: (row: TRow) => void;
+  getStatusDot: (row: TRow) => string;
+  /** Hover tooltip for the status dot — e.g. "Received" / "Scanned". */
+  getStatusDotLabel?: (row: TRow) => string;
+
+  renderRowMain: (row: TRow, ctx: SidebarRailRowContext) => ReactNode;
+  renderPopover?: (
+    row: TRow,
+    ctx: { groupSize: number; openWorkspace: () => void; dismiss: () => void },
+  ) => ReactNode;
+}

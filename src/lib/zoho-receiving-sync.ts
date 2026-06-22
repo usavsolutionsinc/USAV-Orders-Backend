@@ -9,13 +9,15 @@
  * physical receiving row when the warehouse has actually scanned a package.
  */
 
-import pool from '@/lib/db';
-// Transitional: this Zoho sync is a background job with no request ctx to derive
-// the tenant from, and its org isn't threaded through the deep sync chain yet.
-// Single-tenant today → attribute synced local-pickup orders to USAV. Replace
-// with ctx.organizationId once the sync entry points are tenant-aware (Phase A3).
-// eslint-disable-next-line no-restricted-syntax
-import { USAV_ORG_ID } from '@/lib/tenancy/constants';
+// Wave 2 (tenancy): every write path is org-scoped. The caller threads a real
+// `orgId` (from ctx.organizationId on session routes, the row's organization_id
+// on background reconcilers, or the webhook/cron org resolver) and all tenant
+// tables are written through `withTenantTransaction(orgId, …)` so the
+// `app.current_org` GUC is set and RLS can enforce isolation. The previously
+// hardcoded USAV_ORG_ID stamp is gone — see git history for the Phase-A3 debt.
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { withZohoCredential } from '@/lib/zoho/with-zoho-credential';
 import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from '@/lib/zoho';
 import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
@@ -85,6 +87,7 @@ type LocalPickupSyncInput = {
 // local-pickup queue UI.
 async function syncLocalPickupOrder(
   client: PoolClient,
+  orgId: OrgId,
   input: LocalPickupSyncInput,
 ): Promise<SyncPOLinesResult> {
   const { normalizedPoId, poNumber, poReference, lineItems } = input;
@@ -116,7 +119,7 @@ async function syncLocalPickupOrder(
        zoho_reference_number     = COALESCE(EXCLUDED.zoho_reference_number, local_pickup_orders.zoho_reference_number),
        updated_at                = NOW()
      RETURNING id, xmax::text`,
-    [normalizedPoId, poNumber, poReference, USAV_ORG_ID],
+    [normalizedPoId, poNumber, poReference, orgId],
   );
   const orderId = Number(orderRes.rows[0].id);
   const orderPreexisting = orderRes.rows[0].xmax !== '0';
@@ -194,6 +197,7 @@ type SyncPOLinesResult = {
 
 async function syncPurchaseOrderLines(
   client: PoolClient,
+  orgId: OrgId,
   purchaseOrderId: string,
   options: SyncPOLinesOptions = {}
 ): Promise<SyncPOLinesResult> {
@@ -208,7 +212,11 @@ async function syncPurchaseOrderLines(
     [poId],
   );
 
-  const detail = await getPurchaseOrderById(poId);
+  // Scope the Zoho fetch to this tenant's credential + allowlisted operation
+  // (per-org creds via withZohoOrg, audited, deny-by-default on the operation).
+  const detail = await withZohoCredential(orgId, 'purchaseorders.read', () =>
+    getPurchaseOrderById(poId),
+  );
   const po = asObject((detail as AnyRow)?.purchaseorder);
   if (!po) throw new Error(`Zoho purchase order not found: ${poId}`);
 
@@ -223,7 +231,7 @@ async function syncPurchaseOrderLines(
   // local_pickup_order_items — they bypass receiving / receiving_lines /
   // shipping_tracking_numbers altogether.
   if (isLocalPickupPo(poReference, poNumber, normalizedPoId)) {
-    return syncLocalPickupOrder(client, {
+    return syncLocalPickupOrder(client, orgId, {
       normalizedPoId,
       poNumber,
       poReference,
@@ -270,18 +278,22 @@ async function syncPurchaseOrderLines(
       );
     }
   } else {
+    // organization_id stamped from the threaded tenant. Required so the row
+    // survives the loud-fail org default once receiving has FORCE isolation,
+    // and so a re-sync from another tenant can never adopt this PO's carton.
     await client.query(
       `INSERT INTO receiving
          (source, zoho_purchaseorder_id, zoho_purchaseorder_number,
-          shipment_id, created_at, updated_at)
-       VALUES ('zoho_po', $1, $2, $3, NOW(), NOW())
+          shipment_id, organization_id, created_at, updated_at)
+       VALUES ('zoho_po', $1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (zoho_purchaseorder_id)
          WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
        DO UPDATE SET
          zoho_purchaseorder_number = COALESCE(EXCLUDED.zoho_purchaseorder_number, receiving.zoho_purchaseorder_number),
          shipment_id               = COALESCE(receiving.shipment_id, EXCLUDED.shipment_id),
+         organization_id           = COALESCE(receiving.organization_id, EXCLUDED.organization_id),
          updated_at                = NOW()`,
-      [normalizedPoId, poNumber, shipmentId],
+      [normalizedPoId, poNumber, shipmentId, orgId],
     );
   }
 
@@ -314,8 +326,9 @@ async function syncPurchaseOrderLines(
            FROM receiving_lines
            WHERE zoho_purchaseorder_id = $1
              AND zoho_line_item_id = $2
+             AND organization_id = $3
            LIMIT 1`,
-          [normalizedPoId, zohoLineItemId]
+          [normalizedPoId, zohoLineItemId, orgId]
         )
       : { rows: [] as Array<{ id: number; receiving_id: number | null }> };
 
@@ -326,6 +339,10 @@ async function syncPurchaseOrderLines(
         : existingRow?.receiving_id ?? null;
 
     const lineValues: Record<string, unknown> = {
+      // Org stamped from the threaded tenant so the dynamic builder includes
+      // organization_id (survives the loud-fail org default under FORCE
+      // isolation, and pins the line to its tenant).
+      organization_id: orgId,
       zoho_item_id: zohoItemId,
       zoho_line_item_id: zohoLineItemId,
       zoho_purchaseorder_id: normalizedPoId,
@@ -422,9 +439,11 @@ async function syncPurchaseOrderLines(
         WHERE r.source = 'zoho_po'
           AND r.zoho_purchaseorder_id = $1
           AND r.received_at IS NOT NULL
+          AND r.organization_id = $2
           AND rl.zoho_purchaseorder_id = $1
+          AND rl.organization_id = $2
           AND rl.receiving_id IS NULL`,
-      [normalizedPoId],
+      [normalizedPoId, orgId],
     );
     linked += adopted.rowCount ?? 0;
   }
@@ -458,21 +477,16 @@ export type ImportPOResult = SyncPOLinesResult;
  * physical receiving row and moved to MATCHED.
  */
 export async function importZohoPurchaseOrderToReceiving(
+  orgId: OrgId,
   purchaseOrderId: string,
   options: SyncPOLinesOptions = {}
 ): Promise<ImportPOResult> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await syncPurchaseOrderLines(client, purchaseOrderId, options);
-    await client.query('COMMIT');
-    return result;
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
+  // withTenantTransaction opens the transaction, sets the `app.current_org`
+  // GUC via SET LOCAL, and uses the tenant pool — so every write inside (incl.
+  // the advisory locks that need a transaction) is org-scoped and RLS-subject.
+  return withTenantTransaction(orgId, (client) =>
+    syncPurchaseOrderLines(client, orgId, purchaseOrderId, options),
+  );
 }
 
 export type BulkSyncOptions = {
@@ -505,6 +519,7 @@ export type BulkSyncSummary = {
 };
 
 export async function syncZohoPurchaseOrdersToReceiving(
+  orgId: OrgId,
   opts: BulkSyncOptions = {}
 ): Promise<BulkSyncSummary> {
   const perPage = Math.min(200, Math.max(1, Number(opts.per_page) || 200));
@@ -542,13 +557,15 @@ export async function syncZohoPurchaseOrdersToReceiving(
   };
 
   for (let page = 1; page <= maxPages && summary.processed < maxItems; page++) {
-    const data = await listPurchaseOrders({
-      page,
-      per_page: perPage,
-      status: opts.status || undefined,
-      vendor_id: opts.vendor_id || undefined,
-      last_modified_time: lastModifiedTime,
-    });
+    const data = await withZohoCredential(orgId, 'purchaseorders.read', () =>
+      listPurchaseOrders({
+        page,
+        per_page: perPage,
+        status: opts.status || undefined,
+        vendor_id: opts.vendor_id || undefined,
+        last_modified_time: lastModifiedTime,
+      }),
+    );
 
     const rows = (data as AnyRow).purchaseorders;
     const pos = Array.isArray(rows) ? rows : [];
@@ -573,7 +590,7 @@ export async function syncZohoPurchaseOrdersToReceiving(
         asString(poRow.purchaseorder_id, poRow.purchase_order_id, poRow.id) ?? 'unknown';
 
       try {
-        const result = await importZohoPurchaseOrderToReceiving(zohoId);
+        const result = await importZohoPurchaseOrderToReceiving(orgId, zohoId);
         summary.line_items_synced += result.line_items_synced;
         summary.linked += result.line_items_linked;
         if (result.mode === 'inserted') summary.created++;
@@ -611,16 +628,20 @@ export type ImportResult = {
 };
 
 export async function importZohoPurchaseReceiveToReceiving(options: {
+  orgId: OrgId;
   purchaseReceiveId: string;
   receivedBy?: number | null;
   assignedTechId?: number | null;
   needsTest?: boolean;
   targetChannel?: string | null;
 }): Promise<ImportResult> {
+  const { orgId } = options;
   const receiveIdInput = asString(options.purchaseReceiveId);
   if (!receiveIdInput) throw new Error('purchase_receive_id is required');
 
-  const detail = await getPurchaseReceiveById(receiveIdInput);
+  const detail = await withZohoCredential(orgId, 'purchasereceives.read', () =>
+    getPurchaseReceiveById(receiveIdInput),
+  );
   const receive = asObject((detail as AnyRow)?.purchasereceive);
   if (!receive) throw new Error('Zoho purchase receive not found');
 
@@ -630,10 +651,8 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
 
   const lineItems = Array.isArray(receive.line_items) ? receive.line_items : [];
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  // All receiving_lines writes run org-scoped under the tenant GUC.
+  return withTenantTransaction(orgId, async (client) => {
     const lineCols = await getReceivingLineColumns(client);
     let synced = 0;
     let skipped = 0;
@@ -661,13 +680,17 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
             `SELECT id FROM receiving_lines
              WHERE zoho_purchase_receive_id = $1
                AND zoho_line_item_id = $2
+               AND organization_id = $3
              LIMIT 1`,
-            [normalizedReceiveId, zohoLineItemId]
+            [normalizedReceiveId, zohoLineItemId, orgId]
           )
         : { rows: [] as Array<{ id: number }> };
 
       const existingId = existing.rows[0]?.id ?? null;
       const lineValues: Record<string, unknown> = {
+        // Org stamped from the threaded tenant (survives the loud-fail default
+        // under FORCE isolation, and pins the line to its tenant).
+        organization_id: orgId,
         zoho_item_id: zohoItemId,
         zoho_line_item_id: zohoLineItemId,
         zoho_purchase_receive_id: normalizedReceiveId,
@@ -738,17 +761,11 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
       synced++;
     }
 
-    await client.query('COMMIT');
     return {
       purchase_receive_id: normalizedReceiveId,
       line_items_synced: synced,
       line_items_skipped: skipped,
       mode,
     };
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

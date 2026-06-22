@@ -7,6 +7,10 @@
           {
             "type": "command",
             "command": "FP=$(jq -r '.tool_input.file_path // empty'); case \"$FP\" in *.env|*.env.*|*/certificates/*|*.pem|*.key|*/localhost+*.pem|*/localhost+*-key.pem) printf 'Blocked: %s is a secret/credential path. Edit it manually outside Claude.\\n' \"$FP\" >&2; exit 2 ;; esac"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sot-guard.sh\""
           }
         ]
       },
@@ -26,10 +30,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "FP=$(jq -r '.tool_input.file_path // empty'); case \"$FP\" in *.ts|*.tsx) cd /Users/salessupport/Desktop/my-express-app/USAV-Orders-Backend && REL=${FP#/Users/salessupport/Desktop/my-express-app/USAV-Orders-Backend/} && npx --no-install next lint --file \"$REL\" 2>&1 | tail -60 ;; esac"
+            "command": "FP=$(jq -r '.tool_input.file_path // empty'); case \"$FP\" in *.ts|*.tsx) cd \"$CLAUDE_PROJECT_DIR\" && REL=${FP#\"$CLAUDE_PROJECT_DIR\"/} && npx --no-install next lint --file \"$REL\" 2>&1 | tail -60 ;; esac"
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "engineering-skills@claude-code-skills": true,
+    "self-improving-agent@claude-code-skills": true
   }
 }

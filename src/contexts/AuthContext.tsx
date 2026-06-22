@@ -18,6 +18,9 @@ import {
   DEFAULT_MOBILE_DISPLAY_CONFIG,
   type MobileDisplayConfig,
 } from '@/lib/auth/mobile-display-config';
+import type { OrgMembership } from '@/lib/identity/types';
+
+export type { OrgMembership };
 
 // Mirror of PUBLIC_PATHS in src/proxy.ts. Kept in sync by hand — small and
 // stable. Used by the client-side guard below to avoid bouncing the user
@@ -25,9 +28,12 @@ import {
 const CLIENT_PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
   /^\/signup(?:$|\/)/,                  // public account creation — must match proxy.ts
+  /^\/account\/signin(?:$|\/)/,         // account-level sign-in — must match proxy.ts
   /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
+  /^\/invite\/[A-Za-z0-9_-]+(?:$|\/)/,  // org invitation accept — must match proxy.ts
+
   /^\/offline(?:$|\/)/,
   // GS1 Digital Link resolver — server-side redirects anon callers to
   // the storefront before any client-side guard runs, but listing the
@@ -47,6 +53,18 @@ export interface AuthSessionUser {
   /** Active tenant. Used to build org-namespaced realtime channel names on the
    *  client (security is still enforced server-side by the Ably token grant). */
   organizationId: string;
+  /** Active tenant's display name — shown as a passive "which workspace am I
+   *  in" signal in the account menu and Settings → Organization. Falls back to
+   *  'Workspace' if the org row can't be resolved. */
+  organizationName: string;
+  /** Active tenant's slug + plan, for the Settings workspace card. Nullable
+   *  when the org row is unavailable. */
+  organizationSlug: string | null;
+  organizationPlan: string | null;
+  /** Every workspace this account can act in (≥1; the current org is flagged
+   *  isCurrent). Drives the Settings → Organization switcher. Pre-migration
+   *  this is always a single synthesized entry for the current org. */
+  memberships: OrgMembership[];
   name: string;
   role: string;
   permissions: string[];

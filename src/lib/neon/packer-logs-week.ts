@@ -13,6 +13,11 @@ export type PackerLogsTrackingFilter = 'all' | 'orders' | 'sku' | 'fba';
 export interface FetchPackerLogRowsOptions {
   packerId?: number | null;
   testedBy?: number | null;
+  /**
+   * Universal staff filter (P1-WORK-02): narrow to rows this staff packed OR
+   * tested. Null/absent = ALL staff (default). Independent of packerId/testedBy.
+   */
+  staffId?: number | null;
   limit?: number;
   offset?: number;
   weekStart?: string;
@@ -50,9 +55,13 @@ export async function fetchPackerLogRows(
   const weekEnd = opts.weekEnd ?? '';
   const trackingTypeFilter: PackerLogsTrackingFilter = opts.trackingTypeFilter ?? 'all';
 
+  const staffFilterId =
+    opts.staffId != null && Number.isFinite(opts.staffId) && opts.staffId > 0 ? opts.staffId : null;
+
   const cacheLookup = createCacheLookupKey({
     packerId: opts.packerId ?? '',
     testedBy: opts.testedBy ?? '',
+    staffId: staffFilterId ?? '',
     limit,
     offset,
     weekStart,
@@ -80,6 +89,18 @@ export async function fetchPackerLogRows(
     params.push(opts.testedBy);
     const testedByIdx = params.length;
     conditions.push(`(test_data.tested_by = $${testedByIdx} OR wa_t.assigned_tech_id = $${testedByIdx})`);
+  }
+
+  // Universal staff filter: this person packed OR tested the row. References the
+  // order-derived test laterals, so it forces the page-filter joins on (below).
+  if (staffFilterId != null) {
+    params.push(staffFilterId);
+    const staffIdx = params.length;
+    conditions.push(
+      `(sal.staff_id = $${staffIdx}`
+      + ` OR test_data.tested_by = $${staffIdx}`
+      + ` OR wa_t.assigned_tech_id = $${staffIdx})`,
+    );
   }
 
   if (weekStart && weekEnd) {
@@ -114,7 +135,7 @@ export async function fetchPackerLogRows(
   // Page-selection joins. Almost every filter touches only sal/pl, but a
   // testedBy filter references the order-derived laterals — so pull those into
   // the page query only when testedBy is active (keeps the common path minimal).
-  const pageFilterJoins = opts.testedBy != null && !Number.isNaN(opts.testedBy)
+  const pageFilterJoins = (opts.testedBy != null && !Number.isNaN(opts.testedBy)) || staffFilterId != null
     ? `
         LEFT JOIN shipping_tracking_numbers stn ON stn.id = sal.shipment_id
         LEFT JOIN LATERAL (

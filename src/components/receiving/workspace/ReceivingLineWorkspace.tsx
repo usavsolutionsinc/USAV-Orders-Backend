@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { LineEditPanel } from './LineEditPanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
 import type { ReceivingWorkspaceVariant } from './workspace-capabilities';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 const LABEL_PRINTED_KEY = (lineId: number) => `receiving-label-printed:${lineId}`;
 
@@ -98,7 +99,7 @@ export function ReceivingLineWorkspace({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 4 }}
-      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.22, ease: motionBezier.easeOut }}
       className="flex h-full w-full flex-col bg-gray-50"
     >
       {/* Step-by-step progress stepper — first row in the workspace now that

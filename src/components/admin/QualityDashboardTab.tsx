@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, AlertTriangle, Wrench, ShieldCheck } from '@/components/Icons';
+import { qualitySeverityToneClass } from '@/lib/quality-severity-tone';
 
 /**
  * Admin → Quality: risk distribution, top open failure modes, repair rollup,
@@ -25,12 +26,6 @@ interface DashboardResp {
     grade: string | null;
   }[];
 }
-
-const SEV_TONE: Record<string, string> = {
-  critical: 'bg-rose-50 text-rose-700 border-rose-200',
-  major: 'bg-amber-50 text-amber-700 border-amber-200',
-  minor: 'bg-gray-50 text-gray-600 border-gray-200',
-};
 
 function dollars(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -98,7 +93,7 @@ export function QualityDashboardTab() {
               {data.top_failures.map((f) => (
                 <li key={f.id} className="flex items-center gap-2 px-5 py-2.5">
                   <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-800">{f.label}</span>
-                  <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${SEV_TONE[f.severity] ?? SEV_TONE.minor}`}>
+                  <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${qualitySeverityToneClass(f.severity)}`}>
                     {f.severity}
                   </span>
                   <span className="w-8 text-right text-label font-black tabular-nums text-gray-900">{f.open_count}</span>

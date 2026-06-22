@@ -31,9 +31,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-receiving-sync';
+import { syncZohoPurchaseOrdersToReceiving, type BulkSyncSummary } from '@/lib/zoho-receiving-sync';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
+import { forEachOrgWithProvider } from '@/lib/cron/for-each-org';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -72,18 +74,72 @@ export async function GET(req: NextRequest) {
           ? poDateFloorParam
           : '2026-05-08';
 
-    const summary = await withCronRun('zoho.incoming_po_sync', () =>
-      syncZohoPurchaseOrdersToReceiving({
-        // 'issued' = vendor has sent the PO; warehouse is expected to receive.
-        // Use ?status=open or ?status= (empty) for backfills.
-        status: statusOverride || 'issued',
-        days_back: daysBack,
-        per_page: 200,
-        max_pages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 25,
-        max_items: Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? maxItemsRaw : 2000,
-        po_date_floor: poDateFloor,
+    // Distributed lock so an overlapping tick / manual trigger / Vercel retry
+    // can't double-sweep. Fan out per Zoho-connected org (plus USAV while it
+    // still uses env creds) — each org syncs under its own Zoho credentials and
+    // tenant GUC (syncZohoPurchaseOrdersToReceiving self-binds withZohoOrg +
+    // withTenantTransaction per PO), with per-org failures isolated.
+    const locked = await withCronLock('zoho.incoming_po_sync', () =>
+      withCronRun('zoho.incoming_po_sync', async () => {
+        const perOrg = await forEachOrgWithProvider(
+          'zoho',
+          (orgId) =>
+            syncZohoPurchaseOrdersToReceiving(orgId, {
+              // 'issued' = vendor has sent the PO; warehouse is expected to
+              // receive. Use ?status=open or ?status= (empty) for backfills.
+              status: statusOverride || 'issued',
+              days_back: daysBack,
+              per_page: 200,
+              max_pages: Number.isFinite(maxPagesRaw) && maxPagesRaw > 0 ? maxPagesRaw : 25,
+              max_items: Number.isFinite(maxItemsRaw) && maxItemsRaw > 0 ? maxItemsRaw : 2000,
+              po_date_floor: poDateFloor,
+            }),
+          { includeUsavTransitional: true },
+        );
+
+        // Aggregate per-org summaries into the shape callers already expect.
+        const totals = {
+          processed: 0, created: 0, updated: 0, linked: 0,
+          line_items_synced: 0, skipped_pre_floor: 0, failed: 0,
+        };
+        const errors: BulkSyncSummary['errors'] = [];
+        for (const r of perOrg) {
+          if (r.ok && r.result) {
+            totals.processed += r.result.processed;
+            totals.created += r.result.created;
+            totals.updated += r.result.updated;
+            totals.linked += r.result.linked;
+            totals.line_items_synced += r.result.line_items_synced;
+            totals.skipped_pre_floor += r.result.skipped_pre_floor;
+            totals.failed += r.result.failed;
+            if (errors.length < 25) errors.push(...r.result.errors);
+          } else {
+            // Whole-org failure (e.g. Zoho unreachable) — count it so ok=false.
+            totals.failed += 1;
+            if (errors.length < 25) {
+              errors.push({
+                purchaseorder_id: `org:${r.orgId}`,
+                error: r.error instanceof Error ? r.error.message : String(r.error),
+              });
+            }
+          }
+        }
+        return {
+          ...totals,
+          errors: errors.slice(0, 25),
+          orgs_swept: perOrg.length,
+          orgs_failed: perOrg.filter((r) => !r.ok).length,
+        };
       }),
     );
+
+    const elapsedMs = Date.now() - startedAt;
+
+    // Another invocation held the lock — report the skip, don't fail.
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked', po_date_floor: poDateFloor, elapsedMs });
+    }
+    const summary = locked.result!;
 
     // The sync writes rows operators see in the rail; invalidate the same
     // cache tags `scan-serial` uses so the Incoming pill reflects fresh
@@ -96,12 +152,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const elapsedMs = Date.now() - startedAt;
     // Single structured log line — Vercel/Datadog log scrapers key off this
     // prefix to plot run cadence + failure rate. Keep field names stable.
     console.log('[cron.incoming-po-sync]', {
       ok: summary.failed === 0,
       po_date_floor: poDateFloor,
+      orgs_swept: summary.orgs_swept,
+      orgs_failed: summary.orgs_failed,
       processed: summary.processed,
       created: summary.created,
       updated: summary.updated,
@@ -116,6 +173,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: summary.failed === 0,
       po_date_floor: poDateFloor,
+      orgs_swept: summary.orgs_swept,
+      orgs_failed: summary.orgs_failed,
       totals: {
         processed: summary.processed,
         created: summary.created,

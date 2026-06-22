@@ -23,6 +23,7 @@ import './nodes/repair.node';
 import './nodes/list-ebay.node';
 import './nodes/pack.node';
 import './nodes/ship.node';
+import './nodes/decision.node';
 
 /**
  * Kept for API compatibility — builtins now register when this module loads

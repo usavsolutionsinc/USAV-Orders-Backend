@@ -1,19 +1,19 @@
 {
   "summary": {
-    "total": 609,
-    "withAuth": 465,
-    "tenantWrapped": 242,
-    "orgIdRef": 486,
+    "total": 629,
+    "withAuth": 478,
+    "tenantWrapped": 244,
+    "orgIdRef": 512,
     "rawPool": 183,
     "drizzle": 14,
-    "transitional": 11,
-    "cron": 30,
+    "transitional": 12,
+    "cron": 33,
     "byRisk": {
-      "critical": 30,
+      "critical": 25,
       "high": 29,
-      "medium": 214,
-      "low": 240,
-      "info": 96
+      "medium": 235,
+      "low": 242,
+      "info": 98
     }
   },
   "routes": [
@@ -281,47 +281,6 @@
       "risk": "critical"
     },
     {
-      "route": "/api/bose-models",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "sourcing.view",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "items"
-      ],
-      "risk": "critical"
-    },
-    {
-      "route": "/api/manual-server/assign",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "sku_stock.manage",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "sku_stock"
-      ],
-      "risk": "critical"
-    },
-    {
       "route": "/api/nas-dev/[[...path]]",
       "methods": [
         "GET",
@@ -428,48 +387,6 @@
       "risk": "critical"
     },
     {
-      "route": "/api/receiving/nas-archive-test",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.upload_photo",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving",
-        "photos"
-      ],
-      "risk": "critical"
-    },
-    {
-      "route": "/api/receiving/touch-scan",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.scan_po",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_scans",
-        "receiving"
-      ],
-      "risk": "critical"
-    },
-    {
       "route": "/api/receiving/zendesk-claim/classify",
       "methods": [
         "POST"
@@ -486,26 +403,6 @@
       "mutates": true,
       "touched": [
         "receiving"
-      ],
-      "risk": "critical"
-    },
-    {
-      "route": "/api/shipping/track/register",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "shipping.mark_shipped",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "types"
       ],
       "risk": "critical"
     },
@@ -1290,6 +1187,67 @@
       "risk": "medium"
     },
     {
+      "route": "/api/admin/organization/settings",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": "admin.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/admin/photos/mirror",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "admin.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/admin/photos/stats",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "admin.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/admin/po-gmail/create-zoho-draft/[id]",
       "methods": [
         "POST"
@@ -1822,6 +1780,27 @@
       "risk": "medium"
     },
     {
+      "route": "/api/bose-models",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "sourcing.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "items"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/catalog/platform-accounts",
       "methods": [
         "GET",
@@ -1947,6 +1926,48 @@
         "receiving",
         "items",
         "types"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/cron/photos/analyze",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": true,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos",
+        "staff"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/cron/photos/nas-mirror",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": true,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "photos"
       ],
       "risk": "medium"
     },
@@ -2292,6 +2313,26 @@
       "risk": "medium"
     },
     {
+      "route": "/api/manual-server/assign",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "sku_stock.manage",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "sku_stock"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/nas-config",
       "methods": [
         "GET"
@@ -2309,6 +2350,29 @@
       "touched": [
         "receiving",
         "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/nas-target/[target]/[[...path]]",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "receiving",
+        "orders"
       ],
       "risk": "medium"
     },
@@ -2774,6 +2838,26 @@
       "risk": "medium"
     },
     {
+      "route": "/api/packing-logs/save-photo",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "packing.complete_order",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/packing-logs/update",
       "methods": [
         "POST"
@@ -2821,6 +2905,171 @@
         "sku_catalog",
         "items",
         "sku"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/analyze",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "photos.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/library",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "photos.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "photos",
+        "items"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/links",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos",
+        "types"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/nas-backup",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "photos.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/share-packs",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "photos.share",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/share-packs/[token]",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": false,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/share-packs/[token]/zip",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": false,
+      "touched": [
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/photos/upload",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "photos",
+        "types"
       ],
       "risk": "medium"
     },
@@ -3553,6 +3802,27 @@
       "risk": "medium"
     },
     {
+      "route": "/api/receiving/nas-archive-test",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.upload_photo",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving",
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/receiving/pending-check",
       "methods": [
         "GET"
@@ -3782,6 +4052,48 @@
       "risk": "medium"
     },
     {
+      "route": "/api/receiving/zendesk-claim/assist",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving",
+        "messages",
+        "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/receiving/zendesk-claim/assist-seller",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/receiving/zendesk-claim/draft",
       "methods": [
         "POST"
@@ -3847,6 +4159,28 @@
         "receiving_lines",
         "receiving",
         "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/receiving/zendesk-claim/seller-message",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving"
       ],
       "risk": "medium"
     },
@@ -4559,6 +4893,26 @@
       "risk": "medium"
     },
     {
+      "route": "/api/shipping/track/register",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "shipping.mark_shipped",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "types"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/shipping/track/sync-one",
       "methods": [
         "POST"
@@ -4813,11 +5167,12 @@
       "tenantWrapped": false,
       "rawPool": true,
       "drizzle": false,
-      "transitional": false,
+      "transitional": true,
       "isCron": false,
       "isPathParam": true,
       "mutates": true,
       "touched": [
+        "location_transfers",
         "inventory_events",
         "sku_stock_ledger",
         "sku_catalog",
@@ -5824,38 +6179,6 @@
       "mutates": false,
       "touched": [
         "reason_codes",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/work-orders",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
-      "withAuth": true,
-      "permission": "work_orders.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "station_activity_logs",
-        "order_shipment_links",
-        "work_assignments",
-        "receiving_lines",
-        "repair_service",
-        "fba_shipments",
-        "receiving",
-        "sku_stock",
-        "orders",
-        "staff",
         "sku"
       ],
       "risk": "medium"
@@ -8979,26 +9302,6 @@
       "risk": "low"
     },
     {
-      "route": "/api/packing-logs/save-photo",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "packing.complete_order",
-      "orgIdRef": true,
-      "tenantWrapped": true,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "photos"
-      ],
-      "risk": "low"
-    },
-    {
       "route": "/api/payroll/settings",
       "methods": [
         "GET",
@@ -9037,6 +9340,26 @@
       "touched": [
         "receiving",
         "sku_stock",
+        "photos"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/photos/[id]/content",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": false,
+      "touched": [
         "photos"
       ],
       "risk": "low"
@@ -9767,6 +10090,27 @@
         "photos",
         "items",
         "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/touch-scan",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.scan_po",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_scans",
+        "receiving"
       ],
       "risk": "low"
     },
@@ -11584,6 +11928,38 @@
       "risk": "low"
     },
     {
+      "route": "/api/work-orders",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": "work_orders.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "station_activity_logs",
+        "order_shipment_links",
+        "work_assignments",
+        "receiving_lines",
+        "repair_service",
+        "fba_shipments",
+        "receiving",
+        "sku_stock",
+        "orders",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/workflow/flow-audit",
       "methods": [
         "GET"
@@ -11689,25 +12065,6 @@
     },
     {
       "route": "/api/admin/organization/profile",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
-      "withAuth": true,
-      "permission": "admin.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/admin/organization/settings",
       "methods": [
         "GET",
         "PATCH"
@@ -12094,6 +12451,24 @@
     },
     {
       "route": "/api/cron/ebay/refresh-tokens",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": true,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/cron/integrations/reconcile",
       "methods": [
         "GET"
       ],
@@ -12586,7 +12961,7 @@
       ],
       "withAuth": true,
       "permission": "admin.view",
-      "orgIdRef": false,
+      "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": false,
       "drizzle": true,
@@ -12730,7 +13105,7 @@
       ],
       "withAuth": true,
       "permission": "repair.view",
-      "orgIdRef": false,
+      "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": false,
       "drizzle": false,
@@ -12749,7 +13124,7 @@
       ],
       "withAuth": false,
       "permission": null,
-      "orgIdRef": false,
+      "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": false,
       "drizzle": false,
@@ -12906,6 +13281,24 @@
       "risk": "info"
     },
     {
+      "route": "/api/sourcing/research",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "sourcing.search",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
       "route": "/api/sourcing/saved-searches/[id]",
       "methods": [
         "PATCH",
@@ -12975,6 +13368,24 @@
       "isCron": false,
       "isPathParam": false,
       "mutates": false,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/user-issues",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
       "touched": [],
       "risk": "info"
     },

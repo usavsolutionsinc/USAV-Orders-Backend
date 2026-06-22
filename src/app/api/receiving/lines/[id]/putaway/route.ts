@@ -143,23 +143,30 @@ export async function POST(
     // for non-serialized putaways. Idempotent via client_event_id:N.
     const events: Array<{ id: number }> = [];
     for (let i = 0; i < qty; i++) {
-      const ev = await recordInventoryEvent({
-        event_type: 'PUTAWAY',
-        actor_staff_id: staffId,
-        station,
-        receiving_id: line.receiving_id,
-        receiving_line_id: line.id,
-        serial_unit_id: serialUnitId,
-        sku: line.sku,
-        bin_id: bin.id,
-        prev_bin_id: prevBinId,
-        prev_status: null,
-        next_status: serialUnitId ? 'STOCKED' : null,
-        scan_token: scanToken,
-        client_event_id: clientEventId ? `${clientEventId}:put-${i + 1}` : null,
-        notes,
-        payload: { qty: 1, unit_index: i + 1, of_qty: qty, bin_name: bin.name },
-      });
+      const ev = await recordInventoryEvent(
+        {
+          event_type: 'PUTAWAY',
+          actor_staff_id: staffId,
+          station,
+          receiving_id: line.receiving_id,
+          receiving_line_id: line.id,
+          serial_unit_id: serialUnitId,
+          sku: line.sku,
+          bin_id: bin.id,
+          prev_bin_id: prevBinId,
+          prev_status: null,
+          next_status: serialUnitId ? 'STOCKED' : null,
+          scan_token: scanToken,
+          client_event_id: clientEventId ? `${clientEventId}:put-${i + 1}` : null,
+          notes,
+          payload: { qty: 1, unit_index: i + 1, of_qty: qty, bin_name: bin.name },
+        },
+        // No shared txn client here (the route uses the raw pool), so thread the
+        // tenant explicitly: this stamps inventory_events.organization_id via the
+        // org-scoped insert path instead of falling back to the column default.
+        undefined,
+        ctx.organizationId,
+      );
       events.push({ id: ev.id });
     }
 

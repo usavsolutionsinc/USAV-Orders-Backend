@@ -25,7 +25,8 @@ function formatElapsedDuration(startAt: string | null | undefined, endAt: string
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-export type ShippedActiveSection = 'return' | 'shipping' | 'product' | 'timeline' | 'customer';
+import type { ShippedActiveSection } from './stacks/types';
+export type { ShippedActiveSection };
 
 interface ShippedDetailsPanelContentProps {
   shipped: ShippedOrder;

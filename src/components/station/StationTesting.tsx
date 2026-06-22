@@ -2,9 +2,11 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import UpNextOrder from '../UpNextOrder';
 import { Barcode, Loader2, Package, MapPin, Settings } from '../Icons';
 import { StationScanBar } from './StationScanBar';
+import { STATION_SCAN_BAR_MODE_BTN_ARMED } from '@/components/station/scan-bar';
 import { ActiveOrderScanFeedback } from './ActiveOrderScanFeedback';
 import { getStationInputMode, type StationInputMode, useStationTestingController } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
@@ -12,7 +14,7 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { useIsMobile } from '@/hooks';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
-const STATION_EASE_OUT = [0.22, 1, 0.36, 1] as const;
+const STATION_EASE_OUT = motionBezier.easeOut;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
 const stationTween = { duration: 0.26, ease: STATION_EASE_OUT };
 const stationLayoutTween = { layout: { duration: 0.32, ease: STATION_EASE_HEIGHT } };
@@ -167,8 +169,8 @@ export default function StationTesting({
   })();
   const ActiveModeIcon = modeBadge.Icon;
   const modeButtonBaseClass =
-    'h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
-  const inactiveModeButtonClass = 'text-gray-500 hover:bg-gray-100 hover:text-gray-800';
+    'relative h-6 w-6 rounded-md flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
+  const inactiveModeButtonClass = 'relative z-base text-gray-500 hover:bg-gray-100 hover:text-gray-800';
 
   const toggleMode = useCallback(
     (nextMode: StationInputMode) => {
@@ -230,7 +232,7 @@ export default function StationTesting({
         autoFocus
         icon={(
           <span
-            className="-ml-1 flex items-center justify-center"
+            className="flex items-center justify-center"
             role="status"
             aria-label={`Current input mode: ${modeBadge.label}`}
             title={`Current mode: ${modeBadge.label}`}
@@ -238,7 +240,7 @@ export default function StationTesting({
             <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
           </span>
         )}
-        inputClassName={`pl-[2.2rem] focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
+        inputClassName={`focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
         rightContentClassName="right-1.5 gap-0.5"
         rightContent={(
           <>
@@ -260,7 +262,7 @@ export default function StationTesting({
                     ? 'Tracking armed — next Enter/scan. Click again to cancel.'
                     : 'Arm tracking (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isTrackingArmed ? 'text-blue-700 bg-blue-50' : inactiveModeButtonClass}`}
+                className={`${modeButtonBaseClass} ${isTrackingArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-blue-700 bg-blue-50` : inactiveModeButtonClass}`}
               >
                 <MapPin className="h-3.5 w-3.5" />
               </button>
@@ -278,7 +280,7 @@ export default function StationTesting({
                     ? 'FBA armed — next Enter/scan. Click again to cancel.'
                     : 'Arm FBA (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isFbaArmed ? 'text-violet-700 bg-violet-50' : inactiveModeButtonClass}`}
+                className={`${modeButtonBaseClass} ${isFbaArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-violet-700 bg-violet-50` : inactiveModeButtonClass}`}
               >
                 <Package className="h-3.5 w-3.5" />
               </button>
@@ -296,7 +298,7 @@ export default function StationTesting({
                     ? 'Repair armed — next Enter/scan. Click again to cancel.'
                     : 'Arm repair (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isRepairArmed ? 'text-amber-700 bg-amber-50' : inactiveModeButtonClass}`}
+                className={`${modeButtonBaseClass} ${isRepairArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-amber-700 bg-amber-50` : inactiveModeButtonClass}`}
               >
                 <Settings className="h-3.5 w-3.5" />
               </button>
@@ -314,7 +316,7 @@ export default function StationTesting({
                     ? 'Serial armed — next Enter/scan. Click again to cancel.'
                     : 'Arm serial (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isSerialArmed ? 'text-emerald-700 bg-emerald-50' : inactiveModeButtonClass}`}
+                className={`${modeButtonBaseClass} ${isSerialArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-emerald-700 bg-emerald-50` : inactiveModeButtonClass}`}
               >
                 <Barcode className="h-3.5 w-3.5" />
               </button>
@@ -357,10 +359,6 @@ export default function StationTesting({
               }}
               filterBarPortalRef={filterBarPortalRef}
             />
-          </div>
-
-          <div className="mt-auto pt-6 border-t border-gray-50 text-center">
-            <p className="text-eyebrow font-black text-gray-300 uppercase tracking-[0.3em]">USAV TECH v2.6</p>
           </div>
         </div>
 

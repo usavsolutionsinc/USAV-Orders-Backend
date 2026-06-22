@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
+import type { PoolClient } from 'pg';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { normalizePSTTimestamp } from '@/utils/date';
 import {
   publishOrderAssignmentsUpdated,
@@ -11,6 +11,9 @@ import {
   getStaffNameMap,
 } from '@/lib/work-assignments/order-assignment-snapshot';
 import { withAuth } from '@/lib/auth/withAuth';
+import { compareWorkOrderRows } from '@/lib/work-orders/ranking';
+import { getOrders } from '@/lib/work-orders/queries';
+import type { WorkOrderRow as SharedWorkOrderRow } from '@/components/work-orders/types';
 
 type QueueKey =
   | 'all'
@@ -64,8 +67,6 @@ interface WorkOrderRow {
   stockLevel?: number | null;
 }
 
-const shippedByCarrierOrLatestStatusSql = SHIPPED_BY_CARRIER_SQL;
-
 function normalizeQueue(raw: string | null): QueueKey {
   const value = String(raw || '').trim().toLowerCase();
   const allowed: QueueKey[] = [
@@ -90,15 +91,15 @@ function normalizeStatus(raw: unknown): WorkStatus {
   return 'OPEN';
 }
 
-function isAssignedRow(row: WorkOrderRow): boolean {
+function isAssignedRow(row: SharedWorkOrderRow): boolean {
   return row.techId != null || row.packerId != null;
 }
 
-function isActionableRow(row: WorkOrderRow): boolean {
+function isActionableRow(row: SharedWorkOrderRow): boolean {
   return row.status !== 'DONE' && row.status !== 'CANCELED';
 }
 
-function matchesSearch(row: WorkOrderRow, query: string): boolean {
+function matchesSearch(row: SharedWorkOrderRow, query: string): boolean {
   if (!query.trim()) return true;
   const needle = query.trim().toLowerCase();
   const haystack = [
@@ -115,7 +116,7 @@ function matchesSearch(row: WorkOrderRow, query: string): boolean {
   return haystack.includes(needle);
 }
 
-function matchesQueue(row: WorkOrderRow, queue: QueueKey): boolean {
+function matchesQueue(row: SharedWorkOrderRow, queue: QueueKey): boolean {
   if (queue === 'all') return true;
   if (queue === 'done') return row.status === 'DONE';
   if (queue === 'all_unassigned') return isActionableRow(row) && !isAssignedRow(row);
@@ -123,156 +124,13 @@ function matchesQueue(row: WorkOrderRow, queue: QueueKey): boolean {
   return row.queueKey === queue;
 }
 
-function compareRows(a: WorkOrderRow, b: WorkOrderRow): number {
-  const statusRank = (value: WorkStatus) => {
-    if (value === 'IN_PROGRESS') return 0;
-    if (value === 'ASSIGNED') return 1;
-    if (value === 'OPEN') return 2;
-    if (value === 'DONE') return 3;
-    return 4;
-  };
+// Ranking now lives in the shared SoT (src/lib/work-orders/ranking.ts) so the
+// per-operator header chip ranks identically to this queue.
+const compareRows = compareWorkOrderRows;
 
-  const deadlineA = a.deadlineAt ? new Date(a.deadlineAt).getTime() : Number.MAX_SAFE_INTEGER;
-  const deadlineB = b.deadlineAt ? new Date(b.deadlineAt).getTime() : Number.MAX_SAFE_INTEGER;
 
-  if ((a.stockLevel ?? null) != null || (b.stockLevel ?? null) != null) {
-    const stockA = a.stockLevel ?? Number.MAX_SAFE_INTEGER;
-    const stockB = b.stockLevel ?? Number.MAX_SAFE_INTEGER;
-    if (stockA !== stockB) return stockA - stockB;
-  }
-  if (statusRank(a.status) !== statusRank(b.status)) return statusRank(a.status) - statusRank(b.status);
-  if (a.priority !== b.priority) return a.priority - b.priority;
-  if (deadlineA !== deadlineB) return deadlineA - deadlineB;
-  return a.entityId - b.entityId;
-}
-
-async function getOrders(): Promise<WorkOrderRow[]> {
-  const result = await pool.query(
-    `SELECT
-       o.id,
-       o.order_id,
-       o.product_title,
-       o.item_number,
-       o.shipment_id,
-       stn.tracking_number_raw AS tracking_number,
-       COALESCE((
-         SELECT json_agg(json_build_object(
-           'shipment_id', osl.shipment_id,
-           'tracking_number_raw', stn2.tracking_number_raw,
-           'is_primary', osl.is_primary
-         ) ORDER BY osl.is_primary DESC, stn2.tracking_number_raw)
-         FROM order_shipment_links osl
-         JOIN shipping_tracking_numbers stn2 ON stn2.id = osl.shipment_id
-         WHERE osl.order_row_id = o.id
-       ), '[]'::json) AS tracking_number_rows,
-       o.sku,
-       o.condition,
-       o.account_source,
-       o.quantity,
-       o.notes,
-       o.out_of_stock,
-       o.created_at,
-       (COALESCE((SELECT count(*) FROM station_activity_logs sal2
-         WHERE sal2.shipment_id IS NOT NULL AND sal2.shipment_id = o.shipment_id), 0) > 0) AS has_tech_scan,
-       test_wa.id AS test_assignment_id,
-       test_wa.assigned_tech_id AS tech_id,
-       st.name AS tech_name,
-       test_wa.status AS test_status,
-       test_wa.priority AS test_priority,
-       test_wa.deadline_at AS deadline_at,
-       test_wa.notes AS test_notes,
-       test_wa.assigned_at AS test_assigned_at,
-       test_wa.updated_at AS test_updated_at,
-       pack_wa.id AS pack_assignment_id,
-       pack_wa.assigned_packer_id AS packer_id,
-       sp.name AS packer_name
-     FROM orders o
-     LEFT JOIN LATERAL (
-       SELECT *
-       FROM work_assignments wa
-       WHERE wa.entity_type = 'ORDER'
-         AND wa.entity_id = o.id
-         AND wa.work_type = 'TEST'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-       ORDER BY CASE wa.status
-         WHEN 'IN_PROGRESS' THEN 1
-         WHEN 'ASSIGNED' THEN 2
-         WHEN 'OPEN' THEN 3
-         ELSE 4
-       END, wa.updated_at DESC, wa.id DESC
-       LIMIT 1
-     ) test_wa ON TRUE
-     LEFT JOIN LATERAL (
-       SELECT *
-       FROM work_assignments wa
-       WHERE wa.entity_type = 'ORDER'
-         AND wa.entity_id = o.id
-         AND wa.work_type = 'PACK'
-         AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-       ORDER BY CASE wa.status
-         WHEN 'IN_PROGRESS' THEN 1
-         WHEN 'ASSIGNED' THEN 2
-         WHEN 'OPEN' THEN 3
-         ELSE 4
-       END, wa.updated_at DESC, wa.id DESC
-       LIMIT 1
-     ) pack_wa ON TRUE
-     LEFT JOIN staff st ON st.id = test_wa.assigned_tech_id
-     LEFT JOIN staff sp ON sp.id = pack_wa.assigned_packer_id
-     LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-     WHERE NOT ${shippedByCarrierOrLatestStatusSql}
-       AND NOT EXISTS (
-         SELECT 1
-         FROM station_activity_logs sal
-         WHERE sal.shipment_id IS NOT NULL
-           AND sal.shipment_id = o.shipment_id
-       )
-       AND UPPER(COALESCE(o.status, '')) <> 'SHIPPED'
-       AND o.shipment_id IS NOT NULL
-     ORDER BY COALESCE(test_wa.deadline_at, o.created_at) ASC, o.id ASC
-     LIMIT 500`
-  );
-
-  return result.rows.map((row) => ({
-    id: `ORDER:${row.id}`,
-    entityType: 'ORDER' as const,
-    entityId: Number(row.id),
-    queueKey: 'orders' as const,
-    queueLabel: 'Orders',
-    title: String(row.product_title || 'Untitled order'),
-    subtitle: [row.order_id, row.tracking_number, row.sku].filter(Boolean).join(' • '),
-    recordLabel: String(row.order_id || row.item_number || `Order #${row.id}`),
-    sourcePath: '/dashboard?pending=',
-    techId: row.tech_id == null ? null : Number(row.tech_id),
-    techName: row.tech_name ? String(row.tech_name) : null,
-    packerId: row.packer_id == null ? null : Number(row.packer_id),
-    packerName: row.packer_name ? String(row.packer_name) : null,
-    status: normalizeStatus(row.test_status),
-    priority: Number(row.test_priority || 100),
-    deadlineAt: normalizePSTTimestamp(row.deadline_at),
-    notes: (row.test_notes || row.notes) ? String(row.test_notes || row.notes) : null,
-    assignedAt: normalizePSTTimestamp(row.test_assigned_at),
-    updatedAt: normalizePSTTimestamp(row.test_updated_at),
-    primaryAssignmentId: row.test_assignment_id == null ? null : Number(row.test_assignment_id),
-    secondaryAssignmentId: row.pack_assignment_id == null ? null : Number(row.pack_assignment_id),
-    primaryWorkType: 'TEST' as const,
-    orderId: row.order_id ? String(row.order_id) : null,
-    trackingNumber: row.tracking_number ? String(row.tracking_number) : null,
-    trackingNumberRows: Array.isArray(row.tracking_number_rows) ? row.tracking_number_rows : [],
-    itemNumber: row.item_number ? String(row.item_number) : null,
-    sku: row.sku ? String(row.sku) : null,
-    condition: row.condition ? String(row.condition) : null,
-    shipmentId: row.shipment_id ?? null,
-    accountSource: row.account_source ? String(row.account_source) : null,
-    quantity: row.quantity ? String(row.quantity) : null,
-    createdAt: normalizePSTTimestamp(row.created_at),
-    hasTechScan: Boolean(row.has_tech_scan),
-    outOfStock: row.out_of_stock ? String(row.out_of_stock).trim() : null,
-  }));
-}
-
-async function getReceiving(): Promise<WorkOrderRow[]> {
-  const result = await pool.query(
+async function getReceiving(orgId: string): Promise<WorkOrderRow[]> {
+  const result = await tenantQuery(orgId,
     `SELECT
        r.id,
        COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
@@ -299,6 +157,7 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'RECEIVING'
          AND wa.entity_id = r.id
          AND wa.work_type = 'TEST'
+         AND wa.organization_id = $1
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
@@ -311,27 +170,31 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
-     WHERE (
-            -- Carton is flagged for test AND it still has at least one line that
-            -- needs testing. Per-line needs_test (cables toggled off) drops a
-            -- carton out only once EVERY line is no-test; cartons not yet lined
-            -- (no receiving_lines rows) still show so they aren't hidden pre-unbox.
-            COALESCE(r.needs_test, false) = true
-            AND (
-              NOT EXISTS (SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id)
-              OR EXISTS (
-                SELECT 1 FROM receiving_lines rl
-                 WHERE rl.receiving_id = r.id AND COALESCE(rl.needs_test, true) = true
+     WHERE r.organization_id = $1
+       AND (
+            (
+              -- Carton is flagged for test AND it still has at least one line that
+              -- needs testing. Per-line needs_test (cables toggled off) drops a
+              -- carton out only once EVERY line is no-test; cartons not yet lined
+              -- (no receiving_lines rows) still show so they aren't hidden pre-unbox.
+              COALESCE(r.needs_test, false) = true
+              AND (
+                NOT EXISTS (SELECT 1 FROM receiving_lines rl WHERE rl.receiving_id = r.id AND rl.organization_id = $1)
+                OR EXISTS (
+                  SELECT 1 FROM receiving_lines rl
+                   WHERE rl.receiving_id = r.id AND rl.organization_id = $1 AND COALESCE(rl.needs_test, true) = true
+                )
               )
             )
+            OR COALESCE(r.is_return, false) = true
+            OR UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
           )
-        OR COALESCE(r.is_return, false) = true
-        OR UPPER(COALESCE(r.carrier, '')) = 'LOCAL'
      -- is_priority (pending-order match or manual toggle) floats urgent cartons
      -- to the top of the tester's queue, matching the unbox Prioritize rail.
      ORDER BY COALESCE(r.is_priority, false) DESC,
               COALESCE(wa.deadline_at, r.received_at, r.created_at) ASC, r.id ASC
-     LIMIT 500`
+     LIMIT 500`,
+    [orgId]
   );
 
   return result.rows.map((row) => {
@@ -375,8 +238,8 @@ async function getReceiving(): Promise<WorkOrderRow[]> {
   });
 }
 
-async function getRepairs(): Promise<WorkOrderRow[]> {
-  const result = await pool.query(
+async function getRepairs(orgId: string): Promise<WorkOrderRow[]> {
+  const result = await tenantQuery(orgId,
     `SELECT
        rs.id,
        rs.ticket_number,
@@ -401,6 +264,7 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'REPAIR'
          AND wa.entity_id = rs.id
          AND wa.work_type = 'REPAIR'
+         AND wa.organization_id = $1
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
@@ -413,8 +277,10 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
-     WHERE COALESCE(rs.status, '') NOT IN ('Done', 'Shipped', 'Picked Up')
-     ORDER BY COALESCE(wa.deadline_at, wa.updated_at) ASC NULLS LAST, rs.id ASC`
+     WHERE rs.organization_id = $1
+       AND COALESCE(rs.status, '') NOT IN ('Done', 'Shipped', 'Picked Up')
+     ORDER BY COALESCE(wa.deadline_at, wa.updated_at) ASC NULLS LAST, rs.id ASC`,
+    [orgId]
   );
 
   return result.rows.map((row) => {
@@ -450,8 +316,8 @@ async function getRepairs(): Promise<WorkOrderRow[]> {
   });
 }
 
-async function getFbaShipments(): Promise<WorkOrderRow[]> {
-  const result = await pool.query(
+async function getFbaShipments(orgId: string): Promise<WorkOrderRow[]> {
+  const result = await tenantQuery(orgId,
     `SELECT
        fs.id,
        fs.shipment_ref,
@@ -476,6 +342,7 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
        WHERE wa.entity_type = 'FBA_SHIPMENT'
          AND wa.entity_id = fs.id
          AND wa.work_type = 'QA'
+         AND wa.organization_id = $1
          AND wa.status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE wa.status
          WHEN 'IN_PROGRESS' THEN 1
@@ -488,9 +355,11 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = COALESCE(wa.assigned_tech_id, fs.assigned_tech_id)
      LEFT JOIN staff sp ON sp.id = COALESCE(wa.assigned_packer_id, fs.assigned_packer_id)
-     WHERE COALESCE(fs.status, 'PLANNED') <> 'SHIPPED'
+     WHERE fs.organization_id = $1
+       AND COALESCE(fs.status, 'PLANNED') <> 'SHIPPED'
      ORDER BY fs.created_at DESC NULLS LAST, fs.id DESC
-     LIMIT 500`
+     LIMIT 500`,
+    [orgId]
   );
 
   return result.rows.map((row) => ({
@@ -519,11 +388,11 @@ async function getFbaShipments(): Promise<WorkOrderRow[]> {
   }));
 }
 
-async function getSkuStock(): Promise<WorkOrderRow[]> {
+async function getSkuStock(orgId: string): Promise<WorkOrderRow[]> {
   // Only return rows with an assigned/in-progress/done work assignment.
   // Unassigned sku_stock rows (no WA, or WA status = OPEN) are intentionally
   // excluded — use /api/assignments/sku-search to search then assign them.
-  const result = await pool.query(
+  const result = await tenantQuery(orgId,
     `SELECT
        ss.id,
        ss.sku,
@@ -547,6 +416,7 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
        WHERE entity_type = 'SKU_STOCK'
          AND entity_id   = ss.id
          AND work_type   = 'STOCK_REPLENISH'
+         AND organization_id = $1
          AND status IN ('ASSIGNED', 'IN_PROGRESS', 'DONE')
        ORDER BY CASE status
          WHEN 'IN_PROGRESS' THEN 1
@@ -558,6 +428,7 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
      ) wa ON TRUE
      LEFT JOIN staff st ON st.id = wa.assigned_tech_id
      LEFT JOIN staff sp ON sp.id = wa.assigned_packer_id
+     WHERE ss.organization_id = $1
      ORDER BY CASE wa.status
        WHEN 'IN_PROGRESS' THEN 1
        WHEN 'ASSIGNED'    THEN 2
@@ -567,7 +438,8 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
      wa.priority ASC,
      COALESCE(ss.stock, 0) ASC,
      ss.id DESC
-     LIMIT 500`
+     LIMIT 500`,
+    [orgId]
   );
 
   return result.rows.map((row) => {
@@ -600,7 +472,7 @@ async function getSkuStock(): Promise<WorkOrderRow[]> {
   });
 }
 
-async function upsertAssignment(params: {
+async function upsertAssignment(client: PoolClient, orgId: string, params: {
   entityType: EntityType;
   entityId: number;
   workType: WorkType;
@@ -613,12 +485,13 @@ async function upsertAssignment(params: {
   notes: string | null;
   allowInsertWhenEmpty?: boolean;
 }) {
-  const existing = await pool.query<{ id: number }>(
+  const existing = await client.query<{ id: number }>(
     `SELECT id
      FROM work_assignments
      WHERE entity_type = $1
        AND entity_id = $2
        AND work_type = $3
+       AND organization_id = $4
        AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
      ORDER BY CASE status
        WHEN 'IN_PROGRESS' THEN 1
@@ -627,7 +500,7 @@ async function upsertAssignment(params: {
        ELSE 4
      END, updated_at DESC, id DESC
      LIMIT 1`,
-    [params.entityType, params.entityId, params.workType]
+    [params.entityType, params.entityId, params.workType, orgId]
   );
 
   const shouldInsert =
@@ -640,7 +513,7 @@ async function upsertAssignment(params: {
       params.priority !== 100);
 
   if (existing.rows[0]) {
-    await pool.query(
+    await client.query(
       `UPDATE work_assignments
        SET assigned_tech_id = $1,
            assigned_packer_id = $2,
@@ -652,7 +525,7 @@ async function upsertAssignment(params: {
            completed_at = CASE WHEN $3::text IN ('DONE', 'CANCELED') THEN COALESCE(completed_at, NOW()) ELSE NULL END,
            completed_by_packer_id = CASE WHEN $3::text = 'DONE' THEN COALESCE($8, completed_by_packer_id) ELSE completed_by_packer_id END,
            updated_at = NOW()
-       WHERE id = $7`,
+       WHERE id = $7 AND organization_id = $9`,
       [
         params.assignedTechId,
         params.assignedPackerId,
@@ -662,6 +535,7 @@ async function upsertAssignment(params: {
         params.notes,
         existing.rows[0].id,
         params.completedByPackerId ?? null,
+        orgId,
       ]
     );
     return existing.rows[0].id;
@@ -672,11 +546,11 @@ async function upsertAssignment(params: {
   // Two concurrent PATCHes can both miss the SELECT and attempt INSERT; the partial
   // unique index ux_work_assignments_active_entity then raises a duplicate key.
   // ON CONFLICT makes this path atomic (same pattern as shipstation deadline upsert).
-  const inserted = await pool.query<{ id: number }>(
+  const inserted = await client.query<{ id: number }>(
     `INSERT INTO work_assignments
-       (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
+       (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
         completed_by_packer_id, status, priority, deadline_at, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7::assignment_status_enum, $8, $9, $10)
+     VALUES ($11, $1, $2, $3, $4, $5, $6, $7::assignment_status_enum, $8, $9, $10)
      ON CONFLICT (entity_type, entity_id, work_type)
        WHERE (status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS'))
      DO UPDATE SET
@@ -711,6 +585,7 @@ async function upsertAssignment(params: {
       params.priority,
       params.deadlineAt,
       params.notes,
+      orgId,
     ]
   );
   return inserted.rows[0]?.id ?? null;
@@ -725,7 +600,7 @@ async function safeFetch<T>(label: string, fn: () => Promise<T[]>): Promise<T[]>
   }
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const queue = normalizeQueue(searchParams.get('queue'));
@@ -733,7 +608,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 
     // Only pending orders for now — receiving, FBA, repair, stock queues disabled
     const [orders] = await Promise.all([
-      safeFetch('getOrders', getOrders),
+      safeFetch('getOrders', () => getOrders(ctx.organizationId)),
     ]);
 
     const allRows = [...orders];
@@ -796,82 +671,109 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     const assignedPackerId = Number.isFinite(packerIdRaw) && packerIdRaw > 0 ? packerIdRaw : null;
     const priority = Number.isFinite(priorityRaw) ? Math.max(1, Math.min(priorityRaw, 9999)) : 100;
 
-    if (entityType === 'ORDER') {
-      // TEST row owns the technician slot; never write packer here.
-      await upsertAssignment({
-        entityType: 'ORDER',
-        entityId,
-        workType: 'TEST',
-        assignedTechId,
-        assignedPackerId: null,
-        status,
-        priority,
-        deadlineAt,
-        notes,
-      });
+    // Map each entity type to its org-bearing parent table for the ownership
+    // gate. Keys are the validated EntityType union — never user input — so the
+    // identifier interpolated into the SQL below cannot be attacker-controlled.
+    const parentTable: Record<EntityType, string> = {
+      ORDER: 'orders',
+      REPAIR: 'repair_service',
+      FBA_SHIPMENT: 'fba_shipments',
+      RECEIVING: 'receiving',
+      SKU_STOCK: 'sku_stock',
+    };
 
-      // PACK row owns the packer slot.  Only upsert it when the caller explicitly
-      // included assignedPackerId in the request body — either to set a new packer
-      // (non-null) or to intentionally clear one (null).  Skipping this call on
-      // tech-only partial saves prevents the PACK WA from being null-wiped.
-      if (packerIdProvided) {
-        await upsertAssignment({
+    const owned = await withTenantTransaction(ctx.organizationId, async (client) => {
+      // Verify the target entity belongs to the caller's org before any write.
+      // A cross-tenant entityId returns false → 404 (hide existence), closing the
+      // work-assignment / fba_shipments / receiving cross-tenant write breach.
+      const owns = await client.query(
+        `SELECT 1 FROM ${parentTable[entityType]} WHERE id = $1 AND organization_id = $2`,
+        [entityId, ctx.organizationId],
+      );
+      if (owns.rowCount === 0) return false;
+
+      if (entityType === 'ORDER') {
+        // TEST row owns the technician slot; never write packer here.
+        await upsertAssignment(client, ctx.organizationId, {
           entityType: 'ORDER',
           entityId,
-          workType: 'PACK',
-          assignedTechId: null,
-          assignedPackerId,
-          completedByPackerId: status === 'DONE' ? (assignedPackerId ?? null) : null,
+          workType: 'TEST',
+          assignedTechId,
+          assignedPackerId: null,
           status,
           priority,
-          deadlineAt: null,
+          deadlineAt,
           notes,
-          allowInsertWhenEmpty: assignedPackerId != null,
         });
+
+        // PACK row owns the packer slot.  Only upsert it when the caller explicitly
+        // included assignedPackerId in the request body — either to set a new packer
+        // (non-null) or to intentionally clear one (null).  Skipping this call on
+        // tech-only partial saves prevents the PACK WA from being null-wiped.
+        if (packerIdProvided) {
+          await upsertAssignment(client, ctx.organizationId, {
+            entityType: 'ORDER',
+            entityId,
+            workType: 'PACK',
+            assignedTechId: null,
+            assignedPackerId,
+            completedByPackerId: status === 'DONE' ? (assignedPackerId ?? null) : null,
+            status,
+            priority,
+            deadlineAt: null,
+            notes,
+            allowInsertWhenEmpty: assignedPackerId != null,
+          });
+        }
+
+        // is_shipped is now derived from shipping_tracking_numbers; no direct write needed
+      } else {
+        const workType: WorkType =
+          entityType === 'REPAIR'
+            ? 'REPAIR'
+            : entityType === 'FBA_SHIPMENT'
+            ? 'QA'
+            : entityType === 'SKU_STOCK'
+            ? 'STOCK_REPLENISH'
+            : 'TEST';
+
+        await upsertAssignment(client, ctx.organizationId, {
+          entityType,
+          entityId,
+          workType,
+          assignedTechId,
+          assignedPackerId,
+          status,
+          priority,
+          deadlineAt,
+          notes,
+        });
+
+        if (entityType === 'FBA_SHIPMENT') {
+          await client.query(
+            `UPDATE fba_shipments
+             SET assigned_tech_id = $1,
+                 assigned_packer_id = $2
+             WHERE id = $3 AND organization_id = $4`,
+            [assignedTechId, assignedPackerId, entityId, ctx.organizationId]
+          );
+        }
+
+        if (entityType === 'RECEIVING') {
+          await client.query(
+            `UPDATE receiving
+             SET assigned_tech_id = $1,
+                 updated_at = NOW()
+             WHERE id = $2 AND organization_id = $3`,
+            [assignedTechId, entityId, ctx.organizationId]
+          );
+        }
       }
+      return true;
+    });
 
-      // is_shipped is now derived from shipping_tracking_numbers; no direct write needed
-    } else {
-      const workType: WorkType =
-        entityType === 'REPAIR'
-          ? 'REPAIR'
-          : entityType === 'FBA_SHIPMENT'
-          ? 'QA'
-          : entityType === 'SKU_STOCK'
-          ? 'STOCK_REPLENISH'
-          : 'TEST';
-
-      await upsertAssignment({
-        entityType,
-        entityId,
-        workType,
-        assignedTechId,
-        assignedPackerId,
-        status,
-        priority,
-        deadlineAt,
-        notes,
-      });
-
-      if (entityType === 'FBA_SHIPMENT') {
-        await pool.query(
-          `UPDATE fba_shipments
-           SET assigned_tech_id = $1,
-               assigned_packer_id = $2
-           WHERE id = $3`,
-          [assignedTechId, assignedPackerId, entityId]
-        );
-      }
-
-      if (entityType === 'RECEIVING') {
-        await pool.query(
-          `UPDATE receiving
-           SET assigned_tech_id = $1,
-               updated_at = NOW()
-           WHERE id = $2`,
-          [assignedTechId, entityId]
-        );
-      }
+    if (!owned) {
+      return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
     }
 
     try {

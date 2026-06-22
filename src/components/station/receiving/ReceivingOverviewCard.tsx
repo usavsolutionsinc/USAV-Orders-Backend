@@ -2,7 +2,7 @@
 
 import { useStaffNameMap } from '@/hooks/useStaffNameMap';
 import { DateTimeValue } from '@/design-system/components/DateTimeValue';
-import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
+import type { ReceivingDetailsLog } from '@/components/station/receiving-details-log';
 import { ReceivingPhotosSection } from './ReceivingPhotosSection';
 
 interface ReceivingOverviewCardProps {

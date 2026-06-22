@@ -1,4 +1,4 @@
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { formatDateTimePST } from '@/utils/date';
 
 export type ReceivingCopyScratch = {

@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { getActiveStaff } from '@/lib/staffCache';
-import { staffHasRole } from '@/utils/staff';
 import { ChevronLeft, Wrench, X, Check } from '../Icons';
 import { ProductSelector, type SelectedItem } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
-import { CustomerInfoForm, CONTACT_FIELDS, type ContactFieldKey } from './CustomerInfoForm';
+import { CustomerInfoForm, CONTACT_FIELDS } from './CustomerInfoForm';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import RepairServiceForm from './RepairServiceForm';
 import {
@@ -14,8 +12,12 @@ import {
     type RepairIntakeStepKey,
 } from './RepairIntakeStepper';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
+import { RepairPaperworkSheet } from './RepairPaperworkSheet';
 import { TextField, FloatingButton } from '@/design-system/primitives';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
+import { REPAIR_STEP_COPY, buildInitialFormData, formatPhone, isContactFieldValid } from './repair-intake-logic';
+import { useRepairIntakeData } from './useRepairIntakeData';
+import { useRepairCustomerSearch, type ExistingCustomer } from './useRepairCustomerSearch';
 
 interface RepairIntakeFormProps {
     onClose: () => void;
@@ -46,61 +48,8 @@ export interface RepairFormData {
     signatureStrokes?: unknown[] | null;
 }
 
-interface TechStaff {
-    id: number;
-    name: string;
-}
-
-interface ExistingCustomer {
-    id: number;
-    name: string;
-    phone: string | null;
-    email: string | null;
-    updated_at: string | null;
-}
-
 const REPAIR_INTAKE_MAX_WIDTH = 'max-w-[720px]';
 const REPAIR_INTAKE_COLUMN_CLASS = `mx-auto w-full ${REPAIR_INTAKE_MAX_WIDTH}`;
-
-function isContactFieldValid(field: ContactFieldKey, data: RepairFormData): boolean {
-    switch (field) {
-        case 'name':
-            return !!data.customer.name.trim();
-        case 'phone':
-            return !!data.customer.phone.trim();
-        case 'email':
-        case 'notes':
-            return true;
-        case 'serial':
-            return !!data.serialNumber.trim();
-        case 'price':
-            return !!data.price.trim();
-    }
-}
-
-function buildInitialFormData(initialData?: Partial<RepairFormData>): RepairFormData {
-    return {
-        product: {
-            type: initialData?.product?.type || '',
-            model: initialData?.product?.model || '',
-            sourceSku: initialData?.product?.sourceSku ?? null,
-        },
-        repairReasons: Array.isArray(initialData?.repairReasons) ? initialData!.repairReasons : [],
-        repairNotes: initialData?.repairNotes || '',
-        customer: {
-            name: initialData?.customer?.name || '',
-            phone: initialData?.customer?.phone || '',
-            email: initialData?.customer?.email || '',
-        },
-        serialNumber: initialData?.serialNumber || '',
-        price: initialData?.price || '130',
-        notes: initialData?.notes || '',
-        assignedTechId: initialData?.assignedTechId ?? null,
-        assignedTechName: initialData?.assignedTechName || '',
-        signatureDataUrl: null,
-        signatureStrokes: null,
-    };
-}
 
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
@@ -110,43 +59,16 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
     const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
 
-    const [techs, setTechs] = useState<TechStaff[]>([]);
-    const [loadingTechs, setLoadingTechs] = useState(true);
-    const [skuIssues, setSkuIssues] = useState<string[]>([]);
     const [customerMode, setCustomerMode] = useState<'existing' | 'new'>('new');
     const [customerQuery, setCustomerQuery] = useState('');
-    const [customerResults, setCustomerResults] = useState<ExistingCustomer[]>([]);
-    const [loadingCustomers, setLoadingCustomers] = useState(false);
-    const [customerSearchError, setCustomerSearchError] = useState('');
     const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
     const [contactFieldIndex, setContactFieldIndex] = useState(0);
 
-    useEffect(() => {
-        let active = true;
-        getActiveStaff()
-            .then((data) => {
-                if (active) setTechs(data.filter((m) => staffHasRole(m, 'technician')));
-            })
-            .catch(() => setTechs([]))
-            .finally(() => setLoadingTechs(false));
-        return () => { active = false; };
-    }, []);
-
-    useEffect(() => {
-        let active = true;
-        const url = favoriteSkuId
-            ? `/api/repair/issues?favoriteSkuId=${favoriteSkuId}`
-            : '/api/repair/issues';
-        fetch(url)
-            .then(r => r.json())
-            .then(data => {
-                if (active) setSkuIssues(
-                    Array.isArray(data?.issues) ? data.issues.map((i: { label: string }) => i.label) : [],
-                );
-            })
-            .catch(() => { if (active) setSkuIssues([]); });
-        return () => { active = false; };
-    }, [favoriteSkuId]);
+    const { techs, loadingTechs, skuIssues } = useRepairIntakeData(favoriteSkuId);
+    const { customerResults, loadingCustomers, customerSearchError } = useRepairCustomerSearch(
+        currentStep === 'contact' && customerMode === 'existing',
+        customerQuery,
+    );
 
     useEffect(() => {
         setFormData(buildInitialFormData(initialData));
@@ -161,42 +83,6 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     useEffect(() => {
         setContactFieldIndex(0);
     }, [customerMode]);
-
-    useEffect(() => {
-        if (currentStep !== 'contact' || customerMode !== 'existing') return;
-
-        let active = true;
-        const controller = new AbortController();
-        const timer = window.setTimeout(async () => {
-            setLoadingCustomers(true);
-            setCustomerSearchError('');
-            try {
-                const q = customerQuery.trim();
-                const res = await fetch(`/api/repair/customers?q=${encodeURIComponent(q)}&limit=25`, {
-                    signal: controller.signal,
-                });
-                const payload = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    throw new Error(payload?.error || 'Failed to fetch customers');
-                }
-                if (!active) return;
-                const rows = Array.isArray(payload?.customers) ? payload.customers : [];
-                setCustomerResults(rows);
-            } catch (error: unknown) {
-                if (!active || controller.signal.aborted) return;
-                setCustomerResults([]);
-                setCustomerSearchError(error instanceof Error ? error.message : 'Failed to fetch customers');
-            } finally {
-                if (active) setLoadingCustomers(false);
-            }
-        }, 220);
-
-        return () => {
-            active = false;
-            controller.abort();
-            window.clearTimeout(timer);
-        };
-    }, [currentStep, customerMode, customerQuery]);
 
     const productSelected = !!(formData.product.type && formData.product.model);
 
@@ -223,14 +109,6 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         day: '2-digit',
         year: 'numeric',
     });
-
-    const formatPhone = (phone: string) => {
-        const cleaned = phone.replace(/\D/g, '');
-        if (cleaned.length === 10) {
-            return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-        }
-        return phone;
-    };
 
     const handleSelectedItemsChange = (items: SelectedItem[]) => {
         setSelectedItems(items);
@@ -356,23 +234,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         startDateTime: today,
     };
 
-    const stepTitle =
-        currentStep === 'product'
-            ? 'Select repair service'
-            : currentStep === 'issue'
-                ? 'Issue / reason for repair'
-                : currentStep === 'contact'
-                    ? 'Contact information'
-                    : 'Review & sign';
-
-    const stepSubtitle =
-        currentStep === 'product'
-            ? 'Choose the product or pick a common repair.'
-            : currentStep === 'issue'
-                ? 'Describe what needs to be repaired.'
-                : currentStep === 'contact'
-                    ? 'Enter customer details for the repair ticket.'
-                    : 'Confirm all details with the customer before submitting.';
+    const stepTitle = REPAIR_STEP_COPY[currentStep].title;
+    const stepSubtitle = REPAIR_STEP_COPY[currentStep].subtitle;
 
     const isReviewStep = currentStep === 'review';
 
@@ -432,14 +295,19 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
-                            aria-label="Close"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                            {/* Paperwork affordance — present on every step so the
+                                repair agreement is viewable at any point (acceptance B). */}
+                            <RepairPaperworkSheet formData={formData} />
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
+                                aria-label="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="mt-4">

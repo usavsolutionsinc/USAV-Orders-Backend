@@ -69,36 +69,45 @@ export const HashIcon = () => (
  *   fnsku     purple / package  Amazon FNSKUs scanned at FBA intake ONLY
  *   ticket    orange / hash     support ticket ids
  */
+// `dot` = accent-dot bg per tone, so surfaces that show a copied ref as a dot
+// (e.g. the clipboard-history popover) read the same hue as the chip it came
+// from — one tone SoT, no parallel dot map.
 export const CHIP_TONES = {
   id: {
     icon: <HashIcon />,
     underline: 'border-gray-500',
     iconClass: 'text-gray-500',
+    dot: 'bg-gray-400',
   },
   tracking: {
     icon: <MapPin className="h-4 w-4 shrink-0" />,
     underline: 'border-blue-500',
     iconClass: 'inline-flex items-center justify-center text-blue-500',
+    dot: 'bg-blue-500',
   },
   serial: {
     icon: <Barcode className="h-4 w-4 shrink-0" />,
     underline: 'border-emerald-500',
     iconClass: 'inline-flex items-center justify-center text-emerald-500',
+    dot: 'bg-emerald-500',
   },
   sku: {
     icon: <Pencil className="h-4 w-4 shrink-0" />,
     underline: 'border-yellow-500',
     iconClass: 'inline-flex items-center justify-center text-yellow-600',
+    dot: 'bg-yellow-500',
   },
   fnsku: {
     icon: <Package className="h-4 w-4 shrink-0" />,
     underline: 'border-purple-500',
     iconClass: 'text-purple-500',
+    dot: 'bg-purple-500',
   },
   ticket: {
     icon: <HashIcon />,
     underline: 'border-orange-500',
     iconClass: 'text-orange-500',
+    dot: 'bg-orange-500',
   },
 } as const;
 
@@ -585,6 +594,7 @@ export function AddValueChipFace({
   colorClass = 'text-blue-600',
   underlineClass = 'border-blue-400',
   dense = false,
+  size = 'mini',
 }: {
   label: string;
   icon: React.ReactNode;
@@ -593,12 +603,22 @@ export function AddValueChipFace({
   /** Dashed underline border color. Override for status feedback. */
   underlineClass?: string;
   dense?: boolean;
+  /**
+   * `mini` (default) — compact 8px label for popover triggers.
+   * `chip` — 10px label sized so the empty face's total width matches a filled
+   * {@link CopyChip} in a {@link ChipColumns} tracking slot (icon lands at the
+   * same x, footprint is identical). Pass a `h-3.5 w-3.5` icon; the dashed
+   * underline still signals "nothing here yet". (Verified against the filled
+   * TrackingChip at /design-demo/id-chips: both 62px wide, icon at x=933.)
+   */
+  size?: 'mini' | 'chip';
 }) {
+  const labelSize = size === 'chip' ? 'text-[10px]' : dense ? 'text-[11px]' : 'text-mini';
   return (
     <span className={`inline-flex items-center gap-0.5 ${colorClass}`}>
       <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''}`}>{icon}</span>
       <span
-        className={`${dense ? 'text-[11px]' : 'text-mini'} whitespace-nowrap border-b-2 border-dashed pb-0.5 font-bold leading-none tracking-tight ${underlineClass}`}
+        className={`${labelSize} whitespace-nowrap border-b-2 border-dashed pb-0.5 font-bold leading-none tracking-tight ${underlineClass}`}
       >
         {label}
       </span>

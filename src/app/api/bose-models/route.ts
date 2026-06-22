@@ -21,7 +21,7 @@ const ROUTE_BOSE_MODELS_POST = 'bose-models.post';
  * GET /api/bose-models — Paginated Bose model catalog with compatibility counts.
  * Query: q, family, limit (1–500), offset.
  */
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get('q') || '';
@@ -29,7 +29,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     const limit = Math.max(1, Math.min(500, Number(searchParams.get('limit') || 100)));
     const offset = Math.max(0, Number(searchParams.get('offset') || 0));
 
-    const { items, total } = await getBoseModelList({ q, family, limit, offset });
+    const { items, total } = await getBoseModelList({ q, family, limit, offset }, ctx.organizationId);
     return NextResponse.json({ success: true, items, total });
   } catch (error: any) {
     console.error('Error in GET /api/bose-models:', error);
@@ -55,11 +55,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
     if (idemKey) {
-      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE_BOSE_MODELS_POST);
+      const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE_BOSE_MODELS_POST);
       if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
     }
 
-    const existing = await getBoseModelByModelNumber(parsed.modelNumber);
+    const existing = await getBoseModelByModelNumber(parsed.modelNumber, ctx.organizationId);
     if (existing && existing.is_active) {
       return NextResponse.json(
         { success: false, error: 'A Bose model with that model number already exists', id: existing.id },
@@ -77,7 +77,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       imageUrl: parsed.imageUrl ?? null,
       notes: parsed.notes ?? null,
       isActive: parsed.isActive ?? true,
-    });
+    }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
       source: 'bose-models-api',
@@ -91,6 +91,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const responseBody = { success: true, model };
     if (idemKey) {
       await saveApiIdempotencyResponse(pool, {
+        orgId: ctx.organizationId,
         idempotencyKey: idemKey,
         route: ROUTE_BOSE_MODELS_POST,
         staffId: ctx.staffId,

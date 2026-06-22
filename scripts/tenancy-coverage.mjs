@@ -56,6 +56,7 @@ const SYSTEM_GLOBAL = new Map([
   ['stripe_events', 'global Stripe webhook idempotency log'],
   ['roles', 'global system roles (no per-org roles yet — see Phase F3)'],
   ['staff_roles', 'staff↔role link; isolation rides on staff.organization_id'],
+  ['workflow_templates', 'system-owned Operations Studio graph blueprints (Phase E4); tenants CLONE into their own workflow_definitions — never tenant-written'],
 ]);
 
 // Reference taxonomies that *might* be intentionally global (shared knowledge)

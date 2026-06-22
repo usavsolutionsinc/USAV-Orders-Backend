@@ -1,25 +1,54 @@
 'use client';
 
+import { useState } from 'react';
+import { Package, History } from '@/components/Icons';
 import { TOKENS } from '@/components/mobile/redesign/DesignSystem';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { MobilePackingList } from '@/components/mobile/packer/MobilePackingList';
+import { MobilePackerFlow } from '@/components/mobile/packer/MobilePackerFlow';
 import { useAuth } from '@/contexts/AuthContext';
 
+type PackView = 'flow' | 'recent';
+
+const VIEWS = [
+  { id: 'flow' as const, label: 'Pack', icon: Package },
+  { id: 'recent' as const, label: 'Recent', icon: History },
+];
+
 /**
- * /m/pack — Mobile packing feed living INSIDE the /m shell.
+ * /m/pack — Mobile packing surface living INSIDE the /m shell.
  *
- * The recent-packs feed ({@link MobilePackingList}, reused verbatim), last 8.
- * The shared header lives in the shell. The full packer station (desktop table
- * + scan/camera flow) still lives at /packer for desktop.
+ * Two modes (HorizontalButtonSlider):
+ *   - Pack   — the scan-driven two-step packer flow ({@link MobilePackerFlow}):
+ *              scan 1 → order details, scan 2 → what to pack (P1-MOB-01).
+ *   - Recent — the recent-packs history feed ({@link MobilePackingList}),
+ *              reused verbatim.
+ *
+ * The shared header lives in the shell. The full desktop packer station (table
+ * + scan/camera flow) still lives at /packer.
  */
 export default function RedesignedMobilePack() {
   const { user } = useAuth();
   const packerId = user?.staffId ? String(user.staffId) : '';
+  const [view, setView] = useState<PackView>('flow');
 
   return (
     <div className={`flex h-full flex-col ${TOKENS.colors.background}`}>
-      {/* pb-20 keeps the newest (bottom-pinned) pack card clear of the fixed nav. */}
+      <div className="px-4 pt-2">
+        <HorizontalButtonSlider
+          variant="segmented"
+          aria-label="Packing view"
+          value={view}
+          onChange={(id) => setView(id as PackView)}
+          items={VIEWS.map((v) => ({ id: v.id, label: v.label, icon: v.icon }))}
+        />
+      </div>
+
+      {/* pb-20 keeps content clear of the fixed bottom nav. */}
       <div className="min-h-0 flex-1 pb-20">
-        {packerId ? (
+        {view === 'flow' ? (
+          <MobilePackerFlow />
+        ) : packerId ? (
           <MobilePackingList packerId={packerId} limit={25} />
         ) : (
           <div className="flex h-full items-center justify-center text-xs font-black uppercase tracking-widest text-blue-300">

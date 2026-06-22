@@ -46,6 +46,11 @@ const nextConfig: NextConfig = {
         remotePatterns: [
             { protocol: 'https', hostname: 'nas-photos.michaelgarisek.com' },
             { protocol: 'https', hostname: '*.public.blob.vercel-storage.com' },
+            // GCS-backed photos (PHOTOS_GCS_BUCKET: usav-photos-prod / -dev).
+            // Without this, next/image throws "hostname not configured" and the
+            // mobile photo gallery hits its error boundary.
+            { protocol: 'https', hostname: 'storage.googleapis.com', pathname: '/usav-photos-prod/**' },
+            { protocol: 'https', hostname: 'storage.googleapis.com', pathname: '/usav-photos-dev/**' },
         ],
     },
     // Allow cross-device dev access through Cloudflare quick tunnels

@@ -63,7 +63,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // ─── Idempotency replay ─────────────────────────────────────────────────
     const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
     if (idemKey) {
-      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE_SKU_CATALOG_POST);
+      const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE_SKU_CATALOG_POST);
       if (hit) {
         return NextResponse.json(hit.response_body, { status: hit.status_code });
       }
@@ -92,6 +92,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       lastKnownCostCents: parsed.lastKnownCostCents ?? null,
       sourcingNotes: parsed.sourcingNotes ?? null,
       replenishTargetCents: parsed.replenishTargetCents ?? null,
+      notes: parsed.packNotes ?? null,
     }, ctx.organizationId);
 
     await recordAudit(pool, ctx, req, {
@@ -106,6 +107,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const responseBody = { success: true, catalog };
     if (idemKey) {
       await saveApiIdempotencyResponse(pool, {
+        orgId: ctx.organizationId,
         idempotencyKey: idemKey,
         route: ROUTE_SKU_CATALOG_POST,
         staffId: ctx.staffId,

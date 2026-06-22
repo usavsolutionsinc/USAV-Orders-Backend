@@ -8,8 +8,11 @@ import {
   AlertTriangle,
   Boxes,
   ChevronDown,
+  Layers,
   MapPin,
   Share2,
+  TrendingUp,
+  User,
   Wrench,
 } from '@/components/Icons';
 import { useStudioWorkspace } from '@/components/studio/StudioWorkspaceContext';
@@ -34,17 +37,32 @@ const LENSES: ReadonlyArray<{ id: string; label: string; icon: IconCmp; detail: 
   { id: 'build', label: 'Build', icon: Wrench, detail: 'Wire & configure the operation graph' },
   { id: 'static', label: 'Static', icon: Share2, detail: 'Where data flows — sources → transforms → sinks' },
   { id: 'live', label: 'Live', icon: Activity, detail: 'Units in flight, heat & edge traffic, real time' },
+  { id: 'flow', label: 'Flow²', icon: TrendingUp, detail: 'Throughput, dwell & bottlenecks over the window' },
+  { id: 'people', label: 'People', icon: User, detail: 'Who staffs each step — coverage & gaps (read-only)' },
   { id: 'gaps', label: 'Gaps', icon: AlertTriangle, detail: 'Diagnostics — what blocks a clean publish' },
 ];
 
 const ZOOMS: ReadonlyArray<{ z: string; label: string; icon: IconCmp; detail: string }> = [
   { z: '0', label: 'L0 · Business map', icon: Boxes, detail: 'Departments at a glance' },
   { z: '1', label: 'L1 · Flow graph', icon: MapPin, detail: 'Process steps & numbered states' },
+  { z: '2', label: 'L2 · Station', icon: Layers, detail: 'A single step’s station — pick a node to inspect' },
 ];
 
 export function StudioSidebarPanel() {
   const { has, isLoaded } = useAuth();
-  const { lens, z, editing, palette, diagnostics, onAddNode, setParams } = useStudioWorkspace();
+  const {
+    lens,
+    z,
+    editing,
+    palette,
+    diagnostics,
+    onAddNode,
+    setParams,
+    templates,
+    canManage,
+    importingTemplateId,
+    importTemplate,
+  } = useStudioWorkspace();
   const [open, setOpen] = useState(false);
 
   if (isLoaded && !has('studio.view')) {
@@ -155,6 +173,10 @@ export function StudioSidebarPanel() {
           editable={editing}
           onAddNode={onAddNode}
           onFocusIssue={(nodeId) => setParams({ focus: nodeId, z: '1', lens: 'gaps' })}
+          templates={templates}
+          canManage={canManage}
+          importingTemplateId={importingTemplateId}
+          onImportTemplate={importTemplate}
         />
       </div>
     </div>

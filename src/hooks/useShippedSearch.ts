@@ -19,6 +19,8 @@ export interface UseShippedSearchParams {
     searchField?: ShippedSearchField;
     packedBy?: number;
     testedBy?: number;
+    /** Universal staff filter (P1-WORK-02): packed OR tested by this staff. */
+    staffId?: number;
 }
 
 export interface ShippedSearchResponse {
@@ -46,6 +48,7 @@ async function callShippedSearch(
         searchField?: ShippedSearchField;
         packedBy?: number;
         testedBy?: number;
+        staffId?: number;
     },
     signal?: AbortSignal,
 ): Promise<ShippedSearchResponse> {
@@ -55,6 +58,7 @@ async function callShippedSearch(
     if (args.searchField && args.searchField !== 'all') params.set('searchField', args.searchField);
     if (args.packedBy !== undefined) params.set('packedBy', String(args.packedBy));
     if (args.testedBy !== undefined) params.set('testedBy', String(args.testedBy));
+    if (args.staffId !== undefined) params.set('staff', String(args.staffId));
 
     const res = await fetch(`/api/shipped?${params.toString()}`, { signal });
     if (!res.ok) {
@@ -98,6 +102,7 @@ export function useShippedSearch(params: UseShippedSearchParams) {
             params.searchField ?? 'all',
             params.packedBy ?? null,
             params.testedBy ?? null,
+            params.staffId ?? null,
         ] as const,
         queryFn: async ({ signal }) => {
             const initial = await callShippedSearch(
@@ -107,6 +112,7 @@ export function useShippedSearch(params: UseShippedSearchParams) {
                     searchField: params.searchField,
                     packedBy: params.packedBy,
                     testedBy: params.testedBy,
+                    staffId: params.staffId,
                 },
                 signal,
             );
@@ -122,6 +128,7 @@ export function useShippedSearch(params: UseShippedSearchParams) {
                             searchField: params.searchField,
                             packedBy: params.packedBy,
                             testedBy: params.testedBy,
+                            staffId: params.staffId,
                         },
                         signal,
                     );

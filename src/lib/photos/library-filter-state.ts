@@ -25,7 +25,7 @@ export type PhotoLibraryDatePreset = 'all' | 'today' | 'yesterday' | 'last7' | '
 
 export type PhotoLibrarySortMode = 'recent' | 'oldest';
 
-export type PhotoLibraryViewMode = 'grid-sm' | 'grid-lg' | 'list';
+export type PhotoLibraryViewMode = 'grid-sm' | 'grid-lg' | 'grid-ticket' | 'folders' | 'list';
 
 export const PHOTO_LIBRARY_PAGE_SIZE = 24;
 
@@ -62,8 +62,10 @@ export function entityTypeForSourceScope(scope: PhotoLibrarySourceScope): string
 }
 
 export function parsePhotoLibraryViewMode(raw: string | null): PhotoLibraryViewMode {
-  if (raw === 'grid-sm' || raw === 'list') return raw;
-  return 'grid-lg';
+  // Folders is the default — Finder-style "folders first, photos on open" —
+  // because a flat grid of every photo is hard to scan. Other modes opt in.
+  if (raw === 'grid-sm' || raw === 'grid-lg' || raw === 'grid-ticket' || raw === 'list') return raw;
+  return 'folders';
 }
 
 function ymd(d: Date): string {
@@ -210,7 +212,7 @@ export function photoLibraryUrlParams(
   base?: URLSearchParams,
 ): URLSearchParams {
   const params = photoLibraryFiltersToParams(filters, base);
-  if (display.view !== 'grid-lg') params.set('view', display.view);
+  if (display.view !== 'folders') params.set('view', display.view);
   else params.delete('view');
   if (display.page > 1) params.set('page', String(display.page));
   else params.delete('page');

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Trash2 } from '@/components/Icons';
+import { Trash2, X } from '@/components/Icons';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { useUploadQueue, photoUploadQueue, type PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { NasPhotoPicker } from '@/components/mobile/receiving/NasPhotoPicker';
@@ -74,6 +74,21 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
   useEffect(() => {
     if (zoomPhotoId == null) setDeleteArmed(false);
   }, [zoomPhotoId]);
+
+  // Esc closes the open overlay — the NAS picker first, otherwise the zoom
+  // preview (back to the photo grid).
+  useEffect(() => {
+    if (zoomPhotoId == null && !nasOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (nasOpen) setNasOpen(false);
+        else setZoomPhotoId(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [zoomPhotoId, nasOpen]);
 
   // Pending uploads are rendered as tiles with their state ring; once "done",
   // they appear in the committed list via the next refetch. We still keep the
@@ -193,7 +208,9 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
                 sizes="33vw"
                 className="object-cover"
                 unoptimized={
-                  p.photoUrl.startsWith('/api/nas') || p.photoUrl.startsWith('/api/nas-dev')
+                  p.photoUrl.startsWith('/api/nas') ||
+                  p.photoUrl.startsWith('/api/nas-dev') ||
+                  p.photoUrl.includes('storage.googleapis.com')
                 }
               />
             </button>
@@ -209,7 +226,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
           className="fixed inset-0 z-modal bg-black/95"
         >
           <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/70 to-transparent">
-            <div className="flex items-center justify-end px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
+            <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-6">
               <button
                 type="button"
                 onClick={(e) => {
@@ -231,6 +248,20 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
                     {deleting ? 'Deleting…' : 'Confirm'}
                   </span>
                 ) : null}
+              </button>
+
+              {/* Close — dismiss the zoom preview, back to the photo grid. */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setZoomPhotoId(null);
+                }}
+                aria-label="Close photo"
+                title="Close"
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition-colors active:bg-white/20"
+              >
+                <X className="h-5 w-5 shrink-0" />
               </button>
             </div>
           </div>

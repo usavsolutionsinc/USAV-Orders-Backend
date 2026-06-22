@@ -1,8 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
-import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { useSearchParams } from 'next/navigation';
+import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
+import { parseStaffParam } from '@/hooks/useStaffFilter';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 
 /**
@@ -18,14 +20,32 @@ import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBa
 // imports the DB pool and can't be pulled into a client bundle. Keep in sync.
 const ZOHO_RECEIVED_LIKE = new Set(['received', 'billed', 'closed']);
 
-export function getReceivingStatusDot(row: ReceivingLineRow): string {
+/** True when the line reads as fully received (green dot) in receiving sidebar rails. */
+function isReceivingComplete(row: ReceivingLineRow): boolean {
   const { workflow_status: status, quantity_received: qtyReceived, quantity_expected: qtyExpected } = row;
+  const stage = workflowStage(status);
 
-  // Unfound cartons (no PO match) only reach this UNBOXING rail once they've been
-  // unboxed — by definition they're physically in and received, so they read
-  // green regardless of their EXPECTED placeholder workflow_status.
-  if (row.receiving_source === 'unmatched') return 'bg-emerald-500';
+  if (stage.phase === 'TESTING' || stage.phase === 'TERMINAL') return false;
 
+  // Unmatched cartons are only "received" once physically unboxed — not merely
+  // door-scanned (those live in triage Unfound with qty 0 / no unboxed_at).
+  if (row.receiving_source === 'unmatched') {
+    return (qtyReceived ?? 0) > 0 || Boolean(row.unboxed_at);
+  }
+
+  const zohoReceived = ZOHO_RECEIVED_LIKE.has(String(row.zoho_status ?? '').trim().toLowerCase());
+  if (zohoReceived) return true;
+
+  return (
+    qtyExpected != null &&
+    qtyExpected > 0 &&
+    qtyReceived != null &&
+    qtyReceived >= qtyExpected
+  );
+}
+
+export function getReceivingStatusDot(row: ReceivingLineRow): string {
+  const { workflow_status: status } = row;
   const stage = workflowStage(status);
 
   // Testing-phase items (AWAITING_TEST, IN_TEST, PASSED) always use their own
@@ -33,22 +53,38 @@ export function getReceivingStatusDot(row: ReceivingLineRow): string {
   // visually distinct from "received" (DONE) in the rail.
   if (stage.phase === 'TESTING') return workflowStageDot(status);
 
-  // Zoho is the source of truth for "received": once its PO reads
-  // received/billed/closed the box is physically in, even if this line's local
-  // workflow_status still sits at an earlier unbox-pipeline stage (EXPECTED /
-  // MATCHED / UNBOXED) or its qty hasn't been counted yet. Show it green so a
-  // Zoho-received carton can't render a mix of gray/blue/indigo "unbox" dots in
-  // the rail. Terminal dispositions (failed / RTV / scrap) still win — those
-  // happen after receiving and must keep their own color.
-  const zohoReceived = ZOHO_RECEIVED_LIKE.has(String(row.zoho_status ?? '').trim().toLowerCase());
-  if (zohoReceived && stage.phase !== 'TERMINAL') return 'bg-emerald-500';
+  if (isReceivingComplete(row)) return 'bg-emerald-500';
 
-  const qtyComplete =
-    qtyExpected != null && qtyExpected > 0 && qtyReceived != null && qtyReceived >= qtyExpected;
+  // Terminal dispositions (failed / RTV / scrap) keep their own color.
+  if (stage.phase === 'TERMINAL') return workflowStageDot(status);
 
-  // Fully received but not in a terminal-fail state → green completeness cue.
-  if (qtyComplete && stage.phase !== 'TERMINAL') return 'bg-emerald-500';
   return workflowStageDot(status);
+}
+
+/**
+ * Hover tooltip for the rail status dot. Unboxed / Queue / Viewed are view
+ * filters only — the label reflects the line's physical status, not which tab
+ * you're on. Receiving pipeline: green → Received, blue family → Scanned.
+ *
+ * DONE is a terminal workflow stage (label "Done") but still renders an emerald
+ * dot — in the receiving sidebar that reads as Received, not Done.
+ */
+export function getReceivingStatusDotLabel(row: ReceivingLineRow): string {
+  const stage = workflowStage(row.workflow_status);
+
+  if (stage.phase === 'TESTING') {
+    return `${stage.label} — ${stage.description}`;
+  }
+
+  if (getReceivingStatusDot(row).includes('emerald')) {
+    return 'Received';
+  }
+
+  if (stage.phase === 'TERMINAL') {
+    return `${stage.label} — ${stage.description}`;
+  }
+
+  return 'Scanned';
 }
 
 interface Props {
@@ -83,14 +119,20 @@ export function ReceivingRecentRail({
   // ApiResponse object, not the array) so the two queries can't share a cache
   // entry and feed each other the wrong shape. Still under the
   // ['receiving-lines-table'] prefix so broad invalidations refresh it.
+  // Universal staff filter (P1-WORK-02): `?staff=` narrows the rail to one
+  // staff (received / unboxed / first-scanned). Absent = ALL staff (default).
+  const searchParams = useSearchParams();
+  const staffId = parseStaffParam(searchParams.get('staff'));
+
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const,
-    [],
+    () => ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest', staffId ?? 'all'] as const,
+    [staffId],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
+    if (staffId != null) params.set('staff', String(staffId));
     // 'activity' = the UNBOXING pipeline only: lines that have been unboxed /
     // received (qty > 0, workflow past MATCHED, or an unbox timestamp). Cartons
     // merely scanned at the door (phone /m/receive or desktop "mark scanned")
@@ -120,10 +162,10 @@ export function ReceivingRecentRail({
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Recent"
-      eyebrowSuffix="Unboxing"
       autoSelectFirstWhenEmpty
       getActivityAt={getUnboxActivityAt}
       getStatusDot={getReceivingStatusDot}
+      getStatusDotLabel={getReceivingStatusDotLabel}
       renderQuantity={(row) => (
         <span className={
           row.quantity_expected != null && row.quantity_received >= row.quantity_expected 

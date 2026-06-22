@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import {
   GoogleSheetsTransferOrdersJobError,
   runGoogleSheetsTransferOrders,
@@ -16,9 +17,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await withCronRun('google_sheets.transfer_orders', () =>
-      runGoogleSheetsTransferOrders(undefined, 'sheets'),
+    const locked = await withCronLock('google_sheets.transfer_orders', () =>
+      withCronRun('google_sheets.transfer_orders', () =>
+        runGoogleSheetsTransferOrders(undefined, 'sheets'),
+      ),
     );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const result = locked.result!;
     return NextResponse.json({ success: true, ...(result as unknown as Record<string, unknown>) });
   } catch (error) {
     if (error instanceof GoogleSheetsTransferOrdersJobError) {

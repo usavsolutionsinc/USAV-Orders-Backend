@@ -365,19 +365,21 @@ async function upsertMatchedReceiving(
   poId: string,
   carrier: string,
   staffId: number | null,
+  organizationId: string,
 ): Promise<{ receivingId: number; preexisting: boolean }> {
   const now = formatPSTTimestamp();
   const result = await pool.query<{ id: number; xmax: string }>(
     `INSERT INTO receiving
        (source, zoho_purchaseorder_id, carrier, receiving_date_time,
-        received_at, received_by, qa_status, needs_test, updated_at)
-     VALUES ('zoho_po', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz)
+        received_at, received_by, qa_status, needs_test, updated_at, organization_id)
+     VALUES ('zoho_po', $1, $2, $3::timestamp, $3::timestamptz, $4, 'PENDING', true, $3::timestamptz, $5::uuid)
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = EXCLUDED.updated_at,
-       carrier = COALESCE(receiving.carrier, EXCLUDED.carrier)
+       carrier = COALESCE(receiving.carrier, EXCLUDED.carrier),
+       organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
-    [poId, carrier || null, now, staffId],
+    [poId, carrier || null, now, staffId, organizationId],
   );
   const row = result.rows[0];
   return { receivingId: Number(row.id), preexisting: row.xmax !== '0' };
@@ -387,19 +389,23 @@ async function createUnmatchedReceiving(
   trackingNumber: string,
   carrier: string,
   staffId: number | null,
+  organizationId: string,
 ): Promise<{ receivingId: number; shipmentId: number | null }> {
   const now = formatPSTTimestamp();
   const shipment = await registerShipmentPermissive({
     trackingNumber,
     sourceSystem: 'receiving_lookup_po',
-  });
+  }, organizationId);
+  // Stamp organization_id explicitly rather than leaning on the column default
+  // (the GUC default is NULL on this raw-pool path). Receiving is a tenant-owned
+  // table; an unmatched door-scan must land under the scanning operator's org.
   const result = await pool.query<{ id: number }>(
     `INSERT INTO receiving
        (source, receiving_tracking_number, shipment_id, carrier, receiving_date_time,
-        received_at, received_by, qa_status, needs_test, updated_at)
-     VALUES ('unmatched', $1, $2, $3, $4::timestamp, $4::timestamptz, $5, 'PENDING', true, $4::timestamptz)
+        received_at, received_by, qa_status, needs_test, updated_at, organization_id)
+     VALUES ('unmatched', $1, $2, $3, $4::timestamp, $4::timestamptz, $5, 'PENDING', true, $4::timestamptz, $6::uuid)
      RETURNING id`,
-    [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId],
+    [trackingNumber, shipment?.id ?? null, carrier || null, now, staffId, organizationId],
   );
   const receivingId = Number(result.rows[0].id);
   // Phase 5: tag the OS&D reason. No carrier resolved → CARRIER_MISMATCH;
@@ -453,13 +459,14 @@ async function createOrGetTestReceiving(
   trackingNumber: string,
   carrier: string,
   staffId: number | null,
+  organizationId: string,
 ): Promise<{ receivingId: number; scanId: number; preexisting: boolean; poId: string }> {
   const poId = testPoIdFor(trackingNumber);
   const key = poId.slice('TEST-PO-'.length);
   const zohoItemId = `TEST-ITEM-${key}`;
   const zohoLineItemId = `TEST-LINE-${key}`;
 
-  const { receivingId, preexisting } = await upsertMatchedReceiving(poId, carrier, staffId);
+  const { receivingId, preexisting } = await upsertMatchedReceiving(poId, carrier, staffId, organizationId);
   const scanId = await recordReceivingScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
 
   // A scanned test carton belongs in receiving triage as a SCANNED line — NOT
@@ -479,16 +486,16 @@ async function createOrGetTestReceiving(
     `INSERT INTO receiving_lines
        (receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchaseorder_id,
         item_name, sku, quantity_expected, quantity_received, workflow_status,
-        qa_status, disposition_code, condition_grade, needs_test, updated_at)
+        qa_status, disposition_code, condition_grade, needs_test, updated_at, organization_id)
      VALUES ($1, $2, $3, $4, $5, 'TEST-SKU', 1, 0, 'MATCHED',
-        'PENDING', 'HOLD', 'BRAND_NEW', false, NOW())
+        'PENDING', 'HOLD', 'BRAND_NEW', false, NOW(), $6::uuid)
      ON CONFLICT (zoho_purchaseorder_id, zoho_line_item_id)
        WHERE zoho_purchaseorder_id IS NOT NULL AND zoho_line_item_id IS NOT NULL
      -- Heal only needs_test on re-scan (clears any older test carton wrongly
      -- flagged for testing) WITHOUT touching quantity_received / workflow_status,
      -- so unbox progress survives a re-scan.
      DO UPDATE SET needs_test = false`,
-    [receivingId, zohoItemId, zohoLineItemId, poId, `Test item · ${key}`],
+    [receivingId, zohoItemId, zohoLineItemId, poId, `Test item · ${key}`, organizationId],
   );
 
   return { receivingId, scanId, preexisting, poId };
@@ -605,11 +612,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         });
       }
 
-      const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId);
+      const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId, ctx.organizationId);
       const linked = await linkLocalPoLinesToReceiving(poId, receivingId);
       // Only hit Zoho for line items when there was nothing local to adopt.
       if (linked === 0) {
-        await importZohoPurchaseOrderToReceiving(poId, {
+        await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
           receivingId,
           workflowStatus: 'MATCHED',
         }).catch((err) => console.warn(`[lookup-po.order] import(${poId}) failed`, errMessage(err)));
@@ -769,6 +776,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         trackingNumber,
         carrier,
         staffId,
+        ctx.organizationId,
       );
       await applyIntakeClassification(receivingId, classification);
       const [lines, receiving_package] = await Promise.all([
@@ -929,16 +937,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             preexisting = true;
           } else {
             ({ receivingId: primaryReceivingId, preexisting } =
-              await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+              await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
           }
         } catch (err) {
           console.warn('lookup-po: promote preassigned receiving failed — using upsert', err);
           ({ receivingId: primaryReceivingId, preexisting } =
-            await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+            await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
         }
       } else {
         ({ receivingId: primaryReceivingId, preexisting } =
-          await upsertMatchedReceiving(primaryPoId, carrier, staffId));
+          await upsertMatchedReceiving(primaryPoId, carrier, staffId, ctx.organizationId));
       }
 
       const scanId = preassignedScanId ?? await recordScan(
@@ -979,7 +987,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // re-attach them) → matched-but-empty → the client rendered it 'unfound'.
       const linkedPrimary = await linkLocalPoLinesToReceiving(primaryPoId, primaryReceivingId);
       if (linkedPrimary === 0) {
-        await importZohoPurchaseOrderToReceiving(primaryPoId, {
+        await importZohoPurchaseOrderToReceiving(ctx.organizationId, primaryPoId, {
           receivingId: primaryReceivingId,
           workflowStatus: 'MATCHED',
         }).catch((err) => {
@@ -999,11 +1007,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             poId,
             carrier,
             staffId,
+            ctx.organizationId,
           );
           await recordScan(extraReceivingId, trackingNumber, carrier, staffId, 'zoho_po');
           const linkedSecondary = await linkLocalPoLinesToReceiving(poId, extraReceivingId);
           if (linkedSecondary === 0) {
-            await importZohoPurchaseOrderToReceiving(poId, {
+            await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
               receivingId: extraReceivingId,
               workflowStatus: 'MATCHED',
             });
@@ -1152,7 +1161,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     //     upsert a row into tracking_exceptions so the triage/reconciliation
     //     worker can retry this tracking once Zoho catches up.
     const { receivingId: unmatchedReceivingId, shipmentId: unmatchedShipmentId } =
-      await createUnmatchedReceiving(trackingNumber, carrier, staffId);
+      await createUnmatchedReceiving(trackingNumber, carrier, staffId, ctx.organizationId);
     const unmatchedScanId = await recordScan(
       unmatchedReceivingId,
       trackingNumber,

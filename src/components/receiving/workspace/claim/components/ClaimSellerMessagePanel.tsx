@@ -1,0 +1,54 @@
+import { Loader2, MessageSquare, Sparkles } from '@/components/Icons';
+import type { FiledTicket } from '../claim-types';
+import type { UseClaimSellerMessage } from '../hooks/useClaimSellerMessage';
+import { SellerMessageSkeleton } from './SellerMessageSkeleton';
+
+interface Props {
+  seller: UseClaimSellerMessage;
+  filedTicket: FiledTicket | null;
+}
+
+/** Blue seller-message editor with AI redraft, shown on the seller step. */
+export function ClaimSellerMessagePanel({ seller, filedTicket }: Props) {
+  const { sellerMessage, setSellerMessage, aiModel, aiLoading, draftSellerMessage } = seller;
+  const draftDisabled = aiLoading || !filedTicket || filedTicket.number === 'pending';
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
+          <div>
+            <p className="text-micro font-black uppercase tracking-[0.14em] text-blue-700">Seller message</p>
+            {aiModel ? <p className="text-[10px] font-semibold text-blue-600/70">Drafted by {aiModel}</p> : null}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => filedTicket && void draftSellerMessage(filedTicket)}
+          disabled={draftDisabled}
+          title="Regenerate seller message with AI"
+          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2 text-micro font-black uppercase tracking-wider text-blue-700 shadow-sm transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+          {aiLoading ? 'Drafting…' : 'Redraft'}
+        </button>
+      </div>
+      {aiLoading && !sellerMessage ? (
+        <SellerMessageSkeleton />
+      ) : (
+        <textarea
+          value={sellerMessage}
+          onChange={(e) => setSellerMessage(e.target.value)}
+          rows={12}
+          placeholder="Seller-facing message will appear here…"
+          className="block w-full resize-y rounded-lg border border-blue-100 bg-white px-3 py-2 text-caption font-medium leading-snug text-gray-900 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+        />
+      )}
+      <p className="mt-1.5 text-micro font-medium text-blue-700/70">
+        Paste into eBay or the marketplace seller. Plain text only — no links. Includes your Zendesk
+        case # as a reference.
+      </p>
+    </div>
+  );
+}

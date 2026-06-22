@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Search } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -55,7 +56,7 @@ export function UpNextFilterBar({
             initial={{ opacity: 0, width: 0 }}
             animate={{ opacity: 1, width: '100%' }}
             exit={{ opacity: 0, width: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.22, ease: motionBezier.easeOut }}
             className="flex-1 min-w-0 overflow-hidden"
             onBlur={handleBlur}
           >
@@ -76,7 +77,7 @@ export function UpNextFilterBar({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.18, ease: motionBezier.easeOut }}
             className="flex items-center gap-2 flex-1 min-w-0"
           >
             <button

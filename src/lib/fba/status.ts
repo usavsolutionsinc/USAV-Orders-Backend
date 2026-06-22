@@ -66,6 +66,26 @@ export const FBA_STATUS_LABEL: Record<string, string> = {
   CLOSED: 'Closed',
 };
 
+/**
+ * Status-pill background+text classes (single source of truth, beside the
+ * labels). Consolidates the inline `STATUS_PILL_COLOR` map formerly in
+ * FbaBoardTable. SHIPPED/CLOSED intentionally fall back to neutral gray
+ * (matching prior behavior). Classes are plain strings so this module stays
+ * framework-agnostic; src/lib is in Tailwind's content globs.
+ */
+export const FBA_STATUS_PILL: Record<string, string> = {
+  PLANNED: 'bg-amber-100 text-amber-700',
+  TESTED: 'bg-emerald-100 text-emerald-700',
+  PACKED: 'bg-blue-100 text-blue-700',
+  OUT_OF_STOCK: 'bg-red-100 text-red-700',
+  LABEL_ASSIGNED: 'bg-green-100 text-green-700',
+};
+
+/** Pill classes for an FBA status (case-insensitive); safe for unknowns. */
+export function fbaStatusPillClass(status: string): string {
+  return FBA_STATUS_PILL[status.toUpperCase()] ?? 'bg-gray-100 text-gray-600';
+}
+
 /** Allowed forward + revert transitions. Used to guard status writes. */
 export const FBA_ALLOWED_TRANSITIONS: Record<string, FbaStatus[]> = {
   PLANNED: [FBA_STATUS.TESTED, FBA_STATUS.OUT_OF_STOCK],

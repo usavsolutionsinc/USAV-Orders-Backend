@@ -91,7 +91,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         const shipment = await registerShipmentPermissive({
             trackingNumber,
             sourceSystem: 'receiving_entry',
-        });
+        }, ctx.organizationId);
 
         const { columns: availableColumns, dateColumn } = await getReceivingSchema();
         // `receiving.source` is NOT NULL with CHECK (source IN
@@ -130,6 +130,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             type_id: typeId,
             zoho_purchase_receive_id: zohoPurchaseReceiveId,
             zoho_warehouse_id: zohoWarehouseId,
+            organization_id: ctx.organizationId,
             updated_at: now,
         };
 
@@ -268,7 +269,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                                     [newReceivingId, poId]
                                 );
                             } else {
-                                await importZohoPurchaseOrderToReceiving(poId, {
+                                await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
                                     receivingId: newReceivingId,
                                     workflowStatus: 'MATCHED',
                                 }).catch(() => null);
@@ -283,7 +284,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                             const poId = po.purchaseorder_id;
                             if (!poId || matchedPoIds.includes(poId)) continue;
                             matchedPoIds.push(poId);
-                            await importZohoPurchaseOrderToReceiving(poId, {
+                            await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
                                 receivingId: newReceivingId,
                                 workflowStatus: 'MATCHED',
                             }).catch(() => null);

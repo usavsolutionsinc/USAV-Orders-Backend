@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Plus, X } from '@/components/Icons';
 import { TextField } from '@/design-system/primitives';
-import { ConditionBadge } from './ReceivingUnitRows';
+import { ConditionBadge } from './ConditionBadge';
 
 export interface UnitLike {
   id: number;

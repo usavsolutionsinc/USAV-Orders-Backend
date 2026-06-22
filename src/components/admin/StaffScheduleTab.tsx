@@ -1,183 +1,58 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useQueryClient } from '@tanstack/react-query';
-import { qk } from '@/queries/keys';
-import { StaffScheduleBoard } from './StaffScheduleBoard';
-import { toast } from '@/lib/toast';
-import { useAblyChannel } from '@/hooks/useAblyChannel';
-import { getStaffChannelName, safeChannelName } from '@/lib/realtime/channels';
-import { useAuth } from '@/contexts/AuthContext';
-import { getCurrentPSTDateKey } from '@/utils/date';
+/**
+ * Admin → Staff schedule — thin composition layer. Roster management lives in
+ * Settings → Team; this pane is weekly shifts, availability rules, and the shop
+ * calendar.
+ *
+ * Logic lives in focused hooks:
+ *   - useStaffScheduleData ......... server data (existing)
+ *   - useStaffScheduleFilters ...... `?search/staffView/staffId=` → filtered roster
+ *   - useStaffScheduleRealtime ..... staff-channel invalidation
+ *   - useStaffScheduleViewModel .... scheduleMap, today labels, editors, cell meta, summary
+ */
+
+import { useState } from 'react';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
-import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { AdminEmptyDetail } from './shared';
-import {
-  STAFF_SCHEDULE_TIMEZONE,
-  type StaffDayOfWeek,
-  getCurrentStaffDayOfWeek,
-  getStaffWeekdayLabel,
-  isStaffBusinessDay,
-} from '@/lib/staff-schedule';
-import {
-  useStaffScheduleData,
-  getPlannedScheduleState,
-  type ScheduleMap,
-  type WeekdayRuleBucket,
-} from '@/hooks/admin/useStaffScheduleData';
-import { useStaffScheduleEditor } from './staff-management/hooks/useStaffScheduleEditor';
-import { useAvailabilityEditor } from './staff-management/hooks/useAvailabilityEditor';
+import { StaffScheduleBoard } from './StaffScheduleBoard';
+import { useStaffScheduleData } from '@/hooks/admin/useStaffScheduleData';
+import { useStaffScheduleFilters } from './staff-management/hooks/useStaffScheduleFilters';
+import { useStaffScheduleRealtime } from './staff-management/hooks/useStaffScheduleRealtime';
+import { useStaffScheduleViewModel } from './staff-management/hooks/useStaffScheduleViewModel';
+import { StaffScheduleHeader } from './staff-management/StaffScheduleHeader';
 import { StaffSummaryCells } from './staff-management/StaffSummaryCells';
 import { AvailabilityRulesSection } from './staff-management/AvailabilityRulesSection';
 import { BulkScheduleButtons } from './staff-management/BulkScheduleButtons';
 import { WeeklyScheduleTable } from './staff-management/WeeklyScheduleTable';
 import { NextWeekScheduleTable } from './staff-management/NextWeekScheduleTable';
 
-/**
- * Admin → Staff schedule. Roster management lives in Settings → Team;
- * this pane is weekly shifts, availability rules, and the shop calendar.
- */
 export function StaffScheduleTab() {
-  const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const orgId = user?.organizationId;
   const [calendarExpanded, setCalendarExpanded] = useState(true);
-  const staffChannelName = safeChannelName(() => getStaffChannelName(orgId!));
+
+  const data = useStaffScheduleData();
+  useStaffScheduleRealtime();
+  const { selectedStaffId, filteredStaff } = useStaffScheduleFilters(data.staff);
+  const {
+    schedule,
+    availability,
+    isBusinessDayToday,
+    todayLabel,
+    timezoneLabel,
+    todayDateKey,
+    getWeekdayRuleBucket,
+    getScheduleCellMeta,
+    summary,
+    handleBlockedScheduleCell,
+  } = useStaffScheduleViewModel({ data, filteredStaff });
 
   const {
-    staff, scheduleResponse,
-    thisWeekDays, nextBusinessDays, allWeekDays,
-    thisWeekStartDate, nextWeekStartDate,
-    availabilityRuleMap, currentWeekDetailMap, nextWeekDetailMap,
-  } = useStaffScheduleData();
-
-  useAblyChannel(staffChannelName, 'staff.schedule.changed', () => {
-    queryClient.invalidateQueries({ queryKey: qk.staffSchedule.all });
-    queryClient.invalidateQueries({ queryKey: qk.staff.all });
-  }, !!staffChannelName);
-
-  const searchTerm = (searchParams.get('search') || '').trim().toLowerCase();
-  const staffView = searchParams.get('staffView') || 'all';
-  const selectedStaffId = (() => {
-    const raw = searchParams.get('staffId');
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
-  })();
-
-  const filteredStaff = useMemo(() => {
-    return staff.filter((member) => {
-      if (selectedStaffId != null && member.id !== selectedStaffId) return false;
-
-      const matchesSearch =
-        !searchTerm ||
-        member.name.toLowerCase().includes(searchTerm) ||
-        (member.employee_id || '').toLowerCase().includes(searchTerm);
-
-      const matchesView =
-        staffView === 'active'
-          ? Boolean(member.active)
-          : staffView === 'inactive'
-            ? !member.active
-            : staffView === 'technician'
-              ? member.role === 'technician'
-              : staffView === 'packer'
-                ? member.role === 'packer'
-                : true;
-
-      return matchesSearch && matchesView;
-    });
-  }, [searchTerm, staff, staffView, selectedStaffId]);
-
-  const scheduleMap = useMemo<ScheduleMap>(() => {
-    const map: ScheduleMap = {};
-
-    for (const member of staff) {
-      map[member.id] = {};
-      for (const day of [...thisWeekDays, ...nextBusinessDays]) {
-        map[member.id][day.date] = true;
-      }
-    }
-
-    for (const row of scheduleResponse?.schedules || []) {
-      if (!map[row.staff_id]) map[row.staff_id] = {};
-      const dateKey = String(row.schedule_date || '');
-      if (dateKey) map[row.staff_id][dateKey] = Boolean(row.is_scheduled);
-    }
-
-    return map;
-  }, [nextBusinessDays, scheduleResponse?.schedules, staff, thisWeekDays]);
-
-  const todayDay = Number.isFinite(Number(scheduleResponse?.today_day_of_week))
-    ? Number(scheduleResponse?.today_day_of_week)
-    : getCurrentStaffDayOfWeek();
-  const isBusinessDayToday = isStaffBusinessDay(todayDay);
-  const todayLabel = getStaffWeekdayLabel(todayDay);
-  const timezoneLabel = scheduleResponse?.timezone || STAFF_SCHEDULE_TIMEZONE;
-  const todayDateKey = getCurrentPSTDateKey();
-
-  const getWeekdayRuleBucket = (staffId: number, dayOfWeek: StaffDayOfWeek): WeekdayRuleBucket => {
-    return availabilityRuleMap[staffId]?.[dayOfWeek] || {
-      primaryRule: null,
-      extraRulesCount: 0,
-      displayedIsAllowed: true,
-    };
-  };
-
-  const schedule = useStaffScheduleEditor({
-    scheduleMap,
     thisWeekDays,
+    nextBusinessDays,
+    allWeekDays,
+    thisWeekStartDate,
     nextWeekStartDate,
-    filteredStaff,
-  });
-
-  const availability = useAvailabilityEditor({ staff, getWeekdayRuleBucket });
-
-  const getWeekDetail = (staffId: number, scheduleDate: string, weekScope: 'current' | 'next') => {
-    return weekScope === 'current'
-      ? currentWeekDetailMap[staffId]?.[scheduleDate]
-      : nextWeekDetailMap[staffId]?.[scheduleDate];
-  };
-
-  const getScheduleCellMeta = (
-    staffId: number,
-    scheduleDate: string,
-    dayOfWeek: StaffDayOfWeek,
-    weekScope: 'current' | 'next'
-  ) => {
-    const detail = getWeekDetail(staffId, scheduleDate, weekScope);
-    const isScheduled = schedule.getIsScheduled(staffId, scheduleDate);
-    const blockedByRule = detail ? !detail.allowedByRule : !getWeekdayRuleBucket(staffId, dayOfWeek).displayedIsAllowed;
-    const hasConflict = blockedByRule && getPlannedScheduleState(detail);
-    return { detail, isScheduled, blockedByRule, hasConflict };
-  };
-
-  const summary = useMemo(() => {
-    return filteredStaff.reduce(
-      (acc, member) => {
-        acc.total += 1;
-        if (member.active) acc.active += 1;
-        else acc.inactive += 1;
-        if (member.role === 'technician') acc.technicians += 1;
-        if (member.role === 'packer') acc.packers += 1;
-        if (isBusinessDayToday) {
-          const isScheduledToday = schedule.getIsScheduled(member.id, todayDateKey);
-          if (member.active && isScheduledToday) acc.presentToday += 1;
-          else if (member.active) acc.offToday += 1;
-        }
-        return acc;
-      },
-      { total: 0, active: 0, inactive: 0, technicians: 0, packers: 0, presentToday: 0, offToday: 0 }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredStaff, isBusinessDayToday, scheduleMap, todayDateKey]);
-
-  const handleBlockedScheduleCell = (staffId: number, dayOfWeek: StaffDayOfWeek, scheduleDate: string) => {
-    availability.openAvailabilityEditorForDay(staffId, dayOfWeek);
-    toast.message(`Blocked by availability rule for ${scheduleDate}`);
-  };
+  } = data;
 
   if (selectedStaffId == null) {
     return (
@@ -190,20 +65,12 @@ export function StaffScheduleTab() {
 
   return (
     <section className="flex h-full min-h-0 w-full flex-col bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]">
-      <div className={mainStickyHeaderClass}>
-        <div className={`${mainStickyHeaderShellRowClass} px-6`}>
-          <p className={`${sectionLabel} truncate text-gray-900`}>
-            Staff Schedule
-          </p>
-          <div className={`${sectionLabel} hidden items-center gap-3 sm:flex`}>
-            <span>Shown {summary.total}</span>
-            <span className="text-gray-500">/</span>
-            <span>Scheduled Today {isBusinessDayToday ? summary.presentToday : 0}</span>
-            <span className="text-gray-500">/</span>
-            <span>{todayLabel}</span>
-          </div>
-        </div>
-      </div>
+      <StaffScheduleHeader
+        total={summary.total}
+        presentToday={summary.presentToday}
+        isBusinessDayToday={isBusinessDayToday}
+        todayLabel={todayLabel}
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
         <StaffSummaryCells summary={summary} />

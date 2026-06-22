@@ -1,0 +1,134 @@
+import { ChevronLeft, Settings } from '@/components/Icons';
+import { WorkspaceCard } from '@/design-system/components';
+import { STEPS, NumericStep, ConfigSheet, type LabelPrinterVariant } from './index';
+import { StepPills } from './StepPills';
+import { ZoneLetterTile } from './ZoneLetterTile';
+import { RoomPicker } from './RoomPicker';
+import type { BinLabelPrinterController } from './useBinLabelPrinter';
+
+/** Narrow-column builder (mobile / `lg:hidden`): full five-step flow inline. */
+export function BinBuilderMobile({ c, variant }: { c: BinLabelPrinterController; variant: LabelPrinterVariant }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className={variant === 'sidebar'
+            ? 'text-base font-bold tracking-tight text-gray-900'
+            : 'text-2xl font-bold tracking-tight text-gray-900'}
+          >
+            {variant === 'sidebar' ? 'Build a bin label' : 'Location Label Printer'}
+          </h1>
+          {variant === 'main' && (
+            <p className="mt-1 text-sm text-gray-500">
+              Pick a room, then drill down to the bin. Prints a QR-only GS1 Digital Link label.
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {(c.selectedRoom || c.aisle != null) && (
+            <button
+              type="button"
+              onClick={c.resetAll}
+              className="flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Reset
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => c.setConfigOpen(true)}
+            aria-label="Configure label printer"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+        </div>
+      </header>
+
+      <StepPills
+        activeStep={c.activeStep}
+        zoneLetter={c.zoneLetter}
+        roomName={c.selectedRoom}
+        aisle={c.aisle}
+        bay={c.bay}
+        level={c.level}
+        position={c.position}
+        onPillClick={c.handlePillClick}
+      />
+
+      {c.selectedRoom && (
+        <WorkspaceCard tone="blue" label="Selected room">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <ZoneLetterTile letter={c.zoneLetter} />
+              <div className="min-w-0">
+                <p className="truncate text-base font-semibold text-gray-900">{c.selectedRoom}</p>
+                <p className="mt-0.5 text-[11.5px] text-gray-500">
+                  {c.zoneLetter ? `Zone ${c.zoneLetter}` : 'No zone letter yet — set one in the Rooms tab.'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => c.setOverrideStep('zone')}
+              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-caption font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+            >
+              Change
+            </button>
+          </div>
+        </WorkspaceCard>
+      )}
+
+      {c.missingLetter && <MissingLetterBanner />}
+
+      <WorkspaceCard label={STEPS.find((s) => s.id === c.activeStep)?.label} tone={c.activeStep === 'zone' ? undefined : 'blue'}>
+        {c.activeStep === 'zone' && (
+          <RoomPicker
+            rooms={c.allRoomNames}
+            zoneMap={c.zoneMap}
+            loading={c.loading}
+            selectedRoom={c.selectedRoom}
+            onSelect={c.pickRoom}
+          />
+        )}
+        {c.activeStep === 'aisle' && (
+          <NumericStep key="aisle" title="Pick an aisle" prefix="" count={c.config.maxAisles} selected={c.aisle} onPick={c.pickAisle} customLabel="Custom aisle #" />
+        )}
+        {c.activeStep === 'bay' && (
+          <NumericStep
+            key="bay"
+            title="Pick a bay"
+            prefix=""
+            count={c.config.maxBays}
+            selected={c.bay}
+            onPick={c.pickBay}
+            hint="Parallel rack setup — odd numbers on the left, even on the right."
+            customLabel="Custom bay #"
+          />
+        )}
+        {c.activeStep === 'level' && (
+          <NumericStep key="level" title="Pick a level" prefix="" count={c.config.maxLevels} selected={c.level} onPick={c.pickLevel} customLabel="Custom level #" unpadded />
+        )}
+        {c.activeStep === 'position' && (
+          <NumericStep key="position" title="Pick a position" prefix="" count={c.config.maxPositions} selected={c.position} onPick={c.pickPosition} customLabel="Custom position #" />
+        )}
+      </WorkspaceCard>
+
+      <ConfigSheet open={c.configOpen} onClose={() => c.setConfigOpen(false)} config={c.config} onSave={c.handleConfigSave} />
+    </div>
+  );
+}
+
+/** Amber warning shown when the selected room has no zone letter assigned. */
+export function MissingLetterBanner() {
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] text-amber-800">
+      <p className="font-semibold">No zone letter assigned to this room.</p>
+      <p className="mt-0.5 text-amber-700">
+        Open the <span className="font-semibold">Rooms</span> tab, tap this room, and pick a letter
+        (A–Z). The letter prints on every label and inside the QR.
+      </p>
+    </div>
+  );
+}

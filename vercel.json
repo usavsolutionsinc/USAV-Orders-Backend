@@ -77,14 +77,6 @@
       "schedule": "30 0 * * *"
     },
     {
-      "path": "/api/cron/replenishment/sync",
-      "schedule": "0 13 * * *"
-    },
-    {
-      "path": "/api/cron/replenishment-detect",
-      "schedule": "0 */4 * * *"
-    },
-    {
       "path": "/api/cron/inventory/drift-check",
       "schedule": "0 11 * * *"
     },
@@ -95,10 +87,6 @@
     {
       "path": "/api/cron/sourcing/scan",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/sourcing/replenish",
-      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/sourcing/scour",

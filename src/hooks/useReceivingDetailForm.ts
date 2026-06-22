@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
+import type { ReceivingDetailsLog } from '@/components/station/receiving-details-log';
 
 type SaveState = 'idle' | 'saved' | 'error';
 

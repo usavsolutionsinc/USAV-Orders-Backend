@@ -13,7 +13,7 @@ import {
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
 import { MobilePhotoCountBadge } from '@/components/mobile/receiving/MobilePhotoCountBadge';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
 interface MobileReceivingRowProps {

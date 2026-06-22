@@ -144,9 +144,10 @@ export function HorizontalButtonSlider({
   // The `nav` variant uses scale-up + shadow on the active pill. Setting
   // overflow-x-auto forces overflow-y to compute as auto too (CSS spec), so
   // drop shadows get clipped unless the scroller has extra bottom padding.
-  // shadow-md needs ~10px bleed; dense keeps top tight for the 40px grid.
+  // Dense nav: symmetric py-1 + h-8 pills = 40px band (matches scan/mode rows).
+  // Non-dense keeps extra bottom pad so active-pill shadows aren't clipped.
   const scrollerPadY =
-    variant === 'nav' ? (dense ? 'pt-1 pb-2.5' : 'pt-2 pb-3') : 'pb-0.5';
+    variant === 'nav' ? (dense ? 'py-1' : 'pt-2 pb-3') : 'pb-0.5';
 
   // `floating` and `segmented` always fit (segmented splits the width evenly),
   // so they skip the scroller — floating to avoid clipping pill shadows,

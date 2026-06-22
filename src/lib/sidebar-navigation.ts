@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  AlertTriangle,
   Archive,
   Barcode,
   Boxes,
@@ -334,6 +335,7 @@ const TECH = '/tech';
 const WALK_IN = '/walk-in';
 const ADMIN = '/admin';
 const OUTBOUND = '/outbound';
+const PACKER = '/packer';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Orders / Shipping ─────────────────────────────────────────────────────
@@ -424,6 +426,21 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       { id: 'scan-out', label: 'Scan out', icon: Barcode, to: () => ({ pathname: OUTBOUND, params: { mode: 'scan-out', q: null, open: null, sort: null } }) },
     ],
     resolveMode: ({ params }) => (params.get('mode') === 'scan-out' ? 'scan-out' : 'labels'),
+  },
+  // ── Packing ───────────────────────────────────────────────────────────────
+  // `?packMode=fragile|multi`; default `standard` (param cleared). Mirrors the
+  // panel's own `?packMode=` derivation so deep-links resolve identically.
+  {
+    id: 'packer', label: 'Packing', href: PACKER, icon: Box, kind: 'station', requires: 'packing.view',
+    modes: [
+      { id: 'standard', label: 'Standard',   icon: Box,           to: () => ({ pathname: PACKER, params: { packMode: null } }) },
+      { id: 'fragile',  label: 'Fragile',    icon: AlertTriangle, to: () => ({ pathname: PACKER, params: { packMode: 'fragile' } }) },
+      { id: 'multi',    label: 'Multi-Item', icon: Boxes,         to: () => ({ pathname: PACKER, params: { packMode: 'multi' } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const m = params.get('packMode');
+      return m === 'fragile' || m === 'multi' ? m : 'standard';
+    },
   },
   // ── Inventory ─────────────────────────────────────────────────────────────
   // `?mode=triage|pulse` or `?section=replenish`; default `ledger`.

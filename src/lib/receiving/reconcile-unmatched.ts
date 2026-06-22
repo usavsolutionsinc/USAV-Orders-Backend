@@ -164,29 +164,42 @@ export async function reconcileUnmatchedReceiving(
   }
 
   // ─── Import Zoho lines ──────────────────────────────────────────────────
+  // The Zoho import is tenant-scoped (opens a withTenantTransaction under the
+  // receiving's org), so it needs the receiving row's organization_id. Legacy
+  // rows without one are skipped non-fatally — promotion already succeeded and
+  // a later reconcile tick can import lines once the org is backfilled.
   let linesImported = 0;
-  try {
-    const importResult = await importZohoPurchaseOrderToReceiving(primaryPoId);
-    // importZohoPurchaseOrderToReceiving's return shape varies; count rows
-    // defensively. We only care about a rough number for telemetry.
-    if (importResult && typeof importResult === 'object') {
-      const maybeLines = (importResult as { linesImported?: number; lines?: unknown[] })
-        .linesImported;
-      const maybeArr = (importResult as { lines?: unknown[] }).lines;
-      linesImported = typeof maybeLines === 'number'
-        ? maybeLines
-        : Array.isArray(maybeArr)
-          ? maybeArr.length
-          : 0;
-    }
-  } catch (err) {
-    // Promotion succeeded but line import failed. The receiving row now has
-    // source='zoho_po' and the right PO id; the next mark-received-po call
-    // (or another reconcile tick) will sync the lines. Log + continue.
+  if (!rec.organization_id) {
     console.warn(
-      `[reconcile-unmatched] line import failed for receiving=${receivingId} po=${primaryPoId}:`,
-      err instanceof Error ? err.message : err,
+      `[reconcile-unmatched] receiving=${receivingId} has no organization_id; skipping Zoho line import`,
     );
+  } else {
+    try {
+      const importResult = await importZohoPurchaseOrderToReceiving(
+        rec.organization_id,
+        primaryPoId,
+      );
+      // importZohoPurchaseOrderToReceiving's return shape varies; count rows
+      // defensively. We only care about a rough number for telemetry.
+      if (importResult && typeof importResult === 'object') {
+        const maybeLines = (importResult as { linesImported?: number; lines?: unknown[] })
+          .linesImported;
+        const maybeArr = (importResult as { lines?: unknown[] }).lines;
+        linesImported = typeof maybeLines === 'number'
+          ? maybeLines
+          : Array.isArray(maybeArr)
+            ? maybeArr.length
+            : 0;
+      }
+    } catch (err) {
+      // Promotion succeeded but line import failed. The receiving row now has
+      // source='zoho_po' and the right PO id; the next mark-received-po call
+      // (or another reconcile tick) will sync the lines. Log + continue.
+      console.warn(
+        `[reconcile-unmatched] line import failed for receiving=${receivingId} po=${primaryPoId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
   }
 
   // ─── Close open tracking exceptions for this receiving ──────────────────

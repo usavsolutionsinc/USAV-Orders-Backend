@@ -138,6 +138,10 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
             onChange={(hex) => updateColorMutation.mutate(hex)}
           />
           <div className="min-w-0 flex-1">
+            {/* Passive tenant-identity signal: which workspace this session is
+                scoped to. Switching is a deliberate action in Settings →
+                Organization, never from here. */}
+            <div className="truncate text-eyebrow font-bold uppercase tracking-[0.14em] text-gray-400">{user.organizationName}</div>
             <div className="truncate text-sm font-semibold text-gray-900">{staffName || `Staff #${user.staffId}`}</div>
             <div className="truncate text-micro font-medium uppercase tracking-[0.14em] text-gray-500">{user.role.replace(/_/g, ' ')}</div>
           </div>

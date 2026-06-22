@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncZohoPurchaseOrdersToReceiving } from '@/lib/zoho-receiving-sync';
 import { withAuth } from '@/lib/auth/withAuth';
+import { credentialErrorStatus } from '@/lib/integrations/credential-error-response';
 
 export const dynamic = 'force-dynamic';
 
-async function runZohoPurchaseReceivesSync(body: Record<string, unknown> = {}) {
+async function runZohoPurchaseReceivesSync(orgId: string, body: Record<string, unknown> = {}) {
   const daysBackRaw = Number(body?.days_back ?? 0);
   const daysBack = Number.isFinite(daysBackRaw) && daysBackRaw >= 0 ? daysBackRaw : 0;
   const statusFilter = String(body?.status || '').trim() || undefined;
-  const summary = await syncZohoPurchaseOrdersToReceiving({
+  const summary = await syncZohoPurchaseOrdersToReceiving(orgId, {
     status: statusFilter,
     days_back: daysBack,
     per_page: Number(body?.per_page) || 100,
@@ -30,13 +31,13 @@ async function runZohoPurchaseReceivesSync(body: Record<string, unknown> = {}) {
   };
 }
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-    return NextResponse.json(await runZohoPurchaseReceivesSync(body));
+    return NextResponse.json(await runZohoPurchaseReceivesSync(ctx.organizationId, body));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to sync Zoho purchase orders';
     console.error('[zoho-sync] Unexpected error:', message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: message }, { status: credentialErrorStatus(error) ?? 500 });
   }
 }, { permission: 'integrations.zoho' });

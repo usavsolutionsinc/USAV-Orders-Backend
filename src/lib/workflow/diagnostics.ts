@@ -23,6 +23,18 @@
  *   no-station        (warning) — node not bound to an operations-catalog
  *                                 station (nobody owns the step; the People
  *                                 lens and coverage checks need the binding)
+ *   port-fan-out      (warning) — two+ edges leave the SAME output port. Routing
+ *                                 is first-match-wins, so only the first fires
+ *                                 and the rest are dead wiring — visible, not
+ *                                 publish-blocking.
+ *
+ * Decision-node rules (Track 1, Stage 1 — only fire on `decision` nodes, whose
+ * real ports live in config.outputs, not the static registry meta):
+ *   decision-no-rules        (error) — a decision with NO rules AND no
+ *                                      defaultPort parks every item forever.
+ *   decision-port-undeclared (error) — a rule's thenPort (or the defaultPort)
+ *                                      names a port the node doesn't declare in
+ *                                      config.outputs — that lane can't be wired.
  *
  * Composition rules (only when station summaries are supplied — server-side):
  *   station-unmapped-role   (error) — a block in the node's bound station
@@ -31,6 +43,8 @@
  *   station-unknown-action  (error) — a block references an action id that's
  *                                     no longer in the registry (dangling).
  */
+
+import { findPortFanOuts, type WorkflowEdgeLike } from './router';
 
 export type DiagnosticSeverity = 'error' | 'warning' | 'info';
 
@@ -44,7 +58,10 @@ export interface Diagnostic {
     | 'terminal-node'
     | 'no-station'
     | 'station-unmapped-role'
-    | 'station-unknown-action';
+    | 'station-unknown-action'
+    | 'port-fan-out'
+    | 'decision-no-rules'
+    | 'decision-port-undeclared';
   nodeId?: string;
   edgeId?: string;
   message: string;
@@ -99,6 +116,33 @@ export interface DiagnosticsInput {
    * client-side, where only the graph is edited, so composition rules stay quiet.
    */
   stationsByNode?: ReadonlyMap<string, NodeStationSummary>;
+}
+
+/** A decision node's declared output port ids, read from its config.outputs. */
+function decisionOutputs(config: Record<string, unknown>): string[] {
+  const raw = config.outputs;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((o) => String((o as Record<string, unknown>)?.id ?? '')).filter(Boolean);
+}
+
+/** A decision node's rule rows (thenPort only — the port-validity surface). */
+function decisionThenPorts(config: Record<string, unknown>): string[] {
+  const raw = config.rules;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => String((r as Record<string, unknown>)?.thenPort ?? '')).filter(Boolean);
+}
+
+/**
+ * Declared ports for a node, decision-aware. Decision ports are per-instance
+ * (config.outputs), so they override the static registry meta; every other node
+ * falls back to portsOf(type).
+ */
+function declaredPortsFor(
+  node: DiagnosticsGraphNode,
+  portsOf: DiagnosticsInput['portsOf'],
+): string[] | null {
+  if (node.type === 'decision') return decisionOutputs(node.config);
+  return portsOf(node.type);
 }
 
 export function runDiagnostics(input: DiagnosticsInput): Diagnostic[] {
@@ -156,7 +200,7 @@ export function runDiagnostics(input: DiagnosticsInput): Diagnostic[] {
     wiredPorts.set(e.source, set);
   }
   for (const n of nodes) {
-    const declared = portsOf(n.type);
+    const declared = declaredPortsFor(n, portsOf);
     if (!declared || declared.length === 0) continue;
     const wired = wiredPorts.get(n.id) ?? new Set<string>();
     const unwired = declared.filter((p) => !wired.has(p));
@@ -183,6 +227,65 @@ export function runDiagnostics(input: DiagnosticsInput): Diagnostic[] {
         fix: `Wire the “${port}” port to the step that should handle it (or remove the branch).`,
       });
     }
+  }
+
+  // ── Decision-node rules (Track 1, Stage 1). ──
+  // A decision routes via its config rule-table, whose real ports live in
+  // config.outputs. Two ways an operator can strand items: an empty table with
+  // no default (parks everything), or a rule pointing at a port the node never
+  // declares (a lane that can't be wired).
+  for (const n of nodes) {
+    if (n.type !== 'decision') continue;
+    const declared = new Set(decisionOutputs(n.config));
+    const thenPorts = decisionThenPorts(n.config);
+    const defaultPort =
+      typeof n.config.defaultPort === 'string' && n.config.defaultPort ? n.config.defaultPort : null;
+
+    if (thenPorts.length === 0 && !defaultPort) {
+      out.push({
+        id: `decision-no-rules:${n.id}`,
+        severity: 'error',
+        rule: 'decision-no-rules',
+        nodeId: n.id,
+        message: `“${labelOf(n)}” has no rules and no default port — every item would park here forever.`,
+        fix: 'Add at least one rule, or set a default port in the decision editor.',
+      });
+    }
+
+    const referenced = defaultPort ? [...thenPorts, defaultPort] : thenPorts;
+    for (const port of new Set(referenced)) {
+      if (declared.has(port)) continue;
+      out.push({
+        id: `decision-port-undeclared:${n.id}:${port}`,
+        severity: 'error',
+        rule: 'decision-port-undeclared',
+        nodeId: n.id,
+        message: `“${labelOf(n)}” routes to “${port}”, which isn't one of its declared output ports.`,
+        fix: `Add “${port}” to the node's outputs, or point the rule at an existing port.`,
+      });
+    }
+  }
+
+  // ── Ambiguity guard: first-match-wins fan-out off a single port. ──
+  // Routing is deterministic (the first wired edge wins), so a second edge off
+  // the SAME port is silently dead. Surface it — don't block publish.
+  const edgeLikes: WorkflowEdgeLike[] = edges.map((e) => ({
+    sourceNode: e.source,
+    sourcePort: e.sourcePort,
+    targetNode: e.target,
+  }));
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  for (const fan of findPortFanOuts(edgeLikes)) {
+    const node = nodeById.get(fan.sourceNode);
+    const label = node ? labelOf(node) : fan.sourceNode;
+    out.push({
+      id: `port-fan-out:${fan.sourceNode}:${fan.sourcePort}`,
+      severity: 'warning',
+      rule: 'port-fan-out',
+      nodeId: fan.sourceNode,
+      message: `“${label}” has ${fan.targets.length} edges off its “${fan.sourcePort}” port — routing is first-match-wins, so only the first fires.`,
+      fix: `Keep one edge on the “${fan.sourcePort}” port (use a decision node to fan out on conditions).`,
+    });
   }
 
   // ── Station binding. ──

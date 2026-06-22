@@ -2,7 +2,8 @@
 
 import { useState, useRef, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AnchoredLayer, Layer } from '@/design-system';
+import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
+import { Layer } from '@/design-system/primitives/Layer';
 import { Filter, X, ChevronDown } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 

@@ -92,15 +92,50 @@ This design system implements the "Kinetic Ledger" direction for dense operation
 
 **Hard rule: all tab-like UI must use `TabSwitch` from `src/components/ui/TabSwitch.tsx`.** Custom pill buttons or ad-hoc toggle rows are not permitted. Wrap the switcher in `SidebarTabSwitchChrome` when it sits in a sidebar header row.
 
-## Functional Color Mapping
+## Functional Color Mapping (the color story)
 
-- Repair / Support ticket: Orange
-- Inventory alert: Red
-- System identifiers: Gray
-- Logistics / Tracking: Blue
-- Success / Inbound: Green
-- Fulfillment channel: Purple
-- Queued / Pending: Yellow
+Color carries meaning in this app — a hue is never decorative. When building any
+new status/tone map, **pick the hue by meaning from this table**, then take the
+value from the token SoT (`tokens/colors/semantic.ts`) — never eyeball a shade.
+
+### Functional hues (meaning → hue → token)
+
+| Meaning | Hue | Token (`semanticColors`) |
+|---|---|---|
+| Repair / Support ticket | Orange | `functional.repair` |
+| Inventory alert / blocked | Red | `functional.inventoryAlert` |
+| System identifiers | Gray | `functional.identifier` |
+| Logistics / Tracking / info | Blue | `functional.logistics` |
+| Success / Inbound / passed | Green | `functional.successInbound` |
+| Fulfillment channel | Purple | `functional.fulfillment` |
+| Queued / Pending | Yellow | `functional.queued` |
+| Brand / primary accent | Navy | `text.accent`, `background.accent` |
+
+### Status-pill triad (Tailwind aliases)
+
+For status pills/badges, the canonical combination is **surface + text + border**
+of one tone. These are wired as semantic Tailwind utilities (CSS vars curated in
+`src/styles/globals.css`, values mirror `semanticColors`):
+
+| Tone | Pill recipe | Meaning |
+|---|---|---|
+| Success | `bg-surface-success text-text-success border border-border-success` | passed / inbound / done |
+| Warning | `bg-surface-warning text-text-warning border border-border-warning` | caution / pending-late / repair |
+| Danger | `bg-surface-danger text-text-danger border border-border-danger` | failed / blocked / overdue |
+| Accent | `bg-surface-accent text-text-accent border border-border-accent` | brand / selected |
+
+> Note the doubled prefix (`text-text-success`, `bg-surface-success`) — the color
+> key carries the role, matching the neutral family (`text-text-default`,
+> `bg-surface-canvas`, `border-border-soft`). Prefer these over raw
+> `bg-emerald-50`/`text-rose-600`; they flip with dark mode once T2 lands.
+
+### Rule for new tone registries
+
+A new domain status map (e.g. `lib/<domain>-status.ts`) **maps each state to a
+meaning in the table above**, then to the matching tone. Do not introduce a new
+hue without adding it here first. Consolidating the scattered inline `STATUS_TONE`
+maps onto this story is **T1** of `docs/design-system-token-simplification.md`;
+the dark-mode flip of these tones is **T2**.
 
 ## System Rules
 

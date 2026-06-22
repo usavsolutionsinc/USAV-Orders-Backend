@@ -97,6 +97,7 @@ export const PERMISSIONS = [
   { id: 'orders.view',              category: 'shipping', label: 'View orders' },
   { id: 'orders.create',            category: 'shipping', label: 'Create orders' },
   { id: 'orders.import',            category: 'shipping', label: 'Import orders (Google Sheets + Ecwid)' },
+  { id: 'inventory.list_unit',      category: 'shipping', label: 'List a unit on a sales channel' },
   { id: 'orders.void',              category: 'shipping', label: 'Void order', destructive: true, stepUp: true },
   { id: 'warranty.view',            category: 'shipping', label: 'View warranty claims' },
   { id: 'warranty.manage',          category: 'shipping', label: 'Manage warranty claims (log / lifecycle / quote)' },

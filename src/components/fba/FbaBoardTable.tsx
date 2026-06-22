@@ -12,7 +12,7 @@ import { printQueueTableUi } from '@/utils/staff-colors';
 
 import type { FbaBoardItem } from '@/lib/fba/types';
 export type { FbaBoardItem } from '@/lib/fba/types';
-import { FBA_STATUS_LABEL } from '@/lib/fba/status';
+import { FBA_STATUS_LABEL, fbaStatusPillClass } from '@/lib/fba/status';
 import {
   FBA_BOARD_SELECTION,
   FBA_BOARD_SELECTION_COUNT,
@@ -404,17 +404,9 @@ export function FbaBoardTable({
   );
 }
 
-const STATUS_PILL_COLOR: Record<string, string> = {
-  PLANNED: 'bg-amber-100 text-amber-700',
-  TESTED: 'bg-emerald-100 text-emerald-700',
-  PACKED: 'bg-blue-100 text-blue-700',
-  OUT_OF_STOCK: 'bg-red-100 text-red-700',
-  LABEL_ASSIGNED: 'bg-green-100 text-green-700',
-};
-
 function StatusPill({ status }: { status: string }) {
   const s = status.toUpperCase();
-  const color = STATUS_PILL_COLOR[s] ?? 'bg-gray-100 text-gray-600';
+  const color = fbaStatusPillClass(status);
   const label = FBA_STATUS_LABEL[s] ?? s.replace(/_/g, ' ');
 
   return (

@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server';
 import { and, desc, eq } from 'drizzle-orm';
+import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { db } from '@/lib/drizzle/db';
 import { stationDefinitions } from '@/lib/drizzle/schema';
+import { parseBody } from '@/lib/schemas/parse';
+import { NodeStationSaveBody } from '@/lib/schemas/stations';
+import { saveNodeStationDraft } from '@/lib/studio/node-station';
+import type { StationConfig } from '@/lib/stations/contract';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import {
   SLOT_IDS,
   listActionMeta,
@@ -10,6 +17,12 @@ import {
   listDataSourceMeta,
   type BlockInstanceConfig,
 } from '@/lib/stations';
+
+/** .../api/studio/nodes/[id]/station → id is the path segment before 'station'. */
+function nodeIdFromPath(pathname: string): string {
+  const segments = pathname.split('/').filter(Boolean);
+  return decodeURIComponent(segments[segments.length - 2] ?? '');
+}
 
 /**
  * GET /api/studio/nodes/[id]/station
@@ -26,9 +39,7 @@ export const dynamic = 'force-dynamic';
 
 export const GET = withAuth(
   async (request, ctx) => {
-    const segments = request.nextUrl.pathname.split('/').filter(Boolean);
-    // .../api/studio/nodes/[id]/station → id is segments[-2]
-    const nodeId = decodeURIComponent(segments[segments.length - 2] ?? '');
+    const nodeId = nodeIdFromPath(request.nextUrl.pathname);
     if (!nodeId) {
       return NextResponse.json({ ok: false, error: 'invalid node id' }, { status: 400 });
     }
@@ -120,6 +131,9 @@ export const GET = withAuth(
           isActive: row.isActive,
           legacy,
           slots,
+          // Raw composition — the L2 editor seeds its working copy from this
+          // (the resolved `slots` above are render-only / read-only).
+          config: (row.config ?? { slots: {} }) as StationConfig,
         },
       });
     } catch (err) {
@@ -128,5 +142,56 @@ export const GET = withAuth(
       return NextResponse.json({ ok: false, error: message }, { status: 500 });
     }
   },
-  { permission: 'studio.view' },
+  { permission: 'studio.view', feature: 'studio' },
+);
+
+/**
+ * PUT /api/studio/nodes/[id]/station
+ *
+ * The node-scoped station WRITE (Operations Studio Phase D / ST5): upsert a
+ * DRAFT station_definition bound to this workflow node (workflow_node_id = id),
+ * under the reserved ('studio-node', <id>) namespace. Draft-first (Studio law
+ * #6) — publishing is the separate POST .../station/publish step; the active
+ * row is never mutated here. The node id comes from the PATH, never the body.
+ */
+export const PUT = withAuth(
+  async (request, ctx) => {
+    const nodeId = nodeIdFromPath(request.nextUrl.pathname);
+    if (!nodeId) {
+      return NextResponse.json({ ok: false, error: 'invalid node id' }, { status: 400 });
+    }
+
+    const raw = await request.json().catch(() => ({}));
+    const parsed = parseBody(NodeStationSaveBody, raw);
+    if (parsed instanceof NextResponse) return parsed;
+
+    try {
+      const result = await withTenantTransaction(ctx.organizationId, (client) =>
+        saveNodeStationDraft({
+          client,
+          orgId: ctx.organizationId,
+          nodeId,
+          label: parsed.label,
+          config: parsed.config as StationConfig,
+          staffId: ctx.staffId,
+        }),
+      );
+
+      if (result.status === 200) {
+        await recordAudit(pool, ctx, request, {
+          source: 'studio-node-station',
+          action: AUDIT_ACTION.STATION_DRAFT_SAVE,
+          entityType: AUDIT_ENTITY.STATION_DEFINITION,
+          entityId: result.body.draft.id,
+          after: result.audit,
+        });
+      }
+      return NextResponse.json(result.body, { status: result.status });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'studio station save failed';
+      console.error('[PUT /api/studio/nodes/[id]/station] error:', err);
+      return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    }
+  },
+  { permission: 'studio.manage', feature: 'studio' },
 );

@@ -20,10 +20,13 @@ export function HoverTooltip({
   label,
   children,
   className,
+  focusable = true,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
+  /** Set false when the trigger sits inside another focusable control (e.g. a row button). */
+  focusable?: boolean;
 }) {
   const triggerRef = useRef<HTMLSpanElement | null>(null);
   const bubbleRef = useRef<HTMLSpanElement | null>(null);
@@ -69,9 +72,9 @@ export function HoverTooltip({
       className={className}
       onMouseEnter={show}
       onMouseLeave={hide}
-      onFocus={show}
-      onBlur={hide}
-      tabIndex={0}
+      onFocus={focusable ? show : undefined}
+      onBlur={focusable ? hide : undefined}
+      tabIndex={focusable ? 0 : undefined}
     >
       {children}
       {anchor && typeof document !== 'undefined'

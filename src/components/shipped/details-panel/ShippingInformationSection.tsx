@@ -3,8 +3,7 @@
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { getAccountSourceLabel, getOrderIdUrl } from '@/utils/order-links';
 import { ShipmentStatusBadge } from '@/components/shipping/ShipmentStatusBadge';
-import { formatDateTimePST, getDaysLateNumber } from '@/utils/date';
-import { getStaffName } from '@/utils/staff';
+import { formatDateTimePST } from '@/utils/date';
 import { Pencil, Copy, Check } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { DateTimeValue } from '@/design-system/components/DateTimeValue';
@@ -12,7 +11,7 @@ import { CopyActionIcon } from '@/design-system/components/CopyActionIcon';
 import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
 
 import { SerialNumbersRow } from './SerialNumbersRow';
-import { buildAllTrackingRows, serialNumberRowsFromShipped } from './shipping-information/helpers';
+import { buildAllTrackingRows, serialNumberRowsFromShipped, deriveShippingDisplayMeta } from './shipping-information/helpers';
 import { ShippingEditableRow } from './shipping-information/ShippingEditableRow';
 import { ShippingInfoEditModal } from './shipping-information/ShippingInfoEditModal';
 import { PrepackedSkuRow } from './shipping-information/PrepackedSkuRow';
@@ -80,53 +79,21 @@ export function ShippingInformationSection({
     setLinkedTrackingDrafts,
   });
 
-  const daysLate = getDaysLateNumber(shipped.ship_by_date || shipped.created_at || null);
+  const {
+    daysLate,
+    packedAtSource,
+    isScannedOut,
+    scannedOutByDisplay,
+    packerNameDisplay,
+    techNameDisplay,
+    returnsCopyText,
+  } = deriveShippingDisplayMeta(shipped, serialNumberRows);
   const daysLateClassName =
     daysLate > 1
       ? 'text-micro font-black uppercase tracking-wide text-red-600'
       : daysLate === 1
         ? 'text-micro font-black uppercase tracking-wide text-yellow-600'
         : 'text-micro font-black uppercase tracking-wide text-gray-500';
-  const packedAtSource =
-    (shipped.pack_activity_at && shipped.pack_activity_at !== '1' ? shipped.pack_activity_at : null)
-    ?? (shipped.packed_at && shipped.packed_at !== '1' ? shipped.packed_at : null);
-  const shippedAtDisplay = packedAtSource ? formatDateTimePST(packedAtSource) : 'N/A';
-  const testedAtDateTimeDisplay = shipped.test_date_time
-    ? formatDateTimePST(shipped.test_date_time)
-    : 'N/A';
-  const isScannedOut = Boolean(shipped.ship_confirmed_at && shipped.ship_confirmed_at !== '1');
-  const scannedOutDisplay = isScannedOut
-    ? formatDateTimePST(shipped.ship_confirmed_at as string)
-    : 'N/A';
-  // Who scanned it out at the dock — SAL SHIP_CONFIRM staff, surfaced for parity
-  // with the Packed / Tested By rows (and for staff reporting).
-  const scannedOutByDisplay = isScannedOut
-    ? (String(
-        (shipped as any).shipped_out_by_name
-        || getStaffName((shipped as any).shipped_out_by ?? null)
-      ).trim() || 'Not specified')
-    : null;
-  // Packer from actual SAL/packer_logs scan data only — not from work_assignment packer_id
-  const packerNameDisplay = String(
-    (shipped as any).packed_by_name
-    || (shipped as any).packer_name
-    || getStaffName((shipped as any).packed_by ?? null)
-  ).trim() || 'Not specified';
-  const techNameDisplay = String(
-    (shipped as any).tester_name
-    || (shipped as any).tested_by_name
-    || getStaffName((shipped as any).tested_by ?? (shipped as any).tester_id ?? null)
-  ).trim() || 'Not specified';
-
-  // Everything the Return Info block shows, as one clipboard payload for the
-  // header copy icon.
-  const returnsCopyText = [
-    `Order ID: ${shipped.order_id || 'N/A'}`,
-    `Serials: ${serialNumberRows.length ? serialNumberRows.join(', ') : 'N/A'}`,
-    `Tested By: ${techNameDisplay} ${testedAtDateTimeDisplay}`,
-    `Packed By: ${packerNameDisplay} ${shippedAtDisplay}`,
-    `Scanned Out: ${scannedOutByDisplay ?? 'N/A'} ${scannedOutDisplay}`,
-  ].join('\n');
 
   return (
     <section className="space-y-6">

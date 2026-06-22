@@ -10,7 +10,7 @@ import {
   getLast4,
 } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface MobileCartonSheetProps {
   row: ReceivingLineRow | null;

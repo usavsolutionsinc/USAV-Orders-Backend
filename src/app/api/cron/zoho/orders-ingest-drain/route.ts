@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
@@ -32,7 +33,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const summary = await withCronRun('zoho.orders_ingest_drain', async () => {
+    const locked = await withCronLock('zoho.orders_ingest_drain', () =>
+      withCronRun('zoho.orders_ingest_drain', async () => {
       // Atomically claim a batch so concurrent runs never grab the same rows.
       const { rows } = await pool.query<QueueRow>(
         `UPDATE order_ingest_queue
@@ -78,7 +80,12 @@ export async function GET(req: NextRequest) {
       }
 
       return { claimed: rows.length, done, failed };
-    });
+    }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
 
     return NextResponse.json({ ok: true, ...summary });
   } catch (error) {

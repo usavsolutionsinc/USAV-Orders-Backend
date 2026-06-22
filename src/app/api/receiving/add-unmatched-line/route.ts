@@ -229,6 +229,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   if (idempotencyKey) {
     const cached = await getApiIdempotencyResponse(
       pool,
+      ctx.organizationId,
       idempotencyKey,
       IDEMPOTENCY_ROUTE,
     );
@@ -244,6 +245,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const status = init?.status ?? 200;
     if (idempotencyKey && status < 500) {
       await saveApiIdempotencyResponse(pool, {
+        orgId: ctx.organizationId,
         idempotencyKey,
         route: IDEMPOTENCY_ROUTE,
         staffId: ctx.staffId,
@@ -341,6 +343,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        source_system,
        source_order_id,
        is_repair_service,
+       organization_id,
        manual_entry_at,
        created_at,
        updated_at
@@ -348,7 +351,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
        $1, $2, $3, $4, $5, $6, $7, $8::condition_grade_enum,
        $9, $10, $11, $12, 0,
        'MATCHED'::inbound_workflow_status_enum,
-       $13, $14, $15,
+       $13, $14, $15, $16::uuid,
        NOW(), NOW(), NOW()
      )
      RETURNING
@@ -375,6 +378,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       sourceSystem,
       sourceOrderId,
       isRepairService,
+      ctx.organizationId,
     ],
   );
 

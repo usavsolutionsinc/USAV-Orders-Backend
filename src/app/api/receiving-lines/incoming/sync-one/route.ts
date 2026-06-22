@@ -35,7 +35,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // 1. PO mirror refresh (header + status).
-    const mirror = await syncOnePoMirror(poId);
+    const mirror = await syncOnePoMirror(poId, ctx.organizationId);
 
     // 2. Shipment re-poll, if this PO's receiving row has one linked.
     //    receiving is tenant-owned — scope to this org so a PO id from another

@@ -49,3 +49,17 @@ test('surrounding whitespace is tolerated', () => {
   strictEqual(looksLikeReceivingCode('  R-1234  '), true);
   strictEqual(looksLikeReceivingCode('\tH-9\n'), true);
 });
+
+test('bare product SKUs are NOT codes (fall through to the SKU pre-pack branch)', () => {
+  // P1-PCK-01: a scanned product/pre-pack SKU must NOT be classified as a
+  // canonical handle/unit-id — it has to fall through resolveTestingScan to the
+  // fetchLinesBySku branch so the panel prefills from the pre-packed line.
+  for (const v of [
+    'HP-PSU',          // hyphenated SKU, no {YYWW}-{SEQ6} unit-id tail
+    'BOSE-QC35',       // brand SKU
+    'SKU12345',        // plain alphanumeric SKU
+    'WH1000XM4',       // model-style SKU
+  ]) {
+    strictEqual(looksLikeReceivingCode(v), false, `${v} should fall through to SKU resolve`);
+  }
+});

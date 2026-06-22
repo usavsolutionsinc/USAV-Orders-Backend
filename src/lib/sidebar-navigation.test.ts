@@ -139,7 +139,16 @@ test('getSidebarHref resolves every sidebar page to its real route', () => {
 test('resolveSidebarMode returns null for pages without modes', () => {
   assert.equal(getSidebarPageNav('support'), undefined);
   assert.equal(resolveSidebarMode('support', { pathname: '/support', params: new URLSearchParams() }), null);
-  assert.equal(resolveSidebarMode('packer', { pathname: '/packer', params: new URLSearchParams() }), null);
+  assert.equal(resolveSidebarMode('operations', { pathname: '/operations', params: new URLSearchParams() }), null);
+});
+
+// Packing is modeful: bare /packer is Standard; ?packMode= drives Fragile/Multi.
+test('resolveSidebarMode reads the packer pack-mode', () => {
+  const at = (search = '') => ({ pathname: '/packer', params: new URLSearchParams(search) });
+  assert.equal(resolveSidebarMode('packer', at()), 'standard');
+  assert.equal(resolveSidebarMode('packer', at('packMode=fragile')), 'fragile');
+  assert.equal(resolveSidebarMode('packer', at('packMode=multi')), 'multi');
+  assert.equal(resolveSidebarMode('packer', at('packMode=bogus')), 'standard');
 });
 
 // Spot-check the gnarly real-world deep-links the panels read today, so the

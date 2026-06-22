@@ -27,9 +27,11 @@ const SESSION_COOKIE_NAME = 'usav_sid';
 const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/signin(?:$|\/)/,
   /^\/signup(?:$|\/)/,                  // public account creation
+  /^\/account\/signin(?:$|\/)/,         // account-level (email/passkey) sign-in
   /^\/m\/signin(?:$|\/)/,
   /^\/not-authorized(?:$|\/)/,
   /^\/m\/enroll\//,
+  /^\/invite\/[A-Za-z0-9_-]+(?:$|\/)/,  // org invitation accept (unauthenticated)
   /^\/api\/auth\//,
   /^\/api\/health(?:$|\/)/,
   /^\/api\/ready(?:$|\/)/,

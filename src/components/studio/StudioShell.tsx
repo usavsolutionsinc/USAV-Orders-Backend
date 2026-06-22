@@ -17,11 +17,14 @@
  */
 
 import { useLocalStorage } from '@/hooks';
-import { ChevronLeft, ChevronRight } from '@/components/Icons';
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from '@/components/Icons';
 import { useStudioWorkspace } from './StudioWorkspaceContext';
+import { useStudioSimulation } from './useStudioSimulation';
 import { StudioCanvas } from './StudioCanvas';
 import { StudioInspector } from './StudioInspector';
+import { StudioSimulatePanel } from './StudioSimulatePanel';
 import { StudioStationPreview } from './StudioStationPreview';
+import { StudioNodeStationEditor } from './StudioNodeStationEditor';
 
 export function StudioShell() {
   const {
@@ -29,6 +32,8 @@ export function StudioShell() {
     error,
     nodes,
     edges,
+    annotations,
+    palette,
     z,
     lens,
     focus,
@@ -36,9 +41,13 @@ export function StudioShell() {
     diagnostics,
     liveNodes,
     flowEdges,
+    flow,
+    people,
+    peopleNodes,
     live,
     station,
     stationLoading,
+    reloadStation,
     canManage,
     isDraft,
     editing,
@@ -49,13 +58,28 @@ export function StudioShell() {
     onGraphChange,
     onUpdateNodeConfig,
     onDeleteNode,
+    onAddAnnotation,
+    onMoveAnnotation,
+    onUpdateAnnotationText,
+    onDeleteAnnotation,
     createDraft,
     saveDraft,
     publish,
+    discardDraft,
   } = useStudioWorkspace();
 
   // Inspector is a workspace preference (not shareable view state) → localStorage.
   const [inspectorOpen, setInspectorOpen] = useLocalStorage('studio:inspector-open', true);
+
+  // ─── Simulate (ST6): a client-side ghost-run over the IN-CONTEXT graph (current
+  // or draft). Pure dry-run — zero engine writes (see useStudioSimulation). The
+  // panel takes over the inspector slot while open; the ghost paints on the canvas.
+  const sim = useStudioSimulation(nodes, edges);
+  const [simulateOpen, setSimulateOpen] = useLocalStorage('studio:simulate-open', false);
+  const closeSimulate = () => {
+    sim.reset();
+    setSimulateOpen(false);
+  };
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col bg-slate-50">
@@ -90,6 +114,39 @@ export function StudioShell() {
           </span>
         )}
 
+        {lens === 'people' && !editing && people && (
+          <span
+            className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700"
+            title={
+              people.uncoveredNodeIds.length > 0
+                ? `${people.uncoveredNodeIds.length} step(s) with no staff coverage`
+                : 'Every staffable step is covered'
+            }
+          >
+            {people.totalCovering} covering
+            {people.uncoveredNodeIds.length > 0 && ` · ${people.uncoveredNodeIds.length} gap`}
+          </span>
+        )}
+
+        {/* ─── Simulate toggle (ST6) — a read-only authoring aid, studio.view+ ─── */}
+        {graph?.definition && (
+          <button
+            type="button"
+            onClick={() => setSimulateOpen((open) => !open)}
+            aria-pressed={simulateOpen}
+            title="Walk a hypothetical unit through the graph — no real unit moves"
+            className={[
+              'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors',
+              simulateOpen
+                ? 'border-violet-300 bg-violet-100 text-violet-700'
+                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+            ].join(' ')}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Simulate
+          </button>
+        )}
+
         {/* ─── Draft ▸ Publish controls ─── */}
         {canManage && graph?.definition && (
           <div className="ml-auto flex items-center gap-1.5">
@@ -106,6 +163,19 @@ export function StudioShell() {
                 <span className="rounded-md bg-amber-100 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700">
                   Draft v{graph.definition.version}
                 </span>
+                {/* Add a sticky-note (Phase E3) — only on a draft (the active
+                    version's notes are read-only); the canvas owns positioning. */}
+                {editing && (
+                  <button
+                    onClick={() => onAddAnnotation()}
+                    disabled={busy !== null}
+                    title="Drop a sticky-note on the canvas"
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add note
+                  </button>
+                )}
                 <button
                   onClick={() => void saveDraft()}
                   disabled={!dirty || busy !== null}
@@ -122,6 +192,21 @@ export function StudioShell() {
                   className="rounded-md bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:opacity-50"
                 >
                   {busy === 'publishing' ? 'Publishing…' : 'Publish'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        'Discard this draft? Its unsaved-to-active changes are permanently removed. This cannot be undone.',
+                      )
+                    ) {
+                      void discardDraft();
+                    }
+                  }}
+                  disabled={busy !== null}
+                  className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-50"
+                >
+                  {busy === 'discarding' ? 'Discarding…' : 'Discard draft'}
                 </button>
               </>
             )}
@@ -144,12 +229,24 @@ export function StudioShell() {
               No workflow definition yet — seed one to see your operation here.
             </div>
           ) : z === 2 ? (
-            <StudioStationPreview
-              node={focusedNode}
-              station={station}
-              loading={stationLoading}
-              onBack={() => setParams({ z: '1' })}
-            />
+            // Managers editing a focused node get the editable binding pane;
+            // everyone else (or before a node is picked) keeps the read-only
+            // preview with its "select a node" / "no station bound" empty states.
+            canManage && focusedNode ? (
+              <StudioNodeStationEditor
+                node={focusedNode}
+                station={station}
+                onBack={() => setParams({ z: '1' })}
+                reloadStation={reloadStation}
+              />
+            ) : (
+              <StudioStationPreview
+                node={focusedNode}
+                station={station}
+                loading={stationLoading}
+                onBack={() => setParams({ z: '1' })}
+              />
+            )
           ) : (
             <StudioCanvas
               nodes={nodes}
@@ -158,6 +255,8 @@ export function StudioShell() {
               lens={lens}
               live={liveNodes}
               flowEdges={flowEdges}
+              flow={flow}
+              people={peopleNodes}
               diagnostics={diagnostics}
               focus={focus}
               editable={editing}
@@ -165,9 +264,22 @@ export function StudioShell() {
               onFocus={(id) => setParams({ focus: id })}
               onZoomTo={(depth) => setParams({ z: String(depth) })}
               onOpenStation={(id) => setParams({ z: '2', focus: id })}
+              simGhostNodeId={simulateOpen ? sim.currentNodeId : null}
+              simTraversedEdgeIds={simulateOpen ? sim.traversedEdgeIds : undefined}
+              annotations={annotations}
+              onMoveAnnotation={onMoveAnnotation}
+              onUpdateAnnotationText={onUpdateAnnotationText}
+              onDeleteAnnotation={onDeleteAnnotation}
             />
           )}
         </main>
+
+        {/* ─── Simulate panel (ST6) — its own slot, orthogonal to the inspector ─── */}
+        {simulateOpen && (
+          <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
+            <StudioSimulatePanel sim={sim} nodes={nodes} edges={edges} editing={editing} onClose={closeSimulate} />
+          </aside>
+        )}
 
         {inspectorOpen ? (
           <aside className="hidden w-72 shrink-0 flex-col border-l border-slate-200 bg-white md:flex">
@@ -192,10 +304,19 @@ export function StudioShell() {
                 nodeCount={nodes.length}
                 edgeCount={edges.length}
                 live={focusedNode ? liveNodes?.[focusedNode.id] ?? null : null}
+                lens={lens}
+                flow={flow}
+                people={focusedNode ? peopleNodes?.[focusedNode.id] ?? null : null}
                 diagnostics={focusedNode ? diagnostics.filter((d) => d.nodeId === focusedNode.id) : []}
                 editable={editing}
+                configSchema={
+                  focusedNode
+                    ? palette.find((p) => p.type === focusedNode.type)?.configSchema ?? null
+                    : null
+                }
                 onUpdateConfig={onUpdateNodeConfig}
                 onDeleteNode={onDeleteNode}
+                onFocus={(id) => setParams({ focus: id })}
               />
             </div>
           </aside>

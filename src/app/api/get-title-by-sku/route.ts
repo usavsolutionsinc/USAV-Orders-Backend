@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { getQcChecks, getKitParts } from '@/lib/neon/sku-catalog-queries';
 
 /**
  * GET /api/get-title-by-sku?sku=<value>
@@ -29,6 +30,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         const orgId = ctx.organizationId;
         const { searchParams } = new URL(request.url);
         const sku = searchParams.get('sku');
+        // Optional order condition — condition-gates the kit-parts BOM (a part
+        // flagged required_for=['REFURBISHED'] is hidden on a brand-new order).
+        const condition = searchParams.get('condition');
 
         if (!sku) {
             return NextResponse.json({ error: 'Missing sku query param' }, { status: 400 });
@@ -128,7 +132,57 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             return NextResponse.json({
                 sku: trimmedSku, title: '', stock: '0', location: '',
                 imageUrl: '', skuCatalogId: null, gtin: null, packNotes: null,
+                qcFlags: [], kitParts: [],
             });
+        }
+
+        const resolvedCatalogId: number | null =
+            catalogRow?.id ?? ecwidRow?.sku_catalog_id ?? null;
+
+        // Per-SKU QA flags the packer must verify before sealing (P1-PCK-02 §B).
+        // Reuses the published QC-check templates (qc_check_templates) authored
+        // in Products; we surface them — including the per-category defaults —
+        // as the "known problem points" for this product. Org-scoped via orgId.
+        let qcFlags: Array<{ id: number; label: string; category: string | null }> = [];
+        if (resolvedCatalogId != null) {
+            try {
+                const checks = await getQcChecks(
+                    resolvedCatalogId,
+                    catalogRow?.category ?? null,
+                    { publishedOnly: true },
+                    orgId,
+                );
+                qcFlags = checks.map((c) => ({
+                    id: c.id,
+                    label: c.step_label,
+                    category: c.category ?? null,
+                }));
+            } catch {
+                // QC checks are advisory; never let them block SKU resolution.
+                qcFlags = [];
+            }
+        }
+
+        // Per-SKU kit parts (BOM = "what's in the box"), anchored on the SAME
+        // resolvedCatalogId as the QC flags above. This is the single linkage
+        // point: the packer's checklist and the catalog "What's in the box"
+        // editor both key on sku_catalog.id, never on the colliding SKU string,
+        // so they can never drift. Condition-gated via required_for (P1-PCK-03).
+        let kitParts: Array<{ id: number; name: string; type: string; qty: number; critical: boolean }> = [];
+        if (resolvedCatalogId != null) {
+            try {
+                const parts = await getKitParts(resolvedCatalogId, condition, orgId);
+                kitParts = parts.map((p) => ({
+                    id: p.id,
+                    name: p.component_name,
+                    type: p.component_type,
+                    qty: p.qty_required,
+                    critical: p.is_critical,
+                }));
+            } catch {
+                // BOM is advisory at pack time; never block SKU resolution.
+                kitParts = [];
+            }
         }
 
         return NextResponse.json({
@@ -159,9 +213,11 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                     : (ecwidRow?.image_url && String(ecwidRow.image_url).trim()) ||
                       catalogRow?.image_url ||
                       ''),
-            skuCatalogId: catalogRow?.id ?? ecwidRow?.sku_catalog_id ?? null,
+            skuCatalogId: resolvedCatalogId,
             gtin: catalogRow?.gtin || null,
             packNotes: catalogRow?.notes || null,
+            qcFlags,
+            kitParts,
         });
     } catch (error: any) {
         console.error('API error', error);

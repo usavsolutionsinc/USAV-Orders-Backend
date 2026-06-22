@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { getCarrier } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { recordReceivingScan } from '@/lib/receiving/record-scan';
 
 /**
@@ -22,9 +22,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    const meta = await pool.query<{ source: string | null; carrier: string | null }>(
-      `SELECT source, carrier FROM receiving WHERE id = $1 LIMIT 1`,
-      [receivingId],
+    // Org-scope the ownership lookup: a cross-tenant receivingId now resolves to
+    // no row → 404 (hides existence), which also gates the recordReceivingScan
+    // write below so a caller can't re-attribute a scan onto another org's carton.
+    const meta = await tenantQuery<{ source: string | null; carrier: string | null }>(
+      ctx.organizationId,
+      `SELECT source, carrier FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [receivingId, ctx.organizationId],
     );
     const row = meta.rows[0];
     if (!row) {

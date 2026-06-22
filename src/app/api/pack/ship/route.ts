@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
+import pool from '@/lib/db';
 import { transaction } from '@/lib/neon-client';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseScannedUrl } from '@/lib/scan-resolver';
 import { transition } from '@/lib/inventory/state-machine';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { tapWorkflow } from '@/lib/workflow/tap';
+import { isUnifiedEngineFulfillmentTaps } from '@/lib/feature-flags';
 
 /**
  * Thrown when a unit's guarded SHIPPED transition is rejected (it isn't in a
@@ -341,6 +345,7 @@ export const POST = withAuth(async (request, ctx) => {
       return {
         ok: true as const,
         orderId,
+        shipmentId: order.shipment_id ?? null,
         shipped_unit_count: perUnit.length,
         units: perUnit,
         packer_log_id: packerLog.rows[0]?.id ?? null,
@@ -350,6 +355,63 @@ export const POST = withAuth(async (request, ctx) => {
     if (!result.ok) {
       return NextResponse.json(result, { status: result.status });
     }
+
+    // Formal audit-log row for the shipped order. recordAudit pulls actor/role/
+    // ip/request-id from ctx + headers and never throws. The route already
+    // writes per-unit SHIPPED inventory_events + a packer_logs row; this adds
+    // the generic audit_logs spine the compliance dashboards key off.
+    await recordAudit(pool, ctx, request, {
+      source: 'pack.ship',
+      action: AUDIT_ACTION.PACK_COMPLETED,
+      entityType: AUDIT_ENTITY.ORDER,
+      entityId: orderId,
+      method: 'manual',
+      after: { status: 'shipped' },
+      extra: {
+        shipped_unit_count: result.shipped_unit_count,
+        shipment_id: result.shipmentId,
+        tracking_number: trackingNumber,
+        carrier,
+        packer_log_id: result.packer_log_id,
+        unit_ids: result.units.map((u) => u.unitId),
+      },
+    });
+
+    // Phase 1.4/1.5 fulfillment tail: tell the engine each unit was packed then
+    // shipped so an enrolled+listed unit flows pack → ship → done. Fire-and-forget
+    // AFTER the commit (tapWorkflow never throws and drops unenrolled units);
+    // behind the flag. The two taps are awaited in order per unit: 'packed'
+    // advances pack → ship, then 'shipped' (now parked at ship) advances ship →
+    // done (the ship port is terminal/unrouted). expectNodeType keeps each a
+    // no-op off its node, so a unit shipped without engine-listing can't be
+    // false-advanced or blocked. Both are observer-only — the irreversible
+    // carrier custody already happened in the committed transaction above; the
+    // engine just records that the unit reached the terminal node.
+    if (isUnifiedEngineFulfillmentTaps()) {
+      after(async () => {
+        for (const u of result.units) {
+          await tapWorkflow({
+            serialUnitId: u.unitId,
+            event: 'packed',
+            input: { shipmentId: result.shipmentId },
+            staffId: actorStaffId,
+            source: 'scan',
+            orgId: ctx.organizationId,
+            expectNodeType: 'pack',
+          });
+          await tapWorkflow({
+            serialUnitId: u.unitId,
+            event: 'shipped',
+            input: { shipmentId: result.shipmentId, trackingNumber, carrier },
+            staffId: actorStaffId,
+            source: 'scan',
+            orgId: ctx.organizationId,
+            expectNodeType: 'ship',
+          });
+        }
+      });
+    }
+
     return NextResponse.json(result);
   } catch (err) {
     // A unit that wasn't in a shippable state rolled the whole transaction

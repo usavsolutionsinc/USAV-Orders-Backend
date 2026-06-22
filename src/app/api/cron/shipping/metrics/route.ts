@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isVercelCronOrigin } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import {
   collectShippingTrackingMetrics,
   detectMetricAlerts,
@@ -28,11 +29,17 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const { metrics, alerts } = await withCronRun('shipping.metrics', async () => {
-      const metrics = await collectShippingTrackingMetrics();
-      const alerts = detectMetricAlerts(metrics);
-      return { metrics, alerts };
-    });
+    const locked = await withCronLock('shipping.metrics', () =>
+      withCronRun('shipping.metrics', async () => {
+        const metrics = await collectShippingTrackingMetrics();
+        const alerts = detectMetricAlerts(metrics);
+        return { metrics, alerts };
+      }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked' });
+    }
+    const { metrics, alerts } = locked.result!;
 
     console.log('[metrics.shipping.tracking]', {
       deliveredUnscanned: metrics.deliveredUnscanned,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
-import { Barcode, ClipboardList, MapPin, Package } from '@/components/Icons';
+import { Barcode, ClipboardList, Hash, MapPin, Package } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
@@ -53,6 +53,7 @@ function viaFoundLabel(via: string | undefined): string | null {
   if (via === 'serial') return 'serial number';
   if (via === 'po') return 'PO number';
   if (via === 'tracking') return 'tracking number';
+  if (via === 'sku') return 'product SKU';
   return null; // explicit handle / unit-id scans don't need a callout
 }
 
@@ -63,6 +64,8 @@ function viaAckMeta(via: ResolvedVia): { label: string; Icon: typeof MapPin; chi
       return { label: 'Tracking', Icon: MapPin, chip: 'bg-blue-50 text-blue-700 ring-blue-200' };
     case 'po':
       return { label: 'PO#', Icon: ClipboardList, chip: 'bg-indigo-50 text-indigo-700 ring-indigo-200' };
+    case 'sku':
+      return { label: 'SKU', Icon: Hash, chip: 'bg-purple-50 text-purple-700 ring-purple-200' };
     case 'serial':
     case 'unit_id':
       return { label: via === 'unit_id' ? 'Unit ID' : 'Serial', Icon: Barcode, chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200' };
@@ -241,7 +244,9 @@ export function TestingSidebarPanel({
           <p className="mb-1 text-eyebrow font-black uppercase tracking-widest text-amber-700">
             {picker.via === 'serial'
               ? `Pick a unit — ${picker.rows.length} serial matches`
-              : `Pick a line — ${picker.rows.length} items on this PO`}
+              : picker.via === 'sku'
+                ? `Pick a line — ${picker.rows.length} pre-packed lines for this SKU`
+                : `Pick a line — ${picker.rows.length} items on this PO`}
           </p>
           <ul className="space-y-1">
             {picker.rows.map((row) => (

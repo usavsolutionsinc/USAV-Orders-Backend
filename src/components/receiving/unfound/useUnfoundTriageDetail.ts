@@ -15,7 +15,7 @@ import { jsonOrThrow, useResourceMutation } from '@/hooks';
 import { qk } from '@/queries/keys';
 import { toast } from '@/lib/toast';
 import type { TriageDetail, TriageRow } from '@/components/po-triage/types';
-import type { UnfoundQueueDetailsRow } from './UnfoundQueueDetailsPanel';
+import type { UnfoundQueueDetailsRow } from './unfound-triage-types';
 
 export function useUnfoundTriageDetail(row: UnfoundQueueDetailsRow) {
   const queryClient = useQueryClient();

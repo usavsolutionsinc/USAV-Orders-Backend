@@ -14,6 +14,7 @@ import {
     X,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { triageStatusBadgeClass } from '@/lib/inventory-triage-status';
 
 /** Full `tracking_exceptions` row (GET /api/tracking-exceptions/[id]). */
 interface ExceptionDetail {
@@ -41,12 +42,6 @@ interface TriageWorkspaceProps {
     /** `?open=` — the tracking_exception id selected in the sidebar. */
     selectedId: string | null;
 }
-
-const STATUS_TONE: Record<string, string> = {
-    open: 'bg-amber-50 text-amber-700',
-    resolved: 'bg-emerald-50 text-emerald-700',
-    discarded: 'bg-gray-100 text-gray-500',
-};
 
 function formatWhen(iso: string | null): string {
     if (!iso) return '—';
@@ -142,7 +137,7 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                     <span
                         className={cn(
                             'rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider',
-                            STATUS_TONE[data.status] ?? 'bg-gray-100 text-gray-500',
+                            triageStatusBadgeClass(data.status),
                         )}
                     >
                         {data.status}

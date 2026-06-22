@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import {
   claimPendingJobs,
   completePhotoJob,
@@ -29,26 +30,32 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const summary = await withCronRun('photos.analyze', async () => {
-      const jobs = await claimPendingJobs('analyze', limit);
-      let completed = 0;
-      let failed = 0;
-      for (const job of jobs) {
-        try {
-          await runAnalyzeJob(job);
-          await completePhotoJob(job.id);
-          completed++;
-        } catch (err) {
-          failed++;
-          await failPhotoJob(
-            job.id,
-            err instanceof Error ? err.message : 'analyze failed',
-            job.attempts,
-          );
+    const locked = await withCronLock('photos.analyze', () =>
+      withCronRun('photos.analyze', async () => {
+        const jobs = await claimPendingJobs('analyze', limit);
+        let completed = 0;
+        let failed = 0;
+        for (const job of jobs) {
+          try {
+            await runAnalyzeJob(job);
+            await completePhotoJob(job.id);
+            completed++;
+          } catch (err) {
+            failed++;
+            await failPhotoJob(
+              job.id,
+              err instanceof Error ? err.message : 'analyze failed',
+              job.attempts,
+            );
+          }
         }
-      }
-      return { claimed: jobs.length, completed, failed };
-    });
+        return { claimed: jobs.length, completed, failed };
+      }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
     return NextResponse.json({ success: true, ...summary });
   } catch (err: unknown) {
     console.error('[cron/photos/analyze]', err);

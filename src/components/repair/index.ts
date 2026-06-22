@@ -7,4 +7,5 @@ export { RepairTable } from './RepairTable';
 export { RepairDetailsPanel } from './RepairDetailsPanel';
 export { SignaturePad } from './SignaturePad';
 export { RepairAgreement } from './RepairAgreement';
+export { RepairPaperworkSheet } from './RepairPaperworkSheet';
 export type { RepairFormData } from './RepairIntakeForm';

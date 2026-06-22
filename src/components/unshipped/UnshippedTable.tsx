@@ -94,8 +94,12 @@ export function UnshippedTable({
   // Click-to-filter from the status legend (`?ustatus`) — exact derived pre-dock
   // state. Composes on top of the coarse `?stage` facet.
   const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase() as FulfillmentState | '';
+  // Universal staff filter (P1-WORK-02): `?staff=` narrows to one staff's
+  // assigned work. Absent = ALL staff (current behavior preserved).
+  const staffParam = Number(searchParams.get('staff'));
+  const staffId = Number.isFinite(staffParam) && staffParam > 0 ? staffParam : undefined;
   const query = useQuery({
-    ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, strictSearchScope }),
+    ...unshippedOrdersQuery({ searchQuery, packedBy, testedBy, staffId, strictSearchScope }),
     placeholderData: (previousData) => previousData,
   });
 

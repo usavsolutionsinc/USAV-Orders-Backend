@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { fbaPaths } from '@/lib/fba/api-paths';
-import { Check, ChevronDown, Loader2 } from '@/components/Icons';
+import { Check, ChevronDown, Loader2, Boxes } from '@/components/Icons';
 import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
+import { FbaShipmentTracePanel } from './FbaShipmentTracePanel';
 import { stationThemeColors } from '@/utils/staff-colors';
 import type { StationTheme } from '@/utils/staff-colors';
 
@@ -52,12 +53,27 @@ function getPrimaryUps(tracking: TrackingEntry[]): TrackingEntry | null {
   return ups || tracking[0] || null;
 }
 
+/**
+ * Strict UPS link lookup for the SAVE path.
+ *
+ * `getPrimaryUps` falls back to the first tracking entry of ANY carrier for
+ * display, but the save handler must NOT reuse a non-UPS link — PATCHing it
+ * would overwrite that link's number and force its carrier to UPS, mangling a
+ * different (e.g. USPS) tracking row. When no true UPS link exists we return
+ * null so the caller POSTs a fresh UPS link instead.
+ */
+function findUpsLink(tracking: TrackingEntry[]): TrackingEntry | null {
+  if (!Array.isArray(tracking)) return null;
+  return tracking.find((t) => String(t.carrier || '').toUpperCase() === 'UPS') || null;
+}
+
 export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embedded = true }: FbaShippedTableProps) {
   const theme = stationThemeColors[stationTheme];
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shipments, setShipments] = useState<ShipmentRow[]>([]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [tracing, setTracing] = useState<Set<number>>(new Set());
   const [itemsByShipment, setItemsByShipment] = useState<Record<number, ShipmentItem[]>>({});
   const [itemLoadingId, setItemLoadingId] = useState<number | null>(null);
 
@@ -143,6 +159,15 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
     }
   }, [itemsByShipment]);
 
+  const toggleTrace = useCallback((shipmentId: number) => {
+    setTracing((prev) => {
+      const next = new Set(prev);
+      if (next.has(shipmentId)) next.delete(shipmentId);
+      else next.add(shipmentId);
+      return next;
+    });
+  }, []);
+
   const saveShipment = useCallback(async (row: ShipmentRow) => {
     // Fall back to the row's current values when the user opens the form but
     // hasn't typed anything yet — avoids accidentally clearing amazon_shipment_id
@@ -167,13 +192,15 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
       if (!shipmentRes.ok) throw new Error(shipmentJson?.error || 'Failed to save shipment id');
 
       if (ups) {
-        const primary = getPrimaryUps(row.tracking_numbers || []);
-        if (primary?.link_id) {
+        // Only reuse an existing link when it is a real UPS link; otherwise add
+        // a new UPS link so we never clobber a different carrier's tracking row.
+        const upsLink = findUpsLink(row.tracking_numbers || []);
+        if (upsLink?.link_id) {
           const trackingRes = await fetch(fbaPaths.planTracking(row.id), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              link_id: primary.link_id,
+              link_id: upsLink.link_id,
               tracking_number: ups,
               carrier: 'UPS',
               label: 'UPS',
@@ -378,6 +405,24 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                           ))}
                         </div>
                       )}
+
+                      {/* Audit trace — shipment → FNSKU → unit path (P2-FBA-01) */}
+                      <div className="border-t border-gray-100 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleTrace(row.id)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-micro font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                        >
+                          <Boxes className="h-3.5 w-3.5" />
+                          {tracing.has(row.id) ? 'Hide Trace' : 'Trace Units'}
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 text-gray-400 transition-transform ${tracing.has(row.id) ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+                        {tracing.has(row.id) ? (
+                          <FbaShipmentTracePanel shipmentId={row.id} className="mt-2" />
+                        ) : null}
+                      </div>
                     </div>
                   ) : null}
                 </motion.div>

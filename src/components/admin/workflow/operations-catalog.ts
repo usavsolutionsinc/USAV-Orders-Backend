@@ -460,7 +460,7 @@ export const FLOWS: OpsFlow[] = [
     blurb: 'Low stock detected → reviewed → PO created → received. Stage = replenishment_requests.status.',
     stations: ['ADMIN', 'RECEIVING'],
     source: 'replenishment_status enum · src/lib/replenishment.ts',
-    code: ['src/lib/replenishment.ts', '/api/need-to-order/[id]', '/api/replenish/bulk-create-po', '/api/qstash/replenishment/sync'],
+    code: ['src/lib/replenishment.ts', '/api/need-to-order/[id]', '/api/replenish/bulk-create-po', '/api/replenishment/sync'],
     steps: [
       { stage: 'Detected', key: 'detected', station: 'ADMIN', note: 'An order hit insufficient stock → request auto-created', signal: 'auto-detect' },
       { stage: 'Review', key: 'pending_review', station: 'ADMIN', note: 'Buyer reviews vendor / qty / cost' },

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Check } from '@/components/Icons';
 import { receivingScanBandClass } from '@/components/layout/header-shell';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 /**
  * Per-line localStorage key set by ConditionPills callers when the operator

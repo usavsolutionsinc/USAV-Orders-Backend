@@ -10,6 +10,7 @@ import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { PhotoFab } from '@/components/mobile/receiving/PhotoFab';
 import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { poHeaderStatusChipClass } from '@/lib/po-header-status';
 import { workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
 
@@ -52,11 +53,6 @@ interface DetailResponse {
 
 // PO-header rollup status (not a per-line workflow stage). Item rows use the
 // shared workflowStageBadge registry instead.
-const HEADER_STATUS_TONE: Record<string, string> = {
-  OPEN:     'bg-amber-100 text-amber-800',
-  RECEIVED: 'bg-emerald-100 text-emerald-700',
-};
-
 type Tab = 'items' | 'photos';
 
 export default function MobilePoDetailPage(props: { params: Promise<{ poId: string }> }) {
@@ -111,9 +107,9 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
                 PO {header.po_number || header.po_id}
               </p>
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wide ${
-                  HEADER_STATUS_TONE[header.status] ?? 'bg-slate-100 text-slate-600'
-                }`}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wide ${poHeaderStatusChipClass(
+                  header.status,
+                )}`}
               >
                 {header.status}
               </span>

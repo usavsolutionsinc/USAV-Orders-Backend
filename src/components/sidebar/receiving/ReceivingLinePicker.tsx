@@ -1,7 +1,7 @@
 'use client';
 
 import { X } from '@/components/Icons';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface Props {
   rows: ReceivingLineRow[];

@@ -12,8 +12,8 @@ import {
   MapPin,
   Package,
   ShieldCheck,
-  Share2,
   Star,
+  Tags,
   User,
   Wrench,
 } from '@/components/Icons';
@@ -25,7 +25,7 @@ export type AdminSection =
   | 'quality'
   | 'bose_models' | 'compatibility' | 'suppliers'
   | 'station_photos' | 'po_mailbox'
-  | 'logs' | 'architecture' | 'system_sync';
+  | 'logs' | 'system_sync';
 
 export type AdminGroup = 'Performance' | 'Operations' | 'Data & catalogs' | 'System';
 
@@ -58,9 +58,10 @@ export const ADMIN_SECTION_OPTIONS: AdminSectionOption[] = [
   { value: 'compatibility',label: 'Compatibility',description: 'Audit the model ↔ part compatibility edge table',               group: 'Data & catalogs', icon: Layers,      requires: 'sourcing.view' },
   { value: 'suppliers',    label: 'Suppliers',    description: 'Third-party sourcing vendors (eBay sellers, distributors, salvage)', group: 'Data & catalogs', icon: Link2,    requires: 'supplier.view' },
 
+  { value: 'reason_codes', label: 'Reason Codes', description: 'Movement, adjustment & shrinkage reason-code catalog',          group: 'Data & catalogs', icon: Tags,        requires: 'sku_stock.manage' },
+
   { value: 'connections',  label: 'Sync tools',   description: 'Run marketplace syncs, Zoho tools, and connection activity',     group: 'System',      icon: Link2 },
   { value: 'logs',         label: 'Operations log', description: 'Bin, SKU & receiving changes across stations',               group: 'System',      icon: FileText,     requires: 'admin.view_logs' },
-  { value: 'architecture', label: 'Operations',   description: 'Visual flow of how items move through the system — live audit board', group: 'System',  icon: Share2 },
   { value: 'system_sync',  label: 'Sync Activity', description: 'Cron job health, last runs, and history across every scheduled sync', group: 'System', icon: Activity },
 ];
 

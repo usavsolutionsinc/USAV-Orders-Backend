@@ -32,7 +32,7 @@ export const POST = withAuth(async (req: NextRequest) => {
 
 export async function GET() {
   return NextResponse.json(
-    { ok: false, error: 'Method not allowed. Use POST via the QStash worker route.' },
+    { ok: false, error: 'Method not allowed. Use POST (cron worker route).' },
     { status: 405 }
   );
 }

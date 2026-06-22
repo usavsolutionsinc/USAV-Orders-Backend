@@ -452,6 +452,110 @@ export async function appendRepairStatusHistory(
   }
 }
 
+/**
+ * Linkage fields a repair_service ticket can be paired to / unpaired from.
+ * These are the cross-references that connect a ticket to an order, an inbound
+ * shipment, a serialized unit, and a catalog SKU. Link = set, unlink = clear —
+ * fully reversible, no row mutation beyond these reference columns. Mirrors the
+ * curated subset of {@link updateRepairField}'s allowlist.
+ */
+export const REPAIR_LINK_FIELDS = [
+  'source_order_id',
+  'source_tracking_number',
+  'serial_number',
+  'source_sku',
+] as const;
+export type RepairLinkField = (typeof REPAIR_LINK_FIELDS)[number];
+
+export type RepairLinkValues = Partial<Record<RepairLinkField, string | null>>;
+
+export type RepairLinkResult =
+  | { ok: true; repair: RSRecord; before: RepairLinkValues }
+  | { ok: false; status: 404; error: string };
+
+/** Snapshot of just the linkage fields — used as the audit `before`/`after`. */
+function pickLinkValues(r: RSRecord): RepairLinkValues {
+  return {
+    source_order_id: r.source_order_id ?? null,
+    source_tracking_number: r.source_tracking_number ?? null,
+    serial_number: r.serial_number || null,
+    source_sku: r.source_sku ?? null,
+  };
+}
+
+/**
+ * Manual pairing: set one or more linkage fields on a ticket. Empty-string
+ * values are normalized to NULL (an unlink of that field). Only whitelisted
+ * link fields are written — anything else is ignored. Org-scoped; a
+ * cross-tenant id yields 404 (no disclosure). Returns the prior linkage values
+ * so the caller can audit + reverse.
+ */
+export async function linkRepairService(
+  id: number,
+  values: RepairLinkValues,
+  orgId?: OrgId,
+): Promise<RepairLinkResult> {
+  const before = await getRepairById(id, orgId);
+  if (!before) return { ok: false, status: 404, error: 'Repair not found' };
+
+  // Keep only recognized link fields; normalize '' → null.
+  const entries = (Object.keys(values) as RepairLinkField[])
+    .filter((k) => (REPAIR_LINK_FIELDS as readonly string[]).includes(k))
+    .map((k) => {
+      const raw = values[k];
+      const norm = raw == null ? null : String(raw).trim() || null;
+      return [k, norm] as const;
+    });
+
+  if (entries.length === 0) {
+    return { ok: true, repair: before, before: pickLinkValues(before) };
+  }
+
+  const setSql = entries.map(([col], i) => `${col} = $${i + 1}`).join(', ');
+  const params = entries.map(([, v]) => v);
+
+  if (orgId) {
+    const idIdx = params.length + 1;
+    const orgIdx = params.length + 2;
+    const result = await withTenantTransaction(orgId, (client) =>
+      client.query(
+        `UPDATE repair_service SET ${setSql}, updated_at = NOW()
+          WHERE id = $${idIdx} AND organization_id = $${orgIdx}`,
+        [...params, id, orgId],
+      ),
+    );
+    if ((result.rowCount ?? 0) === 0) return { ok: false, status: 404, error: 'Repair not found' };
+  } else {
+    const idIdx = params.length + 1;
+    const result = await pool.query(
+      `UPDATE repair_service SET ${setSql}, updated_at = NOW() WHERE id = $${idIdx}`,
+      [...params, id],
+    );
+    if ((result.rowCount ?? 0) === 0) return { ok: false, status: 404, error: 'Repair not found' };
+  }
+
+  const repair = await getRepairById(id, orgId);
+  return { ok: true, repair: repair!, before: pickLinkValues(before) };
+}
+
+/**
+ * Reverse of {@link linkRepairService}: clear one or more linkage fields (or all
+ * of them when `fields` is omitted). The ticket row survives — only the
+ * reference columns are nulled. Org-scoped; 404 on cross-tenant id.
+ */
+export async function unlinkRepairService(
+  id: number,
+  fields?: readonly RepairLinkField[],
+  orgId?: OrgId,
+): Promise<RepairLinkResult> {
+  const targets = (fields && fields.length ? fields : REPAIR_LINK_FIELDS).filter((f) =>
+    (REPAIR_LINK_FIELDS as readonly string[]).includes(f),
+  );
+  const clear: RepairLinkValues = {};
+  for (const f of targets) clear[f] = null;
+  return linkRepairService(id, clear, orgId);
+}
+
 export async function updateRepairField(id: number, field: string, value: any, orgId?: OrgId): Promise<void> {
   try {
     const validFields = [

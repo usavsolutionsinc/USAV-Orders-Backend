@@ -29,6 +29,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const weekEnd = searchParams.get('weekEnd') || '';
     const packedBy = searchParams.get('packedBy') || '';
     const testedBy = searchParams.get('testedBy') || '';
+    // Universal staff filter (P1-WORK-02): packed OR tested by this staff.
+    const staffFilter = searchParams.get('staff') || '';
     const missingTrackingOnly = searchParams.get('missingTrackingOnly') === 'true';
     const rawShippedFilter = searchParams.get('shippedFilter') || '';
     const shippedFilter: ShippedFilterMode =
@@ -51,6 +53,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       weekEnd,
       packedBy,
       testedBy,
+      staffFilter,
       missingTrackingOnly,
       shippedFilter,
     });
@@ -67,11 +70,17 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         let filtered = rows;
         const packedById = packedBy ? Number(packedBy) : null;
         const testedById = testedBy ? Number(testedBy) : null;
+        const staffId = staffFilter ? Number(staffFilter) : null;
         if (packedById != null && Number.isFinite(packedById)) {
           filtered = filtered.filter((record) => Number(record.packed_by) === packedById);
         }
         if (testedById != null && Number.isFinite(testedById)) {
           filtered = filtered.filter((record) => Number(record.tested_by) === testedById);
+        }
+        if (staffId != null && Number.isFinite(staffId) && staffId > 0) {
+          filtered = filtered.filter(
+            (record) => Number(record.packed_by) === staffId || Number(record.tested_by) === staffId,
+          );
         }
         if (missingTrackingOnly) {
           filtered = filtered.filter((record) => !String(record.shipping_tracking_number || '').trim());
@@ -135,6 +144,14 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const offset = (page - 1) * limit;
     const packedById = packedBy ? Number(packedBy) : null;
     const testedById = testedBy ? Number(testedBy) : null;
+    const staffFilterId = staffFilter ? Number(staffFilter) : null;
+    // Universal staff filter (P1-WORK-02): packed OR tested by this staff.
+    // Pushed into SQL (PERF) — the default (no `?staff=`) path passes a null
+    // staffFilterId so the generated query is byte-for-byte unchanged.
+    const staffFilterIdEffective =
+      staffFilterId != null && Number.isFinite(staffFilterId) && staffFilterId > 0
+        ? staffFilterId
+        : null;
     const shipped = await getAllShippedOrders({
       limit,
       offset,
@@ -142,6 +159,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       weekEnd: weekEnd || undefined,
       packedBy: Number.isFinite(packedById) ? packedById : null,
       testedBy: Number.isFinite(testedById) ? testedById : null,
+      staffFilterId: staffFilterIdEffective,
       missingTrackingOnly,
       shippedFilter,
     });

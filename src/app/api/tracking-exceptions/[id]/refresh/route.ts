@@ -177,7 +177,7 @@ export async function POST(
   // Import Zoho PO lines into receiving_lines for the primary (and any extras).
   if (promotedReceivingId) {
     try {
-      await importZohoPurchaseOrderToReceiving(primaryPoId, {
+      await importZohoPurchaseOrderToReceiving(gate.ctx.organizationId, primaryPoId, {
         receivingId: promotedReceivingId,
         workflowStatus: 'MATCHED',
       });

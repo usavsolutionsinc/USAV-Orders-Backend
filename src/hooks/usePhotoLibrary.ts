@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import type { LibraryPhoto } from '@/components/photos/PhotoLibraryPage';
+import type { LibraryPhoto } from '@/components/photos/photo-library-types';
 import {
   entityTypeForSourceScope,
   type PhotoLibraryFilterState,

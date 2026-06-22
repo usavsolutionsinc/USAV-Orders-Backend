@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-import { getReceivingStatusDot } from './ReceivingRecentRail';
+import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
 
 interface Props {
   selectedLineId: number | null;
@@ -60,10 +60,10 @@ export function ReceivingViewedRail({
       deleteGroupEvent="receiving-entry-deleted"
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Viewed"
-      eyebrowSuffix="You"
       autoSelectFirstWhenEmpty
       getActivityAt={getViewedAt}
       getStatusDot={getReceivingStatusDot}
+      getStatusDotLabel={getReceivingStatusDotLabel}
       renderQuantity={(row) => (
         <span
           className={

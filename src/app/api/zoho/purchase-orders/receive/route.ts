@@ -60,6 +60,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   if (idempotencyKey) {
     const cached = await getApiIdempotencyResponse(
       pool,
+      ctx.organizationId,
       idempotencyKey,
       IDEMPOTENCY_ROUTE,
     );
@@ -170,6 +171,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       zoho_purchase_receive_id: null,
       zoho_warehouse_id: warehouseId,
       notes,
+      organization_id: ctx.organizationId,
       updated_at: formatPSTTimestamp(),
     };
 
@@ -198,10 +200,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           receiving_id, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id, zoho_purchaseorder_id,
           item_name, sku, quantity_received, quantity_expected,
           qa_status, disposition_code, condition_grade, disposition_audit,
-          workflow_status, needs_test, assigned_tech_id, zoho_sync_source, zoho_synced_at
+          workflow_status, needs_test, assigned_tech_id, zoho_sync_source, zoho_synced_at,
+          organization_id
         )
         VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$8,'PENDING','HOLD',$9,'[]'::jsonb,
-                'MATCHED'::inbound_workflow_status_enum,$10,$11,'purchase_receive',$12)`,
+                'MATCHED'::inbound_workflow_status_enum,$10,$11,'purchase_receive',$12,$13::uuid)`,
         [
           receivingId,
           line.item_id || null,
@@ -215,6 +218,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           needsTest,
           assignedTechId,
           formatPSTTimestamp(),
+          ctx.organizationId,
         ],
       );
       insertedLines++;
@@ -271,6 +275,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
   if (idempotencyKey) {
     await saveApiIdempotencyResponse(pool, {
+      orgId: ctx.organizationId,
       idempotencyKey,
       route: IDEMPOTENCY_ROUTE,
       staffId: ctx.staffId ?? null,

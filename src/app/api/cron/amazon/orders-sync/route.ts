@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { syncOrgAmazonOrders, type AmazonOrderSyncResult } from '@/lib/amazon/order-sync';
 
 export const dynamic = 'force-dynamic';
@@ -33,17 +34,23 @@ export async function GET(req: NextRequest) {
   const importAll = req.nextUrl.searchParams.get('all') === '1';
 
   try {
-    const summary = await withCronRun('amazon.orders_sync', async () => {
-      const { rows } = await pool.query<{ organization_id: string }>(
-        `SELECT DISTINCT organization_id FROM amazon_accounts WHERE is_active = true`,
-      );
-      const perOrg = [];
-      for (const row of rows) {
-        perOrg.push(await syncOrgAmazonOrders(row.organization_id, { importAll, fetchPii: true }));
-      }
-      const totals = aggregate(perOrg.flatMap((o) => o.accounts));
-      return { orgs: perOrg.length, totals, perOrg };
-    });
+    const locked = await withCronLock('amazon.orders_sync', () =>
+      withCronRun('amazon.orders_sync', async () => {
+        const { rows } = await pool.query<{ organization_id: string }>(
+          `SELECT DISTINCT organization_id FROM amazon_accounts WHERE is_active = true`,
+        );
+        const perOrg = [];
+        for (const row of rows) {
+          perOrg.push(await syncOrgAmazonOrders(row.organization_id, { importAll, fetchPii: true }));
+        }
+        const totals = aggregate(perOrg.flatMap((o) => o.accounts));
+        return { orgs: perOrg.length, totals, perOrg };
+      }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
     return NextResponse.json({ ok: true, ...summary });
   } catch (err: any) {
     console.error('[cron/amazon/orders-sync]', err?.message || err);

@@ -31,7 +31,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const idemKey = readIdempotencyKey(req, body?.idempotencyKey);
 
     if (idemKey) {
-      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE);
+      const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE);
       if (hit && hit.status_code === 200) {
         return NextResponse.json(hit.response_body, { status: 200 });
       }
@@ -274,6 +274,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
     if (idemKey) {
       await saveApiIdempotencyResponse(pool, {
+        orgId: ctx.organizationId,
         idempotencyKey: idemKey,
         route: ROUTE,
         staffId,

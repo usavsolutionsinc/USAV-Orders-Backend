@@ -13,186 +13,27 @@
  *
  * URL params: ?recvId=<receiving id>&po=<human PO ref>. Without recvId the page
  * still identifies (read-only) but Add is disabled with a hint.
+ *
+ * Thin composition shell: camera + identify + live-scan logic lives in
+ * {@link useMobileIdentify}; the candidate card + session list are presentational
+ * components under `./`.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Check, X, RotateCcw, Loader2, AlertTriangle, Search, Zap } from '@/components/Icons';
-import { useCamera } from '@/hooks/useCamera';
-import { toast } from '@/lib/toast';
-import { useLabelIdentify } from '@/components/receiving/label-identify/useLabelIdentify';
-import { useLiveLabelScan } from '@/components/receiving/label-identify/useLiveLabelScan';
-import type { GateReason } from '@/lib/vision/frame-quality';
-import type { LabelCandidate } from '@/lib/vision-identify';
-
-type ScanMode = 'live' | 'manual';
-const SCAN_MODE_KEY = 'usav.identify.scanMode';
-
-/** Reticle border colour by gate state — green when a frame is good enough to send. */
-const RETICLE_TINT: Record<GateReason, string> = {
-  ok: 'border-emerald-400',
-  moving: 'border-amber-300/80',
-  blurry: 'border-amber-300/80',
-  dark: 'border-white/40',
-  'too-bright': 'border-amber-300/80',
-};
-
-interface AddedItem {
-  id: string;
-  title: string;
-  lineId?: number;
-}
+import { RETICLE_TINT } from './mobile-identify-shared';
+import { useMobileIdentify } from './useMobileIdentify';
+import { CandidateCard } from './CandidateCard';
+import { SessionList } from './SessionList';
 
 export function MobileIdentify() {
-  const params = useSearchParams();
-  const recvId = Number(params.get('recvId')) || null;
-  const poRef = params.get('po');
-
-  const { videoRef, startCamera, stopCamera, cameraError } = useCamera();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [frozen, setFrozen] = useState<string | null>(null); // freeze-frame while reading
-  const [added, setAdded] = useState<AddedItem[]>([]);
-  const [adding, setAdding] = useState(false);
-  /** Last confirmed item — drives the success bottom sheet before the camera re-arms. */
-  const [confirmed, setConfirmed] = useState<AddedItem | null>(null);
-
-  // Live (hands-free) vs manual (tap-shutter) capture. Live is the default; manual is
-  // the always-available fallback. Last choice is remembered per device.
-  const [mode, setMode] = useState<ScanMode>('live');
-  const modeRef = useRef<ScanMode>('live');
-  useEffect(() => {
-    const saved = (typeof localStorage !== 'undefined' && localStorage.getItem(SCAN_MODE_KEY)) as ScanMode | null;
-    if (saved === 'live' || saved === 'manual') { setMode(saved); modeRef.current = saved; }
-  }, []);
-
-  const { status, candidates, rawText, error, identify, identifyOnce, applyResult, reset } = useLabelIdentify();
-  const liveScan = useLiveLabelScan({ videoRef, identifyOnce });
-  // Stable action handles (the liveScan object itself is a fresh literal each render).
-  const { start: startLiveScan, stop: stopLiveScan, reset: resetLiveScan } = liveScan;
-
-  // Start the rear camera; retry once at default resolution.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        await startCamera({ facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } });
-      } catch {
-        if (!cancelled) {
-          try { await startCamera({ facingMode: 'environment' }); } catch { /* surfaced via cameraError */ }
-        }
-      }
-    })();
-    return () => { cancelled = true; stopCamera(); };
-  }, [startCamera, stopCamera]);
-
-  // Capture the current video frame → blob → identify. Freeze the frame so the
-  // "reading" state shows what was shot (no spinner-in-void).
-  const capture = useCallback(async () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.videoWidth === 0) return;
-    const maxDim = 1600;
-    const scale = Math.min(1, maxDim / Math.max(video.videoWidth, video.videoHeight));
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFrozen(canvas.toDataURL('image/jpeg', 0.7));
-    const blob: Blob | null = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.85));
-    if (blob) await identify(blob);
-  }, [identify, videoRef]);
-
-  const retake = useCallback(() => {
-    setFrozen(null);
-    setConfirmed(null);
-    reset();
-    // In live mode, re-arm the scan loop for the next item; manual waits for a tap.
-    if (modeRef.current === 'live') { resetLiveScan(); startLiveScan(); }
-  }, [reset, resetLiveScan, startLiveScan]);
-
-  // Switch capture modes: start/stop the live loop and remember the choice.
-  const switchMode = useCallback(
-    (next: ScanMode) => {
-      modeRef.current = next;
-      setMode(next);
-      try { localStorage.setItem(SCAN_MODE_KEY, next); } catch { /* private mode */ }
-      setFrozen(null);
-      reset();
-      if (next === 'live') { resetLiveScan(); startLiveScan(); }
-      else stopLiveScan();
-    },
-    [reset, resetLiveScan, startLiveScan, stopLiveScan],
-  );
-
-  // Kick off the live loop once on mount when live mode is active. The loop self-guards
-  // until the camera is ready (videoWidth>0), so starting early is safe.
-  useEffect(() => {
-    if (modeRef.current === 'live') startLiveScan();
-    return () => stopLiveScan();
-  }, [startLiveScan, stopLiveScan]);
-
-  // When the live loop LOCKS (consensus reached) or errors, feed the result into the
-  // shared identify state so the existing results / error sheet renders unchanged.
-  useEffect(() => {
-    if (liveScan.phase === 'locked') {
-      setFrozen(liveScan.frozen);
-      applyResult({ ok: true, candidates: liveScan.candidates, rawText: liveScan.rawText });
-    } else if (liveScan.phase === 'error' && liveScan.error) {
-      applyResult({ ok: false, candidates: [], rawText: '', error: liveScan.error });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveScan.phase]);
-
-  // After a confirm, the success sheet shows briefly, then the camera re-arms for
-  // the next item (rapid intake). Operator can also tap "Next item" to skip the wait.
-  useEffect(() => {
-    if (!confirmed) return;
-    const t = setTimeout(() => retake(), 1800);
-    return () => clearTimeout(t);
-  }, [confirmed, retake]);
-
-  // Confirm a candidate → add the receiving line (the same idempotent path the
-  // desktop CartonAddPopover uses). Re-arms the camera for the next item.
-  const confirm = useCallback(
-    async (c: LabelCandidate) => {
-      if (!recvId) { toast.error('Open this from a carton to add items.'); return; }
-      setAdding(true);
-      const clientEventId = `m-identify-${recvId}-${c.zoho_item_id ?? c.model}-${added.length}`;
-      try {
-        const res = await fetch('/api/receiving/add-unmatched-line', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': clientEventId },
-          body: JSON.stringify({
-            receiving_id: recvId,
-            sku_catalog_id: c.sku_catalog_id,
-            sku: c.sku || undefined,
-            item_name: c.product_title ?? c.item_name ?? c.model,
-            intake_type: 'po',
-            client_event_id: clientEventId,
-          }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok || !body.success) { toast.error(body.error ?? 'Add failed'); return; }
-        const item: AddedItem = { id: clientEventId, title: c.product_title ?? c.model, lineId: body.line?.id };
-        setAdded((xs) => [item, ...xs]);
-        // Show the success bottom sheet (keeps the freeze-frame behind it) before
-        // re-arming — confirmation is visible, not a silent snap-back to camera.
-        setConfirmed(item);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : 'Add failed');
-      } finally {
-        setAdding(false);
-      }
-    },
-    [added.length, recvId],
-  );
-
-  const isLive = mode === 'live';
-  // Live mode runs the scan loop; manual waits for the shutter. These drive the overlays.
-  const liveScanning = isLive && liveScan.phase === 'scanning';
-  const manualIdle = !isLive && status === 'idle' && !frozen;
-  const reading = status === 'identifying' || (isLive && liveScan.phase === 'reading');
+  const c = useMobileIdentify();
+  const {
+    recvId, poRef, videoRef, canvasRef, cameraError,
+    frozen, added, adding, confirmed, isLive, switchMode, liveScan,
+    status, candidates, rawText, error,
+    capture, retake, confirm, createSkuAndAdd, flagMissing,
+    liveScanning, manualIdle, reading,
+  } = c;
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0B0B0F] text-white">
@@ -394,8 +235,17 @@ export function MobileIdentify() {
                 <div className="px-1 text-xs font-medium uppercase tracking-wide text-white/40">
                   Confirm the product
                 </div>
-                {candidates.map((c, i) => (
-                  <CandidateCard key={`${c.model}-${i}`} c={c} primary={i === 0} adding={adding} canAdd={!!recvId} onAdd={confirm} />
+                {candidates.map((cand, i) => (
+                  <CandidateCard
+                    key={`${cand.model}-${i}`}
+                    c={cand}
+                    primary={i === 0}
+                    adding={adding}
+                    canAdd={!!recvId}
+                    onAdd={confirm}
+                    onCreateSku={createSkuAndAdd}
+                    onFlagMissing={flagMissing}
+                  />
                 ))}
                 {rawText && (
                   <p className="px-1 pt-1 text-[11px] text-white/30">read: “{rawText.slice(0, 90)}”</p>
@@ -408,66 +258,6 @@ export function MobileIdentify() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function CandidateCard({
-  c, primary, adding, canAdd, onAdd,
-}: {
-  c: LabelCandidate;
-  primary: boolean;
-  adding: boolean;
-  canAdd: boolean;
-  onAdd: (c: LabelCandidate) => void;
-}) {
-  const title = c.product_title ?? c.item_name ?? c.model;
-  return (
-    <div className={`flex items-center gap-3 rounded-2xl p-3 ${primary ? 'bg-white/[0.06] ring-1 ring-emerald-500/40' : 'bg-white/[0.03]'}`}>
-      {c.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={c.image_url} alt="" className="h-12 w-12 rounded-lg object-cover" />
-      ) : (
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 text-white/40">
-          <Camera className="h-5 w-5" />
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold">{title}</div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-white/50">
-          {c.sku ? <span className="tabular-nums">SKU {c.sku}</span> : <span>no SKU</span>}
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
-            <Check className="h-3 w-3" /> label match
-          </span>
-          {!c.resolved && <span className="text-amber-300/80">· new product</span>}
-        </div>
-      </div>
-      <button
-        disabled={!canAdd || adding}
-        onClick={() => onAdd(c)}
-        className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold ${
-          primary ? 'bg-emerald-500 text-black' : 'bg-white/10 text-white'
-        } disabled:opacity-40`}
-      >
-        {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : c.resolved ? 'Add' : 'Create + Add'}
-      </button>
-    </div>
-  );
-}
-
-function SessionList({ added }: { added: AddedItem[] }) {
-  return (
-    <div className="mb-1 w-[min(92vw,420px)] space-y-1">
-      {added.slice(0, 3).map((a) => (
-        <div key={a.id} className="flex items-center gap-2 rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs">
-          <Check className="h-3.5 w-3.5 text-emerald-400" />
-          <span className="truncate text-white/80">{a.title}</span>
-          <span className="ml-auto text-white/30">added</span>
-        </div>
-      ))}
-      {added.length > 0 && (
-        <div className="text-center text-[11px] text-white/40">{added.length} added this session</div>
-      )}
     </div>
   );
 }

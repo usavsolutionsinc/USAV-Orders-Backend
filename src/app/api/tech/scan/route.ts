@@ -246,7 +246,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
   const idemKey = readIdempotencyKey(req, body.idempotencyKey);
   if (idemKey) {
-    const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE);
+    const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE);
     if (hit?.status_code === 200) return NextResponse.json(hit.response_body);
   }
 
@@ -420,7 +420,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             createdAt: testDateTime,
           }),
         };
-        if (idemKey) await saveApiIdempotencyResponse(pool, { idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
+        if (idemKey) await saveApiIdempotencyResponse(pool, { orgId: ctx.organizationId, idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
         return NextResponse.json(out);
       }
 
@@ -489,7 +489,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             notes: 'Tracking recorded in orders_exceptions for reconciliation',
           }),
         };
-        if (idemKey) await saveApiIdempotencyResponse(pool, { idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
+        if (idemKey) await saveApiIdempotencyResponse(pool, { orgId: ctx.organizationId, idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
         return NextResponse.json(out);
       }
 
@@ -549,7 +549,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           testedBy,
         }),
       };
-      if (idemKey) await saveApiIdempotencyResponse(pool, { idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
+      if (idemKey) await saveApiIdempotencyResponse(pool, { orgId: ctx.organizationId, idempotencyKey: idemKey, route: ROUTE, staffId: testedBy, statusCode: 200, responseBody: out });
       return NextResponse.json(out);
     });
   } catch (error: any) {

@@ -67,7 +67,13 @@ export function StudioStationPreview({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {loading ? (
+        {!node ? (
+          <EmptyState
+            icon="MousePointerClick"
+            title="Select a node to inspect its station"
+            body="Station detail (L2) shows the screen a single step binds to. Pick a step from the flow graph — double-click it at L1, or use the Inspector — to see its blocks, data sources, and actions here."
+          />
+        ) : loading ? (
           <p className="p-8 text-center text-sm text-slate-400">Loading the station…</p>
         ) : !station ? (
           <EmptyState

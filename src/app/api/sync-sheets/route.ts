@@ -73,6 +73,7 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
                 sheets,
                 spreadsheetId: targetSpreadsheetId,
                 existingSheetNames,
+                organizationId: ctx.organizationId,
             });
             results.push(...techResults);
 
@@ -81,6 +82,7 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
                 sheets,
                 spreadsheetId: targetSpreadsheetId,
                 existingSheetNames,
+                organizationId: ctx.organizationId,
             });
             results.push(...packerResults);
 
@@ -269,8 +271,9 @@ async function syncTechSheets(params: {
     sheets: any;
     spreadsheetId: string;
     existingSheetNames: string[];
+    organizationId: string;
 }): Promise<SyncResult[]> {
-    const { client, sheets, spreadsheetId, existingSheetNames } = params;
+    const { client, sheets, spreadsheetId, existingSheetNames, organizationId } = params;
     const techSheets = [
         { name: 'tech_1', testedBy: 1 },
         { name: 'tech_2', testedBy: 2 },
@@ -393,9 +396,10 @@ async function syncTechSheets(params: {
                         scan_ref,
                         serial_number,
                         serial_type,
-                        tested_by
-                    ) VALUES ($1, $2, $3, $4, $5)`,
-                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', techSheet.testedBy]
+                        tested_by,
+                        organization_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', techSheet.testedBy, organizationId]
                 );
 
                 inserted++;
@@ -429,8 +433,9 @@ async function syncPackerSheets(params: {
     sheets: any;
     spreadsheetId: string;
     existingSheetNames: string[];
+    organizationId: string;
 }): Promise<SyncResult[]> {
-    const { client, sheets, spreadsheetId, existingSheetNames } = params;
+    const { client, sheets, spreadsheetId, existingSheetNames, organizationId } = params;
     const packerSheetNames = existingSheetNames
         .filter((name) => /^packer_/i.test(String(name || '').trim()))
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -529,10 +534,11 @@ async function syncPackerSheets(params: {
                         scan_ref,
                         tracking_type,
                         created_at,
-                        packed_by
-                    ) VALUES ($1, $2, $3, $4, $5)
+                        packed_by,
+                        organization_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id`,
-                    [plShipmentId, plScanRef, trackingType, normalizePSTTimestamp(packDateTime) ?? null, packedBy]
+                    [plShipmentId, plScanRef, trackingType, normalizePSTTimestamp(packDateTime) ?? null, packedBy, organizationId]
                 );
 
                 const insertedPlId = (insertedPl.rows[0]?.id as number | undefined) ?? null;

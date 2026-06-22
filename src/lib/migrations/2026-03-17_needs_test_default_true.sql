@@ -1,5 +1,0 @@
-ALTER TABLE receiving
-  ALTER COLUMN needs_test SET DEFAULT TRUE;
-
-ALTER TABLE receiving_lines
-  ALTER COLUMN needs_test SET DEFAULT TRUE;

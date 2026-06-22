@@ -178,7 +178,7 @@ export async function POST(
     }
     const { poId, poNumber } = po;
 
-    const receivingId = await ensureReceivingForPo({ poId, poNumber });
+    const receivingId = await ensureReceivingForPo({ poId, poNumber, organizationId: ctx.organizationId });
 
     const result = await attachBoxToReceiving({ receivingId, trackingNumber: tracking, staffId });
     if (!result.ok) {

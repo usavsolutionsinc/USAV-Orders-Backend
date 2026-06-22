@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { PoolClient } from 'pg';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { forEachActiveOrg } from '@/lib/cron/for-each-org';
 import type { OrgId } from '@/lib/tenancy/constants';
 
@@ -26,7 +27,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const summary = await withCronRun('stock_alerts', runStockAlerts);
+    const locked = await withCronLock('stock_alerts', () =>
+      withCronRun('stock_alerts', runStockAlerts),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const summary = locked.result!;
     return NextResponse.json({ success: true, ...summary });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Cron failed';

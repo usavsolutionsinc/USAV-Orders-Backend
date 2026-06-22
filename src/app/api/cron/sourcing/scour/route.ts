@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { runScourWatch } from '@/lib/jobs/scour-watch';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await withCronRun('sourcing.scour', runScourWatch);
+    const locked = await withCronLock('sourcing.scour', () =>
+      withCronRun('sourcing.scour', runScourWatch),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const result = locked.result!;
     console.log('[cron.sourcing.scour]', JSON.stringify(result));
     return NextResponse.json({ success: true, ...result });
   } catch (err) {

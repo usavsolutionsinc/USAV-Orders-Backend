@@ -8,9 +8,8 @@
  * Dev/CI: logs to console and returns ok=true. Lets tests and local runs
  * exercise the email send sites without provisioning a real account.
  *
- * Adding nodemailer/SMTP as a second backend is a five-line change in
- * `send()` if a customer needs it; the `nodemailer` dep is already
- * installed.
+ * Adding nodemailer/SMTP as a second backend is a small change in
+ * `send()` if a customer needs it (add the `nodemailer` dep back first).
  */
 
 export interface EmailMessage {

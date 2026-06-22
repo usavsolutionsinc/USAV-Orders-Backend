@@ -7,7 +7,7 @@ import { RepairIssuesManagementTab } from '@/components/admin/RepairIssuesManage
 import { FavoritesManagementTab } from '@/components/admin/FavoritesManagementTab';
 import { LocationsManagementTab } from '@/components/admin/LocationsManagementTab';
 import { AdminLogsTab } from '@/components/admin/AdminLogsTab';
-import { OperationsSection } from '@/components/admin/workflow/OperationsSection';
+import { ReasonCodesManagementTab } from '@/components/admin/ReasonCodesManagementTab';
 import { StationNasFoldersTab } from '@/components/admin/StationNasFoldersTab';
 import { PoMailboxAdminSection } from '@/components/admin/PoMailboxAdminSection';
 import { BoseModelsManagementTab } from '@/components/admin/sourcing/BoseModelsManagementTab';
@@ -31,7 +31,7 @@ interface AdminPageProps {
 
 function renderTab(
   activeTab: AdminSection,
-  args: { searchValue: string; mode?: string; canManageStock: boolean },
+  args: { searchValue: string; mode?: string },
 ) {
   switch (activeTab) {
     case 'overview':       return <AdminOverviewTab />;
@@ -44,7 +44,7 @@ function renderTab(
     case 'compatibility':  return <CompatibilityManagementTab />;
     case 'suppliers':      return <SuppliersManagementTab />;
     case 'logs':           return <AdminLogsTab initialSearch={args.searchValue} />;
-    case 'architecture':   return <OperationsSection mode={args.mode} canManageStock={args.canManageStock} />;
+    case 'reason_codes':   return <ReasonCodesManagementTab />;
     case 'system_sync':    return <SystemSyncActivityTab />;
     case 'station_photos': return <StationNasFoldersTab mode={args.mode} />;
     case 'po_mailbox':     return <PoMailboxAdminSection />;
@@ -66,14 +66,17 @@ function buildSettingsRedirect(
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
-  const user = await requirePermission('admin.view', { enforce: true });
+  await requirePermission('admin.view', { enforce: true });
 
   const params = await searchParams;
   const rawSection = String(params.section || '').toLowerCase();
 
-  // Reason Codes folded into Operations — preserve old deep links.
-  if (rawSection === 'reason_codes') {
-    redirect('/admin?section=architecture&mode=reasons');
+  // The Operations / architecture board now lives only in /studio (Operations
+  // Studio). Redirect the retired admin tab — and its old `reasons` sub-mode
+  // deep link, which belongs to Reason Codes now a standalone section again.
+  if (rawSection === 'architecture') {
+    if (params.mode === 'reasons') redirect('/admin?section=reason_codes');
+    redirect('/studio');
   }
 
   // Moved to Settings — preserve query params where applicable.
@@ -92,13 +95,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   const activeTab = getAdminSection(params.section);
   const sidebarSearch = (params.search || '').trim();
-  const canManageStock = user.permissions.has('sku_stock.manage');
 
   return (
     <div className="flex h-full w-full bg-gray-50">
       <div className="flex-1 min-w-0 overflow-hidden">
         <div className="h-full min-h-0 w-full">
-          {renderTab(activeTab, { searchValue: sidebarSearch, mode: params.mode, canManageStock })}
+          {renderTab(activeTab, { searchValue: sidebarSearch, mode: params.mode })}
         </div>
       </div>
     </div>

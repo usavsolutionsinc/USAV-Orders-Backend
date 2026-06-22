@@ -303,7 +303,11 @@ export function useReceivingLineCore(
   }, [row.receiving_id, row.zoho_purchaseorder_number, row.id]);
 
   // Push a "Shared from computer" sheet to the operator's paired phone via
-  // `station:{staffId}` — implicit pairing, the channel name is the gate.
+  // `staffstation:{staffId}` — implicit pairing, the (orgId, staffId) channel
+  // name is the gate. A bare publish ALWAYS resolves even with zero subscribers,
+  // so we wait for the phone to ACK the exact request before reporting success;
+  // otherwise a mismatched org/staff (e.g. phone signed into a different account)
+  // would silently swallow the share while the desktop toasted "Shared".
   const handleSharePhone = useCallback(async () => {
     if (!row.receiving_id) {
       toast.error('No receiving package linked yet');
@@ -314,11 +318,14 @@ export function useReceivingLineCore(
       toast.error('Sign in to share to your phone');
       return;
     }
+    // safeChannelName only returns '' when orgChannelPrefix throws — i.e. a
+    // missing/non-uuid org id. staffId is already validated above, so an empty
+    // name here is specifically an org-linkage problem; message it as such.
     const stationChannelName = safeChannelName(() =>
       getStaffStationBridgeChannelName(orgId!, staffIdNum),
     );
     if (!stationChannelName) {
-      toast.error('Sign in to share to your phone');
+      toast.error('Your account has no organization yet — sign out and back in.');
       return;
     }
     setPhoneSharing(true);
@@ -328,15 +335,43 @@ export function useReceivingLineCore(
         toast.error('Realtime unavailable — try again');
         return;
       }
+      const requestId = randomId();
       const ch = client.channels.get(stationChannelName);
+
+      // Subscribe to the ACK BEFORE publishing so a fast phone can't reply
+      // before we're listening.
+      let onAck: ((msg: { data?: { request_id?: string } }) => void) | null = null;
+      const ackPromise = new Promise<boolean>((resolve) => {
+        const handler = (msg: { data?: { request_id?: string } }) => {
+          if (String(msg?.data?.request_id || '') === requestId) resolve(true);
+        };
+        onAck = handler;
+        ch.subscribe('receiving_share_ack', handler).catch(() => resolve(false));
+      });
+
       await ch.publish('receiving_share_to_phone', {
         receiving_id: row.receiving_id,
         po_label: row.zoho_purchaseorder_number || `Package #${row.receiving_id}`,
         tracking: (row.tracking_number || '').trim() || null,
-        request_id: randomId(),
+        request_id: requestId,
         requested_by_staff_id: staffIdNum,
       });
-      toast.success('Shared to your phone');
+
+      const acked = await Promise.race([
+        ackPromise,
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 6000)),
+      ]);
+      if (onAck) {
+        try { ch.unsubscribe('receiving_share_ack', onAck); } catch {}
+      }
+
+      if (acked) {
+        toast.success('Shared to your phone');
+      } else {
+        toast.error(
+          'No phone picked it up — open the app on your phone signed in to the same account, then try again.',
+        );
+      }
     } catch {
       toast.error('Could not share to phone');
     } finally {

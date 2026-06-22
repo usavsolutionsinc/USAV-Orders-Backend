@@ -15,7 +15,7 @@ import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivin
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow, useMobileFeedQuery } from '@/components/mobile/feed/useMobileFeed';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface ApiResponse {
   success: boolean;

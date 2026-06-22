@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useDeviceMode, type DeviceInfo } from '@/hooks';
+import { useDeviceMode, type DeviceInfo } from '@/hooks/_ui';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

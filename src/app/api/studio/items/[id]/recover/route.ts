@@ -76,5 +76,5 @@ export const POST = withAuth(
       return errorResponse(err, 'studio.recover');
     }
   },
-  { permission: 'studio.recover' },
+  { permission: 'studio.recover', feature: 'studio' },
 );

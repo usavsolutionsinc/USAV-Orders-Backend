@@ -59,6 +59,18 @@ export interface WorkflowTapArgs {
    * for units that already have a workflow position.
    */
   orgId?: string | null;
+  /**
+   * Position guard (opt-in). When set, the tap only advances a unit whose
+   * CURRENT graph node is of this registry type; off that node it is a no-op
+   * (the unit is left where it is, not advanced). Without it, a later-stage
+   * observer event fired against a unit parked at the wrong node runs that node,
+   * fails to match, and parks it `blocked` (see advance.ts await→blocked) —
+   * false "stuck" triage noise. Used by the fulfillment-tail taps: 'listed'
+   * passes 'list_ebay', 'packed' passes 'pack', so a unit shipped without first
+   * being listed-through-the-engine is left alone instead of blocked. Omit it
+   * (the legacy taps do) to advance from wherever the unit sits.
+   */
+  expectNodeType?: string;
 }
 
 export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
@@ -72,8 +84,19 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
       .select({
         organizationId: itemWorkflowState.organizationId,
         status: itemWorkflowState.status,
+        // Current parked node's registry type — for the opt-in position guard
+        // below. LEFT JOIN so an enrolled unit on a since-removed node still
+        // loads (currentNodeType null → guard treats it as a mismatch no-op).
+        currentNodeType: workflowNodes.type,
       })
       .from(itemWorkflowState)
+      .leftJoin(
+        workflowNodes,
+        and(
+          eq(workflowNodes.id, itemWorkflowState.currentNodeId),
+          eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
+        ),
+      )
       .where(eq(itemWorkflowState.serialUnitId, args.serialUnitId))
       .limit(1);
 
@@ -98,6 +121,13 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
     }
 
     if (!orgId) return;
+
+    // Position guard: only advance when the unit is parked at the node this
+    // event is meant for. Off that node, no-op (don't run the wrong node and
+    // park it `blocked`). Only enrolled units reach here, so `state` is set.
+    if (args.expectNodeType && state && state.currentNodeType !== args.expectNodeType) {
+      return;
+    }
 
     await advance(orgId, {
       serialUnitId: args.serialUnitId,

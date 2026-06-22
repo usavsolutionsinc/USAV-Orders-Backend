@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Layer } from '@/design-system/primitives';
+import { Layer } from '@/design-system/primitives/Layer';
 import { X } from '@/components/Icons';
 
 interface AssignmentOverlayCardProps {

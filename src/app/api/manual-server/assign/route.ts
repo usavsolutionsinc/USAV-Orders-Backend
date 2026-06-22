@@ -16,7 +16,7 @@ function deriveDisplayName(fileName: string) {
     .trim();
 }
 
-export const POST = withAuth(async (req: NextRequest) => {
+export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => ({}));
     const relativePath = String(body?.relativePath || '').trim();
@@ -34,7 +34,7 @@ export const POST = withAuth(async (req: NextRequest) => {
       return NextResponse.json({ success: false, error: 'itemNumber is required' }, { status: 400 });
     }
 
-    const existing = await getProductManualByRelativePath(relativePath);
+    const existing = await getProductManualByRelativePath(relativePath, ctx.organizationId);
     const payload = await assignManualServerManual({ relativePath, itemNumber });
     const fileName = String(payload.relativePath.split('/').pop() || '').trim();
 
@@ -52,7 +52,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         assignedBy: assignedBy ?? existing.assigned_by ?? null,
         type: type ?? existing.type ?? null,
         isActive: true,
-      })
+      }, ctx.organizationId)
       : await upsertProductManual({
         itemNumber,
         productTitle,
@@ -64,7 +64,7 @@ export const POST = withAuth(async (req: NextRequest) => {
         status: 'assigned',
         assignedBy,
         type,
-      });
+      }, ctx.organizationId);
 
     await invalidateCacheTags(['product-manuals', 'pm:manuals']);
 

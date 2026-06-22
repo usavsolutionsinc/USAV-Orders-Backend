@@ -8,6 +8,7 @@ import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { formatDistanceToNowStrict } from 'date-fns';
 import type { DashboardData } from '@/features/operations/types';
 import { useRepairsTable } from '@/hooks/useRepairs';
+import { repairStatusChipClass } from '@/lib/repair-status';
 
 export type KpiKind = 'velocity' | 'tested' | 'fba' | 'repair';
 
@@ -69,15 +70,6 @@ const ACTIVITY_DOT: Record<string, string> = {
   FBA_READY: 'bg-emerald-600',
 };
 
-const REPAIR_STATUS_TONE: Record<string, string> = {
-  'Incoming Shipment': 'bg-blue-50 text-blue-600',
-  'Awaiting Parts': 'bg-orange-50 text-orange-600',
-  'Awaiting Additional Parts Payment': 'bg-orange-50 text-orange-600',
-  'Pending Repair': 'bg-amber-50 text-amber-700',
-  'Awaiting Pickup': 'bg-emerald-50 text-emerald-600',
-  'Awaiting Payment': 'bg-rose-50 text-rose-600',
-  'Repaired, Contact Customer': 'bg-blue-50 text-blue-600',
-};
 
 function relativeTime(iso: string): string {
   try {
@@ -173,7 +165,7 @@ function RepairList({ emptyHint }: { emptyHint: string }) {
   return (
     <ul className="divide-y divide-[#F0EDE8]">
       {sorted.map((r) => {
-        const statusTone = REPAIR_STATUS_TONE[r.status] ?? 'bg-[#FAFAF8] text-[#6B6356]';
+        const statusTone = repairStatusChipClass(r.status);
         const customer = r.customer_name || r.contact_info || 'Unknown customer';
         const age = relativeTime(r.created_at);
         return (

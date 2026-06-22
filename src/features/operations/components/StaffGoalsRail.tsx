@@ -4,17 +4,12 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import type { DashboardData } from '@/features/operations/types';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { staffGoalStatusMeta } from '@/lib/staff-goal-status';
 
 interface StaffGoalsRailProps {
   staffProgress: DashboardData['staffProgress'] | undefined;
   isLoading?: boolean;
 }
-
-const STATUS_TONE = {
-  on_track: { ring: '#6B9080', dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700',  label: 'On track' },
-  at_risk:  { ring: '#F59E0B', dot: 'bg-amber-500',   chip: 'bg-amber-50 text-amber-700',      label: 'Close to goal' },
-  behind:   { ring: '#E07A5F', dot: 'bg-rose-500',    chip: 'bg-rose-50 text-rose-700',        label: 'Behind'   },
-} as const;
 
 function GoalRing({ percent, color }: { percent: number; color: string }) {
   const radius = 26;
@@ -51,7 +46,7 @@ function StaffGoalCard({ row, index }: {
   row: DashboardData['staffProgress'][number];
   index: number;
 }) {
-  const tone = STATUS_TONE[row.status] ?? STATUS_TONE.behind;
+  const tone = staffGoalStatusMeta(row.status);
   const initials = row.name
     .split(/\s+/)
     .filter(Boolean)

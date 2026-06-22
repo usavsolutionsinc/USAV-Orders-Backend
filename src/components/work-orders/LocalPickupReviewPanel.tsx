@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, Package, Printer, ShoppingCart, X } from '@/components/Icons';
 import { ReceivingPoLabelPreview } from '@/components/receiving/workspace/ReceivingPoLabelPreview';
 import { printReceivingLabel } from '@/lib/print/printReceivingLabel';
@@ -402,7 +403,7 @@ function ReviewShell({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 4 }}
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.18, ease: motionBezier.easeOut }}
         className="pointer-events-none fixed inset-0 z-panelPopover flex items-start justify-center p-4 pt-[6vh] md:pl-[360px]"
       >
         <div

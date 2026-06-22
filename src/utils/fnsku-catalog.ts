@@ -1,4 +1,4 @@
-import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/types/orders';
 
 /** True when the row should show FNSKU catalog product details (vs carrier tracking flow). */
 export function isFnskuCatalogContext(shipped: ShippedOrder): boolean {

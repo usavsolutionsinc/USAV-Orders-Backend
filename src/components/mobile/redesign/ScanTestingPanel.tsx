@@ -13,7 +13,7 @@ import {
   unitStatusToVerdict,
 } from '@/components/receiving/workspace/TestingStatusPills';
 import { resolveTestingScan } from '@/lib/testing/resolve-testing-scan';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 type State = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 

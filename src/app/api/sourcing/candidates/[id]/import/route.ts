@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // 1. Idempotency-Key replay.
     const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
     if (idemKey) {
-      const hit = await getApiIdempotencyResponse(pool, idemKey, ROUTE_CANDIDATE_IMPORT);
+      const hit = await getApiIdempotencyResponse(pool, orgId, idemKey, ROUTE_CANDIDATE_IMPORT);
       if (hit) return NextResponse.json(hit.response_body, { status: hit.status_code });
     }
 
@@ -102,6 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     };
     if (idemKey) {
       await saveApiIdempotencyResponse(pool, {
+        orgId,
         idempotencyKey: idemKey,
         route: ROUTE_CANDIDATE_IMPORT,
         staffId: gate.ctx.staffId,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConditionPills } from './ConditionPills';
 import { UnitSlotList, type UnitLike } from './UnitSlotList';
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
+import { ConditionBadge } from './ConditionBadge';
 
 export type UnitSerial = UnitLike;
 
@@ -171,22 +171,7 @@ export function ReceivingUnitRows({
   );
 }
 
-export function ConditionBadge({ grade }: { grade: string | null | undefined }) {
-  const g = String(grade || '').trim().toUpperCase();
-  if (!g || g === 'PENDING') {
-    return <span className="text-micro font-bold uppercase tracking-widest text-gray-400">pending</span>;
-  }
-  const tone =
-    g === 'BRAND_NEW'
-      ? 'text-yellow-600'
-      : g === 'PARTS'
-        ? 'text-amber-800'
-        : g.startsWith('USED')
-          ? 'text-gray-600'
-          : 'text-gray-500';
-  return (
-    <span className={`text-micro font-bold uppercase tracking-widest ${tone}`}>
-      {conditionGradeTableLabel(g)}
-    </span>
-  );
-}
+// `ConditionBadge` moved to ./ConditionBadge so UnitSlotList can render it without
+// importing this module (runtime cycle). Imported above for local use; re-exported
+// here for backwards compatibility.
+export { ConditionBadge };

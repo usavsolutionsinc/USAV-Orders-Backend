@@ -12,12 +12,14 @@
  */
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { AlertTriangle, Flag } from '@/components/Icons';
 import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { cn } from '@/utils/_cn';
 import { ReceivingScannedRail } from './ReceivingScannedRail';
 import { TriageUnfoundList } from './TriageUnfoundList';
 
@@ -63,11 +65,15 @@ export function TriageSidebarBody({
 
   return (
     <div className="flex flex-col">
-      {/* pb-1.5 — must mirror the unbox Queue/Recent toggle band exactly
-          (ReceivingSidebarPanel) so the rail eyebrow below sits at the same
-          height in triage and unbox. */}
-      <div className="sticky top-0 z-10 bg-white/90 px-3 pb-1.5 pt-1 backdrop-blur">
+      {/* 40px band — mirrors the unbox view toggle + scan band grid. */}
+      <div
+        className={cn(
+          'sticky top-0 z-10 flex h-[40px] shrink-0 items-center overflow-visible bg-white/90 backdrop-blur',
+          SIDEBAR_GUTTER,
+        )}
+      >
         <HorizontalButtonSlider
+          className="w-full"
           items={TABS}
           value={view}
           onChange={(id) => setView(id as TriageView)}

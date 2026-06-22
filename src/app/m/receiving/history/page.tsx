@@ -20,7 +20,7 @@ import { MobilePoQrScanSheet } from '@/components/mobile/receiving/MobilePoQrSca
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 interface ApiResponse {

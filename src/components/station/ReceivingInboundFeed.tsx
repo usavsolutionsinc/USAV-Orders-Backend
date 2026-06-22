@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Loader2, Package } from '@/components/Icons';
 import { QA_BADGE, COND_LABEL } from './receiving-constants';
 import { formatDateTimePST } from '@/utils/date';
-import type { ReceivingDetailsLog } from './ReceivingDetailsStack';
+import type { ReceivingDetailsLog } from './receiving-details-log';
 
 interface FeedLog extends ReceivingDetailsLog {
   unboxed_at: string | null;

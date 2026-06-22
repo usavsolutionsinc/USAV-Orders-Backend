@@ -48,11 +48,33 @@ const config: Config = {
                 },
                 // Semantic aliases bound to design-system CSS variables.
                 // Dark mode swaps via [data-theme='dark'] in globals.css.
+                // Convention: the color key carries the role prefix, so usage
+                // doubles it — `text-text-default`, `bg-surface-canvas`,
+                // `border-border-soft`. Keeps neutral + functional families
+                // symmetric. CSS vars are curated in src/styles/globals.css.
                 'text-default': 'var(--ds-color-text-primary)',
                 'text-muted': 'var(--ds-color-text-secondary)',
+                'text-soft': 'var(--ds-color-text-soft)',
+                'text-faint': 'var(--ds-color-text-faint)',
                 'surface-canvas': 'var(--ds-color-background-canvas)',
                 'surface-card': 'var(--ds-color-background-surface)',
+                'surface-sunken': 'var(--ds-color-surface-sunken)',
                 'border-soft': 'var(--ds-color-border-subtle)',
+                'border-default': 'var(--ds-color-border-default)',
+                // Functional tones — status pills/badges:
+                // bg-surface-success + text-text-success + border-border-success.
+                'text-success': 'var(--ds-color-text-success)',
+                'text-warning': 'var(--ds-color-text-warning)',
+                'text-danger': 'var(--ds-color-text-danger)',
+                'text-accent': 'var(--ds-color-text-accent)',
+                'surface-success': 'var(--ds-color-surface-success)',
+                'surface-warning': 'var(--ds-color-surface-warning)',
+                'surface-danger': 'var(--ds-color-surface-danger)',
+                'surface-accent': 'var(--ds-color-surface-accent)',
+                'border-success': 'var(--ds-color-border-success)',
+                'border-warning': 'var(--ds-color-border-warning)',
+                'border-danger': 'var(--ds-color-border-danger)',
+                'border-accent': 'var(--ds-color-border-accent)',
             },
             fontFamily: {
                 sans: ['var(--ds-font-sans)', 'DM Sans', 'Inter', 'system-ui', 'sans-serif'],

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface UseReceivingLineNavigationArgs {
   selectedLine: ReceivingLineRow | null;

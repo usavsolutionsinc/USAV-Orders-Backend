@@ -66,3 +66,48 @@ Everything is built + verified; what remains is live config.
 
 ## Sequencing
 `Stripe (Part A)` and `E1 steps 1–4` are independent and can both be done now. `E1 step 5` (per-table FORCE) proceeds as the route burn-down completes for each table — tracked in `docs/tier0-execution-checklist.md`.
+
+---
+
+## Part C — activate Waves 2–6 (Zoho multi-tenancy, webhooks, crons, credentials, Phase B)
+
+Waves 2–6 (2026-06-20, recorded in `docs/tenancy/SESSION-2026-06-19-route-hardening.md`) made the Zoho/integration surface tenant-safe **in code**. The code is deployed-safe today (single-tenant USAV behaves identically); these steps light it up for real multi-tenant.
+
+### C1 — apply the new migrations (with the matching deploy)
+All additive + idempotent. Apply via `npm run db:migrate`. **Ordering matters for the two that pair with code** — deploy the Waves 2–6 code first (or together), because their writers reference the new columns:
+
+| Migration | Pairs with | Notes |
+|---|---|---|
+| `2026-06-20_org_id_phase_b_final_six.sql` | — | hermes_*/google_photos_* org_id (armed, inert). Safe any time. |
+| `2026-06-20_api_idempotency_org_scope.sql` | `src/lib/api-idempotency.ts` + ~33 routes | **Apply WITH the deploy** — the writers now stamp `organization_id`. |
+| `2026-06-20_zoho_webhook_org_resolution.sql` | webhook pipeline + dedupe | **Apply BEFORE deploy** — the dedupe writers reference `zoho_webhook_events.organization_id`; adds `organization_integrations.webhook_token`. |
+| `2026-06-20_integration_credential_audit.sql` | credential-scope | Audit writer is best-effort (swallows a missing table), so order-independent. |
+
+After applying: `npm run tenancy:guard:check` and a smoke POST to `/api/zoho/purchase-receives/sync` (USAV) should still succeed.
+
+### C2 — provision per-tenant Zoho webhooks (per org that connects Zoho)
+The legacy global-secret endpoint `/api/zoho/webhooks` still works for USAV. For **each tenant** (incl. migrating USAV off the global secret):
+1. The tenant connects Zoho via OAuth (`/api/zoho/oauth/authorize` → callback). The callback now mints + returns a one-time `{ webhook.url, webhook.signing_secret }`.
+2. **[tenant/you]** In Zoho → Settings → Automation → Webhooks, register that `url` with the `signing_secret` (header `x-zoho-webhook-signature`, hex HMAC-SHA256 of the raw body).
+3. Verify a test delivery: 200 with `{ ok: true }`; a wrong-secret body → 401; an event whose Zoho org id ≠ the connected account → 403.
+4. Once USAV is on its per-tenant URL, retire the global `ZOHO_WEBHOOK_SECRET` path.
+
+### C3 — migrate USAV's Zoho credentials into the vault (retire env creds)
+Today USAV's Zoho creds come from env (`ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN/ORG_ID`); `loadZohoCredentials` falls back to them, and the cron fan-out includes USAV via `includeUsavTransitional:true`. To finish:
+1. Connect USAV's Zoho through the OAuth flow so an `organization_integrations` (provider='zoho') vault row exists.
+2. Confirm `getIntegrationCredentials(USAV, 'zoho')` returns the vault row (not env).
+3. Drop `includeUsavTransitional` from the Zoho crons and remove the env-fallback once every connected org has a vault row.
+
+### C4 — FORCE candidates unlocked by Waves 2–6 (extends E1 step 5)
+Once `app_tenant` is live (Part B), these become enforceable after their remaining writers are GUC-safe:
+- **`receiving` / `receiving_lines`** — already FORCEd (2026-06-19). Wave 2 made the Zoho-sync writers GUC-wrapped + org-stamped, so they're correct under `app_tenant`. ✅ ready.
+- **`zoho_webhook_events`, `integration_credential_audit`, `api_idempotency_responses`, hermes_*/google_photos_*** — armed policies in place; FORCE after confirming their writers run under the GUC (webhook pipeline + credential-scope use `tenantQuery`/`withTenantTransaction`; the idempotency routes still use the owner `pool` → move them to `tenantQuery(orgId, …)` first, or accept that their org-filtered reads already isolate them).
+
+### C5 — documented follow-ups (not blocking go-live; do at/around 2nd-tenant onboarding)
+- ~~**Per-org Zoho threading** for `po-mirror-sync.ts` / `fulfillment-sync.ts`~~ **DONE (2026-06-20)** — both are org-threaded + fanned out via `forEachOrgWithProvider('zoho', …)`. Zoho is now multi-tenant end-to-end (inbound + outbound). Note: the mirror + fulfillment sync-cursors are still a single shared key (advanced only when all orgs succeed) — split to per-org cursors when tenant Zoho timelines diverge enough to matter.
+- **Cron locking — DONE (2026-06-20):** all 31 cron routes now run under `withCronLock` (skip-on-overlap). Wave 4's concurrency/distributed-locking requirement is complete.
+- **Dead crons removed (2026-06-20):** `shipping/subscribe-{ups,fedex,usps}` (de-scheduled carrier-webhook path; polling via `sync-due` replaced them; USPS 403-blocked) and `cron/reconcile-unmatched` (never scheduled; superseded by tracking-exceptions — its lib `reconcileUnmatchedReceiving` is kept, still used by `scripts/reconcile-unfound-zoho.ts`). Now-orphaned libs `lib/jobs/{ups,fedex,usps}-subscribe-pending` + the `/api/webhooks/{ups,fedex,usps}` receivers can be removed once the webhook path is confirmed permanently shelved.
+- **Cron fan-out — partial.** Fanned out: the 4 Zoho crons + the 5 that already loop orgs (stock-alerts, inventory/drift-check, integrations/sync, integrations/reconcile, amazon/orders-sync). **Remaining (locked but still single global pass):** 11 tenant-data crons → `forEachActiveOrg` (photos/{analyze,nas-mirror}, replenishment/{detect,sync}, shipping/{metrics,reconcile-delivered}, sku-catalog/refresh-suggestions, sourcing/scan, staff-goals/history, workflow-node-stats, zoho/orders-ingest-drain); 4 provider crons → `forEachOrgWithProvider` + lib org-threading (ebay/refresh-tokens, google-sheets/transfer-orders, receiving/incoming-tracking-sync, shipping/sync-due, sourcing/scour). Each needs its queries rewritten to the per-org client / its provider lib threaded — do per-cron, NOT a blind sweep (a naïve wrap would run global queries N times). 2 global crons (cleanup, refresh-reports) are complete with lock-only.
+- **Composite-key flips** (each couples a migration to an `ON CONFLICT` target — do atomically with the matching code, NOT before): `api_idempotency_responses` → `(organization_id, idempotency_key, route)`; `receiving`/`local_pickup_orders` Zoho-id partial-uniques → per-org; `fba_fnskus` → `(organization_id, fnsku)`.
+- **hermes_* NOT NULL**: thread org through the external Hermes writer (sibling repo), then `SET NOT NULL` before FORCE.
+- **Credential allowlist coverage**: bring `po-mirror-sync`/`fulfillment-sync` under `withZohoCredential`; declare operation sets for ebay/amazon/etc. as their service code adopts `withCredentialScope`.

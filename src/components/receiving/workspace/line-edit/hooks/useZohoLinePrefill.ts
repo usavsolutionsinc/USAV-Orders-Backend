@@ -15,7 +15,7 @@ import {
   parseSerialFromLineDescription,
   parseZendeskListingFromPoNotes,
 } from '@/lib/zoho-po-prefill';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface UseZohoLinePrefillArgs {
   row: ReceivingLineRow;

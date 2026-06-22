@@ -21,6 +21,15 @@ test('trial cannot do anything growth+ can do exclusively', () => {
   strictEqual(trial.features.advancedRoles, false);
 });
 
+test('every plan grants the studio capability by default (permissive — revokes nothing)', () => {
+  // Track 2: the studio entitlement is granted on every tier so turning the
+  // gate on never locks an existing org out. Tighten per-tier later if the
+  // plan ladder is split into Tracker/Ops/Studio.
+  for (const plan of ['trial', 'starter', 'growth', 'pro', 'enterprise'] as const) {
+    strictEqual(entitlementsForPlan(plan).features.studio, true, `${plan} should include studio`);
+  }
+});
+
 test('enterprise has everything pro has', () => {
   const pro = entitlementsForPlan('pro');
   const ent = entitlementsForPlan('enterprise');

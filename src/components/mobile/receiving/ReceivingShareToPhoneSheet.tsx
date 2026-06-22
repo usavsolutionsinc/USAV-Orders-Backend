@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Camera, Monitor } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
+import { useAblyClient } from '@/contexts/AblyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
 
@@ -12,6 +13,7 @@ interface SharePayload {
   receiving_id?: number;
   po_label?: string | null;
   tracking?: string | null;
+  request_id?: string | null;
 }
 
 /**
@@ -27,6 +29,7 @@ interface SharePayload {
 export function ReceivingShareToPhoneSheet() {
   const router = useRouter();
   const { user } = useAuth();
+  const { getClient } = useAblyClient();
   const orgId = user?.organizationId;
   const staffId = user?.staffId ?? 0;
   const stationBridgeChannel = safeChannelName(() => getStaffStationBridgeChannelName(orgId!, staffId));
@@ -35,11 +38,24 @@ export function ReceivingShareToPhoneSheet() {
   const handleShare = useCallback((msg: { data?: SharePayload }) => {
     const id = Number(msg?.data?.receiving_id);
     if (!Number.isFinite(id) || id <= 0) return;
+    // ACK back on the same bridge so the desktop knows a phone actually received
+    // this share (a bare publish resolves even with zero subscribers). Echoing
+    // the request_id lets the desktop match this reply to its exact request.
+    const requestId = String(msg?.data?.request_id || '');
+    if (requestId && stationBridgeChannel) {
+      getClient()
+        .then((client) =>
+          client?.channels
+            .get(stationBridgeChannel)
+            .publish('receiving_share_ack', { request_id: requestId }),
+        )
+        .catch(() => {});
+    }
     // `poLabel` is the real PO title (empty when the desktop didn't send one);
     // `label` adds a friendly fallback purely for the sheet's heading.
     const poLabel = (msg?.data?.po_label || '').trim();
     setShared({ receivingId: id, label: poLabel || `Package #${id}`, poLabel });
-  }, []);
+  }, [getClient, stationBridgeChannel]);
 
   useAblyChannel(
     stationBridgeChannel,

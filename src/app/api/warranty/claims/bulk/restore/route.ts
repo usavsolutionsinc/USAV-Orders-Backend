@@ -29,6 +29,7 @@ export const POST = withAuth(async (request, ctx) => {
   return idempotentJson({
     request,
     staffId: ctx.staffId ?? null,
+    orgId: ctx.organizationId,
     route: 'POST /api/warranty/claims/bulk/restore',
     bodyKey: parsed.data.idempotencyKey ?? null,
     produce: async () => {

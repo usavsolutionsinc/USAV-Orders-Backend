@@ -1,6 +1,6 @@
 'use client';
 
-import type { ShippedOrder } from '@/lib/neon/orders-queries';
+import type { ShippedOrder } from '@/types/orders';
 import type { ShippedDetailsContext } from '@/utils/events';
 
 // 'pending' removed — Awaiting+Pending merged into 'unshipped' (2026-06-13).

@@ -87,4 +87,4 @@ export const DELETE = withAuth(async (request, ctx) => {
     console.error('[DELETE /api/studio/definitions/[id]/discard] error:', err);
     return errorResponse(err, 'studio.discard');
   }
-}, { permission: 'studio.manage' });
+}, { permission: 'studio.manage', feature: 'studio' });

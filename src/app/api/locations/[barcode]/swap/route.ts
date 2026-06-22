@@ -23,6 +23,7 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import type { AnonymousAuthContext } from '@/lib/auth/withAuth';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 
 const ROUTE_LOCATION_SWAP = 'locations.barcode.swap';
 
@@ -72,13 +73,22 @@ export async function POST(
         ? Math.floor(Number(body?.staffId))
         : null;
 
+    // Resolve session org up-front so the bin lookup + both adjustBinQty
+    // writes + the bin_contents read + the inventory_events write are all
+    // tenant-scoped. Anonymous callers fall back to legacy un-scoped behavior.
+    const ctx = await resolveCtx(request);
+    const orgId = ctx.organizationId ?? undefined;
+    // The idempotency cache requires a concrete tenant; anonymous (legacy QR)
+    // callers fall back to USAV so the org-scoped cache row still resolves.
+    const idempotencyOrgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+
     // ─── Idempotency: replay cached responses for the same key ──────────────
     const idempotencyKey = readIdempotencyKey(
       request,
       body?.clientEventId ?? body?.idempotencyKey,
     );
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_LOCATION_SWAP);
+      const cached = await getApiIdempotencyResponse(pool, idempotencyOrgId, idempotencyKey, ROUTE_LOCATION_SWAP);
       if (cached) {
         return NextResponse.json(cached.response_body, { status: cached.status_code });
       }
@@ -86,6 +96,7 @@ export async function POST(
     const respond = async (payload: Record<string, unknown>, status = 200) => {
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId: idempotencyOrgId,
           idempotencyKey,
           route: ROUTE_LOCATION_SWAP,
           staffId,
@@ -106,12 +117,6 @@ export async function POST(
       }
       throw err;
     }
-
-    // Resolve session org up-front so the bin lookup + both adjustBinQty
-    // writes + the bin_contents read + the inventory_events write are all
-    // tenant-scoped. Anonymous callers fall back to legacy un-scoped behavior.
-    const ctx = await resolveCtx(request);
-    const orgId = ctx.organizationId ?? undefined;
 
     if (!oldSku || !newSku) {
       return respond({ error: 'oldSku and newSku are required' }, 400);

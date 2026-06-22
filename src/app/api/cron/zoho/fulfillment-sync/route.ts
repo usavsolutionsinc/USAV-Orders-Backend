@@ -21,7 +21,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSyncCursor, updateSyncCursor } from '@/lib/sync-cursors';
 import { withCronRun } from '@/lib/cron/run-log';
-import { syncShippedOrdersToZoho } from '@/lib/zoho/fulfillment-sync';
+import { withCronLock } from '@/lib/cron/lock';
+import { forEachOrgWithProvider } from '@/lib/cron/for-each-org';
+import { syncShippedOrdersToZoho, type SyncRunReport } from '@/lib/zoho/fulfillment-sync';
 import { getFulfillmentSyncConfig } from '@/lib/zoho/fulfillment-config';
 
 export const dynamic = 'force-dynamic';
@@ -48,6 +50,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const startedAt = Date.now();
   const url = new URL(req.url);
   const mode = url.searchParams.get('mode') === 'full' ? 'full' : 'delta';
   const dryRunOverride = parseDryRun(url.searchParams.get('dry_run'));
@@ -64,29 +67,77 @@ export async function GET(req: NextRequest) {
       since = cursor ?? new Date(Date.now() - config.bootstrapLookbackDays * 24 * 60 * 60 * 1000);
     }
 
-    const report = await withCronRun('zoho.fulfillment_sync', () =>
-      syncShippedOrdersToZoho({ since, dryRun: dryRunOverride, limit }),
+    // Distributed lock so an overlapping tick / manual trigger / Vercel retry
+    // can't double-push. Fan out per Zoho-connected org (plus USAV while it uses
+    // env creds): each org pushes its OWN shipped orders under its OWN Zoho
+    // credential (syncShippedOrdersToZoho org-scopes the order load + binds
+    // withZohoCredential). Per-org failures are isolated.
+    const locked = await withCronLock('zoho.fulfillment_sync', () =>
+      withCronRun('zoho.fulfillment_sync', async () => {
+        const perOrg = await forEachOrgWithProvider(
+          'zoho',
+          (orgId) => syncShippedOrdersToZoho({ since, dryRun: dryRunOverride, limit, orgId }),
+          { includeUsavTransitional: true },
+        );
+
+        const totals = { scanned: 0, completed: 0, skipped: 0, errored: 0 };
+        const errors: string[] = [];
+        let dryRunSeen = false;
+        let invoiceMode: SyncRunReport['invoiceMode'] | null = null;
+        let allLiveErrorFree = true;
+        for (const r of perOrg) {
+          if (r.ok && r.result) {
+            totals.scanned += r.result.scanned;
+            totals.completed += r.result.completed;
+            totals.skipped += r.result.skipped;
+            totals.errored += r.result.errored;
+            dryRunSeen = dryRunSeen || r.result.dryRun;
+            invoiceMode = r.result.invoiceMode;
+            if (r.result.dryRun || r.result.errored > 0) allLiveErrorFree = false;
+            if (errors.length < 25) errors.push(...r.result.errors);
+          } else {
+            totals.errored += 1;
+            allLiveErrorFree = false;
+            if (errors.length < 25) errors.push(`org ${r.orgId}: ${r.error instanceof Error ? r.error.message : String(r.error)}`);
+          }
+        }
+
+        // Advance the (shared) cursor only after every org had an error-free LIVE run.
+        if (allLiveErrorFree && perOrg.length > 0) {
+          await updateSyncCursor(CURSOR_KEY, new Date());
+        }
+        return {
+          ...totals,
+          dryRun: dryRunSeen,
+          invoiceMode: invoiceMode ?? config.invoiceMode,
+          errors: errors.slice(0, 25),
+          orgs_swept: perOrg.length,
+          orgs_failed: perOrg.filter((r) => !r.ok).length,
+        };
+      }),
     );
 
-    // Advance the cursor only after an error-free LIVE run. Dry runs never move it.
-    if (!report.dryRun && report.errored === 0) {
-      await updateSyncCursor(CURSOR_KEY, new Date(report.runStartedAt));
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked', mode });
     }
+    const summary = locked.result!;
 
     return NextResponse.json({
-      ok: report.errored === 0,
+      ok: summary.errored === 0,
       mode,
-      dryRun: report.dryRun,
-      invoiceMode: report.invoiceMode,
+      dryRun: summary.dryRun,
+      invoiceMode: summary.invoiceMode,
       cursor: { resource: CURSOR_KEY, since: since?.toISOString() ?? null },
+      orgs_swept: summary.orgs_swept,
+      orgs_failed: summary.orgs_failed,
       totals: {
-        scanned: report.scanned,
-        completed: report.completed,
-        skipped: report.skipped,
-        errored: report.errored,
+        scanned: summary.scanned,
+        completed: summary.completed,
+        skipped: summary.skipped,
+        errored: summary.errored,
       },
-      errors: report.errors.slice(0, 25),
-      elapsedMs: report.elapsedMs,
+      errors: summary.errors.slice(0, 25),
+      elapsedMs: Date.now() - startedAt,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'fulfillment-sync failed';

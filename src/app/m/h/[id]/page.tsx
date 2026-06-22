@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { unitStatusBadgeTone } from '@/components/station/receiving-constants';
 import { conditionLabel } from '@/lib/conditions';
+import { handlingUnitStatusChipClass } from '@/lib/handling-unit-status';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { printHandlingUnitLabel } from '@/lib/print/printHandlingUnitLabel';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
@@ -59,13 +60,6 @@ interface BoxResponse {
   success: boolean;
   handling_unit: BoxDetail;
 }
-
-const STATUS_TONE: Record<string, string> = {
-  OPEN: 'bg-slate-100 text-slate-700',
-  STAGED: 'bg-amber-100 text-amber-800',
-  IN_TEST: 'bg-blue-100 text-blue-700',
-  CLOSED: 'bg-emerald-100 text-emerald-700',
-};
 
 export default function MobileHandlingUnitPage() {
   const router = useRouter();
@@ -184,7 +178,7 @@ export default function MobileHandlingUnitPage() {
           {box ? box.code : 'Box'}
         </div>
         {box && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_TONE[box.status] || 'bg-slate-100 text-slate-700'}`}>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${handlingUnitStatusChipClass(box.status)}`}>
             {box.status}
           </span>
         )}

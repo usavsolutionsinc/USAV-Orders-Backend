@@ -38,11 +38,11 @@ export const maxDuration = 300;
 
 const MIRROR_CURSOR_KEY = 'zoho_po_mirror';
 
-export const POST = withAuth(async (_req: NextRequest) => {
+export const POST = withAuth(async (_req: NextRequest, ctx) => {
   const startedAt = Date.now();
   try {
     // ── 1. Issued POs → receiving_lines (same policy as the cron) ──────────
-    const issued = await syncZohoPurchaseOrdersToReceiving({
+    const issued = await syncZohoPurchaseOrdersToReceiving(ctx.organizationId, {
       status: 'issued',
       days_back: 0,
       per_page: 200,
@@ -59,7 +59,7 @@ export const POST = withAuth(async (_req: NextRequest) => {
       lastModifiedTime: formatApiOffsetTimestamp(mirrorStart),
       maxPages: 200,
       maxItems: 20000,
-    });
+    }, ctx.organizationId);
     if (mirror.errors.length === 0) {
       await updateSyncCursor(MIRROR_CURSOR_KEY, new Date());
     }

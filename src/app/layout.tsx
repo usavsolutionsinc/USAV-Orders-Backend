@@ -9,12 +9,16 @@ import { ActivityInboxProvider } from "../contexts/ActivityInboxContext";
 import { StaffColorsProvider } from "../contexts/StaffColorsProvider";
 import { StaffSwitcherProvider } from "../contexts/StaffSwitcherContext";
 import { SwitchStaffSheet } from "../components/auth/SwitchStaffSheet";
+import { ScanHotkeySync } from "../components/scan/ScanHotkeySync";
+import { ThemeSync } from "../components/theme/ThemeSync";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import { designTokenStyleText } from '@/styles/tokens';
 import { OfflineBanner } from "../components/station/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
 import { getInitialAuthUser } from "@/lib/auth/server-session";
+import { Analytics } from "@vercel/analytics/next";
 
 export default async function RootLayout({
     children,
@@ -40,6 +44,8 @@ export default async function RootLayout({
                 {/* Viewport — cover notch, prevent zoom on input focus */}
                 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
                 <style id="app-design-tokens">{designTokenStyleText}</style>
+                {/* Applies the cached theme before paint (no light→dark flash). */}
+                <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
             </head>
             <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100dvh', minHeight: '100vh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 <ElectronDragStrip />
@@ -59,6 +65,8 @@ export default async function RootLayout({
                                 </FbaWorkspaceProvider>
                             </HeaderProvider>
                             <SwitchStaffSheet />
+                            <ScanHotkeySync />
+                            <ThemeSync />
                         </StaffSwitcherProvider>
                         </StaffColorsProvider>
                         </ActivityInboxProvider>
@@ -66,6 +74,7 @@ export default async function RootLayout({
                 </Providers>
                 <InstallPrompt />
                 <AppearanceApplier />
+                <Analytics />
             </body>
         </html>
     );

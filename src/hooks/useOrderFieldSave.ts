@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { useOrderAssignment } from '@/hooks';
+import { useOrderAssignment } from './useOrderAssignment';
 import { getCurrentPSTDateKey } from '@/utils/date';
 
 interface UseOrderFieldSaveOptions {

@@ -23,6 +23,8 @@ export type TechSerialInsertDb = Pick<Pool, 'query'>;
 async function linkTechSerialToInventoryV2(
   db: TechSerialInsertDb,
   args: {
+    /** Tenant scope — stamped on the serial_units upsert so the per-org natural key resolves. */
+    organizationId: string;
     techSerialNumberId: number | null;
     upperSerial: string;
     sku: string | null;
@@ -42,16 +44,16 @@ async function linkTechSerialToInventoryV2(
     const upsert = await db.query(
       `INSERT INTO serial_units (
         serial_number, normalized_serial, sku,
-        current_status, origin_source, origin_tsn_id
+        current_status, origin_source, origin_tsn_id, organization_id
       )
       VALUES ($1, UPPER(TRIM($1)), $2,
-              'UNKNOWN'::serial_status_enum, 'tech.add-serial', $3)
-      ON CONFLICT (normalized_serial) DO UPDATE SET
+              'UNKNOWN'::serial_status_enum, 'tech.add-serial', $3, $4::uuid)
+      ON CONFLICT (organization_id, normalized_serial) DO UPDATE SET
         sku = COALESCE(serial_units.sku, EXCLUDED.sku),
         origin_tsn_id = COALESCE(serial_units.origin_tsn_id, EXCLUDED.origin_tsn_id),
         updated_at = NOW()
       RETURNING id`,
-      [args.upperSerial, args.sku, args.techSerialNumberId],
+      [args.upperSerial, args.sku, args.techSerialNumberId, args.organizationId],
     );
     const serialUnitId: number | null = upsert.rows[0]?.id
       ? Number(upsert.rows[0].id)
@@ -284,6 +286,7 @@ export async function insertTechSerialForTracking(
   // shape unchanged. The serial_units upsert COALESCEs sku so an
   // already-known SKU on the master row is preserved.
   await linkTechSerialToInventoryV2(db, {
+    organizationId: params.organizationId,
     techSerialNumberId: targetTechSerialId,
     upperSerial,
     sku: null,

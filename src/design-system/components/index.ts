@@ -27,3 +27,6 @@ export * from './WorkspaceCard';
 export * from './StickyActionBar';
 export * from './MobileSelectionBar';
 export * from './FilterRefinementBar';
+export * from './VerticalSplitStack';
+export * from './StaffFilter';
+export * from './DataTable';

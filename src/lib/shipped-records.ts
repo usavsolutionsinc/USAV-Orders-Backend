@@ -9,6 +9,37 @@ import {
 
 export type DerivedPackerRecord = PackerRecord & WithOutboundState;
 
+// FBA records are identified by scan_ref matching Amazon's FBA shipment ID format
+// (FBAxxxxxxxx) or by tracking_type being 'FBA' / 'FNSKU'.
+// NOTE: equivalent logic is also inlined in hooks/station/usePackerTableController.ts
+// and lib/shipped/pickup-report.ts — candidates for a future single-SoT dedup.
+const FBA_SHIPMENT_ID_RE = /^FBA[0-9A-Z]{8,}$/i;
+
+export function isFbaPackerRecord(record: { scan_ref?: string | null; tracking_type?: string | null }): boolean {
+  const scanRef = String(record.scan_ref || '').trim();
+  const ttype = String(record.tracking_type || '').toUpperCase();
+  return FBA_SHIPMENT_ID_RE.test(scanRef) || ttype === 'FBA' || ttype === 'FNSKU';
+}
+
+// SKU records are identified by tracking_type === 'SKU' (set by packer_logs.tracking_type)
+// or by scan_ref containing ':' (the "SKU_VALUE:QUANTITY" format used at the pack station).
+export function isSkuPackerRecord(record: { scan_ref?: string | null; tracking_type?: string | null }): boolean {
+  const ttype = String(record.tracking_type || '').toUpperCase();
+  if (ttype === 'SKU') return true;
+  const scanRef = String(record.scan_ref || '').trim();
+  return scanRef.includes(':');
+}
+
+export function hasLinkedOrder(record: { order_row_id?: number | null; order_id?: string | null }): boolean {
+  if (record.order_row_id != null) return true;
+  return String(record.order_id || '').trim().length > 0;
+}
+
+export function isExceptionPackerRecord(record: { row_source?: string | null; exception_reason?: string | null }): boolean {
+  return String(record.row_source || '').trim().toLowerCase() === 'exception'
+    || !!String(record.exception_reason || '').trim();
+}
+
 /**
  * Collapse duplicate scans of the SAME package, while keeping a multi-package
  * order as one row PER package (they ship at different times). Shared by the

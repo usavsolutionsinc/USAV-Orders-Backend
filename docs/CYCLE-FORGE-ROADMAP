@@ -1,0 +1,353 @@
+```md
+Execute roadmap task $ARGUMENTS from docs/CYCLE-FORGE-ROADMAP.md.
+
+BEFORE writing any code:
+1. Phase 0 discovery — scan the relevant areas of the codebase and report what exists. Do NOT generate code yet.
+2. Confirm every dependency in the task's "Depends on" is marked done. If not, stop and report the blocker.
+3. Restate the Objective + Acceptance criteria you are building to.
+
+WHILE implementing:
+- Keep all operations fully reversible.
+- Respect the system-of-record boundary: Supabase owns unit-level truth; Zoho owns SKU-level quantity/financials. Never cross them.
+- Never regenerate or mutate an existing unit serial ({SKU}-{WWYY}-{SER6}).
+- Reuse the design tokens/primitives from P0-DS-01.
+
+WHEN done:
+- Verify each Acceptance bullet explicitly.
+- Flip this task's Status to `done` in the roadmap file.
+```
+
+**Loop patterns:**
+- Sequential: `/execute-task P0-IDN-01`, then `P0-TRACE-01`, etc.
+- Autonomous: *"Read CYCLE-FORGE-ROADMAP.md. Work through every P0 task whose dependencies are met, one at a time, running the Phase 0 discovery step first and updating Status as you finish each."*
+
+**Status keywords:** `todo` · `in-progress` · `done` · `blocked`. (Grep `Status: todo` to list remaining work.)
+
+---
+
+## Critical path (the spine)
+
+```
+P0-DS-01  (design foundation)  ──────────────────────────────► runs in parallel
+
+P0-IDN-01 ─► P0-TRACE-01 ─► P1-TRACE-02 ─► P1-TRACE-03
+                         └─► P1-TRACE-04 (notifications)
+```
+Get serial identity + the audit-trail data layer correct first; everything visual and notification-driven hangs off it.
+
+---
+
+## Phase 0 — Load-bearing foundations
+
+### P0-DS-01 · Design-system foundation (tokens + primitives + motion)
+- **Status:** `done`
+- **Priority:** P0 — every later UI task inherits this; build it once, correctly.
+- **Objective:** Establish a Linear/Notion token set (color, spacing, type scale, radius, elevation), standardize primitive components (Panel, Table, Popover, Badge, Toolbar, Timeline, EmptyState), and wire the motion library (Framer Motion / `motion`) with shared transition presets.
+- **Acceptance:** Tokens in one source of truth; ≥6 reusable primitives in a library/showcase page; one real page refactored to prove the system; motion presets exported and reused.
+- **Depends on:** none
+- **Touches:** design tokens, shared UI components, Tailwind v4 config, motion setup
+
+### P0-IDN-01 · Serial reuse: PO Unboxing → Tech Shipping
+- **Status:** `review`
+- **Priority:** P0 — the license-plate identity is the spine; downstream timelines are garbage without it.
+- **Objective:** Ensure serials generated/scanned at PO Unboxing are the *exact* serials reused at Tech Shipping (no regeneration, no collisions). Enforce at DB + app layer.
+- **Acceptance:** Scanning an existing unit at shipping resolves to its original serial; uniqueness constraint blocks duplicates; operation reversible.
+- **Depends on:** none
+- **Touches:** Supabase unit tables, unboxing + shipping flows, scan resolver
+
+### P0-TRACE-01 · Unit audit-trail data layer (First-Trace backbone)
+- **Status:** `review`
+- **Priority:** P0 — the data behind every timeline and notification.
+- **Objective:** Append-only event log per unit serial capturing phase transitions (Receive → Pre-pack → Test → Putaway → Pick → Pack → Label → Ship-Confirm → Return) with actor + timestamp.
+- **Acceptance:** Every state-changing action writes one event row with actor+ts; events queryable by serial *and* by order number; backfill path documented.
+- **Depends on:** P0-IDN-01
+- **Touches:** events table, XState transition hooks, write paths across all modes
+
+---
+
+## Phase 1 — Core daily operations
+
+### P1-TRACE-02 · Universal timeline component in all detail panels
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** One reusable Timeline component fed by the audit-trail log, embedded in every detail panel; supports both serial-based and order-based identifier views.
+- **Acceptance:** Any unit/order detail panel renders full chronological history with actor+ts; identifier toggle works; reads from P0-TRACE-01.
+- **Depends on:** P0-TRACE-01, P0-DS-01
+- **Touches:** detail panels, Timeline component
+
+### P1-TRACE-03 · First-Trace audit view + fix broken timeline displays
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Dedicated "first trace" view tracing a product from origin through every station; correct existing timeline displays that show wrong info.
+- **Acceptance:** Given a serial, view renders receiving → shipping → returns with who/when at each step; previously-incorrect displays verified.
+- **Depends on:** P1-TRACE-02
+- **Touches:** timeline views
+
+### P1-TRACE-04 · Notification inbox (bell) for primary tech station
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Bell-icon inbox alerting on (a) unboxed returns and (b) unboxed orders pending shipment, routed to the primary tech station.
+- **Acceptance:** Qualifying events generate notifications; unread badge; mark-read; deep-links to the unit/order.
+- **Depends on:** P0-TRACE-01
+- **Touches:** notifications table, header bell, event subscriptions
+
+### P1-RCV-01 · Receiving Search + To-Do list from email order numbers
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Searchable to-do list in receiving mode seeded from incoming email order numbers.
+- **Acceptance:** Ingested order numbers appear as actionable to-do items; searchable; check-off updates state.
+- **Depends on:** P0-DS-01
+- **Touches:** receiving mode, email ingestion, to-do list
+
+### P1-PCK-01 · Testing mode: packing-list display + scan prefill from pre-packed state
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Give testing mode a packing-list + selection UX mirroring receiving; on SKU scan, prefill all fields from the pre-packed state.
+- **Acceptance:** SKU scan populates fields from the pre-pack record; interaction matches receiving mode.
+- **Depends on:** P0-IDN-01, P0-DS-01
+- **Touches:** testing mode, scan handler, pre-pack data
+
+### P1-PCK-02 · Packing page upgrades: modes + per-SKU QA
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Add distinct packing modes; surface per-SKU problems and explicit "how to pack this product" guidance.
+- **Acceptance:** Packer sees SKU-specific pack instructions and flagged problems before confirming the pack.
+- **Depends on:** P0-DS-01
+- **Touches:** packing page, SKU metadata/QA rules
+
+### P1-PCK-03 · Testing to-do list defaulting to recently received items
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Testing to-do feed that defaults to recently received units for real-time pickup.
+- **Acceptance:** Newly received units surface at the top automatically; live updates.
+- **Depends on:** P0-TRACE-01
+- **Touches:** testing mode feed
+
+### P1-WORK-01 · Work-order assignment via popover + global-header priority
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Assign tasks (testing, packing, picking) to staff via popover; surface the single most important work order in the global header.
+- **Acceptance:** Assign/reassign from popover; header always shows the top-priority work order for the signed-in operator.
+- **Depends on:** P0-DS-01
+- **Touches:** work-order model, header, popover
+
+### P1-WORK-02 · Universal staff filters on every mode
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** All-staff ↔ single-staff filter on every page/mode (unboxed, receiving, packing, etc.).
+- **Acceptance:** Each mode defaults to all staff and filters down to one; consistent shared control.
+- **Depends on:** P0-DS-01
+- **Touches:** shared filter component, all mode views
+
+### P1-MOB-01 · Mobile packer flow with scan-driven auto-progression
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Mobile-optimized packer workflow that auto-progresses modes on scan states — scan 1 → order details, scan 2 → what to pack. Packing list viewable on phone for packer *and* tech; QR scanning (PO + print labels) supported.
+- **Acceptance:** Two-scan progression works on device; packing list legible on phone; QR scan works.
+- **Depends on:** P1-PCK-01
+- **Touches:** mobile views, scan state machine (XState), packing list
+
+### P1-WORK-03 · Quick-key to jump to next PO serial scan
+- **Status:** `review`
+- **Priority:** P1
+- **Objective:** Hotkey that immediately returns the operator to scanning the next PO serial number.
+- **Acceptance:** Defined key returns focus to the scan input from anywhere in the flow.
+- **Depends on:** none
+- **Touches:** keyboard handler, scan input
+
+---
+
+## Phase 2 — Integrations, verticals, AI
+
+### P2-INT-01 · Zoho webhook on receiving page
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Add Zoho webhook support so receiving syncs SKU-level quantity/financials (Zoho = system of record for SKU truth).
+- **Acceptance:** Receiving events trigger/consume the Zoho webhook; SKU quantities reconcile.
+- **Depends on:** P0-IDN-01
+- **Touches:** receiving page, Zoho integration
+
+### P2-INT-02 · Ecwid order pull + attach repair services
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Pull orders from Ecwid via API and attach repair services to them (research the Ecwid API for the linkage).
+- **Acceptance:** Ecwid order imported; repair service attachable to an order line.
+- **Depends on:** none
+- **Touches:** Ecwid integration, repair linkage
+
+### P2-INT-03 · eBay + Amazon connection testing (login / connect account)
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Validate eBay (OAuth 2.0) and Amazon integrations end-to-end by connecting a live account and exercising the flows.
+- **Acceptance:** Account connects; auth persists; a representative read/write call succeeds for each platform.
+- **Depends on:** none
+- **Touches:** eBay OAuth, Amazon API, account-connection UI
+
+### P2-INT-04 · Amazon incoming-orders ingestion (testing flow + cron)
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Bring Amazon incoming orders into the system via the testing flow plus scheduled cron jobs.
+- **Acceptance:** Orders ingest on schedule; land in the correct mode; idempotent.
+- **Depends on:** P2-INT-03
+- **Touches:** Amazon API, cron, order ingestion
+
+### P2-RPR-01 · Repair-service linear flow (centered, ordered entry, paperwork access)
+- **Status:** `review`
+- **Priority:** P2
+- **Objective:** Simple centered linear repair UI with a defined entry order; paperwork viewable at any point in the flow.
+- **Acceptance:** Guided ordered entry; document viewer reachable from any step.
+- **Depends on:** P0-DS-01
+- **Touches:** repair module
+
+### P2-RPR-02 · Ticket CRUD + linkage/unlinkage + manual pairing + recent feed
+- **Status:** `review`
+- **Priority:** P2
+- **Objective:** Full ticket CRUD; link/unlink tickets; manual pairing entry; manual repair-service entry; scrollable most-recent feed.
+- **Acceptance:** Create/read/update/delete tickets; link + unlink; manual entries persist; recent feed scrolls.
+- **Depends on:** P2-RPR-01
+- **Touches:** ticket model, repair module
+
+### P2-RPR-03 · Warranty page + check-in + repair pickup dashboard
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Warranty page with a quick-access check-in action; pickup dashboard tracking readiness, staff attribution, and due dates for Ecwid/walk-ins.
+- **Acceptance:** Check-in creates a tracked record; dashboard shows ready/overdue with owner.
+- **Depends on:** P2-RPR-02, P2-INT-02
+- **Touches:** warranty page, pickup dashboard
+
+### P2-FBA-01 · FBA pipeline end-to-end test + shipment→FNSKU→path audit
+- **Status:** `review`
+- **Priority:** P2
+- **Objective:** Fully test the FBA pipeline for consistency; link all-in-one shipment IDs to FNSKUs and render the product-path timeline audit trail.
+- **Acceptance:** A shipment traces shipmentID → FNSKU → unit path with detailed UI; inconsistencies surfaced.
+- **Depends on:** P0-TRACE-01
+- **Touches:** FBA pipeline, audit views
+
+### P2-FBA-02 · FBA popover fixes (tracking #, condition, save-to-DB)
+- **Status:** `review`
+- **Priority:** P2
+- **Objective:** Fix the tracking-number update bug from the dashboard popover; make FNSKU condition updates consistent; ensure edits save to DB tables on save.
+- **Acceptance:** Tracking + condition edits persist reliably to the correct tables; popover display consistent.
+- **Depends on:** P2-FBA-01
+- **Touches:** FBA popover, DB writes
+
+### P2-AI-01 · OCR for local pickups → fast SKU create / missing-item flag
+- **Status:** `review`
+- **Priority:** P2
+- **Objective:** OCR product titles on local pickups to quickly update products, generate a SKU, or flag items not yet in the system.
+- **Acceptance:** Photo/scan of a title yields parsed text; user can create a SKU or flag missing in one step.
+- **Depends on:** P0-IDN-01
+- **Touches:** OCR pipeline, SKU creation
+
+### P2-AI-02 · AI claims assistant (TOS-compliant) with rationale display
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Auto-draft carrier/platform claims (eBay etc.) following each platform's TOS; show *why* it was framed that way; let the user ask "is this OK for [platform] TOS?"; cover undelivered / wrong-address cases.
+- **Acceptance:** Generates a claim draft; displays TOS rationale; answers the TOS-check prompt.
+- **Depends on:** none
+- **Touches:** AI claims module
+
+### P2-AI-03 · AI product sourcing (Hermes plugin + integrations)
+- **Status:** `todo`
+- **Priority:** P2
+- **Objective:** Set up product-sourcing workflows via the ChatGPT/Hermes plugin and other AI integrations.
+- **Acceptance:** A sourcing query returns candidate products into a usable workflow.
+- **Depends on:** none
+- **Touches:** sourcing workflow, Hermes integration
+
+---
+
+## Phase 3 — Business, admin, polish
+
+### P3-DS-02 · Site-wide migration to the design system + component cleanup
+- **Status:** `todo`
+- **Priority:** P3 — best done opportunistically as each page is touched in P1/P2.
+- **Objective:** Migrate remaining pages to the P0 design foundation; standardize Testing/Shipping panels; add sorting + staff-assignment icons.
+- **Acceptance:** All primary modes use shared primitives + tokens; Testing/Shipping panels consistent.
+- **Depends on:** P0-DS-01
+- **Touches:** all pages
+
+### P3-DS-03 · Photos library + receiving quick-peek previews
+- **Status:** `review`
+- **Priority:** P3
+- **Objective:** Fix the photos library to display by ticket number with QoL improvements; add a desktop quick-peek photo preview in receiving (bottom-right Framer Motion stack-of-cards).
+- **Acceptance:** Photos resolve by ticket number; receiving shows a hover/peek card stack.
+- **Depends on:** P0-DS-01
+- **Touches:** photos library, receiving mode
+
+### P3-ADM-01 · Operations page overhaul (goal-first + ops/stats/research, agent-paired)
+- **Status:** `review`
+- **Priority:** P3
+- **Objective:** Redesign the operations page — top section shows the current goal; scroll section shows live operations, stats, and the main research displays. Pair local agents to this UI so it maps the whole workflow.
+- **Acceptance:** Goal-first layout; live stats; agent hooks present.
+- **Depends on:** P0-DS-01, P0-TRACE-01
+- **Touches:** operations page, agent integration
+
+### P3-BIZ-01 · Payment plans + per-plan feature gates (visible, paywalled)
+- **Status:** `todo`
+- **Priority:** P3 — **business call:** pull this forward if you're actively selling.
+- **Objective:** Implement plans and gate pages per plan — gates visible but locked behind the paywall.
+- **Acceptance:** Plan tiers defined; gated routes show a locked state + upgrade path.
+- **Depends on:** P3-BIZ-02
+- **Touches:** billing (Stripe), route guards
+
+### P3-BIZ-02 · Password signup + account creation + marketing-site truth-up
+- **Status:** `todo`
+- **Priority:** P3
+- **Objective:** Make password signup + proper account creation work; update the marketing website to reflect actual current features.
+- **Acceptance:** A new user can sign up with a password and land in a provisioned account; marketing claims match reality.
+- **Depends on:** none
+- **Touches:** auth/signup, marketing site
+
+### P3-ADM-02 · Staff global sign-in (phone history, mobile-on-desktop popovers, inventory access)
+- **Status:** `todo`
+- **Priority:** P3
+- **Objective:** Finish global staff sign-in with phone history and mobile-on-desktop popovers; ensure inventory access.
+- **Acceptance:** Sign-in persists with history; popovers work on desktop; inventory reachable.
+- **Depends on:** none
+- **Touches:** auth, popovers
+
+### P3-ADM-03 · Calendar page for staff scheduling/assignments
+- **Status:** `review`
+- **Priority:** P3
+- **Objective:** Dedicated calendar page for scheduling and staff assignments.
+- **Acceptance:** Create/view assignments on a calendar; ties into work orders.
+- **Depends on:** P1-WORK-01
+- **Touches:** calendar page
+
+### P3-ADM-04 · Product-manual PDF viewer (Cloudflare R2 + Vercel)
+- **Status:** `todo`
+- **Priority:** P3
+- **Objective:** Host + view product-manual PDFs via Cloudflare R2 and Vercel.
+- **Acceptance:** PDFs upload to R2 and render in-app.
+- **Depends on:** none
+- **Touches:** R2 storage, PDF viewer
+
+### P3-ADM-05 · SOP generation on onboarding completion
+- **Status:** `todo`
+- **Priority:** P3 — explicitly "once workflows are finalized."
+- **Objective:** Draft the SOP/manual from the finalized flows; trigger on onboarding completion.
+- **Acceptance:** Completing onboarding produces a draft SOP derived from the live flows.
+- **Depends on:** most P1/P2 flows stable
+- **Touches:** SOP generator
+
+---
+
+## Appendix — What got merged (dedupe map)
+
+The original list had heavy duplication from being two passes stitched together. Major collapses:
+
+- **Design / Linear-Notion redesign** (appeared ~4×, plus "motion+", "component cleanup", "new icons") → split into **P0-DS-01** (foundation, do early) and **P3-DS-02** (page migration, do opportunistically).
+- **Serial reuse PO Unboxing → Tech Shipping** (appeared 2×) → **P0-IDN-01**.
+- **Timelines / "first trace" / "all detail panels have timelines" / "fix timeline displays"** (appeared ~4× across sections) → **P0-TRACE-01** (data) + **P1-TRACE-02** (component) + **P1-TRACE-03** (view/fixes).
+- **Notification bell** (2×, "unboxed returns" / "pending shipments") → **P1-TRACE-04**.
+- **Mobile packer flow** ("auto progresses on scan", "scan 1 / scan 2", "packing list on phone", "QR scan PO + labels") → **P1-MOB-01**.
+- **Repair service** ("linear flow", "CRUD", "linkage/unlinkage", "manual pairing", "manual repair entry + recent", "warranty page", "pickup dashboard") → **P2-RPR-01/02/03**.
+- **Operations page overhaul** (2×, "goal top / scroll stats / pair local agents") → **P3-ADM-01**.
+- **Incoming/receiving to-do from email order numbers** (2×) → **P1-RCV-01**.
+- **Quick key to next PO serial** (2×) → **P1-WORK-03**.
+- **Ecwid pull + attach repairs** (2×) → **P2-INT-02**.
+- **FBA** ("end-to-end test", "shipment→FNSKU audit", "popover tracking/condition save") → **P2-FBA-01/02**.
+- **Integrations testing eBay/Amazon** + **Amazon cron ingestion** + **Zoho webhook** → **P2-INT-01/03/04**.
+
+Nothing from the source list was dropped — every line maps to exactly one task above.

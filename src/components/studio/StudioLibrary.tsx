@@ -10,7 +10,7 @@
 
 import { icons } from 'lucide-react';
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
-import type { Diagnostic, StudioGraphResponse } from './studio-types';
+import type { Diagnostic, StudioGraphResponse, StudioTemplateSummary } from './studio-types';
 
 const SEVERITY_GLYPH: Record<Diagnostic['severity'], { glyph: string; cls: string }> = {
   error: { glyph: '✖', cls: 'text-rose-600' },
@@ -33,6 +33,10 @@ export function StudioLibrary({
   editable = false,
   onAddNode,
   onFocusIssue,
+  templates = [],
+  canManage = false,
+  importingTemplateId = null,
+  onImportTemplate,
 }: {
   palette: StudioGraphResponse['palette'];
   diagnostics: Diagnostic[];
@@ -40,6 +44,13 @@ export function StudioLibrary({
   editable?: boolean;
   onAddNode?: (type: string) => void;
   onFocusIssue: (nodeId: string) => void;
+  /** System-owned blueprints to clone (ST6 / Phase E4). */
+  templates?: StudioTemplateSummary[];
+  /** studio.manage: shows the Import action (cloning creates a draft). */
+  canManage?: boolean;
+  /** The template whose import is in flight (its card shows a spinner). */
+  importingTemplateId?: number | null;
+  onImportTemplate?: (templateId: number) => void;
 }) {
   const issues = diagnostics.filter((d) => d.severity !== 'info');
   return (
@@ -108,6 +119,65 @@ export function StudioLibrary({
           ))}
         </ul>
       </section>
+
+      {/* ─── Templates (ST6 / Phase E4) — system blueprints to clone ─── */}
+      {templates.length > 0 && (
+        <section className="border-t border-slate-100 pt-4">
+          <h3 className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Templates</h3>
+          <ul className="space-y-1.5">
+            {templates.map((t) => {
+              const importing = importingTemplateId === t.id;
+              return (
+                <li
+                  key={t.id}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm"
+                >
+                  <div className="flex items-start gap-2">
+                    <icons.LayoutTemplate className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-semibold text-slate-700">{t.name}</p>
+                      {t.description && (
+                        <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-slate-400">
+                          {t.description}
+                        </p>
+                      )}
+                      <p className="mt-1 font-mono text-[9px] text-slate-400">
+                        {t.nodeCount} step{t.nodeCount === 1 ? '' : 's'} · {t.edgeCount} link
+                        {t.edgeCount === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                  </div>
+                  {canManage && onImportTemplate && (
+                    <button
+                      type="button"
+                      onClick={() => onImportTemplate(t.id)}
+                      disabled={importingTemplateId !== null}
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+                    >
+                      {importing ? (
+                        <>
+                          <icons.LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                          Importing…
+                        </>
+                      ) : (
+                        <>
+                          <icons.Plus className="h-3.5 w-3.5" />
+                          Import as draft
+                        </>
+                      )}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          {!canManage && (
+            <p className="mt-1.5 text-[10px] text-slate-300">
+              Importing a template needs the manage permission.
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ─── Issues rail (ST3) — the operation's linter output ─── */}
       <section className="border-t border-slate-100 pt-4">

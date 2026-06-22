@@ -6,6 +6,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import { Loader2, RefreshCw, Play, Activity } from '@/components/Icons';
 import { useCronRunsSummary, useCronRunsList } from '@/hooks/useCronRuns';
 import { cronRunsKeys, type JobHealth, type CronJobStatus, type CronRunRow } from '@/lib/queries/cron-runs-queries';
+import { syncRunStatusChipClass } from '@/lib/sync-run-status';
 
 /**
  * Admin → System sync activity: every cron/job's health, last run, and a
@@ -19,12 +20,6 @@ const DOT: Record<JobHealth, string> = {
   failed: 'bg-rose-500',
   running: 'bg-blue-500 animate-pulse',
   never: 'bg-gray-300',
-};
-
-const STATUS_TONE: Record<string, string> = {
-  success: 'bg-emerald-50 text-emerald-700',
-  failed: 'bg-rose-50 text-rose-700',
-  running: 'bg-blue-50 text-blue-700',
 };
 
 function rel(iso: string | null): string {
@@ -190,7 +185,7 @@ function RunRow({ run }: { run: CronRunRow }) {
         onClick={() => hasDetail && setOpen((o) => !o)}
         className="flex w-full items-center gap-3 text-left"
       >
-        <span className={`rounded-full px-1.5 py-0.5 text-mini font-bold ${STATUS_TONE[run.status] ?? 'bg-gray-100 text-gray-600'}`}>
+        <span className={`rounded-full px-1.5 py-0.5 text-mini font-bold ${syncRunStatusChipClass(run.status)}`}>
           {run.status}
         </span>
         <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-800">{run.job}</span>

@@ -226,6 +226,21 @@ export async function GET(request: NextRequest) {
     createdBy: user.staffId,
   });
 
+  // Mint this tenant's per-tenant webhook identity (Wave 3) so inbound Zoho
+  // events resolve to THIS org. The admin configures the URL + secret below in
+  // Zoho's webhook console. The secret is returned ONCE here and never again.
+  let webhookUrl: string | null = null;
+  let webhookSecret: string | null = null;
+  try {
+    const { ensureZohoWebhookIdentity } = await import('@/lib/zoho/webhooks/zoho-webhook-credentials');
+    const identity = await ensureZohoWebhookIdentity(orgId);
+    webhookUrl = `${appUrl}/api/zoho/webhooks/${identity.webhookToken}`;
+    webhookSecret = identity.webhookSecret;
+  } catch (err) {
+    // Non-fatal: the connection is saved; webhook can be provisioned later.
+    console.warn('[zoho-oauth] webhook identity mint failed (non-fatal):', err);
+  }
+
   return NextResponse.json({
     success: true,
     message: 'Zoho connected. Credentials saved to the encrypted per-tenant vault.',
@@ -237,5 +252,14 @@ export async function GET(request: NextRequest) {
     accounts_server: accountsServer,
     token_type: tokenData.token_type ?? 'Bearer',
     api_domain: apiDomain,
+    // Configure these in Zoho → Settings → Automation → Webhooks. The secret is
+    // shown only this once.
+    webhook: webhookUrl
+      ? {
+          url: webhookUrl,
+          signing_secret: webhookSecret,
+          signature_header: (process.env.ZOHO_WEBHOOK_SIGNATURE_HEADER || 'x-zoho-webhook-signature').toLowerCase(),
+        }
+      : null,
   });
 }

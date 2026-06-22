@@ -1,5 +1,5 @@
-import type { ReceivingDetailsLog } from '@/components/station/ReceivingDetailsStack';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import type { ReceivingDetailsLog } from '@/components/station/receiving-details-log';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 type CartonApiRow = ReceivingDetailsLog & {
   id?: number | string;

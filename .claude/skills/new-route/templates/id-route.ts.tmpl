@@ -1,0 +1,116 @@
+// Template: dynamic route — src/app/api/<<segments>>/[id]/route.ts
+// Uses requireRoutePerm() (NOT withAuth): withAuth ignores Next's route-`params`,
+// so param routes use the plain handler form and gate inside. Delete unused methods.
+import { NextRequest, NextResponse } from 'next/server';
+import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { parseBody } from '@/lib/schemas/parse';
+import { <<DomainUpdateBody>> } from '@/lib/schemas/<<feature>>';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { <<getByIdFn>>, <<updateFn>>, <<softDeleteFn>> } from '@/lib/<<domain-module>>';
+import pool from '@/lib/db';
+
+/**
+ * GET /api/<<segments>>/[id] — detail.
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const gate = await requireRoutePerm(req, '<<read.permission>>');
+    if (gate.denied) return gate.denied;
+
+    const { id: rawId } = await params;
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const detail = await <<getByIdFn>>(id, gate.ctx.organizationId);
+    if (!detail) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+
+    return NextResponse.json({ success: true, ...detail });
+  } catch (error: any) {
+    console.error('Error in GET /api/<<segments>>/[id]:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Failed' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/<<segments>>/[id] — update.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const gate = await requireRoutePerm(req, '<<write.permission>>');
+    if (gate.denied) return gate.denied;
+
+    const { id: rawId } = await params;
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const raw = await req.json().catch(() => ({}));
+    const parsed = parseBody(<<DomainUpdateBody>>, raw);
+    if (parsed instanceof NextResponse) return parsed;
+
+    const before = await <<getByIdFn>>(id, gate.ctx.organizationId);
+    if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+
+    const after = await <<updateFn>>(id, parsed, gate.ctx.organizationId);
+
+    await recordAudit(pool, gate.ctx, req, {
+      source: '<<feature>>-api',
+      action: AUDIT_ACTION.<<VERB_UPDATE>>,
+      entityType: AUDIT_ENTITY.<<TYPE>>,
+      entityId: id,
+      before: { ...before },
+      after: { ...after },
+    });
+
+    return NextResponse.json({ success: true, item: after });
+  } catch (error: any) {
+    console.error('Error in PATCH /api/<<segments>>/[id]:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Failed' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/<<segments>>/[id] — soft-delete (non-destructive; reversible).
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const gate = await requireRoutePerm(req, '<<write.permission>>');
+    if (gate.denied) return gate.denied;
+
+    const { id: rawId } = await params;
+    const id = Number(rawId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    }
+
+    const before = await <<getByIdFn>>(id, gate.ctx.organizationId);
+    if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+
+    await <<softDeleteFn>>(id, gate.ctx.organizationId);
+
+    await recordAudit(pool, gate.ctx, req, {
+      source: '<<feature>>-api',
+      action: AUDIT_ACTION.<<VERB_DELETE>>,
+      entityType: AUDIT_ENTITY.<<TYPE>>,
+      entityId: id,
+      before: { ...before },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error in DELETE /api/<<segments>>/[id]:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Failed' }, { status: 500 });
+  }
+}

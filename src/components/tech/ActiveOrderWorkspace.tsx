@@ -13,6 +13,8 @@ import {
 import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
+import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
+import { cn } from '@/utils/_cn';
 import { isElectron } from '@/utils/isElectron';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { UpNextActionDock } from './UpNextActionDock';
@@ -110,7 +112,12 @@ export function ActiveOrderWorkspace({
     >
       {/* Sticky header — identifies the order, gives a way back to history. */}
       <PaneHeader
-        className="border-gray-200 bg-white"
+        className={cn(
+          'bg-white',
+          isPreview
+            ? cn('border-b-0', receivingHeaderHairlineClass)
+            : 'border-gray-200',
+        )}
         rowClassName="px-4"
         leftSlot={
           <>

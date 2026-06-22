@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { motionBezier } from '@/design-system/foundations/motion-framer';
 
 /**
  * Full-screen sign-in splash. Shown by {@link BootGate} from first paint after
@@ -28,7 +29,7 @@ export function BootSplash({ label = 'Loading your workspace' }: { label?: strin
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.4, ease: motionBezier.easeOut }}
         className="relative flex flex-col items-center gap-6"
         role="status"
         aria-live="polite"

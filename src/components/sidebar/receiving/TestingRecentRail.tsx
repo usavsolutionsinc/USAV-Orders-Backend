@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import { workflowStageDot } from '@/lib/receiving/workflow-stages';
+import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 
 /**
@@ -15,10 +15,26 @@ export function getTestingStatusDot(row: ReceivingLineRow): string {
   return workflowStageDot(row.workflow_status);
 }
 
+function getTestingStatusDotLabel(row: ReceivingLineRow): string {
+  const stage = workflowStage(row.workflow_status);
+  return `${stage.label} — ${stage.description}`;
+}
+
 /** Full invalidation triggers — module-scope so the shell's refresh-listener
  * effect keeps a stable identity and subscribes once (a fresh array literal each
  * render made it re-subscribe, risking a dropped event mid-swap). */
-const TESTING_REFRESH_EVENTS = ['receiving-entry-added', 'usav-refresh-data', 'testing-result-recorded'];
+// Full-invalidation triggers for the testing TO-DO feed. A unit ENTERS the
+// needs-test set on receive (`receiving-entry-added` from a tracking scan,
+// `receiving-serial-scanned` when a serial is captured during unbox) and LEAVES
+// it on a recorded verdict (`testing-result-recorded`) — all of which add/remove
+// rows, so the feed must refetch rather than merely patch in place. The receive
+// events are exactly how acceptance B (live updates as units are received) is met.
+const TESTING_REFRESH_EVENTS = [
+  'receiving-entry-added',
+  'receiving-serial-scanned',
+  'usav-refresh-data',
+  'testing-result-recorded',
+];
 
 /**
  * Computes "Tested" quantity for a line in the Testing feed. Prefers the real
@@ -72,21 +88,20 @@ export function TestingRecentRail({
   // ['receiving-lines-table'] prefix so broad invalidations refresh it. The
   // tester segment keeps each staff member's feed in its own cache slot.
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', 'testing', String(testerId ?? 'all')] as const,
+    () => ['receiving-lines-table', 'rail', 'needs-test', String(testerId ?? 'all')] as const,
     [testerId],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    if (hasTester) {
-      // Recently-tested feed scoped to this staff member (testing_results).
-      params.set('view', 'testing');
-      params.set('tester', String(testerId));
-    } else {
-      // No identity yet — fall back to the shared touched-activity feed.
-      params.set('view', 'activity');
-    }
+    // P1-PCK-03: the testing to-do DEFAULTS to recently-received units awaiting
+    // test — newest-received first (server orders view=needs-test by unbox/
+    // receive time DESC), so freshly-unboxed units surface at the top for
+    // real-time pickup. When a tech identity is known we scope to that tech's
+    // own assignments; otherwise the all-staff needs-test queue.
+    params.set('view', 'needs-test');
+    if (hasTester) params.set('tester', String(testerId));
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
     return res.json();
@@ -102,9 +117,10 @@ export function TestingRecentRail({
       updateEvent="receiving-line-updated"
       refreshEvents={TESTING_REFRESH_EVENTS}
       navigateEvent="testing-navigate-rail"
-      eyebrowTitle="Recent"
-      eyebrowSuffix={hasTester ? 'You Tested' : 'Testing Feed'}
+      eyebrowTitle="To Test"
+      eyebrowSuffix={hasTester ? 'Your Queue' : 'Newest Received'}
       getStatusDot={getTestingStatusDot}
+      getStatusDotLabel={getTestingStatusDotLabel}
       renderQuantity={(row) => {
         const tested = getTestedQty(row);
         const received = row.quantity_received;

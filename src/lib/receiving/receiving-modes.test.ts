@@ -189,6 +189,7 @@ test('parseReceivingView accepts the full server set and rejects junk', () => {
   // The two views that previously existed only server-side must round-trip.
   assert.equal(parseReceivingView('activity'), 'activity');
   assert.equal(parseReceivingView('testing'), 'testing');
+  assert.equal(parseReceivingView('needs-test'), 'needs-test'); // testing to-do (P1-PCK-03)
   assert.equal(parseReceivingView('ALL'), 'all'); // case-insensitive
   assert.equal(parseReceivingView('bogus'), null);
   assert.equal(parseReceivingView(''), null);

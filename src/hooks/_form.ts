@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalStorage } from './_storage';
-import { retry, safeAwait } from '@/utils';
+import { retry, safeAwait } from '@/utils/_async';
 
 // ─── useAutoSaveForm ──────────────────────────────────────────────────────────
 

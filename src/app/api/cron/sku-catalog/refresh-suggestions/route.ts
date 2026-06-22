@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthorizedCronRequest } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import { refreshAllSuggestions } from '@/lib/neon/pairing-queries';
 
 export const dynamic = 'force-dynamic';
@@ -19,11 +20,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const result = await withCronRun('sku_catalog.refresh_suggestions', async () => {
-      const startedAt = Date.now();
-      const r = await refreshAllSuggestions();
-      return { ...r, durationMs: Date.now() - startedAt };
-    });
+    const locked = await withCronLock('sku_catalog.refresh_suggestions', () =>
+      withCronRun('sku_catalog.refresh_suggestions', async () => {
+        const startedAt = Date.now();
+        const r = await refreshAllSuggestions();
+        return { ...r, durationMs: Date.now() - startedAt };
+      }),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ success: true, skipped: 'locked' });
+    }
+    const result = locked.result!;
     return NextResponse.json({ success: true, ...result });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'refresh-suggestions failed';

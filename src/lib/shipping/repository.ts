@@ -33,9 +33,38 @@ export async function upsertShipment(params: {
   sourceSystem?: string | null;
   carrierAccountRef?: string | null;
 }, orgId?: OrgId): Promise<ShipmentRow> {
-  // shipping_tracking_numbers has no organization_id column (NEEDS-COL): when an
-  // orgId is threaded we GUC-wrap via withTenantTransaction; the SQL is identical
-  // (no stamp/predicate possible yet). Omitted → byte-identical raw-pool path.
+  // shipping_tracking_numbers.organization_id exists (2026-06-14, NULLABLE) but is
+  // a GLOBAL natural key on tracking_number_normalized — one row per physical
+  // package that orders/receiving/fba all link to. We do NOT re-scope the unique
+  // per-org (that needs a product decision + every session-less writer threaded;
+  // see 2026-06-14_org_id_phase_b_needs_col_2.sql). What we CAN do safely, and
+  // what unblocks an eventual per-org re-scope + FORCE RLS, is stamp the column:
+  // when orgId is threaded we set it explicitly on INSERT and HEAL it on conflict
+  // (COALESCE keeps a non-null existing value, fills a NULL one). Omitted orgId →
+  // byte-identical raw-pool path so un-migrated session-less callers are unchanged.
+  if (orgId) {
+    const sql = `INSERT INTO shipping_tracking_numbers
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system, carrier_account_ref, next_check_at, organization_id)
+         VALUES ($1, $2, $3, $4, $5, now(), $6::uuid)
+         ON CONFLICT (tracking_number_normalized) DO UPDATE
+           SET carrier_account_ref = EXCLUDED.carrier_account_ref,
+               source_system       = COALESCE(EXCLUDED.source_system, shipping_tracking_numbers.source_system),
+               organization_id     = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
+               updated_at          = now()
+         RETURNING *`;
+    const scopedArgs = [
+      params.trackingNumberRaw,
+      params.trackingNumberNormalized,
+      params.carrier,
+      params.sourceSystem ?? null,
+      params.carrierAccountRef ?? null,
+      orgId,
+    ];
+    return withTenantTransaction(orgId, async (client) => {
+      const result = await client.query<ShipmentRow>(sql, scopedArgs);
+      return result.rows[0];
+    });
+  }
   const sql = `INSERT INTO shipping_tracking_numbers
          (tracking_number_raw, tracking_number_normalized, carrier, source_system, carrier_account_ref, next_check_at)
        VALUES ($1, $2, $3, $4, $5, now())
@@ -51,12 +80,6 @@ export async function upsertShipment(params: {
     params.sourceSystem ?? null,
     params.carrierAccountRef ?? null,
   ];
-  if (orgId) {
-    return withTenantTransaction(orgId, async (client) => {
-      const result = await client.query<ShipmentRow>(sql, args);
-      return result.rows[0];
-    });
-  }
   const client = await pool.connect();
   try {
     const result = await client.query<ShipmentRow>(sql, args);

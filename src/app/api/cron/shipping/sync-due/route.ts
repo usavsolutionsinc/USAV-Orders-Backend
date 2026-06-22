@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isVercelCronOrigin } from '@/lib/cron/auth';
 import { withCronRun } from '@/lib/cron/run-log';
+import { withCronLock } from '@/lib/cron/lock';
 import {
   runShippingSyncDueJob,
   normalizeShippingSyncDuePayload,
@@ -57,7 +58,13 @@ export async function GET(req: NextRequest) {
 
   const startedAt = Date.now();
   try {
-    const result = await withCronRun('shipping.sync_due', () => runShippingSyncDueJob(payload));
+    const locked = await withCronLock('shipping.sync_due', () =>
+      withCronRun('shipping.sync_due', () => runShippingSyncDueJob(payload)),
+    );
+    if (!locked.ran) {
+      return NextResponse.json({ ok: true, skipped: 'locked' });
+    }
+    const result = locked.result!;
 
     // One structured log line — Vercel/Datadog scrapers key off the prefix
     // to plot run cadence + failure rate. Keep field names stable.

@@ -27,6 +27,8 @@ import { audit } from './audit';
 import pool from '@/lib/db';
 import { recordAudit } from '@/lib/audit-logs';
 import { isTrialBlocked } from '@/lib/billing/trial-gate';
+import { isFeatureGated } from '@/lib/billing/feature-gate';
+import type { EntitlementFeature } from '@/lib/billing/feature-gate';
 
 /**
  * Auth context handed to wrapped route handlers.
@@ -35,32 +37,8 @@ import { isTrialBlocked } from '@/lib/billing/trial-gate';
  * is non-null. `AnonymousAuthContext` is what `allowAnonymous: true` routes
  * see; they must null-check `user` themselves.
  */
-export interface AuthContext {
-  user: CurrentUser;
-  session: CurrentUser['session'];
-  staffId: number;
-  /** Active tenant id — every business query should be scoped by this. */
-  organizationId: string;
-  role: CurrentUser['role'];
-  permissions: CurrentUser['permissions'];
-  /**
-   * Call this when the handler writes its own rich `audit_logs` row (with
-   * before/after diffs). The wrapper-level `audit:` floor will skip so we
-   * don't double-write. No-op when the wrapper has no `audit:` configured.
-   */
-  markAuditWritten: () => void;
-}
-
-export interface AnonymousAuthContext {
-  user: CurrentUser | null;
-  session: CurrentUser['session'] | null;
-  staffId: number | null;
-  /** Null when truly anonymous; otherwise mirrors authenticated context. */
-  organizationId: string | null;
-  role: CurrentUser['role'] | null;
-  permissions: CurrentUser['permissions'];
-  markAuditWritten: () => void;
-}
+import type { AuthContext, AnonymousAuthContext } from './auth-context';
+export type { AuthContext, AnonymousAuthContext } from './auth-context';
 
 /**
  * Audit-floor config. When set on a route, the wrapper writes one
@@ -93,6 +71,19 @@ export interface WithAuthOpts {
   allowAnonymous?: boolean;
   /** Write a baseline `audit_logs` row on 2xx. Handler can opt out via `ctx.markAuditWritten()`. */
   audit?: WithAuthAuditOpts;
+  /**
+   * Plan-entitlement gate. When set, the wrapper checks whether the tenant's
+   * plan includes `feature` and returns 403 (FEATURE_GATED + upgrade prompt)
+   * instead of running the handler.
+   *
+   * This is layered ON TOP of `permission` (RBAC) — a route can require both.
+   * It is PERMISSIVE BY DEFAULT: the only wired feature (`studio`) is dormant
+   * until its enforcement flag is set and the dogfood/internal org + a per-org
+   * override flag are always exempt, so adding `feature` here changes nothing
+   * until enforcement is explicitly turned on. Routes without `feature` are
+   * unaffected. See src/lib/billing/feature-gate.ts.
+   */
+  feature?: EntitlementFeature;
 }
 
 type ApiHandler = (req: NextRequest, ctx: AuthContext) => Promise<Response> | Response;
@@ -247,6 +238,19 @@ export function withAuth(
       return NextResponse.json(
         { error: 'TRIAL_EXPIRED', hint: 'Subscribe at /settings/billing to continue.' },
         { status: 402 },
+      );
+    }
+
+    // Plan-entitlement gate — OFF by default. When a route declares `feature`
+    // and that feature's enforcement is on (and the org isn't exempt / lacks a
+    // force-grant override), block with a 403 upgrade prompt instead of running
+    // the handler. No DB read when enforcement is off (isFeatureGated → the
+    // feature's gate short-circuits first), so wired-but-dormant routes pay
+    // nothing and behave exactly as before.
+    if (opts.feature && (await isFeatureGated(opts.feature, user.organizationId))) {
+      return NextResponse.json(
+        { ok: false, error: 'FEATURE_GATED', feature: opts.feature, upgrade: true },
+        { status: 403 },
       );
     }
 

@@ -27,6 +27,7 @@
 import pool from '@/lib/db';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { withZohoCredential } from '@/lib/zoho/with-zoho-credential';
 import { zohoClient, ZohoInventoryClient } from '@/lib/zoho/ZohoInventoryClient';
 import { salesOrderRepository } from '@/lib/repositories/salesOrderRepository';
 import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService';
@@ -548,6 +549,8 @@ export interface SyncRunOptions {
   config?: Partial<FulfillmentSyncConfig>;
   /** Inject deps for testing; production callers omit this. */
   deps?: Partial<FulfillmentDeps>;
+  /** Tenant to push for. Crons fan out per org; defaults to transitional USAV. */
+  orgId?: string;
 }
 
 export interface SyncRunReport {
@@ -574,7 +577,7 @@ export async function syncShippedOrdersToZoho(opts: SyncRunOptions = {}): Promis
   const runStartedAt = new Date().toISOString();
   const config = getFulfillmentSyncConfig(opts.config);
   const dryRun = opts.dryRun ?? config.dryRunDefault;
-  const orgId = opts.deps?.orgId ?? transitionalUsavOrgId();
+  const orgId = opts.orgId ?? opts.deps?.orgId ?? transitionalUsavOrgId();
 
   const deps: FulfillmentDeps = {
     client: opts.deps?.client ?? zohoClient,
@@ -590,12 +593,20 @@ export async function syncShippedOrdersToZoho(opts: SyncRunOptions = {}): Promis
     limit: opts.limit ?? config.batchSize,
     includeFba: config.includeFba,
     referenceNumber: opts.referenceNumber,
+    orgId,
   });
 
-  const results: OrderSyncResult[] = [];
-  for (const order of orders) {
-    results.push(await syncOneOrder(order, deps, { dryRun, force: opts.force }));
-  }
+  // Bind the whole push to this org's Zoho credential (per-org creds via
+  // withZohoOrg) + the allowlisted outbound op + usage audit. All client calls
+  // inside syncOneOrder (sales order / package / shipment / invoice) run as this
+  // tenant. A dry run still passes through so the binding is identical.
+  const results: OrderSyncResult[] = await withZohoCredential(orgId, 'salesorders.write', async () => {
+    const out: OrderSyncResult[] = [];
+    for (const order of orders) {
+      out.push(await syncOneOrder(order, deps, { dryRun, force: opts.force }));
+    }
+    return out;
+  });
 
   const errors = results.filter((r) => r.status === 'error').map((r) => `${r.referenceNumber}: ${r.error}`);
 

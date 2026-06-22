@@ -4,6 +4,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { velocityTierMeta } from '@/lib/velocity-tier-tone';
 
 interface VelocityRow {
   sku: string;
@@ -30,13 +31,6 @@ async function safeJson<T>(url: string): Promise<T | null> {
     return null;
   }
 }
-
-const TIER_TONE: Record<string, { bg: string; ring: string; label: string }> = {
-  A: { bg: 'bg-emerald-500', ring: 'bg-emerald-50',  label: 'Fast (A)' },
-  B: { bg: 'bg-amber-500',   ring: 'bg-amber-50',    label: 'Medium (B)' },
-  C: { bg: 'bg-orange-500',  ring: 'bg-orange-50',   label: 'Slow (C)' },
-  D: { bg: 'bg-rose-500',    ring: 'bg-rose-50',     label: 'Dead (D)' },
-};
 
 function TierDonut({ counts }: { counts: Record<string, number> }) {
   const total = Object.values(counts).reduce((s, x) => s + x, 0) || 1;
@@ -138,7 +132,7 @@ export function VelocityAndDeadStock() {
           <TierDonut counts={tierCounts} />
           <div className="grid grid-cols-2 gap-2 mt-5">
             {(['A', 'B', 'C', 'D'] as const).map((t) => {
-              const tone = TIER_TONE[t];
+              const tone = velocityTierMeta(t);
               return (
                 <div key={t} className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${tone.bg}`} />
@@ -180,7 +174,7 @@ export function VelocityAndDeadStock() {
                     <p className="text-[10px] font-medium text-[#A89F91] font-mono truncate">{row.sku}</p>
                   </div>
                   {row.velocity_tier && (
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${TIER_TONE[row.velocity_tier].ring} ${
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${velocityTierMeta(row.velocity_tier).ring} ${
                       row.velocity_tier === 'A' ? 'text-emerald-700' :
                       row.velocity_tier === 'B' ? 'text-amber-700' :
                       row.velocity_tier === 'C' ? 'text-orange-700' : 'text-rose-700'

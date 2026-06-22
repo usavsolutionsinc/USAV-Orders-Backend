@@ -1,5 +1,7 @@
 'use client';
 
+import { conditionTextColor } from '@/lib/conditions';
+
 export interface ConditionTextProps {
   condition: string | null | undefined;
   quantity?: number;
@@ -8,17 +10,11 @@ export interface ConditionTextProps {
 }
 
 /**
- * Returns the Tailwind text color class for an item condition.
- * - "new" → yellow-500
- * - "parts" → amber-800
- * - default (used) → black
+ * Tailwind text color class for an item condition (new→yellow-500,
+ * parts→amber-800, else→black). Thin re-export of the SoT in conditions.ts;
+ * kept here for the established `@/design-system/primitives` import path.
  */
-export function getConditionColor(condition: string | null | undefined): string {
-  const c = (condition || '').toLowerCase().trim();
-  if (c.includes('new')) return 'text-yellow-500';
-  if (c.includes('part')) return 'text-amber-800';
-  return 'text-black';
-}
+export const getConditionColor = conditionTextColor;
 
 /**
  * Formats a raw condition string for display.

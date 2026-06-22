@@ -1,7 +1,8 @@
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import type { PanelActionBarConfig } from '@/components/shipped/details-panel/PanelActionBar';
-import type { ShippedActiveSection } from '../ShippedDetailsPanelContent';
-import type { ShippedActiveInput } from '../ShippedDetailsPanel';
+// These two unions live here (the leaf) so the panels can import them downward.
+export type ShippedActiveSection = 'return' | 'shipping' | 'product' | 'timeline' | 'customer';
+export type ShippedActiveInput = 'none' | 'out_of_stock' | 'notes';
 
 export interface DetailsStackDurationData {
   boxingDuration?: string;

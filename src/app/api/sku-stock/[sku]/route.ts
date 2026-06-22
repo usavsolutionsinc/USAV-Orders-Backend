@@ -260,6 +260,11 @@ export async function PATCH(
     const parsed = parseBody(SkuStockPatchBody, body);
     if (parsed instanceof NextResponse) return parsed;
 
+    // Resolve the actor context up front — the idempotency cache is org-scoped,
+    // and legacy QR scans can predate sign-in (null org) so fall back to USAV.
+    const ctx = await resolveCtx(request);
+    const idempotencyOrgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
+
     // ─── Idempotency: replay cached response for the same key ────────────────
     const idempotencyKey = readIdempotencyKey(
       request,
@@ -267,7 +272,7 @@ export async function PATCH(
     );
     const idempotencyStaffId = Number(body?.staffId);
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(pool, idempotencyKey, ROUTE_SKU_STOCK_PATCH);
+      const cached = await getApiIdempotencyResponse(pool, idempotencyOrgId, idempotencyKey, ROUTE_SKU_STOCK_PATCH);
       if (cached) {
         return NextResponse.json(cached.response_body, { status: cached.status_code });
       }
@@ -275,6 +280,7 @@ export async function PATCH(
     const respond = async (payload: Record<string, unknown>, status = 200) => {
       if (idempotencyKey && status < 500) {
         await saveApiIdempotencyResponse(pool, {
+          orgId: idempotencyOrgId,
           idempotencyKey,
           route: ROUTE_SKU_STOCK_PATCH,
           staffId:
@@ -303,7 +309,6 @@ export async function PATCH(
       clearOverride?: boolean;
     };
 
-    const ctx = await resolveCtx(request);
     const effectiveStaffId = ctx.staffId ?? (staffId && staffId > 0 ? staffId : null);
 
     // Per-action permission gate against the session's verified permission set.
