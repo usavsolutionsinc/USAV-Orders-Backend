@@ -63,11 +63,9 @@ export function LineEditPanel({
           zohoSyncing={c.zohoSyncing}
           busy={c.saving || c.platformSaving}
           copyingAll={c.copyingAll}
-          phoneSharing={c.phoneSharing}
           handlers={{
             refresh: () => void c.syncWithZoho(),
             share: () => void c.handleShare(),
-            phone: () => void c.handleSharePhone(),
             audit: () => c.setAuditOpen(true),
             copy: () => void c.handleCopyAll(),
           }}
