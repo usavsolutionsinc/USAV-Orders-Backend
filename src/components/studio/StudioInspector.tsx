@@ -10,6 +10,7 @@
 
 import { STATIONS } from '@/components/admin/workflow/operations-catalog';
 import { workflowStage } from '@/lib/receiving/workflow-stages';
+import { StudioRecoveryPanel } from './StudioRecoveryPanel';
 import {
   circledNumber,
   oldestAgeHours,
@@ -74,6 +75,7 @@ export function StudioInspector({
             {nodeCount} nodes · {edgeCount} edges
           </p>
         </section>
+        <StudioRecoveryPanel definitionId={definition.id} />
         <PaneHint text="Select a node on the canvas to inspect its states, ports and config." />
       </div>
     );
