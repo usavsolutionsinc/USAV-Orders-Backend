@@ -125,6 +125,24 @@ test('applyTransition: a genuine guard rejection does NOT tap and surfaces 409',
   assert.equal(cap.taps.length, 0, 'no engine tap when the domain state did not change');
 });
 
+test('applyTransition: with expectedFrom, a 409 (even from===to) is a rejection, not idempotent', async () => {
+  // transition() runs the expectedFrom drift check BEFORE the guard identity
+  // check, so a caller using optimistic concurrency wants any 409 to fail —
+  // even the edge where the drifted state happens to equal the target.
+  const { deps, cap } = fakes({
+    ok: false,
+    status: 409,
+    from: 'TESTED',
+    error: 'expected from=IN_TEST but unit is in TESTED',
+  });
+  const out = await applyTransition({ ...baseArgs, expectedFrom: 'IN_TEST' }, deps);
+
+  assert.equal(out.ok, false);
+  if (!out.ok) assert.equal(out.status, 409);
+  assert.equal(cap.events.length, 0, 'must NOT record an idempotent event on a drift rejection');
+  assert.equal(cap.taps.length, 0, 'must NOT tap on a drift rejection');
+});
+
 test('applyTransition: a missing unit surfaces 404 and does not tap', async () => {
   const { deps, cap } = fakes({ ok: false, status: 404, error: 'serial_unit 42 not found' });
   const out = await applyTransition(baseArgs, deps);

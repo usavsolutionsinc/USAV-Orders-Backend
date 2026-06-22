@@ -130,10 +130,13 @@ export async function applyTransition(
   }
 
   // 2. Identity (unit already at `to`) → idempotent re-entry. transition()
-  //    classifies any from===to as an 'identity transition' (409) before the
-  //    allow-list check, so from===to uniquely identifies this case. Record the
-  //    event (client_event_id de-dupes a true retry) and still tap.
-  if (result.status === 409 && result.from === args.to) {
+  //    classifies from===to as an 'identity transition' (409). We only treat it
+  //    as a re-entry when the caller did NOT request optimistic concurrency:
+  //    transition() runs the expectedFrom drift check BEFORE the guard's identity
+  //    check, so with expectedFrom a 409 (even one where from===to) is a drift
+  //    rejection the caller asked to fail on, not an idempotent re-entry. Record
+  //    the event (client_event_id de-dupes a true retry) and still tap.
+  if (args.expectedFrom === undefined && result.status === 409 && result.from === args.to) {
     const event = await deps.recordEvent(
       {
         event_type: args.eventType,
