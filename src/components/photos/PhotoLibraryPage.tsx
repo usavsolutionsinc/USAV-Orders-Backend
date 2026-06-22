@@ -201,6 +201,11 @@ export function PhotoLibraryPage() {
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
+        {!query.isLoading && pagePhotos.length > 0 && !hasMore && page >= totalPages ? (
+          <p className="mt-6 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+            {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
+          </p>
+        ) : null}
         {selectMode ? (
           <ContextualSelectionBar
             scope={PHOTO_LIBRARY_SELECTION_SCOPE}

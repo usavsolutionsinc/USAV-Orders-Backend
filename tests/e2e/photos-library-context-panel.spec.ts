@@ -72,4 +72,22 @@ test.describe('Photo library · viewer context panel', () => {
       await expect(page.getByText(/photos? in view/i)).toBeVisible();
     }
   });
+
+  test('grid views render day bands and the masonry view without crashing', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    // Small grid groups photos under the shared sticky day band (data-date).
+    await page.goto('/ops/photos?view=grid-sm');
+    await expect(page.getByText(/photos? in view/i)).toBeVisible();
+    if (await page.getByTestId('photo-tile').count()) {
+      await expect(page.locator('[data-date]').first()).toBeVisible();
+    }
+
+    // Large grid switches to the masonry layout; must render error-free.
+    await page.goto('/ops/photos?view=grid-lg');
+    await expect(page.getByText(/photos? in view/i)).toBeVisible();
+
+    expect(pageErrors, `Uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);
+  });
 });

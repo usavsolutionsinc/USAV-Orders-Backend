@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import type { LibraryPhoto } from './photo-library-types';
-import { Check, Folder, Layers } from '@/components/Icons';
-import { formatDateTimePST } from '@/utils/date';
+import { Check, Folder, Image as ImageIcon, Layers } from '@/components/Icons';
+import { formatDateTimePST, toPSTDateKey } from '@/utils/date';
+import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import type { PhotoLibrarySourceScope, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
+import { PhotoThumb } from './PhotoThumb';
 import { useZendeskTicketSubject } from '@/hooks/useZendeskTicketSubject';
 import { cn } from '@/utils/_cn';
 
@@ -121,6 +123,63 @@ function SelectionMark({
   );
 }
 
+interface DayGroup {
+  /** PST day key (YYYY-MM-DD) — fed to the shared DateGroupHeader band. */
+  date: string;
+  photos: LibraryPhoto[];
+}
+
+/**
+ * Bucket photos into day groups, preserving the incoming sort order so the
+ * library reads newest-day-first (or oldest-first under the oldest sort). Each
+ * group renders under the shared sticky {@link DateGroupHeader} band — the same
+ * day separator the week tables use, so the library feels native, not bespoke.
+ */
+function groupPhotosByDay(photos: LibraryPhoto[]): DayGroup[] {
+  const order: string[] = [];
+  const map = new Map<string, DayGroup>();
+  for (const photo of photos) {
+    const key = toPSTDateKey(photo.createdAt) || 'unknown';
+    let group = map.get(key);
+    if (!group) {
+      group = { date: key, photos: [] };
+      map.set(key, group);
+      order.push(key);
+    }
+    group.photos.push(photo);
+  }
+  return order.map((key) => map.get(key)!);
+}
+
+/** Loading shimmer — a grid of placeholder tiles matching the small-grid rhythm. */
+function PhotoGridSkeleton() {
+  return (
+    <div
+      className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8"
+      aria-busy="true"
+      aria-label="Loading photos"
+    >
+      {Array.from({ length: 24 }).map((_, i) => (
+        <div key={i} className="aspect-square animate-pulse rounded-lg bg-gray-100" />
+      ))}
+    </div>
+  );
+}
+
+/** Teaching empty state — explains the filter, doesn't just say "nothing here". */
+function PhotoEmptyState() {
+  return (
+    <div className="mx-auto mt-6 flex max-w-sm flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center">
+      <ImageIcon className="h-6 w-6 text-gray-400" />
+      <p className="text-sm font-semibold text-gray-900">No photos in this view</p>
+      <p className="text-xs leading-relaxed text-gray-500">
+        Unboxing, packing, and claim photos land here as staff capture them. Widen the
+        source or date range in the sidebar to see more.
+      </p>
+    </div>
+  );
+}
+
 export function PhotoLibraryGrid({
   photos,
   view,
@@ -156,13 +215,19 @@ export function PhotoLibraryGrid({
     ) : null;
 
   if (isLoading) {
-    return <p className="text-sm text-muted-foreground">Loading photos…</p>;
+    return <PhotoGridSkeleton />;
   }
   if (error) {
-    return <p className="text-sm text-destructive">{error}</p>;
+    return (
+      <div className="mx-auto mt-6 flex max-w-sm flex-col items-center gap-2 rounded-xl border border-dashed border-rose-200 bg-rose-50 px-6 py-10 text-center">
+        <ImageIcon className="h-6 w-6 text-rose-400" />
+        <p className="text-sm font-semibold text-rose-900">Couldn’t load photos</p>
+        <p className="text-xs leading-relaxed text-rose-600">{error}</p>
+      </div>
+    );
   }
   if (photos.length === 0) {
-    return <p className="text-sm text-muted-foreground">No photos match these filters.</p>;
+    return <PhotoEmptyState />;
   }
 
   if (view === 'list') {
@@ -175,15 +240,9 @@ export function PhotoLibraryGrid({
           const fileName = photoFileName(photo);
           const rowBody = (
             <>
-              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
+              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
                 {selectMode ? <SelectionMark checked={isSelected} /> : null}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.thumbUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
+                <PhotoThumb src={photo.thumbUrl} alt="" damage={Boolean(photo.damageDetected)} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
@@ -287,28 +346,41 @@ export function PhotoLibraryGrid({
     );
   }
 
-  const gridClass =
-    view === 'grid-sm'
-      ? 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8'
-      : 'grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6';
+  // grid-sm: dense square contact sheet (no per-tile labels — the day band
+  // already names the group). grid-lg: editorial masonry of natural-aspect,
+  // labeled cards. Both bucket under the shared sticky day band.
+  const isMasonry = view === 'grid-lg';
+  const containerClass = isMasonry
+    ? 'columns-2 gap-3 sm:columns-3 md:columns-4 xl:columns-6'
+    : 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8';
+  const days = groupPhotosByDay(photos);
 
   return (
     <>
-    <div className={gridClass}>
-      {photos.map((photo) => (
-        <PhotoCard
-          key={photo.id}
-          photo={photo}
-          imageUrl={view === 'grid-sm' || view === 'grid-lg' ? photo.displayUrl : photo.thumbUrl}
-          showLabel
-          selectMode={selectMode}
-          selected={selected.has(photo.id)}
-          onToggleSelect={onToggleSelect}
-          onOpen={() => openAt(photo.id)}
-        />
-      ))}
-    </div>
-    {lightbox}
+      <div className="space-y-5">
+        {days.map((day) => (
+          <section key={day.date}>
+            <DateGroupHeader date={day.date} total={day.photos.length} className="mb-3" />
+            <div className={containerClass}>
+              {day.photos.map((photo) => (
+                <PhotoCard
+                  key={photo.id}
+                  photo={photo}
+                  imageUrl={photo.thumbUrl}
+                  ratio={isMasonry ? 'natural' : 'square'}
+                  masonry={isMasonry}
+                  showLabel={isMasonry}
+                  selectMode={selectMode}
+                  selected={selected.has(photo.id)}
+                  onToggleSelect={onToggleSelect}
+                  onOpen={() => openAt(photo.id)}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      {lightbox}
     </>
   );
 }
@@ -317,6 +389,8 @@ export function PhotoLibraryGrid({
 function PhotoCard({
   photo,
   imageUrl,
+  ratio = 'square',
+  masonry = false,
   showLabel,
   selectMode,
   selected,
@@ -325,6 +399,9 @@ function PhotoCard({
 }: {
   photo: LibraryPhoto;
   imageUrl: string;
+  ratio?: 'square' | 'natural';
+  /** Render as a CSS-columns masonry child (avoid mid-tile column breaks). */
+  masonry?: boolean;
   showLabel: boolean;
   selectMode: boolean;
   selected: boolean;
@@ -334,14 +411,13 @@ function PhotoCard({
 }) {
   const cardBody = (
     <>
-      <div className="relative aspect-square w-full overflow-hidden bg-muted">
+      <div className="relative">
         {selectMode ? <SelectionMark checked={selected} /> : null}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <PhotoThumb
           src={imageUrl}
           alt={photo.poRef ? `PO ${photo.poRef}` : `Photo ${photo.id}`}
-          className="h-full w-full object-cover"
-          loading="lazy"
+          ratio={ratio}
+          damage={Boolean(photo.damageDetected)}
         />
       </div>
       {showLabel ? (
@@ -360,7 +436,9 @@ function PhotoCard({
     <div
       className={cn(
         'group overflow-hidden rounded-lg border bg-white text-left transition-colors',
+        masonry && 'mb-3 block w-full break-inside-avoid',
         selected ? 'border-primary ring-2 ring-primary' : 'border-border',
+        !selectMode && 'hover:border-gray-300',
         selectMode && 'cursor-pointer hover:border-primary/70 hover:bg-slate-50',
       )}
     >
@@ -516,9 +594,8 @@ function FolderTile({
       <div className="relative h-40 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
         <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
-        <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200 bg-muted">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={folder.cover.thumbUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
+          <PhotoThumb src={folder.cover.thumbUrl} alt="" ratio="fill" />
           <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
             {count}
           </span>
