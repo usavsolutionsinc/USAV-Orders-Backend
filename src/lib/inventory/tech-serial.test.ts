@@ -92,7 +92,9 @@ function read(rel: string): string {
 const CALL_SITES = [
   '../receiving/serial-attach.ts',
   '../receiving/receive-line.ts',
-  '../../app/api/serial-units/[id]/test/route.ts',
+  // The per-unit test verdict's TSN write lives in the extracted lib
+  // (recordTestVerdict), not the thin HTTP route which only delegates to it.
+  '../tech/recordTestVerdict.ts',
   '../tech/insertTechSerialForTracking.ts',
   '../tech/insertTechSerialForSalContext.ts',
   '../../app/api/post-multi-sn/route.ts',
