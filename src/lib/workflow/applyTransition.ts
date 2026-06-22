@@ -48,8 +48,11 @@ export interface ApplyTransitionArgs {
   to: SerialState;
   /** inventory_events classifier for this transition. */
   eventType: InventoryEventType;
-  /** Domain event the engine's current node is gated on (drives graph routing). */
-  tapEvent: WorkflowTapEvent;
+  /**
+   * Domain event the engine's current node is gated on (drives graph routing).
+   * Required to tap; omit it together with skipTap for write-only call sites.
+   */
+  tapEvent?: WorkflowTapEvent;
   /** Extra payload merged into the tapped node's ctx.input (e.g. { verdict }). */
   tapInput?: Record<string, unknown>;
 
@@ -171,9 +174,9 @@ export async function applyTransition(
   return { ok: false, status: result.status, from: result.from, error: result.error };
 }
 
-/** Fire-and-forget engine observe (never throws — see tap.ts). No-op when skipTap. */
+/** Fire-and-forget engine observe (never throws — see tap.ts). No-op when skipTap / no tapEvent. */
 async function tapAfter(args: ApplyTransitionArgs, deps: ApplyTransitionDeps): Promise<void> {
-  if (args.skipTap) return;
+  if (args.skipTap || !args.tapEvent) return;
   await deps.tap({
     serialUnitId: args.unitId,
     event: args.tapEvent,

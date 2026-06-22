@@ -7,6 +7,9 @@ import {
   type InventoryEventType,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { applyTransition } from '@/lib/workflow/applyTransition';
+import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
+import type { SerialState } from '@/lib/inventory/state-machine';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 const ALLOWED_EVENT_TYPES: ReadonlySet<InventoryEventType> = new Set([
@@ -91,7 +94,12 @@ export async function POST(
         ? (stationRaw as InventoryEventStation)
         : 'MOBILE';
 
-    // Load the line to capture prev state + sku + receiving_id.
+    // Tenant scope. `pool` is the BYPASSRLS owner connection, so every read/write
+    // below carries an explicit organization_id predicate — a cross-tenant id
+    // reads as not-found rather than mutating another org's row.
+    const orgId = ctx.organizationId;
+
+    // Load the line to capture prev state + sku + receiving_id (org-scoped).
     const lineRes = await pool.query<{
       id: number;
       receiving_id: number | null;
@@ -99,8 +107,8 @@ export async function POST(
       workflow_status: string | null;
     }>(
       `SELECT id, receiving_id, sku, workflow_status::text AS workflow_status
-       FROM receiving_lines WHERE id = $1 LIMIT 1`,
-      [lineId],
+       FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [lineId, orgId],
     );
     const line = lineRes.rows[0];
     if (!line) {
@@ -110,12 +118,13 @@ export async function POST(
       );
     }
 
-    // Capture prior status of the serial (if any) for the event diff.
+    // Capture prior status of the serial (if any) for the event diff (org-scoped).
     let priorSerialStatus: string | null = null;
     if (serialUnitId) {
       const sr = await pool.query<{ current_status: string }>(
-        `SELECT current_status::text AS current_status FROM serial_units WHERE id = $1 LIMIT 1`,
-        [serialUnitId],
+        `SELECT current_status::text AS current_status
+           FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [serialUnitId, orgId],
       );
       priorSerialStatus = sr.rows[0]?.current_status ?? null;
     }
@@ -123,7 +132,7 @@ export async function POST(
     const nextWorkflow = WORKFLOW_FOR_EVENT[eventType] ?? null;
     const nextSerialStatus = SERIAL_STATUS_FOR_EVENT[eventType] ?? null;
 
-    // ─── Update line metadata + workflow_status ─────────────────────────────
+    // ─── Update line metadata + workflow_status (org-scoped) ────────────────
     if (nextWorkflow || qaStatus || dispositionCode || conditionGrade) {
       await pool.query(
         `UPDATE receiving_lines
@@ -133,42 +142,95 @@ export async function POST(
              condition_grade  = COALESCE($5, condition_grade),
              notes            = COALESCE($6, notes),
              updated_at       = NOW()
-         WHERE id = $1`,
-        [lineId, nextWorkflow, qaStatus, dispositionCode, conditionGrade, notes],
+         WHERE id = $1 AND organization_id = $7`,
+        [lineId, nextWorkflow, qaStatus, dispositionCode, conditionGrade, notes, orgId],
       );
     }
 
-    // ─── Update serial_units.current_status when in scope ───────────────────
-    if (serialUnitId && nextSerialStatus) {
-      await pool.query(
-        `UPDATE serial_units
-         SET current_status = $2::serial_status_enum,
-             updated_at = NOW()
-         WHERE id = $1`,
-        [serialUnitId, nextSerialStatus],
-      );
+    // ─── Update serial_units.current_status + the lifecycle event ───────────
+    //
+    // The serial status change is the dual-spine drift this route used to cause:
+    // a raw, unguarded UPDATE plus a separate, non-atomic inventory_event. Behind
+    // UNIFIED_ENGINE_APPLY_TRANSITION, route it through the guarded chokepoint
+    // (applyTransition) — guard + atomic event in one tx — with skipTap, since
+    // recordTestVerdict is the canonical tapper for test verdicts (a second tap
+    // here would be redundant). The chokepoint writes the inventory_event itself
+    // (receiving_line_id + payload preserved), so we don't write a second one.
+    //
+    //   - flag ON  + serial in scope + guard allows → chokepoint owns the event.
+    //   - flag ON  + guard declines (e.g. RTV RETURNED from a receiving state is
+    //     not modeled) → log + fall back to the legacy raw write + event (parity
+    //     net; surfaces which transitions still need an allow-list edge).
+    //   - flag OFF, line-only (NOTE / no serial) → legacy raw write + event,
+    //     now org-scoped. Byte-identical to before for legitimate traffic.
+    const useChokepoint = isUnifiedEngineApplyTransition();
+    const eventPayload = {
+      qa_status: qaStatus,
+      disposition_code: dispositionCode,
+      condition_grade: conditionGrade,
+    };
+    let event!: { id: number } | Awaited<ReturnType<typeof recordInventoryEvent>>;
+    let serialHandledByChokepoint = false;
+
+    if (serialUnitId && nextSerialStatus && useChokepoint) {
+      const applied = await applyTransition({
+        unitId: serialUnitId,
+        to: nextSerialStatus as SerialState,
+        eventType,
+        actorStaffId: staffId,
+        station,
+        clientEventId,
+        notes,
+        payload: eventPayload,
+        receivingLineId: lineId,
+        binId: null, // a line-status verdict moves no bin — keep the event bin_id null
+        sku: line.sku,
+        orgId,
+        skipTap: true,
+      });
+      if (applied.ok) {
+        // The chokepoint already wrote the (guarded) serial status + atomic event.
+        event = { id: applied.eventId };
+        serialHandledByChokepoint = true;
+      } else {
+        console.warn(
+          `[receiving/lines/status] chokepoint declined serial ${serialUnitId} ` +
+            `${priorSerialStatus ?? '?'}→${nextSerialStatus} (${applied.error}); falling back to raw write`,
+        );
+      }
     }
 
-    // ─── Write the lifecycle event ──────────────────────────────────────────
-    const event = await recordInventoryEvent({
-      event_type: eventType,
-      actor_staff_id: staffId,
-      station,
-      receiving_id: line.receiving_id,
-      receiving_line_id: lineId,
-      serial_unit_id: serialUnitId,
-      sku: line.sku,
-      prev_status: priorSerialStatus ?? line.workflow_status ?? null,
-      next_status: nextSerialStatus ?? nextWorkflow ?? null,
-      scan_token: scanToken,
-      client_event_id: clientEventId,
-      notes,
-      payload: {
-        qa_status: qaStatus,
-        disposition_code: dispositionCode,
-        condition_grade: conditionGrade,
-      },
-    });
+    if (!serialHandledByChokepoint) {
+      // Legacy/line-only path: raw serial UPDATE (org-scoped) when in scope, then
+      // the single inventory_event covering this line+serial action.
+      if (serialUnitId && nextSerialStatus) {
+        await pool.query(
+          `UPDATE serial_units
+             SET current_status = $2::serial_status_enum, updated_at = NOW()
+           WHERE id = $1 AND organization_id = $3`,
+          [serialUnitId, nextSerialStatus, orgId],
+        );
+      }
+      event = await recordInventoryEvent(
+        {
+          event_type: eventType,
+          actor_staff_id: staffId,
+          station,
+          receiving_id: line.receiving_id,
+          receiving_line_id: lineId,
+          serial_unit_id: serialUnitId,
+          sku: line.sku,
+          prev_status: priorSerialStatus ?? line.workflow_status ?? null,
+          next_status: nextSerialStatus ?? nextWorkflow ?? null,
+          scan_token: scanToken,
+          client_event_id: clientEventId,
+          notes,
+          payload: eventPayload,
+        },
+        undefined,
+        orgId,
+      );
+    }
 
     after(async () => {
       try {
