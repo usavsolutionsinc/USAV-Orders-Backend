@@ -8,6 +8,7 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { normalizePSTTimestamp } from '@/utils/date';
 import { normalizeTrackingNumber } from '@/lib/tracking-format';
 import { applyOrderTrackingOps } from '@/lib/neon/orders-tracking-queries';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 interface TrackingRow {
   id: number;
@@ -74,6 +75,7 @@ async function resolveShipmentViaOrderOrException(
       const result = await applyOrderTrackingOps({
         orderIds: [Number(order.id)],
         setTrackingNumbers: [String(order.shipping_tracking_number)],
+        organizationId: String(organizationId) as OrgId,
       });
       if (result.primaryShipmentId != null) return result.primaryShipmentId;
     } catch {

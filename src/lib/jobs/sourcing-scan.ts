@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 /**
  * Nightly sourcing scan — turns lifecycle + stock conditions into the
@@ -39,6 +40,10 @@ export interface SourcingScanResult {
 
 export async function runSourcingScanJob(): Promise<SourcingScanResult> {
   const startedAt = Date.now();
+  // Session-less cron — no request org in scope. sourcing_alerts is tenant-owned
+  // with a usav-fallback default (an unstamped INSERT silently misroutes to USAV
+  // anyway), so stamp the transitional USAV org explicitly as a selected constant.
+  const orgId = transitionalUsavOrgId();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -47,11 +52,12 @@ export async function runSourcingScanJob(): Promise<SourcingScanResult> {
     const eol = await client.query<{ inserted: number }>(
       `WITH ${STOCK_CTE},
        ins AS (
-         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason)
+         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason, organization_id)
          SELECT s.sku_id, s.lifecycle_status,
                 CASE WHEN s.on_hand = 0 THEN 'critical' ELSE 'warn' END,
                 'open',
-                'auto: ' || s.lifecycle_status || ', on-hand ' || s.on_hand
+                'auto: ' || s.lifecycle_status || ', on-hand ' || s.on_hand,
+                $1::uuid
          FROM stock s
          WHERE s.lifecycle_status IN ('eol','discontinued')
            AND s.on_hand <= COALESCE(s.reorder_threshold, 0)
@@ -60,17 +66,19 @@ export async function runSourcingScanJob(): Promise<SourcingScanResult> {
          RETURNING 1
        )
        SELECT COUNT(*)::int AS inserted FROM ins`,
+      [orgId],
     );
 
     // ─── B. Active low_stock ──────────────────────────────────────────────────
     const low = await client.query<{ inserted: number }>(
       `WITH ${STOCK_CTE},
        ins AS (
-         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason)
+         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason, organization_id)
          SELECT s.sku_id, 'low_stock',
                 CASE WHEN s.on_hand = 0 THEN 'critical' ELSE 'warn' END,
                 'open',
-                'auto: low stock, on-hand ' || s.on_hand || ' <= threshold ' || s.reorder_threshold
+                'auto: low stock, on-hand ' || s.on_hand || ' <= threshold ' || s.reorder_threshold,
+                $1::uuid
          FROM stock s
          WHERE s.lifecycle_status = 'active'
            AND s.reorder_threshold IS NOT NULL
@@ -80,15 +88,17 @@ export async function runSourcingScanJob(): Promise<SourcingScanResult> {
          RETURNING 1
        )
        SELECT COUNT(*)::int AS inserted FROM ins`,
+      [orgId],
     );
 
     // ─── C. Compatible part with zero stock (demand_no_stock) ─────────────────
     const demand = await client.query<{ inserted: number }>(
       `WITH ${STOCK_CTE},
        ins AS (
-         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason)
+         INSERT INTO sourcing_alerts (sku_id, alert_type, severity, status, reason, organization_id)
          SELECT DISTINCT s.sku_id, 'demand_no_stock', 'warn', 'open',
-                'auto: compatible part out of stock'
+                'auto: compatible part out of stock',
+                $1::uuid
          FROM stock s
          WHERE s.on_hand = 0
            AND EXISTS (SELECT 1 FROM part_compatibility pc WHERE pc.sku_id = s.sku_id)
@@ -97,6 +107,7 @@ export async function runSourcingScanJob(): Promise<SourcingScanResult> {
          RETURNING 1
        )
        SELECT COUNT(*)::int AS inserted FROM ins`,
+      [orgId],
     );
 
     // ─── D. Auto-resolve cleared conditions ───────────────────────────────────

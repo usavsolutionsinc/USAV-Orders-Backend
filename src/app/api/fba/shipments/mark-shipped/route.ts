@@ -140,14 +140,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       let trackingId: number | null = null;
       if (rawTracking) {
         const trackRes = await client.query(
+          // Stamp + heal organization_id (SoT: lib/shipping/repository.ts upsertShipment).
           `INSERT INTO shipping_tracking_numbers
-             (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-           VALUES ($1, $2, $3, 'fba')
+             (tracking_number_raw, tracking_number_normalized, carrier, source_system, organization_id)
+           VALUES ($1, $2, $3, 'fba', $4::uuid)
            ON CONFLICT (tracking_number_normalized) DO UPDATE
              SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
+                 organization_id = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
                  updated_at    = NOW()
            RETURNING id, tracking_number_raw, carrier`,
-          [rawTracking, rawTracking, carrier]
+          [rawTracking, rawTracking, carrier, ctx.organizationId]
         );
         trackingId = trackRes.rows[0].id as number;
 

@@ -56,7 +56,7 @@ async function runTrackingOps(
 
   let result;
   try {
-    result = await applyOrderTrackingOps({ orderIds: [id], ...ops });
+    result = await applyOrderTrackingOps({ orderIds: [id], organizationId: ctx.organizationId, ...ops });
   } catch (error: any) {
     const message = String(error?.message || '');
     console.error('[orders/[id]/tracking] op failed:', error);

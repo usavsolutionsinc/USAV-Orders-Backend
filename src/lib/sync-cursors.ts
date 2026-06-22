@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export async function getSyncCursor(resource: string): Promise<Date | null> {
   const res = await pool.query<{ last_synced_at: string | null }>(
@@ -16,12 +17,15 @@ export async function getSyncCursor(resource: string): Promise<Date | null> {
 }
 
 export async function updateSyncCursor(resource: string, lastSyncedAt: Date): Promise<void> {
+  // sync_cursors is tenant-owned with a usav-fallback default; these helpers are
+  // driven by session-less syncs/jobs with no request org, so stamp the
+  // transitional USAV org explicitly (the established single-tenant convention).
   await pool.query(
-    `INSERT INTO sync_cursors (resource, last_synced_at)
-     VALUES ($1, $2)
+    `INSERT INTO sync_cursors (resource, last_synced_at, organization_id)
+     VALUES ($1, $2, $3::uuid)
      ON CONFLICT (resource) DO UPDATE SET
        last_synced_at = EXCLUDED.last_synced_at,
        updated_at = NOW()`,
-    [resource, lastSyncedAt.toISOString()]
+    [resource, lastSyncedAt.toISOString(), transitionalUsavOrgId()]
   );
 }

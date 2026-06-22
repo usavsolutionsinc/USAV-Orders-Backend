@@ -1,8 +1,6 @@
 'use client'
 
-import React, { useMemo } from 'react'
-import { Gs1DataMatrix } from '@/components/barcode/Gs1DataMatrix'
-import { repairHandle } from '@/lib/barcode-routing'
+import React from 'react'
 
 type RepairServiceFormProps = {
   repairServiceId: string | number
@@ -35,13 +33,6 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
     ? `RS-${repairNumericId}`
     : `RS-${String(repairServiceId || '').trim()}`
 
-  // Bare handle (REP-{id}) — internal scanner routes to /repair/{id}. No
-  // URL on the printed sheet; "Scan to update" is a staff action.
-  const repairCodeValue = useMemo(() => {
-    if (!Number.isFinite(repairNumericId) || repairNumericId <= 0) return ''
-    return repairHandle(repairNumericId)
-  }, [repairNumericId])
-
   // Format contact display as "Name, Phone, Email"
   const contactDisplay = [name, contact].filter(Boolean).join(', ')
   const externalTicket = String(ticketNumber || '').trim()
@@ -62,30 +53,12 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       </div>
 
       {/* Title and Ticket Number */}
-      <div className={`mb-6 flex items-start justify-between gap-4 ${isPreview ? 'sm:gap-6' : 'gap-6'}`}>
-        <div className="min-w-0">
-          <h1 className={`font-bold mb-2 ${isPreview ? 'text-xl sm:text-2xl' : 'text-3xl'}`}>Repair Service</h1>
-          <p className={`font-semibold ${isPreview ? 'text-sm sm:text-base' : 'text-lg'}`}>{repairServiceCode} - Repair Service Number</p>
-          {externalTicket && !/^RS-\d+$/i.test(externalTicket) && (
-            <p className="text-sm font-medium text-gray-600">Ticket #: {externalTicket}</p>
-          )}
-        </div>
-        <div className="flex flex-col items-end">
-          <div className="rounded-lg border border-gray-200 bg-white p-1.5 shadow-sm">
-            {repairCodeValue ? (
-              <Gs1DataMatrix
-                value={repairCodeValue}
-                size={isPreview ? 80 : 112}
-                symbology="datamatrix"
-                ariaLabel={`DataMatrix link to manage repair ${repairServiceCode}`}
-              />
-            ) : (
-              <div className={`bg-gray-50 ${isPreview ? 'h-20 w-20' : 'h-28 w-28'}`} aria-hidden />
-            )}
-          </div>
-          <p className="mt-1 text-center text-xs font-semibold tracking-[0.2em] text-gray-500">Scan to update</p>
-          <p className="text-micro font-bold text-gray-400">{repairServiceCode}</p>
-        </div>
+      <div className="mb-6 min-w-0">
+        <h1 className={`font-bold mb-2 ${isPreview ? 'text-xl sm:text-2xl' : 'text-3xl'}`}>Repair Service</h1>
+        <p className={`font-semibold ${isPreview ? 'text-sm sm:text-base' : 'text-lg'}`}>{repairServiceCode} - Repair Ticket Number</p>
+        {externalTicket && !/^RS-\d+$/i.test(externalTicket) && (
+          <p className="text-sm font-medium text-gray-600">Ticket #: {externalTicket}</p>
+        )}
       </div>
 
       {/* Information Table */}
@@ -107,7 +80,7 @@ const RepairServiceForm: React.FC<RepairServiceFormProps> = ({
       {/* Price Section */}
       <div className={isPreview ? 'mb-4' : 'mb-6'}>
         <p className={`font-medium mb-2 ${isPreview ? 'text-base' : 'text-lg'}`}>
-          <span className={`font-bold ${isPreview ? 'text-gray-900' : 'text-emerald-600'}`}>${price}</span> - Price Paid at Pick-up
+          <span className="font-bold text-emerald-600">${price}</span> - Price Paid at Pick-up
         </p>
         <p className={`font-medium ${isPreview ? 'text-sm' : 'text-base'}`}>
           Card / Cash - Payment Method

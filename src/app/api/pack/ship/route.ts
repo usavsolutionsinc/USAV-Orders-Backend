@@ -213,15 +213,16 @@ export const POST = withAuth(async (request, ctx) => {
         const packedKey = clientEventId ? `${clientEventId}:${u.id}:PACKED` : null;
         const packedEv = await client.query<{ id: number }>(
           `INSERT INTO inventory_events (
-             event_type, actor_staff_id, station, serial_unit_id, sku,
+             organization_id, event_type, actor_staff_id, station, serial_unit_id, sku,
              prev_status, next_status, client_event_id, payload
            )
-           VALUES ('PACKED', $1, 'PACK', $2, $3, $4, 'PACKED', $5, $6::jsonb)
+           VALUES ($7::uuid, 'PACKED', $1, 'PACK', $2, $3, $4, 'PACKED', $5, $6::jsonb)
            ON CONFLICT (client_event_id) DO NOTHING
            RETURNING id`,
           [
             actorStaffId, u.id, u.sku, u.current_status, packedKey,
             JSON.stringify({ source: 'pack.ship', order_id: orderId, allocation_id: a.id, ordinal: i + 1 }),
+            ctx.organizationId,
           ],
         );
 
@@ -229,15 +230,16 @@ export const POST = withAuth(async (request, ctx) => {
         const labeledKey = clientEventId ? `${clientEventId}:${u.id}:LABELED` : null;
         const labeledEv = await client.query<{ id: number }>(
           `INSERT INTO inventory_events (
-             event_type, actor_staff_id, station, serial_unit_id, sku,
+             organization_id, event_type, actor_staff_id, station, serial_unit_id, sku,
              prev_status, next_status, client_event_id, payload
            )
-           VALUES ('LABELED', $1, 'PACK', $2, $3, 'PACKED', 'LABELED', $4, $5::jsonb)
+           VALUES ($6::uuid, 'LABELED', $1, 'PACK', $2, $3, 'PACKED', 'LABELED', $4, $5::jsonb)
            ON CONFLICT (client_event_id) DO NOTHING
            RETURNING id`,
           [
             actorStaffId, u.id, u.sku, labeledKey,
             JSON.stringify({ source: 'pack.ship', order_id: orderId, tracking_number: trackingNumber, carrier }),
+            ctx.organizationId,
           ],
         );
 
@@ -248,14 +250,15 @@ export const POST = withAuth(async (request, ctx) => {
         if (u.sku) {
           const ledger = await client.query<{ id: number }>(
             `INSERT INTO sku_stock_ledger (
-               sku, delta, reason, dimension, staff_id,
+               organization_id, sku, delta, reason, dimension, staff_id,
                ref_serial_unit_id, ref_order_id, ref_shipment_id, notes
              )
-             VALUES ($1, -1, 'SOLD', 'WAREHOUSE', $2, $3, $4, $5, $6)
+             VALUES ($7::uuid, $1, -1, 'SOLD', 'WAREHOUSE', $2, $3, $4, $5, $6)
              RETURNING id`,
             [
               u.sku, actorStaffId, u.id, orderId, order.shipment_id ?? null,
               `pack.ship order=${orderId} alloc=${a.id} unit=${u.id}`,
+              ctx.organizationId,
             ],
           );
           ledgerId = ledger.rows[0]?.id ?? null;
@@ -307,10 +310,10 @@ export const POST = withAuth(async (request, ctx) => {
       // 6. One packer_logs row for the order — keeps the existing
       //    shipped-dashboard query working.
       const packerLog = await client.query<{ id: number }>(
-        `INSERT INTO packer_logs (shipment_id, scan_ref, tracking_type, packed_by)
-         VALUES ($1, $2, 'ORDERS', $3)
+        `INSERT INTO packer_logs (organization_id, shipment_id, scan_ref, tracking_type, packed_by)
+         VALUES ($4::uuid, $1, $2, 'ORDERS', $3)
          RETURNING id`,
-        [order.shipment_id ?? null, trackingNumber, actorStaffId],
+        [order.shipment_id ?? null, trackingNumber, actorStaffId, ctx.organizationId],
       );
 
       // 7. One SAL row for cross-station visibility.

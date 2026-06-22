@@ -211,9 +211,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           [idsToUpdate]
         );
         newlyTrackedIds = priorNull.rows.map((r: { id: number }) => Number(r.id));
-        await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client);
+        await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client, ctx.organizationId);
       } else if (shippingTrackingNumber !== undefined) {
-        await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client);
+        await upsertOrderTracking(idsToUpdate, shippingTrackingNumber, client, ctx.organizationId);
       }
 
       if (Array.isArray(trackingLinkEdits) && trackingLinkEdits.length > 0) {
@@ -222,7 +222,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           const nextTracking = String(edit?.shippingTrackingNumber || '').trim();
           if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
           if (!nextTracking) continue;
-          await updateShipmentTrackingById(idsToUpdate, shipmentId, nextTracking, client);
+          await updateShipmentTrackingById(idsToUpdate, shipmentId, nextTracking, client, ctx.organizationId);
         }
       }
 
@@ -231,7 +231,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         for (const create of trackingLinkCreates) {
           const nextTracking = String(create?.shippingTrackingNumber || '').trim();
           if (!nextTracking) continue;
-          const createdId = await createAdditionalShipmentLink(idsToUpdate, nextTracking, client);
+          const createdId = await createAdditionalShipmentLink(idsToUpdate, nextTracking, client, ctx.organizationId);
           createdShipmentIds.push(createdId);
         }
       }
@@ -275,11 +275,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             [idsToUpdate]
           );
           await client.query(
-            `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
-             SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign'
+            `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
+             SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign', $3::uuid
              ON CONFLICT (order_row_id, shipment_id) DO UPDATE
                SET is_primary = true, source = 'orders.assign', updated_at = NOW()`,
-            [idsToUpdate, resolvedPrimaryId]
+            [idsToUpdate, resolvedPrimaryId, ctx.organizationId]
           );
         } catch (error) {
           if (!isMissingOrderShipmentLinksRelation(error)) throw error;

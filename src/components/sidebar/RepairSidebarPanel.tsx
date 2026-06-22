@@ -20,6 +20,7 @@ const REPAIR_TAB_ITEMS: HorizontalSliderItem[] = [
 import {
   RepairIntakeForm,
   type RepairFormData,
+  type RepairSubmitResult,
 } from '@/components/repair';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
@@ -115,7 +116,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
     setSelectedFavoriteId(null);
   };
 
-  const handleSubmitForm = async (data: RepairFormData) => {
+  const handleSubmitForm = async (data: RepairFormData): Promise<RepairSubmitResult | null> => {
     setIsSubmitting(true);
     if (!repairIdemKey.current) repairIdemKey.current = crypto.randomUUID();
     const controller = new AbortController();
@@ -136,9 +137,6 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
       if (result.success) {
         repairIdemKey.current = null;
-        setShowIntakeForm(false);
-        setIntakeDraft(undefined);
-        setSelectedFavoriteId(null);
         const ticketUrl: string | null =
           typeof result.zendeskTicketUrl === 'string' ? result.zendeskTicketUrl : null;
         const ticketSuffix = result.zendeskTicketNumber
@@ -152,9 +150,18 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
         if (result.signatureWarning) {
           window.alert(`Repair submitted, but: ${result.signatureWarning}`);
         }
-      } else {
-        window.alert('Failed to submit repair form. Please try again.');
+        // Keep the overlay open — the form transitions to its print screen so a
+        // waiting customer never sees the walk-in dashboard. Close happens on Done.
+        return {
+          id: Number(result.id),
+          rsNumber: result.rsNumber ?? null,
+          zendeskTicketNumber: result.zendeskTicketNumber ?? null,
+          zendeskTicketUrl: ticketUrl,
+        };
       }
+
+      window.alert('Failed to submit repair form. Please try again.');
+      return null;
     } catch (error: unknown) {
       clearTimeout(timeout);
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -162,6 +169,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
       } else {
         window.alert('Error submitting repair form. Please try again.');
       }
+      return null;
     } finally {
       setIsSubmitting(false);
     }

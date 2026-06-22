@@ -60,8 +60,8 @@ export interface MarkUnitListedDeps {
   withTx: <T>(orgId: OrgId, fn: (client: Pick<PoolClient, 'query'>) => Promise<T>) => Promise<T>;
   recordEvent: (
     input: RecordInventoryEventInput,
-    client?: Pick<PoolClient, 'query'>,
-    orgId?: OrgId,
+    client: Pick<PoolClient, 'query'> | undefined,
+    orgId: OrgId,
   ) => Promise<{ id: number }>;
 }
 
@@ -146,6 +146,7 @@ export async function markUnitListed(
           },
         },
         client,
+        args.orgId,
       );
       eventId = ev.id;
     } catch (err) {

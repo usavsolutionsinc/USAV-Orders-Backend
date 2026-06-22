@@ -3,6 +3,7 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatApiInstant, normalizePSTTimestamp } from '@/utils/date';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export interface SyncResult {
   accountName: string;
@@ -166,6 +167,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
 
   await pool.query(
     `INSERT INTO orders (
+      organization_id,
       order_id,
       product_title,
       condition,
@@ -181,7 +183,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
       sale_amount,
       currency
     ) VALUES (
-      $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14
+      $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
     )
     ON CONFLICT ON CONSTRAINT idx_orders_unique_account_order DO UPDATE
       SET product_title = COALESCE(NULLIF(EXCLUDED.product_title, 'No title'), orders.product_title),
@@ -195,6 +197,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
             ELSE orders.status
           END`,
     [
+      transitionalUsavOrgId(),
       orderId,
       productTitle,
       condition,

@@ -57,8 +57,8 @@ export function ReasonSelector({
                                 onClick={() => toggleReason(reason)}
                                 className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
                                     isSelected
-                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                                        : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-blue-300 hover:bg-blue-50'
+                                        ? 'bg-gray-900 text-white'
+                                        : 'border border-gray-200 bg-gray-50 text-gray-900 hover:border-gray-300 hover:bg-gray-100'
                                 }`}
                             >
                                 <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md ${
@@ -66,7 +66,7 @@ export function ReasonSelector({
                                         ? 'bg-white'
                                         : 'border border-gray-300 bg-white'
                                 }`}>
-                                    {isSelected && <Check className="h-3 w-3 text-blue-600" />}
+                                    {isSelected && <Check className="h-3 w-3 text-gray-900" />}
                                 </div>
                                 <span className="text-xs font-bold uppercase tracking-wide">
                                     {reason}

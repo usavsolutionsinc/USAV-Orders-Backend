@@ -37,7 +37,7 @@ export function ScanBandShell({ themeColor, children }: ScanBandShellProps) {
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-      className={cn(receivingScanBandClass, scanBandHaloClass(themeColor), SIDEBAR_GUTTER, 'py-1')}
+      className={cn(receivingScanBandClass, scanBandHaloClass(themeColor), SIDEBAR_GUTTER)}
     >
       {children}
     </motion.div>

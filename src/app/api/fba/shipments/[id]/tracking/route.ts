@@ -126,14 +126,21 @@ export async function POST(
     const { trackingId, linkRes, allocationCount } = await withTenantTransaction(orgId, async (client) => {
       // Upsert into shipping_tracking_numbers
       const trackRes = await client.query(
+        // shipping_tracking_numbers.organization_id is a stamped-but-global
+        // natural key (SoT: lib/shipping/repository.ts upsertShipment). Stamp it
+        // on INSERT and HEAL it on conflict (COALESCE keeps a non-null existing
+        // value, fills a NULL one) so a row first created by a session-less
+        // writer gets attributed. The GUC default would also stamp inside this
+        // txn, but the explicit form matches the SoT and heals NULL rows.
         `INSERT INTO shipping_tracking_numbers
-           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-         VALUES ($1, $2, $3, 'fba')
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system, organization_id)
+         VALUES ($1, $2, $3, 'fba', $4::uuid)
          ON CONFLICT (tracking_number_normalized) DO UPDATE
            SET source_system = COALESCE(shipping_tracking_numbers.source_system, EXCLUDED.source_system),
+               organization_id = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
                updated_at    = NOW()
          RETURNING id, tracking_number_raw, carrier`,
-        [raw, raw, carrier]
+        [raw, raw, carrier, orgId]
       );
       const trackingId = trackRes.rows[0].id;
 
@@ -241,15 +248,17 @@ export async function PATCH(
       }
 
       const trackRes = await client.query(
+        // Stamp + heal organization_id (SoT: lib/shipping/repository.ts) — see POST note.
         `INSERT INTO shipping_tracking_numbers
-           (tracking_number_raw, tracking_number_normalized, carrier, source_system)
-         VALUES ($1, $2, $3, 'fba')
+           (tracking_number_raw, tracking_number_normalized, carrier, source_system, organization_id)
+         VALUES ($1, $2, $3, 'fba', $4::uuid)
          ON CONFLICT (tracking_number_normalized) DO UPDATE
            SET tracking_number_raw = EXCLUDED.tracking_number_raw,
                carrier = COALESCE(NULLIF(EXCLUDED.carrier, 'UNKNOWN'), shipping_tracking_numbers.carrier),
+               organization_id = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
                updated_at = NOW()
          RETURNING id, tracking_number_raw, carrier`,
-        [raw, raw, carrier]
+        [raw, raw, carrier, orgId]
       );
 
       const trackingId = Number(trackRes.rows[0].id);

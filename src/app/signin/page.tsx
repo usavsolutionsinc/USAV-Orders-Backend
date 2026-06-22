@@ -302,7 +302,7 @@ export default function SignInPage() {
               recent={recent}
               onPick={handlePick}
               onMessage={setPickerMessage}
-              onPolicy={(p) => setPinless(p.pinless && !isMobileDevice())}
+              onPolicy={(p) => setPinless(p.pinless)}
             />
             {pickerMessage && (
               <div className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">

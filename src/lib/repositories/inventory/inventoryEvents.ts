@@ -51,6 +51,13 @@ export type InventoryEventStation = 'RECEIVING' | 'TECH' | 'PACK' | 'SHIP' | 'MO
 
 export interface AppendEventInput {
   eventType: InventoryEventType;
+  /**
+   * Tenant scope. This writer runs on the stateless neon-http `db` connection,
+   * which cannot carry the `app.current_org` GUC, so the `organization_id`
+   * column default would resolve to NULL (and the NOT NULL column would crash).
+   * Callers with an org in scope MUST pass it; it is stamped explicitly below.
+   */
+  organizationId?: string | null;
   /** UNIQUE — stable id from the client for retry-safety. Strongly recommended. */
   clientEventId?: string | null;
   actorStaffId?: number | null;
@@ -102,6 +109,7 @@ export async function appendInventoryEvent(
     .insert(inventoryEvents)
     .values({
       eventType: input.eventType,
+      ...(input.organizationId ? { organizationId: input.organizationId } : {}),
       clientEventId: input.clientEventId ?? null,
       actorStaffId: input.actorStaffId ?? null,
       station: input.station ?? null,

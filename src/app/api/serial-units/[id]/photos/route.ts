@@ -187,7 +187,7 @@ export const POST = withAuth(
             sku: unit.sku,
             notes: `${insertedIds.length} ${stage} photo${insertedIds.length === 1 ? '' : 's'} captured`,
             payload: { source: 'serial-unit-photos', stage, photo_ids: insertedIds },
-          });
+          }, undefined, ctx.organizationId);
         } catch (err) {
           console.warn('[serial-unit photos] NOTE event failed (non-fatal)', err);
         }

@@ -344,9 +344,9 @@ export async function PATCH(
       // sku_stock.stock. Load-bearing (no .catch swallow): a failed ledger write
       // must surface, not silently no-op the adjustment.
       await pool.query(
-        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-        [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
+        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id, organization_id)
+         VALUES ($1, $2, $3, 'WAREHOUSE', $4, $5::uuid)`,
+        [skuValue, delta, reason || 'ADJUSTMENT', staffId || null, ctx.organizationId ?? USAV_ORG_ID],
       );
 
       const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
@@ -382,9 +382,9 @@ export async function PATCH(
       // absent). Always post — a 0 delta still ensures the projected row exists
       // at the intended value. Load-bearing (no .catch swallow).
       await pool.query(
-        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-        [skuValue, ledgerDelta, reason || 'SET', staffId || null],
+        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id, organization_id)
+         VALUES ($1, $2, $3, 'WAREHOUSE', $4, $5::uuid)`,
+        [skuValue, ledgerDelta, reason || 'SET', staffId || null, ctx.organizationId ?? USAV_ORG_ID],
       );
 
       const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
@@ -478,12 +478,12 @@ export async function PATCH(
         .then((r) => r.rows[0] ?? null);
 
       await pool.query(
-        `INSERT INTO sku_stock (sku, display_name_override, stock)
-         VALUES ($1, $2, 0)
+        `INSERT INTO sku_stock (sku, display_name_override, stock, organization_id)
+         VALUES ($1, $2, 0, $3::uuid)
          ON CONFLICT (sku)
          DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
                        updated_at = NOW()`,
-        [skuValue, nextTitle],
+        [skuValue, nextTitle, ctx.organizationId ?? USAV_ORG_ID],
       );
 
       // Audit — non-quantity event lives in inventory_events alongside the
@@ -503,7 +503,7 @@ export async function PATCH(
             next_title: nextTitle,
             catalog_title: prior?.product_title ?? null,
           },
-        });
+        }, undefined, ctx.organizationId ?? USAV_ORG_ID);
       } catch (err) {
         console.warn('rename: audit insert failed (non-fatal)', err);
       }

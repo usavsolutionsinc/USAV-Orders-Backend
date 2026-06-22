@@ -628,7 +628,7 @@ export async function recordShortPick(input: RecordShortPickInput, orgId?: OrgId
   }
 }
 
-export async function completeSession(input: { sessionId: number; actorStaffId: number }, orgId?: OrgId): Promise<{ ok: true } | { ok: false; status: 404; error: string }> {
+export async function completeSession(input: { sessionId: number; actorStaffId: number }, orgId: OrgId): Promise<{ ok: true } | { ok: false; status: 404; error: string }> {
   // ── Org-scoped path: GUC-wrapped transaction. picking_sessions has NO
   // organization_id column (child of orders) → scope the UPDATE via the parent
   // order (UPDATE … FROM orders + parent org predicate, 404 cross-org). The
@@ -664,23 +664,8 @@ export async function completeSession(input: { sessionId: number; actorStaffId: 
     });
   }
 
-  const result = await pool.query(
-    `UPDATE picking_sessions
-        SET ended_at = NOW()
-      WHERE id = $1
-        AND ended_at IS NULL
-      RETURNING id`,
-    [input.sessionId],
-  );
-  if (result.rowCount === 0) {
-    return { ok: false, status: 404, error: `session ${input.sessionId} not found or already closed` };
-  }
-  // Log the close as a session-level note so audit timelines reflect it.
-  await recordInventoryEvent({
-    event_type: 'NOTE',
-    actor_staff_id: input.actorStaffId,
-    station: 'MOBILE',
-    payload: { source: 'picking.complete', sessionId: input.sessionId },
-  });
-  return { ok: true };
+  // orgId is required; the GUC-scoped path above always returns. The old
+  // un-scoped pool.query() fallback was removed — its inventory_events NOTE
+  // insert stamped a NULL organization_id and is unreachable now.
+  throw new Error('completeSession: orgId is required');
 }

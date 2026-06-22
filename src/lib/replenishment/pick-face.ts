@@ -124,12 +124,12 @@ export async function detectReplenishmentNeeds(orgId?: OrgId): Promise<Detection
 
         // 3. Insert. The partial UNIQUE silently rejects duplicates of open tasks.
         const insertQ = await client.query<{ id: number }>(`
-          INSERT INTO replenishment_tasks (sku, from_bin_id, to_bin_id, qty)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO replenishment_tasks (sku, from_bin_id, to_bin_id, qty, organization_id)
+          VALUES ($1, $2, $3, $4, $5::uuid)
           ON CONFLICT (sku, to_bin_id) WHERE status IN ('REQUESTED','IN_PROGRESS')
             DO NOTHING
           RETURNING id
-        `, [row.sku, fromBinId, row.to_bin_id, actualQty]);
+        `, [row.sku, fromBinId, row.to_bin_id, actualQty, orgId]);
         if (insertQ.rowCount && insertQ.rowCount > 0) {
           result.inserted += 1;
         } else {
@@ -298,7 +298,7 @@ export async function completeTask(input: {
   taskId: number;
   qtyMoved: number;
   actorStaffId: number;
-}, orgId?: OrgId): Promise<CompleteTaskResult> {
+}, orgId: OrgId): Promise<CompleteTaskResult> {
   if (input.qtyMoved <= 0) {
     return { ok: false, status: 409, error: 'qtyMoved must be > 0' };
   }
@@ -381,85 +381,11 @@ export async function completeTask(input: {
     });
   }
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const taskQ = await client.query<{
-      id: number;
-      sku: string;
-      from_bin_id: number | null;
-      to_bin_id: number;
-      status: ReplenishmentTaskStatus;
-    }>(
-      `SELECT id, sku, from_bin_id, to_bin_id, status
-         FROM replenishment_tasks
-        WHERE id = $1
-        FOR UPDATE`,
-      [input.taskId],
-    );
-    const task = taskQ.rows[0];
-    if (!task) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'task not found' };
-    }
-    if (task.status !== 'IN_PROGRESS') {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: `task is ${task.status}, expected IN_PROGRESS` };
-    }
-
-    let fromBinQty: number | null = null;
-    if (task.from_bin_id) {
-      const fromQ = await client.query<{ qty: number }>(
-        `UPDATE bin_contents
-            SET qty = qty - $3
-          WHERE location_id = $1 AND sku = $2 AND qty >= $3
-        RETURNING qty`,
-        [task.from_bin_id, task.sku, input.qtyMoved],
-      );
-      if (fromQ.rowCount === 0) {
-        await client.query('ROLLBACK');
-        return { ok: false, status: 409, error: 'insufficient qty in source bin' };
-      }
-      fromBinQty = fromQ.rows[0].qty;
-    }
-
-    const toQ = await client.query<{ qty: number }>(
-      `INSERT INTO bin_contents (location_id, sku, qty)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (location_id, sku) DO UPDATE
-         SET qty = bin_contents.qty + EXCLUDED.qty
-       RETURNING qty`,
-      [task.to_bin_id, task.sku, input.qtyMoved],
-    );
-
-    await client.query(
-      `UPDATE replenishment_tasks
-          SET status = 'COMPLETE',
-              completed_at = NOW(),
-              qty_moved = $2
-        WHERE id = $1`,
-      [task.id, input.qtyMoved],
-    );
-
-    // Use the inventory_events log to record the location move. This keeps
-    // the timeline coherent with picks/packs that flow through the same log.
-    await recordReplenishmentEvent(client, {
-      taskId: task.id,
-      sku: task.sku,
-      fromBinId: task.from_bin_id,
-      toBinId: task.to_bin_id,
-      qty: input.qtyMoved,
-      actorStaffId: input.actorStaffId,
-    });
-
-    await client.query('COMMIT');
-    return { ok: true, fromBinQty, toBinQty: toQ.rows[0].qty };
-  } catch (err) {
-    try { await client.query('ROLLBACK'); } catch { /* noop */ }
-    throw err;
-  } finally {
-    client.release();
-  }
+  // orgId is required, so the GUC-scoped path above always returns. The old
+  // un-scoped pool.connect() fallback was removed: it inserted inventory_events
+  // and bin_contents rows with a NULL organization_id (NOT NULL violation once
+  // tenancy hardened) and is unreachable now.
+  throw new Error('completeTask: orgId is required');
 }
 
 export type CancelTaskResult = { ok: true } | { ok: false; status: 404 | 409; error: string };
@@ -533,48 +459,21 @@ async function recordReplenishmentEvent(
     qty: number;
     actorStaffId: number;
   },
-  orgId?: OrgId,
+  orgId: OrgId,
 ) {
-  // Tenant-scoped path: stamp organization_id on the event row. inventory_events
-  // is tenant-owned. The passed client is already inside the GUC transaction, but
-  // we re-assert app.current_org on it defensively before the write.
-  if (orgId) {
-    await client.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
-    await client.query(
-      `INSERT INTO inventory_events (
-         event_type, actor_staff_id, station,
-         sku, bin_id, prev_bin_id,
-         payload, organization_id
-       ) VALUES (
-         'MOVED', $1, 'SYSTEM',
-         $2, $3, $4,
-         $5::jsonb, $6
-       )`,
-      [
-        input.actorStaffId,
-        input.sku,
-        input.toBinId,
-        input.fromBinId,
-        JSON.stringify({
-          source: 'replenishment.complete',
-          taskId: input.taskId,
-          qty: input.qty,
-        }),
-        orgId,
-      ],
-    );
-    return;
-  }
-
+  // inventory_events is tenant-owned. The passed client is already inside the
+  // GUC transaction; re-assert app.current_org on it defensively, then stamp
+  // organization_id explicitly on the row.
+  await client.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
   await client.query(
     `INSERT INTO inventory_events (
        event_type, actor_staff_id, station,
        sku, bin_id, prev_bin_id,
-       payload
+       payload, organization_id
      ) VALUES (
        'MOVED', $1, 'SYSTEM',
        $2, $3, $4,
-       $5::jsonb
+       $5::jsonb, $6
      )`,
     [
       input.actorStaffId,
@@ -586,6 +485,7 @@ async function recordReplenishmentEvent(
         taskId: input.taskId,
         qty: input.qty,
       }),
+      orgId,
     ],
   );
 }

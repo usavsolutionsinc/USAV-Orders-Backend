@@ -63,9 +63,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     } else {
       await client.query(
         `INSERT INTO work_assignments
-              (entity_type, entity_id, work_type, assigned_tech_id, status, priority, assigned_at, started_at, completed_at, completed_by_tech_id, repair_outcome)
-         VALUES ('REPAIR', $1, 'REPAIR', $2, 'DONE', 100, NOW(), NOW(), NOW(), $3, $4)`,
-        [repairId, assignedTech, completedBy, repairOutcome],
+              (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, assigned_at, started_at, completed_at, completed_by_tech_id, repair_outcome)
+         VALUES ($1, 'REPAIR', $2, 'REPAIR', $3, 'DONE', 100, NOW(), NOW(), NOW(), $4, $5)`,
+        [ctx.organizationId, repairId, assignedTech, completedBy, repairOutcome],
       );
     }
 

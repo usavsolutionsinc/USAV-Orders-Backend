@@ -263,10 +263,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       } else {
         const inserted = await client.query<WorkAssignmentRow>(
           `INSERT INTO work_assignments
-                (entity_type, entity_id, work_type, status, priority, assigned_at, started_at, completed_at)
-           VALUES ('REPAIR', $1, 'REPAIR', 'DONE', 100, NOW(), NOW(), NOW())
+                (organization_id, entity_type, entity_id, work_type, status, priority, assigned_at, started_at, completed_at)
+           VALUES ($1, 'REPAIR', $2, 'REPAIR', 'DONE', 100, NOW(), NOW(), NOW())
            RETURNING id`,
-          [repairId],
+          [ctx.organizationId, repairId],
         );
         assignmentId = inserted.rows[0] ? Number(inserted.rows[0].id) : null;
       }
@@ -299,8 +299,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       try {
         const docResult = await client.query<{ id: number }>(
           `INSERT INTO documents (
-              entity_type, entity_id, document_type, signature_url, signer_name, signed_at, document_data
-           ) VALUES ('REPAIR', $1, 'pickup_agreement', $2, $3, NOW(), $4)
+              entity_type, entity_id, document_type, signature_url, signer_name, signed_at, document_data, organization_id
+           ) VALUES ('REPAIR', $1, 'pickup_agreement', $2, $3, NOW(), $4, $5::uuid)
            RETURNING id`,
           [
             repairId,
@@ -317,6 +317,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 'I confirm I am picking up this repaired item and acknowledge the 30-day warranty on the repair.',
               signedAt: new Date().toISOString(),
             }),
+            ctx.organizationId,
           ],
         );
         documentId = docResult.rows[0]?.id ?? null;

@@ -155,10 +155,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const isFirstLabel = (prior.rowCount ?? 0) === 0;
 
     const inserted = await pool.query<DbRow>(
-      `INSERT INTO documents (entity_type, entity_id, document_type, document_data)
-       VALUES ('SHIPPING_LABEL', $1, 'shipping_label', $2::jsonb)
+      `INSERT INTO documents (entity_type, entity_id, document_type, document_data, organization_id)
+       VALUES ('SHIPPING_LABEL', $1, 'shipping_label', $2::jsonb, $3::uuid)
        RETURNING id, entity_id, document_data, created_at`,
-      [orderId, JSON.stringify({ url: labelUrl, carrier, tracking, uploadedBy })],
+      [orderId, JSON.stringify({ url: labelUrl, carrier, tracking, uploadedBy }), ctx.organizationId],
     );
 
     if (isFirstLabel) {

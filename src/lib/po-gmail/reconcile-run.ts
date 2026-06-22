@@ -196,8 +196,8 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
             const { rowCount } = await client.query(
               `INSERT INTO email_delivery_signals
                  (gmail_msg_id, gmail_thread_id, order_number, order_number_norm,
-                  email_subject, email_from, snippet, delivered_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()))
+                  email_subject, email_from, snippet, delivered_at, organization_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, NOW()), $9::uuid)
                ON CONFLICT (organization_id, gmail_msg_id, order_number_norm) DO UPDATE
                  SET email_subject = EXCLUDED.email_subject,
                      email_from    = EXCLUDED.email_from,
@@ -212,6 +212,7 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
                 item.from || null,
                 item.snippet || null,
                 deliveredAt,
+                orgId,
               ],
             );
             deliverySignals += rowCount ?? 0;
@@ -222,8 +223,8 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
           const { rowCount } = await client.query(
             `INSERT INTO email_missing_purchase_orders
                (gmail_msg_id, gmail_thread_id, po_numbers, po_numbers_norm,
-                email_subject, email_from, email_received, scanned_at, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pending')
+                email_subject, email_from, email_received, scanned_at, status, organization_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pending', $8::uuid)
              ON CONFLICT (organization_id, gmail_msg_id) DO UPDATE
                SET po_numbers      = EXCLUDED.po_numbers,
                    po_numbers_norm = EXCLUDED.po_numbers_norm,
@@ -244,6 +245,7 @@ export async function runPoMailboxReconcile(opts: ReconcileRunOpts = {}): Promis
               item.subject || null,
               item.from || null,
               item.internalDate ? new Date(Number(item.internalDate)) : null,
+              orgId,
             ],
           );
           upserted += rowCount ?? 0;

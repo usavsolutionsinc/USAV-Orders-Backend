@@ -528,9 +528,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             // completed_by_packer_id records the scanner-station actor (staffId).
             await pool.query(`
                 INSERT INTO work_assignments
-                    (entity_type, entity_id, work_type, assigned_packer_id,
+                    (organization_id, entity_type, entity_id, work_type, assigned_packer_id,
                      completed_by_packer_id, status, priority, notes, completed_at)
-                VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on pack scan', NOW())
+                VALUES ($1, 'ORDER', $2, 'PACK', $3, $3, 'DONE', 100, 'Auto-completed on pack scan', NOW())
                 ON CONFLICT (entity_type, entity_id, work_type)
                     WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
                 DO UPDATE
@@ -539,7 +539,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                         status                 = 'DONE',
                         completed_at           = NOW(),
                         updated_at             = NOW()
-            `, [order.id, staffId]);
+                WHERE work_assignments.organization_id = $1
+            `, [ctx.organizationId, order.id, staffId]);
 
             const orderShipmentId: number | null = order.shipment_id ?? null;
 
@@ -765,9 +766,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 );
             } else {
                 await pool.query(
-                    `INSERT INTO sku_stock (stock, sku, product_title)
-                     VALUES ($1, $2, $3)`,
-                    [String(Math.max(0, addQty)), normalizedBase, resolvedSkuTitle]
+                    `INSERT INTO sku_stock (stock, sku, product_title, organization_id)
+                     VALUES ($1, $2, $3, $4::uuid)`,
+                    [String(Math.max(0, addQty)), normalizedBase, resolvedSkuTitle, ctx.organizationId]
                 );
             }
             skuUpdated = true;

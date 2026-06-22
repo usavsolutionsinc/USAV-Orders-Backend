@@ -60,7 +60,7 @@ async function loadLine(id: number, orgId: OrgId): Promise<LineRow | null> {
   return r.rows[0] ?? null;
 }
 
-async function applyVariance(line: LineRow, countedQty: number, staffId: number | null) {
+async function applyVariance(line: LineRow, countedQty: number, staffId: number | null, orgId: OrgId) {
   const delta = countedQty - line.expected_qty;
   if (delta === 0) return null;
   // Single source of truth: adjustBinQty also writes the ledger + sku_stock.
@@ -88,7 +88,7 @@ async function applyVariance(line: LineRow, countedQty: number, staffId: number 
         counted_qty: countedQty,
         delta,
       },
-    });
+    }, undefined, orgId);
   } catch {
     /* non-fatal */
   }
@@ -163,7 +163,7 @@ export async function PATCH(
 
       if (withinTolerance) {
         // Auto-approve.
-        await applyVariance(line, Math.floor(countedQty), staffId);
+        await applyVariance(line, Math.floor(countedQty), staffId, orgId);
         const upd = await tenantQuery(
           orgId,
           `UPDATE cycle_count_lines
@@ -223,7 +223,7 @@ export async function PATCH(
         if (line.counted_qty == null) {
           return respond({ error: 'Line has no countedQty; submit first' }, 409);
         }
-        await applyVariance(line, line.counted_qty, staffId);
+        await applyVariance(line, line.counted_qty, staffId, orgId);
       }
       const upd = await tenantQuery(
         orgId,

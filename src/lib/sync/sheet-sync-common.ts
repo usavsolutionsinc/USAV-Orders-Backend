@@ -1,4 +1,5 @@
 import type { OrgId } from '@/lib/tenancy/constants';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export function getTrackingLast8(value: string): string {
   return String(value || '').replace(/\D/g, '').slice(-8);
@@ -291,6 +292,9 @@ export async function upsertOpenOrdersException(params: {
     return;
   }
 
+  // Legacy (no-org) branch: runs on a raw client with no GUC set, so the
+  // orders_exceptions usav-fallback default would silently misroute. Stamp the
+  // transitional USAV org explicitly to match the org-scoped branch above.
   await params.client.query(
     `INSERT INTO orders_exceptions (
       shipping_tracking_number,
@@ -298,9 +302,10 @@ export async function upsertOpenOrdersException(params: {
       staff_id,
       exception_reason,
       status,
+      organization_id,
       created_at,
       updated_at
-    ) VALUES ($1, $2, $3, 'not_found', 'open', NOW(), NOW())`,
-    [tracking, params.sourceStation, params.staffId]
+    ) VALUES ($1, $2, $3, 'not_found', 'open', $4::uuid, NOW(), NOW())`,
+    [tracking, params.sourceStation, params.staffId, transitionalUsavOrgId()]
   );
 }

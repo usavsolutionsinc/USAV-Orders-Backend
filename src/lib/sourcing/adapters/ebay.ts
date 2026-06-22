@@ -3,6 +3,8 @@ import { browseSearch } from '@/lib/ebay/browse-client';
 import { getIntegrationCredentials, type EbayCredentials } from '@/lib/integrations/credentials';
 import { normalizeEnvValue } from '@/lib/env-utils';
 import { normalizeBrowseItems } from '@/lib/sourcing/normalize';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { buildScourQuery, type ScourRequest, type SourceAdapter } from './types';
 
 /**
@@ -11,12 +13,22 @@ import { buildScourQuery, type ScourRequest, type SourceAdapter } from './types'
  * to ebay_api_calls. See src/lib/ebay/browse-client.ts.
  */
 
-async function logCall(endpoint: string, latencyMs: number, statusCode: number, errorMessage: string | null) {
+async function logCall(
+  endpoint: string,
+  latencyMs: number,
+  statusCode: number,
+  errorMessage: string | null,
+  orgId?: OrgId,
+) {
   try {
+    // ebay_api_calls is tenant-owned with a usav-fallback default — an unstamped
+    // insert silently misroutes to USAV. Stamp the calling org explicitly; this
+    // adapter runs from session-less scour jobs that may not thread one, so fall
+    // back to the transitional USAV org (the established single-tenant convention).
     await pool.query(
-      `INSERT INTO ebay_api_calls (method, endpoint, latency_ms, status_code, error_message, created_at)
-       VALUES ('GET', $1, $2, $3, $4, NOW())`,
-      [endpoint, latencyMs, statusCode, errorMessage],
+      `INSERT INTO ebay_api_calls (method, endpoint, latency_ms, status_code, error_message, created_at, organization_id)
+       VALUES ('GET', $1, $2, $3, $4, NOW(), $5::uuid)`,
+      [endpoint, latencyMs, statusCode, errorMessage, orgId ?? transitionalUsavOrgId()],
     );
   } catch (err) {
     console.warn('[sourcing.ebay] ebay_api_calls log failed:', err instanceof Error ? err.message : err);
@@ -50,7 +62,7 @@ export const ebayAdapter: SourceAdapter = {
         orgId: req.orgId,
       });
       const normalized = normalizeBrowseItems(browse.items);
-      await logCall('buy/browse/v1/item_summary/search', Date.now() - startedAt, 200, null);
+      await logCall('buy/browse/v1/item_summary/search', Date.now() - startedAt, 200, null, req.orgId);
       return normalized;
     } catch (err) {
       await logCall(
@@ -58,6 +70,7 @@ export const ebayAdapter: SourceAdapter = {
         Date.now() - startedAt,
         502,
         err instanceof Error ? err.message : String(err),
+        req.orgId,
       );
       throw err;
     }

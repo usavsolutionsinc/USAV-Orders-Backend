@@ -214,10 +214,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       // in sync automatically — no direct UPDATE on sku_stock from this route.
       const ledgerInsert = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
-           (sku, delta, reason, dimension, staff_id, ref_sal_id, notes)
-         VALUES ($1, $2, 'PICKED', 'WAREHOUSE', $3, $4, $5)
+           (sku, delta, reason, dimension, staff_id, ref_sal_id, notes, organization_id)
+         VALUES ($1, $2, 'PICKED', 'WAREHOUSE', $3, $4, $5, $6::uuid)
          RETURNING id`,
-        [canonicalSku, -qtyToDecrement, staffId, salIdNum, `tech.scan-sku ${fullSkuCode}`],
+        [canonicalSku, -qtyToDecrement, staffId, salIdNum, `tech.scan-sku ${fullSkuCode}`, ctx.organizationId],
       );
       ledgerIdForPublish = ledgerInsert.rows[0]?.id ?? null;
       canonicalSkuForPublish = canonicalSku;

@@ -101,21 +101,17 @@ export interface InventoryEventRow {
  * Pass `db` to share a transaction with the caller; otherwise uses the pool
  * directly.
  *
- * Tenancy (backward-compatible): pass `orgId` to scope the write to a tenant.
- * - When `orgId` is OMITTED the behavior is unchanged — the raw `db`/pool
- *   insert runs exactly as before and `organization_id` falls to the column
- *   default (USAV backfill / GUC, depending on the DB). All existing callers
- *   keep compiling and behaving identically.
- * - When `orgId` is PRESENT the row is stamped with `organization_id`. If a
- *   caller `db` (existing transaction client) was supplied, the GUC is set on
- *   that client first (so the table's GUC default + RLS see the right tenant);
- *   otherwise the insert runs via `tenantQuery(orgId, …)` (a single, self-
- *   contained GUC-scoped statement).
+ * Tenancy: `orgId` is REQUIRED — inventory_events is tenant-owned and its
+ * organization_id column is NOT NULL. The row is always stamped with
+ * `organization_id`. If a caller `db` (existing transaction client) is supplied,
+ * the GUC is set on that client first (so the table's GUC default + RLS see the
+ * right tenant); otherwise the insert runs via `tenantQuery(orgId, …)` (a single,
+ * self-contained GUC-scoped statement). Pass `undefined` for `db` to use the pool.
  */
 export async function recordInventoryEvent(
   input: RecordInventoryEventInput,
-  db?: Pick<PoolClient, 'query'>,
-  orgId?: OrgId,
+  db: Pick<PoolClient, 'query'> | undefined,
+  orgId: OrgId,
 ): Promise<InventoryEventRow> {
   const baseParams = [
     input.event_type,
@@ -136,68 +132,40 @@ export async function recordInventoryEvent(
     JSON.stringify(input.payload ?? {}),
   ];
 
-  // ── Org-scoped path: stamp organization_id explicitly. ────────────────────
-  // ON CONFLICT requires a unique constraint; client_event_id has one (UNIQUE),
-  // so the upsert is safe. When no client_event_id is supplied the ON CONFLICT
-  // clause is unreachable and we get a fresh insert.
-  if (orgId) {
-    const orgParams = [...baseParams, orgId];
-    const orgSql = `INSERT INTO inventory_events (
-       event_type, actor_staff_id, station,
-       receiving_id, receiving_line_id, serial_unit_id, sku,
-       bin_id, prev_bin_id,
-       prev_status, next_status,
-       stock_ledger_id,
-       scan_token, client_event_id, notes, payload,
-       organization_id
-     ) VALUES (
-       $1, $2, $3,
-       $4, $5, $6, $7,
-       $8, $9,
-       $10, $11,
-       $12,
-       $13, $14, $15, $16::jsonb,
-       $17
-     )
-     ON CONFLICT (client_event_id) DO UPDATE
-       SET event_type = inventory_events.event_type   -- no-op, return existing row
-     RETURNING *`;
+  // Stamp organization_id explicitly. inventory_events is tenant-owned, so the
+  // orgId is required. ON CONFLICT requires a unique constraint; client_event_id
+  // has one (UNIQUE), so the upsert is safe. When no client_event_id is supplied
+  // the ON CONFLICT clause is unreachable and we get a fresh insert.
+  const orgParams = [...baseParams, orgId];
+  const orgSql = `INSERT INTO inventory_events (
+     event_type, actor_staff_id, station,
+     receiving_id, receiving_line_id, serial_unit_id, sku,
+     bin_id, prev_bin_id,
+     prev_status, next_status,
+     stock_ledger_id,
+     scan_token, client_event_id, notes, payload,
+     organization_id
+   ) VALUES (
+     $1, $2, $3,
+     $4, $5, $6, $7,
+     $8, $9,
+     $10, $11,
+     $12,
+     $13, $14, $15, $16::jsonb,
+     $17
+   )
+   ON CONFLICT (client_event_id) DO UPDATE
+     SET event_type = inventory_events.event_type   -- no-op, return existing row
+   RETURNING *`;
 
-    if (db) {
-      // Caller owns the transaction — set the GUC on their client so the
-      // RLS backstop + GUC column default agree with the explicit stamp.
-      await db.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
-      const result = await db.query<InventoryEventRow>(orgSql, orgParams);
-      return result.rows[0];
-    }
-    const result = await tenantQuery<InventoryEventRow>(orgId, orgSql, orgParams);
+  if (db) {
+    // Caller owns the transaction — set the GUC on their client so the
+    // RLS backstop + GUC column default agree with the explicit stamp.
+    await db.query("SELECT set_config('app.current_org', $1, true)", [orgId]);
+    const result = await db.query<InventoryEventRow>(orgSql, orgParams);
     return result.rows[0];
   }
-
-  // ── Legacy path (no orgId): byte-identical to the original behavior. ───────
-  const executor: Pick<PoolClient, 'query'> = db ?? pool;
-  const result = await executor.query<InventoryEventRow>(
-    `INSERT INTO inventory_events (
-       event_type, actor_staff_id, station,
-       receiving_id, receiving_line_id, serial_unit_id, sku,
-       bin_id, prev_bin_id,
-       prev_status, next_status,
-       stock_ledger_id,
-       scan_token, client_event_id, notes, payload
-     ) VALUES (
-       $1, $2, $3,
-       $4, $5, $6, $7,
-       $8, $9,
-       $10, $11,
-       $12,
-       $13, $14, $15, $16::jsonb
-     )
-     ON CONFLICT (client_event_id) DO UPDATE
-       SET event_type = inventory_events.event_type   -- no-op, return existing row
-     RETURNING *`,
-    baseParams,
-  );
-
+  const result = await tenantQuery<InventoryEventRow>(orgId, orgSql, orgParams);
   return result.rows[0];
 }
 
