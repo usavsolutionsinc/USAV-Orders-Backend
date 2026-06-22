@@ -61,6 +61,17 @@ test('guard: order-release rewind edges (outbound → STOCKED, Phase 1.3)', () =
   }
 });
 
+test('guard: FBA direct-ship edges (sellable → SHIPPED, Phase 1.3)', () => {
+  // FBA ships sellable units straight to Amazon from stock/graded/tested
+  // (link-unit normally allocates first; ALLOCATED/PICKED→SHIPPED already exist).
+  for (const from of ['ALLOCATED', 'STOCKED', 'GRADED', 'TESTED'] as const) {
+    assert.equal(guard(from, 'SHIPPED').ok, true, `${from} → SHIPPED must be allowed`);
+  }
+  // A non-sellable/broken source must NOT ship (was a latent force-ship bug).
+  assert.equal(guard('IN_REPAIR', 'SHIPPED').ok, false);
+  assert.equal(guard('SCRAPPED', 'SHIPPED').ok, false);
+});
+
 test('guard: a genuinely illegal transition is still rejected', () => {
   // Widening added IN_TEST/REPAIR_DONE/TESTED edges only — unrelated jumps stay closed.
   assert.equal(guard('SHIPPED', 'TESTED').ok, false);
