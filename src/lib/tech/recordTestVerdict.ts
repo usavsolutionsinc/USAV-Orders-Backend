@@ -68,6 +68,8 @@ export interface TestedUnit {
   current_status: string;
   sku: string | null;
   origin_receiving_line_id: number | null;
+  /** Owning tenant — fetched up front so downstream writes stamp it directly. */
+  organization_id: string;
 }
 
 export interface TestLineRollup {
@@ -104,13 +106,23 @@ export async function recordTestVerdict(
   const mapping = VERDICT_TO_STATUS[verdict];
   const notes = args.notes ?? null;
   const actorStaffId = args.actorStaffId ?? null;
+  // Tenant scope. When present (every authenticated route call), every read/write
+  // below is org-scoped so a cross-tenant serial_unit id reads as not-found (404)
+  // — `pool` is the BYPASSRLS owner connection, so this explicit predicate, not
+  // RLS, is what isolates tenants here. Mirrors transition()'s `orgId ? …` shape;
+  // omitting org keeps the legacy unscoped SQL for any caller that lacks one.
+  const orgId = args.organizationId ?? null;
 
-  // 1. Fetch existing unit + its parent receiving_line.
+  // 1. Fetch existing unit + its parent receiving_line (org-scoped).
   const existing = await pool.query<TestedUnit>(
-    `SELECT id, serial_number, current_status::text AS current_status, sku, origin_receiving_line_id
-       FROM serial_units
-      WHERE id = $1`,
-    [serialUnitId],
+    orgId
+      ? `SELECT id, serial_number, current_status::text AS current_status, sku,
+                origin_receiving_line_id, organization_id
+           FROM serial_units WHERE id = $1 AND organization_id = $2`
+      : `SELECT id, serial_number, current_status::text AS current_status, sku,
+                origin_receiving_line_id, organization_id
+           FROM serial_units WHERE id = $1`,
+    orgId ? [serialUnitId, orgId] : [serialUnitId],
   );
   if (existing.rows.length === 0) return null;
   const prev = existing.rows[0];
@@ -159,13 +171,18 @@ export async function recordTestVerdict(
     eventId = applied.eventId;
   } else if (prev.current_status !== mapping.nextStatus) {
     const updated = await pool.query<TestedUnit>(
-      `UPDATE serial_units
-          SET current_status = $2::serial_status_enum,
-              updated_at = NOW()
-        WHERE id = $1
-        RETURNING id, serial_number, current_status::text AS current_status,
-                  sku, origin_receiving_line_id`,
-      [serialUnitId, mapping.nextStatus],
+      orgId
+        ? `UPDATE serial_units
+              SET current_status = $2::serial_status_enum, updated_at = NOW()
+            WHERE id = $1 AND organization_id = $3
+            RETURNING id, serial_number, current_status::text AS current_status,
+                      sku, origin_receiving_line_id, organization_id`
+        : `UPDATE serial_units
+              SET current_status = $2::serial_status_enum, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, serial_number, current_status::text AS current_status,
+                      sku, origin_receiving_line_id, organization_id`,
+      orgId ? [serialUnitId, mapping.nextStatus, orgId] : [serialUnitId, mapping.nextStatus],
     );
     unit = updated.rows[0];
   }
@@ -224,8 +241,10 @@ export async function recordTestVerdict(
       `INSERT INTO testing_results
          (serial_unit_id, receiving_line_id, verdict, unit_status,
           tested_by, notes, inventory_event_id, organization_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT organization_id FROM serial_units WHERE id = $1))`,
-      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId],
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      // org from the unit we already fetched — not a re-SELECT subquery (which
+      // would race a concurrent delete to NULL → wrong fallback org).
+      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId, unit.organization_id],
     );
   } catch (err) {
     console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
@@ -242,16 +261,26 @@ export async function recordTestVerdict(
       failed_units: string;
       in_test_units: string;
     }>(
-      `SELECT rl.quantity_expected,
-              COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
-              COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
-              COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
-              COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
-         FROM receiving_lines rl
-    LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
-        WHERE rl.id = $1
-        GROUP BY rl.id, rl.quantity_expected`,
-      [lineId],
+      orgId
+        ? `SELECT rl.quantity_expected,
+                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
+             FROM receiving_lines rl
+        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
+            WHERE rl.id = $1 AND rl.organization_id = $2
+            GROUP BY rl.id, rl.quantity_expected`
+        : `SELECT rl.quantity_expected,
+                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
+                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
+             FROM receiving_lines rl
+        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
+            WHERE rl.id = $1
+            GROUP BY rl.id, rl.quantity_expected`,
+      orgId ? [lineId, orgId] : [lineId],
     );
 
     const t = tally.rows[0];
@@ -295,12 +324,19 @@ export async function recordTestVerdict(
         params.push(nextDisposition);
         sets.push(`disposition_code = $${params.length}::disposition_enum`);
       }
+      // Tenant-scope the rollup write (defense-in-depth; the line is the
+      // org-verified unit's parent).
+      let whereClause = 'id = $1';
+      if (orgId) {
+        params.push(orgId);
+        whereClause += ` AND organization_id = $${params.length}`;
+      }
 
       const rolled = await pool.query<TestLineRollup>(
         `UPDATE receiving_lines
             SET ${sets.join(', ')},
                 updated_at = NOW()
-          WHERE id = $1
+          WHERE ${whereClause}
           RETURNING id, workflow_status::text AS workflow_status,
                     qa_status::text AS qa_status,
                     disposition_code::text AS disposition_code`,

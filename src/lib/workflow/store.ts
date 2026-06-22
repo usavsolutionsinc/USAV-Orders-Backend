@@ -25,7 +25,15 @@ export function createDrizzleStore(orgId: OrgId): WorkflowStore {
       const [row] = await db
         .select()
         .from(itemWorkflowState)
-        .where(eq(itemWorkflowState.serialUnitId, serialUnitId))
+        // Org-scoped read: neon-http can't see the GUC, so the predicate is
+        // explicit (mirrors recordRun's explicit stamp). A cross-org id reads
+        // as not-enrolled rather than leaking another tenant's position.
+        .where(
+          and(
+            eq(itemWorkflowState.organizationId, orgId),
+            eq(itemWorkflowState.serialUnitId, serialUnitId),
+          ),
+        )
         .limit(1);
       if (!row) return null;
       return {
@@ -78,7 +86,12 @@ export function createDrizzleStore(orgId: OrgId): WorkflowStore {
           enteredNodeAt: now,
           updatedAt: now,
         })
-        .where(eq(itemWorkflowState.serialUnitId, state.serialUnitId));
+        .where(
+          and(
+            eq(itemWorkflowState.organizationId, orgId),
+            eq(itemWorkflowState.serialUnitId, state.serialUnitId),
+          ),
+        );
     },
 
     async setStatus(state, status, contextPatch): Promise<void> {
@@ -89,7 +102,12 @@ export function createDrizzleStore(orgId: OrgId): WorkflowStore {
           context: contextPatch ? { ...state.context, ...contextPatch } : state.context,
           updatedAt: new Date(),
         })
-        .where(eq(itemWorkflowState.serialUnitId, state.serialUnitId));
+        .where(
+          and(
+            eq(itemWorkflowState.organizationId, orgId),
+            eq(itemWorkflowState.serialUnitId, state.serialUnitId),
+          ),
+        );
     },
 
     async recordRun(run: RunRecord): Promise<void> {
