@@ -182,7 +182,9 @@ export async function POST(
         clientEventId,
         notes,
         payload: eventPayload,
+        receivingId: line.receiving_id,
         receivingLineId: lineId,
+        scanToken,
         binId: null, // a line-status verdict moves no bin — keep the event bin_id null
         sku: line.sku,
         orgId,

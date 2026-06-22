@@ -45,7 +45,9 @@ const baseArgs = {
   clientEventId: 'evt-1',
   notes: 'looks good',
   payload: { verdict: 'PASS' },
+  receivingId: 5,
   receivingLineId: 9,
+  scanToken: 'scan-xyz',
   binId: null,
   sku: 'SKU-1',
   orgId: ORG,
@@ -67,6 +69,8 @@ test('applyTransition: happy path writes via transition() then taps, no idempote
   assert.equal(ti.to, 'TESTED');
   assert.equal(ti.eventType, 'TEST_PASS');
   assert.equal(ti.receivingLineId, 9);
+  assert.equal(ti.receivingId, 5); // carton linkage preserved on the event
+  assert.equal(ti.scanToken, 'scan-xyz');
   assert.equal(ti.binId, null);
   assert.equal(ti.clientEventId, 'evt-1');
   assert.equal(cap.transitionOrgs[0], ORG);

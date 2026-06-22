@@ -62,7 +62,9 @@ export interface ApplyTransitionArgs {
   clientEventId?: string | null;
   notes?: string | null;
   payload?: Record<string, unknown>;
+  receivingId?: number | null;
   receivingLineId?: number | null;
+  scanToken?: string | null;
   /** Pass null to keep the event's bin_id null (e.g. testing has no placement). */
   binId?: number | null;
   /** SKU for the idempotent re-entry event (the happy path reads it from the row). */
@@ -127,7 +129,9 @@ export async function applyTransition(
       clientEventId: args.clientEventId ?? null,
       notes: args.notes ?? null,
       payload: args.payload ?? {},
+      receivingId: args.receivingId ?? null,
       receivingLineId: args.receivingLineId ?? null,
+      scanToken: args.scanToken ?? null,
       binId: args.binId,
       expectedFrom: args.expectedFrom,
     },
@@ -156,7 +160,9 @@ export async function applyTransition(
         serial_unit_id: args.unitId,
         sku: args.sku ?? null,
         bin_id: args.binId ?? null,
+        receiving_id: args.receivingId ?? null,
         receiving_line_id: args.receivingLineId ?? null,
+        scan_token: args.scanToken ?? null,
         prev_status: result.from,
         next_status: args.to,
         client_event_id: args.clientEventId ?? null,
