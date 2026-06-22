@@ -138,3 +138,17 @@ export function isReceivingUnifiedInbound(): boolean {
   return readBoolEnv('RECEIVING_UNIFIED_INBOUND');
 }
 
+/**
+ * Unified-engine chokepoint cutover (UNIFIED-ENGINE-MASTER-PLAN §1.1). When ON,
+ * domain handlers route their serial-unit status change + inventory event +
+ * engine tap through the single guarded applyTransition() chokepoint instead of
+ * a hand-rolled raw UPDATE + appendInventoryEvent + tap. recordTestVerdict is the
+ * reference call site. Default OFF — when off, every converted handler takes its
+ * byte-identical legacy path, so this is a no-op until explicitly enabled per
+ * environment. Flip to true once per-site parity is verified, then delete the
+ * legacy branch. Set UNIFIED_ENGINE_APPLY_TRANSITION=true to enable.
+ */
+export function isUnifiedEngineApplyTransition(): boolean {
+  return readBoolEnv('UNIFIED_ENGINE_APPLY_TRANSITION');
+}
+

@@ -18,6 +18,10 @@ test('guard: TESTED → IN_TEST is allowed (TEST_AGAIN re-test of a passed unit)
   assert.equal(guard('TESTED', 'IN_TEST').ok, true);
 });
 
+test('guard: GRADED → TESTED is allowed (PASS on an already-graded unit)', () => {
+  assert.equal(guard('GRADED', 'TESTED').ok, true);
+});
+
 test('guard: pre-existing edges still hold (RECEIVED→TESTED, GRADED→IN_TEST)', () => {
   assert.equal(guard('RECEIVED', 'TESTED').ok, true);
   assert.equal(guard('RECEIVED', 'IN_TEST').ok, true);

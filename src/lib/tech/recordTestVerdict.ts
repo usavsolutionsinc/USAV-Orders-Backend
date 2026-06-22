@@ -29,6 +29,24 @@ import pool from '@/lib/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { tapWorkflow } from '@/lib/workflow/tap';
+import { applyTransition } from '@/lib/workflow/applyTransition';
+import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
+import type { SerialState } from '@/lib/inventory/state-machine';
+
+/**
+ * Thrown when the unified-engine chokepoint refuses a verdict's status
+ * transition (the guarded allow-list rejected it — e.g. a held or shipped
+ * unit). Only reachable on the UNIFIED_ENGINE_APPLY_TRANSITION path; the legacy
+ * raw path force-writes and never throws this. The route maps it to a 409.
+ */
+export class GuardRejectedError extends Error {
+  readonly from: string;
+  constructor(message: string, from: string) {
+    super(message);
+    this.name = 'GuardRejectedError';
+    this.from = from;
+  }
+}
 
 export const TEST_VERDICTS = ['PASS', 'TEST_AGAIN', 'TESTING_FAILED'] as const;
 export type TestVerdict = (typeof TEST_VERDICTS)[number];
@@ -98,11 +116,48 @@ export async function recordTestVerdict(
   const prev = existing.rows[0];
   const lineId = prev.origin_receiving_line_id;
 
-  // 2. Apply the unit's new status. Skip the UPDATE if it's already there
-  //    (idempotent retry) but still emit the audit + tsn rows below so the
-  //    operator's verdict click leaves a trail.
+  // 2. Apply the unit's new status. Two paths behind UNIFIED_ENGINE_APPLY_TRANSITION:
+  //      ON  → applyTransition(): the single guarded chokepoint does the status
+  //            write + atomic inventory_event + engine tap together (the engine
+  //            reference impl — see UNIFIED-ENGINE-MASTER-PLAN §1.1).
+  //      OFF → the legacy raw UPDATE here + appendInventoryEvent (step 4) +
+  //            end-of-fn tap (step 6), byte-identical to before.
+  //    Either way: skip the actual status change when it's already there
+  //    (idempotent retry) but still leave the audit + tsn + event trail below.
+  const useChokepoint = isUnifiedEngineApplyTransition();
   let unit = prev;
-  if (prev.current_status !== mapping.nextStatus) {
+  let eventId!: number;
+
+  if (useChokepoint) {
+    const applied = await applyTransition({
+      unitId: serialUnitId,
+      to: mapping.nextStatus as SerialState,
+      eventType: mapping.eventType,
+      tapEvent: 'test_verdict',
+      tapInput: { verdict },
+      actorStaffId,
+      station: 'TECH',
+      clientEventId: args.clientEventId ?? null,
+      notes,
+      payload: { verdict },
+      receivingLineId: lineId,
+      binId: null, // testing changes no placement — keep the event's bin_id null
+      sku: prev.sku,
+      orgId: args.organizationId ?? null,
+      source: 'manual',
+    });
+    if (!applied.ok) {
+      // Unit vanished between the read and the write → not-found (route 404).
+      if (applied.status === 404) return null;
+      // The guard refused the transition (held/shipped/illegal source state).
+      // The legacy path force-wrote; the chokepoint enforces the allow-list, so
+      // surface it for the route to map to 409 instead of silently forcing.
+      throw new GuardRejectedError(applied.error, applied.from ?? prev.current_status);
+    }
+    // current_status is the only field that changed; everything else mirrors prev.
+    unit = { ...prev, current_status: mapping.nextStatus };
+    eventId = applied.eventId;
+  } else if (prev.current_status !== mapping.nextStatus) {
     const updated = await pool.query<TestedUnit>(
       `UPDATE serial_units
           SET current_status = $2::serial_status_enum,
@@ -139,22 +194,26 @@ export async function recordTestVerdict(
     }
   }
 
-  // 4. inventory_events row for the unit timeline. The event id is surfaced
-  //    in the result so callers can cross-reference the verdict transition
-  //    back to the timeline entry (mirrors /grade).
-  const { event } = await appendInventoryEvent({
-    eventType: mapping.eventType,
-    clientEventId: args.clientEventId ?? null,
-    actorStaffId,
-    station: 'TECH',
-    serialUnitId: unit.id,
-    receivingLineId: lineId,
-    sku: unit.sku,
-    prevStatus: prev.current_status,
-    nextStatus: mapping.nextStatus,
-    notes,
-    payload: { verdict },
-  });
+  // 4. inventory_events row for the unit timeline (LEGACY path only — the
+  //    chokepoint already wrote the event inside applyTransition at step 2). The
+  //    event id is surfaced in the result so callers can cross-reference the
+  //    verdict transition back to the timeline entry (mirrors /grade).
+  if (!useChokepoint) {
+    const { event } = await appendInventoryEvent({
+      eventType: mapping.eventType,
+      clientEventId: args.clientEventId ?? null,
+      actorStaffId,
+      station: 'TECH',
+      serialUnitId: unit.id,
+      receivingLineId: lineId,
+      sku: unit.sku,
+      prevStatus: prev.current_status,
+      nextStatus: mapping.nextStatus,
+      notes,
+      payload: { verdict },
+    });
+    eventId = event.id;
+  }
 
   // 4b. Recently-Tested feed row. References the unit by id only — serial
   //     number / SKU / condition are JOINed from serial_units at read time
@@ -166,7 +225,7 @@ export async function recordTestVerdict(
          (serial_unit_id, receiving_line_id, verdict, unit_status,
           tested_by, notes, inventory_event_id, organization_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, (SELECT organization_id FROM serial_units WHERE id = $1))`,
-      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, event.id],
+      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId],
     );
   } catch (err) {
     console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
@@ -251,22 +310,25 @@ export async function recordTestVerdict(
     }
   }
 
-  // 6. Workflow-engine tap (fire-and-forget — never throws). The inspection
-  //    node maps PASS → pass, TESTING_FAILED → fail; TEST_AGAIN re-parks.
-  await tapWorkflow({
-    serialUnitId: unit.id,
-    event: 'test_verdict',
-    input: { verdict },
-    staffId: actorStaffId,
-    source: 'manual',
-    orgId: args.organizationId ?? null,
-  });
+  // 6. Workflow-engine tap (LEGACY path only — fire-and-forget, never throws).
+  //    The chokepoint path already tapped inside applyTransition at step 2. The
+  //    inspection node maps PASS → pass, TESTING_FAILED → fail; TEST_AGAIN re-parks.
+  if (!useChokepoint) {
+    await tapWorkflow({
+      serialUnitId: unit.id,
+      event: 'test_verdict',
+      input: { verdict },
+      staffId: actorStaffId,
+      source: 'manual',
+      orgId: args.organizationId ?? null,
+    });
+  }
 
   return {
     unit,
     prevStatus: prev.current_status,
     nextStatus: mapping.nextStatus,
     line: lineRollup,
-    eventId: event.id,
+    eventId,
   };
 }

@@ -5,6 +5,7 @@ import pool from '@/lib/db';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import {
   recordTestVerdict,
+  GuardRejectedError,
   TEST_VERDICTS,
   type TestVerdict,
 } from '@/lib/tech/recordTestVerdict';
@@ -144,6 +145,11 @@ export const POST = withAuth(async (request, ctx) => {
       event_id: result.eventId,
     });
   } catch (err) {
+    // The unified-engine chokepoint refused this transition (held/shipped/illegal
+    // source state) — a client/state error, not a server fault → 409.
+    if (err instanceof GuardRejectedError) {
+      return NextResponse.json({ ok: false, error: err.message, from: err.from }, { status: 409 });
+    }
     const message = err instanceof Error ? err.message : 'test verdict failed';
     console.error('[POST /api/serial-units/[id]/test] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
