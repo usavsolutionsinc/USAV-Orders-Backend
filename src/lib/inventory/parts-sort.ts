@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
-import { recordInventoryEvent, type InventoryEventStation } from '@/lib/inventory/events';
+import { type InventoryEventStation } from '@/lib/inventory/events';
+import { transition } from '@/lib/inventory/state-machine';
 import {
   findLocationByBarcode,
   findLocationByName,
@@ -86,7 +87,7 @@ export interface SortSerialToPartsInput {
 
 export type SortSerialToPartsResult =
   | { sorted: true; bin: PartsBin }
-  | { sorted: false; reason: 'disabled' | 'no_parts_bin' | 'not_found' | 'committed' | 'already_there' };
+  | { sorted: false; reason: 'disabled' | 'no_parts_bin' | 'not_found' | 'committed' | 'already_there' | 'blocked' };
 
 /**
  * Move a serial unit into the Parts bin and mark it STOCKED. No-op (returns
@@ -134,40 +135,42 @@ export async function sortSerialUnitToParts(
     prevBinId = prev?.id ?? null;
   }
 
+  // Guarded status write + PUTAWAY event via the chokepoint (SoT rule: never
+  // hand-write current_status). transition() emits the event itself. The common
+  // from-states (GRADED/RECEIVED/TESTED/RETURNED → STOCKED) are guard-clean; an
+  // odd source (e.g. a unit mid-repair) is rejected → we no-op ('blocked'),
+  // staying best-effort so the caller's grade write still succeeds.
+  const moved = await transition(
+    {
+      unitId: unit.id,
+      to: 'STOCKED',
+      eventType: 'PUTAWAY',
+      actorStaffId: input.staffId ?? null,
+      station: input.station ?? 'TECH',
+      binId: bin.id,
+      prevBinId,
+      clientEventId: input.clientEventId ? `${input.clientEventId}:parts-sort` : null,
+      notes: 'Auto-sorted to Parts bin (condition: For Parts)',
+      payload: { auto_parts_sort: true, from: unit.current_location, to: bin.name },
+    },
+    // runtime only needs .query; parts-sort types its client as Pick<PoolClient,'query'>.
+    input.client as PoolClient | undefined,
+  );
+  if (!moved.ok) {
+    console.warn(
+      `[parts-sort] guarded move ${unit.current_status}→STOCKED declined (${moved.error}); not sorted`,
+    );
+    return { sorted: false, reason: 'blocked' };
+  }
+
+  // current_location is not part of the status transition — set it separately
+  // (location-only UPDATE, no current_status, so the SoT guard permits it).
   await db.query(
     `UPDATE serial_units
-        SET current_location = $1,
-            current_status   = 'STOCKED'::serial_status_enum,
-            updated_at = NOW()
+        SET current_location = $1, updated_at = NOW()
       WHERE id = $2`,
     [bin.name, unit.id],
   );
-
-  try {
-    await recordInventoryEvent(
-      {
-        event_type: 'PUTAWAY',
-        actor_staff_id: input.staffId ?? null,
-        station: input.station ?? 'TECH',
-        serial_unit_id: unit.id,
-        sku: unit.sku,
-        bin_id: bin.id,
-        prev_bin_id: prevBinId,
-        next_status: 'STOCKED',
-        client_event_id: input.clientEventId ? `${input.clientEventId}:parts-sort` : null,
-        notes: 'Auto-sorted to Parts bin (condition: For Parts)',
-        payload: {
-          auto_parts_sort: true,
-          from: unit.current_location,
-          to: bin.name,
-        },
-      },
-      input.client,
-    );
-  } catch (err) {
-    // Non-fatal: the move already landed; the audit row is best-effort.
-    console.warn('[parts-sort] PUTAWAY event failed (non-fatal)', err);
-  }
 
   return { sorted: true, bin };
 }
