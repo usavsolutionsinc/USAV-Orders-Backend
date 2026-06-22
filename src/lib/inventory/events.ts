@@ -24,6 +24,10 @@ export type InventoryEventType =
   | 'RELEASED'
   | 'REPAIR_STARTED'
   | 'REPAIR_COMPLETED'
+  // Hold lifecycle (src/lib/inventory/hold.ts). Already present in inventory_events
+  // via raw INSERTs; declared here so the guarded transition() can emit them.
+  | 'HELD'
+  | 'RELEASED_HOLD'
   | 'NOTE';
 
 export type InventoryEventStation =
@@ -78,6 +82,13 @@ export interface InventoryEventRow {
   client_event_id: string | null;
   notes: string | null;
   payload: Record<string, unknown>;
+  /**
+   * Actor display name, resolved by `readTimeline` via a LEFT JOIN to `staff`.
+   * Null for system / unknown actors. Only the read path populates this — the
+   * `inventory_events` table itself has no `actor_name` column (the writer
+   * returns it absent), so it's optional on the row.
+   */
+  actor_name?: string | null;
 }
 
 // ── Writer ─────────────────────────────────────────────────────────────────
@@ -215,24 +226,33 @@ export async function readTimeline(
   };
 
   // Tenant scope (only when orgId is supplied — keeps the legacy raw path
-  // byte-identical for callers that don't yet thread org).
-  if (orgId) push('organization_id = $?', orgId);
+  // byte-identical for callers that don't yet thread org). Columns are
+  // qualified with `ie.` because the read LEFT JOINs `staff` to resolve the
+  // actor display name (see below).
+  if (orgId) push('ie.organization_id = $?', orgId);
 
-  if (filter.receiving_id != null)       push('receiving_id = $?',        filter.receiving_id);
-  if (filter.receiving_line_id != null)  push('receiving_line_id = $?',   filter.receiving_line_id);
-  if (filter.serial_unit_id != null)     push('serial_unit_id = $?',      filter.serial_unit_id);
-  if (filter.sku)                        push('sku = $?',                 filter.sku);
-  if (filter.bin_id != null)             push('bin_id = $?',              filter.bin_id);
-  if (filter.actor_staff_id != null)     push('actor_staff_id = $?',      filter.actor_staff_id);
-  if (filter.since)                      push('occurred_at >= $?',        filter.since);
+  if (filter.receiving_id != null)       push('ie.receiving_id = $?',        filter.receiving_id);
+  if (filter.receiving_line_id != null)  push('ie.receiving_line_id = $?',   filter.receiving_line_id);
+  if (filter.serial_unit_id != null)     push('ie.serial_unit_id = $?',      filter.serial_unit_id);
+  if (filter.sku)                        push('ie.sku = $?',                 filter.sku);
+  if (filter.bin_id != null)             push('ie.bin_id = $?',              filter.bin_id);
+  if (filter.actor_staff_id != null)     push('ie.actor_staff_id = $?',      filter.actor_staff_id);
+  if (filter.since)                      push('ie.occurred_at >= $?',        filter.since);
 
   const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   const limit = Math.min(Math.max(filter.limit ?? 100, 1), 1000);
   params.push(limit);
 
-  const sql = `SELECT * FROM inventory_events
+  // Resolve the actor display name in the read (the table has no actor_name
+  // column). Additive: `ie.*` keeps every existing field; the LEFT JOIN only
+  // appends a nullable `actor_name`, so the row set is otherwise unchanged.
+  // This is the root-cause fix for unit timelines that showed when/what but
+  // never WHO (the lightweight `events` feed had no actor name).
+  const sql = `SELECT ie.*, s.name AS actor_name
+       FROM inventory_events ie
+       LEFT JOIN staff s ON s.id = ie.actor_staff_id
      ${where}
-     ORDER BY occurred_at DESC, id DESC
+     ORDER BY ie.occurred_at DESC, ie.id DESC
      LIMIT $${params.length}`;
 
   // When org-scoped, run through the tenant connection so the GUC + RLS

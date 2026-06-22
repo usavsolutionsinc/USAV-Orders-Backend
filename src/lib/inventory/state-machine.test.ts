@@ -40,6 +40,19 @@ test('guard: any state can enter ON_HOLD (universal hold entry, incl. TESTING_FA
   assert.equal(guard('SHIPPED', 'ON_HOLD').ok, true);
 });
 
+test('guard: ON_HOLD exits to the restorable set (release-from-hold, Phase 1.3)', () => {
+  // releaseUnit restores the pre-hold state; every restorable destination must
+  // be guard-legal so the guarded release never rejects.
+  for (const to of ['STOCKED', 'TRIAGED', 'IN_REPAIR', 'REPAIR_DONE', 'IN_TEST',
+                     'GRADED', 'ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'STAGED'] as const) {
+    assert.equal(guard('ON_HOLD', to).ok, true, `ON_HOLD → ${to} must be allowed`);
+  }
+  // ON_HOLD → ON_HOLD is still an identity no-op (rejected).
+  assert.equal(guard('ON_HOLD', 'ON_HOLD').ok, false);
+  // A non-restorable destination stays closed.
+  assert.equal(guard('ON_HOLD', 'SHIPPED').ok, false);
+});
+
 test('guard: a genuinely illegal transition is still rejected', () => {
   // Widening added IN_TEST/REPAIR_DONE/TESTED edges only — unrelated jumps stay closed.
   assert.equal(guard('SHIPPED', 'TESTED').ok, false);

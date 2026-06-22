@@ -78,7 +78,12 @@ const TRANSITIONS: Readonly<Record<SerialState, ReadonlySet<SerialState>>> = {
   RETURNED:    new Set<SerialState>(['TRIAGED', 'STOCKED', 'RMA', 'SCRAPPED']),
   RMA:         new Set<SerialState>(['SCRAPPED', 'RETURNED']),
   SCRAPPED:    new Set<SerialState>([]), // terminal
-  ON_HOLD:     new Set<SerialState>([]), // exits handled by hold.releaseUnit(); see below.
+  // Release-from-hold restores the pre-hold state. The destination is dynamic
+  // (recovered from the unit's HELD event, or an operator force_status), but it
+  // is ALWAYS one of hold.ts' RESTORABLE_STATUSES — so model exactly that set as
+  // ON_HOLD's outgoing edges. Entry to ON_HOLD stays universal via guard()'s
+  // to===ON_HOLD special-case below; these edges are the exits.
+  ON_HOLD:     new Set<SerialState>(['STOCKED', 'TRIAGED', 'IN_REPAIR', 'REPAIR_DONE', 'IN_TEST', 'GRADED', 'ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'STAGED']),
 };
 
 /**
