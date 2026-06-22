@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { withTenantTransaction } from '@/lib/tenancy/db';
+import { transition } from '@/lib/inventory/state-machine';
+import { recordInventoryEvent } from '@/lib/inventory/events';
 
 /**
  * POST /api/orders/[id]/release
@@ -87,63 +89,71 @@ export const POST = withAuth(async (request, ctx) => {
         // units already SHIPPED — those shouldn't have an open allocation,
         // but defending against the edge case here.
         const outboundStates = ['ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'STAGED'];
-        let stockedReturn = false;
-        if (outboundStates.includes(row.unit_status)) {
-          await client.query(
-            `UPDATE serial_units
-                SET current_status = 'STOCKED'::serial_status_enum,
-                    updated_at = NOW()
-              WHERE id = $1
-                AND organization_id = $2`,
-            [row.serial_unit_id, ctx.organizationId],
-          );
-          stockedReturn = true;
-        }
-
+        const stockedReturn = outboundStates.includes(row.unit_status);
         const perUnitClientEventId = clientEventId ? `${clientEventId}:${row.serial_unit_id}` : null;
-        // inventory_events is tenant-owned. The GUC set by withTenantTransaction
-        // would supply organization_id via the column default, but stamp it
-        // explicitly too so the row attributes to the right tenant regardless.
-        const ev = await client.query<{ id: number }>(
-          `INSERT INTO inventory_events (
-            event_type, actor_staff_id, station,
-            serial_unit_id, sku,
-            prev_status, next_status,
-            client_event_id, notes, payload,
-            organization_id
-          )
-          VALUES ('RELEASED', $1, 'SYSTEM',
-                  $2, $3,
-                  $4, $5,
-                  $6, $7, $8::jsonb,
-                  $9)
-          ON CONFLICT (client_event_id) DO NOTHING
-          RETURNING id`,
-          [
-            actorStaffId,
-            row.serial_unit_id,
-            row.sku,
-            row.unit_status,
-            stockedReturn ? 'STOCKED' : row.unit_status,
-            perUnitClientEventId,
-            reason,
-            JSON.stringify({
-              source: 'orders.release',
-              order_id: orderId,
-              allocation_id: row.id,
-              prev_alloc_state: row.state,
-              ordinal: i + 1,
-            }),
+        const releasePayload = {
+          source: 'orders.release',
+          order_id: orderId,
+          allocation_id: row.id,
+          prev_alloc_state: row.state,
+          ordinal: i + 1,
+        };
+
+        // The status return + RELEASED event go through the guarded chokepoint
+        // (SoT rule: never hand-write current_status). The outbound→STOCKED
+        // release-rewind edges are modeled, so the guard never rejects here.
+        // The allocation close (above) and ledger stay outside transition. The
+        // non-outbound defensive case has no status change → log the event only.
+        let eventId: number | null;
+        if (stockedReturn) {
+          const moved = await transition(
+            {
+              unitId: row.serial_unit_id,
+              to: 'STOCKED',
+              eventType: 'RELEASED',
+              actorStaffId,
+              station: 'SYSTEM',
+              clientEventId: perUnitClientEventId,
+              notes: reason,
+              payload: releasePayload,
+            },
+            client,
             ctx.organizationId,
-          ],
-        );
+          );
+          if (!moved.ok) {
+            // Unreachable in practice (every outbound state has a →STOCKED edge);
+            // surface rather than silently force-write, rolling back the release.
+            throw new Error(
+              `release: cannot return unit ${row.serial_unit_id} (${row.unit_status}) to STOCKED: ${moved.error}`,
+            );
+          }
+          eventId = moved.eventId;
+        } else {
+          const ev = await recordInventoryEvent(
+            {
+              event_type: 'RELEASED',
+              actor_staff_id: actorStaffId,
+              station: 'SYSTEM',
+              serial_unit_id: row.serial_unit_id,
+              sku: row.sku,
+              prev_status: row.unit_status,
+              next_status: row.unit_status,
+              client_event_id: perUnitClientEventId,
+              notes: reason,
+              payload: releasePayload,
+            },
+            client,
+            ctx.organizationId,
+          );
+          eventId = ev.id;
+        }
 
         released.push({
           unitId: row.serial_unit_id,
           allocationId: row.id,
           prevAllocState: row.state,
           prevUnitStatus: row.unit_status,
-          eventId: ev.rows[0]?.id ?? null,
+          eventId,
         });
       }
 

@@ -53,6 +53,14 @@ test('guard: ON_HOLD exits to the restorable set (release-from-hold, Phase 1.3)'
   assert.equal(guard('ON_HOLD', 'SHIPPED').ok, false);
 });
 
+test('guard: order-release rewind edges (outbound → STOCKED, Phase 1.3)', () => {
+  // Cancelling an order before ship returns each allocated/picked/packed unit
+  // to stock — every outbound state must reach STOCKED.
+  for (const from of ['ALLOCATED', 'PICKED', 'PACKED', 'LABELED', 'STAGED'] as const) {
+    assert.equal(guard(from, 'STOCKED').ok, true, `${from} → STOCKED must be allowed`);
+  }
+});
+
 test('guard: a genuinely illegal transition is still rejected', () => {
   // Widening added IN_TEST/REPAIR_DONE/TESTED edges only — unrelated jumps stay closed.
   assert.equal(guard('SHIPPED', 'TESTED').ok, false);
