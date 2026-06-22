@@ -12,6 +12,7 @@ import { advanceItem, type AdvanceArgs, type AdvanceOutcome } from './advance';
 import { getNode } from './registry';
 import { createDrizzleStore } from './store';
 import { emitWorkflowEvent } from './events';
+import { redisAdvanceLock } from './lock';
 
 // Built-in nodes register via import side-effect (each module calls
 // registerNode()). Importing this barrel wires the full palette; tests that
@@ -38,7 +39,13 @@ export async function advance(
 ): Promise<AdvanceOutcome> {
   registerBuiltins();
   return advanceItem(
-    { store: createDrizzleStore(orgId), getNode, emit: (event) => emitWorkflowEvent(orgId, event) },
+    {
+      store: createDrizzleStore(orgId),
+      getNode,
+      emit: (event) => emitWorkflowEvent(orgId, event),
+      // Phase 1.0: real per-unit mutex (best-effort Upstash; no-op without it).
+      lock: redisAdvanceLock,
+    },
     { orgId, ...args },
   );
 }
