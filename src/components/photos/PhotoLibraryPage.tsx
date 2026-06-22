@@ -21,7 +21,6 @@ import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
-import { PhotoGallery, type PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
 
 // `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
 // without importing this page (cycle). Re-exported here for compatibility.
@@ -35,12 +34,6 @@ export function PhotoLibraryPage() {
   const queryClient = useQueryClient();
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [galleryState, setGalleryState] = useState<{
-    key: string;
-    title: string;
-    photos: PhotoGalleryInput[];
-    initialIndex: number;
-  } | null>(null);
   const selectedRows = useTableSelection<LibraryPhoto>(
     PHOTO_LIBRARY_SELECTION_SCOPE,
     (photo) => photo.id,
@@ -131,26 +124,6 @@ export function PhotoLibraryPage() {
       return next;
     });
   }, [selectMode]);
-
-  const openGallery = useCallback((photo: LibraryPhoto) => {
-    const poRef = photo.poRef?.trim() || null;
-    const grouped = (poRef ? photos.filter((item) => item.poRef === poRef) : [photo]).slice();
-    grouped.sort((a, b) => {
-      const left = new Date(a.createdAt).getTime();
-      const right = new Date(b.createdAt).getTime();
-      return left - right || a.id - b.id;
-    });
-    const initialIndex = Math.max(
-      0,
-      grouped.findIndex((item) => item.id === photo.id),
-    );
-    setGalleryState({
-      key: poRef ? `po:${poRef}` : `photo:${photo.id}`,
-      title: poRef ? `PO ${poRef}` : `Photo ${photo.id}`,
-      photos: grouped.map((item) => ({ id: item.id, url: item.displayUrl })),
-      initialIndex,
-    });
-  }, [photos]);
 
   const downloadPhotoFile = useCallback(async (url: string, filename: string) => {
     const res = await fetch(url);
@@ -254,7 +227,6 @@ export function PhotoLibraryPage() {
           selectMode={selectMode}
           selected={selected}
           onToggleSelect={toggleSelect}
-          onOpenPhoto={openGallery}
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
@@ -273,21 +245,6 @@ export function PhotoLibraryPage() {
           />
         ) : null}
       </div>
-
-      {galleryState ? (
-        <PhotoGallery
-          key={galleryState.key}
-          photos={galleryState.photos}
-          orderId={galleryState.title.replace(/\s+/g, '-')}
-          viewerTitle={galleryState.title}
-          defaultOpen
-          initialIndex={galleryState.initialIndex}
-          onViewerClose={() => setGalleryState(null)}
-          compact
-          showCopyLinks={false}
-          launcherTitle={galleryState.title}
-        />
-      ) : null}
     </div>
   );
 }
