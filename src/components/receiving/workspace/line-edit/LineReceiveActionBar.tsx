@@ -51,11 +51,8 @@ export function LineReceiveActionBar({
       disabled={primaryDisabled}
       onClick={onPrintAndReceive}
       icon={<Printer className="h-4 w-4 shrink-0" />}
-      // 45rem = 720px — the LineEditPanel cards' rendered width (max-w-3xl
-      // column minus its px-6 gutters). FloatingButton applies its own px
-      // OUTSIDE the max-width container, so passing max-w-3xl here made the
-      // pill 48px wider than the cards above it.
-      maxWidth="max-w-[45rem]"
+      // Match the workspace track used by the cards above it.
+      maxWidth="max-w-3xl"
       fullWidth
       tone="emerald"
       toneClasses={

@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import type { PermissionString } from '@/lib/auth/permissions-shared';
 import { deletePhoto } from '@/lib/photos/service';
+import { getReceivingPhotoDeleteMeta } from '@/lib/photos/queries/receiving-list';
+import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 
 /**
  * DELETE /api/photos/[id] — unified photo delete across every entity_type
@@ -65,7 +67,18 @@ export async function DELETE(
   const gate = await requireRoutePerm(request, perm);
   if (gate.denied) return gate.denied;
 
+  const receivingMeta = await getReceivingPhotoDeleteMeta(id, orgId);
   await deletePhoto(id, orgId);
+  if (receivingMeta?.receivingId != null) {
+    await publishReceivingPhotoChanged({
+      organizationId: orgId,
+      action: 'delete',
+      receivingId: receivingMeta.receivingId,
+      receivingLineId: receivingMeta.receivingLineId,
+      photoId: id,
+      source: 'api.photos.delete',
+    });
+  }
 
   return NextResponse.json({ success: true, id, entityType });
 }

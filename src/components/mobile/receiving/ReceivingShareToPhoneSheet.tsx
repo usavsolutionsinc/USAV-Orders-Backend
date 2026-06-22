@@ -64,7 +64,13 @@ export function ReceivingShareToPhoneSheet() {
     !!stationBridgeChannel && staffId > 0,
   );
 
-  const close = useCallback(() => setShared(null), []);
+  const close = useCallback(() => {
+    if (!shared) return;
+    setShared(null);
+    // X on the handoff sheet should land the operator on the mobile receiving
+    // feed so they return to the unbox page instead of staying on the prompt.
+    router.replace('/m/receiving');
+  }, [router, shared]);
   const takePhotos = useCallback(() => {
     if (!shared) return;
     const id = shared.receivingId;

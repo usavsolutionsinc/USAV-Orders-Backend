@@ -23,6 +23,7 @@ export async function GET(
   }
 
   const variant = new URL(request.url).searchParams.get('variant') === 'thumb' ? 'thumb' : 'full';
+  const download = new URL(request.url).searchParams.get('download') === '1';
 
   const sid = request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null;
   const actor = await getCurrentUserBySid(sid);
@@ -55,6 +56,19 @@ export async function GET(
   }
 
   const storage = await getPrimaryPhotoStorage(photoId, orgId);
+
+  if (download) {
+    const bytes = await readPhotoBytesById(photoId, orgId);
+    if (bytes) {
+      return new NextResponse(Buffer.from(bytes.bytes), {
+        headers: {
+          'content-type': bytes.contentType,
+          'content-disposition': `attachment; filename="${bytes.filename}"`,
+          'cache-control': 'private, max-age=300',
+        },
+      });
+    }
+  }
 
   if (storage?.provider === 'gcs' && storage.bucket) {
     const key = variant === 'thumb' && storage.thumbObjectKey

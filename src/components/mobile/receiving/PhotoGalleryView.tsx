@@ -3,13 +3,18 @@
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Trash2, X } from '@/components/Icons';
+import { Download, Trash2, X } from '@/components/Icons';
 import { MobileTopBar } from '@/components/mobile/receiving/MobileTopBar';
 import { useUploadQueue, photoUploadQueue, type PhotoScope } from '@/components/mobile/receiving/PhotoUploadQueue';
 import { NasPhotoPicker } from '@/components/mobile/receiving/NasPhotoPicker';
 import { deleteNasPhoto, isNasPhotoUrl, nasConfigured, normalizePhotoDisplayUrl } from '@/lib/nas-photos';
+import { buildPhotoZipDownloadUrl, triggerBrowserDownload } from '@/lib/photos/download-zip';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
+import { useAblyClient } from '@/contexts/AblyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
+import { toast } from '@/lib/toast';
 
 interface PhotoRow {
   id: number;
@@ -36,6 +41,10 @@ interface GalleryProps {
  */
 export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref }: GalleryProps) {
   const qc = useQueryClient();
+  const { getClient } = useAblyClient();
+  const { user } = useAuth();
+  const orgId = user?.organizationId;
+  const staffId = user?.staffId ?? 0;
   // Seed the active NAS base URL so the "NAS" picker button shows at runtime.
   useNasConfig();
   const queryKey = ['receiving-photos', scope.receivingId, scope.receivingLineId ?? 'po'];
@@ -70,6 +79,7 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
   const photos = data?.photos ?? [];
   const zoomPhoto = zoomPhotoId != null ? photos.find((p) => p.id === zoomPhotoId) : null;
   const zoomUrl = zoomPhoto ? normalizePhotoDisplayUrl(zoomPhoto.photoUrl) : null;
+  const downloadZipUrl = buildPhotoZipDownloadUrl(photos.map((p) => p.id), title || 'photos');
 
   useEffect(() => {
     if (zoomPhotoId == null) setDeleteArmed(false);
@@ -127,6 +137,22 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
     void performDelete(zoomPhotoId);
   };
 
+  const handleDownloadAll = () => {
+    if (!downloadZipUrl) return;
+    triggerBrowserDownload(downloadZipUrl);
+  };
+
+  const handleSendToPhone = async () => {
+    try {
+      const client = await getClient();
+      await publishReceivingPhotoRequest(client, orgId, staffId, scope.receivingId);
+      toast.success('Sent to phone');
+    } catch (err) {
+      console.warn('photo-gallery-view: photo request publish failed', err);
+      toast.error('Could not send to phone');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black pb-24 text-white">
       <MobileTopBar
@@ -135,6 +161,17 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
         backHref={backHref}
         right={
           <div className="flex items-center gap-2">
+            {downloadZipUrl ? (
+              <button
+                type="button"
+                onClick={handleDownloadAll}
+                className="rounded-full bg-white/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-white/20"
+                aria-label="Download all photos as ZIP"
+                title="Download all photos as ZIP"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+            ) : null}
             {nasConfigured() ? (
               <button
                 type="button"
@@ -146,9 +183,13 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
             ) : null}
             <a
               href={captureHref}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleSendToPhone();
+              }}
               className="rounded-full bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white active:bg-blue-700"
             >
-              + Photo
+              Send to Phone
             </a>
           </div>
         }
@@ -172,7 +213,6 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
         <div className="grid grid-cols-3 gap-0.5 bg-black">
           {pendingTiles.map((p) => (
             <div key={p.id} className="relative aspect-square bg-gray-900">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={p.previewUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
               <div className="absolute inset-0 grid place-items-center text-micro font-black uppercase tracking-widest">
                 {p.state === 'queued' && '⌛ queued'}
@@ -196,11 +236,6 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
               onClick={() => setZoomPhotoId(p.id)}
               className="relative aspect-square bg-gray-900"
             >
-              {/* Photos served through the same-origin /api/nas proxy are
-                  auth-gated, so the Next image optimizer (which fetches the URL
-                  server-side WITHOUT the session cookie) 401s on them. Render
-                  those unoptimized so the browser loads them directly with the
-                  cookie; public absolute NAS URLs still optimize normally. */}
               <Image
                 src={normalizePhotoDisplayUrl(p.photoUrl)}
                 alt=""
@@ -265,7 +300,6 @@ export function PhotoGalleryView({ title, subtitle, backHref, scope, captureHref
               </button>
             </div>
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={zoomUrl}
             alt=""

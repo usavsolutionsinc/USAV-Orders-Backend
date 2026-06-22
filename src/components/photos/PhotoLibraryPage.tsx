@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Sparkles, Share2 } from '@/components/Icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { Download, Trash2 } from '@/components/Icons';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
@@ -17,8 +18,10 @@ import {
   onToggleAll,
 } from '@/lib/selection/table-selection';
 import { toast } from '@/lib/toast';
+import { dispatchReceivingPhotoChanged } from '@/utils/events';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
+import { PhotoGallery, type PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
 
 // `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
 // without importing this page (cycle). Re-exported here for compatibility.
@@ -29,8 +32,15 @@ import type { LibraryPhoto } from './photo-library-types';
 export function PhotoLibraryPage() {
   const { filters, display, setView, setPage } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
+  const queryClient = useQueryClient();
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [galleryState, setGalleryState] = useState<{
+    key: string;
+    title: string;
+    photos: PhotoGalleryInput[];
+    initialIndex: number;
+  } | null>(null);
   const selectedRows = useTableSelection<LibraryPhoto>(
     PHOTO_LIBRARY_SELECTION_SCOPE,
     (photo) => photo.id,
@@ -122,58 +132,104 @@ export function PhotoLibraryPage() {
     });
   }, [selectMode]);
 
+  const openGallery = useCallback((photo: LibraryPhoto) => {
+    const poRef = photo.poRef?.trim() || null;
+    const grouped = (poRef ? photos.filter((item) => item.poRef === poRef) : [photo]).slice();
+    grouped.sort((a, b) => {
+      const left = new Date(a.createdAt).getTime();
+      const right = new Date(b.createdAt).getTime();
+      return left - right || a.id - b.id;
+    });
+    const initialIndex = Math.max(
+      0,
+      grouped.findIndex((item) => item.id === photo.id),
+    );
+    setGalleryState({
+      key: poRef ? `po:${poRef}` : `photo:${photo.id}`,
+      title: poRef ? `PO ${poRef}` : `Photo ${photo.id}`,
+      photos: grouped.map((item) => ({ id: item.id, url: item.displayUrl })),
+      initialIndex,
+    });
+  }, [photos]);
+
+  const downloadPhotoFile = useCallback(async (url: string, filename: string) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to download ${filename}`);
+    const blob = await res.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(objectUrl);
+  }, []);
+
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
     () => [
       {
-        key: 'share',
-        label: 'Create share pack',
-        icon: <Share2 className="h-4 w-4" />,
+        key: 'download',
+        label: 'Download selected',
+        icon: <Download className="h-4 w-4" />,
         tone: 'blue',
-        primary: true,
+        primary: false,
         run: async (rows) => {
-          const photoIds = rows.map((row) => row.id);
-          const res = await fetch('/api/photos/share-packs', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              photoIds,
-              title: `Photo pack (${photoIds.length})`,
-              packType: 'manual',
-              filenamePrefix: 'Photo',
-            }),
-          });
-          const data = (await res.json()) as { shareUrl?: string; error?: string };
-          if (!res.ok) throw new Error(data.error || 'Share pack failed');
-          if (data.shareUrl) {
-            await navigator.clipboard.writeText(data.shareUrl);
-            toast.success('Share pack link copied');
+          if (rows.length === 0) return;
+          const results = await Promise.allSettled(
+            rows.map((row, index) =>
+              downloadPhotoFile(
+                `/api/photos/${row.id}/content?download=1`,
+                rows.length === 1 ? `photo-${row.id}.jpg` : `photo-${index + 1}-${row.id}.jpg`,
+              ),
+            ),
+          );
+          const failures = results.filter((result) => result.status === 'rejected');
+          if (failures.length > 0) {
+            toast.error(`Downloaded ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
           } else {
-            toast.success('Share pack created');
+            toast.success(`Downloaded ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
           }
-          exitSelectMode();
         },
       },
       {
-        key: 'analyze',
-        label: 'Analyze selected',
-        icon: <Sparkles className="h-4 w-4" />,
+        key: 'delete',
+        label: 'Delete selected',
+        icon: <Trash2 className="h-4 w-4" />,
+        tone: 'red',
+        primary: false,
         run: async (rows) => {
-          const res = await fetch('/api/photos/analyze', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ photoIds: rows.map((row) => row.id).slice(0, 10) }),
-          });
-          const data = (await res.json()) as { error?: string; enqueued?: number };
-          if (!res.ok) throw new Error(data.error || 'Analyze enqueue failed');
-          toast.success(
-            data.enqueued
-              ? `Enqueued ${data.enqueued} analysis job${data.enqueued === 1 ? '' : 's'}`
-              : 'Analysis enqueued',
+          if (rows.length === 0) return;
+          const ok = window.confirm(
+            `Delete ${rows.length} selected photo${rows.length === 1 ? '' : 's'}? This cannot be undone.`,
           );
+          if (!ok) return;
+          const results = await Promise.allSettled(
+            rows.map(async (row) => {
+              const res = await fetch(`/api/photos/${row.id}`, { method: 'DELETE' });
+              const data = (await res.json().catch(() => null)) as { error?: string } | null;
+              if (!res.ok) throw new Error(data?.error || `Delete failed for photo ${row.id}`);
+              return row.id;
+            }),
+          );
+          const deletedIds = results
+            .filter((result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled')
+            .map((result) => result.value);
+          const failures = results.filter((result) => result.status === 'rejected');
+          if (deletedIds.length > 0) {
+            dispatchReceivingPhotoChanged({ action: 'delete', photoIds: deletedIds });
+          }
+          await queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+          exitSelectMode();
+          if (failures.length > 0) {
+            toast.error(`Deleted ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
+          } else {
+            toast.success(`Deleted ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
+          }
         },
       },
     ],
-    [exitSelectMode],
+    [downloadPhotoFile, exitSelectMode, queryClient],
   );
 
   return (
@@ -198,6 +254,7 @@ export function PhotoLibraryPage() {
           selectMode={selectMode}
           selected={selected}
           onToggleSelect={toggleSelect}
+          onOpenPhoto={openGallery}
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
@@ -211,9 +268,26 @@ export function PhotoLibraryPage() {
             scope={PHOTO_LIBRARY_SELECTION_SCOPE}
             rows={selectedRows}
             actions={photoBulkActions}
+            onDismiss={exitSelectMode}
+            visible={selectMode}
           />
         ) : null}
       </div>
+
+      {galleryState ? (
+        <PhotoGallery
+          key={galleryState.key}
+          photos={galleryState.photos}
+          orderId={galleryState.title.replace(/\s+/g, '-')}
+          viewerTitle={galleryState.title}
+          defaultOpen
+          initialIndex={galleryState.initialIndex}
+          onViewerClose={() => setGalleryState(null)}
+          compact
+          showCopyLinks={false}
+          launcherTitle={galleryState.title}
+        />
+      ) : null}
     </div>
   );
 }
