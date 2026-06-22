@@ -148,6 +148,11 @@ export const PERMISSIONS = [
   // Step-up is enforced on the PUBLISH route only (withAuth stepUp: true) so
   // ordinary draft edits don't prompt for a PIN every five minutes.
   { id: 'studio.manage',            category: 'ops', label: 'Edit & publish Operations Studio workflows' },
+  // Item-level recovery is distinct from graph authoring: a floor lead can
+  // unpark a stuck unit (blocked/error → active) without being able to edit or
+  // publish workflows. Non-destructive + reversible (a re-park is one scan away),
+  // so it's friction-free — no stepUp.
+  { id: 'studio.recover',           category: 'ops', label: 'Recover stuck workflow items (unpark)' },
   { id: 'reports.view',             category: 'ops', label: 'View reports' },
   { id: 'reports.export',           category: 'ops', label: 'Export reports' },
   { id: 'print.label',              category: 'ops', label: 'Print labels' },
