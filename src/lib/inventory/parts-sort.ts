@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { transaction } from '@/lib/neon-client';
 import { type InventoryEventStation } from '@/lib/inventory/events';
 import { transition } from '@/lib/inventory/state-machine';
 import {
@@ -135,42 +136,46 @@ export async function sortSerialUnitToParts(
     prevBinId = prev?.id ?? null;
   }
 
-  // Guarded status write + PUTAWAY event via the chokepoint (SoT rule: never
-  // hand-write current_status). transition() emits the event itself. The common
-  // from-states (GRADED/RECEIVED/TESTED/RETURNED → STOCKED) are guard-clean; an
-  // odd source (e.g. a unit mid-repair) is rejected → we no-op ('blocked'),
-  // staying best-effort so the caller's grade write still succeeds.
-  const moved = await transition(
-    {
-      unitId: unit.id,
-      to: 'STOCKED',
-      eventType: 'PUTAWAY',
-      actorStaffId: input.staffId ?? null,
-      station: input.station ?? 'TECH',
-      binId: bin.id,
-      prevBinId,
-      clientEventId: input.clientEventId ? `${input.clientEventId}:parts-sort` : null,
-      notes: 'Auto-sorted to Parts bin (condition: For Parts)',
-      payload: { auto_parts_sort: true, from: unit.current_location, to: bin.name },
-    },
-    // runtime only needs .query; parts-sort types its client as Pick<PoolClient,'query'>.
-    input.client as PoolClient | undefined,
-  );
-  if (!moved.ok) {
-    console.warn(
-      `[parts-sort] guarded move ${unit.current_status}→STOCKED declined (${moved.error}); not sorted`,
+  // Guarded status write + PUTAWAY event + the location move, in ONE transaction
+  // so a unit never ends STOCKED-but-not-relocated (the split would otherwise
+  // commit the status in transition()'s own tx, then do current_location as a
+  // separate autocommit). transition() emits the event (SoT rule: never
+  // hand-write current_status); current_location is a location-only UPDATE on the
+  // same client. Common from-states (GRADED/RECEIVED/TESTED/RETURNED → STOCKED)
+  // are guard-clean; an odd source (e.g. mid-repair) is declined → no-op
+  // ('blocked'), best-effort so the caller's grade write still succeeds.
+  const runMove = async (txc: Pick<PoolClient, 'query'>): Promise<boolean> => {
+    const moved = await transition(
+      {
+        unitId: unit.id,
+        to: 'STOCKED',
+        eventType: 'PUTAWAY',
+        actorStaffId: input.staffId ?? null,
+        station: input.station ?? 'TECH',
+        binId: bin.id,
+        prevBinId,
+        clientEventId: input.clientEventId ? `${input.clientEventId}:parts-sort` : null,
+        notes: 'Auto-sorted to Parts bin (condition: For Parts)',
+        payload: { auto_parts_sort: true, from: unit.current_location, to: bin.name },
+      },
+      txc,
     );
-    return { sorted: false, reason: 'blocked' };
-  }
+    if (!moved.ok) {
+      console.warn(
+        `[parts-sort] guarded move ${unit.current_status}→STOCKED declined (${moved.error}); not sorted`,
+      );
+      return false;
+    }
+    await txc.query(
+      `UPDATE serial_units
+          SET current_location = $1, updated_at = NOW()
+        WHERE id = $2`,
+      [bin.name, unit.id],
+    );
+    return true;
+  };
 
-  // current_location is not part of the status transition — set it separately
-  // (location-only UPDATE, no current_status, so the SoT guard permits it).
-  await db.query(
-    `UPDATE serial_units
-        SET current_location = $1, updated_at = NOW()
-      WHERE id = $2`,
-    [bin.name, unit.id],
-  );
-
-  return { sorted: true, bin };
+  // Caller's tx when provided (receiving path), else our own — both atomic.
+  const sorted = input.client ? await runMove(input.client) : await transaction(runMove);
+  return sorted ? { sorted: true, bin } : { sorted: false, reason: 'blocked' };
 }

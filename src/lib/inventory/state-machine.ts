@@ -178,7 +178,10 @@ export type TransitionResult =
  */
 export async function transition(
   input: TransitionInput,
-  db?: PoolClient,
+  // Only `.query` is used when a caller passes its own client (the executor
+  // path), so accept the narrow shape — lets callers thread a Pick<…'query'>
+  // tx client without an unsafe cast. The legacy path opens its own full client.
+  db?: Pick<PoolClient, 'query'>,
   orgId?: OrgId,
 ): Promise<TransitionResult> {
   // ── Org-aware, no caller transaction: run the whole thing GUC-wrapped. ──────
