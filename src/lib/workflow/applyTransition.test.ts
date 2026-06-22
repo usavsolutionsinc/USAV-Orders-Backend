@@ -106,6 +106,32 @@ test('applyTransition: identity (already at target) records the event + taps, id
   assert.equal(cap.taps.length, 1, 'still taps the engine on re-entry');
 });
 
+test('applyTransition: skipTap does the guarded write + event but suppresses the tap', async () => {
+  const { deps, cap } = fakes({ ok: true, eventId: 42, from: 'RECEIVED', to: 'TESTED' });
+  const out = await applyTransition({ ...baseArgs, skipTap: true }, deps);
+
+  assert.equal(out.ok, true);
+  if (out.ok) assert.equal(out.eventId, 42);
+  assert.equal(cap.transitionInputs.length, 1, 'still writes via the guarded transition()');
+  assert.equal(cap.taps.length, 0, 'skipTap suppresses the engine tap');
+});
+
+test('applyTransition: skipTap on an idempotent re-entry still records the event, no tap', async () => {
+  const { deps, cap } = fakes(
+    { ok: false, status: 409, from: 'TESTED', error: 'identity transition' },
+    88,
+  );
+  const out = await applyTransition({ ...baseArgs, skipTap: true }, deps);
+
+  assert.equal(out.ok, true);
+  if (out.ok) {
+    assert.equal(out.idempotent, true);
+    assert.equal(out.eventId, 88);
+  }
+  assert.equal(cap.events.length, 1, 'idempotent re-entry still leaves an event trail');
+  assert.equal(cap.taps.length, 0, 'skipTap suppresses the tap on the identity path too');
+});
+
 test('applyTransition: a genuine guard rejection does NOT tap and surfaces 409', async () => {
   const { deps, cap } = fakes({
     ok: false,

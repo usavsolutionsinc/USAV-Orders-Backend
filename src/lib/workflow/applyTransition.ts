@@ -71,6 +71,14 @@ export interface ApplyTransitionArgs {
   orgId?: OrgId | null;
   /** Who/what triggered this (defaults to 'manual'). */
   source?: WorkflowTapArgs['source'];
+  /**
+   * Suppress the engine tap (still does the guarded status write + atomic
+   * inventory_event + idempotent-identity handling). For call sites that mutate
+   * a unit's status but are NOT the canonical driver of its graph position —
+   * e.g. the receiving line-status route, whose test pass/fail is already
+   * tapped by recordTestVerdict, so a second tap would be redundant.
+   */
+  skipTap?: boolean;
 }
 
 export type ApplyTransitionResult =
@@ -163,8 +171,9 @@ export async function applyTransition(
   return { ok: false, status: result.status, from: result.from, error: result.error };
 }
 
-/** Fire-and-forget engine observe (never throws — see tap.ts). */
+/** Fire-and-forget engine observe (never throws — see tap.ts). No-op when skipTap. */
 async function tapAfter(args: ApplyTransitionArgs, deps: ApplyTransitionDeps): Promise<void> {
+  if (args.skipTap) return;
   await deps.tap({
     serialUnitId: args.unitId,
     event: args.tapEvent,
