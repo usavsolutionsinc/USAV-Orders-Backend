@@ -30,6 +30,7 @@
 
 import { transaction } from '@/lib/neon-client';
 import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
+import { transition } from '@/lib/inventory/state-machine';
 
 export interface ReturnsIntakeInput {
   /** Normalized serial strings (already upper-cased, GS1 URLs extracted). */
@@ -156,32 +157,26 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
         ledgerId = ledgerQ.rows[0]?.id ?? null;
       }
 
-      await client.query(
-        `UPDATE serial_units
-            SET current_status = 'RETURNED'::serial_status_enum,
-                updated_at = NOW()
-          WHERE id = $1`,
-        [u.id],
-      );
-
+      // status → RETURNED + the RETURNED event via the guarded chokepoint (SoT
+      // rule: never hand-write current_status). transition() emits the event
+      // (scan_token=tracking, stock_ledger_id=ledger preserved) atomically on
+      // this tx client. The allocation flip + ledger above stay outside it.
+      // SHIPPED/STOCKED/RMA → RETURNED are modeled; an unmodeled source throws,
+      // rolling back the whole batch — consistent with the all-or-nothing intake
+      // contract (zero mutations committed, operator fixes input and retries).
       const perUnitKey = input.clientEventId ? `${input.clientEventId}:return:${u.id}` : null;
-      const evQ = await client.query<{ id: number }>(
-        `INSERT INTO inventory_events (
-           event_type, actor_staff_id, station,
-           serial_unit_id, sku,
-           prev_status, next_status, stock_ledger_id,
-           scan_token, client_event_id, notes, payload
-         )
-         VALUES ('RETURNED', $1, 'RECEIVING',
-                 $2, $3,
-                 $4, 'RETURNED', $5,
-                 $6, $7, $8, $9::jsonb)
-         ON CONFLICT (client_event_id) DO NOTHING
-         RETURNING id`,
-        [
-          input.actorStaffId, u.id, u.sku, u.current_status, ledgerId,
-          trackingNumber, perUnitKey, reason,
-          JSON.stringify({
+      const moved = await transition(
+        {
+          unitId: u.id,
+          to: 'RETURNED',
+          eventType: 'RETURNED',
+          actorStaffId: input.actorStaffId,
+          station: 'RECEIVING',
+          clientEventId: perUnitKey,
+          notes: reason,
+          scanToken: trackingNumber,
+          stockLedgerId: ledgerId,
+          payload: {
             source: 'returns.intake',
             order_id: resolvedOrderId,
             order_id_operator: input.orderId ?? null,
@@ -189,14 +184,21 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
             allocation_returned: allocationReturned,
             tracking_number: trackingNumber,
             ordinal: i + 1,
-          }),
-        ],
+          },
+        },
+        client,
+        input.organizationId ?? undefined,
       );
+      if (!moved.ok) {
+        throw new Error(
+          `returns: cannot return unit ${u.id} (${u.current_status}) → RETURNED: ${moved.error}`,
+        );
+      }
 
       perUnit.push({
         unitId: u.id,
         prevStatus: u.current_status,
-        eventId: evQ.rows[0]?.id ?? null,
+        eventId: moved.eventId,
         ledgerId,
         matchedOrderPk: prior?.orderPk ?? null,
         matchedVia: prior?.via ?? null,
