@@ -7,7 +7,7 @@ import {
   MessageSquare,
   Package,
   PackageOpen,
-  Truck,
+  ShoppingCart,
   Wrench,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
@@ -23,7 +23,7 @@ const SOURCE_ITEMS: Array<{
 }> = [
   { id: 'all', label: 'All photos', icon: Camera },
   { id: 'unboxing', label: 'Unboxing', icon: PackageOpen },
-  { id: 'local_pickup', label: 'Local pickups', icon: Truck },
+  { id: 'local_pickup', label: 'Local pickups', icon: ShoppingCart },
   { id: 'packing', label: 'Packing', icon: Package },
   { id: 'repair', label: 'Repair services', icon: Wrench },
   { id: 'claims', label: 'Zendesk claims', icon: MessageSquare },
