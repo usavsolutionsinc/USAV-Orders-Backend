@@ -2173,7 +2173,7 @@
       "rls_forced": false,
       "has_iso_policy": true,
       "hermes_read": false,
-      "approx_rows": 6086,
+      "approx_rows": 6106,
       "fk_parents": []
     },
     {
