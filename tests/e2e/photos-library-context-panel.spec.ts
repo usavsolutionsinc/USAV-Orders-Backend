@@ -73,16 +73,19 @@ test.describe('Photo library · viewer context panel', () => {
     }
   });
 
-  test('grid views render day bands and the masonry view without crashing', async ({ page }) => {
+  test('grid views render a flat contact sheet and the masonry view without crashing', async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
 
-    // Small grid groups photos under the shared sticky day band (data-date).
+    // Small grid is a flat contact sheet now (Finder-style — no day-separator
+    // bands); photo tiles render directly.
     await page.goto('/ops/photos?view=grid-sm');
     await expect(page.getByText(/photos? in view/i)).toBeVisible();
     if (await page.getByTestId('photo-tile').count()) {
-      await expect(page.locator('[data-date]').first()).toBeVisible();
+      await expect(page.getByTestId('photo-tile').first()).toBeVisible();
     }
+    // The day-separator bands are intentionally gone.
+    await expect(page.locator('[data-date]')).toHaveCount(0);
 
     // Large grid switches to the masonry layout; must render error-free.
     await page.goto('/ops/photos?view=grid-lg');

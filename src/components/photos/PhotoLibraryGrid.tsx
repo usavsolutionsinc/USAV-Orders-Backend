@@ -1,12 +1,11 @@
 'use client';
 
-import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import type { LibraryPhoto } from './photo-library-types';
-import { Check, Folder, Image as ImageIcon, Layers } from '@/components/Icons';
-import { formatDateTimePST, toPSTDateKey } from '@/utils/date';
-import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
+import { Check, ChevronLeft, ChevronRight, Folder, Image as ImageIcon, Layers } from '@/components/Icons';
+import { formatDateTimePST } from '@/utils/date';
 import type { PhotoLibrarySourceScope, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
@@ -74,23 +73,33 @@ interface PhotoLibraryGridProps {
   selected: Set<number>;
   /** Select/toggle a tile (the page owns range/anchor logic). */
   onSelectTile: (id: number, mods: TileSelectMods) => void;
-  /** Resolve the id set to drag for a given tile (selection or just that one). */
-  resolveDragIds: (id: number) => number[];
-  /** Drag start for a set of ids — the page sets dataTransfer + mints links. */
-  onDragStart: (e: DragEvent<HTMLElement>, ids: number[]) => void;
   /** Called after a photo is deleted from the folder viewer so the list refreshes. */
   onPhotoDeleted?: (photoId: number) => void;
   isLoading: boolean;
   error: string | null;
 }
 
-function photoFileName(photo: LibraryPhoto): string {
+/**
+ * Whether a photo's name should read as a Zendesk ticket# rather than a PO#.
+ * Claims photos carry the ticket id the claim was opened under (often the same
+ * receiving the PO# came from) — in the claims scope we surface that ticket# so
+ * the same physical photos are findable by their Zendesk reference.
+ */
+function ticketIdForLabel(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): number | null {
+  return scope === 'claims' && photo.ticketId != null ? photo.ticketId : null;
+}
+
+function photoFileName(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): string {
+  const ticketId = ticketIdForLabel(photo, scope);
+  if (ticketId != null) return `ticket-${ticketId}-${photo.id}.jpg`;
   if (photo.poRef) return `PO-${photo.poRef}-${photo.id}.jpg`;
   const type = photo.photoType?.toLowerCase().replace(/_/g, '-') ?? 'photo';
   return `${type}-${photo.id}.jpg`;
 }
 
-function photoPrimaryLabel(photo: LibraryPhoto): string {
+function photoPrimaryLabel(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): string {
+  const ticketId = ticketIdForLabel(photo, scope);
+  if (ticketId != null) return `Ticket ${ticketId}`;
   if (photo.poRef) return `PO ${photo.poRef}`;
   return photo.photoType?.replace(/_/g, ' ').toLowerCase() ?? `Photo ${photo.id}`;
 }
@@ -146,8 +155,6 @@ function SelectionMark({
       type="button"
       aria-pressed={checked}
       aria-label={checked ? 'Deselect photo' : 'Select photo'}
-      // Don't let grabbing the checkmark begin a tile drag with odd state.
-      onDragStart={(e) => e.preventDefault()}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -166,34 +173,6 @@ function SelectionMark({
       <Check className="h-3.5 w-3.5 stroke-[2.5]" />
     </button>
   );
-}
-
-interface DayGroup {
-  /** PST day key (YYYY-MM-DD) — fed to the shared DateGroupHeader band. */
-  date: string;
-  photos: LibraryPhoto[];
-}
-
-/**
- * Bucket photos into day groups, preserving the incoming sort order so the
- * library reads newest-day-first (or oldest-first under the oldest sort). Each
- * group renders under the shared sticky {@link DateGroupHeader} band — the same
- * day separator the week tables use, so the library feels native, not bespoke.
- */
-function groupPhotosByDay(photos: LibraryPhoto[]): DayGroup[] {
-  const order: string[] = [];
-  const map = new Map<string, DayGroup>();
-  for (const photo of photos) {
-    const key = toPSTDateKey(photo.createdAt) || 'unknown';
-    let group = map.get(key);
-    if (!group) {
-      group = { date: key, photos: [] };
-      map.set(key, group);
-      order.push(key);
-    }
-    group.photos.push(photo);
-  }
-  return order.map((key) => map.get(key)!);
 }
 
 /** Loading shimmer — a grid of placeholder tiles matching the small-grid rhythm. */
@@ -232,8 +211,6 @@ export function PhotoLibraryGrid({
   selectionActive,
   selected,
   onSelectTile,
-  resolveDragIds,
-  onDragStart,
   onPhotoDeleted,
   isLoading,
   error,
@@ -248,11 +225,6 @@ export function PhotoLibraryGrid({
     [photos],
   );
   const openAt = (id: number) => setOpenIndex(indexById.get(id) ?? 0);
-
-  // Bind a tile's drag handler to its resolved id set (the whole selection if the
-  // tile is selected, else just that tile). Mints links lazily on drag start.
-  const bindTileDrag = (id: number) => (e: DragEvent<HTMLElement>) =>
-    onDragStart(e, resolveDragIds(id));
 
   // Rendered inside each flat-view branch (folders excluded). Mounts lazily so
   // images preload only once a photo is actually opened.
@@ -289,14 +261,9 @@ export function PhotoLibraryGrid({
           {photos.map((photo) => {
             const isSelected = selected.has(photo.id);
             const takenAt = formatDateTimePST(photo.createdAt);
-            const fileName = photoFileName(photo);
+            const fileName = photoFileName(photo, sourceScope);
             return (
-              <li
-                key={photo.id}
-                className="group relative"
-                draggable
-                onDragStart={bindTileDrag(photo.id)}
-              >
+              <li key={photo.id} className="group relative">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -318,7 +285,7 @@ export function PhotoLibraryGrid({
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {photoPrimaryLabel(photo)}
+                      {photoPrimaryLabel(photo, sourceScope)}
                       {photo.damageDetected ? ' · damage' : ''}
                       {photo.hasAnalysis && !photo.damageDetected ? ' · analyzed' : ''}
                     </p>
@@ -339,16 +306,18 @@ export function PhotoLibraryGrid({
     );
   }
 
-  // Folders: one collapsed folder per group (PO# for unboxing, order# for
-  // packing, Zendesk ticket for claims) — open a folder to browse its photos in
-  // the shared fullscreen viewer. A whole folder can also be dragged to share
-  // every photo it contains.
+  // Folders: one folder per group (PO# for unboxing, order# for packing, Zendesk
+  // ticket for claims). Finder-style — click a folder to drill *into* it (a
+  // breadcrumb path appears and its photos render inline), then click a photo to
+  // open the shared fullscreen viewer.
   if (view === 'folders') {
     return (
       <FoldersView
         photos={photos}
         scope={sourceScope}
-        onDragStart={onDragStart}
+        selectionActive={selectionActive}
+        selected={selected}
+        onSelectTile={onSelectTile}
         onPhotoDeleted={onPhotoDeleted}
       />
     );
@@ -381,12 +350,12 @@ export function PhotoLibraryGrid({
                     key={photo.id}
                     photo={photo}
                     imageUrl={photo.thumbUrl}
+                    scope={sourceScope}
                     showLabel={false}
                     selectionActive={selectionActive}
                     selected={selected.has(photo.id)}
                     onSelect={(mods) => onSelectTile(photo.id, mods)}
                     onOpen={() => openAt(photo.id)}
-                    onDragStart={bindTileDrag(photo.id)}
                   />
                 ))}
               </div>
@@ -398,39 +367,31 @@ export function PhotoLibraryGrid({
     );
   }
 
-  // grid-sm: dense square contact sheet (no per-tile labels — the day band
-  // already names the group). grid-lg: editorial masonry of natural-aspect,
-  // labeled cards. Both bucket under the shared sticky day band.
+  // grid-sm: dense square contact sheet. grid-lg: editorial masonry of
+  // natural-aspect, labeled cards. Both render as one flat sheet (Finder-style —
+  // no day-separator bands).
   const isMasonry = view === 'grid-lg';
   const containerClass = isMasonry
     ? 'columns-2 gap-3 sm:columns-3 md:columns-4 xl:columns-6'
     : 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8';
-  const days = groupPhotosByDay(photos);
 
   return (
     <>
-      <div className="space-y-5">
-        {days.map((day) => (
-          <section key={day.date}>
-            <DateGroupHeader date={day.date} total={day.photos.length} className="mb-3" />
-            <div className={containerClass}>
-              {day.photos.map((photo) => (
-                <PhotoCard
-                  key={photo.id}
-                  photo={photo}
-                  imageUrl={photo.thumbUrl}
-                  ratio={isMasonry ? 'natural' : 'square'}
-                  masonry={isMasonry}
-                  showLabel={isMasonry}
-                  selectionActive={selectionActive}
-                  selected={selected.has(photo.id)}
-                  onSelect={(mods) => onSelectTile(photo.id, mods)}
-                  onOpen={() => openAt(photo.id)}
-                  onDragStart={bindTileDrag(photo.id)}
-                />
-              ))}
-            </div>
-          </section>
+      <div className={containerClass}>
+        {photos.map((photo) => (
+          <PhotoCard
+            key={photo.id}
+            photo={photo}
+            imageUrl={photo.thumbUrl}
+            scope={sourceScope}
+            ratio={isMasonry ? 'natural' : 'square'}
+            masonry={isMasonry}
+            showLabel={isMasonry}
+            selectionActive={selectionActive}
+            selected={selected.has(photo.id)}
+            onSelect={(mods) => onSelectTile(photo.id, mods)}
+            onOpen={() => openAt(photo.id)}
+          />
         ))}
       </div>
       {lightbox}
@@ -442,6 +403,7 @@ export function PhotoLibraryGrid({
 function PhotoCard({
   photo,
   imageUrl,
+  scope,
   ratio = 'square',
   masonry = false,
   showLabel,
@@ -449,10 +411,11 @@ function PhotoCard({
   selected,
   onSelect,
   onOpen,
-  onDragStart,
 }: {
   photo: LibraryPhoto;
   imageUrl: string;
+  /** Source scope — drives the PO# vs Zendesk-ticket# label. */
+  scope: PhotoLibrarySourceScope;
   ratio?: 'square' | 'natural';
   /** Render as a CSS-columns masonry child (avoid mid-tile column breaks). */
   masonry?: boolean;
@@ -462,8 +425,6 @@ function PhotoCard({
   onSelect: (mods: TileSelectMods) => void;
   /** Open the shared fullscreen viewer at this photo (flat views only). */
   onOpen?: () => void;
-  /** Begin a drag-to-share for this tile's resolved id set. */
-  onDragStart?: (e: DragEvent<HTMLElement>) => void;
 }) {
   return (
     <div
@@ -472,10 +433,6 @@ function PhotoCard({
         masonry && 'mb-3 block w-full break-inside-avoid',
         selected ? 'border-primary ring-2 ring-primary' : 'border-border hover:border-gray-300',
       )}
-      // The whole tile is the drag handle — grabbing anywhere on it starts the
-      // share drag; the inner button still owns click (open/select) + keyboard.
-      draggable
-      onDragStart={onDragStart}
     >
       <SelectionMark
         checked={selected}
@@ -497,7 +454,7 @@ function PhotoCard({
       >
         <PhotoThumb
           src={imageUrl}
-          alt={photo.poRef ? `PO ${photo.poRef}` : `Photo ${photo.id}`}
+          alt={photoPrimaryLabel(photo, scope)}
           ratio={ratio}
           damage={Boolean(photo.damageDetected)}
         />
@@ -505,7 +462,7 @@ function PhotoCard({
           <div className="flex items-start justify-between gap-2 px-2.5 py-2">
             <div className="min-w-0 flex-1">
               <div className="truncate text-[11px] font-semibold text-gray-900">
-                {photoPrimaryLabel(photo)}
+                {photoPrimaryLabel(photo, scope)}
               </div>
               <div className="truncate text-[10px] text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
             </div>
@@ -572,43 +529,208 @@ function folderRefLabel(poRef: string, scope: PhotoLibrarySourceScope): string {
   return `#${poRef}`;
 }
 
+function folderRefLabelFallback(folder: PhotoFolder, scope: PhotoLibrarySourceScope): string {
+  if (folder.ticketId != null) return `Ticket #${folder.ticketId}`;
+  if (folder.poRef) return folderRefLabel(folder.poRef, scope);
+  return 'Unlinked';
+}
+
+/**
+ * Resolve a folder's display label. Claim folders (with a Zendesk ticket id)
+ * lazily resolve the ticket subject and fall back to "Ticket #id"; PO/order
+ * folders use the scope-aware ref label.
+ */
+function useFolderLabel(folder: PhotoFolder, scope: PhotoLibrarySourceScope): string {
+  const ticketSubject = useZendeskTicketSubject(folder.ticketId);
+  if (folder.ticketId != null) return ticketSubject.data || `Ticket #${folder.ticketId}`;
+  return folderRefLabelFallback(folder, scope);
+}
+
+/**
+ * Finder-style folders view. At the root it shows a grid of folder tiles; click
+ * one to drill *into* it — a breadcrumb path appears and the folder's photos
+ * render inline as a contact sheet. Click a photo to open the shared lightbox;
+ * with a selection active, photos toggle so the top bulk bar can share/download
+ * the chosen set (replacing the old drag-a-folder-to-share gesture).
+ */
 function FoldersView({
   photos,
   scope,
-  onDragStart,
+  selectionActive,
+  selected,
+  onSelectTile,
   onPhotoDeleted,
 }: {
   photos: LibraryPhoto[];
   scope: PhotoLibrarySourceScope;
-  onDragStart: (e: DragEvent<HTMLElement>, ids: number[]) => void;
+  selectionActive: boolean;
+  selected: Set<number>;
+  onSelectTile: (id: number, mods: TileSelectMods) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
-  const folders = groupPhotosIntoFolders(photos, scope);
+  const folders = useMemo(() => groupPhotosIntoFolders(photos, scope), [photos, scope]);
+  // Finder/Runway-style split: real (linked) folders render as folder tiles;
+  // photos with no PO/ticket are surfaced as a loose "Ungrouped" sheet at the
+  // root instead of being buried in a folder you have to open.
+  const linkedFolders = useMemo(
+    () => folders.filter((f) => f.key !== UNLINKED_FOLDER_KEY),
+    [folders],
+  );
+  const loosePhotos = useMemo(
+    () => folders.find((f) => f.key === UNLINKED_FOLDER_KEY)?.photos ?? [],
+    [folders],
+  );
+
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const openFolder = folders.find((f) => f.key === openKey) ?? null;
+  const openFolder = linkedFolders.find((f) => f.key === openKey) ?? null;
+  // Lightbox index when drilled into a folder (flat list/grid use their own).
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // Lightbox index for the root-level "Ungrouped photos" sheet.
+  const [looseIndex, setLooseIndex] = useState<number | null>(null);
+  const folderInputs = useMemo(
+    () => (openFolder ? toGalleryInputs(openFolder.photos, scope) : []),
+    [openFolder, scope],
+  );
+  const looseInputs = useMemo(() => toGalleryInputs(loosePhotos, scope), [loosePhotos, scope]);
+
+  // Leaving a folder (or it vanishing after a refetch) closes any open image.
+  useEffect(() => {
+    if (!openFolder) setOpenIndex(null);
+  }, [openFolder]);
+
+  if (openFolder) {
+    return (
+      <div className="space-y-3">
+        <FolderPathBar folder={openFolder} scope={scope} onBack={() => setOpenKey(null)} />
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
+          {openFolder.photos.map((photo, i) => (
+            <PhotoCard
+              key={photo.id}
+              photo={photo}
+              imageUrl={photo.thumbUrl}
+              scope={scope}
+              showLabel={false}
+              selectionActive={selectionActive}
+              selected={selected.has(photo.id)}
+              onSelect={(mods) => onSelectTile(photo.id, mods)}
+              onOpen={() => setOpenIndex(i)}
+            />
+          ))}
+        </div>
+        {openIndex !== null ? (
+          <LightboxPortal
+            photos={folderInputs}
+            startIndex={openIndex}
+            onPhotoDeleted={onPhotoDeleted}
+            onClose={() => setOpenIndex(null)}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-        {folders.map((folder) => (
-          <FolderTile
-            key={folder.key}
-            folder={folder}
-            scope={scope}
-            onOpen={() => setOpenKey(folder.key)}
-            onDragStart={(e) => onDragStart(e, folder.photos.map((p) => p.id))}
-          />
-        ))}
-      </div>
-      {openFolder ? (
+    <div className="space-y-6">
+      {linkedFolders.length > 0 ? (
+        <section className="space-y-2">
+          <SectionEyebrow icon={Folder} label="Folders" count={linkedFolders.length} />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+            {linkedFolders.map((folder) => (
+              <FolderTile
+                key={folder.key}
+                folder={folder}
+                scope={scope}
+                onOpen={() => setOpenKey(folder.key)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {loosePhotos.length > 0 ? (
+        <section className="space-y-2">
+          <SectionEyebrow icon={ImageIcon} label="Ungrouped photos" count={loosePhotos.length} />
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
+            {loosePhotos.map((photo, i) => (
+              <PhotoCard
+                key={photo.id}
+                photo={photo}
+                imageUrl={photo.thumbUrl}
+                scope={scope}
+                showLabel={false}
+                selectionActive={selectionActive}
+                selected={selected.has(photo.id)}
+                onSelect={(mods) => onSelectTile(photo.id, mods)}
+                onOpen={() => setLooseIndex(i)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {looseIndex !== null ? (
         <LightboxPortal
-          key={openFolder.key}
-          photos={toGalleryInputs(openFolder.photos, scope)}
+          photos={looseInputs}
+          startIndex={looseIndex}
           onPhotoDeleted={onPhotoDeleted}
-          onClose={() => setOpenKey(null)}
+          onClose={() => setLooseIndex(null)}
         />
       ) : null}
-    </>
+    </div>
+  );
+}
+
+/** Eyebrow section header with a count chip (Runway/Squarespace asset library). */
+function SectionEyebrow({
+  icon: Icon,
+  label,
+  count,
+}: {
+  icon: typeof Folder;
+  label: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5 text-gray-400" />
+      <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+        {label}
+      </span>
+      <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-500">
+        {count}
+      </span>
+    </div>
+  );
+}
+
+/** Breadcrumb path bar shown while drilled into a folder — back to "All folders". */
+function FolderPathBar({
+  folder,
+  scope,
+  onBack,
+}: {
+  folder: PhotoFolder;
+  scope: PhotoLibrarySourceScope;
+  onBack: () => void;
+}) {
+  const label = useFolderLabel(folder, scope);
+  const count = folder.photos.length;
+  return (
+    <nav className="flex items-center gap-1 text-sm" aria-label="Folder path">
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" /> All folders
+      </button>
+      <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" aria-hidden="true" />
+      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-900">
+        <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <span className="truncate">{label}</span>
+        <span className="shrink-0 tabular-nums text-gray-400">· {count}</span>
+      </span>
+    </nav>
   );
 }
 
@@ -617,21 +739,12 @@ function FolderTile({
   folder,
   scope,
   onOpen,
-  onDragStart,
 }: {
   folder: PhotoFolder;
   scope: PhotoLibrarySourceScope;
   onOpen: () => void;
-  onDragStart: (e: DragEvent<HTMLElement>) => void;
 }) {
-  // Claim folders resolve their Zendesk ticket title lazily (best-effort).
-  const ticketSubject = useZendeskTicketSubject(folder.ticketId);
-  const label =
-    folder.ticketId != null
-      ? ticketSubject.data || `Ticket #${folder.ticketId}`
-      : folder.poRef
-        ? folderRefLabel(folder.poRef, scope)
-        : 'Unlinked';
+  const label = useFolderLabel(folder, scope);
   const count = folder.photos.length;
 
   return (
@@ -639,13 +752,10 @@ function FolderTile({
       type="button"
       data-testid="photo-folder"
       onClick={onOpen}
-      // Dragging a folder shares every photo it contains.
-      draggable
-      onDragStart={onDragStart}
       title={`${label} · ${count} photo${count === 1 ? '' : 's'}`}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
     >
-      <div className="relative h-40 w-full p-1.5">
+      <div className="relative h-32 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
         <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
         <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
@@ -655,9 +765,15 @@ function FolderTile({
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-1.5 px-2.5 py-2">
-        <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-        <span className="truncate text-[11px] font-semibold text-gray-900">{label}</span>
+      <div className="flex flex-col gap-0.5 px-2.5 py-2">
+        <div className="flex items-center gap-1.5">
+          <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+          <span className="truncate text-[11px] font-semibold text-gray-900">{label}</span>
+        </div>
+        {/* Frame.io-style meta line: latest capture in the folder. */}
+        <span className="truncate pl-5 text-[10px] tabular-nums text-gray-400">
+          {formatDateTimePST(folder.latestAt)}
+        </span>
       </div>
     </button>
   );

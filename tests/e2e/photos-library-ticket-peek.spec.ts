@@ -30,7 +30,7 @@ test.describe('A · Photo library group-by-ticket', () => {
     );
   });
 
-  test('Folders view groups photos into folders and opens one in the viewer', async ({ page }) => {
+  test('Folders view drills into a folder, then opens a photo in the viewer', async ({ page }) => {
     // DevTools-style check: no uncaught page errors during the folder flow.
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(err.message));
@@ -42,11 +42,17 @@ test.describe('A · Photo library group-by-ticket', () => {
       'true',
     );
 
-    // If unboxing photos exist, a folder tile renders; opening it launches the
-    // shared fullscreen viewer. Otherwise the empty state is valid (no crash).
+    // Finder-style: clicking a folder drills *into* it (photos render inline)
+    // rather than opening the lightbox; clicking a photo then opens the viewer.
+    // Otherwise the empty state is valid (no crash).
     const firstFolder = page.getByTestId('photo-folder').first();
     if (await firstFolder.count()) {
       await firstFolder.click();
+      // Breadcrumb path back to all folders appears, and photos render inline.
+      await expect(page.getByRole('button', { name: /all folders/i })).toBeVisible();
+      const firstTile = page.getByTestId('photo-tile').first();
+      await expect(firstTile).toBeVisible();
+      await firstTile.click();
       await expect(page.getByTestId('photo-lightbox')).toBeVisible();
       // Folder photos carry ids, so the viewer's delete affordance shows.
       await expect(page.getByRole('button', { name: /delete photo/i })).toBeVisible();
