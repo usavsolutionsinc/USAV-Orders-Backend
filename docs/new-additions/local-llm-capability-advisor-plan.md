@@ -294,3 +294,39 @@ Per-tenant **LoRA adapters on one shared base** is proven on the exact 16 GB 507
 ---
 
 *Sources: two verified deep-research sweeps (26 threads, adversarial fact-check per claim) + a repo code-seam map + a cloud-LLM usage inventory, 2026-06-22. Claims carry the research's confidence/refutation notes inline; vendor prices and Blackwell stack versions move fast — re-verify at implementation time.*
+
+---
+
+## Appendix — MLX / M5 (48 GB) alternative-hardware path
+
+*Added 2026-06-22 from a third verified sweep (5 Apple-Silicon threads, adversarial fact-check). The session originally scoped this to an MLX/M5 box; we pivoted the main plan to CUDA mid-session. This appendix preserves the Mac path as a **comparison + a dev-box role**, not a competing production target. **Bottom line: use the Mac to iterate, use the 5070 Ti to serve.***
+
+### A.1 Read this first — three corrections the marketing hides
+
+1. 🚩 **"M5 48 GB" is an M5 *Pro*, not a base M5.** The base M5 **caps at 32 GB**; 48 GB only exists on the **M5 Pro** (~**307 GB/s** bandwidth — *not* 330). If the box is actually a base M5, the ceiling is 32 GB → ~14B-class 4-bit, not 32B. Confirm the exact chip before sizing anything. [high]
+2. **Usable memory is ~36 GB, not 48.** macOS reserves ~25% (the default Metal wired limit is lower still unless you raise `iogpu.wired_limit_mb`). Plan against ~36 GB usable out-of-the-box; KV cache grows ~linearly with context and eats into it. [uncertain→corrected]
+3. **"From scratch" is off the table here too.** Chinchilla-optimal training (~20 tokens/param) makes a general from-scratch LLM infeasible on one Mac (months-to-years, bandwidth-bound). From-scratch *only* makes sense for **tiny narrow models** (TinyStories ~2.5–30M params, nanoGPT) — research/learning, not capability. GPT-2-124M from scratch needs CUDA anyway (`llm.c` is CUDA-only, won't run on Apple Silicon). The Mac's real sweet spot is **inference + LoRA/QLoRA of a small base** — identical to the CUDA conclusion in §5.5.
+
+### A.2 What the M5 (Pro, 48 GB) is genuinely good at
+
+- **Fine-tuning:** `mlx_lm.lora` supports **LoRA / DoRA / full / QLoRA** (QLoRA auto-engages when the base is already 4-bit — start from an `mlx-community` 4-bit model). Pipeline: `mlx_lm.lora --train` → `mlx_lm.fuse` → optional `--export-gguf` / `--upload`. Mainstream bases covered (Llama, Qwen2, Mistral, Gemma, Phi…). Memory knobs to fit: QLoRA → lower `--batch-size` → `--grad-checkpoint` → fewer `--num-layers` → shorter seq. Rule-of-thumb: **16 GB≈8B, 32 GB≈14B, 64 GB≈32B** QLoRA. So 48 GB comfortably QLoRA-trains the **Qwen3-4B-class student** the main plan picks, with room for larger.
+  - ⚠️ Caveats: **full fine-tune of >~3B and any pretrain are not feasible**; RLHF/DPO/GRPO are **third-party** (`mlx-tune`, `mlx-lm-lora`), not core; GGUF export has documented friction (fp16-only for some families; fuse `--dequantize` bugs). The `train→fuse→export` "no juggling" story is rosier than reality.
+- **Inference:** MLX 4-bit, 14B–32B daily-driver range on 48 GB (note: a "32B at 42–50 tok/s" figure circulating is implausible for a *dense* 32B at 307 GB/s — that's a ~3B-active **MoE** like 30B-A3B; a dense 32B decodes nearer ~17 tok/s). The **M5's Neural Accelerators give ~4× prefill/TTFT over M4** but only ~19–27% on memory-bound decode — so the Mac shines on **long-prompt / RAG / agent** workloads where prompt processing dominates. Use **MLX (not Ollama-Metal)** to actually get those prefill gains.
+
+### A.3 Why it is NOT the production server (vs the 5070 Ti)
+
+- **Training is ~3–5× slower** than a comparable NVIDIA GPU; LoRA throughput is single-digit tok/s — fine for iterating small adapters, not for large runs. No published M5 *fine-tune* throughput exists (Apple's M5 numbers are inference-only) — **benchmark before committing dataset size**.
+- **Serving maturity:** `mlx_lm.server` is OpenAI-compatible but **Apple labels it not-for-production** (basic security only; batching is a feature request, not shipped). Real concurrency needs `vllm-mlx` or **LM Studio's MLX backend** (continuous batching since v0.4.2) — and even those are judged "not yet at the maturity of established engines"; Apple Silicon is a **dev / single-tenant / modest-concurrency** substrate in 2026, not a high-concurrency production one. That's the opposite of what a multi-tenant SaaS serving layer needs.
+
+### A.4 The recommended posture — dev-on-Mac, serve-on-GPU (hybrid)
+
+The portability research makes the split clean and low-risk:
+
+- **Interchange unit = the FUSED full-model `safetensors`**, never the bare adapter. `mlx_lm.fuse` (Mac) or PEFT `merge_and_unload` (CUDA) bakes the LoRA into the base → ships to vLLM/Transformers *or* MLX with no format fight.
+- **A bare MLX LoRA adapter is NOT PEFT-compatible** (different key names / config) — the single biggest "lost in translation" gap. If you need swappable multi-LoRA on vLLM, write+unit-test a small MLX→PEFT key-rename converter once.
+- **safetensors portability is asymmetric:** HF→MLX is first-class (`mlx_lm.convert`); **MLX→PyTorch is an unsupported feature request** — it only works because MLX *writes* safetensors, not because a symmetric tool exists.
+- **Therefore:** iterate datasets + LoRA hyperparams **fast on the Mac** (cheap experiments, exploit the prefill speed for RAG/agent prototyping), but do the **final production fine-tune on the 5070 Ti with PEFT** so the served artifact is *born* in the format vLLM expects — avoiding the unsupported reverse conversion entirely. Validate semantic equivalence with a fixed eval-prompt set after any cross-platform move.
+
+> **Net for this repo:** the Mac (if it's an M5 *Pro* 48 GB) is a great **local R&D / experimentation box** that slots into the existing Hermes Cloudflare-tunnel pattern for single-user testing. The **production train+serve target remains the CUDA 5070 Ti** in §5. This appendix changes nothing in the main plan — it adds the Mac as the fast-iteration front-end to it. If the goal were ever *production* Apple-Silicon serving, the right tier is an **M5 Max (128 GB, ~460–614 GB/s)**, not a 48 GB part.
+
+*Appendix sources: verified MLX/M5 sweep (mlx-lm `LORA.md`/`SERVER.md`, Apple ML "Exploring LLMs with MLX on M5", vllm-mlx, LM Studio MLX notes, mlx-lm portability issues #320/#1374), 2026-06-22. M5-specific fine-tune throughput is unpublished — treat tok/s figures as order-of-magnitude and benchmark on the actual chip.*
