@@ -218,6 +218,7 @@ export async function recordTestVerdict(
   if (!useChokepoint) {
     const { event } = await appendInventoryEvent({
       eventType: mapping.eventType,
+      organizationId: args.organizationId ?? null,
       clientEventId: args.clientEventId ?? null,
       actorStaffId,
       station: 'TECH',

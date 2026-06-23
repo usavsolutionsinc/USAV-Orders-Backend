@@ -181,31 +181,13 @@ export async function POST(
 
     // 3. inventory_events row for the lifecycle timeline — non-quantity
     //    event that joins the two ledger rows together by intent.
-    //    recordInventoryEvent (src/lib/inventory/events.ts) doesn't take an
-    //    orgId; inventory_events relies on the `app.current_org` GUC default
-    //    to stamp the tenant. Running it inside withTenantTransaction sets that
-    //    GUC so the row lands on the right org instead of NULL/USAV-fallback.
+    //    recordInventoryEvent relies on the `app.current_org` GUC default to
+    //    stamp the tenant. Run it inside withTenantTransaction (with the
+    //    idempotencyOrgId fallback, so an anonymous-context swap still attributes
+    //    to USAV instead of inserting a NULL organization_id and being dropped).
     try {
-      if (orgId) {
-        await withTenantTransaction(orgId, (client) =>
-          recordInventoryEvent({
-            event_type: 'MOVED',
-            actor_staff_id: staffId,
-            station: 'MOBILE',
-            bin_id: loc.id,
-            sku: newSku,
-            notes: `SKU swap in bin ${code}: ${oldSku} → ${newSku} (qty ${transferQty})`,
-            payload: {
-              action: 'sku_swap',
-              bin_barcode: code,
-              old_sku: oldSku,
-              new_sku: newSku,
-              qty: transferQty,
-            },
-          }, client),
-        );
-      } else {
-        await recordInventoryEvent({
+      await withTenantTransaction(idempotencyOrgId, (client) =>
+        recordInventoryEvent({
           event_type: 'MOVED',
           actor_staff_id: staffId,
           station: 'MOBILE',
@@ -219,8 +201,8 @@ export async function POST(
             new_sku: newSku,
             qty: transferQty,
           },
-        });
-      }
+        }, client, idempotencyOrgId),
+      );
     } catch (err) {
       console.warn('swap: audit insert failed (non-fatal)', err);
     }

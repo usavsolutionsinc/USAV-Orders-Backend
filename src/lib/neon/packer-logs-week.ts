@@ -169,13 +169,13 @@ export async function fetchPackerLogRows(
         ) order_match ON TRUE
         LEFT JOIN orders o ON o.id = order_match.id
         LEFT JOIN LATERAL (
-            SELECT assigned_tech_id
-            FROM work_assignments
-            WHERE entity_type = 'ORDER'
-              AND entity_id = o.id
-              AND work_type = 'TEST'
-              AND status IN ('ASSIGNED', 'IN_PROGRESS')
-            ORDER BY created_at DESC, id DESC
+            SELECT wa.assigned_tech_id
+            FROM work_assignments wa
+            WHERE wa.entity_type = 'ORDER'
+              AND wa.entity_id = o.id
+              AND wa.work_type = 'TEST'
+              AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+            ORDER BY wa.created_at DESC, wa.id DESC
             LIMIT 1
         ) wa_t ON TRUE
         LEFT JOIN LATERAL (
@@ -529,13 +529,13 @@ export async function fetchPackerLogRows(
         LIMIT 1
     ) wa_deadline ON TRUE
     LEFT JOIN LATERAL (
-        SELECT assigned_tech_id
-        FROM work_assignments
-        WHERE entity_type = 'ORDER'
-          AND entity_id = o.id
-          AND work_type = 'TEST'
-          AND status IN ('ASSIGNED', 'IN_PROGRESS')
-        ORDER BY created_at DESC, id DESC
+        SELECT wa.assigned_tech_id
+        FROM work_assignments wa
+        WHERE wa.entity_type = 'ORDER'
+          AND wa.entity_id = o.id
+          AND wa.work_type = 'TEST'
+          AND wa.status IN ('ASSIGNED', 'IN_PROGRESS')
+        ORDER BY wa.created_at DESC, wa.id DESC
         LIMIT 1
     ) wa_t ON TRUE
     LEFT JOIN LATERAL (
@@ -563,15 +563,32 @@ export async function fetchPackerLogRows(
 
   const photosMap: Record<number, any[]> = {};
   if (packerLogIds.length > 0) {
-    const photosResult = await pool.query(
-      `SELECT entity_id, json_agg(json_build_object('id', id, 'url', url, 'uploadedAt', created_at) ORDER BY created_at) AS photos
-       FROM photos
-       WHERE entity_type = 'PACKER_LOG' AND entity_id = ANY($1)
-       GROUP BY entity_id`,
-      [packerLogIds],
-    );
-    for (const row of photosResult.rows) {
-      photosMap[row.entity_id] = row.photos;
+    try {
+      const photosResult = await pool.query(
+        `SELECT l.entity_id,
+                json_agg(
+                  json_build_object(
+                    'id', p.id,
+                    'url', '/api/photos/' || p.id::text || '/content',
+                    'uploadedAt', p.created_at
+                  )
+                  ORDER BY p.created_at
+                ) AS photos
+           FROM photos p
+           JOIN photo_entity_links l
+             ON l.photo_id = p.id
+            AND l.organization_id = p.organization_id
+          WHERE l.entity_type = 'PACKER_LOG'
+            AND l.link_role = 'primary'
+            AND l.entity_id = ANY($1)
+          GROUP BY l.entity_id`,
+        [packerLogIds],
+      );
+      for (const row of photosResult.rows) {
+        photosMap[row.entity_id] = row.photos;
+      }
+    } catch (error) {
+      console.warn('[packer-logs-week] photo lookup failed; returning rows without photos', error);
     }
   }
 

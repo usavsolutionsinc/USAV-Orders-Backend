@@ -1,5 +1,7 @@
 import pool from '@/lib/db';
 import { normalizeTrackingKey18, normalizeTrackingLast8 } from '@/lib/tracking-format';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export type ExceptionDomain = 'orders' | 'receiving';
 export type ExceptionSourceStation =
@@ -52,7 +54,13 @@ export interface UpsertTrackingExceptionParams {
 export async function upsertOpenTrackingException(
   params: UpsertTrackingExceptionParams,
   dbClient: DbClient = pool,
+  // tracking_exceptions is tenant-owned with a usav-fallback default. Callers
+  // that have a request org should thread it; session-less callers fall back to
+  // the transitional USAV org (the established single-tenant convention) so the
+  // INSERT is always stamped explicitly rather than relying on the GUC default.
+  orgId?: OrgId,
 ): Promise<TrackingExceptionRecord | null> {
+  const effectiveOrgId = orgId ?? transitionalUsavOrgId();
   const tracking = String(params.trackingNumber || '').trim();
   if (!tracking || tracking.includes(':')) return null;
 
@@ -119,12 +127,12 @@ export async function upsertOpenTrackingException(
        tracking_number, domain, source_station, staff_id, staff_name,
        exception_reason, notes, status, shipment_id, receiving_id,
        last_error, last_zoho_check_at, zoho_check_count, domain_metadata,
-       created_at, updated_at
+       created_at, updated_at, organization_id
      ) VALUES (
        $1, $2, $3, $4, $5,
        $6, $7, 'open', $8, $9,
        $10, NOW(), 1, COALESCE($11::jsonb, '{}'::jsonb),
-       NOW(), NOW()
+       NOW(), NOW(), $12::uuid
      )
      RETURNING *`,
     [
@@ -139,6 +147,7 @@ export async function upsertOpenTrackingException(
       params.receivingId ?? null,
       params.lastError ?? null,
       params.domainMetadata ? JSON.stringify(params.domainMetadata) : null,
+      effectiveOrgId,
     ],
   );
   return (inserted.rows[0] as TrackingExceptionRecord) ?? null;

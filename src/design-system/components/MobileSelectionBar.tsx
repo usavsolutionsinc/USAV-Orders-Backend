@@ -17,8 +17,10 @@ interface MobileSelectionBarProps {
   count: number;
   total: number;
   allSelected: boolean;
+  visible?: boolean;
   onToggleAll: () => void;
   onClear: () => void;
+  onDismiss?: () => void;
   actions?: MobileSelectionAction[];
 }
 
@@ -81,7 +83,17 @@ function SelectAll({ count, allSelected, onToggleAll }: { count: number; allSele
   );
 }
 
-function GlassActions({ actions, onClear }: { actions: MobileSelectionAction[]; onClear: () => void }) {
+function GlassActions({
+  actions,
+  onClear,
+  onDismiss,
+}: {
+  actions: MobileSelectionAction[];
+  onClear: () => void;
+  onDismiss?: () => void;
+}) {
+  const handleClear = onDismiss ?? onClear;
+
   return (
     <motion.div
       variants={{
@@ -114,8 +126,8 @@ function GlassActions({ actions, onClear }: { actions: MobileSelectionAction[]; 
       {/* Hairline divider keeps the dismiss control visually distinct from actions. */}
       <span aria-hidden className="mx-0.5 h-5 w-px bg-gray-200" />
       <motion.button
-        onClick={onClear}
-        aria-label="Clear selection"
+        onClick={handleClear}
+        aria-label={onDismiss ? 'Exit selection mode' : 'Clear selection'}
         variants={{
           hidden: { opacity: 0, scale: 0.8 },
           visible: { opacity: 1, scale: 1 },
@@ -147,15 +159,17 @@ const SURFACE_LIGHT = 'bg-white/95 ring-1 ring-gray-200 backdrop-blur-xl';
 export function MobileSelectionBar({
   count,
   allSelected,
+  visible = count > 0,
   onToggleAll,
   onClear,
+  onDismiss,
   actions = [],
 }: MobileSelectionBarProps) {
   const anim = useBarAnim();
 
   return (
     <AnimatePresence>
-      {count > 0 && (
+      {visible && (
         <motion.div {...anim} className="absolute inset-x-0 bottom-0 z-20 px-3 pb-4">
           <div className={cn('relative flex items-center overflow-hidden rounded-full p-1.5 shadow-xl shadow-gray-900/10', SURFACE_LIGHT)}>
             <div className="relative z-10 flex flex-1 items-center gap-2">
@@ -163,7 +177,7 @@ export function MobileSelectionBar({
               <span className="text-eyebrow font-bold uppercase tracking-wider text-gray-500">
                 selected
               </span>
-              <GlassActions actions={actions} onClear={onClear} />
+              <GlassActions actions={actions} onClear={onClear} onDismiss={onDismiss} />
             </div>
           </div>
         </motion.div>

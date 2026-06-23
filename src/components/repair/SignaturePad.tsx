@@ -121,7 +121,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
           {label}
         </label>
         <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-orange-600 bg-orange-50 border-orange-200' : 'opacity-0 border-transparent'}`}>
+            <span className={`flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -140,7 +140,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className={`relative border-2 border-gray-900 bg-white overflow-hidden ${fillHeight ? 'flex-1 min-h-0' : ''}`}
+        className={`relative bg-white overflow-hidden ${fillHeight ? 'flex-1 min-h-0' : 'border border-gray-300'}`}
         style={fillHeight ? undefined : { height: PAD_HEIGHT }}
       >
         <canvas

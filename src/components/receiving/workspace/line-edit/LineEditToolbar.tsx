@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Copy, History, Info, Link2, RefreshCw, Smartphone } from '@/components/Icons';
+import { Copy, History, Info, Link2, RefreshCw } from '@/components/Icons';
 import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
@@ -18,7 +18,7 @@ import {
  * progress stepper. Icon-only; the action set is driven by the mode registry
  * (`WORKSPACE_MODES[mode].headerActions`) so every mode renders the SAME header
  * primitive configured by data, not a bespoke toolbar each. Unbox/triage show
- * refresh·share·audit·copy·phone; testing shows audit·pair·copy. Lives outside
+ * refresh·share·audit·copy; testing shows audit·pair·copy. Lives outside
  * the scroll surface so it stays locked while the body scrolls under it.
  *
  * Prev/Next dispatch the mode's `navChannel` event (receiving-navigate-table vs
@@ -30,7 +30,6 @@ export function LineEditToolbar({
   zohoSyncing = false,
   busy,
   copyingAll,
-  phoneSharing = false,
   pairing = false,
   handlers,
 }: {
@@ -41,8 +40,6 @@ export function LineEditToolbar({
   /** saving || platformSaving — surfaces the "Saving" status pill. */
   busy: boolean;
   copyingAll: boolean;
-  /** Publish-in-flight for the share-to-phone action — disables the button. */
-  phoneSharing?: boolean;
   /** SKU-pairing modal opening — disables the pair button (testing). */
   pairing?: boolean;
   /** Handler per action key; only the keys this mode lists are read. */
@@ -84,13 +81,6 @@ export function LineEditToolbar({
       disabled: disabled || copyingAll,
       title: 'Copy package + PO details to clipboard',
       ariaLabel: 'Copy all receiving details',
-    },
-    phone: {
-      label: 'Phone',
-      icon: <Smartphone className="h-3.5 w-3.5" />,
-      disabled: disabled || phoneSharing,
-      title: 'Share to your phone to take photos',
-      ariaLabel: 'Share to phone',
     },
     pair: {
       label: 'Pair',

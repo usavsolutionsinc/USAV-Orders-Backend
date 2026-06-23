@@ -217,7 +217,7 @@ export const POST = withAuth(
             print_class: printClass,
             station_activity_log_id: stationActivityLogId,
           },
-        });
+        }, undefined, ctx.organizationId);
       } catch (err) {
         console.warn('[post-multi-sn] recordInventoryEvent failed (non-fatal)', err);
       }

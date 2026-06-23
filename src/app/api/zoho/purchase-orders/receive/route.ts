@@ -233,10 +233,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       if (hasAssignRes.rows[0]?.exists) {
         await client.query(
           `INSERT INTO work_assignments
-             (entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes)
-           VALUES ('RECEIVING', $1, 'TEST', $2, 'ASSIGNED', 100, $3)
+             (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, notes)
+           VALUES ($1, 'RECEIVING', $2, 'TEST', $3, 'ASSIGNED', 100, $4)
            ON CONFLICT DO NOTHING`,
           [
+            ctx.organizationId,
             receivingId,
             assignedTechId,
             `Auto-created from Zoho PO ${purchaseOrderId} (Zoho receive pending)`,

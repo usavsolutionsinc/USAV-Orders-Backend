@@ -1,9 +1,9 @@
 {
   "summary": {
-    "total": 651,
+    "total": 652,
     "withAuth": 495,
-    "tenantWrapped": 285,
-    "orgIdRef": 538,
+    "tenantWrapped": 286,
+    "orgIdRef": 539,
     "rawPool": 176,
     "drizzle": 19,
     "transitional": 14,
@@ -12,7 +12,7 @@
       "critical": 26,
       "high": 29,
       "medium": 226,
-      "low": 281,
+      "low": 282,
       "info": 89
     }
   },
@@ -9409,6 +9409,26 @@
       "risk": "low"
     },
     {
+      "route": "/api/photos/download-zip",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "photos"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/photos/upload",
       "methods": [
         "POST"
@@ -12590,7 +12610,6 @@
         "order_unit_allocations",
         "orders",
         "items",
-        "types",
         "sku"
       ],
       "risk": "low"

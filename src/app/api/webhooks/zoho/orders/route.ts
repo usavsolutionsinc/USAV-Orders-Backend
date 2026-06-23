@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ingestOrder, type OrderIntakeLine } from '@/lib/inventory/order-intake';
 import { transitionalUsavOrgId } from '@/lib/tenancy/db';
-import type { OrgId } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -175,17 +174,10 @@ export async function POST(request: NextRequest) {
   // allocateOrder(input, orgId) to actually close the leak (tracked in stillOpen).
   const orgId = transitionalUsavOrgId();
   try {
-    // The trailing `orgId` is threaded per the verifier finding so that, once
-    // order-intake.ts gains its optional-orgId overload, the orders INSERT runs
-    // under withTenantTransaction and allocateOrder(input, orgId) takes its
-    // org-aligned path. Until that shared-module edit lands (it is out of this
-    // fileset — see stillOpen), ingestOrder still types as 1-arg, so the call is
-    // cast to keep the build green while the org value is already wired here.
-    const ingestOrderWithOrg = ingestOrder as (
-      input: Parameters<typeof ingestOrder>[0],
-      orgId?: OrgId,
-    ) => ReturnType<typeof ingestOrder>;
-    const result = await ingestOrderWithOrg({
+    // ingestOrder now accepts an optional trailing orgId: the orders INSERT runs
+    // under withTenantTransaction (GUC-scoped + organization_id stamped) and
+    // allocateOrder(input, orgId) takes its org-aligned path.
+    const result = await ingestOrder({
       externalId: order.externalId,
       source: 'zoho',
       customerExternalId: order.customerExternalId,

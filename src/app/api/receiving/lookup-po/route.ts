@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
-import { getCarrier } from '@/lib/tracking-format';
+import { getCarrier, extractCanonicalTracking } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged, publishPriorityUnbox } from '@/lib/realtime/publish';
 import { searchPurchaseOrdersByTracking, searchPurchaseReceivesByTracking, findPurchaseOrderByNumber } from '@/lib/zoho';
@@ -536,11 +536,19 @@ async function applyIntakeClassification(
 export const POST = withAuth(async (request: NextRequest, ctx) => {
   try {
     const body = await request.json();
-    const trackingNumber = String(body?.trackingNumber || '').trim();
+    const rawTracking = String(body?.trackingNumber || '').trim();
     const providedCarrier = String(body?.carrier || '').trim();
     // Scan route: 'order' resolves a Zoho PO / reference number (local mirror
     // first), 'tracking' (default) resolves a carrier tracking number.
     const mode: 'tracking' | 'order' = body?.mode === 'order' ? 'order' : 'tracking';
+    // Canonicalize carrier scans at the ingestion boundary so a scanned GS1/"96"
+    // FedEx barcode (e.g. 9632…382141152045) and a pasted human number
+    // (382141152045) — and the Zoho reference# they reconcile against — all land
+    // on ONE identical value for storage, display, dedup, and Zoho search. Only
+    // in tracking mode: an order-mode value is a PO/reference number, not a
+    // carrier barcode, so it must reach findPurchaseOrderByNumber untouched.
+    const trackingNumber =
+      mode === 'tracking' ? extractCanonicalTracking(rawTracking) || rawTracking : rawTracking;
     // Optional door-intake classification (e.g. 'FBA_RETURN'). Maps to the
     // carton's source_platform/is_return/return_platform so the unboxer sees it.
     const classification: IntakeClassification | null = isIntakeClassification(body?.classification)
@@ -1194,7 +1202,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         zoho_reachable: zohoReachable,
         scan_id: unmatchedScanId,
       },
-    }).catch((err) => {
+    }, undefined, ctx.organizationId).catch((err) => {
       console.warn('lookup-po: upsertOpenTrackingException (receiving) failed', err);
       return null;
     });

@@ -22,7 +22,8 @@ export const REPAIR_STEP_COPY: Record<RepairIntakeStepKey, { title: string; subt
   },
 };
 
-/** Whether a single contact-step field is satisfied (email + notes are optional). */
+/** Whether a single contact-step field is satisfied. Serial + price are required
+ *  in the combined "extras" step; email is optional, notes ride along with extras. */
 export function isContactFieldValid(field: ContactFieldKey, data: RepairFormData): boolean {
   switch (field) {
     case 'name':
@@ -30,12 +31,9 @@ export function isContactFieldValid(field: ContactFieldKey, data: RepairFormData
     case 'phone':
       return !!data.customer.phone.trim();
     case 'email':
-    case 'notes':
       return true;
-    case 'serial':
-      return !!data.serialNumber.trim();
-    case 'price':
-      return !!data.price.trim();
+    case 'extras':
+      return !!data.serialNumber.trim() && !!data.price.trim();
   }
 }
 

@@ -87,10 +87,13 @@ export function ScanHotkeyControl({ children }: ScanHotkeyControlProps) {
         title={`Focus scan — press ${hotkey}. Click to change.`}
         aria-label={`Focus-scan hotkey is ${hotkey}. Click to reassign.`}
         className={cn(
-          'absolute inset-y-0 left-0 inline-flex items-center gap-1 rounded-md pr-0.5 text-gray-500 transition-opacity duration-150 hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none',
+          // Slide-in from the left (translate-x) + fade, so the gear + key chip
+          // "arrives" into the slot while the input placeholder shifts right to
+          // make room (see group-hover:pl-16 in StationScanBar).
+          'absolute inset-y-0 left-0 inline-flex items-center gap-1 rounded-md pr-0.5 text-gray-500 transition-all duration-150 hover:text-blue-600 focus-visible:opacity-100 focus-visible:outline-none',
           open
-            ? 'pointer-events-auto opacity-100 text-blue-600'
-            : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100',
+            ? 'pointer-events-auto translate-x-0 opacity-100 text-blue-600'
+            : 'pointer-events-none -translate-x-2 opacity-0 group-hover:pointer-events-auto group-hover:translate-x-0 group-hover:opacity-100',
         )}
       >
         <span className="inline-flex size-[17px] shrink-0 items-center justify-center">

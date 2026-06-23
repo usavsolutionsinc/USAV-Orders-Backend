@@ -183,9 +183,9 @@ async function applyInventoryV2Effects(input: {
       const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger (
           sku, delta, reason, dimension, staff_id,
-          ref_serial_unit_id, ref_receiving_line_id, notes
+          ref_serial_unit_id, ref_receiving_line_id, notes, organization_id
         )
-        VALUES ($1, $2, 'RECEIVED', 'WAREHOUSE', $3, $4, $5, $6)
+        VALUES ($1, $2, 'RECEIVED', 'WAREHOUSE', $3, $4, $5, $6, $7::uuid)
         RETURNING id`,
         [
           input.sku,
@@ -194,6 +194,7 @@ async function applyInventoryV2Effects(input: {
           serialUnitId,
           input.receivingLineId,
           input.notes,
+          input.organizationId,
         ],
       );
       ledgerId = ledger.rows[0]?.id ?? null;
@@ -210,12 +211,12 @@ async function applyInventoryV2Effects(input: {
         event_type, actor_staff_id, station,
         receiving_id, receiving_line_id, serial_unit_id, sku,
         bin_id, prev_status, next_status, stock_ledger_id,
-        client_event_id, notes, payload
+        client_event_id, notes, payload, organization_id
       )
       VALUES ('RECEIVED', $1, 'RECEIVING',
               $2, $3, $4, $5,
               $6, NULL, 'RECEIVED', $7,
-              $8, $9, $10::jsonb)
+              $8, $9, $10::jsonb, $11::uuid)
       ON CONFLICT (client_event_id) DO NOTHING
       RETURNING id`,
       [
@@ -233,6 +234,7 @@ async function applyInventoryV2Effects(input: {
           disposition_code: input.dispositionCode,
           qty_received: input.qtyReceived,
         }),
+        input.organizationId,
       ],
     );
     // If conflict swallowed the insert, look up the existing row.
@@ -297,12 +299,12 @@ async function applyInventoryV2Effects(input: {
             event_type, actor_staff_id, station,
             receiving_id, receiving_line_id, serial_unit_id, sku,
             bin_id, prev_status, next_status, stock_ledger_id,
-            client_event_id, payload
+            client_event_id, payload, organization_id
           )
           VALUES ('PUTAWAY', $1, 'RECEIVING',
                   $2, $3, $4, $5,
                   $6, 'RECEIVED', 'STOCKED', $7,
-                  $8, $9::jsonb)
+                  $8, $9::jsonb, $10::uuid)
           ON CONFLICT (client_event_id) DO NOTHING
           RETURNING id`,
           [
@@ -318,6 +320,7 @@ async function applyInventoryV2Effects(input: {
               qty: input.qtyReceived,
               condition_grade: input.conditionGrade,
             }),
+            input.organizationId,
           ],
         );
         putawayEventId = putawayEvent.rows[0]?.id ?? null;

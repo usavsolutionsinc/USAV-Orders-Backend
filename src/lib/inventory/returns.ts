@@ -157,12 +157,12 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
       if (u.sku) {
         const ledgerQ = await client.query<{ id: number }>(
           `INSERT INTO sku_stock_ledger (
-             sku, delta, reason, dimension, staff_id,
+             organization_id, sku, delta, reason, dimension, staff_id,
              ref_serial_unit_id, ref_order_id, notes
            )
-           VALUES ($1, 1, 'RETURN_CUSTOMER', 'WAREHOUSE', $2, $3, $4, $5)
+           VALUES ($1, $2, 1, 'RETURN_CUSTOMER', 'WAREHOUSE', $3, $4, $5, $6)
            RETURNING id`,
-          [u.sku, input.actorStaffId, u.id, resolvedOrderId, reason],
+          [input.organizationId ?? null, u.sku, input.actorStaffId, u.id, resolvedOrderId, reason],
         );
         ledgerId = ledgerQ.rows[0]?.id ?? null;
       }

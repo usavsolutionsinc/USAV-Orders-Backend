@@ -40,5 +40,9 @@ export const STATION_SCAN_BAR_MODE_BTN_ARMED =
   'relative z-dropdown ring-2 ring-current/40';
 
 export function stationScanBarFocusInputClass(theme: StationTheme): string {
-  return `focus:ring-4 focus:ring-${theme}-500/10 focus:border-${theme}-500`;
+  // Inset ring + box-border keep the entire focus affordance INSIDE the input's
+  // own box, so it is never clipped or over-painted by the surrounding sidebar
+  // bands (which are sized to the same height as the input). See the receiving
+  // scan-band geometry note in ReceivingScanBands.tsx.
+  return `focus:ring-2 focus:ring-inset focus:ring-${theme}-500/30 focus:border-${theme}-500`;
 }

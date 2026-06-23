@@ -46,7 +46,7 @@ interface PhotoCaptureSurfaceProps {
  * Shared photo capture surface for PO-level and line-level scopes.
  *
  * On the green check-mark, shots enqueue into {@link PhotoUploadQueue}
- * (downscale → POST /api/photos/upload → GCS)
+ * (downscale → POST /api/photos/upload → storage)
  * and the operator returns to the unbox/detail screen immediately while uploads
  * finish in the background.
  *
@@ -71,6 +71,13 @@ export function PhotoCaptureSurface({
   const orgId = user?.organizationId;
   const notifyStaffId = user?.staffId ?? 0;
   const phoneChannelName = safeChannelName(() => getPhoneBridgeChannelName(orgId!, notifyStaffId));
+
+  const returnToUnbox = useCallback(() => {
+    // Replace instead of push so the capture page does not stay behind in the
+    // history stack after the operator exits with X or the checkmark.
+    router.replace(returnHref);
+  }, [router, returnHref]);
+
   useEffect(() => {
     if (notifyStaffId <= 0 || !phoneChannelName) return;
     photoUploadQueue.configureNotifier(async (notice) => {
@@ -157,7 +164,7 @@ export function PhotoCaptureSurface({
   const handleDone = useCallback(
     (shots: CapturedShot[]) => {
       if (shots.length === 0) {
-        router.push(returnHref);
+        returnToUnbox();
         return;
       }
       const existingCount = existingPhotos?.photos?.length ?? 0;
@@ -169,18 +176,18 @@ export function PhotoCaptureSurface({
         );
       });
       toast.message(`Uploading ${shots.length} photo${shots.length === 1 ? '' : 's'}…`, {
-        description: 'Saving to GCS in the background.',
+        description: 'Saving to storage in the background.',
         position: 'top-center',
         duration: 5000,
       });
-      router.push(returnHref);
+      returnToUnbox();
     },
-    [existingPhotos?.photos?.length, scope, router, returnHref],
+    [existingPhotos?.photos?.length, returnToUnbox, scope],
   );
 
   const handleCancel = useCallback(() => {
-    router.push(returnHref);
-  }, [router, returnHref]);
+    returnToUnbox();
+  }, [returnToUnbox]);
 
   return (
     <MobilePackerSpamCamera

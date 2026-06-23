@@ -1,4 +1,5 @@
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import {
   normalizeSerial,
   upsertSerialUnit,
@@ -189,25 +190,22 @@ function dedupeSerials(input: ReceiveLineUnitsInput): string[] {
 export async function receiveLineUnits(
   input: ReceiveLineUnitsInput,
 ): Promise<ReceiveLineUnitsResult> {
-  // Acquire a dedicated connection + open a transaction so the SELECT ... FOR
-  // UPDATE on receiving_lines holds for the lifetime of this call. Concurrent
-  // scan-serial requests on the same line block on this lock so reads and
-  // writes serialize correctly.
-  const client = await pool.connect();
-  let committed = false;
-  try {
-    await client.query('BEGIN');
-
+  // withTenantTransaction owns BEGIN / SET LOCAL app.current_org / COMMIT /
+  // ROLLBACK / release. One transaction means the SELECT ... FOR UPDATE on
+  // receiving_lines holds for the lifetime of the callback, so concurrent
+  // scan-serial requests on the same line block on this lock and reads/writes
+  // serialize correctly. It also sets the org GUC, so every inventory_events /
+  // sku_stock_ledger insert inside auto-stamps organization_id (the column
+  // default reads current_setting('app.current_org')).
+  return withTenantTransaction(input.organizationId, async (client) => {
     const line = await loadLineForUpdate(client, input.receiving_line_id);
     if (!line) {
-      await client.query('ROLLBACK');
       throw new Error(`receiving_line ${input.receiving_line_id} not found`);
     }
 
     const units = Math.max(0, Math.floor(input.units));
     const serials = dedupeSerials(input);
     if (serials.length > units) {
-      await client.query('ROLLBACK');
       throw new Error(
         `receiveLineUnits: serials (${serials.length}) > units (${units})`,
       );
@@ -237,8 +235,6 @@ export async function receiveLineUnits(
           [normalized, line.id],
         );
         if (existing.rows[0]) {
-          await client.query('COMMIT');
-          committed = true;
           return {
             line_id: line.id,
             units_added: 0,
@@ -358,11 +354,12 @@ export async function receiveLineUnits(
     if (upserted.is_new && line.sku && !isOverCap) {
       const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
-           (sku, delta, reason, dimension, staff_id,
+           (organization_id, sku, delta, reason, dimension, staff_id,
             ref_serial_unit_id, ref_receiving_line_id, notes)
-         VALUES ($1, 1, 'RECEIVED', 'WAREHOUSE', $2, $3, $4, $5)
+         VALUES ($1, $2, 1, 'RECEIVED', 'WAREHOUSE', $3, $4, $5, $6)
          RETURNING id`,
         [
+          input.organizationId,
           line.sku,
           input.staff_id ?? null,
           upserted.unit.id,
@@ -412,7 +409,7 @@ export async function receiveLineUnits(
           is_return: upserted.is_return,
           warnings: upserted.warnings,
         },
-      }, client);
+      }, client, input.organizationId);
       inventoryEventIds.push(event.id);
     } else if (upserted.is_new && line.sku && isOverCap) {
       // Supplemental serial logged after the line was already at expected
@@ -440,7 +437,7 @@ export async function receiveLineUnits(
           is_return: upserted.is_return,
           warnings: upserted.warnings,
         },
-      }, client);
+      }, client, input.organizationId);
       inventoryEventIds.push(event.id);
     } else if (line.sku) {
       // Already known serial (re-scan). Still emit an event so the timeline
@@ -465,7 +462,7 @@ export async function receiveLineUnits(
           rescan: true,
           is_return: upserted.is_return,
         },
-      }, client);
+      }, client, input.organizationId);
       inventoryEventIds.push(event.id);
     }
   }
@@ -482,11 +479,12 @@ export async function receiveLineUnits(
 
       const ledger = await client.query<{ id: number }>(
         `INSERT INTO sku_stock_ledger
-           (sku, delta, reason, dimension, staff_id,
+           (organization_id, sku, delta, reason, dimension, staff_id,
             ref_receiving_line_id, notes)
-         VALUES ($1, 1, 'RECEIVED', 'WAREHOUSE', $2, $3, $4)
+         VALUES ($1, $2, 1, 'RECEIVED', 'WAREHOUSE', $3, $4, $5)
          RETURNING id`,
         [
+          input.organizationId,
           line.sku,
           input.staff_id ?? null,
           line.id,
@@ -529,7 +527,7 @@ export async function receiveLineUnits(
           unit_ordinal: ordinal,
           serialized: false,
         },
-      }, client);
+      }, client, input.organizationId);
       inventoryEventIds.push(event.id);
     }
   }
@@ -621,12 +619,9 @@ export async function receiveLineUnits(
         from: prevWorkflow,
         to: nextWorkflow,
       },
-    }, client);
+    }, client, input.organizationId);
     inventoryEventIds.push(transition.id);
   }
-
-    await client.query('COMMIT');
-    committed = true;
 
     return {
       line_id: line.id,
@@ -650,16 +645,5 @@ export async function receiveLineUnits(
           Number(updated.quantity_received) >= Number(updated.quantity_expected),
       },
     };
-  } catch (err) {
-    if (!committed) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        /* connection may already be in error state */
-      }
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }

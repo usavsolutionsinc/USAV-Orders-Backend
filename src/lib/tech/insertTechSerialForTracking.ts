@@ -75,10 +75,10 @@ async function linkTechSerialToInventoryV2(
     //    intent. Explicit test results go through /api/tech/test-result.
     const eventInsert = await db.query(
       `INSERT INTO inventory_events (
-        event_type, actor_staff_id, station,
+        organization_id, event_type, actor_staff_id, station,
         serial_unit_id, sku, scan_token, notes, payload
       )
-      VALUES ('NOTE', $1, 'TECH', $2, $3, $4, $5, $6::jsonb)
+      VALUES ($7::uuid, 'NOTE', $1, 'TECH', $2, $3, $4, $5, $6::jsonb)
       RETURNING id`,
       [
         args.staffId > 0 ? args.staffId : null,
@@ -95,6 +95,7 @@ async function linkTechSerialToInventoryV2(
           fba_shipment_id: args.fbaShipmentId,
           fba_shipment_item_id: args.fbaShipmentItemId,
         }),
+        args.organizationId,
       ],
     );
     const inventoryEventId: number | null = eventInsert.rows[0]?.id

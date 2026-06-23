@@ -22,9 +22,27 @@
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
+import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /** Minimal pg client surface the helpers need (a pool client mid-transaction). */
 type Tx = Pick<PoolClient, 'query'>;
+
+// ─── Tenancy note ─────────────────────────────────────────────────────────────
+//
+// These helpers run on a caller-owned `Tx` (a raw-pool client mid-transaction),
+// NOT inside withTenantTransaction — so there is no `app.current_org` GUC to
+// auto-stamp `organization_id`. Both tenant-owned tables written here carry the
+// column with a `usav-fallback` default (an unstamped INSERT silently misroutes
+// to the USAV org rather than crashing). To make multi-tenant correct we thread
+// an OPTIONAL `organizationId` and STAMP it explicitly on every INSERT:
+//   - shipping_tracking_numbers (tenant-owned, has organization_id)
+//   - order_shipment_links      (tenant-owned, has organization_id)
+// When the caller doesn't thread one we fall back to transitionalUsavOrgId(),
+// which preserves today's single-tenant (USAV) behavior exactly while letting
+// multi-tenant callers pass their real `ctx.organizationId`. All current callers
+// (orders/assign, orders/[id]/tracking, shipped/scan-out) have ctx.organizationId
+// in scope and now pass it through.
 
 export function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '');
@@ -58,7 +76,9 @@ export async function upsertOrderTracking(
   orderIds: number[],
   shippingTrackingNumber: string | null | undefined,
   client: Tx,
+  organizationId?: OrgId,
 ): Promise<void> {
+  const orgId = organizationId ?? transitionalUsavOrgId();
   const existingOrders = await client.query(
     `SELECT id, shipment_id
      FROM orders
@@ -209,9 +229,10 @@ export async function upsertOrderTracking(
            latest_status_category,
            is_terminal,
            last_error_code,
-           last_error_message
+           last_error_message,
+           organization_id
          )
-       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8, $9::uuid)
        ON CONFLICT (tracking_number_normalized) DO UPDATE
          SET tracking_number_raw = EXCLUDED.tracking_number_raw,
              carrier = EXCLUDED.carrier,
@@ -240,6 +261,9 @@ export async function upsertOrderTracking(
                WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
                ELSE shipping_tracking_numbers.last_error_message
              END,
+             -- Heal a NULL org on an orphan/legacy row; never overwrite an
+             -- existing tenant's stamp.
+             organization_id = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
              updated_at = NOW()
        RETURNING id`,
       [
@@ -251,6 +275,7 @@ export async function upsertOrderTracking(
         isUnknownCarrier,
         isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
         isUnknownCarrier ? unknownCarrierMessage : null,
+        orgId,
       ]
     );
     const insertedShipmentId = Number((insertedShipment.rows[0] as { id?: unknown } | undefined)?.id ?? 0);
@@ -275,13 +300,13 @@ export async function upsertOrderTracking(
         [orderIds]
       );
       await client.query(
-        `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
-         SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign'
+        `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
+         SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign', $3::uuid
          ON CONFLICT (order_row_id, shipment_id) DO UPDATE
            SET is_primary = true,
                source = EXCLUDED.source,
                updated_at = NOW()`,
-        [orderIds, shipmentId]
+        [orderIds, shipmentId, orgId]
       );
     } catch (error) {
       if (!isMissingOrderShipmentLinksRelation(error)) throw error;
@@ -294,7 +319,11 @@ export async function updateShipmentTrackingById(
   shipmentId: number,
   shippingTrackingNumber: string,
   client: Tx,
+  // UPDATE-only (no INSERT here) — org is accepted for signature symmetry with
+  // the other helpers; there is no tenant-owned row created to stamp.
+  _organizationId?: OrgId,
 ): Promise<void> {
+  void _organizationId;
   const rawTracking = String(shippingTrackingNumber || '').trim();
   if (!rawTracking) throw new Error('Tracking number is required');
 
@@ -407,7 +436,9 @@ export async function createAdditionalShipmentLink(
   orderIds: number[],
   shippingTrackingNumber: string,
   client: Tx,
+  organizationId?: OrgId,
 ): Promise<number> {
+  const orgId = organizationId ?? transitionalUsavOrgId();
   const rawTracking = String(shippingTrackingNumber || '').trim();
   if (!rawTracking) throw new Error('Tracking number is required');
 
@@ -447,7 +478,7 @@ export async function createAdditionalShipmentLink(
           throw new Error('Tracking number already exists on another shipment');
         }
       } else {
-        await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client);
+        await updateShipmentTrackingById(orderIds, shipmentId, rawTracking, client, organizationId);
       }
     }
   } else {
@@ -468,9 +499,10 @@ export async function createAdditionalShipmentLink(
            latest_status_category,
            is_terminal,
            last_error_code,
-           last_error_message
+           last_error_message,
+           organization_id
          )
-       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8)
+       VALUES ($1, $2, $3, 'MANUAL_PANEL_EDIT', $4, $5, $6, $7, $8, $9::uuid)
        ON CONFLICT (tracking_number_normalized) DO UPDATE
          SET tracking_number_raw = EXCLUDED.tracking_number_raw,
              carrier = EXCLUDED.carrier,
@@ -499,6 +531,9 @@ export async function createAdditionalShipmentLink(
                WHEN shipping_tracking_numbers.carrier = 'UNKNOWN' THEN NULL
                ELSE shipping_tracking_numbers.last_error_message
              END,
+             -- Heal a NULL org on an orphan/legacy row; never overwrite an
+             -- existing tenant's stamp.
+             organization_id = COALESCE(shipping_tracking_numbers.organization_id, EXCLUDED.organization_id),
              updated_at = NOW()
        RETURNING id`,
       [
@@ -510,6 +545,7 @@ export async function createAdditionalShipmentLink(
         isUnknownCarrier,
         isUnknownCarrier ? 'UNKNOWN_CARRIER' : null,
         isUnknownCarrier ? unknownCarrierMessage : null,
+        orgId,
       ]
     );
     shipmentId = Number(insertedShipment.rows[0]?.id ?? 0) || null;
@@ -519,13 +555,13 @@ export async function createAdditionalShipmentLink(
 
   try {
     await client.query(
-      `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
-       SELECT UNNEST($1::int[]), $2::bigint, false, 'orders.assign'
+      `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
+       SELECT UNNEST($1::int[]), $2::bigint, false, 'orders.assign', $3::uuid
        ON CONFLICT (order_row_id, shipment_id) DO UPDATE
          SET is_primary = false,
              source = EXCLUDED.source,
              updated_at = NOW()`,
-      [orderIds, shipmentId],
+      [orderIds, shipmentId, orgId],
     );
   } catch (error) {
     if (!isMissingOrderShipmentLinksRelation(error)) throw error;
@@ -607,6 +643,12 @@ export interface ApplyOrderTrackingOps {
   deletes?: Array<{ shipmentId: number }>;
   /** Which shipment should become orders.shipment_id after the batch. */
   setPrimaryShipmentId?: number | null;
+  /**
+   * Owning org. Threaded into every tenant-owned INSERT (shipping_tracking_numbers,
+   * order_shipment_links) so they stamp organization_id explicitly. Omitted →
+   * transitionalUsavOrgId() (today's single-tenant USAV behavior).
+   */
+  organizationId?: OrgId;
 }
 
 export interface ApplyOrderTrackingResult {
@@ -629,6 +671,7 @@ export async function reconcileOrderTrackingSet(
   orderIds: number[],
   desiredRaw: string[],
   client: Tx,
+  organizationId?: OrgId,
 ): Promise<{ shipmentIds: number[]; primaryShipmentId: number | null }> {
   // Normalize + dedupe the desired list, preserving order.
   const desired: Array<{ raw: string; key: string }> = [];
@@ -690,7 +733,7 @@ export async function reconcileOrderTrackingSet(
       shipmentIds.push(existing);
       continue;
     }
-    const createdId = await createAdditionalShipmentLink(orderIds, d.raw, client);
+    const createdId = await createAdditionalShipmentLink(orderIds, d.raw, client, organizationId);
     shipmentIds.push(createdId);
     currentByKey.set(d.key, createdId);
   }
@@ -733,7 +776,8 @@ export async function reconcileOrderTrackingSet(
 export async function applyOrderTrackingOps(
   ops: ApplyOrderTrackingOps,
 ): Promise<ApplyOrderTrackingResult> {
-  const { orderIds, setTrackingNumbers, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId } = ops;
+  const { orderIds, setTrackingNumbers, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId, organizationId } = ops;
+  const orgId = organizationId ?? transitionalUsavOrgId();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -745,13 +789,14 @@ export async function applyOrderTrackingOps(
         orderIds,
         setTrackingNumbers,
         client,
+        organizationId,
       );
       await client.query('COMMIT');
       return { createdShipmentIds: shipmentIds, primaryShipmentId };
     }
 
     if (primaryTrackingNumber !== undefined) {
-      await upsertOrderTracking(orderIds, primaryTrackingNumber, client);
+      await upsertOrderTracking(orderIds, primaryTrackingNumber, client, organizationId);
     }
 
     if (Array.isArray(edits) && edits.length > 0) {
@@ -760,7 +805,7 @@ export async function applyOrderTrackingOps(
         const nextTracking = String(edit?.trackingNumber || '').trim();
         if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
         if (!nextTracking) continue;
-        await updateShipmentTrackingById(orderIds, shipmentId, nextTracking, client);
+        await updateShipmentTrackingById(orderIds, shipmentId, nextTracking, client, organizationId);
       }
     }
 
@@ -769,7 +814,7 @@ export async function applyOrderTrackingOps(
       for (const create of creates) {
         const nextTracking = String(create?.trackingNumber || '').trim();
         if (!nextTracking) continue;
-        const createdId = await createAdditionalShipmentLink(orderIds, nextTracking, client);
+        const createdId = await createAdditionalShipmentLink(orderIds, nextTracking, client, organizationId);
         createdShipmentIds.push(createdId);
       }
     }
@@ -809,11 +854,11 @@ export async function applyOrderTrackingOps(
           [orderIds]
         );
         await client.query(
-          `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
-           SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.tracking'
+          `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
+           SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.tracking', $3::uuid
            ON CONFLICT (order_row_id, shipment_id) DO UPDATE
              SET is_primary = true, source = 'orders.tracking', updated_at = NOW()`,
-          [orderIds, resolvedPrimaryId]
+          [orderIds, resolvedPrimaryId, orgId]
         );
       } catch (error) {
         if (!isMissingOrderShipmentLinksRelation(error)) throw error;

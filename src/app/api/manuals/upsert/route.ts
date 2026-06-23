@@ -106,11 +106,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         );
       }
 
+      // product_manuals grew an organization_id column (2026-06-14 phase-B
+      // needs-col-2) with a GUC-or-USAV default. Inside this txn the GUC default
+      // would stamp correctly, but stamp explicitly so the row is org-attributed
+      // even if the default is later restored to GUC-only for tenant #2.
       const inserted = await client.query(
-        `INSERT INTO product_manuals (sku, item_number, product_title, display_name, google_file_id, type, sku_catalog_id, is_active, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW())
+        `INSERT INTO product_manuals (sku, item_number, product_title, display_name, google_file_id, type, sku_catalog_id, is_active, updated_at, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, NOW(), $8::uuid)
          RETURNING id`,
-        [null, itemNumber || null, productTitle, displayName, googleFileId, type, skuCatalogId]
+        [null, itemNumber || null, productTitle, displayName, googleFileId, type, skuCatalogId, orgId]
       );
 
       return inserted.rows[0]?.id ?? null;

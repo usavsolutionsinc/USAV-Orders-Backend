@@ -39,6 +39,7 @@
     "tenancy:guard": "tsx scripts/tenancy-guard.ts",
     "tenancy:guard:check": "tsx scripts/tenancy-guard.ts --check",
     "test:dashboard-state": "tsx --test src/utils/dashboard-search-state.test.ts",
+    "test:tracking-format": "tsx --test src/lib/tracking-format.test.ts",
     "test:sync-hash": "tsx --test src/lib/integrations/sync-hash.test.ts",
     "test:workflow": "tsx --test src/lib/workflow/*.test.ts",
     "test:shipping-usps": "tsx --test src/lib/shipping/providers/usps-subscription.test.ts",

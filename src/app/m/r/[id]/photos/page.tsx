@@ -62,7 +62,7 @@ function PhotoPageInner() {
       headerLabel={cameraTitle}
       poRef={poRef}
       requestId={requestId}
-      returnHref={requestId ? `/m/r/${receivingId}` : '/m/receiving'}
+      returnHref="/m/receiving"
       maxPhotos={10}
     />
   );

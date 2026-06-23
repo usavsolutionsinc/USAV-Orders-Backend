@@ -36,14 +36,17 @@ test('isContactFieldValid: required fields gate on non-empty trimmed value', () 
   assert.equal(isContactFieldValid('name', baseForm), false);
   assert.equal(isContactFieldValid('name', { ...baseForm, customer: { ...baseForm.customer, name: '  ' } }), false);
   assert.equal(isContactFieldValid('name', { ...baseForm, customer: { ...baseForm.customer, name: 'Jo' } }), true);
-  assert.equal(isContactFieldValid('serial', { ...baseForm, serialNumber: 'SN1' }), true);
-  // price defaults to '130', so it's valid out of the box
-  assert.equal(isContactFieldValid('price', baseForm), true);
 });
 
-test('isContactFieldValid: email and notes are always optional', () => {
+test('isContactFieldValid: extras require a serial (price defaults to 130)', () => {
+  // price defaults to '130', so extras gate only on the serial number
+  assert.equal(isContactFieldValid('extras', baseForm), false);
+  assert.equal(isContactFieldValid('extras', { ...baseForm, serialNumber: 'SN1' }), true);
+  assert.equal(isContactFieldValid('extras', { ...baseForm, serialNumber: 'SN1', price: '' }), false);
+});
+
+test('isContactFieldValid: email is always optional', () => {
   assert.equal(isContactFieldValid('email', baseForm), true);
-  assert.equal(isContactFieldValid('notes', baseForm), true);
 });
 
 // ─── formatPhone ──────────────────────────────────────────────────────────────

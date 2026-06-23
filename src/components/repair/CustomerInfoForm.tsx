@@ -1,17 +1,15 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { TextField } from '@/design-system/primitives';
 
-export type ContactFieldKey = 'name' | 'phone' | 'email' | 'serial' | 'price' | 'notes';
+export type ContactFieldKey = 'name' | 'phone' | 'email' | 'extras';
 
 export const CONTACT_FIELDS: readonly ContactFieldKey[] = [
     'name',
     'phone',
     'email',
-    'serial',
-    'price',
-    'notes',
+    'extras',
 ];
 
 interface CustomerInfoFormProps {
@@ -45,17 +43,6 @@ export function CustomerInfoForm({
     onPriceChange,
     onNotesChange,
 }: CustomerInfoFormProps) {
-    const priceRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        const timer = window.setTimeout(() => {
-            if (activeField === 'price') {
-                priceRef.current?.focus();
-            }
-        }, 50);
-        return () => window.clearTimeout(timer);
-    }, [activeField]);
-
     const handlePhoneChange = (value: string) => {
         const cleaned = value.replace(/\D/g, '');
         let formatted = cleaned;
@@ -78,15 +65,11 @@ export function CustomerInfoForm({
                 ? 'Phone Number'
                 : activeField === 'email'
                     ? 'Email (optional)'
-                    : activeField === 'serial'
-                        ? 'Serial Number'
-                        : activeField === 'price'
-                            ? 'Price'
-                            : 'Notes (optional)';
+                    : 'Repair Details';
 
     return (
         <div className="space-y-4">
-            <p className="text-center text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">
                 {fieldIndex + 1} of {fieldCount} · {fieldLabel}
             </p>
 
@@ -128,48 +111,45 @@ export function CustomerInfoForm({
                 />
             )}
 
-            {activeField === 'serial' && (
-                <TextField
-                    label="Serial Number"
-                    value={serialNumber}
-                    onChange={onSerialNumberChange}
-                    mono
-                    autoFocus
-                    tone="neutral"
-                />
-            )}
+            {/* Combined "extras" — serial (required) + price (green) + notes (optional). */}
+            {activeField === 'extras' && (
+                <div className="space-y-4">
+                    <TextField
+                        label="Serial Number"
+                        value={serialNumber}
+                        onChange={onSerialNumberChange}
+                        mono
+                        autoFocus
+                        tone="neutral"
+                    />
 
-            {activeField === 'price' && (
-                <div className="relative w-full">
-                    <span className="pointer-events-none absolute left-3.5 top-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                        Price
-                    </span>
-                    <div className="flex h-11 items-center overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 pt-3 focus-within:border-gray-900 focus-within:ring-2 focus-within:ring-gray-900/10">
-                        <span className="pr-1 text-sm font-black text-gray-400">$</span>
-                        <input
-                            ref={priceRef}
-                            type="text"
-                            inputMode="decimal"
-                            value={price}
-                            onChange={(e) => onPriceChange(e.target.value)}
-                            className="flex-1 bg-transparent text-sm font-black text-gray-900 outline-none placeholder:font-normal placeholder:text-gray-300"
-                            placeholder="130"
-                            required
-                        />
+                    <div className="relative w-full">
+                        <span className="pointer-events-none absolute left-3.5 top-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                            Price
+                        </span>
+                        <div className="flex h-11 items-center overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 pt-3 focus-within:border-gray-900 focus-within:ring-2 focus-within:ring-gray-900/10">
+                            <span className="pr-1 text-sm font-black text-emerald-500">$</span>
+                            <input
+                                type="text"
+                                inputMode="decimal"
+                                value={price}
+                                onChange={(e) => onPriceChange(e.target.value)}
+                                className="flex-1 bg-transparent text-sm font-black text-emerald-600 outline-none placeholder:font-normal placeholder:text-gray-300"
+                                placeholder="130"
+                                required
+                            />
+                        </div>
                     </div>
-                </div>
-            )}
 
-            {activeField === 'notes' && (
-                <TextField
-                    label="Notes (optional)"
-                    value={notes}
-                    onChange={onNotesChange}
-                    multiline
-                    rows={4}
-                    autoFocus
-                    tone="neutral"
-                />
+                    <TextField
+                        label="Notes (optional)"
+                        value={notes}
+                        onChange={onNotesChange}
+                        multiline
+                        rows={3}
+                        tone="neutral"
+                    />
+                </div>
             )}
         </div>
     );

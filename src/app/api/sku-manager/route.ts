@@ -96,12 +96,16 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 );
                 return NextResponse.json({ nextSku: `${baseSku}:${nextCounting}`, currentSku: `${baseSku}:${nextCounting}` });
             } else {
-                // First time - set to A01 (since A00 was just used)
-                // GUC-wrapped insert — NEEDS-COL table, nothing to org-stamp yet.
+                // First time - set to A01 (since A00 was just used).
+                // sku_management grew an organization_id column (2026-06-14
+                // phase-B needs-col-2) with a GUC-or-USAV default. tenantQuery
+                // sets the GUC so the default would stamp correctly, but stamp
+                // explicitly to match the project convention and survive a future
+                // GUC-only default restore for tenant #2.
                 await tenantQuery(
                     orgId,
-                    'INSERT INTO sku_management (base_sku, current_sku_counting) VALUES ($1, $2)',
-                    [baseSku, 'A01']
+                    'INSERT INTO sku_management (base_sku, current_sku_counting, organization_id) VALUES ($1, $2, $3::uuid)',
+                    [baseSku, 'A01', orgId]
                 );
                 return NextResponse.json({ nextSku: `${baseSku}:A01`, currentSku: `${baseSku}:A01` });
             }

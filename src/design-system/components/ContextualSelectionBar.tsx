@@ -16,6 +16,10 @@ interface ContextualSelectionBarProps<T> {
   /** Per-page contextual actions. Each enabled action renders as one icon in
    *  the glass capsule (icon-only — the label drives the tooltip/aria). */
   actions: SelectionAction<T>[];
+  /** Optional override for the X button when selection mode should fully exit. */
+  onDismiss?: () => void;
+  /** Keep the bar mounted even when the selection count hits zero. */
+  visible?: boolean;
 }
 
 /**
@@ -34,6 +38,8 @@ export function ContextualSelectionBar<T>({
   scope,
   rows,
   actions,
+  onDismiss,
+  visible,
 }: ContextualSelectionBarProps<T>) {
   const total = useTableSelectionTotal(scope);
 
@@ -63,8 +69,10 @@ export function ContextualSelectionBar<T>({
       count={count}
       total={total}
       allSelected={allSelected}
+      visible={visible}
       onToggleAll={() => emitToggleAll(scope, allSelected ? 'none' : 'all')}
       onClear={() => emitToggleAll(scope, 'none')}
+      onDismiss={onDismiss}
       actions={capsuleActions}
     />
   );

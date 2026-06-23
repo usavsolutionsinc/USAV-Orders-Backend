@@ -81,9 +81,55 @@ export function collapseRepeatedTracking(input: string): string {
   return clean;
 }
 
+/**
+ * Strip the FedEx GS1-128 / "96" concatenated-barcode envelope down to the
+ * human-readable carrier tracking number.
+ *
+ * Barcode guns read the FULL application-identifier label (e.g.
+ * `9632001960200651497200382141152045`, ~22-34 digits), while the number a
+ * buyer/vendor types or pastes into Zoho's reference# is the SHORT human form
+ * (`382141152045`). FedEx embeds that human number in the trailing digits of
+ * the long label, so both must canonicalize to the SAME key — otherwise a
+ * scanned carton and its pasted PO reference never reconcile except by the
+ * fragile last-8 suffix.
+ *
+ * Conservative by construction: only acts on long all-digit strings, and only
+ * collapses to a trailing slice that independently detects as a FedEx number
+ * (longest-first, so a 15-digit Ground number is never truncated to its
+ * trailing 12). Anything else is returned untouched — so this can only make a
+ * value MORE canonical, never corrupt a number that was already human-readable.
+ */
+export function stripFedexConcatPrefix(input: string): string {
+  const clean = normalizeTrackingCanonical(input);
+  // A pasted human FedEx number is ≤15 digits; only a scanned concatenated
+  // label is longer. Bail on anything that isn't a long pure-digit barcode.
+  if (!/^\d{18,34}$/.test(clean)) return clean;
+  // FedEx human tracking lengths, longest-first. Accept the longest trailing
+  // slice that (a) is shorter than the full label and (b) detects as FedEx.
+  for (const n of [15, 12]) {
+    if (clean.length <= n) continue;
+    const tail = clean.slice(-n);
+    if (detectCarrier(tail) === 'FedEx') return tail;
+  }
+  return clean;
+}
+
 /** Normalize tracking number, collapsing exact repeats and stripping USPS routing prefix. */
 export const normalizeTrackingNumber = (input: string): string =>
   stripUspsRoutingPrefix(collapseRepeatedTracking(normalizeTrackingCanonical(input)));
+
+/**
+ * Canonical match/display key for a tracking number — the single normalizer the
+ * receiving scan + paste boundaries should run every value through so a scanned
+ * GS1 barcode and a pasted human number land on one identical value.
+ *
+ * Pipeline: canonical → collapse doubled scans → strip USPS IMpb routing prefix
+ * → strip FedEx GS1/"96" concat envelope. Each step is a no-op when it doesn't
+ * apply, so a value that is already human-readable passes through unchanged.
+ */
+export function extractCanonicalTracking(input: string): string {
+  return stripFedexConcatPrefix(normalizeTrackingNumber(input));
+}
 
 /** Alias for FBA FNSKU normalization — identical to normalizeTrackingCanonical. */
 export const normalizeFnsku = normalizeTrackingCanonical;

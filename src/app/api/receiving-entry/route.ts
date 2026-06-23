@@ -306,12 +306,12 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                     if (assignmentTableRes.rows[0]?.exists) {
                         await pool.query(
                             `INSERT INTO work_assignments (
-                                entity_type, entity_id, work_type,
+                                organization_id, entity_type, entity_id, work_type,
                                 assigned_tech_id, status, priority, notes
                              )
-                             VALUES ('RECEIVING', $1, 'TEST', $2, 'ASSIGNED', 100, $3)
+                             VALUES ($1, 'RECEIVING', $2, 'TEST', $3, 'ASSIGNED', 100, $4)
                              ON CONFLICT DO NOTHING`,
-                            [newReceivingId, assignedTechId, `Auto-created from receiving entry ${trackingNumber}`]
+                            [ctx.organizationId, newReceivingId, assignedTechId, `Auto-created from receiving entry ${trackingNumber}`]
                         );
                     }
                 } catch {

@@ -1,4 +1,3 @@
-import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import {
@@ -229,6 +228,7 @@ export async function attachSerialToLine(
           },
         },
         client,
+        orgId,
       );
 
       return {
@@ -267,7 +267,7 @@ export interface DetachSerialResult {
  */
 export async function detachSerialFromLine(
   input: DetachSerialInput,
-  orgId?: OrgId,
+  orgId: OrgId,
 ): Promise<DetachSerialResult> {
   const serialUnitId =
     input.serial_unit_id != null && Number.isFinite(input.serial_unit_id)
@@ -340,6 +340,7 @@ export async function detachSerialFromLine(
             payload: { serial_detach: true },
           },
           client,
+          orgId,
         );
       } catch (err) {
         console.warn('detachSerialFromLine: note event failed (non-fatal)', err);
@@ -355,87 +356,9 @@ export async function detachSerialFromLine(
     });
   }
 
-  // ── Legacy raw-pool path (byte-identical to pre-tenancy behaviour) ──────────
-  const client = await pool.connect();
-  let committed = false;
-  try {
-    await client.query('BEGIN');
-
-    const lookup = await client.query<{
-      id: number;
-      sku: string | null;
-      serial_number: string;
-    }>(
-      serialUnitId
-        ? `SELECT id, sku, serial_number
-             FROM serial_units
-            WHERE id = $1 AND origin_receiving_line_id = $2
-            LIMIT 1`
-        : `SELECT id, sku, serial_number
-             FROM serial_units
-            WHERE normalized_serial = upper(trim($1))
-              AND origin_receiving_line_id = $2
-            LIMIT 1`,
-      serialUnitId
-        ? [serialUnitId, input.receiving_line_id]
-        : [serialNumber, input.receiving_line_id],
-    );
-
-    const unit = lookup.rows[0];
-    if (!unit) {
-      await client.query('ROLLBACK');
-      committed = true; // nothing to roll back further
-      const line = await loadLine(pool, input.receiving_line_id);
-      return {
-        removed: false,
-        removed_serial_unit_id: null,
-        removed_serial_number: null,
-        line_state: line ? lineState(line) : null,
-      };
-    }
-
-    // FK references in tech_serial_numbers / sku_stock_ledger are ON DELETE SET
-    // NULL so historical lineage is preserved.
-    await client.query(`DELETE FROM serial_units WHERE id = $1`, [unit.id]);
-
-    // Lineage NOTE so the timeline records the removal. No qty / ledger change.
-    try {
-      await recordInventoryEvent(
-        {
-          event_type: 'NOTE',
-          actor_staff_id: input.staff_id ?? null,
-          station,
-          receiving_line_id: input.receiving_line_id,
-          sku: unit.sku,
-          notes: `Serial ${unit.serial_number.toUpperCase()} removed`,
-          payload: { serial_detach: true },
-        },
-        client,
-      );
-    } catch (err) {
-      console.warn('detachSerialFromLine: note event failed (non-fatal)', err);
-    }
-
-    await client.query('COMMIT');
-    committed = true;
-
-    const line = await loadLine(pool, input.receiving_line_id);
-    return {
-      removed: true,
-      removed_serial_unit_id: unit.id,
-      removed_serial_number: unit.serial_number,
-      line_state: line ? lineState(line) : null,
-    };
-  } catch (err) {
-    if (!committed) {
-      try {
-        await client.query('ROLLBACK');
-      } catch {
-        /* ignore */
-      }
-    }
-    throw err;
-  } finally {
-    client.release();
-  }
+  // orgId is required; the GUC-scoped path above always returns. The old
+  // un-scoped raw-pool fallback was removed — it ran the DELETE with no
+  // organization_id predicate and its inventory_events NOTE stamped a NULL
+  // organization_id. Unreachable now.
+  throw new Error('detachSerialFromLine: orgId is required');
 }

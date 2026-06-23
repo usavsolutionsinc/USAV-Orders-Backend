@@ -11,6 +11,14 @@ export interface CardItem {
 
 interface SocialCardsProps {
   cards: CardItem[];
+  /**
+   * When provided, each card becomes a button that calls this with its stable
+   * array index instead of following `linkUrl`. Lets a host (e.g. the unbox
+   * photo peek) open the card in a shared viewer. Takes precedence over linkUrl.
+   */
+  onCardClick?: (index: number) => void;
+  /** Applied to every rendered card element (for hosts that test/target cards). */
+  cardTestId?: string;
 }
 
 const MAX_VISIBLE = 7;
@@ -69,7 +77,7 @@ function getSlotConfig(totalCards: number, slot: number) {
 const ARROW_CLASSES =
   "relative flex items-center justify-center rounded-full border-[1.5px] border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 backdrop-blur-[16px] text-black/40 dark:text-white/55 cursor-pointer shrink-0 z-30 outline-none shadow-[0_4px_20px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:border-black/25 dark:hover:border-white/25 hover:text-black/70 dark:hover:text-white/80 active:opacity-70 transition-colors duration-300 before:content-[''] before:absolute before:inset-[3px] before:rounded-full before:border before:border-black/[0.04] dark:before:border-white/[0.04] before:pointer-events-none";
 
-export default function SocialCards({ cards }: SocialCardsProps) {
+export default function SocialCards({ cards, onCardClick, cardTestId }: SocialCardsProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAnimating = useRef(false);
   const hasEntered = useRef(false);
@@ -267,10 +275,15 @@ export default function SocialCards({ cards }: SocialCardsProps) {
                 <img src={card.imgUrl} loading="lazy" alt={card.alt || `Card ${index}`} className="absolute inset-0 w-full h-full object-cover z-10" />
               </div>
             );
+            if (onCardClick) {
+              return (
+                <button key={index} type="button" data-testid={cardTestId} onClick={() => onCardClick(index)} aria-label={card.alt || `Open card ${index + 1}`} className="fan-card block cursor-zoom-in">{image}</button>
+              );
+            }
             return card.linkUrl ? (
-              <a key={index} href={card.linkUrl} target={card.linkUrl.startsWith("http") ? "_blank" : "_self"} rel="noopener noreferrer" className="fan-card block cursor-pointer">{image}</a>
+              <a key={index} data-testid={cardTestId} href={card.linkUrl} target={card.linkUrl.startsWith("http") ? "_blank" : "_self"} rel="noopener noreferrer" className="fan-card block cursor-pointer">{image}</a>
             ) : (
-              <div key={index} className="fan-card">{image}</div>
+              <div key={index} data-testid={cardTestId} className="fan-card">{image}</div>
             );
           })}
         </div>

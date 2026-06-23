@@ -69,7 +69,7 @@ function summarizeLines(order: SquareOrder): { title: string; quantity: number }
 }
 
 /** Upsert one Square order into `orders`. Returns 'created' | 'updated'. */
-async function upsertOrder(order: SquareOrder): Promise<'created' | 'updated'> {
+async function upsertOrder(orgId: OrgId, order: SquareOrder): Promise<'created' | 'updated'> {
   const { title, quantity } = summarizeLines(order);
   const saleAmount =
     typeof order.total_money?.amount === 'number' ? order.total_money.amount / 100 : null;
@@ -80,11 +80,11 @@ async function upsertOrder(order: SquareOrder): Promise<'created' | 'updated'> {
 
   const result = await pool.query(
     `INSERT INTO orders (
-       order_id, product_title, condition, sku, status, status_history, notes,
+       organization_id, order_id, product_title, condition, sku, status, status_history, notes,
        quantity, out_of_stock, account_source, order_date, sku_catalog_id,
        sale_amount, currency
      ) VALUES (
-       $1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14
+       $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
      )
      ON CONFLICT ON CONSTRAINT idx_orders_unique_account_order DO UPDATE
        SET product_title = COALESCE(NULLIF(EXCLUDED.product_title, 'Square order'), orders.product_title),
@@ -98,6 +98,7 @@ async function upsertOrder(order: SquareOrder): Promise<'created' | 'updated'> {
            END
        RETURNING (xmax = 0) AS inserted`,
     [
+      orgId,
       order.id,
       title,
       '',
@@ -167,7 +168,7 @@ export async function squareSync(orgId: OrgId): Promise<SyncOutcome> {
       for (const order of orders) {
         if (!order.id) continue;
         try {
-          if ((await upsertOrder(order)) === 'created') imported++;
+          if ((await upsertOrder(orgId, order)) === 'created') imported++;
           else updated++;
         } catch (e) {
           errors.push(`${order.id}: ${e instanceof Error ? e.message : String(e)}`);

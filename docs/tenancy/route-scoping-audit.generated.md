@@ -9,10 +9,10 @@
 
 | metric | count |
 |---|---|
-| total route files | 651 |
+| total route files | 652 |
 | withAuth | 495 |
-| GUC-wrapped (tenantQuery/withTenantConnection/withTenantTransaction) | 285 |
-| references organizationId | 538 |
+| GUC-wrapped (tenantQuery/withTenantConnection/withTenantTransaction) | 286 |
+| references organizationId | 539 |
 | raw @/lib/db pool import | 176 |
 | drizzle / neon-http | 19 |
 | uses USAV_ORG_ID / transitionalUsavOrgId | 14 |
@@ -23,7 +23,7 @@
 | critical | 26 |
 | high | 29 |
 | medium | 226 |
-| low | 281 |
+| low | 282 |
 | info | 89 |
 
 ## Routes by risk (critical + high first)
@@ -453,6 +453,7 @@
 | low | `/api/payroll/settings` | GET/PATCH | ✅ | ✅ | ✅ | payroll_settings |
 | low | `/api/photos/[id]` | DELETE | — | ✅ | ✅ | photo_entity_links, receiving, sku_stock, photos |
 | low | `/api/photos/[id]/content` | GET | — | ✅ | ✅ | photos |
+| low | `/api/photos/download-zip` | GET | — | ✅ | ✅ | photos |
 | low | `/api/photos/upload` | POST | ✅ | ✅ | ✅ | receiving_lines, photos, types |
 | low | `/api/pick/queue` | GET | ✅ | ✅ | ✅ | order_unit_allocations, picking_sessions, work_assignments, customers, orders |
 | low | `/api/pick/scan` | POST | ✅ | ✅ | ✅ | order_unit_allocations, inventory_events, serial_units, orders, sku |
@@ -586,7 +587,7 @@
 | low | `/api/warehouses` | GET | ✅ | ✅ | ✅ | warehouses, sku_stock |
 | low | `/api/warranty/claims/[id]/restore` | POST | ✅ | ✅ | ✅ | warranty_claims |
 | low | `/api/warranty/claims/bulk/restore` | POST | ✅ | ✅ | ✅ | warranty_claims |
-| low | `/api/webhooks/zoho/orders` | POST/GET | — | — | ✅ | order_unit_allocations, orders, items, types, sku |
+| low | `/api/webhooks/zoho/orders` | POST/GET | — | — | ✅ | order_unit_allocations, orders, items, sku |
 | low | `/api/work-orders` | GET/PATCH | ✅ | ✅ | ✅ | shipping_tracking_numbers, work_assignments, receiving_lines, repair_service, fba_shipments, receiving +5 |
 | low | `/api/work-orders/mine` | GET | ✅ | ✅ | ✅ | orders |
 | low | `/api/workflow/flow-audit` | GET | ✅ | ✅ | ✅ | inventory_events, serial_units |
@@ -1395,7 +1396,7 @@
 - ⛔ `/api/admin/photos/stats` (medium)
 - ✅ `/api/receiving/zendesk-claim` (low)
 
-### `photos` — 42 routes, 22 not yet GUC-safe
+### `photos` — 43 routes, 22 not yet GUC-safe
 
 - ⛔ `/api/admin/photos/mirror` (medium)
 - ⛔ `/api/admin/photos/stats` (medium)
@@ -1414,6 +1415,7 @@
 - ✅ `/api/photos/[id]` (low)
 - ✅ `/api/photos/[id]/content` (low)
 - ⛔ `/api/photos/analyze` (medium)
+- ✅ `/api/photos/download-zip` (low)
 - ⛔ `/api/photos/library` (medium)
 - ⛔ `/api/photos/links` (medium)
 - ⛔ `/api/photos/nas-backup` (medium)
@@ -2666,7 +2668,7 @@
 - ✅ `/api/tracking-exceptions/[id]` (low)
 - ✅ `/api/tracking-exceptions/[id]/refresh` (low)
 
-### `types` — 26 routes, 18 not yet GUC-safe
+### `types` — 25 routes, 18 not yet GUC-safe
 
 - ⛔ `/api/ai/chat` (medium)
 - ⛔ `/api/ai/chat/stream` (medium)
@@ -2692,7 +2694,6 @@
 - ⛔ `/api/studio/graph` (medium)
 - ⛔ `/api/studio/templates` (high)
 - ⛔ `/api/studio/templates/[id]` (high)
-- ✅ `/api/webhooks/zoho/orders` (low)
 - ✅ `/api/work-orders` (low)
 
 ### `unfound_overlay` — 4 routes, 2 not yet GUC-safe

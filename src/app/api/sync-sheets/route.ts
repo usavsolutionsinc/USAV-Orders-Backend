@@ -204,12 +204,12 @@ async function syncShippedSheet(params: {
             const insertedOrder = await client.query(
                 `INSERT INTO orders (
                     order_id, product_title, quantity, condition,
-                    sku, notes, status, sku_catalog_id, account_source
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    sku, notes, status, sku_catalog_id, account_source, organization_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::uuid)
                 RETURNING id`,
                 [
                     orderId, productTitle, quantity, condition,
-                    sku, notes, 'shipped', skuCatalogId, derivedSource,
+                    sku, notes, 'shipped', skuCatalogId, derivedSource, organizationId,
                 ]
             );
 
@@ -589,8 +589,9 @@ async function syncScanFbaInSheet(params: {
     sheets: any;
     spreadsheetId: string;
     existingSheetNames: string[];
+    organizationId: string;
 }): Promise<SyncResult> {
-    const { client, sheets, spreadsheetId, existingSheetNames } = params;
+    const { client, sheets, spreadsheetId, existingSheetNames, organizationId } = params;
     const sheetName = existingSheetNames.find(s => s.toLowerCase() === 'scan fba in');
 
     if (!sheetName) {
@@ -643,8 +644,8 @@ async function syncScanFbaInSheet(params: {
                 seenFnsku.add(fnsku);
 
                 await client.query(
-                    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at)
-                     VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW())
+                    `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at, organization_id)
+                     VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW(), $5::uuid)
                      ON CONFLICT (fnsku) DO UPDATE
                      SET product_title = EXCLUDED.product_title,
                          asin = EXCLUDED.asin,
@@ -652,7 +653,7 @@ async function syncScanFbaInSheet(params: {
                          is_active = TRUE,
                          last_seen_at = NOW(),
                          updated_at = NOW()`,
-                    [fnsku, productTitle, asin, sku]
+                    [fnsku, productTitle, asin, sku, organizationId]
                 );
                 inserted++;
             }

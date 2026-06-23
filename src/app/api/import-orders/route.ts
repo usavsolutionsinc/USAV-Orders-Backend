@@ -43,10 +43,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
             await pool.query(
                 `INSERT INTO work_assignments
-                   (entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
-                 VALUES ('ORDER', $1, 'TEST', NULL, 'OPEN', 100, $2, 'Canonical deadline row from import-orders', NOW(), NOW(), NOW())
+                   (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
+                 VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3, 'Canonical deadline row from import-orders', NOW(), NOW(), NOW())
                  ON CONFLICT DO NOTHING`,
-                [insertedOrders[i].id, shipByDate]
+                [ctx.organizationId, insertedOrders[i].id, shipByDate]
             );
         }
 

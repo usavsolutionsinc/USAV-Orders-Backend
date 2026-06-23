@@ -244,9 +244,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           const targetOrderId = fallbackUpdate.rows[0].id;
           await client.query(`
             INSERT INTO work_assignments
-                (entity_type, entity_id, work_type, assigned_packer_id,
+                (organization_id, entity_type, entity_id, work_type, assigned_packer_id,
                  completed_by_packer_id, status, priority, notes, completed_at)
-            VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+            VALUES ($1, 'ORDER', $2, 'PACK', $3, $3, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
             ON CONFLICT (entity_type, entity_id, work_type)
                 WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
             DO UPDATE
@@ -255,8 +255,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     status                 = 'DONE',
                     completed_at           = NOW(),
                     updated_at             = NOW()
-              WHERE work_assignments.organization_id = $3
-          `, [targetOrderId, staffId, ctx.organizationId]);
+            WHERE work_assignments.organization_id = $1
+          `, [ctx.organizationId, targetOrderId, staffId]);
         }
         return { deduplicated: false, packerLogId, ledgerRows: [], updatedRows: fallbackUpdate.rows };
       } else {
@@ -264,9 +264,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const targetOrderId = updateResult.rows[0].id;
         await client.query(`
           INSERT INTO work_assignments
-              (entity_type, entity_id, work_type, assigned_packer_id,
+              (organization_id, entity_type, entity_id, work_type, assigned_packer_id,
                completed_by_packer_id, status, priority, notes, completed_at)
-          VALUES ('ORDER', $1, 'PACK', $2, $2, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
+          VALUES ($1, 'ORDER', $2, 'PACK', $3, $3, 'DONE', 100, 'Auto-completed on mobile pack scan', NOW())
           ON CONFLICT (entity_type, entity_id, work_type)
               WHERE status IN ('ASSIGNED', 'IN_PROGRESS')
           DO UPDATE
@@ -275,8 +275,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                   status                 = 'DONE',
                   completed_at           = NOW(),
                   updated_at             = NOW()
-            WHERE work_assignments.organization_id = $3
-        `, [targetOrderId, staffId, ctx.organizationId]);
+          WHERE work_assignments.organization_id = $1
+        `, [ctx.organizationId, targetOrderId, staffId]);
       }
 
       // 4. Emit PACKED ledger rows per SKU in the shipment. The trigger
@@ -288,7 +288,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         const ledgerResult = await client.query<{ id: number; sku: string; delta: number }>(
           `INSERT INTO sku_stock_ledger
              (sku, delta, reason, dimension, staff_id,
-              ref_packer_log_id, ref_shipment_id, notes)
+              ref_packer_log_id, ref_shipment_id, notes, organization_id)
            SELECT
              q.sku,
              SUM(q.qty_int)::int,
@@ -297,7 +297,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
              $1,
              $2,
              $3,
-             $4
+             $4,
+             $5::uuid
            FROM (
              SELECT
                o.sku,

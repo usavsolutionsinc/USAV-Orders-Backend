@@ -148,11 +148,12 @@ export async function recordUnitEvent(
   if (input.ledger && input.ledger.delta !== 0 && effectiveSku) {
     const led = await client.query<{ id: number }>(
       `INSERT INTO sku_stock_ledger
-         (sku, delta, reason, dimension, reason_code_id, staff_id,
+         (organization_id, sku, delta, reason, dimension, reason_code_id, staff_id,
           ref_serial_unit_id, ref_order_id, ref_receiving_line_id, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
+        input.organizationId,
         effectiveSku,
         input.ledger.delta,
         input.ledger.reason,
@@ -187,6 +188,7 @@ export async function recordUnitEvent(
       payload: { ...(input.payload ?? {}), is_return: upserted.is_return },
     },
     client,
+    input.organizationId,
   );
 
   return {

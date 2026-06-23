@@ -9,6 +9,27 @@ export function dispatchDashboardAndStationRefresh(): void {
   window.dispatchEvent(new CustomEvent('usav-refresh-data'));
 }
 
+export interface ReceivingPhotoChangedPayload {
+  action: 'delete' | 'upload' | 'update';
+  photoIds?: number[];
+  receivingId?: number | null;
+  receivingLineIds?: number[];
+}
+
+/**
+ * Browser-side photo refresh signal.
+ *
+ * The `receiving-photo.changed` name matches the realtime event used by the
+ * receiving surfaces, while `usav-refresh-data` keeps the existing tables in
+ * sync immediately after a library delete.
+ */
+export function dispatchReceivingPhotoChanged(payload: ReceivingPhotoChangedPayload): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('receiving-photo.changed', { detail: payload }));
+  window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+  window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+}
+
 /** Merge a single row into the dashboard pending queue cache (no full table refetch). */
 export function dispatchPendingOrderRowRefetch(orderId: number): void {
   if (typeof window === 'undefined') return;

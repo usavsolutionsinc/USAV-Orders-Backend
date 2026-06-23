@@ -359,11 +359,11 @@ export async function PATCH(
         // sku_stock.stock (creating the row if absent) — no direct write to
         // sku_stock.stock. Load-bearing (no .catch swallow): a failed ledger write
         // must surface, not silently no-op the adjustment. organization_id is
-        // stamped by the GUC default.
+        // stamped by the GUC default; the explicit column is a backstop.
         await client.query(
-          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-           VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-          [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
+          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id, organization_id)
+           VALUES ($1, $2, $3, 'WAREHOUSE', $4, $5::uuid)`,
+          [skuValue, delta, reason || 'ADJUSTMENT', staffId || null, idempotencyOrgId],
         );
 
         const after = await client.query(
@@ -405,11 +405,12 @@ export async function PATCH(
         // Ledger-only: post a WAREHOUSE delta that brings the sum to absoluteQty;
         // the trigger projects it onto sku_stock.stock (and creates the row if
         // absent). Always post — a 0 delta still ensures the projected row exists
-        // at the intended value. Load-bearing (no .catch swallow).
+        // at the intended value. Load-bearing (no .catch swallow). organization_id
+        // is stamped by the GUC default; the explicit column is a backstop.
         await client.query(
-          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-           VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-          [skuValue, ledgerDelta, reason || 'SET', staffId || null],
+          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id, organization_id)
+           VALUES ($1, $2, $3, 'WAREHOUSE', $4, $5::uuid)`,
+          [skuValue, ledgerDelta, reason || 'SET', staffId || null, idempotencyOrgId],
         );
 
         const after = await client.query(
@@ -518,12 +519,12 @@ export async function PATCH(
         const prior = r.rows[0] ?? null;
 
         await client.query(
-          `INSERT INTO sku_stock (sku, display_name_override, stock)
-           VALUES ($1, $2, 0)
+          `INSERT INTO sku_stock (sku, display_name_override, stock, organization_id)
+           VALUES ($1, $2, 0, $3::uuid)
            ON CONFLICT (sku)
            DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
                          updated_at = NOW()`,
-          [skuValue, nextTitle],
+          [skuValue, nextTitle, idempotencyOrgId],
         );
         return prior;
       });

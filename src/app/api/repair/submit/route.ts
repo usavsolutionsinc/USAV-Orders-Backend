@@ -123,8 +123,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             try {
                 const docResult = await pool.query(
                     `INSERT INTO documents (
-                        entity_type, entity_id, document_type, signature_url, signer_name, signed_at, document_data
-                    ) VALUES ('REPAIR', $1, 'intake_agreement', $2, $3, NOW(), $4)
+                        entity_type, entity_id, document_type, signature_url, signer_name, signed_at, document_data, organization_id
+                    ) VALUES ('REPAIR', $1, 'intake_agreement', $2, $3, NOW(), $4, $5::uuid)
                     RETURNING id`,
                     [
                         dbId,
@@ -143,6 +143,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                             terms: 'Your Bose product has been received into our repair center. Under normal circumstances it will be repaired within the next 3-10 working days. There is a 30 day Warranty on all our repair services.',
                             signedAt: new Date().toISOString(),
                         }),
+                        ctx.organizationId,
                     ],
                 );
                 documentId = docResult.rows[0]?.id ?? null;

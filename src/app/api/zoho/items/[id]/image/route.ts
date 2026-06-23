@@ -84,19 +84,24 @@ export async function GET(
       return NextResponse.json({ error: 'Upstream image unavailable' }, { status: 404 });
     }
 
-    // zoho_item_images has no organization_id column (NEEDS-COL): GUC-wrap the
-    // write via tenantQuery so it runs under the org GUC; isolation rides on the
-    // parent `items` precheck above that gated reaching this cache write.
+    // zoho_item_images grew an organization_id column (2026-06-14 phase-B
+    // needs-col-2) with a GUC-or-USAV default; zoho_item_id is a global natural
+    // key (the conflict target). tenantQuery sets the GUC so the default stamps,
+    // but stamp explicitly + HEAL on conflict (COALESCE keeps a non-null
+    // existing value, fills a NULL one) — matching the global-natural-key
+    // convention in lib/shipping/repository.ts upsertShipment. Isolation also
+    // rides on the parent `items` precheck above that gated reaching this write.
     await tenantQuery(
       orgId,
-      `INSERT INTO zoho_item_images (zoho_item_id, document_id, content_type, bytes, fetched_at)
-       VALUES ($1, $2, $3, $4, now())
+      `INSERT INTO zoho_item_images (zoho_item_id, document_id, content_type, bytes, fetched_at, organization_id)
+       VALUES ($1, $2, $3, $4, now(), $5::uuid)
        ON CONFLICT (zoho_item_id) DO UPDATE SET
-         document_id  = EXCLUDED.document_id,
-         content_type = EXCLUDED.content_type,
-         bytes        = EXCLUDED.bytes,
-         fetched_at   = now()`,
-      [zohoItemId, row.cur_doc, fetched.contentType, fetched.bytes],
+         document_id     = EXCLUDED.document_id,
+         content_type    = EXCLUDED.content_type,
+         bytes           = EXCLUDED.bytes,
+         fetched_at      = now(),
+         organization_id = COALESCE(zoho_item_images.organization_id, EXCLUDED.organization_id)`,
+      [zohoItemId, row.cur_doc, fetched.contentType, fetched.bytes, orgId],
     );
 
     return imageResponse(fetched.bytes, fetched.contentType);

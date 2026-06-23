@@ -21,7 +21,6 @@ export type WorkspaceMode = 'unbox' | 'triage' | 'testing';
 export type HeaderActionKey =
   | 'refresh' // re-sync this line from Zoho by tracking number
   | 'share' // copy/native-share a deep link to this package
-  | 'phone' // push a "take photos" sheet to the paired phone
   | 'audit' // open the inventory-events audit modal
   | 'copy' // copy package + PO details to the clipboard
   | 'pair' // open the cross-platform SKU pairing modal (testing only)
@@ -48,13 +47,13 @@ export interface ModeDef {
 export const WORKSPACE_MODES: Record<WorkspaceMode, ModeDef> = {
   unbox: {
     label: 'Unbox',
-    headerActions: ['refresh', 'share', 'audit', 'copy', 'phone'],
+    headerActions: ['refresh', 'share', 'audit', 'copy'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },
   triage: {
     label: 'Receiving',
-    headerActions: ['refresh', 'share', 'audit', 'copy', 'phone'],
+    headerActions: ['refresh', 'share', 'audit', 'copy'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },

@@ -75,8 +75,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         created_at,
         sku_catalog_id,
         sale_amount,
-        currency
-      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8)
+        currency,
+        organization_id
+      ) VALUES ($1, $2, $3, $4, $5, NOW(), $6, $7, $8, $9::uuid)
       RETURNING id, order_id, product_title, sku`,
       [
         orderId,
@@ -87,6 +88,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         skuCatalogId,
         saleAmountValue,
         currencyValue,
+        ctx.organizationId,
       ]
     );
 

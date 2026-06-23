@@ -261,7 +261,7 @@ export function PhotoLibraryGrid({
                 <button
                   type="button"
                   className={cn(
-                    'flex w-full items-center gap-3 px-3 py-2.5 text-left',
+                    'flex w-full items-center gap-4 px-4 py-3 text-left',
                     isSelected && 'bg-blue-50/50',
                   )}
                   onClick={() => onToggleSelect(photo.id)}

@@ -2,24 +2,23 @@
 
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Barcode, ExternalLink, Plus } from '@/components/Icons';
+import { Barcode, ExternalLink, Plus, X } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { WorkspaceCard } from '@/design-system/components';
 import {
   FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
-  RECEIVING_TRAIL_SLOT_CLASS,
   TRACKING_ADD_BTN_CLASS,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { ReceivingPhotoButton } from './ReceivingPhotoButton';
 import { IdentityLinkChip } from './IdentityLinkChip';
 import { ReceivingTicketChip } from './ReceivingTicketChip';
-import { parseZendeskTicketId } from '@/lib/receiving-claim-seller-ticket-match';
 import { SellerMessageChip } from './SellerMessageChip';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
+import { parseZendeskTicketId } from '@/lib/receiving-claim-seller-ticket-match';
 import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/hooks/useCatalog';
 
 
@@ -451,8 +450,19 @@ export function CartonContextCard({
           {anyBelow ? (
             <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
               {poEditorOpen ? (
-                <div>
-                  <span className={`${FLOW_SECTION_LABEL} mb-1 leading-none`}>PO number</span>
+                <div className="relative">
+                  <div className="mb-1 flex items-start justify-between gap-2">
+                    <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>PO number</span>
+                    <button
+                      type="button"
+                      onClick={() => setPoEditorOpen(false)}
+                      aria-label="Close PO# editor"
+                      title="Close editor"
+                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <div className="group">
                     <SearchBar
                       value={poNumberEdit}
@@ -471,10 +481,10 @@ export function CartonContextCard({
                 </div>
               ) : null}
               {trackingEditorsOpen ? (
-                <>
-                  <div className="flex items-center justify-between gap-2">
+                <div className="relative">
+                  <div className="flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Tracking number</span>
-                    <span className={RECEIVING_TRAIL_SLOT_CLASS}>
+                    <span className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))}
@@ -484,6 +494,15 @@ export function CartonContextCard({
                         className={TRACKING_ADD_BTN_CLASS}
                       >
                         <Plus className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={onToggleTrackingEditors}
+                        aria-label="Close tracking editor"
+                        title="Close editor"
+                        className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </span>
                   </div>
@@ -520,13 +539,21 @@ export function CartonContextCard({
                       <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
                     </div>
                   ))}
-                </>
+                </div>
               ) : null}
               {listingEditorOpen ? (
-                <>
-                  <div className="flex items-center justify-between gap-2">
+                <div className="relative">
+                  <div className="mb-1 flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Listing URL</span>
-                    <span className={RECEIVING_TRAIL_SLOT_CLASS} aria-hidden />
+                    <button
+                      type="button"
+                      onClick={() => setListingEditorOpen(false)}
+                      aria-label="Close listing editor"
+                      title="Close editor"
+                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                   <div className="group">
                     <SearchBar
@@ -559,7 +586,7 @@ export function CartonContextCard({
                     />
                     <div className={RECEIVING_SCAN_RULE_LINE_CLASS} aria-hidden />
                   </div>
-                </>
+                </div>
               ) : null}
             </div>
           ) : null}

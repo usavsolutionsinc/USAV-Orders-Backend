@@ -102,6 +102,7 @@ async function loadExceptionTrackingMap(): Promise<Map<string, ExceptionTracking
 async function upsertEcwidOrder(params: {
   order: any;
   trackingNumber: string;
+  organizationId: string;
 }): Promise<'created' | 'updated'> {
   const orderId = String(params.order?.orderNumber ?? params.order?.id ?? '').trim();
   const firstItem = Array.isArray(params.order?.items) ? params.order.items[0] || {} : {};
@@ -170,9 +171,10 @@ async function upsertEcwidOrder(params: {
         order_date,
         sku_catalog_id,
         sale_amount,
-        currency
+        currency,
+        organization_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid
       )`,
       [
         orderId || null,
@@ -190,6 +192,7 @@ async function upsertEcwidOrder(params: {
         skuCatalogId,
         saleAmount,
         currency,
+        params.organizationId,
       ]
     );
 
@@ -305,7 +308,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           touchedRepairIds.add(repair.id);
           updated += 1;
         } else {
-          const result = await upsertEcwidOrder({ order, trackingNumber });
+          const result = await upsertEcwidOrder({ order, trackingNumber, organizationId: ctx.organizationId });
           if (result === 'created') created += 1;
           else updated += 1;
         }

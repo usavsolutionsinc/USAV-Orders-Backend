@@ -3,18 +3,20 @@
 /**
  * Compact carton-photos control for the condensed CartonContextCard row.
  *
- * The control is view-only in the desktop unbox workspace: the mobile capture
- * flow owns uploads now, and this button just shows the current count plus the
- * gallery toolbar when photos exist.
+ * When there are no photos yet, the button acts as the send-to-phone trigger
+ * for starting capture. Once photos exist, hovering reveals the gallery toolbar.
  */
 
 import { memo, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAblyClient } from '@/contexts/AblyContext';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
+import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
+import { toast } from '@/lib/toast';
 
 interface PhotoRow {
   id: number;
@@ -38,6 +40,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   receivingId: number;
   staffId: number;
 }) {
+  const { getClient } = useAblyClient();
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
@@ -59,10 +62,20 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey });
     invalidateReceivingFeeds(queryClient);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryClient, queryKey]);
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
+
+  const handleRequestOnPhone = useCallback(async () => {
+    try {
+      const client = await getClient();
+      await publishReceivingPhotoRequest(client, orgId, staffId, receivingId);
+      toast.success('Sent to phone');
+    } catch (err) {
+      console.warn('receiving-photo-button: photo request publish failed', err);
+      toast.error('Could not send to phone');
+    }
+  }, [getClient, orgId, receivingId, staffId]);
 
   const photos = useMemo(
     () =>
@@ -82,10 +95,10 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     return (
       <button
         type="button"
-        disabled
-        title="Photos are captured on mobile"
-        aria-label="Photo count"
-        className={`${btnBase} border border-dashed border-gray-300 bg-white text-gray-500 opacity-60`}
+        onClick={handleRequestOnPhone}
+        title="Send to phone to take photos"
+        aria-label="Send to phone to take photos"
+        className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100`}
       >
         <Camera className="h-4 w-4" />
         <Plus className="h-3 w-3" />
@@ -113,6 +126,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
             photos={photos}
             orderId={`RCV-${receivingId}`}
             launcherLayout="toolbar"
+            onAddPhotos={handleRequestOnPhone}
             showCopyLinks={false}
             toolbarShowLabel={false}
             compact

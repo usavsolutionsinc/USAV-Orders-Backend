@@ -226,6 +226,7 @@ async function resolveSkuByGtin(gtin: string): Promise<string | null> {
 // ─── Telemetry ───────────────────────────────────────────────────────────────
 
 interface LogParams {
+  organizationId: string;
   staffId: number;
   raw: string;
   normalized: string | null;
@@ -240,10 +241,16 @@ interface LogParams {
 
 async function logScanEvent(p: LogParams): Promise<void> {
   try {
+    // mobile_scan_events grew an organization_id column (2026-06-14 phase-B
+    // needs-col-2) with a GUC-based default. This telemetry insert runs on the
+    // bare neon-client `query` connection, which never sets app.current_org, so
+    // the default resolves to NULL → a NULL-org row. Stamp organizationId
+    // explicitly so the row is tenant-attributed.
     await query`
       INSERT INTO mobile_scan_events (
         staff_id, raw_value, normalized, kind, carrier,
-        matched_order_id, match_outcome, routed_to, parsed_ais, device_info
+        matched_order_id, match_outcome, routed_to, parsed_ais, device_info,
+        organization_id
       )
       VALUES (
         ${p.staffId},
@@ -255,7 +262,8 @@ async function logScanEvent(p: LogParams): Promise<void> {
         ${p.outcome},
         ${p.routedTo},
         ${p.parsedAis ? JSON.stringify(p.parsedAis) : null}::jsonb,
-        ${p.device ? JSON.stringify(p.device) : null}::jsonb
+        ${p.device ? JSON.stringify(p.device) : null}::jsonb,
+        ${p.organizationId}::uuid
       )
     `;
   } catch {
@@ -353,7 +361,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
       mobileRoute: handleRoute.redirect,
     };
     await logScanEvent({
-      staffId, raw: trimmed, normalized: null, kind, carrier: null,
+      organizationId, staffId, raw: trimmed, normalized: null, kind, carrier: null,
       matches: [], outcome: 'single', routedTo: handleRoute.redirect,
       parsedAis: null, device,
     });
@@ -382,7 +390,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
         mobileRoute: route,
       };
       await logScanEvent({
-        staffId, raw: trimmed, normalized: trimmed.toUpperCase(), kind: 'package',
+        organizationId, staffId, raw: trimmed, normalized: trimmed.toUpperCase(), kind: 'package',
         carrier: null, matches: [], outcome: 'single', routedTo: route,
         parsedAis: null, device,
       });
@@ -402,7 +410,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
       entity: { ais: aiTree.ais }, matches, matchOutcome: outcome, mobileRoute,
     };
     await logScanEvent({
-      staffId, raw: trimmed, normalized: null, kind: 'gs1_ai', carrier: null,
+      organizationId, staffId, raw: trimmed, normalized: null, kind: 'gs1_ai', carrier: null,
       matches, outcome, routedTo: mobileRoute, parsedAis: aiTree.ais, device,
     });
     return result;
@@ -432,7 +440,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
       matches, matchOutcome: outcome, mobileRoute,
     };
     await logScanEvent({
-      staffId, raw: trimmed, normalized: null, kind, carrier: null,
+      organizationId, staffId, raw: trimmed, normalized: null, kind, carrier: null,
       matches, outcome, routedTo: mobileRoute, parsedAis: null, device,
     });
     return result;
@@ -461,7 +469,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
     matches, matchOutcome: outcome, mobileRoute,
   };
   await logScanEvent({
-    staffId, raw: trimmed, normalized: classified.normalized, kind,
+    organizationId, staffId, raw: trimmed, normalized: classified.normalized, kind,
     carrier: classified.carrier, matches, outcome, routedTo: mobileRoute,
     parsedAis: null, device,
   });

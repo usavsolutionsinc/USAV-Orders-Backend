@@ -355,16 +355,13 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    const result = await detachSerialFromLine(
-      {
-        receiving_line_id: receivingLineId,
-        serial_unit_id: serialUnitId,
-        serial_number: serialNumberRaw || null,
-        staff_id: ctx.staffId ?? null,
-        station: 'RECEIVING',
-      },
-      ctx.organizationId,
-    );
+    const result = await detachSerialFromLine({
+      receiving_line_id: receivingLineId,
+      serial_unit_id: serialUnitId,
+      serial_number: serialNumberRaw || null,
+      staff_id: ctx.staffId ?? null,
+      station: 'RECEIVING',
+    }, ctx.organizationId);
 
     if (!result.removed) {
       return NextResponse.json(

@@ -20,7 +20,7 @@
  * at /design-demo/photo-peek.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
@@ -29,14 +29,13 @@ import { X } from '@/components/Icons';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import type { PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
+import SocialCards, { type CardItem } from '@/components/ui/card-fan-carousel';
 
 export type PeekCard = { id: string; imgUrl: string; alt: string };
 
 const PEEK_COUNT = 4; // cards in the corner/fan
-const EXPAND_COUNT = 5; // cards in the expanded display (kept ≤5 so big cards fit the pane)
 
 const FAN_SPRING = { type: 'spring', stiffness: 320, damping: 26 } as const;
-const EXPAND_SPRING = { type: 'spring', stiffness: 210, damping: 24 } as const;
 
 // Background set via inline style (not Tailwind) so brand-new arbitrary opacity
 // utilities don't silently no-op under the turbopack/JIT regen gotcha.
@@ -80,11 +79,14 @@ export function PhotoPeekFan({
 }) {
   const count = cards.length;
   const peekCards = cards.slice(0, PEEK_COUNT);
-  // Expanded fan rendered oldest→newest (left→right) so the newest sits top-right.
-  const expandCards = cards.slice(0, EXPAND_COUNT).reverse();
-  // The viewer shows ALL photos chronologically: first (oldest) on the left,
-  // newest on the right — the reverse of the newest-first peek/fan ordering.
+  // The expanded fan + the viewer both show ALL photos chronologically: first
+  // (oldest) on the left, newest on the right — the reverse of the newest-first
+  // peek/fan ordering. The fan card index lines up 1:1 with the gallery index.
   const chronoCards = useMemo(() => [...cards].reverse(), [cards]);
+  const fanItems = useMemo<CardItem[]>(
+    () => chronoCards.map((c) => ({ imgUrl: c.imgUrl, alt: c.alt })),
+    [chronoCards],
+  );
   // Build gallery inputs with numeric ids when available so the viewer's delete
   // affordance shows here too (parity with the top-bar ReceivingPhotoButton).
   // Demo cards use non-numeric ids → those stay read-only.
@@ -105,19 +107,6 @@ export function PhotoPeekFan({
   const [peekState, setPeekState] = useState<'rest' | 'fan'>('rest');
   const [expanded, setExpanded] = useState(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Measure the pane so the fan spreads to fill the room — tight in a narrow
-  // pane, panned out when there's space — instead of a fixed overlap.
-  const stageRef = useRef<HTMLDivElement>(null);
-  const [stageW, setStageW] = useState(0);
-  useLayoutEffect(() => {
-    if (!expanded) return;
-    const measure = () => setStageW(stageRef.current?.clientWidth ?? 0);
-    measure();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
-    if (stageRef.current) ro?.observe(stageRef.current);
-    return () => ro?.disconnect();
-  }, [expanded]);
 
   // Escape on the bare fan (no viewer) fully closes back to the resting peek.
   // The viewer owns Esc while it's open (usePhotoGallery), returning to the fan.
@@ -251,48 +240,16 @@ export function PhotoPeekFan({
               </button>
             ) : null}
 
-            {/* Fan stage — `isolate` contains card stacking in its own context
-                so a mid-hover card can never bleed above the viewer;
-                pointer-events off while the viewer is up. */}
+            {/* Fan stage — the shared GSAP card-fan carousel (hover to spread,
+                arrows/dots to page when >7 photos). `isolate` keeps card stacking
+                in its own context so a mid-hover card can't bleed above the
+                viewer; `stopPropagation` keeps card/arrow clicks from closing the
+                backdrop; pointer-events off while the viewer is up. */}
             <div
-              ref={stageRef}
-              className={`relative -mt-20 h-72 w-full isolate ${viewerOpen ? 'pointer-events-none' : ''}`}
+              className={`isolate w-full ${viewerOpen ? 'pointer-events-none' : ''}`}
               onClick={(e) => e.stopPropagation()}
             >
-              {expandCards.map((card, i) => {
-                const n = expandCards.length;
-                const center = (n - 1) / 2;
-                const d = i - center; // signed distance from centre
-                // Spread to fill ~72% of the pane (leaving margins), clamped so a
-                // narrow pane stays readable and a wide one doesn't fly apart.
-                const CARD_W = 192; // w-48
-                const room = (stageW || 600) * 0.72;
-                const outerHalf = Math.max(70, (room - CARD_W) / 2);
-                const spacing = n > 1 ? Math.min(150, Math.max(60, outerHalf / center)) : 0;
-                const tx = d * spacing;
-                const ty = Math.abs(d) * 8; // gentle downward arc
-                const rotZ = d * 9;
-                return (
-                  <motion.div
-                    key={card.id}
-                    data-testid="fan-card"
-                    initial={{ x: 230, y: 60, rotate: 20, scale: 0.45, opacity: 0 }}
-                    animate={{ x: tx, y: ty, rotate: rotZ, scale: 1, opacity: 1 }}
-                    exit={{ x: 230, y: 60, rotate: 20, scale: 0.45, opacity: 0 }}
-                    transition={{ ...EXPAND_SPRING, delay: Math.abs(d) * 0.05 }}
-                    style={{ zIndex: 20 + (n - Math.abs(d)) }}
-                    whileHover={{ y: ty - 18, scale: 1.05, zIndex: 49 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openViewer(chronoCards.findIndex((c) => c.id === card.id));
-                    }}
-                    className="absolute left-1/2 top-1/2 -ml-24 -mt-32 h-64 w-48 origin-bottom cursor-zoom-in overflow-hidden rounded-2xl shadow-[0_18px_45px_rgba(0,0,0,0.28)] ring-1 ring-black/10 will-change-transform"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={card.imgUrl} alt={card.alt} loading="lazy" className="h-full w-full object-cover" />
-                  </motion.div>
-                );
-              })}
+              <SocialCards cards={fanItems} onCardClick={openViewer} cardTestId="fan-card" />
             </div>
 
           </motion.div>

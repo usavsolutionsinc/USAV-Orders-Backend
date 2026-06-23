@@ -2,6 +2,8 @@ import pool from '@/lib/db';
 import { conditionLabel } from '@/components/receiving/zoho-po-types';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { sourcePlatformLabel } from '@/lib/source-platform';
+import { receivingLabelTypeDisplay } from '@/lib/print/printReceivingLabel';
 
 export type ClaimType =
   | 'damage'
@@ -56,9 +58,11 @@ export async function buildReceivingClaimTemplate(
   const recvSql = orgId
     ? `SELECT r.id,
             r.source_platform,
+            r.intake_type,
             s.tracking_number_raw AS tracking_number,
             COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
-            COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id
+            COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id,
+            rl.receiving_type
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
      LEFT JOIN receiving_lines rl
@@ -71,9 +75,11 @@ export async function buildReceivingClaimTemplate(
      LIMIT 1`
     : `SELECT r.id,
             r.source_platform,
+            r.intake_type,
             s.tracking_number_raw AS tracking_number,
             COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
-            COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id
+            COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id,
+            rl.receiving_type
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
      LEFT JOIN receiving_lines rl
@@ -89,9 +95,11 @@ export async function buildReceivingClaimTemplate(
     | {
         id: number;
         source_platform: string | null;
+        intake_type: string | null;
         tracking_number: string | null;
         zoho_purchaseorder_number: string | null;
         zoho_purchaseorder_id: string | null;
+        receiving_type: string | null;
       }
     | undefined;
   if (!carton) throw new Error('Receiving not found');
@@ -135,14 +143,14 @@ export async function buildReceivingClaimTemplate(
     ? (carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id) as string
     : 'Unfound PO';
   const trackingRef = carton.tracking_number || 'n/a';
-  // Dropped the 'USAV' fallback — the platform tag only leads the subject
-  // when an actual marketplace platform is set.
-  const platformTag = (carton.source_platform || '').trim().toUpperCase();
-  const subjectPrefix = platformTag ? `${platformTag} ` : '';
-
-  const subject = hasPo
-    ? `${subjectPrefix}Receiving Claim — ${CLAIM_TYPE_LABEL[claimType]} — PO ${poRef}`
-    : `${subjectPrefix}Receiving Claim — ${poRef}`;
+  const effectiveReceivingType = (carton.receiving_type || carton.intake_type || 'PO').trim().toUpperCase();
+  const platformLabel = sourcePlatformLabel(carton.source_platform);
+  const typeLabel = receivingLabelTypeDisplay(effectiveReceivingType);
+  const subjectPlatform =
+    platformLabel && platformLabel !== 'Unknown'
+      ? (typeLabel ? `${platformLabel} - ${typeLabel}` : platformLabel)
+      : typeLabel || 'Unknown';
+  const subject = `Claim // ${subjectPlatform} // ${CLAIM_TYPE_LABEL[claimType]} // TRK#${trackingRef}`;
 
   const trimmedReason = String(reason ?? '').trim();
   const descriptionLines: string[] = [
@@ -152,14 +160,14 @@ export async function buildReceivingClaimTemplate(
     lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,
     '',
   ];
-  if (trimmedReason) {
-    descriptionLines.push('What happened:', trimmedReason, '');
-  }
   // Photos ride along as real Zendesk attachments (uploaded at submit from the
   // operator's selection) — no boilerplate line about them in the body. A link
   // back to the carton's receiving workspace gives the agent full context.
   if (poReceivingLink) {
     descriptionLines.push(`View the receiving record: ${poReceivingLink}`);
+  }
+  if (trimmedReason) {
+    descriptionLines.push('', 'Claim reason:', trimmedReason, '');
   }
 
   return { subject, description: descriptionLines.join('\n') };

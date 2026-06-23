@@ -1,7 +1,47 @@
 {
-  "generatedAt": "2026-06-22T06:12:13.181Z",
-  "count": 200,
+  "generatedAt": "2026-06-22T23:19:19.393Z",
+  "count": 199,
   "commits": [
+    {
+      "sha": "8d68b72290913919e188cffee4f6b2cdd77fea4a",
+      "shortSha": "8d68b722",
+      "date": "2026-06-22T10:12:44-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Fix receiving line edit toolbar handler contract",
+      "body": "",
+      "type": "fix",
+      "title": "Fix receiving line edit toolbar handler contract"
+    },
+    {
+      "sha": "6bab4e127c061899486f2bcf07097298d860b653",
+      "shortSha": "6bab4e12",
+      "date": "2026-06-22T09:56:14-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Integrate photo library and receiving updates",
+      "body": "",
+      "type": "other",
+      "title": "Integrate photo library and receiving updates"
+    },
+    {
+      "sha": "38a7336fdfcf6b476cd7fe56217aea57d76b88bc",
+      "shortSha": "38a7336f",
+      "date": "2026-06-22T08:39:55-07:00",
+      "author": "DENSENSE8",
+      "subject": "photo library updates UX and UI, folder first",
+      "body": "",
+      "type": "other",
+      "title": "photo library updates UX and UI, folder first"
+    },
+    {
+      "sha": "c6bb865aa947b8b10409d7c26e3b873d1ef82eb6",
+      "shortSha": "c6bb865a",
+      "date": "2026-06-22T08:27:35-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat: identity layer, studio workflows, tenancy hardening, and UI chassis refactor",
+      "body": "Ship global accounts with passkey auth and org switching; expand Operations\nStudio (templates, node-bound stations, simulation); route inventory status\nchanges through guarded transition(); enforce tenant isolation across APIs and\nmigrations; refactor receiving sidebar/station chassis and design-system\nprimitives; add staff preferences, audit trace, and integration credential\nscoping. Remove tracked .env.local, legacy scripts/docs, and debug artifacts.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "feature",
+      "title": "identity layer, studio workflows, tenancy hardening, and UI chassis refactor"
+    },
     {
       "sha": "725c0d39376ccd9efdcbb1b5f97130d18df4a1ba",
       "shortSha": "725c0d39",
@@ -1951,56 +1991,6 @@
       "body": "Renames the bin/room/zone surface from inventory/* to warehouse/*\n(components, sidebar panel, /warehouse route) and adds /products and\n/warehouse to the sidebar nav. /sku-stock keeps redirecting to\n/inventory/* via next.config.ts.\n\nAdds pinless sign-in behind AUTH_PINLESS_SIGNIN: when set, the staff\npicker exposes a `pinless` flag, the signin route skips PIN verification\nand audits as `signin.pinless`. Default behavior unchanged when the env\nvar is off.\n\nOther fixes bundled in this stash:\n- Zoho OAuth scope adds ZohoInventory.bills.READ for billed-PO receives\n- debug-bills route accepts ?bill_id to inspect a single bill payload\n- @simplewebauthn type imports moved to @simplewebauthn/types\n- src/lib/db.ts pool typed as PgPool instead of any\n- mark-received null-safety on staffId\n- scan/resolve redirectTo paths point at /inventory/sku|location\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "inventory/warehouse rename Phase B/C + pinless signin"
-    },
-    {
-      "sha": "03c06df08c26bc90512e72c6da3d657e81fc81d0",
-      "shortSha": "03c06df0",
-      "date": "2026-05-18T16:40:47-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "desktop app: install page with OS detection + Vercel Blob installer hosting",
-      "body": "Replaces the 404 /desktop-app destination from the install banner with a\nreal landing page that auto-detects macOS/Windows, highlights the user's\nplatform, and downloads the matching installer (Apple Silicon, Intel, or\nWindows). API route reads installer URLs from Vercel Blob (prefix\ndesktop-installers/) with GitHub Releases as fallback. New\n`npm run desktop:upload` script publishes binaries from desktop-dist/\nto Blob without redeploying the app.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "desktop app: install page with OS detection + Vercel Blob installer hosting"
-    },
-    {
-      "sha": "b822685c8908bd175d4e3c3a98dca0db0af1cfb6",
-      "shortSha": "b822685c",
-      "date": "2026-05-18T12:47:24-07:00",
-      "author": "DENSENSE8",
-      "subject": "auth: admin perms no step-up; sidebar avatar uses DB color_hex",
-      "body": "- Remove admin.manage_staff/roles/features from STEP_UP_PERMISSIONS so a\n  signed-in admin doesn't get re-prompted for PIN on /admin?section=access\n- SignedInChip reads staff.color_hex from /api/staff and applies it inline\n  instead of hardcoded bg-gray-900\n- Ignore /desktop-dist2 build output\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "auth: admin perms no step-up; sidebar avatar uses DB color_hex"
-    },
-    {
-      "sha": "3d8b201e3a5846e170728696dacafe1912bf7101",
-      "shortSha": "3d8b201e",
-      "date": "2026-05-18T08:40:24-07:00",
-      "author": "DENSENSE8",
-      "subject": "plan: Products / Inventory / Warehouse rename + modernization",
-      "body": "Comprehensive UX/UI plan for renaming two existing top-level routes\nand introducing a first-class Products page. Saved to\ncontext/page-rename-products-inventory-warehouse-plan.md.\n\nThe rename map:\n  /sku-stock  →  /inventory   (live ledger — search by SKU / unit /\n                                location / state / condition)\n  /inventory  →  /warehouse   (the page that's currently misnamed —\n                                rooms, bins, fill bars, physical map)\n  /products   →  NEW          (sku_catalog editor — search, edit,\n                                bulk sync, click-into-inventory)\n\nWhy: today's labels don't match what each page actually shows. The\nexisting /inventory route renders WarehouseMap + RoomsBoard + BinsTable\n— it's the warehouse, not the ledger. Renaming makes the navigation\nmatch the operator's mental model:\n  Products    \"what do we sell?\"\n  Inventory   \"where is each unit right now?\"\n  Warehouse   \"what's in this physical location?\"\n\nPlan covers (15 sections, ~800 lines):\n  - naming rationale + back-compat redirects via next.config.js\n  - file + component + sidebar rename map (with the conflict-order\n    trick: warehouse rename FIRST so the inventory slot frees up)\n  - information architecture (one job per page, with what each page\n    does NOT do)\n  - cross-page navigation graph\n  - per-page UX/UI:\n      * Products: virtualized catalog table + filter chips + detail\n        page with attributes/platform-links/kit/QC/live-stock summary\n      * Inventory: universal search + filter chips + four views\n        (pulse / by-sku / by-bin / by-unit) on one URL surface\n      * Warehouse: three view modes (map / list / print labels) with\n        DRIFT-alert banner and open-cycle-count strip\n  - shared primitives (StatusBadge, ConditionBadge, ScanInput, etc.)\n  - mobile/narrow-viewport behavior\n  - consistent search+filter grammar (one ScanInput across all three)\n  - realtime Ably channels + cache tag invalidation contract\n  - permission gating (reuses sku_stock.* + bin.* + print.label)\n  - 4-phase rollout (A: routes exist alongside; B: modernize behind\n    feature flags; C: flip flags + relabel sidebar; D: delete legacy)\n  - file-level implementation plan: 15 commits, ~2.5-3.5 weeks\n  - 8 open decisions captured for follow-up\n\nNo code changes — plan-only commit. Implementation follows once the\nplan is approved.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "plan: Products / Inventory / Warehouse rename + modernization"
-    },
-    {
-      "sha": "735375c2bf8f76f2a6d614c557f9132491bf9aba",
-      "shortSha": "735375c2",
-      "date": "2026-05-18T08:01:05-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 #4: Zoho order-intake webhook + auto-allocation",
-      "body": "Operationalizes Phase 4 end-to-end. Zoho POSTs an order-created\nwebhook, the receiver normalizes the payload, the shared ingest\nhelper upserts orders rows + auto-allocates (when the flag is on).\n\nsrc/lib/inventory/order-intake.ts (NEW):\n  - ingestOrder({externalId, source, lineItems, ...}):\n      1. Per line: SELECT existing orders row by (order_id, sku) →\n         INSERT if missing (status='open', account_source = source).\n         Transactional batch — partial failures roll back.\n      2. Per resulting orders row: call allocateOrder() with a\n         deterministic clientEventId derived from\n         \"order-intake:{source}:{externalId}:{sku}\" so retries idempo-\n         tent. Allocation runs in its own transaction so one failing\n         line doesn't roll back its siblings.\n      3. Returns {externalId, source, totalLines, unitsAllocated,\n         lines[]}. Each line carries {sku, orderId, created,\n         allocation: AllocateOrderResult | null}. null when the flag\n         is off (helper still creates orders rows, skips alloc).\n  - Source string validated against /[a-z0-9_-]+/i so future eBay /\n    manual integrations get the same path.\n\nsrc/app/api/webhooks/zoho/orders/route.ts (NEW):\n  - POST handler:\n      * Fails CLOSED when ZOHO_WEBHOOK_SECRET env var is unset — 503.\n      * Returns 401 on header mismatch\n        (x-zoho-webhook-secret: $ZOHO_WEBHOOK_SECRET).\n      * extractZohoOrder() pulls salesorder_id + line_items out of\n        either {\"salesorder\": {...}} or top-level shapes (Zoho\n        Inventory vs Books vs subtype variation). Tolerates missing\n        fields; returns null when payload doesn't look like an order\n        (ping events, malformed bodies).\n      * Lines with no SKU are dropped silently.\n  - GET probe: returns {ok, webhook, configured} so Zoho's \"Test\"\n    button reports the secret-presence status without exposing it.\n\nIdempotency:\n  - orders rows: dedup on (order_id, sku) — re-running the same\n    webhook doesn't double-create.\n  - allocations: per-line clientEventId on inventory_events ON\n    CONFLICT DO NOTHING.\n  - All allocation failures are logged but never break the response\n    so Zoho doesn't see retries for downstream issues.\n\nOperations:\n  1. Set ZOHO_WEBHOOK_SECRET in Vercel env to a long random string.\n  2. Configure Zoho Inventory webhook for \"Sales order created\" →\n     POST https://app.example/api/webhooks/zoho/orders with header\n     x-zoho-webhook-secret: <that secret>.\n  3. Flip INVENTORY_V2_ALLOCATION on Vercel when ready.\n\nZero new tsc errors.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 #4: Zoho order-intake webhook + auto-allocation"
-    },
-    {
-      "sha": "35ff10b04eb50d5f39b9d8b5f297a860cd3be69b",
-      "shortSha": "35ff10b0",
-      "date": "2026-05-18T07:58:02-07:00",
-      "author": "DENSENSE8",
-      "subject": "inventory v2 #2: cycle count admin UI",
-      "body": "Operationalizes the Phase 0 cycle_count_campaigns + cycle_count_lines\ntables (2026-05-14 migration). No UI existed; this lands the full\noperator + admin workflow.\n\nsrc/lib/inventory/cycle-count.ts (NEW):\n  - createCampaign(name, varianceTol, createdByStaffId) — INSERTs\n    the campaign + snapshots every bin_contents row (qty > 0 OR\n    last_counted IS NULL) into cycle_count_lines (status='pending').\n    Returns {campaignId, lineCount}.\n  - submitCount(lineId, countedQty) — auto-routes to status='counted'\n    when within campaign.variance_tol, status='pending_review' when\n    outside. Computes variance + variance fraction inline.\n  - approveLine(lineId) — for variance != 0, INSERTs sku_stock_ledger\n    with reason='CYCLE_COUNT_ADJ'; updates bin_contents.qty +\n    last_counted to match counted_qty; flips line to 'approved'.\n  - rejectLine(lineId) — line → 'rejected'; no stock changes.\n  - closeCampaign(campaignId) — auto-approves remaining 'counted'\n    lines (inline to keep one transaction, since pg disallows nested\n    transactions); leaves 'pending_review' alone; flips campaign\n    status to 'closed' + stamps closed_at.\n\nsrc/app/admin/inventory-v2/cycle-counts/page.tsx (NEW):\n  - Create-campaign form (name + variance_tol).\n  - Last-50 campaigns table with per-status counts (total / counted\n    / pending_review / approved). Pending-review counter goes amber\n    when > 0 so it grabs attention.\n\nsrc/app/admin/inventory-v2/cycle-counts/[id]/page.tsx (NEW):\n  - Header with status badge + \"Close campaign\" action (open-only).\n  - Status filter pills (all / pending / counted / pending_review /\n    approved / rejected) drive the lines query via ?status=...\n  - Per-line: bin name (linked) + SKU (linked) + expected/counted\n    qty + colored variance + status badge.\n  - Inline action per status:\n      pending      → number input + Submit button\n      pending_review or counted → Approve / Reject buttons\n      approved/rejected → audit text (\"by Tuan\")\n  - All actions are server actions calling the helper; pages\n    revalidatePath after each so the new state lands in the same\n    render cycle.\n  - Variance color codes: gray when 0; red when > tolerance; amber\n    otherwise.\n\nDashboard \"Quick links\" row gains \"Cycle counts →\".\n\nZero new tsc errors in any new file. (Four pre-existing TS2347 errors\nin /api/cycle-counts/* routes are untouched.)\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory v2 #2: cycle count admin UI"
     }
   ]
 }

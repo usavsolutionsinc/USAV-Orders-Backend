@@ -201,7 +201,10 @@ export function StationScanBar({
             'relative z-base',
             padLeft,
             padRight,
-            showHotkeyGear ? 'group-hover:placeholder:text-transparent' : '',
+            // On hover the hotkey chip slides in from the left; shift the
+            // placeholder/value right (rather than hiding it) so the gear + key
+            // have room. `transition-all` on the input animates the pad change.
+            showHotkeyGear ? 'group-hover:pl-16' : '',
             inputBorderClassName ?? 'border border-gray-100',
             inputClassName,
           ].join(' ').trim()}

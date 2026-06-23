@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, Wrench, X, Check } from '../Icons';
+import { ChevronLeft, Wrench, X, Check, Printer } from '../Icons';
 import { ProductSelector, type SelectedItem } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
 import { CustomerInfoForm, CONTACT_FIELDS } from './CustomerInfoForm';
@@ -19,9 +19,19 @@ import { REPAIR_STEP_COPY, buildInitialFormData, formatPhone, isContactFieldVali
 import { useRepairIntakeData } from './useRepairIntakeData';
 import { useRepairCustomerSearch, type ExistingCustomer } from './useRepairCustomerSearch';
 
+/** What the submit handler resolves with on a successful post, so the form can
+ *  show the printable paper instead of dropping back to the walk-in dashboard. */
+export interface RepairSubmitResult {
+    id: number;
+    rsNumber?: string | number | null;
+    zendeskTicketNumber?: string | null;
+    zendeskTicketUrl?: string | null;
+}
+
 interface RepairIntakeFormProps {
     onClose: () => void;
-    onSubmit: (data: RepairFormData) => void;
+    /** Resolve with the created repair on success; resolve null/throw on failure. */
+    onSubmit: (data: RepairFormData) => Promise<RepairSubmitResult | null | void>;
     initialData?: Partial<RepairFormData>;
     favoriteSkuId?: number | null;
 }
@@ -50,10 +60,13 @@ export interface RepairFormData {
 
 const REPAIR_INTAKE_MAX_WIDTH = 'max-w-[720px]';
 const REPAIR_INTAKE_COLUMN_CLASS = `mx-auto w-full ${REPAIR_INTAKE_MAX_WIDTH}`;
+const SECTION_LABEL = 'text-[10px] font-black uppercase tracking-[0.16em] text-gray-500';
 
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showPaperwork, setShowPaperwork] = useState(false);
+    const [submitted, setSubmitted] = useState<RepairSubmitResult | null>(null);
 
     const [formData, setFormData] = useState<RepairFormData>(() => buildInitialFormData(initialData));
     const [signatureData, setSignatureData] = useState<SignatureData | null>(null);
@@ -83,6 +96,15 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     useEffect(() => {
         setContactFieldIndex(0);
     }, [customerMode]);
+
+    // Single orchestrated reveal when the step (or contact field) changes — a quiet
+    // settle, never on every keystroke. Honors prefers-reduced-motion via motion-reduce:.
+    const [stepRevealed, setStepRevealed] = useState(true);
+    useEffect(() => {
+        setStepRevealed(false);
+        const raf = requestAnimationFrame(() => setStepRevealed(true));
+        return () => cancelAnimationFrame(raf);
+    }, [currentStep, contactFieldIndex]);
 
     const productSelected = !!(formData.product.type && formData.product.model);
 
@@ -190,11 +212,18 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         if (!canSubmit || !signatureData) return;
         setIsSubmitting(true);
         try {
-            await onSubmit({
+            const result = await onSubmit({
                 ...formData,
                 signatureDataUrl: signatureData.dataUrl,
                 signatureStrokes: signatureData.strokes,
             });
+            // On success, hold the full-screen overlay and show the printable paper —
+            // never reveal the walk-in dashboard to a waiting customer.
+            if (result && Number.isFinite(result.id)) {
+                setSubmitted(result);
+            } else {
+                setIsSubmitting(false);
+            }
         } catch (error) {
             console.error('Error submitting form:', error);
             setIsSubmitting(false);
@@ -222,7 +251,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const receiptProps = {
         repairServiceId: '—',
         ticketNumber: '',
-        productTitle: formData.product.model || '—',
+        productTitle: formData.product.model || formData.product.type || '—',
         issue: issueText || '—',
         serialNumber: formData.serialNumber || '—',
         name: formData.customer.name || '—',
@@ -235,7 +264,6 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     };
 
     const stepTitle = REPAIR_STEP_COPY[currentStep].title;
-    const stepSubtitle = REPAIR_STEP_COPY[currentStep].subtitle;
 
     const isReviewStep = currentStep === 'review';
 
@@ -260,6 +288,90 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         : primaryDisabled
             ? 'Complete the required fields to continue'
             : undefined;
+
+    // Post-submit: the repair is persisted and the Zendesk ticket is created.
+    // Stay full-screen and present the exact paper to print — the customer never
+    // sees the walk-in dashboard, and staff print straight from here.
+    if (submitted) {
+        const rsLabel = submitted.rsNumber
+            ? String(submitted.rsNumber)
+            : `RS-${submitted.id}`;
+        const printHref = `/api/repair-service/print/${submitted.id}`;
+
+        return (
+            <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
+                <header className="shrink-0 border-b border-gray-100">
+                    <div className={`${REPAIR_INTAKE_COLUMN_CLASS} flex items-center justify-between gap-3 px-6 py-3`}>
+                        <div className="flex min-w-0 items-center gap-2.5">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-900 text-white">
+                                <Check className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0">
+                                <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-[10px]">
+                                    Repair submitted
+                                </p>
+                                <h1 className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]">
+                                    {rsLabel}
+                                </h1>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
+                            aria-label="Done"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </header>
+
+                <main className="min-h-0 flex-1 overflow-y-auto bg-gray-100">
+                    <div className="min-h-full overflow-x-auto p-4 sm:p-6">
+                        <div className="mx-auto w-fit shadow-lg ring-1 ring-gray-300">
+                            <RepairServiceForm
+                                {...receiptProps}
+                                repairServiceId={submitted.id}
+                                ticketNumber={submitted.zendeskTicketNumber ?? ''}
+                                variant="print"
+                            />
+                        </div>
+                    </div>
+                </main>
+
+                <div className="shrink-0 border-t border-gray-100 bg-white">
+                    <div className={`${REPAIR_INTAKE_COLUMN_CLASS} flex items-center gap-3 px-6 py-3`}>
+                        {submitted.zendeskTicketUrl ? (
+                            <a
+                                href={submitted.zendeskTicketUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="truncate text-[10px] font-black uppercase tracking-[0.14em] text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+                            >
+                                {submitted.zendeskTicketNumber ? `Ticket ${submitted.zendeskTicketNumber}` : 'View ticket'}
+                            </a>
+                        ) : null}
+                        <div className="ml-auto flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="rounded-lg border border-gray-200 px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900"
+                            >
+                                Done
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => window.open(printHref, '_blank', 'noopener,noreferrer')}
+                                className="flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-black"
+                            >
+                                <Printer className="h-4 w-4" /> Print document
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
@@ -286,19 +398,25 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 </div>
                             )}
                             <div className="min-w-0">
-                                <h1 className="truncate text-xs font-black uppercase tracking-[0.12em] text-gray-900 sm:text-sm">
+                                <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-[10px]">
                                     Repair Intake
-                                </h1>
-                                <p className="mt-0.5 truncate text-[9px] font-bold uppercase tracking-[0.16em] text-gray-400 sm:text-[10px]">
-                                    {stepTitle}
                                 </p>
+                                <h1
+                                    id="repair-intake-step-title"
+                                    className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]"
+                                >
+                                    {stepTitle}
+                                </h1>
                             </div>
                         </div>
 
                         <div className="flex shrink-0 items-center gap-2">
                             {/* Paperwork affordance — present on every step so the
                                 repair agreement is viewable at any point (acceptance B). */}
-                            <RepairPaperworkSheet formData={formData} />
+                            <RepairPaperworkSheet
+                                active={showPaperwork}
+                                onToggle={() => setShowPaperwork((v) => !v)}
+                            />
                             <button
                                 type="button"
                                 onClick={onClose}
@@ -327,12 +445,24 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             </header>
 
             {/* Step body — single centered column, no sidebar split */}
-            <main className="min-h-0 flex-1 overflow-y-auto pb-28">
-                <div className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-8`}>
-                    <p className="mb-8 text-center text-sm leading-relaxed text-gray-500">
-                        {stepSubtitle}
-                    </p>
-
+            <main
+                aria-labelledby="repair-intake-step-title"
+                className={`min-h-0 flex-1 overflow-y-auto ${showPaperwork ? 'bg-gray-100' : 'pb-28'}`}
+            >
+                {showPaperwork ? (
+                    /* Exact printed document — same `variant="print"` sheet that prints,
+                       on a paper-on-desk canvas. Toggled from the header, not a popover. */
+                    <div className="min-h-full overflow-x-auto bg-gray-100 p-4 sm:p-6">
+                        <div className="mx-auto w-fit shadow-lg ring-1 ring-gray-300">
+                            <RepairServiceForm {...receiptProps} variant="print" />
+                        </div>
+                    </div>
+                ) : (
+                <div
+                    className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-8 transition-all duration-300 ease-out motion-reduce:translate-y-0 motion-reduce:transition-none ${
+                        stepRevealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'
+                    }`}
+                >
                     {currentStep === 'product' && (
                         <div className="space-y-8">
                             <FavoritesWorkspaceSection
@@ -349,7 +479,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 fuzzyTitleSearch
                             />
 
-                            <div className="rounded-2xl border border-gray-200 p-4">
+                            <section className="space-y-3">
+                                <p className={SECTION_LABEL}>All products</p>
                                 <ProductSelector
                                     onSelect={(product) => setFormData(prev => ({ ...prev, product }))}
                                     selectedProduct={formData.product.type ? formData.product : null}
@@ -358,37 +489,33 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     selectedItems={selectedItems}
                                     onSelectedItemsChange={handleSelectedItemsChange}
                                 />
-                            </div>
+                            </section>
                         </div>
                     )}
 
                     {currentStep === 'issue' && (
-                        <div className="w-full space-y-6">
+                        <div className="w-full space-y-7">
                             {productSelected && (
-                                <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-center">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">
-                                        Selected product
-                                    </p>
-                                    <p className="mt-1 text-sm font-bold text-gray-900">{formData.product.model}</p>
+                                <div className="space-y-1">
+                                    <p className={SECTION_LABEL}>Selected product</p>
+                                    <p className="text-sm font-bold text-gray-900">{formData.product.model}</p>
                                 </div>
                             )}
 
-                            <div className="rounded-2xl border border-gray-200 p-5">
-                                <ReasonSelector
-                                    selectedReasons={formData.repairReasons}
-                                    notes={formData.repairNotes}
-                                    onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
-                                    onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
-                                    skuIssues={skuIssues}
-                                />
-                            </div>
+                            <ReasonSelector
+                                selectedReasons={formData.repairReasons}
+                                notes={formData.repairNotes}
+                                onReasonsChange={(reasons) => setFormData(prev => ({ ...prev, repairReasons: reasons }))}
+                                onNotesChange={(notes) => setFormData(prev => ({ ...prev, repairNotes: notes }))}
+                                skuIssues={skuIssues}
+                            />
 
-                            <div>
+                            <div className="space-y-2">
                                 <label
                                     htmlFor="repair-tech-select"
-                                    className="mb-2 block text-[10px] font-black uppercase tracking-[0.16em] text-gray-500"
+                                    className={`block ${SECTION_LABEL}`}
                                 >
-                                    Assign technician <span className="font-bold text-gray-300">(optional)</span>
+                                    Assign technician <span className="font-bold lowercase text-gray-300">(optional)</span>
                                 </label>
                                 <select
                                     id="repair-tech-select"
@@ -514,29 +641,21 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
                     {currentStep === 'review' && (
                         <div className="space-y-8">
-                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                                 <RepairServiceForm {...receiptProps} variant="preview" />
                             </div>
 
-                            <div className="w-full space-y-2 rounded-xl border border-gray-200 bg-gray-50/80 px-5 py-4 text-center">
-                                <p className="text-xs leading-relaxed text-gray-600">
-                                    By signing below, the customer consents to conduct this transaction electronically
-                                    and agrees to the listed repair price, terms, and any unexpected delays.
-                                </p>
-                                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-900">
-                                    30-Day Warranty on all repair services
-                                </p>
-                            </div>
+                            <p className="max-w-[60ch] text-xs leading-relaxed text-gray-500">
+                                By signing below, the customer consents to conduct this transaction electronically
+                                and agrees to the listed repair price, terms, and any unexpected delays.
+                            </p>
 
                             <div className="w-full space-y-3">
-                                <p className="text-center text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">
-                                    Customer signature
-                                </p>
-                                <div className="h-[220px] overflow-hidden rounded-2xl border-2 border-gray-900 bg-white">
+                                <div className="h-[220px] overflow-hidden rounded-2xl border border-gray-300 bg-white">
                                     <SignaturePad onSignatureChange={setSignatureData} fillHeight />
                                 </div>
                                 {signatureData && (
-                                    <div className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
+                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
                                         <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
                                             <Check className="h-2.5 w-2.5 text-white" />
                                         </span>
@@ -547,19 +666,22 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                         </div>
                     )}
                 </div>
+                )}
             </main>
 
-            <FloatingButton
-                label={primaryLabel}
-                onClick={isReviewStep ? handleSubmit : handleNext}
-                disabled={primaryDisabled}
-                loading={isSubmitting}
-                title={primaryTitle}
-                tone="gray"
-                maxWidth={REPAIR_INTAKE_MAX_WIDTH}
-                fullWidth
-                className="px-0 sm:px-0"
-            />
+            {!showPaperwork && (
+                <FloatingButton
+                    label={primaryLabel}
+                    onClick={isReviewStep ? handleSubmit : handleNext}
+                    disabled={primaryDisabled}
+                    loading={isSubmitting}
+                    title={primaryTitle}
+                    tone="gray"
+                    maxWidth={REPAIR_INTAKE_MAX_WIDTH}
+                    fullWidth
+                    className="px-0 sm:px-0"
+                />
+            )}
         </div>
     );
 }
