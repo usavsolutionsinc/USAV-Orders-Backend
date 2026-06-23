@@ -19,8 +19,30 @@ interface PhotoFolderTreeProps {
  * bespoke modal — consistent with the library's other destructive confirms.
  */
 export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolderTreeProps) {
-  const { tree, isLoading, createFolder, renameFolder, deleteFolder } = usePhotoFolders();
+  const { tree, folders, isLoading, createFolder, renameFolder, deleteFolder, reorderFolders } =
+    usePhotoFolders();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // Drag-to-reorder among siblings. `dragId` is the folder being dragged;
+  // `overId` is the row currently hovered (drawn with an insert-before line).
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<number | null>(null);
+
+  /** Reorder the dragged folder to sit immediately before `targetId` (same parent only). */
+  const dropOn = (targetId: number) => {
+    const dragged = folders.find((f) => f.id === dragId);
+    const target = folders.find((f) => f.id === targetId);
+    setDragId(null);
+    setOverId(null);
+    if (!dragged || !target || dragged.id === target.id) return;
+    if (dragged.parentId !== target.parentId) return; // same-level reorder only
+    const siblings = folders
+      .filter((f) => f.parentId === dragged.parentId && f.id !== dragged.id)
+      .sort((a, b) => a.sortIndex - b.sortIndex || a.id - b.id);
+    const insertAt = siblings.findIndex((f) => f.id === target.id);
+    siblings.splice(insertAt < 0 ? siblings.length : insertAt, 0, dragged);
+    const items = siblings.map((f, i) => ({ id: f.id, sortIndex: i }));
+    reorderFolders.mutate(items);
+  };
 
   const toggle = (id: number) =>
     setExpanded((prev) => {
@@ -91,6 +113,15 @@ export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolde
               onCreateSub={promptCreate}
               onRename={promptRename}
               onDelete={confirmDelete}
+              dragId={dragId}
+              overId={overId}
+              onDragStart={setDragId}
+              onDragOver={setOverId}
+              onDragEnd={() => {
+                setDragId(null);
+                setOverId(null);
+              }}
+              onDrop={dropOn}
             />
           ))}
         </ul>
@@ -109,6 +140,12 @@ function FolderRow({
   onCreateSub,
   onRename,
   onDelete,
+  dragId,
+  overId,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onDrop,
 }: {
   node: PhotoFolderNode;
   depth: number;
@@ -119,20 +156,50 @@ function FolderRow({
   onCreateSub: (parentId: number | null) => void;
   onRename: (id: number, current: string) => void;
   onDelete: (node: PhotoFolderNode) => void;
+  dragId: number | null;
+  overId: number | null;
+  onDragStart: (id: number) => void;
+  onDragOver: (id: number) => void;
+  onDragEnd: () => void;
+  onDrop: (id: number) => void;
 }) {
   const hasChildren = node.children.length > 0;
   const isOpen = expanded.has(node.id);
   const selected = selectedFolderId === node.id;
+  // Only siblings (same parent) are valid drop targets; mark the insert line.
+  const isDropTarget = dragId != null && overId === node.id && dragId !== node.id;
 
   return (
     <li>
       <div
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          onDragStart(node.id);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          onDragOver(node.id);
+        }}
+        onDragEnd={onDragEnd}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDrop(node.id);
+        }}
         className={cn(
-          'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
+          'group relative flex items-center gap-1 rounded-lg pr-1 transition-colors',
+          dragId === node.id && 'opacity-40',
           selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
         )}
         style={{ paddingLeft: `${depth * 14}px` }}
       >
+        {isDropTarget ? (
+          <span
+            className="pointer-events-none absolute inset-x-1 top-0 h-0.5 -translate-y-px rounded-full bg-blue-400"
+            aria-hidden="true"
+          />
+        ) : null}
         {hasChildren ? (
           <button
             type="button"
@@ -183,6 +250,12 @@ function FolderRow({
               onCreateSub={onCreateSub}
               onRename={onRename}
               onDelete={onDelete}
+              dragId={dragId}
+              overId={overId}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragEnd={onDragEnd}
+              onDrop={onDrop}
             />
           ))}
         </ul>

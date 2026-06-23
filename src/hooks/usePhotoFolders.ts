@@ -114,6 +114,34 @@ export function usePhotoFolders() {
     onError,
   });
 
+  // Optimistically reflow sort_index so a drag-reorder feels instant; roll back
+  // on error and reconcile with the server on settle.
+  const reorderFolders = useMutation({
+    mutationFn: (items: Array<{ id: number; sortIndex: number }>) =>
+      fetch('/api/photos/folders/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      }).then(jsonOrThrow),
+    onMutate: async (items) => {
+      await qc.cancelQueries({ queryKey: FOLDERS_KEY });
+      const prev = qc.getQueryData<PhotoFolder[]>(FOLDERS_KEY);
+      if (prev) {
+        const next = new Map(items.map((i) => [i.id, i.sortIndex]));
+        qc.setQueryData<PhotoFolder[]>(
+          FOLDERS_KEY,
+          prev.map((f) => (next.has(f.id) ? { ...f, sortIndex: next.get(f.id)! } : f)),
+        );
+      }
+      return { prev };
+    },
+    onError: (e: Error, _items, context) => {
+      if (context?.prev) qc.setQueryData(FOLDERS_KEY, context.prev);
+      onError(e);
+    },
+    onSettled: () => invalidateFolders(),
+  });
+
   const addPhotos = useMutation({
     mutationFn: ({ folderId, photoIds }: { folderId: number; photoIds: number[] }) =>
       fetch(`/api/photos/folders/${folderId}/items`, {
@@ -151,6 +179,7 @@ export function usePhotoFolders() {
     createFolder,
     renameFolder,
     moveFolder,
+    reorderFolders,
     deleteFolder,
     addPhotos,
     removePhotos,

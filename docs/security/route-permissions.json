@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-23T17:45:54Z",
-  "totalRoutes": 655,
+  "generatedAt": "2026-06-23T18:30:59Z",
+  "totalRoutes": 656,
   "summary": {
-    "permissionGated": 560,
+    "permissionGated": 561,
     "authenticatedNoPermission": 28,
     "anonymousIntentional": 57,
     "serviceToService": 2,
@@ -2872,6 +2872,15 @@
         "PATCH"
       ],
       "gate": "requireRoutePerm",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/folders/reorder/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
       "permission": "photos.manage",
       "exemptReason": null
     },
