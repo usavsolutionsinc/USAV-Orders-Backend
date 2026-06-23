@@ -16,7 +16,8 @@ import {
 } from '@/lib/zendesk-links';
 import { listTicketLinkCandidates } from '@/lib/zendesk-link-candidates';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,11 +130,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Persist the human-visible ticket # onto the record, same as the create
     // route, so the header pill / Support section pick it up. Best-effort.
     const ticketNumber = `#${ticket.id}`;
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     try {
       if (body.lineId != null) {
-        await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, body.lineId]);
+        await tenantQuery(orgId, `UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, body.lineId]);
       } else {
-        await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, body.receivingId]);
+        await tenantQuery(orgId, `UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, body.receivingId]);
       }
     } catch (colErr) {
       console.warn(`[${context}] zendesk_ticket column update failed`, colErr);
@@ -194,14 +196,17 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     // Clear the human-visible ticket # from the record so the chip flips back to
     // the Claim affordance. Best-effort; only clears when it still matches.
     const ticketNumber = `#${parsed.ticketId}`;
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     try {
       if (parsed.lineId != null) {
-        await pool.query(
+        await tenantQuery(
+          orgId,
           `UPDATE receiving_lines SET zendesk_ticket = NULL WHERE id = $1 AND zendesk_ticket = $2`,
           [parsed.lineId, ticketNumber],
         );
       } else {
-        await pool.query(
+        await tenantQuery(
+          orgId,
           `UPDATE receiving SET zendesk_ticket = NULL WHERE id = $1 AND zendesk_ticket = $2`,
           [parsed.receivingId, ticketNumber],
         );

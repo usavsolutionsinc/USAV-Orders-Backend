@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { isAllowedAdminOrigin } from '@/lib/security/allowed-origin';
 import { orderSyncService, type ChannelOrder } from '@/services/OrderSyncService';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -13,6 +14,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 
   try {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const body = (await request.json()) as Partial<ChannelOrder> & { enqueue?: boolean };
     const shouldEnqueue = body.enqueue === true || request.nextUrl.searchParams.get('enqueue') === 'true';
 
@@ -28,7 +30,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           { status: 400 },
         );
       }
-      const { rows } = await pool.query<{ id: number }>(
+      const { rows } = await tenantQuery<{ id: number }>(
+        orgId,
         `INSERT INTO order_ingest_queue (channel_order_id, organization_id, payload, status)
          VALUES ($1, $2, $3, 'pending')
          ON CONFLICT (channel_order_id) DO UPDATE

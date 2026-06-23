@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/drizzle/db';
 import { orders as ordersTable } from '@/lib/drizzle/schema';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { withAuth } from '@/lib/auth/withAuth';
 
 export const POST = withAuth(async (request: NextRequest, ctx) => {
@@ -36,12 +37,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             })
         ).returning({ id: ordersTable.id });
 
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
+
         for (let i = 0; i < insertedOrders.length; i += 1) {
             const parsedShipByDate = data[i]?.shipByDate ? new Date(data[i].shipByDate) : null;
             const shipByDate = parsedShipByDate && !Number.isNaN(parsedShipByDate.getTime()) ? parsedShipByDate : null;
             if (!shipByDate) continue;
 
-            await pool.query(
+            await tenantQuery(
+                orgId,
                 `INSERT INTO work_assignments
                    (organization_id, entity_type, entity_id, work_type, assigned_tech_id, status, priority, deadline_at, notes, assigned_at, created_at, updated_at)
                  VALUES ($1, 'ORDER', $2, 'TEST', NULL, 'OPEN', 100, $3, 'Canonical deadline row from import-orders', NOW(), NOW(), NOW())

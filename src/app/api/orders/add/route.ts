@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
@@ -40,8 +41,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const saleAmountValue = saleAmount != null ? Number(saleAmount) : null;
     const currencyValue = (typeof currency === 'string' && currency.trim()) || 'USD';
 
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
+
     // Check if order already exists with this order_id
-    const existingOrder = await pool.query(
+    const existingOrder = await tenantQuery(
+      orgId,
       `SELECT id, order_id FROM orders WHERE order_id = $1 LIMIT 1`,
       [orderId]
     );
@@ -65,7 +69,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
 
     // Insert the new order (tracking linked later via shipment_id when packer scans)
-    const result = await pool.query(
+    const result = await tenantQuery(
+      orgId,
       `INSERT INTO orders (
         order_id,
         product_title,

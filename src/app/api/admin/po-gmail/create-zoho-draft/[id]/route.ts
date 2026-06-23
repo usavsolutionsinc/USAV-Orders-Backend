@@ -34,8 +34,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import {
   createPurchaseOrder,
   searchVendorsByName,
@@ -85,6 +86,7 @@ function buildZohoUrl(purchaseOrderId: string): string {
 }
 
 export const POST = withAuth(async (request: NextRequest, ctx) => {
+  const orgId = ctx.organizationId ?? USAV_ORG_ID;
   const rowId = pathRowId(request.nextUrl);
   if (!rowId) {
     return NextResponse.json({ success: false, error: 'invalid path' }, { status: 400 });
@@ -98,7 +100,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   }
 
   // ─── Load the mailbox row ───────────────────────────────────────────────────
-  const rowRes = await pool.query<MailboxRow>(
+  const rowRes = await tenantQuery<MailboxRow>(
+    orgId,
     `SELECT id, gmail_msg_id, po_numbers, triage_state, zoho_uploaded_po_number
        FROM email_missing_purchase_orders
       WHERE id = $1
@@ -227,7 +230,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   // pile stays as 'upload' — published-and-resolved happens later via the
   // Phase 5 reconcile cron when the published PO shows up in the mirror.
   try {
-    await pool.query(
+    await tenantQuery(
+      orgId,
       `UPDATE email_missing_purchase_orders
           SET zoho_uploaded_po_number = $1,
               zoho_uploaded_at        = NOW(),

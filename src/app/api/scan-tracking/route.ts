@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { normalizeTrackingCanonical, normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { upsertOpenOrderException, type ExceptionSourceStation } from '@/lib/orders-exceptions';
 import { checkRateLimit } from '@/lib/api-guard';
@@ -63,10 +64,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ success: false, found: false, error: 'Invalid tracking number key' }, { status: 400 });
     }
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
 
+    return await withTenantTransaction(orgId, async (client) => {
       const key18MatchResult = await client.query(
         `SELECT
             o.id,
@@ -85,7 +85,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       );
 
       if (key18MatchResult.rows.length > 0) {
-        await client.query('COMMIT');
         const row = key18MatchResult.rows[0];
         return NextResponse.json({
           success: true,
@@ -125,7 +124,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           [upsertResult.matchedOrderId]
         );
         if (matched.rows.length > 0) {
-          await client.query('COMMIT');
           const row = matched.rows[0];
           return NextResponse.json({
             success: true,
@@ -141,7 +139,6 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           });
         }
       }
-      await client.query('COMMIT');
       return NextResponse.json(
         {
           success: false,
@@ -152,12 +149,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         },
         { status: 202 }
       );
-    } catch (txError) {
-      await client.query('ROLLBACK');
-      throw txError;
-    } finally {
-      client.release();
-    }
+    });
   } catch (error: any) {
     console.error('Error scanning tracking:', error);
     return NextResponse.json(

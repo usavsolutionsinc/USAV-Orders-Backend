@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -72,8 +73,9 @@ async function fetchEcwidOrders(storeId: string, token: string, maxPages: number
   return items;
 }
 
-async function loadExceptionTrackingMap(): Promise<Map<string, ExceptionTrackingEntry>> {
-  const result = await pool.query(
+async function loadExceptionTrackingMap(orgId: string): Promise<Map<string, ExceptionTrackingEntry>> {
+  const result = await tenantQuery(
+    orgId,
     `SELECT id, shipping_tracking_number
      FROM orders_exceptions
      ORDER BY id ASC`
@@ -116,118 +118,120 @@ async function upsertEcwidOrder(params: {
   const saleAmount = rawAmount != null && !Number.isNaN(rawAmount) ? rawAmount : null;
   const currency = String(params.order?.currency || '').trim() || 'USD';
 
-  let existingRows: any[] = [];
+  return withTenantTransaction(params.organizationId, async (client) => {
+    let existingRows: any[] = [];
 
-  if (orderId) {
-    const byOrderId = await pool.query(
-      `SELECT id
-       FROM orders
-       WHERE order_id = $1
-       ORDER BY id DESC
-       LIMIT 1`,
-      [orderId]
-    );
-    existingRows = byOrderId.rows;
-  }
-
-  if (existingRows.length === 0) {
-    const trackingKey18 = normalizeTrackingKey18(params.trackingNumber);
-    if (trackingKey18) {
-      const byTracking = await pool.query(
+    if (orderId) {
+      const byOrderId = await client.query(
         `SELECT id
          FROM orders
-         WHERE shipping_tracking_number IS NOT NULL
-           AND shipping_tracking_number != ''
-           AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+         WHERE order_id = $1
          ORDER BY id DESC
          LIMIT 1`,
-        [trackingKey18]
+        [orderId]
       );
-      existingRows = byTracking.rows;
+      existingRows = byOrderId.rows;
     }
-  }
 
-  const skuCatalogId = await resolveOrCreateSkuCatalogId({
-    sku: sku || null,
-    productTitle: productTitle || null,
-    accountSource: 'ecwid',
-    orderId: orderId || null,
-  });
+    if (existingRows.length === 0) {
+      const trackingKey18 = normalizeTrackingKey18(params.trackingNumber);
+      if (trackingKey18) {
+        const byTracking = await client.query(
+          `SELECT id
+           FROM orders
+           WHERE shipping_tracking_number IS NOT NULL
+             AND shipping_tracking_number != ''
+             AND RIGHT(regexp_replace(UPPER(COALESCE(shipping_tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
+           ORDER BY id DESC
+           LIMIT 1`,
+          [trackingKey18]
+        );
+        existingRows = byTracking.rows;
+      }
+    }
 
-  if (existingRows.length === 0) {
-    await pool.query(
-      `INSERT INTO orders (
-        order_id,
-        product_title,
-        condition,
-        shipping_tracking_number,
-        sku,
-        status,
-        status_history,
-        notes,
-        quantity,
-        out_of_stock,
-        account_source,
-        order_date,
-        sku_catalog_id,
-        sale_amount,
-        currency,
-        organization_id
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid
-      )`,
+    const skuCatalogId = await resolveOrCreateSkuCatalogId({
+      sku: sku || null,
+      productTitle: productTitle || null,
+      accountSource: 'ecwid',
+      orderId: orderId || null,
+    });
+
+    if (existingRows.length === 0) {
+      await client.query(
+        `INSERT INTO orders (
+          order_id,
+          product_title,
+          condition,
+          shipping_tracking_number,
+          sku,
+          status,
+          status_history,
+          notes,
+          quantity,
+          out_of_stock,
+          account_source,
+          order_date,
+          sku_catalog_id,
+          sale_amount,
+          currency,
+          organization_id
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid
+        )`,
+        [
+          orderId || null,
+          productTitle || null,
+          '',
+          params.trackingNumber,
+          sku || null,
+          'shipped',
+          JSON.stringify([]),
+          '',
+          quantity,
+          '',
+          'ecwid',
+          orderDate,
+          skuCatalogId,
+          saleAmount,
+          currency,
+          params.organizationId,
+        ]
+      );
+
+      return 'created';
+    }
+
+    const existingId = existingRows[0].id;
+    await client.query(
+      `UPDATE orders
+       SET order_id = COALESCE(NULLIF(order_id, ''), $1),
+           product_title = COALESCE(NULLIF(product_title, ''), $2),
+           shipping_tracking_number = COALESCE(NULLIF(shipping_tracking_number, ''), $3),
+           sku = COALESCE(NULLIF(sku, ''), $4),
+           quantity = COALESCE(NULLIF(quantity, ''), $5),
+           account_source = COALESCE(NULLIF(account_source, ''), 'ecwid'),
+           order_date = COALESCE(order_date, $6),
+           sku_catalog_id = COALESCE(sku_catalog_id, $7),
+           status = CASE
+             WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
+             ELSE status
+           END
+       WHERE id = $8`,
       [
         orderId || null,
         productTitle || null,
-        '',
         params.trackingNumber,
         sku || null,
-        'shipped',
-        JSON.stringify([]),
-        '',
         quantity,
-        '',
-        'ecwid',
         orderDate,
         skuCatalogId,
-        saleAmount,
-        currency,
-        params.organizationId,
+        existingId,
       ]
     );
 
-    return 'created';
-  }
-
-  const existingId = existingRows[0].id;
-  await pool.query(
-    `UPDATE orders
-     SET order_id = COALESCE(NULLIF(order_id, ''), $1),
-         product_title = COALESCE(NULLIF(product_title, ''), $2),
-         shipping_tracking_number = COALESCE(NULLIF(shipping_tracking_number, ''), $3),
-         sku = COALESCE(NULLIF(sku, ''), $4),
-         quantity = COALESCE(NULLIF(quantity, ''), $5),
-         account_source = COALESCE(NULLIF(account_source, ''), 'ecwid'),
-         order_date = COALESCE(order_date, $6),
-         sku_catalog_id = COALESCE(sku_catalog_id, $7),
-         status = CASE
-           WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
-           ELSE status
-         END
-     WHERE id = $8`,
-    [
-      orderId || null,
-      productTitle || null,
-      params.trackingNumber,
-      sku || null,
-      quantity,
-      orderDate,
-      skuCatalogId,
-      existingId,
-    ]
-  );
-
-  return 'updated';
+    return 'updated';
+  });
 }
 
 function findRepairItem(order: any): any | null {
@@ -246,6 +250,7 @@ function extractEcwidContactInfo(order: any): string {
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const body = await req.json().catch(() => ({}));
     const maxPages = Math.max(1, Math.min(50, Number(body.maxPages || 10)));
 
@@ -260,7 +265,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       'NEXT_PUBLIC_ECWID_API_TOKEN',
     ]);
 
-    const exceptionMap = await loadExceptionTrackingMap();
+    const exceptionMap = await loadExceptionTrackingMap(orgId);
     if (exceptionMap.size === 0) {
       return NextResponse.json({
         success: true,
@@ -308,13 +313,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           touchedRepairIds.add(repair.id);
           updated += 1;
         } else {
-          const result = await upsertEcwidOrder({ order, trackingNumber, organizationId: ctx.organizationId });
+          const result = await upsertEcwidOrder({ order, trackingNumber, organizationId: orgId });
           if (result === 'created') created += 1;
           else updated += 1;
         }
 
         const placeholders = entry.ids.map((_, i) => `$${i + 1}`).join(', ');
-        const deleteResult = await pool.query(
+        const deleteResult = await tenantQuery(
+          orgId,
           `DELETE FROM orders_exceptions WHERE id IN (${placeholders})`,
           entry.ids
         );

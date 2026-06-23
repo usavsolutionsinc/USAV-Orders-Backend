@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderAssignmentsUpdated, publishOrderChanged } from '@/lib/realtime/publish';
 import { createAuditLog } from '@/lib/audit-logs';
@@ -173,12 +175,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const userAgent = req.headers.get('user-agent');
     const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
 
-    const client = await pool.connect();
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     let outOfStockChanged = false;
     let outOfStockValue: string | null = null;
 
+    // Sentinel for the duplicate order_id case: thrown to abort the tenant
+    // transaction (the wrapper ROLLBACKs), then caught to return the exact
+    // same 409 response body the inline ROLLBACK produced.
+    const DUPLICATE_ORDER_ID = Symbol('duplicate_order_id');
+
     try {
-      await client.query('BEGIN');
+      await withTenantTransaction(orgId, async (client) => {
 
       // ── 1. Write work_assignments for tech / packer ────────────────────────
       if (testerId !== undefined) {
@@ -299,11 +306,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             [normalizedOrderNumber, idsToUpdate]
           );
           if (duplicateCheck.rowCount && duplicateCheck.rowCount > 0) {
-            await client.query('ROLLBACK');
-            return NextResponse.json(
-              { error: 'Order ID already exists on another order' },
-              { status: 409 }
-            );
+            // Abort the tenant transaction (wrapper ROLLBACKs); caught below to
+            // return the same 409 body as the original inline ROLLBACK path.
+            throw DUPLICATE_ORDER_ID;
           }
         }
         updates.push(`order_id = $${paramCount++}`);
@@ -415,12 +420,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         );
       }
 
-      await client.query('COMMIT');
+      });
     } catch (txError) {
-      await client.query('ROLLBACK');
+      if (txError === DUPLICATE_ORDER_ID) {
+        return NextResponse.json(
+          { error: 'Order ID already exists on another order' },
+          { status: 409 }
+        );
+      }
       throw txError;
-    } finally {
-      client.release();
     }
 
     if (process.env.FEATURE_REPLENISHMENT === 'true' && outOfStockChanged) {

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 interface RepairLookupRow {
   id: number;
@@ -83,69 +84,68 @@ interface PickupRequestBody {
  *    still captures the customer's refusal.
  */
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const client = await pool.connect();
+  const orgId = ctx.organizationId ?? USAV_ORG_ID;
   const staffId = ctx.staffId;
 
   try {
     const body: PickupRequestBody = await req.json().catch(() => ({}));
 
-    let repair: RepairLookupRow | null = null;
-    let scanInputForHistory: string | null = null;
+    // Legacy path needs the parsed scan up-front so the 400 (no identifier)
+    // can be returned before opening a transaction.
+    const usesRepairId =
+      typeof body.repairId === 'number' && Number.isFinite(body.repairId) && body.repairId > 0;
+    const parsed = usesRepairId ? null : parseScanInput(body.scan ?? body.rsId ?? body.value);
+    if (!usesRepairId && !parsed!.raw) {
+      return NextResponse.json({ error: 'scan value or repairId is required' }, { status: 400 });
+    }
 
-    // Preferred path: caller passes repairId directly (overlay UI).
-    if (typeof body.repairId === 'number' && Number.isFinite(body.repairId) && body.repairId > 0) {
-      await client.query('BEGIN');
-      const byId = await client.query<RepairLookupRow>(
-        `SELECT id, ticket_number, status
-         FROM repair_service
-         WHERE id = $1
-         FOR UPDATE`,
-        [body.repairId],
-      );
-      repair = byId.rows[0] ?? null;
-      scanInputForHistory = `RS-${body.repairId}`;
-    } else {
-      // Legacy path: parse a scan string (RS-####, digits, or ticket #).
-      const parsed = parseScanInput(body.scan ?? body.rsId ?? body.value);
-      if (!parsed.raw) {
-        return NextResponse.json({ error: 'scan value or repairId is required' }, { status: 400 });
-      }
-      scanInputForHistory = parsed.raw;
+    const outcome = await withTenantTransaction(orgId, async (client) => {
+      let repair: RepairLookupRow | null = null;
+      let scanInputForHistory: string | null = null;
 
-      await client.query('BEGIN');
-
-      if (parsed.repairId != null) {
+      // Preferred path: caller passes repairId directly (overlay UI).
+      if (usesRepairId) {
         const byId = await client.query<RepairLookupRow>(
           `SELECT id, ticket_number, status
            FROM repair_service
            WHERE id = $1
            FOR UPDATE`,
-          [parsed.repairId],
+          [body.repairId],
         );
         repair = byId.rows[0] ?? null;
+        scanInputForHistory = `RS-${body.repairId}`;
+      } else {
+        // Legacy path: parse a scan string (RS-####, digits, or ticket #).
+        scanInputForHistory = parsed!.raw;
+
+        if (parsed!.repairId != null) {
+          const byId = await client.query<RepairLookupRow>(
+            `SELECT id, ticket_number, status
+             FROM repair_service
+             WHERE id = $1
+             FOR UPDATE`,
+            [parsed!.repairId],
+          );
+          repair = byId.rows[0] ?? null;
+        }
+
+        if (!repair && parsed!.ticketCandidate) {
+          const byTicket = await client.query<RepairLookupRow>(
+            `SELECT id, ticket_number, status
+             FROM repair_service
+             WHERE UPPER(TRIM(COALESCE(ticket_number, ''))) = UPPER(TRIM($1))
+             ORDER BY id DESC
+             LIMIT 1
+             FOR UPDATE`,
+            [parsed!.ticketCandidate],
+          );
+          repair = byTicket.rows[0] ?? null;
+        }
       }
 
-      if (!repair && parsed.ticketCandidate) {
-        const byTicket = await client.query<RepairLookupRow>(
-          `SELECT id, ticket_number, status
-           FROM repair_service
-           WHERE UPPER(TRIM(COALESCE(ticket_number, ''))) = UPPER(TRIM($1))
-           ORDER BY id DESC
-           LIMIT 1
-           FOR UPDATE`,
-          [parsed.ticketCandidate],
-        );
-        repair = byTicket.rows[0] ?? null;
+      if (!repair) {
+        return { kind: 'notFound' as const, scanInputForHistory };
       }
-    }
-
-    if (!repair) {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { error: `Repair not found for input "${scanInputForHistory ?? ''}"` },
-        { status: 404 },
-      );
-    }
 
     const repairId = Number(repair.id);
     const previousStatus = String(repair.status || '').trim() || null;
@@ -327,30 +327,49 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
     }
 
-    await client.query('COMMIT');
+      return {
+        kind: 'ok' as const,
+        repairId,
+        ticketNumber: repair.ticket_number ?? null,
+        previousStatus,
+        assignmentId,
+        documentId,
+        signatureUrl,
+        signatureWarning,
+        declinedReason,
+        hasSignature,
+        sourceTag,
+      };
+    });
+
+    if (outcome.kind === 'notFound') {
+      return NextResponse.json(
+        { error: `Repair not found for input "${outcome.scanInputForHistory ?? ''}"` },
+        { status: 404 },
+      );
+    }
 
     await invalidateCacheTags(['repair-service']);
     await publishRepairChanged({
       organizationId: ctx.organizationId,
-      repairIds: [repairId],
-      source: sourceTag,
+      repairIds: [outcome.repairId],
+      source: outcome.sourceTag,
     });
 
     return NextResponse.json({
       success: true,
-      repairId,
-      ticketNumber: repair.ticket_number ?? null,
+      repairId: outcome.repairId,
+      ticketNumber: outcome.ticketNumber,
       status: 'Done',
-      previousStatus,
-      assignmentId,
-      alreadyDone: previousStatus === 'Done',
-      documentId,
-      signatureUrl,
-      signatureWarning,
-      declined: !!declinedReason && !hasSignature,
+      previousStatus: outcome.previousStatus,
+      assignmentId: outcome.assignmentId,
+      alreadyDone: outcome.previousStatus === 'Done',
+      documentId: outcome.documentId,
+      signatureUrl: outcome.signatureUrl,
+      signatureWarning: outcome.signatureWarning,
+      declined: !!outcome.declinedReason && !outcome.hasSignature,
     });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('POST /api/repair-service/pickup error:', error);
     return NextResponse.json(
       {
@@ -359,7 +378,5 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       },
       { status: 500 },
     );
-  } finally {
-    client.release();
   }
 }, { permission: 'repair.pickup_sign' });

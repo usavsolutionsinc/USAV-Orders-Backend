@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sheets as googleSheets } from '@googleapis/sheets';
 import { getGoogleAuth } from '@/lib/google-auth';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { withAuth } from '@/lib/auth/withAuth';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -55,10 +56,9 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
         });
         const existingSheetNames = spreadsheet.data.sheets?.map(s => s.properties?.title || '') || [];
 
-        const client = await pool.connect();
         const results: SyncResult[] = [];
 
-        try {
+        await withTenantTransaction(ctx.organizationId ?? USAV_ORG_ID, async (client) => {
             const shippedResult = await syncShippedSheet({
                 organizationId: ctx.organizationId,
                 client,
@@ -85,10 +85,7 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
                 organizationId: ctx.organizationId,
             });
             results.push(...packerResults);
-
-        } finally {
-            client.release();
-        }
+        });
 
         const hasErrors = results.some(r => r.status === 'error');
 

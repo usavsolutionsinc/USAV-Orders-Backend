@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { getCarrier } from '@/lib/tracking-format';
 import { formatPSTTimestamp } from '@/utils/date';
 import { createCacheLookupKey, getCachedJson, setCachedJson, invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -35,6 +37,7 @@ function getPSTWeekRange(pstTimestamp: string): { startStr: string; endStr: stri
 // POST - Add entry to receiving table
 export const POST = withAuth(async (request: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
         const body = await request.json();
         const { trackingNumber, carrier: providedCarrier } = body;
         const skipZohoMatch = !!(body?.skipZohoMatch ?? body?.skip_zoho_match);
@@ -147,7 +150,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         }
 
         const valuePlaceholders = insertColumns.map((_, i) => `$${i + 1}`).join(', ');
-        const inserted = await pool.query(
+        const inserted = await tenantQuery(
+            orgId,
             `INSERT INTO receiving (${insertColumns.join(', ')})
              VALUES (${valuePlaceholders})
              RETURNING id`,
@@ -208,7 +212,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
             if (skipZohoMatch) return;
             try {
                 // 1a. Check local receiving_lines first
-                const localUnmatched = await pool.query<{ id: number; zoho_purchaseorder_id: string | null }>(
+                const localUnmatched = await tenantQuery<{ id: number; zoho_purchaseorder_id: string | null }>(
+                    orgId,
                     `SELECT id, zoho_purchaseorder_id
                      FROM receiving_lines
                      WHERE receiving_id IS NULL
@@ -222,7 +227,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
                 if (localUnmatched.rows.length > 0) {
                     const lineIds = localUnmatched.rows.map((r) => r.id);
-                    await pool.query(
+                    await tenantQuery(
+                        orgId,
                         `UPDATE receiving_lines
                          SET receiving_id    = $1,
                              workflow_status = 'MATCHED'::inbound_workflow_status_enum,
@@ -239,7 +245,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                         const firstReceive = zohoReceives[0];
                         const prId = String(firstReceive.purchase_receive_id || '');
                         if (prId) {
-                            await pool.query(
+                            await tenantQuery(
+                                orgId,
                                 `UPDATE receiving
                                  SET zoho_purchase_receive_id = $1, updated_at = NOW()
                                  WHERE id = $2 AND zoho_purchase_receive_id IS NULL`,
@@ -251,7 +258,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                             if (!poId || matchedPoIds.includes(poId)) continue;
                             matchedPoIds.push(poId);
 
-                            const existingLines = await pool.query<{ id: number }>(
+                            const existingLines = await tenantQuery<{ id: number }>(
+                                orgId,
                                 `SELECT id FROM receiving_lines
                                  WHERE zoho_purchaseorder_id = $1 AND receiving_id IS NULL
                                  LIMIT 1`,
@@ -259,7 +267,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                             );
 
                             if (existingLines.rows.length > 0) {
-                                await pool.query(
+                                await tenantQuery(
+                                    orgId,
                                     `UPDATE receiving_lines
                                      SET receiving_id    = $1,
                                          workflow_status = 'MATCHED'::inbound_workflow_status_enum,
@@ -304,7 +313,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                         ) AS exists`
                     );
                     if (assignmentTableRes.rows[0]?.exists) {
-                        await pool.query(
+                        await tenantQuery(
+                            orgId,
                             `INSERT INTO work_assignments (
                                 organization_id, entity_type, entity_id, work_type,
                                 assigned_tech_id, status, priority, notes
@@ -334,7 +344,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 }, { permission: 'receiving.scan_po' });
 
 // GET - Fetch all receiving logs
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -348,7 +359,8 @@ export const GET = withAuth(async (req: NextRequest) => {
 
         const { dateColumn, hasQuantity } = await getReceivingSchema();
         const countExpr = hasQuantity ? "COALESCE(quantity, '1')" : "'1'";
-        const result = await pool.query(
+        const result = await tenantQuery(
+            orgId,
             `SELECT
                 id,
                 to_char(${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,

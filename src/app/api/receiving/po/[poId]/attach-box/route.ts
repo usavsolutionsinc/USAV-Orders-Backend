@@ -9,6 +9,8 @@ import {
 } from '@/lib/receiving/attach-box';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 /**
  * POST /api/receiving/po/:poId/attach-box
@@ -30,10 +32,12 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /** Resolve a Zoho purchaseorder_id (or PO number/reference) to the canonical id. */
 async function resolvePo(
+  orgId: string,
   poIdInput: string,
 ): Promise<{ poId: string; poNumber: string | null } | null> {
   const norm = poIdInput.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  const resolved = await pool.query<{ zoho_purchaseorder_id: string; zoho_purchaseorder_number: string | null }>(
+  const resolved = await tenantQuery<{ zoho_purchaseorder_id: string; zoho_purchaseorder_number: string | null }>(
+    orgId,
     `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number
        FROM receiving_lines
       WHERE zoho_purchaseorder_id = $1
@@ -45,7 +49,8 @@ async function resolvePo(
   let poId = resolved.rows[0]?.zoho_purchaseorder_id ?? null;
   let poNumber = resolved.rows[0]?.zoho_purchaseorder_number ?? null;
   if (!poId) {
-    const m = await pool.query<{ zoho_purchaseorder_id: string; zoho_purchaseorder_number: string | null }>(
+    const m = await tenantQuery<{ zoho_purchaseorder_id: string; zoho_purchaseorder_number: string | null }>(
+      orgId,
       `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number
          FROM zoho_po_mirror
         WHERE zoho_purchaseorder_id = $1
@@ -74,6 +79,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(request, 'receiving.mark_received');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId ?? USAV_ORG_ID;
 
     const { poId: poIdRaw } = await params;
     const poIdInput = decodeURIComponent(String(poIdRaw ?? '')).trim();
@@ -84,7 +90,7 @@ export async function GET(
       );
     }
 
-    const po = await resolvePo(poIdInput);
+    const po = await resolvePo(orgId, poIdInput);
     if (!po) {
       return NextResponse.json(
         { success: false, error: 'No matching purchase order found' },
@@ -92,7 +98,8 @@ export async function GET(
       );
     }
 
-    const carton = await pool.query<{ id: number }>(
+    const carton = await tenantQuery<{ id: number }>(
+      orgId,
       `SELECT id FROM receiving
         WHERE source = 'zoho_po' AND zoho_purchaseorder_id = $1
         ORDER BY id DESC
@@ -125,6 +132,7 @@ export async function POST(
     const gate = await requireRoutePerm(request, 'receiving.mark_received');
     if (gate.denied) return gate.denied;
     const ctx = gate.ctx;
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const staffId = Number(ctx.staffId) || null;
 
     const { poId: poIdRaw } = await params;
@@ -169,7 +177,7 @@ export async function POST(
     }
 
     // Resolve the PO (accept a Zoho purchaseorder_id or a PO number/reference).
-    const po = await resolvePo(poIdInput);
+    const po = await resolvePo(orgId, poIdInput);
     if (!po) {
       return NextResponse.json(
         { success: false, error: 'No matching purchase order found' },

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
 import { upsertReceivingAssignment } from '@/lib/receiving/assignment-upsert';
@@ -35,8 +37,9 @@ async function checkReceivingScansTableExists(): Promise<boolean> {
     return exists;
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = parseInt(searchParams.get('offset') || '0');
@@ -146,7 +149,7 @@ export const GET = withAuth(async (request: NextRequest) => {
             ? "(r.shipment_id IS NOT NULL OR (r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''))"
             : "r.receiving_tracking_number IS NOT NULL AND r.receiving_tracking_number <> ''";
 
-        const logs = await pool.query(`
+        const logs = await tenantQuery(orgId, `
             SELECT ${selectFields.join(', ')}
             FROM receiving r
             ${shipmentJoin}
@@ -196,6 +199,7 @@ export const GET = withAuth(async (request: NextRequest) => {
 
 export const DELETE = withAuth(async (request: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
         const { searchParams } = new URL(request.url);
 
         // Bulk: `?ids=1,2,3` deletes the batch in ONE statement. The sidebar
@@ -213,7 +217,8 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
                     { status: 400 }
                 );
             }
-            const result = await pool.query(
+            const result = await tenantQuery(
+                orgId,
                 `DELETE FROM receiving WHERE id = ANY($1::int[]) RETURNING id`,
                 [ids]
             );
@@ -240,7 +245,8 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
             );
         }
 
-        const result = await pool.query(
+        const result = await tenantQuery(
+            orgId,
             `DELETE FROM receiving WHERE id = $1 RETURNING id`,
             [id]
         );
@@ -266,6 +272,7 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
 
 export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
         const body = await request.json();
         const id = Number(body?.id);
         const tracking = String(body?.tracking ?? '').trim();
@@ -374,7 +381,8 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         if (availableColumns.has('needs_test') && needsTestRaw !== undefined) {
             const nextNeedsTest = !!needsTestRaw;
             if (!nextNeedsTest && availableColumns.has('assigned_tech_id')) {
-                const currentRow = await pool.query<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
+                const currentRow = await tenantQuery<{ needs_test: boolean | null; assigned_tech_id: number | null }>(
+                    orgId,
                     `SELECT needs_test, assigned_tech_id FROM receiving WHERE id = $1`,
                     [id]
                 );
@@ -465,7 +473,8 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
         }
 
         values.push(id);
-        const result = await pool.query(
+        const result = await tenantQuery(
+            orgId,
             `UPDATE receiving
              SET ${updates.join(', ')}
              WHERE id = $${idx}
@@ -484,10 +493,11 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 
         if (assignmentFieldChanged) {
             // Fetch the current state of the row after update
-            const currentRow = await pool.query<{
+            const currentRow = await tenantQuery<{
                 needs_test: boolean;
                 assigned_tech_id: number | null;
             }>(
+                orgId,
                 `SELECT needs_test, assigned_tech_id FROM receiving WHERE id = $1`,
                 [id]
             );

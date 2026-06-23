@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 /**
  * POST /api/receiving-lines/view
@@ -31,7 +31,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const rawRecv = Number((body as Record<string, unknown>)?.receiving_id);
     const receivingId = Number.isFinite(rawRecv) && rawRecv > 0 ? rawRecv : null;
 
-    await pool.query(
+    await tenantQuery(
+      orgId,
       `INSERT INTO receiving_line_views (organization_id, staff_id, receiving_line_id, receiving_id, viewed_at)
        VALUES ($1, $2, $3, $4, NOW())
        ON CONFLICT (organization_id, staff_id, receiving_line_id)

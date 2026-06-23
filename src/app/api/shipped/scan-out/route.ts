@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { withAuth } from '@/lib/auth/withAuth';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
@@ -27,17 +29,17 @@ async function findByTracking(
   norm: string,
 ): Promise<TrackingRow | null> {
   const last8 = norm.slice(-8).toUpperCase();
-  const rows = await pool
-    .query<TrackingRow>(
-      `SELECT id, shipment_id, shipping_tracking_number
+  const rows = await tenantQuery<TrackingRow>(
+    String(organizationId),
+    `SELECT id, shipment_id, shipping_tracking_number
          FROM ${table}
         WHERE organization_id = $1
           AND shipping_tracking_number IS NOT NULL
           AND right(regexp_replace(upper(shipping_tracking_number), '[^A-Z0-9]', '', 'g'), 8) = $2
         ORDER BY id DESC
         LIMIT 25`,
-      [organizationId, last8],
-    )
+    [organizationId, last8],
+  )
     .then((r) => r.rows)
     .catch(() => [] as TrackingRow[]);
   return rows.find((row) => normalizeTrackingNumber(String(row.shipping_tracking_number ?? '')) === norm) ?? null;
@@ -104,6 +106,7 @@ async function resolveShipmentViaOrderOrException(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const raw = String(
       (body?.trackingNumber ?? body?.tracking ?? body?.scan ?? '') as string,
@@ -130,9 +133,9 @@ export const POST = withAuth(
 
     // Light context for the toast / running list (best-effort). Also pull the
     // carrier status so we can flag scanning out an already-delivered package.
-    const ctxRow = await pool
-      .query(
-        `SELECT stn.tracking_number_raw    AS tracking,
+    const ctxRow = await tenantQuery(
+      orgId,
+      `SELECT stn.tracking_number_raw    AS tracking,
                 stn.latest_status_category AS latest_status_category,
                 stn.is_terminal            AS is_terminal,
                 o.order_id              AS order_id,
@@ -142,8 +145,8 @@ export const POST = withAuth(
          WHERE stn.id = $1
          ORDER BY o.id DESC
          LIMIT 1`,
-        [shipmentId],
-      )
+      [shipmentId],
+    )
       .then((r) => r.rows[0] ?? null)
       .catch(() => null);
 
@@ -169,7 +172,8 @@ export const POST = withAuth(
     }
 
     // Idempotency: a package leaves once. Return the existing event if present.
-    const existing = await pool.query(
+    const existing = await tenantQuery(
+      orgId,
       `SELECT id, to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') AS created_at, staff_id
        FROM station_activity_logs
        WHERE activity_type = 'SHIP_CONFIRM' AND shipment_id = $1
@@ -243,14 +247,16 @@ export const POST = withAuth(
  * so the audit trail of the scan survives with a nulled reference.
  */
 export const DELETE = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const shipmentId = Number(body?.shipmentId);
     if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
       return NextResponse.json({ ok: false, error: 'shipmentId required' }, { status: 400 });
     }
 
-    const deleted = await pool.query(
+    const deleted = await tenantQuery(
+      orgId,
       `DELETE FROM station_activity_logs
        WHERE activity_type = 'SHIP_CONFIRM' AND shipment_id = $1`,
       [shipmentId],

@@ -8,11 +8,13 @@ import { publishRepairChanged } from '@/lib/realtime/publish';
 import { formatPSTTimestamp } from '@/utils/date';
 import { findOrCreateRepairCustomer, linkCustomerToRepair } from '@/lib/neon/customer-queries';
 import { put } from '@vercel/blob';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
+        const orgId = ctx.organizationId ?? USAV_ORG_ID;
         const body = await req.json();
         const { customer, product, repairReasons, repairNotes, serialNumber, price, notes, assignedTechId, signatureDataUrl, signatureStrokes } = body;
         const normalizedProductTitle = String(product?.model || '').trim();
@@ -121,7 +123,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // Always create document record if we have signature data (strokes or PNG)
         if (hasSignature || (Array.isArray(signatureStrokes) && signatureStrokes.length > 0)) {
             try {
-                const docResult = await pool.query(
+                const docResult = await tenantQuery(
+                    orgId,
                     `INSERT INTO documents (
                         entity_type, entity_id, document_type, signature_url, signer_name, signed_at, document_data, organization_id
                     ) VALUES ('REPAIR', $1, 'intake_agreement', $2, $3, NOW(), $4, $5::uuid)

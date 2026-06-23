@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 const VALID_ACTION_TYPES = new Set<string>([
   'replaced',
@@ -33,9 +34,11 @@ function normInt(v: unknown): number | null {
 }
 
 async function loadActionForMutation(
+  orgId: string,
   id: number,
 ): Promise<ActionRow | null> {
-  const r = await pool.query<ActionRow>(
+  const r = await tenantQuery<ActionRow>(
+    orgId,
     `SELECT id, repair_id, staff_id
        FROM repair_actions
       WHERE id = $1 AND deleted_at IS NULL`,
@@ -57,6 +60,7 @@ function canMutate(action: ActionRow, ctxStaffId: number, ctxRole: string | null
  */
 export const PATCH = withAuth(
   async (req, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     // withAuth doesn't forward Next's route ctx; parse the id from the URL.
     const idRaw = req.nextUrl.pathname.split('/').pop() ?? '';
     const id = Number(decodeURIComponent(idRaw));
@@ -64,7 +68,7 @@ export const PATCH = withAuth(
       return NextResponse.json({ error: 'Invalid action id' }, { status: 400 });
     }
 
-    const existing = await loadActionForMutation(id);
+    const existing = await loadActionForMutation(orgId, id);
     if (!existing) return NextResponse.json({ error: 'Action not found' }, { status: 404 });
     if (!canMutate(existing, ctx.staffId, ctx.role)) {
       return NextResponse.json({ error: 'Not allowed to edit this action' }, { status: 403 });
@@ -103,7 +107,8 @@ export const PATCH = withAuth(
     const values = entries.map(([, v]) => v);
 
     try {
-      await pool.query(
+      await tenantQuery(
+        orgId,
         `UPDATE repair_actions SET ${setSql} WHERE id = $1`,
         [id, ...values],
       );
@@ -132,20 +137,22 @@ export const PATCH = withAuth(
  */
 export const DELETE = withAuth(
   async (req, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const idRaw = req.nextUrl.pathname.split('/').pop() ?? '';
     const id = Number(decodeURIComponent(idRaw));
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ error: 'Invalid action id' }, { status: 400 });
     }
 
-    const existing = await loadActionForMutation(id);
+    const existing = await loadActionForMutation(orgId, id);
     if (!existing) return NextResponse.json({ error: 'Action not found' }, { status: 404 });
     if (!canMutate(existing, ctx.staffId, ctx.role)) {
       return NextResponse.json({ error: 'Not allowed to delete this action' }, { status: 403 });
     }
 
     try {
-      await pool.query(
+      await tenantQuery(
+        orgId,
         `UPDATE repair_actions SET deleted_at = NOW() WHERE id = $1`,
         [id],
       );

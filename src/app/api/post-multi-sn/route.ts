@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getSkuCatalogBySku } from '@/lib/neon/sku-catalog-queries';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
@@ -107,13 +108,15 @@ export const POST = withAuth(
     const skuForStorage = catalog?.sku || baseProductSku || productSku;
 
     const actorId = ctx.staffId ?? null;
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
 
     // 1. One station_activity_logs row covering the whole batch. Carries
     //    the print payload + metadata so the future Recently Printed view
     //    can render rich rows without rejoining inventory_events.
     let stationActivityLogId: number | null = null;
     try {
-      const logRes = await pool.query<{ id: number }>(
+      const logRes = await tenantQuery<{ id: number }>(
+        orgId,
         `INSERT INTO station_activity_logs
            (station, activity_type, staff_id, scan_ref, notes, metadata, organization_id)
          VALUES ('LABELS', 'LABEL_PRINTED', $1, $2, $3, $4::jsonb, $5)

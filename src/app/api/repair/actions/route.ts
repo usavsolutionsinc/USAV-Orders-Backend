@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishRepairChanged } from '@/lib/realtime/publish';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 const VALID_ACTION_TYPES = new Set<string>([
   'replaced',
@@ -46,14 +47,16 @@ function normInt(v: unknown): number | null {
  * Joined with staff for display names.
  */
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const repairId = Number(req.nextUrl.searchParams.get('repairId'));
     if (!Number.isFinite(repairId) || repairId <= 0) {
       return NextResponse.json({ error: 'repairId is required' }, { status: 400 });
     }
 
     try {
-      const result = await pool.query<RepairActionRecord>(
+      const result = await tenantQuery<RepairActionRecord>(
+        orgId,
         `SELECT a.id, a.repair_id, a.action_type, a.part_name,
                 a.old_sku, a.new_sku, a.old_serial, a.new_serial,
                 a.duration_min, a.notes, a.staff_id,
@@ -88,6 +91,7 @@ export const GET = withAuth(
  */
 export const POST = withAuth(
   async (req: NextRequest, ctx) => {
+    const orgId = ctx.organizationId ?? USAV_ORG_ID;
     const body = await req.json().catch(() => ({}));
     const repairId = Number(body?.repairId);
     const actionType = String(body?.actionType ?? '').trim().toLowerCase();
@@ -103,39 +107,41 @@ export const POST = withAuth(
     }
 
     try {
-      const inserted = await pool.query<{ id: number }>(
-        `INSERT INTO repair_actions
-            (repair_id, action_type, part_name, old_sku, new_sku,
-             old_serial, new_serial, duration_min, notes, staff_id, organization_id)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                 (SELECT organization_id FROM unit_repairs WHERE id = $1))
-         RETURNING id`,
-        [
-          repairId,
-          actionType,
-          normString(body?.partName),
-          normString(body?.oldSku),
-          normString(body?.newSku),
-          normString(body?.oldSerial),
-          normString(body?.newSerial),
-          normInt(body?.durationMin),
-          normString(body?.notes),
-          ctx.staffId,
-        ],
-      );
+      const fetched = await withTenantTransaction(orgId, async (client) => {
+        const inserted = await client.query<{ id: number }>(
+          `INSERT INTO repair_actions
+              (repair_id, action_type, part_name, old_sku, new_sku,
+               old_serial, new_serial, duration_min, notes, staff_id, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                   (SELECT organization_id FROM unit_repairs WHERE id = $1))
+           RETURNING id`,
+          [
+            repairId,
+            actionType,
+            normString(body?.partName),
+            normString(body?.oldSku),
+            normString(body?.newSku),
+            normString(body?.oldSerial),
+            normString(body?.newSerial),
+            normInt(body?.durationMin),
+            normString(body?.notes),
+            ctx.staffId,
+          ],
+        );
 
-      const newId = inserted.rows[0]?.id;
-      const fetched = await pool.query<RepairActionRecord>(
-        `SELECT a.id, a.repair_id, a.action_type, a.part_name,
-                a.old_sku, a.new_sku, a.old_serial, a.new_serial,
-                a.duration_min, a.notes, a.staff_id,
-                s.name AS staff_name,
-                a.created_at
-           FROM repair_actions a
-           LEFT JOIN staff s ON s.id = a.staff_id
-          WHERE a.id = $1`,
-        [newId],
-      );
+        const newId = inserted.rows[0]?.id;
+        return client.query<RepairActionRecord>(
+          `SELECT a.id, a.repair_id, a.action_type, a.part_name,
+                  a.old_sku, a.new_sku, a.old_serial, a.new_serial,
+                  a.duration_min, a.notes, a.staff_id,
+                  s.name AS staff_name,
+                  a.created_at
+             FROM repair_actions a
+             LEFT JOIN staff s ON s.id = a.staff_id
+            WHERE a.id = $1`,
+          [newId],
+        );
+      });
 
       await invalidateCacheTags(['repair-service']);
       await publishRepairChanged({

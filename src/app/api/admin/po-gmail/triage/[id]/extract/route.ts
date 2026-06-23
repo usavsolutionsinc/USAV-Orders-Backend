@@ -14,8 +14,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { ApiError, errorResponse } from '@/lib/api';
 import { fetchMessage } from '@/lib/po-gmail/messages';
 import { extractWithLlm, type LlmFieldResult } from '@/lib/po-gmail/extract-llm';
@@ -65,12 +66,14 @@ export async function POST(
   const gate = await requireRoutePerm(req, 'admin.view');
   if (gate.denied) return gate.denied;
   const { organizationId } = gate.ctx;
+  const orgId = organizationId ?? USAV_ORG_ID;
 
   try {
     const { id } = await params;
     if (!id) throw ApiError.badRequest('id is required');
 
-    const { rows } = await pool.query<TriageRowMinimal>(
+    const { rows } = await tenantQuery<TriageRowMinimal>(
+      orgId,
       `SELECT id, gmail_msg_id, email_subject, email_from, po_numbers, triage_state
          FROM email_missing_purchase_orders
         WHERE id = $1`,
@@ -146,7 +149,8 @@ export async function POST(
       ? [id, fieldsPatch, JSON.stringify(suggestedPile)]
       : [id, fieldsPatch];
 
-    const { rows: updated } = await pool.query(
+    const { rows: updated } = await tenantQuery(
+      orgId,
       `UPDATE email_missing_purchase_orders
           SET triage_state = ${setExpr}
         WHERE id = $1

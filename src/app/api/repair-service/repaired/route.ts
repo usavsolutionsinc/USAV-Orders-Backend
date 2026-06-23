@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { publishRepairChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 /**
  * POST /api/repair-service/repaired
@@ -21,7 +22,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * }
  */
 export const POST = withAuth(async (req: NextRequest, ctx) => {
-  const client = await pool.connect();
+  const orgId = ctx.organizationId ?? USAV_ORG_ID;
 
   try {
     const { repairId, assignmentId, repairedPart, assignedTechId } = await req.json();
@@ -44,8 +45,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       ? Number(assignedTechId)
       : completedBy;
 
-    await client.query('BEGIN');
-
+    await withTenantTransaction(orgId, async (client) => {
     if (assignmentId) {
       await client.query(
         `UPDATE work_assignments
@@ -102,20 +102,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       ],
     );
 
-    await client.query('COMMIT');
+    });
 
     await invalidateCacheTags(['repair-service']);
     await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [Number(repairId)], source: 'repair-service.repaired' });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('POST /api/repair-service/repaired error:', error);
     return NextResponse.json(
       { error: 'Failed to mark repair as repaired', details: error.message },
       { status: 500 },
     );
-  } finally {
-    client.release();
   }
 }, { permission: 'repair.mark_repaired' });

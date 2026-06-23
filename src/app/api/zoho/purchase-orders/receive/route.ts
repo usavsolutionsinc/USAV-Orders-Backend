@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { withTenantTransaction, tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import {
   createPurchaseReceive,
   getPurchaseOrderById,
@@ -140,11 +142,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   })!;
 
   // ── 1. Local insert (optimistic) ───────────────────────────────────────
-  const client = await pool.connect();
+  const orgId = ctx.organizationId ?? USAV_ORG_ID;
   let receivingId: number | null = null;
   let insertedLines = 0;
   try {
-    await client.query('BEGIN');
+    await withTenantTransaction(orgId, async (client) => {
 
     const columnsRes = await client.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns WHERE table_name = 'receiving'`,
@@ -246,15 +248,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
     }
 
-    await client.query('COMMIT');
+    });
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
     const msg = error instanceof Error ? error.message : 'Failed to receive PO';
     console.error('zoho/purchase-orders/receive local insert failed:', error);
-    client.release();
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
-  } finally {
-    client.release();
   }
 
   // ── 2. Build optimistic response + persist idempotency ─────────────────
@@ -343,14 +341,16 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       const purchaseReceiveId = getPurchaseReceiveIdFromCreateResponse(zohoReceive) ?? '';
 
       if (purchaseReceiveId) {
-        await pool.query(
+        await tenantQuery(
+          orgId,
           `UPDATE receiving
              SET zoho_purchase_receive_id = $1,
                  updated_at = NOW()
            WHERE id = $2`,
           [purchaseReceiveId, receivingIdForBg],
         );
-        await pool.query(
+        await tenantQuery(
+          orgId,
           `UPDATE receiving_lines
              SET zoho_purchase_receive_id = $1,
                  zoho_synced_at = NOW(),
