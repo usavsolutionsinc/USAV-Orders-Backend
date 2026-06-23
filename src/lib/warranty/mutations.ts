@@ -14,6 +14,8 @@
 
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 import { computeWarranty } from './clock';
 import { resolveWarrantyDays } from './term';
 import { getClaim } from './claims';
@@ -197,12 +199,11 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
   const warrantyDays = await resolveWarrantyDays(input.organizationId);
   const clock = computeWarranty({ deliveredAt, packedScannedAt, warrantyDays });
 
-  const client = await pool.connect();
-  try {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const claimNumber = await nextClaimNumber(client);
-      try {
-        await client.query('BEGIN');
+  const orgId: OrgId = input.organizationId;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const id = await withTenantTransaction(orgId, async (client) => {
+        const claimNumber = await nextClaimNumber(client);
         const { rows } = await client.query<{ id: number }>(
           `INSERT INTO warranty_claims (
              claim_number, serial_unit_id, serial_number, order_id, sku, product_title,
@@ -243,31 +244,28 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
             input.organizationId,
           ],
         );
-        const id = Number(rows[0].id);
+        const newId = Number(rows[0].id);
         await insertEvent(client, {
-          claimId: id,
+          claimId: newId,
           eventType: 'STATUS_CHANGE',
           fromStatus: null,
           toStatus: 'LOGGED',
           payload: { clockBasis: clock.basis, warrantyDays },
           actorStaffId: input.createdByStaffId,
         });
-        await client.query('COMMIT');
+        return newId;
+      });
 
-        const claim = await getClaim(id);
-        if (!claim) return { ok: false, status: 500, error: 'claim vanished after insert' };
-        return { ok: true, claim };
-      } catch (err) {
-        await client.query('ROLLBACK').catch(() => {});
-        const message = err instanceof Error ? err.message : '';
-        if (/duplicate key value/i.test(message) && attempt < 2) continue;
-        return { ok: false, status: 500, error: message || 'create claim failed' };
-      }
+      const claim = await getClaim(id, orgId);
+      if (!claim) return { ok: false, status: 500, error: 'claim vanished after insert' };
+      return { ok: true, claim };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (/duplicate key value/i.test(message) && attempt < 2) continue;
+      return { ok: false, status: 500, error: message || 'create claim failed' };
     }
-    return { ok: false, status: 500, error: 'failed to generate a unique claim number' };
-  } finally {
-    client.release();
   }
+  return { ok: false, status: 500, error: 'failed to generate a unique claim number' };
 }
 
 // ─── Metadata edit (PATCH) ───────────────────────────────────────────────────
@@ -356,20 +354,20 @@ export interface SoftDeleteClaimsResult {
 export async function softDeleteClaims(
   ids: number[],
   actorStaffId: number | null,
+  orgId: OrgId = USAV_ORG_ID,
 ): Promise<SoftDeleteClaimsResult> {
   const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
   if (unique.length === 0) return { deleted: [], notFound: [] };
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTenantTransaction(orgId, async (client) => {
     const { rows } = await client.query<{ id: number; claim_number: string }>(
       `UPDATE warranty_claims
           SET deleted_at = NOW(), updated_at = NOW()
         WHERE id = ANY($1::bigint[])
           AND deleted_at IS NULL
+          AND organization_id = $2
         RETURNING id, claim_number`,
-      [unique],
+      [unique, orgId],
     );
     if (rows.length > 0) {
       await client.query(
@@ -380,19 +378,13 @@ export async function softDeleteClaims(
         [rows.map((r) => Number(r.id)), actorStaffId],
       );
     }
-    await client.query('COMMIT');
 
     const deletedIds = new Set(rows.map((r) => Number(r.id)));
     return {
       deleted: rows.map((r) => ({ id: Number(r.id), claimNumber: r.claim_number })),
       notFound: unique.filter((id) => !deletedIds.has(id)),
     };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 export interface RestoreClaimsResult {
@@ -645,21 +637,21 @@ export async function logRepairAttempt(
   claimId: number,
   input: RepairAttemptInput,
   actorStaffId: number | null,
+  orgId: OrgId = USAV_ORG_ID,
 ): Promise<LogRepairResult> {
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    const txResult = await withTenantTransaction(orgId, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true; attemptId: number }
+    > => {
     const cur = await client.query<{ status: WarrantyClaimStatus }>(
-      `SELECT status FROM warranty_claims WHERE id = $1 FOR UPDATE`,
-      [claimId],
+      `SELECT status FROM warranty_claims WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+      [claimId, orgId],
     );
     if (cur.rowCount === 0) {
-      await client.query('ROLLBACK');
       return { ok: false, status: 404, error: 'claim not found' };
     }
     const status = cur.rows[0].status;
     if (!REPAIR_ALLOWED_FROM.includes(status)) {
-      await client.query('ROLLBACK');
       return { ok: false, status: 409, error: `claim is ${status}; repairs allowed only when APPROVED or IN_REPAIR` };
     }
 
@@ -701,9 +693,10 @@ export async function logRepairAttempt(
     // Auto status advance.
     const nextStatus = repairNextStatus(input.outcome);
     if (nextStatus !== status) {
-      await client.query(`UPDATE warranty_claims SET status = $2, updated_at = NOW() WHERE id = $1`, [
+      await client.query(`UPDATE warranty_claims SET status = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`, [
         claimId,
         nextStatus,
+        orgId,
       ]);
       await insertEvent(client, {
         claimId,
@@ -721,16 +714,17 @@ export async function logRepairAttempt(
       payload: { attemptNo, outcome: input.outcome ?? null },
       actorStaffId,
     });
-    await client.query('COMMIT');
 
-    const claim = await getClaim(claimId);
+      return { ok: true, attemptId };
+    });
+
+    if (!txResult.ok) return txResult;
+
+    const claim = await getClaim(claimId, orgId);
     if (!claim) return { ok: false, status: 500, error: 'claim vanished after repair insert' };
-    return { ok: true, attemptId, claim };
+    return { ok: true, attemptId: txResult.attemptId, claim };
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     const message = err instanceof Error ? err.message : 'log repair failed';
     return { ok: false, status: 500, error: message };
-  } finally {
-    client.release();
   }
 }

@@ -55,6 +55,7 @@ export const POST = withAuth(async (request, ctx) => {
           completedAt: parsed.data.completedAt ?? null,
         },
         ctx.staffId ?? null,
+        ctx.organizationId,
       );
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {

@@ -44,7 +44,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
 
   // ── Helpers ────────────────────────────────────────────────
 
-  function parseListParams(req: NextRequest): CrudListParams {
+  function parseListParams(req: NextRequest, organizationId?: string): CrudListParams {
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') || '50', 10)));
@@ -52,7 +52,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
     const searchQuery = (searchParams.get('q') || searchParams.get('search') || '').trim();
     const tab = (searchParams.get('tab') || '').trim();
     const sort = (searchParams.get('sort') || '').trim();
-    return { page, limit, offset, search: searchQuery, tab, sort, searchParams };
+    return { page, limit, offset, search: searchQuery, tab, sort, searchParams, organizationId };
   }
 
   async function invalidateCache() {
@@ -63,7 +63,10 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
 
   // ── GET ────────────────────────────────────────────────────
 
-  async function GET(req: NextRequest): Promise<NextResponse> {
+  async function GET(
+    req: NextRequest,
+    ctx?: { organizationId?: string },
+  ): Promise<NextResponse> {
     try {
       const { searchParams } = new URL(req.url);
       const idParam = searchParams.get('id');
@@ -88,7 +91,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
       }
 
       // List / search
-      const params = parseListParams(req);
+      const params = parseListParams(req, ctx?.organizationId);
 
       // Build cache key from all query params
       if (cacheNamespace) {
@@ -181,7 +184,10 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
 
   // ── PATCH ──────────────────────────────────────────────────
 
-  async function PATCH(req: NextRequest): Promise<NextResponse> {
+  async function PATCH(
+    req: NextRequest,
+    ctx?: { organizationId?: string },
+  ): Promise<NextResponse> {
     if (!update) {
       return NextResponse.json({ error: 'Method not allowed' }, { status: 405 });
     }
@@ -199,7 +205,7 @@ export function createCrudHandler<TRow = any>(config: CrudConfig<TRow>) {
         body = await hooks.beforeUpdate(body);
       }
 
-      const result = await update(body, req);
+      const result = await update(body, req, ctx?.organizationId);
 
       // Invalidate cache after mutation
       await invalidateCache();

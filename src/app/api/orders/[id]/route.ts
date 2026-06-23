@@ -46,7 +46,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid order id' }, { status: 400 });
     }
 
-    const order = await getOrderById(id);
+    const order = await getOrderById(id, gate.ctx.organizationId);
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
@@ -77,12 +77,12 @@ export async function PATCH(
     const parsed = parseBody(OrderUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getOrderById(id);
+    const before = await getOrderById(id, gate.ctx.organizationId);
     if (!before) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const updated = await updateOrder(id, parsed);
+    const updated = await updateOrder(id, parsed, gate.ctx.organizationId);
     if (!updated) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
@@ -136,12 +136,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid order id' }, { status: 400 });
     }
 
-    const before = await getOrderById(id);
+    const before = await getOrderById(id, gate.ctx.organizationId);
     if (!before) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const deleted = await deleteOrder(id);
+    const deleted = await deleteOrder(id, gate.ctx.organizationId);
     if (!deleted) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }

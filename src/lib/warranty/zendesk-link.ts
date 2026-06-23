@@ -13,6 +13,8 @@
  */
 
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 import { clearTicketExternalIdIfMatches, linkTicket, unlinkTicket } from '@/lib/zendesk-links';
 
 /** Append a warranty_claim_events row outside the mutations.ts transaction helpers. */
@@ -56,11 +58,14 @@ export async function recordClaimTicketLink(args: {
   actorStaffId: number | null;
   eventType?: 'ZENDESK_TICKET_CREATED' | 'ZENDESK_LINKED';
 }): Promise<void> {
-  await pool.query(
+  const orgId: OrgId = args.organizationId || USAV_ORG_ID;
+  await tenantQuery(
+    orgId,
     `UPDATE warranty_claims
         SET zendesk_ticket_id = $2, updated_at = NOW()
-      WHERE id = $1`,
-    [args.claimId, args.zendeskTicketId],
+      WHERE id = $1
+        AND organization_id = $3`,
+    [args.claimId, args.zendeskTicketId, orgId],
   );
 
   try {
@@ -108,11 +113,14 @@ export async function unlinkClaimTicket(args: {
   organizationId: string;
   actorStaffId: number | null;
 }): Promise<{ detached: boolean }> {
-  const upd = await pool.query(
+  const orgId: OrgId = args.organizationId || USAV_ORG_ID;
+  const upd = await tenantQuery(
+    orgId,
     `UPDATE warranty_claims
         SET zendesk_ticket_id = NULL, updated_at = NOW()
-      WHERE id = $1 AND zendesk_ticket_id = $2`,
-    [args.claimId, args.zendeskTicketId],
+      WHERE id = $1 AND zendesk_ticket_id = $2
+        AND organization_id = $3`,
+    [args.claimId, args.zendeskTicketId, orgId],
   );
   const columnCleared = (upd.rowCount ?? 0) > 0;
 

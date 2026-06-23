@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
     }
 
-    const search = await getSourcingSearchById(id);
+    const search = await getSourcingSearchById(id, gate.ctx.organizationId);
     if (!search) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     const result = await scour({
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       save: true,
       orgId: gate.ctx.organizationId,
     });
-    await markSourcingSearchRun(id, result.results.length);
+    await markSourcingSearchRun(id, result.results.length, gate.ctx.organizationId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'sourcing-saved-searches-api',

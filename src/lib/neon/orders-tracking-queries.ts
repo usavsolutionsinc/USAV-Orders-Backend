@@ -20,9 +20,8 @@
  * ─────────────────────────────────────────────────────────────────
  */
 import type { PoolClient } from 'pg';
-import pool from '@/lib/db';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
+import { transitionalUsavOrgId, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 
 /** Minimal pg client surface the helpers need (a pool client mid-transaction). */
@@ -778,10 +777,12 @@ export async function applyOrderTrackingOps(
 ): Promise<ApplyOrderTrackingResult> {
   const { orderIds, setTrackingNumbers, primaryTrackingNumber, edits, creates, deletes, setPrimaryShipmentId, organizationId } = ops;
   const orgId = organizationId ?? transitionalUsavOrgId();
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
+  // Run the whole multi-statement batch on the tenant pool inside ONE
+  // GUC-scoped transaction (SET LOCAL app.current_org). The low-level helpers
+  // receive this same tenant client, so every write is RLS-subject and
+  // organization_id auto-stamps from the GUC (explicit stamps are kept too).
+  // withTenantTransaction owns BEGIN/COMMIT/ROLLBACK/release.
+  return withTenantTransaction(orgId, async (client) => {
     // Desired-state path: when the caller sends the full set, reconcile to it
     // and skip the legacy primary/edits/creates/deletes ops entirely.
     if (setTrackingNumbers !== undefined) {
@@ -791,7 +792,6 @@ export async function applyOrderTrackingOps(
         client,
         organizationId,
       );
-      await client.query('COMMIT');
       return { createdShipmentIds: shipmentIds, primaryShipmentId };
     }
 
@@ -865,12 +865,6 @@ export async function applyOrderTrackingOps(
       }
     }
 
-    await client.query('COMMIT');
     return { createdShipmentIds, primaryShipmentId: resolvedPrimaryId };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 }

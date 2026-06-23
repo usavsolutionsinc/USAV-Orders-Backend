@@ -12,9 +12,9 @@
  */
 
 import type { PoolClient } from 'pg';
-import pool from '@/lib/db';
 import { createAuthorization, findByNumber, type RmaAuthorizationRow } from '@/lib/rma/authorizations';
-import type { OrgId } from '@/lib/tenancy/constants';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
 import { getClaim } from './claims';
 import type { WarrantyClaimDetail } from './types';
 
@@ -122,29 +122,29 @@ export async function issueRmaForClaim(
    */
   orgId?: OrgId | null,
 ): Promise<RmaLinkResult> {
-  const client = await pool.connect();
+  const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   let rma: RmaAuthorizationRow | null = null;
   try {
-    await client.query('BEGIN');
-    const claim = await loadClaimCore(client, claimId, orgId);
-    if (!claim) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'claim not found' };
-    }
-    if (claim.rmaId) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: 'claim already has an RMA' };
-    }
+    // Phase 1: precheck the claim in its own transaction (mirrors the original
+    // BEGIN…COMMIT that closed before createAuthorization opened its own conn).
+    const pre = await withTenantTransaction(txOrg, async (client): Promise<
+      | { ok: false; status: 404 | 409; error: string }
+      | { ok: true; orderId: number | null; customerId: number | null }
+    > => {
+      const claim = await loadClaimCore(client, claimId, orgId);
+      if (!claim) return { ok: false, status: 404, error: 'claim not found' };
+      if (claim.rmaId) return { ok: false, status: 409, error: 'claim already has an RMA' };
+      return { ok: true, orderId: claim.orderId, customerId: claim.customerId };
+    });
+    if (!pre.ok) return pre;
 
     // createAuthorization manages its own connection + per-year number; call it
-    // outside this transaction, then link the result in.
-    await client.query('COMMIT');
-
+    // outside the precheck transaction, then link the result in.
     const created = await createAuthorization(
       {
         direction: 'INBOUND_FROM_CUSTOMER',
-        orderId: claim.orderId,
-        customerId: claim.customerId,
+        orderId: pre.orderId,
+        customerId: pre.customerId,
         expectedCarrier: args.expectedCarrier ?? null,
         expiresAt: args.expiresAt ?? null,
         createdByStaffId: args.createdByStaffId,
@@ -155,37 +155,32 @@ export async function issueRmaForClaim(
     if (!created.ok) return { ok: false, status: 500, error: created.error };
     rma = created.rma;
 
-    await client.query('BEGIN');
-    // Re-check the claim wasn't linked concurrently.
-    const recheck = await loadClaimCore(client, claimId, orgId);
-    if (!recheck) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'claim not found' };
-    }
-    if (recheck.rmaId) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: 'claim already has an RMA' };
-    }
-    await client.query(
-      orgId
-        ? `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
-        : `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1`,
-      orgId ? [claimId, rma.id, orgId] : [claimId, rma.id],
-    );
-    await insertEvent(
-      client,
-      claimId,
-      'RMA_LINKED',
-      { rmaId: rma.id, rmaNumber: rma.rmaNumber, issued: true },
-      args.createdByStaffId,
-    );
-    await client.query('COMMIT');
+    // Phase 2: re-check + link in a fresh transaction.
+    const linkResult = await withTenantTransaction(txOrg, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true }
+    > => {
+      const recheck = await loadClaimCore(client, claimId, orgId);
+      if (!recheck) return { ok: false, status: 404, error: 'claim not found' };
+      if (recheck.rmaId) return { ok: false, status: 409, error: 'claim already has an RMA' };
+      await client.query(
+        orgId
+          ? `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
+          : `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1`,
+        orgId ? [claimId, rma!.id, orgId] : [claimId, rma!.id],
+      );
+      await insertEvent(
+        client,
+        claimId,
+        'RMA_LINKED',
+        { rmaId: rma!.id, rmaNumber: rma!.rmaNumber, issued: true },
+        args.createdByStaffId,
+      );
+      return { ok: true };
+    });
+    if (!linkResult.ok) return linkResult;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     const message = err instanceof Error ? err.message : 'issue RMA failed';
     return { ok: false, status: 500, error: message };
-  } finally {
-    client.release();
   }
 
   const claim = await getClaim(claimId, orgId ?? undefined);
@@ -203,38 +198,33 @@ export async function linkRmaByNumber(
   const rma = await findByNumber(rmaNumber, orgId ?? null);
   if (!rma) return { ok: false, status: 404, error: 'RMA not found' };
 
-  const client = await pool.connect();
+  const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   try {
-    await client.query('BEGIN');
-    const claim = await loadClaimCore(client, claimId, orgId);
-    if (!claim) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'claim not found' };
-    }
-    if (claim.rmaId) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: 'claim already has an RMA' };
-    }
-    await client.query(
-      orgId
-        ? `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
-        : `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1`,
-      orgId ? [claimId, rma.id, orgId] : [claimId, rma.id],
-    );
-    await insertEvent(
-      client,
-      claimId,
-      'RMA_LINKED',
-      { rmaId: rma.id, rmaNumber: rma.rmaNumber, issued: false },
-      actorStaffId,
-    );
-    await client.query('COMMIT');
+    const linkResult = await withTenantTransaction(txOrg, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true }
+    > => {
+      const claim = await loadClaimCore(client, claimId, orgId);
+      if (!claim) return { ok: false, status: 404, error: 'claim not found' };
+      if (claim.rmaId) return { ok: false, status: 409, error: 'claim already has an RMA' };
+      await client.query(
+        orgId
+          ? `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
+          : `UPDATE warranty_claims SET rma_id = $2, updated_at = NOW() WHERE id = $1`,
+        orgId ? [claimId, rma.id, orgId] : [claimId, rma.id],
+      );
+      await insertEvent(
+        client,
+        claimId,
+        'RMA_LINKED',
+        { rmaId: rma.id, rmaNumber: rma.rmaNumber, issued: false },
+        actorStaffId,
+      );
+      return { ok: true };
+    });
+    if (!linkResult.ok) return linkResult;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     const message = err instanceof Error ? err.message : 'link RMA failed';
     return { ok: false, status: 500, error: message };
-  } finally {
-    client.release();
   }
 
   const claim = await getClaim(claimId, orgId ?? undefined);
@@ -265,20 +255,19 @@ export async function handoffToRepair(
    */
   orgId?: OrgId | null,
 ): Promise<RepairHandoffResult> {
-  const client = await pool.connect();
+  const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   try {
-    await client.query('BEGIN');
+    const txResult = await withTenantTransaction(txOrg, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true; repairServiceId: number }
+    > => {
     const claim = await loadClaimCore(client, claimId, orgId);
     if (!claim) {
-      await client.query('ROLLBACK');
       return { ok: false, status: 404, error: 'claim not found' };
     }
     if (claim.repairServiceId) {
-      await client.query('ROLLBACK');
       return { ok: false, status: 409, error: 'claim already has a repair ticket' };
     }
     if (claim.status !== 'APPROVED' && claim.status !== 'IN_REPAIR') {
-      await client.query('ROLLBACK');
       return { ok: false, status: 409, error: `claim is ${claim.status}; repair handoff needs APPROVED or IN_REPAIR` };
     }
 
@@ -341,17 +330,17 @@ export async function handoffToRepair(
         [claimId, args.createdByStaffId],
       );
     }
-    await client.query('COMMIT');
+      return { ok: true, repairServiceId };
+    });
+
+    if (!txResult.ok) return txResult;
 
     const detail = await getClaim(claimId, orgId ?? undefined);
     if (!detail) return { ok: false, status: 500, error: 'claim vanished after handoff' };
-    return { ok: true, claim: detail, repairServiceId };
+    return { ok: true, claim: detail, repairServiceId: txResult.repairServiceId };
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     const message = err instanceof Error ? err.message : 'repair handoff failed';
     return { ok: false, status: 500, error: message };
-  } finally {
-    client.release();
   }
 }
 
@@ -375,31 +364,26 @@ export async function unlinkRma(
   /** Optional tenant scope — org-filters every warranty_claims read/write. */
   orgId?: OrgId | null,
 ): Promise<RmaUnlinkResult> {
-  const client = await pool.connect();
+  const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   try {
-    await client.query('BEGIN');
-    const claim = await loadClaimCore(client, claimId, orgId);
-    if (!claim) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'claim not found' };
-    }
-    if (!claim.rmaId) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: 'claim has no linked RMA' };
-    }
-    await client.query(
-      orgId
-        ? `UPDATE warranty_claims SET rma_id = NULL, updated_at = NOW() WHERE id = $1 AND organization_id = $2`
-        : `UPDATE warranty_claims SET rma_id = NULL, updated_at = NOW() WHERE id = $1`,
-      orgId ? [claimId, orgId] : [claimId],
-    );
-    await insertEvent(client, claimId, 'RMA_UNLINKED', { rmaId: claim.rmaId }, actorStaffId);
-    await client.query('COMMIT');
+    const txResult = await withTenantTransaction(txOrg, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true }
+    > => {
+      const claim = await loadClaimCore(client, claimId, orgId);
+      if (!claim) return { ok: false, status: 404, error: 'claim not found' };
+      if (!claim.rmaId) return { ok: false, status: 409, error: 'claim has no linked RMA' };
+      await client.query(
+        orgId
+          ? `UPDATE warranty_claims SET rma_id = NULL, updated_at = NOW() WHERE id = $1 AND organization_id = $2`
+          : `UPDATE warranty_claims SET rma_id = NULL, updated_at = NOW() WHERE id = $1`,
+        orgId ? [claimId, orgId] : [claimId],
+      );
+      await insertEvent(client, claimId, 'RMA_UNLINKED', { rmaId: claim.rmaId }, actorStaffId);
+      return { ok: true };
+    });
+    if (!txResult.ok) return txResult;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     return { ok: false, status: 500, error: err instanceof Error ? err.message : 'unlink RMA failed' };
-  } finally {
-    client.release();
   }
   const claim = await getClaim(claimId, orgId ?? undefined);
   if (!claim) return { ok: false, status: 404, error: 'claim not found' };
@@ -425,49 +409,43 @@ export async function detachRepairHandoff(
   /** Optional tenant scope — org-filters the claim precheck + warranty_claims UPDATE. */
   orgId?: OrgId | null,
 ): Promise<RepairDetachResult> {
-  const client = await pool.connect();
+  const txOrg: OrgId = orgId ?? USAV_ORG_ID;
   let revertedToApproved = false;
   try {
-    await client.query('BEGIN');
-    const claim = await loadClaimCore(client, claimId, orgId);
-    if (!claim) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 404, error: 'claim not found' };
-    }
-    if (!claim.repairServiceId) {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: 'claim has no linked repair ticket' };
-    }
-    // Only IN_REPAIR (what the handoff produces) or APPROVED (a handoff from
-    // IN_REPAIR that didn't advance) can be cleanly detached. A REPAIRED/CLOSED
-    // claim has moved on — refuse rather than rewrite history.
-    if (claim.status !== 'IN_REPAIR' && claim.status !== 'APPROVED') {
-      await client.query('ROLLBACK');
-      return { ok: false, status: 409, error: `claim is ${claim.status}; cannot detach a repair past IN_REPAIR` };
-    }
-    revertedToApproved = claim.status === 'IN_REPAIR';
-    const nextStatus = revertedToApproved ? 'APPROVED' : claim.status;
-    await client.query(
-      orgId
-        ? `UPDATE warranty_claims SET repair_service_id = NULL, status = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
-        : `UPDATE warranty_claims SET repair_service_id = NULL, status = $2, updated_at = NOW() WHERE id = $1`,
-      orgId ? [claimId, nextStatus, orgId] : [claimId, nextStatus],
-    );
-    await insertEvent(client, claimId, 'REPAIR_DETACH', { repairServiceId: claim.repairServiceId, revertedToApproved }, actorStaffId);
-    if (revertedToApproved) {
+    const txResult = await withTenantTransaction(txOrg, async (client): Promise<
+      { ok: false; status: 404 | 409; error: string } | { ok: true }
+    > => {
+      const claim = await loadClaimCore(client, claimId, orgId);
+      if (!claim) return { ok: false, status: 404, error: 'claim not found' };
+      if (!claim.repairServiceId) return { ok: false, status: 409, error: 'claim has no linked repair ticket' };
+      // Only IN_REPAIR (what the handoff produces) or APPROVED (a handoff from
+      // IN_REPAIR that didn't advance) can be cleanly detached. A REPAIRED/CLOSED
+      // claim has moved on — refuse rather than rewrite history.
+      if (claim.status !== 'IN_REPAIR' && claim.status !== 'APPROVED') {
+        return { ok: false, status: 409, error: `claim is ${claim.status}; cannot detach a repair past IN_REPAIR` };
+      }
+      revertedToApproved = claim.status === 'IN_REPAIR';
+      const nextStatus = revertedToApproved ? 'APPROVED' : claim.status;
       await client.query(
-        `INSERT INTO warranty_claim_events (claim_id, event_type, from_status, to_status, payload, actor_staff_id, organization_id)
-         VALUES ($1, 'STATUS_CHANGE', 'IN_REPAIR', 'APPROVED', '{"via":"repair_detach"}'::jsonb, $2,
-           (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
-        [claimId, actorStaffId],
+        orgId
+          ? `UPDATE warranty_claims SET repair_service_id = NULL, status = $2, updated_at = NOW() WHERE id = $1 AND organization_id = $3`
+          : `UPDATE warranty_claims SET repair_service_id = NULL, status = $2, updated_at = NOW() WHERE id = $1`,
+        orgId ? [claimId, nextStatus, orgId] : [claimId, nextStatus],
       );
-    }
-    await client.query('COMMIT');
+      await insertEvent(client, claimId, 'REPAIR_DETACH', { repairServiceId: claim.repairServiceId, revertedToApproved }, actorStaffId);
+      if (revertedToApproved) {
+        await client.query(
+          `INSERT INTO warranty_claim_events (claim_id, event_type, from_status, to_status, payload, actor_staff_id, organization_id)
+           VALUES ($1, 'STATUS_CHANGE', 'IN_REPAIR', 'APPROVED', '{"via":"repair_detach"}'::jsonb, $2,
+             (SELECT organization_id FROM warranty_claims WHERE id = $1))`,
+          [claimId, actorStaffId],
+        );
+      }
+      return { ok: true };
+    });
+    if (!txResult.ok) return txResult;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
     return { ok: false, status: 500, error: err instanceof Error ? err.message : 'repair detach failed' };
-  } finally {
-    client.release();
   }
   const detail = await getClaim(claimId, orgId ?? undefined);
   if (!detail) return { ok: false, status: 500, error: 'claim vanished after detach' };

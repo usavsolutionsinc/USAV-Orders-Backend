@@ -162,7 +162,7 @@ export const DELETE = withAuth(async (request, ctx) => {
         else foreignIds.push(id);
       }
 
-      const { deleted, notFound } = await softDeleteClaims(ownedIds, ctx.staffId ?? null);
+      const { deleted, notFound } = await softDeleteClaims(ownedIds, ctx.staffId ?? null, ctx.organizationId);
 
       const results = [
         ...deleted.map((d) => ({ id: d.id, ok: true as const, claimNumber: d.claimNumber })),

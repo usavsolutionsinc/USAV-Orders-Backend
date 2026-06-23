@@ -101,7 +101,7 @@ export const DELETE = withAuth(async (request, ctx) => {
   if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
   try {
-    const result = await softDeleteClaims([id], ctx.staffId ?? null);
+    const result = await softDeleteClaims([id], ctx.staffId ?? null, ctx.organizationId);
     if (result.deleted.length === 0) {
       return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
     }

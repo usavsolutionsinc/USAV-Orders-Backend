@@ -11,6 +11,12 @@ export interface CrudListParams {
   sort: string;
   /** Raw search params for custom extraction */
   searchParams: URLSearchParams;
+  /**
+   * Tenant org id from the auth context (`ctx.organizationId`), threaded through
+   * additively so org-scoped query layers can run on the tenant pool + GUC.
+   * Undefined for callers that haven't wired auth ctx into the handler.
+   */
+  organizationId?: string;
 }
 
 /** Configuration for createCrudHandler */
@@ -64,9 +70,15 @@ export interface CrudConfig<TRow = any> {
 
   /**
    * Update an existing row. Receives the validated body (after Zod parse).
-   * The body always contains `id`.
+   * The body always contains `id`. The optional third arg carries the tenant
+   * org id from the auth context (`ctx.organizationId`), threaded additively so
+   * org-scoped mutations can run on the tenant pool + GUC.
    */
-  update?: (body: any, req: NextRequest) => Promise<TRow | { success: true }>;
+  update?: (
+    body: any,
+    req: NextRequest,
+    organizationId?: string,
+  ) => Promise<TRow | { success: true }>;
 
   /**
    * Delete a row by ID. Return the deleted row or { success: true }.

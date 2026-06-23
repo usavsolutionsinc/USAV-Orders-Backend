@@ -42,7 +42,7 @@ export const POST = withAuth(async (request, ctx) => {
         issue: parsed.data.issue ?? null,
         notes: parsed.data.notes ?? null,
         createdByStaffId: ctx.staffId ?? null,
-      });
+      }, ctx.organizationId);
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {
         source: 'warranty-logger',
@@ -74,7 +74,7 @@ export const DELETE = withAuth(async (request, ctx) => {
   const owns = await getClaimTicketRef(id, ctx.organizationId);
   if (!owns) return NextResponse.json({ ok: false, error: 'claim not found' }, { status: 404 });
 
-  const result = await detachRepairHandoff(id, ctx.staffId ?? null);
+  const result = await detachRepairHandoff(id, ctx.staffId ?? null, ctx.organizationId);
   if (!result.ok) return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
 
   await recordAudit(pool, ctx, request, {

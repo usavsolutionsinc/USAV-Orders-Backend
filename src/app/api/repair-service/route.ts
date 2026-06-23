@@ -17,6 +17,7 @@ import { publishRepairChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import type { AuthContext } from '@/lib/auth/auth-context';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import pool from '@/lib/db';
 import {
   getApiIdempotencyResponse,
@@ -79,24 +80,27 @@ const handler = createCrudHandler({
 
   list: async (params) => {
     const tab = normalizeTab(params.tab);
-    const repairs = await getAllRepairs(params.limit, params.offset, { tab });
+    const orgId = params.organizationId ?? USAV_ORG_ID;
+    const repairs = await getAllRepairs(params.limit, params.offset, { tab }, orgId);
     return { rows: repairs };
   },
 
   search: async (query, params) => {
     const tab = normalizeTab(params.tab);
-    return searchRepairs(query, { tab });
+    const orgId = params.organizationId ?? USAV_ORG_ID;
+    return searchRepairs(query, { tab }, orgId);
   },
 
-  update: async (body) => {
+  update: async (body, _req, organizationId) => {
     const { id, status, notes, field, value, statusHistoryEntry } = body;
 
     if (!id) throw ApiError.badRequest('ID is required');
 
-    if (status) await updateRepairStatus(id, status);
-    if (notes !== undefined) await updateRepairNotes(id, notes);
-    if (field && value !== undefined) await updateRepairField(id, field, value);
-    if (statusHistoryEntry) await appendRepairStatusHistory(id, statusHistoryEntry);
+    const orgId = organizationId ?? USAV_ORG_ID;
+    if (status) await updateRepairStatus(id, status, orgId);
+    if (notes !== undefined) await updateRepairNotes(id, notes, orgId);
+    if (field && value !== undefined) await updateRepairField(id, field, value, orgId);
+    if (statusHistoryEntry) await appendRepairStatusHistory(id, statusHistoryEntry, orgId);
 
     return { success: true as const };
   },
@@ -114,7 +118,7 @@ const originalPatch = handler.PATCH;
 async function patchWithRealtime(req: NextRequest, ctx: { organizationId: string }) {
   // Clone the request so we can read body twice (once here for realtime, once in handler)
   const clonedReq = req.clone();
-  const response = await originalPatch(req);
+  const response = await originalPatch(req, ctx);
 
   // If successful, publish realtime event
   if (response.status === 200) {
