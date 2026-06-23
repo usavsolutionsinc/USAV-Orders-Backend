@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 
 /**
  * GET /api/assignments/sku-search?q=<term>&staff_id=<id>&limit=50
@@ -17,7 +17,7 @@ import { withAuth } from '@/lib/auth/withAuth';
  * This intentionally never returns all unassigned rows without a query,
  * preventing the "ping all 500" problem.
  */
-async function handleGet(req: NextRequest) {
+async function handleGet(req: NextRequest, ctx: { organizationId: string }) {
   try {
     const { searchParams } = new URL(req.url);
     const q           = String(searchParams.get('q') || '').trim();
@@ -37,6 +37,12 @@ async function handleGet(req: NextRequest) {
 
     const params: any[] = [];
     const where: string[] = [];
+
+    // Tenant scope on sku_stock — explicit predicate is defense-in-depth on top
+    // of the GUC backstop applied by tenantQuery() below.
+    params.push(ctx.organizationId);
+    const orgParam = params.length;
+    where.push(`ss.organization_id = $${orgParam}`);
 
     if (q) {
       params.push(`%${q}%`);
@@ -79,6 +85,7 @@ async function handleGet(req: NextRequest) {
           AND entity_id   = ss.id
           AND work_type   = 'STOCK_REPLENISH'
           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+          AND organization_id = $${orgParam}
         ORDER BY id DESC
         LIMIT 1
       ) wa ON true
@@ -96,7 +103,7 @@ async function handleGet(req: NextRequest) {
       LIMIT $${params.length}
     `;
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(ctx.organizationId, sql, params);
 
     return NextResponse.json({
       success: true,
@@ -142,72 +149,90 @@ async function handlePost(req: NextRequest, ctx: { organizationId: string }) {
       return NextResponse.json({ success: false, error: 'Valid sku_stock_id is required' }, { status: 400 });
     }
 
-    const skuRow = await pool.query(`SELECT id FROM sku_stock WHERE id = $1`, [skuStockId]);
-    if (skuRow.rows.length === 0) {
-      return NextResponse.json({ success: false, error: 'sku_stock_id not found' }, { status: 404 });
-    }
-
     // ASSIGNED once either slot is filled; OPEN when both are cleared
     const newStatus = (techId || packerId) ? 'ASSIGNED' : 'OPEN';
 
-    const existing = await pool.query(
-      `SELECT id, assigned_tech_id FROM work_assignments
-       WHERE entity_type = 'SKU_STOCK'
-         AND entity_id   = $1
-         AND work_type   = 'STOCK_REPLENISH'
-         AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
-       ORDER BY id DESC LIMIT 1`,
-      [skuStockId]
-    );
+    const result = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const skuRow = await client.query(
+        `SELECT id FROM sku_stock WHERE id = $1 AND organization_id = $2`,
+        [skuStockId, ctx.organizationId]
+      );
+      if (skuRow.rows.length === 0) {
+        return { notFound: true as const };
+      }
 
-    let wa;
-    if (existing.rows.length > 0) {
-      const r = await pool.query(
-        `UPDATE work_assignments
-         SET assigned_tech_id   = $1,
-             assigned_packer_id = $2,
-             status             = $3,
-             priority           = $4,
-             notes              = COALESCE($5, notes),
-             deadline_at        = COALESCE($6, deadline_at),
-             assigned_at        = CASE
-                                    WHEN $1 IS NOT NULL
-                                     AND assigned_tech_id IS DISTINCT FROM $1
-                                    THEN NOW()
-                                    ELSE assigned_at
-                                  END,
-             updated_at         = NOW()
-         WHERE id = $7
-         RETURNING *`,
-        [techId, packerId, newStatus, priority, notes, deadlineAt, existing.rows[0].id]
+      const existing = await client.query(
+        `SELECT id, assigned_tech_id FROM work_assignments
+         WHERE entity_type = 'SKU_STOCK'
+           AND entity_id   = $1
+           AND work_type   = 'STOCK_REPLENISH'
+           AND status IN ('OPEN', 'ASSIGNED', 'IN_PROGRESS')
+           AND organization_id = $2
+         ORDER BY id DESC LIMIT 1`,
+        [skuStockId, ctx.organizationId]
       );
-      wa = r.rows[0];
-    } else {
-      const r = await pool.query(
-        `INSERT INTO work_assignments
-           (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
-            status, priority, notes, deadline_at, assigned_at)
-         VALUES
-           ($1, 'SKU_STOCK', $2, 'STOCK_REPLENISH', $3, $4, $5, $6, $7, $8,
-            CASE WHEN $3 IS NOT NULL OR $4 IS NOT NULL THEN NOW() ELSE NULL END)
-         RETURNING *`,
-        [ctx.organizationId, skuStockId, techId, packerId, newStatus, priority, notes, deadlineAt]
-      );
-      wa = r.rows[0];
+
+      let wa;
+      if (existing.rows.length > 0) {
+        const r = await client.query(
+          `UPDATE work_assignments
+           SET assigned_tech_id   = $1,
+               assigned_packer_id = $2,
+               status             = $3,
+               priority           = $4,
+               notes              = COALESCE($5, notes),
+               deadline_at        = COALESCE($6, deadline_at),
+               assigned_at        = CASE
+                                      WHEN $1 IS NOT NULL
+                                       AND assigned_tech_id IS DISTINCT FROM $1
+                                      THEN NOW()
+                                      ELSE assigned_at
+                                    END,
+               updated_at         = NOW()
+           WHERE id = $7 AND organization_id = $8
+           RETURNING *`,
+          [techId, packerId, newStatus, priority, notes, deadlineAt, existing.rows[0].id, ctx.organizationId]
+        );
+        wa = r.rows[0];
+      } else {
+        // organization_id is stamped by the column default from the GUC
+        // (app.current_org) set by withTenantTransaction.
+        const r = await client.query(
+          `INSERT INTO work_assignments
+             (entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id,
+              status, priority, notes, deadline_at, assigned_at)
+           VALUES
+             ('SKU_STOCK', $1, 'STOCK_REPLENISH', $2, $3, $4, $5, $6, $7,
+              CASE WHEN $2 IS NOT NULL OR $3 IS NOT NULL THEN NOW() ELSE NULL END)
+           RETURNING *`,
+          [skuStockId, techId, packerId, newStatus, priority, notes, deadlineAt]
+        );
+        wa = r.rows[0];
+      }
+
+      // Fetch names for response
+      const [techRow, packerRow] = await Promise.all([
+        techId   ? client.query(`SELECT name FROM staff WHERE id = $1 AND organization_id = $2`, [techId, ctx.organizationId])   : Promise.resolve({ rows: [] }),
+        packerId ? client.query(`SELECT name FROM staff WHERE id = $1 AND organization_id = $2`, [packerId, ctx.organizationId]) : Promise.resolve({ rows: [] }),
+      ]);
+
+      return {
+        wa,
+        techName:   techRow.rows[0]?.name   ?? null,
+        packerName: packerRow.rows[0]?.name ?? null,
+      };
+    });
+
+    if ('notFound' in result) {
+      return NextResponse.json({ success: false, error: 'sku_stock_id not found' }, { status: 404 });
     }
-
-    // Fetch names for response
-    const [techRow, packerRow] = await Promise.all([
-      techId   ? pool.query(`SELECT name FROM staff WHERE id = $1`, [techId])   : Promise.resolve({ rows: [] }),
-      packerId ? pool.query(`SELECT name FROM staff WHERE id = $1`, [packerId]) : Promise.resolve({ rows: [] }),
-    ]);
 
     return NextResponse.json({
       success: true,
       assignment: {
-        ...wa,
-        assigned_tech_name:   techRow.rows[0]?.name   ?? null,
-        assigned_packer_name: packerRow.rows[0]?.name ?? null,
+        ...result.wa,
+        assigned_tech_name:   result.techName,
+        assigned_packer_name: result.packerName,
       },
     });
   } catch (error: any) {

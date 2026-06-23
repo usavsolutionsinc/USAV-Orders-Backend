@@ -19,6 +19,7 @@ import { linkPhoto } from '@/lib/photos/service';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getNasStorageTarget } from '@/lib/tenancy/settings';
 import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
@@ -164,7 +165,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // claim whose photos silently didn't archive is visible to the operator.
         let archiveWarning: string | null = null;
         try {
-          const allPhotosRes = await pool.query<{ legacy_url: string | null }>(
+          const allPhotosRes = await tenantQuery<{ legacy_url: string | null }>(
+            ctx.organizationId,
             `SELECT ps.legacy_url
                FROM photos p
                JOIN photo_entity_links l

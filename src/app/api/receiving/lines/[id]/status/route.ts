@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import {
@@ -100,12 +101,13 @@ export async function POST(
     const orgId = ctx.organizationId;
 
     // Load the line to capture prev state + sku + receiving_id (org-scoped).
-    const lineRes = await pool.query<{
+    const lineRes = await tenantQuery<{
       id: number;
       receiving_id: number | null;
       sku: string | null;
       workflow_status: string | null;
     }>(
+      orgId,
       `SELECT id, receiving_id, sku, workflow_status::text AS workflow_status
        FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
       [lineId, orgId],
@@ -121,7 +123,8 @@ export async function POST(
     // Capture prior status of the serial (if any) for the event diff (org-scoped).
     let priorSerialStatus: string | null = null;
     if (serialUnitId) {
-      const sr = await pool.query<{ current_status: string }>(
+      const sr = await tenantQuery<{ current_status: string }>(
+        orgId,
         `SELECT current_status::text AS current_status
            FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
         [serialUnitId, orgId],
@@ -134,7 +137,8 @@ export async function POST(
 
     // ─── Update line metadata + workflow_status (org-scoped) ────────────────
     if (nextWorkflow || qaStatus || dispositionCode || conditionGrade) {
-      await pool.query(
+      await tenantQuery(
+        orgId,
         `UPDATE receiving_lines
          SET workflow_status  = COALESCE($2::inbound_workflow_status_enum, workflow_status),
              qa_status        = COALESCE($3, qa_status),

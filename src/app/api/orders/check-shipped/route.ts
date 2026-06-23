@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -10,18 +10,23 @@ import { withAuth } from '@/lib/auth/withAuth';
 // Admin-triggered reconciliation; gated to shipping role.
 export const POST = withAuth(async (_req, ctx) => {
   try {
-    const result = await pool.query(`
+    const result = await tenantQuery(
+      ctx.organizationId,
+      `
       UPDATE orders o
       SET status = 'shipped'
       WHERE o.shipment_id IS NOT NULL
         AND (o.status IS NULL OR o.status != 'shipped')
+        AND o.organization_id = $1
         AND EXISTS (
           SELECT 1 FROM station_activity_logs sal
           WHERE sal.shipment_id IS NOT NULL
             AND sal.shipment_id = o.shipment_id
         )
       RETURNING o.id
-    `);
+    `,
+      [ctx.organizationId],
+    );
 
     await invalidateCacheTags(['orders', 'orders-next', 'shipped', 'packing-logs']);
 

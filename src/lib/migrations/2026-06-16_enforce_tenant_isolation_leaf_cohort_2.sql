@@ -28,7 +28,19 @@
 -- PROMOTE: drop `.template` → npm run db:migrate → npm run tenancy:guard:check.
 -- ============================================================================
 
-SELECT enforce_tenant_isolation('favorite_skus');
-SELECT enforce_tenant_isolation('favorite_sku_workspaces');
-SELECT enforce_tenant_isolation('repair_issue_templates');
-SELECT enforce_tenant_isolation('location_transfers');
+-- Guarded: skip any table not present in this DB. `repair_issue_templates` was
+-- named in the audit but never created (to_regclass → NULL → PERFORM skipped),
+-- so this migration enforces the tables that exist instead of aborting on it.
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'favorite_skus', 'favorite_sku_workspaces', 'repair_issue_templates', 'location_transfers'
+  ] LOOP
+    IF to_regclass('public.' || t) IS NOT NULL THEN
+      PERFORM enforce_tenant_isolation(t);
+    ELSE
+      RAISE NOTICE 'leaf_cohort_2: skipping enforce_tenant_isolation(%) — table does not exist', t;
+    END IF;
+  END LOOP;
+END $$;

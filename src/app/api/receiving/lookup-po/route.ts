@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { getCarrier } from '@/lib/tracking-format';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -705,9 +706,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       if (lines.length > 0) {
         // Re-attribute this dock event to the current operator (dedup path
         // used to leave scanned_by stale or NULL via memoizeLookupHit).
-        const recvSourceRes = await pool.query<{ source: string | null }>(
-          `SELECT source FROM receiving WHERE id = $1 LIMIT 1`,
-          [existingScan.receiving_id],
+        const recvSourceRes = await tenantQuery<{ source: string | null }>(
+          ctx.organizationId,
+          `SELECT source FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [existingScan.receiving_id, ctx.organizationId],
         );
         const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
         await recordReceivingScan(
@@ -921,7 +923,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         // 'zoho_po' row already claims this PO (unique index conflict),
         // fall back to the normal upsert + re-parent the scan.
         try {
-          const promoted = await pool.query<{ id: number }>(
+          const promoted = await tenantQuery<{ id: number }>(
+            ctx.organizationId,
             `UPDATE receiving
                 SET source = 'zoho_po',
                     zoho_purchaseorder_id = $1,
@@ -929,8 +932,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                     updated_at = NOW()
               WHERE id = $3
                 AND (source = 'unmatched' OR zoho_purchaseorder_id IS NULL)
+                AND organization_id = $4
               RETURNING id`,
-            [primaryPoId, carrier || null, preassignedReceivingId],
+            [primaryPoId, carrier || null, preassignedReceivingId, ctx.organizationId],
           );
           if (promoted.rows[0]) {
             primaryReceivingId = Number(promoted.rows[0].id);
@@ -962,10 +966,11 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // so a cleanup job can find it. Don't fail the request: the primary
       // receiving row is correct, only the scan linkage is stale.
       if (preassignedScanId && preassignedReceivingId !== primaryReceivingId) {
-        await pool.query(
+        await tenantQuery(
+          ctx.organizationId,
           `UPDATE receiving_scans SET receiving_id = $1, source = 'zoho_po'
-            WHERE id = $2`,
-          [primaryReceivingId, preassignedScanId],
+            WHERE id = $2 AND organization_id = $3`,
+          [primaryReceivingId, preassignedScanId, ctx.organizationId],
         ).catch((err) => {
           console.error('[lookup-po] scan re-parent failed — orphaned scan', {
             scan_id: preassignedScanId,

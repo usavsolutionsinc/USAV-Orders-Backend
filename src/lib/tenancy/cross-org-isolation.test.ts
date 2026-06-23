@@ -19,7 +19,7 @@ import {
   ensureTestOrgs,
   appRolePool,
   enforcedRoleInvariant,
-  proveRlsIsolatesScratch,
+  proveRlsIsolatesForcedTable,
   TEST_ORG_A,
   TEST_ORG_B,
 } from './cross-org-harness';
@@ -27,26 +27,36 @@ import {
 const HAS_DB = !!process.env.DATABASE_URL;
 const HAS_APP_ROLE = !!process.env.TENANT_APP_DATABASE_URL;
 
-test('enforced-role invariant: no FORCEd table under a BYPASSRLS role', { skip: !HAS_DB }, async () => {
-  const { default: pool } = await import('@/lib/db');
-  const inv = await enforcedRoleInvariant(pool as any);
+// The invariant is asserted against the RUNTIME (tenant) pool, not the default
+// owner pool. The two-pool split is deliberate: `neondb_owner` (default pool)
+// keeps BYPASSRLS for admin/cron/cross-org work, while the runtime that touches
+// tenant tables connects via `tenantPool` (the non-BYPASSRLS app_tenant role).
+// "Is the enforced runtime role a non-bypass subject?" is what makes FORCE real;
+// "do all routes touching a FORCEd table use that runtime path?" is a separate
+// gate enforced by scripts/tenancy-guard.ts + the route audit. Skips cleanly
+// until TENANT_APP_DATABASE_URL is set (otherwise tenantPool aliases the owner).
+test('enforced-role invariant: the runtime (tenant) pool role is not BYPASSRLS', { skip: !HAS_APP_ROLE }, async () => {
+  const { tenantPool } = await import('@/lib/db');
+  const inv = await enforcedRoleInvariant(tenantPool as any);
   ok(
-    inv.ok,
-    `role '${inv.role}' has BYPASSRLS=${inv.bypass} while ${inv.forcedCount} table(s) are FORCEd — ` +
-      `FORCE is inert under a bypass role. Flip the app to a non-bypassrls role (Phase E1).`,
+    inv.ok && !inv.bypass,
+    `runtime role '${inv.role}' has BYPASSRLS=${inv.bypass} while ${inv.forcedCount} table(s) are FORCEd — ` +
+      `FORCE is inert under a bypass role. The tenant pool must run as a non-bypassrls role (Phase E1).`,
   );
 });
 
-test('RLS canary: policy isolates without a WHERE filter (needs app_tenant role)', { skip: !HAS_APP_ROLE }, async () => {
+test('RLS canary: policy isolates a real FORCEd table without a WHERE filter (needs app_tenant role)', { skip: !HAS_APP_ROLE }, async () => {
   const pool = await appRolePool();
   ok(pool, 'TENANT_APP_DATABASE_URL must resolve to a pool');
   try {
     await ensureTestOrgs(pool!);
-    const r = await proveRlsIsolatesScratch(pool!);
-    strictEqual(r.ownA, 1, 'org A sees exactly its own row');
-    strictEqual(r.ownB, 1, 'org B sees exactly its own row');
-    strictEqual(r.crossFromB, 0, "org B must see 0 of org A's rows (RLS, no WHERE filter)");
-    ok(r.loudFail, 'insert with the GUC cleared must fail (loud-fail default / policy)');
+    // serial_units is FORCEd (2026-06-20b) and populated for USAV — the real
+    // proof that the policy, not an app filter, blocks cross-org reads. Uses an
+    // existing table because the locked-down app_tenant role lacks CREATE.
+    const r = await proveRlsIsolatesForcedTable(pool!, 'serial_units');
+    ok(r.forced, 'serial_units must be FORCEd for this canary to be meaningful');
+    ok(r.own > 0, 'the populated org sees its own serial_units rows under its GUC');
+    strictEqual(r.cross, 0, "a different org must see 0 of the populated org's serial_units (RLS, no WHERE filter)");
   } finally {
     await pool!.end();
   }

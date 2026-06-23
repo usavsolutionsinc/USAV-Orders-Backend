@@ -1,19 +1,19 @@
 {
   "summary": {
-    "total": 629,
-    "withAuth": 478,
-    "tenantWrapped": 244,
-    "orgIdRef": 512,
-    "rawPool": 183,
-    "drizzle": 14,
-    "transitional": 12,
-    "cron": 33,
+    "total": 651,
+    "withAuth": 495,
+    "tenantWrapped": 285,
+    "orgIdRef": 538,
+    "rawPool": 176,
+    "drizzle": 19,
+    "transitional": 14,
+    "cron": 26,
     "byRisk": {
-      "critical": 25,
+      "critical": 26,
       "high": 29,
-      "medium": 235,
-      "low": 242,
-      "info": 98
+      "medium": 226,
+      "low": 281,
+      "info": 89
     }
   },
   "routes": [
@@ -34,6 +34,68 @@
       "mutates": true,
       "touched": [
         "messages"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/auth/account/passkey/[id]",
+      "methods": [
+        "DELETE"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "memberships"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/auth/account/passkey/register/begin",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "memberships",
+        "accounts"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/auth/account/passkey/register/finish",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "memberships",
+        "types"
       ],
       "risk": "critical"
     },
@@ -281,6 +343,48 @@
       "risk": "critical"
     },
     {
+      "route": "/api/ebay/refresh-tokens",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "integrations.ebay",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "accounts"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/ebay/sync",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "integrations.ebay",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "accounts"
+      ],
+      "risk": "critical"
+    },
+    {
       "route": "/api/nas-dev/[[...path]]",
       "methods": [
         "GET",
@@ -345,28 +449,6 @@
       "risk": "critical"
     },
     {
-      "route": "/api/receiving-lines/incoming/zoho-refresh",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.view",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "zoho_po_mirror",
-        "receiving"
-      ],
-      "risk": "critical"
-    },
-    {
       "route": "/api/receiving/disposition-suggest",
       "methods": [
         "POST"
@@ -403,6 +485,28 @@
       "mutates": true,
       "touched": [
         "receiving"
+      ],
+      "risk": "critical"
+    },
+    {
+      "route": "/api/sku-catalog/flag-missing",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "sku_stock.manage",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "pending_skus",
+        "sku_stock",
+        "sku"
       ],
       "risk": "critical"
     },
@@ -454,12 +558,12 @@
       "risk": "critical"
     },
     {
-      "route": "/api/zoho/purchase-orders/sync",
+      "route": "/api/admin/po-gmail/connect",
       "methods": [
-        "POST"
+        "GET"
       ],
       "withAuth": true,
-      "permission": "integrations.zoho",
+      "permission": "admin.view",
       "orgIdRef": false,
       "tenantWrapped": false,
       "rawPool": false,
@@ -467,60 +571,15 @@
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
-      "mutates": true,
+      "mutates": false,
       "touched": [
-        "receiving_lines",
-        "receiving",
-        "orders"
+        "accounts"
       ],
-      "risk": "critical"
+      "risk": "high"
     },
     {
-      "route": "/api/zoho/purchase-receives/import",
+      "route": "/api/auth/account/passkey",
       "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.mark_received",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving"
-      ],
-      "risk": "critical"
-    },
-    {
-      "route": "/api/zoho/purchase-receives/sync",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "integrations.zoho",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "receiving",
-        "orders"
-      ],
-      "risk": "critical"
-    },
-    {
-      "route": "/api/zoho/webhooks",
-      "methods": [
-        "POST",
         "GET"
       ],
       "withAuth": false,
@@ -532,11 +591,12 @@
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
-      "mutates": true,
+      "mutates": false,
       "touched": [
-        "types"
+        "memberships",
+        "staff"
       ],
-      "risk": "critical"
+      "risk": "high"
     },
     {
       "route": "/api/auth/staff-picker",
@@ -575,6 +635,7 @@
       "mutates": false,
       "touched": [
         "amazon_accounts",
+        "accounts",
         "orders"
       ],
       "risk": "high"
@@ -679,47 +740,6 @@
       "mutates": false,
       "touched": [
         "receiving"
-      ],
-      "risk": "high"
-    },
-    {
-      "route": "/api/cron/reconcile-unmatched",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [
-        "receiving"
-      ],
-      "risk": "high"
-    },
-    {
-      "route": "/api/cron/replenishment-detect",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [
-        "replenishment_tasks",
-        "sku"
       ],
       "risk": "high"
     },
@@ -892,31 +912,6 @@
       "risk": "high"
     },
     {
-      "route": "/api/cron/zoho/incoming-po-sync",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [
-        "receiving_lines",
-        "zoho_po_mirror",
-        "sync_cursors",
-        "receiving",
-        "orders",
-        "items"
-      ],
-      "risk": "high"
-    },
-    {
       "route": "/api/cron/zoho/orders-ingest-drain",
       "methods": [
         "GET"
@@ -933,30 +928,6 @@
       "mutates": false,
       "touched": [
         "order_ingest_queue",
-        "orders"
-      ],
-      "risk": "high"
-    },
-    {
-      "route": "/api/cron/zoho/po-sync",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [
-        "email_missing_purchase_orders",
-        "receiving_lines",
-        "zoho_po_mirror",
-        "receiving",
         "orders"
       ],
       "risk": "high"
@@ -1085,6 +1056,46 @@
       "risk": "high"
     },
     {
+      "route": "/api/studio/templates",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "studio.view",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "types"
+      ],
+      "risk": "high"
+    },
+    {
+      "route": "/api/studio/templates/[id]",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "studio.view",
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": false,
+      "touched": [
+        "types"
+      ],
+      "risk": "high"
+    },
+    {
       "route": "/api/support/overview",
       "methods": [
         "GET"
@@ -1142,6 +1153,7 @@
       "touched": [
         "warehouses",
         "receiving",
+        "accounts",
         "items"
       ],
       "risk": "high"
@@ -1243,6 +1255,9 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
+        "photo_analysis",
+        "photo_storage",
+        "photo_jobs",
         "photos"
       ],
       "risk": "medium"
@@ -1526,27 +1541,42 @@
       "risk": "medium"
     },
     {
-      "route": "/api/assignments/sku-search",
+      "route": "/api/amazon/health",
       "methods": [
-        "GET",
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "integrations.amazon",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "accounts"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/amazon/sync",
+      "methods": [
         "POST"
       ],
       "withAuth": true,
-      "permission": "work_orders.view",
+      "permission": "integrations.amazon",
       "orgIdRef": true,
       "tenantWrapped": false,
-      "rawPool": true,
+      "rawPool": false,
       "drizzle": false,
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "work_assignments",
-        "sku_stock",
-        "items",
-        "staff",
-        "sku"
+        "accounts"
       ],
       "risk": "medium"
     },
@@ -1655,6 +1685,26 @@
       "risk": "medium"
     },
     {
+      "route": "/api/audit-log/trace",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "admin.view_logs",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/audit/bin/[id]",
       "methods": [
         "GET"
@@ -1700,6 +1750,71 @@
       "risk": "medium"
     },
     {
+      "route": "/api/auth/account/passkey/authenticate/finish",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "memberships",
+        "accounts",
+        "types"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/auth/account/signin",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "memberships",
+        "accounts"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/auth/invitation/accept",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "memberships",
+        "staff"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/auth/session",
       "methods": [
         "GET"
@@ -1715,6 +1830,7 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
+        "memberships",
         "staff"
       ],
       "risk": "medium"
@@ -1735,6 +1851,28 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
+        "staff"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/auth/switch-org",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "auth_events",
+        "memberships",
         "staff"
       ],
       "risk": "medium"
@@ -1817,7 +1955,29 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "receiving"
+        "receiving",
+        "accounts"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/catalog/platform-accounts/[id]",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "accounts"
       ],
       "risk": "medium"
     },
@@ -1923,6 +2083,7 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
+        "workflow_nodes",
         "receiving",
         "items",
         "types"
@@ -1946,6 +2107,7 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
+        "photo_jobs",
         "photos",
         "staff"
       ],
@@ -1968,6 +2130,26 @@
       "mutates": false,
       "touched": [
         "photos"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/ebay/health",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "integrations.ebay",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "accounts"
       ],
       "risk": "medium"
     },
@@ -2239,7 +2421,7 @@
       "tenantWrapped": false,
       "rawPool": true,
       "drizzle": false,
-      "transitional": false,
+      "transitional": true,
       "isCron": false,
       "isPathParam": true,
       "mutates": true,
@@ -2446,32 +2628,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/order-labels",
-      "methods": [
-        "GET",
-        "POST",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "orders.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "audit_logs",
-        "documents",
-        "receiving",
-        "orders",
-        "photos"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/orders",
       "methods": [
         "GET"
@@ -2567,6 +2723,7 @@
         "tech_serial_numbers",
         "inventory_events",
         "audit_logs",
+        "receiving",
         "orders",
         "staff"
       ],
@@ -2645,85 +2802,23 @@
       "risk": "medium"
     },
     {
-      "route": "/api/orders/check-shipped",
+      "route": "/api/org/invitations",
       "methods": [
-        "POST"
+        "POST",
+        "GET"
       ],
       "withAuth": true,
-      "permission": "shipping.mark_shipped",
+      "permission": "admin.manage_staff",
       "orgIdRef": true,
       "tenantWrapped": false,
-      "rawPool": true,
+      "rawPool": false,
       "drizzle": false,
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "station_activity_logs",
-        "orders"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/orders/delete",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "orders.void",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "orders",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/orders/missing-parts",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "orders.create",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "orders",
-        "staff"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/orders/set-item-number",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "orders.create",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "orders"
+        "memberships"
       ],
       "risk": "medium"
     },
@@ -2749,95 +2844,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/pack/ship",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "packing.complete_order",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "order_unit_allocations",
-        "station_activity_logs",
-        "inventory_events",
-        "sku_stock_ledger",
-        "serial_units",
-        "packer_logs",
-        "sku_stock",
-        "orders",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/packerlogs",
-      "methods": [
-        "GET",
-        "POST",
-        "PUT",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "packing.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": true,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "station_activity_logs",
-        "packer_logs",
-        "orders",
-        "photos",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/packing-logs",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "packing.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "fba_shipment_tracking",
-        "fba_shipment_items",
-        "sku_platform_ids",
-        "work_assignments",
-        "fba_shipments",
-        "packer_logs",
-        "sku_catalog",
-        "fba_fnskus",
-        "sku_stock",
-        "orders",
-        "photos",
-        "staff",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/packing-logs/save-photo",
       "methods": [
         "POST"
@@ -2854,33 +2860,6 @@
       "mutates": true,
       "touched": [
         "photos"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/packing-logs/update",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "packing.complete_order",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "sku_stock_ledger",
-        "work_assignments",
-        "packer_logs",
-        "sku_stock",
-        "orders",
-        "photos",
-        "sku"
       ],
       "risk": "medium"
     },
@@ -3048,28 +3027,6 @@
       "mutates": false,
       "touched": [
         "photos"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/photos/upload",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "photos",
-        "types"
       ],
       "risk": "medium"
     },
@@ -3448,6 +3405,28 @@
       "risk": "medium"
     },
     {
+      "route": "/api/receiving-lines/incoming/zoho-refresh",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "zoho_po_mirror",
+        "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/receiving-lines/view",
       "methods": [
         "POST"
@@ -3495,31 +3474,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/receiving-photos",
-      "methods": [
-        "GET",
-        "POST",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "receiving.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "receiving_scans",
-        "receiving",
-        "photos"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/receiving-tasks",
       "methods": [
         "GET",
@@ -3539,37 +3493,6 @@
       "mutates": true,
       "touched": [
         "receiving"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/[id]",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "local_pickup_orders",
-        "inventory_events",
-        "receiving_lines",
-        "receiving_scans",
-        "serial_units",
-        "locations",
-        "platforms",
-        "receiving",
-        "staff",
-        "sku"
       ],
       "risk": "medium"
     },
@@ -3594,32 +3517,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/receiving/add-unmatched-line",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "api_idempotency_responses",
-        "sku_platform_ids",
-        "receiving_lines",
-        "receiving",
-        "orders",
-        "items",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/receiving/identify-label",
       "methods": [
         "POST"
@@ -3638,165 +3535,6 @@
         "sku_catalog",
         "receiving",
         "items",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/lines/[id]/condition",
-      "methods": [
-        "PATCH"
-      ],
-      "withAuth": true,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "receiving"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/lines/[id]/putaway",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "inventory_events",
-        "receiving_lines",
-        "serial_units",
-        "locations",
-        "receiving",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/lines/[id]/status",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "serial_units",
-        "receiving",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/lookup-po",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.scan_po",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "tracking_exceptions",
-        "receiving_lines",
-        "receiving_scans",
-        "zoho_po_mirror",
-        "sku_catalog",
-        "receiving",
-        "orders",
-        "items",
-        "staff",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/mark-received",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.mark_received",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "inventory_events",
-        "sku_stock_ledger",
-        "receiving_lines",
-        "serial_units",
-        "audit_logs",
-        "locations",
-        "receiving",
-        "sku_stock",
-        "items",
-        "staff",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/mark-received-po",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.mark_received",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "shipping_tracking_numbers",
-        "inventory_events",
-        "sku_stock_ledger",
-        "receiving_lines",
-        "serial_units",
-        "audit_logs",
-        "receiving",
-        "items",
-        "staff",
         "sku"
       ],
       "risk": "medium"
@@ -3870,56 +3608,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/receiving/scan-serial",
-      "methods": [
-        "POST",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "receiving.mark_received",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "tech_serial_numbers",
-        "receiving_lines",
-        "serial_units",
-        "receiving",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/serials",
-      "methods": [
-        "GET",
-        "POST",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "receiving.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "tech_serial_numbers",
-        "receiving_lines",
-        "serial_units",
-        "receiving"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/receiving/unfound-queue",
       "methods": [
         "GET"
@@ -3935,53 +3623,6 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
-        "receiving"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/unfound-queue/[kind]/[id]",
-      "methods": [
-        "PATCH",
-        "DELETE"
-      ],
-      "withAuth": true,
-      "permission": "receiving.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "email_missing_purchase_orders",
-        "orders_exceptions",
-        "unfound_overlay",
-        "serial_units",
-        "receiving",
-        "staff"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "unfound_overlay",
         "receiving"
       ],
       "risk": "medium"
@@ -4025,29 +3666,6 @@
         "sku_catalog",
         "receiving",
         "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/receiving/zendesk-claim",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "receiving.mark_received",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "receiving_lines",
-        "ticket_links",
-        "receiving",
-        "photos"
       ],
       "risk": "medium"
     },
@@ -4180,6 +3798,7 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
+        "receiving_claim_seller_messages",
         "receiving"
       ],
       "risk": "medium"
@@ -4205,6 +3824,28 @@
       "risk": "medium"
     },
     {
+      "route": "/api/repair-service",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "repair.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "types"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/repair-service/[id]",
       "methods": [
         "GET",
@@ -4223,6 +3864,27 @@
       "touched": [
         "customers",
         "documents"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/repair-service/[id]/link",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "repair_service"
       ],
       "risk": "medium"
     },
@@ -4704,13 +4366,12 @@
       "risk": "medium"
     },
     {
-      "route": "/api/serial-units/[id]/photos",
+      "route": "/api/serial-units/[id]/list",
       "methods": [
-        "GET",
         "POST"
       ],
       "withAuth": true,
-      "permission": "sku_stock.view",
+      "permission": "inventory.list_unit",
       "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": true,
@@ -4720,12 +4381,8 @@
       "isPathParam": true,
       "mutates": true,
       "touched": [
-        "inventory_events",
-        "serial_units",
-        "receiving",
-        "sku_stock",
-        "photos",
-        "sku"
+        "serial_unit_listings",
+        "serial_units"
       ],
       "risk": "medium"
     },
@@ -4822,6 +4479,7 @@
       "touched": [
         "packer_logs",
         "orders",
+        "staff",
         "sku"
       ],
       "risk": "medium"
@@ -5156,35 +4814,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/sku-stock/[sku]",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
-      "withAuth": true,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": true,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "location_transfers",
-        "inventory_events",
-        "sku_stock_ledger",
-        "sku_catalog",
-        "locations",
-        "sku_stock",
-        "photos",
-        "items",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/sourcing/alerts",
       "methods": [
         "GET",
@@ -5384,6 +5013,27 @@
       "risk": "medium"
     },
     {
+      "route": "/api/staff-preferences",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "staff"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/staff-todos",
       "methods": [
         "GET",
@@ -5507,25 +5157,25 @@
       "risk": "medium"
     },
     {
-      "route": "/api/stations",
+      "route": "/api/studio/flow",
       "methods": [
-        "GET",
-        "POST"
+        "GET"
       ],
       "withAuth": true,
-      "permission": "dashboard.view",
+      "permission": "studio.view",
       "orgIdRef": true,
       "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
+      "rawPool": false,
+      "drizzle": true,
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
-      "mutates": true,
+      "mutates": false,
       "touched": [
-        "station_definitions",
-        "receiving",
-        "staff"
+        "workflow_node_stats",
+        "workflow_edges",
+        "workflow_nodes",
+        "workflow_runs"
       ],
       "risk": "medium"
     },
@@ -5550,6 +5200,50 @@
       "risk": "medium"
     },
     {
+      "route": "/api/studio/items/[id]/recover",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "studio.recover",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "item_workflow_state",
+        "workflow_runs",
+        "audit_logs",
+        "items"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/studio/items/stuck",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "studio.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "items",
+        "sku"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/studio/live",
       "methods": [
         "GET"
@@ -5566,26 +5260,6 @@
       "mutates": false,
       "touched": [
         "item_workflow_state"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/studio/nodes/[id]/station",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "studio.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": true,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": false,
-      "touched": [
-        "station_definitions"
       ],
       "risk": "medium"
     },
@@ -5661,30 +5335,6 @@
       "risk": "medium"
     },
     {
-      "route": "/api/tech/delete",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "tech.scan_serial",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "station_activity_logs",
-        "tech_serial_numbers",
-        "fba_fnsku_logs",
-        "orders",
-        "staff"
-      ],
-      "risk": "medium"
-    },
-    {
       "route": "/api/tech/scan-repair-station",
       "methods": [
         "POST"
@@ -5701,78 +5351,6 @@
       "mutates": true,
       "touched": [
         "staff"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/tech/scan-sku",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "tech.scan_serial",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "sku_stock_ledger",
-        "serial_units",
-        "sku_stock",
-        "orders",
-        "staff",
-        "sku"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/tech/serial",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": true,
-      "permission": "tech.scan_serial",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [
-        "station_activity_logs",
-        "tech_serial_numbers",
-        "orders"
-      ],
-      "risk": "medium"
-    },
-    {
-      "route": "/api/tracking-exceptions/[id]/refresh",
-      "methods": [
-        "POST"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
-      "touched": [
-        "tracking_exceptions",
-        "receiving_lines",
-        "receiving_scans",
-        "receiving",
-        "orders",
-        "sku"
       ],
       "risk": "medium"
     },
@@ -6184,6 +5762,27 @@
       "risk": "medium"
     },
     {
+      "route": "/api/work-orders/calendar",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "work_orders.view",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "work_assignments",
+        "orders"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/zendesk/tickets",
       "methods": [
         "GET",
@@ -6248,6 +5847,26 @@
       "risk": "medium"
     },
     {
+      "route": "/api/zoho/health",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "integrations.zoho",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "accounts"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/zoho/items/sync",
       "methods": [
         "POST",
@@ -6265,6 +5884,26 @@
       "mutates": true,
       "touched": [
         "items"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/zoho/oauth/callback",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "accounts"
       ],
       "risk": "medium"
     },
@@ -6338,6 +5977,28 @@
       "risk": "medium"
     },
     {
+      "route": "/api/zoho/purchase-orders/sync",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "integrations.zoho",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "receiving",
+        "orders"
+      ],
+      "risk": "medium"
+    },
+    {
       "route": "/api/zoho/purchase-receives",
       "methods": [
         "GET"
@@ -6354,6 +6015,48 @@
       "mutates": false,
       "touched": [
         "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/zoho/purchase-receives/import",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving"
+      ],
+      "risk": "medium"
+    },
+    {
+      "route": "/api/zoho/purchase-receives/sync",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "integrations.zoho",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "receiving",
+        "orders"
       ],
       "risk": "medium"
     },
@@ -7122,7 +6825,8 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "amazon_accounts"
+        "amazon_accounts",
+        "accounts"
       ],
       "risk": "low"
     },
@@ -7142,7 +6846,8 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "amazon_accounts"
+        "amazon_accounts",
+        "accounts"
       ],
       "risk": "low"
     },
@@ -7162,7 +6867,8 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
-        "amazon_accounts"
+        "amazon_accounts",
+        "accounts"
       ],
       "risk": "low"
     },
@@ -7183,6 +6889,31 @@
       "mutates": false,
       "touched": [
         "work_assignments"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/assignments/sku-search",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "work_orders.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "work_assignments",
+        "sku_stock",
+        "items",
+        "staff",
+        "sku"
       ],
       "risk": "low"
     },
@@ -7257,6 +6988,55 @@
         "shipping_tracking_numbers",
         "work_assignments",
         "packer_logs",
+        "orders"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/cron/zoho/incoming-po-sync",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": true,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "receiving_lines",
+        "zoho_po_mirror",
+        "sync_cursors",
+        "receiving",
+        "orders",
+        "items"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/cron/zoho/po-sync",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": true,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "email_missing_purchase_orders",
+        "receiving_lines",
+        "zoho_po_mirror",
+        "receiving",
         "orders"
       ],
       "risk": "low"
@@ -7447,7 +7227,8 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
-        "ebay_accounts"
+        "ebay_accounts",
+        "accounts"
       ],
       "risk": "low"
     },
@@ -7510,6 +7291,7 @@
         "shipping_tracking_numbers",
         "tech_serial_numbers",
         "work_assignments",
+        "accounts",
         "orders",
         "sku"
       ],
@@ -8103,6 +7885,36 @@
       "risk": "low"
     },
     {
+      "route": "/api/fba/shipments/[id]/trace",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": false,
+      "touched": [
+        "fba_shipment_item_units",
+        "fba_shipment_tracking",
+        "fba_shipment_items",
+        "inventory_events",
+        "fba_shipments",
+        "serial_units",
+        "fba_fnskus",
+        "items",
+        "staff",
+        "types",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/fba/shipments/[id]/tracking",
       "methods": [
         "GET",
@@ -8340,6 +8152,7 @@
       "isPathParam": false,
       "mutates": false,
       "touched": [
+        "qc_check_templates",
         "sku_platform_ids",
         "sku_catalog",
         "sku_stock",
@@ -8884,7 +8697,7 @@
       "tenantWrapped": true,
       "rawPool": true,
       "drizzle": false,
-      "transitional": false,
+      "transitional": true,
       "isCron": false,
       "isPathParam": true,
       "mutates": true,
@@ -8990,6 +8803,32 @@
         "station_activity_logs",
         "audit_logs",
         "staff"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/order-labels",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "orders.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "audit_logs",
+        "documents",
+        "receiving",
+        "orders",
+        "photos"
       ],
       "risk": "low"
     },
@@ -9101,6 +8940,7 @@
       "touched": [
         "shipping_tracking_numbers",
         "ebay_accounts",
+        "accounts",
         "orders",
         "sku"
       ],
@@ -9150,6 +8990,48 @@
         "packer_logs",
         "orders",
         "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/orders/check-shipped",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "shipping.mark_shipped",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "station_activity_logs",
+        "orders"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/orders/delete",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "orders.void",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "orders",
         "sku"
       ],
       "risk": "low"
@@ -9205,6 +9087,27 @@
       "risk": "low"
     },
     {
+      "route": "/api/orders/missing-parts",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "orders.create",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "orders",
+        "staff"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/orders/next",
       "methods": [
         "GET"
@@ -9255,6 +9158,26 @@
       "risk": "low"
     },
     {
+      "route": "/api/orders/set-item-number",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "orders.create",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "orders"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/orders/verify",
       "methods": [
         "GET"
@@ -9277,6 +9200,97 @@
       "risk": "low"
     },
     {
+      "route": "/api/pack/ship",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "packing.complete_order",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "order_unit_allocations",
+        "station_activity_logs",
+        "inventory_events",
+        "sku_stock_ledger",
+        "serial_units",
+        "packer_logs",
+        "audit_logs",
+        "sku_stock",
+        "orders",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/packerlogs",
+      "methods": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "packing.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "station_activity_logs",
+        "packer_logs",
+        "orders",
+        "photos",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/packing-logs",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "packing.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "fba_shipment_tracking",
+        "fba_shipment_items",
+        "sku_platform_ids",
+        "work_assignments",
+        "fba_shipments",
+        "packer_logs",
+        "sku_catalog",
+        "fba_fnskus",
+        "sku_stock",
+        "orders",
+        "photos",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/packing-logs/history",
       "methods": [
         "GET"
@@ -9293,10 +9307,39 @@
       "mutates": false,
       "touched": [
         "shipping_tracking_numbers",
+        "photo_entity_links",
         "packer_logs",
         "orders",
         "photos",
         "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/packing-logs/update",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "packing.complete_order",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "photo_entity_links",
+        "sku_stock_ledger",
+        "work_assignments",
+        "packer_logs",
+        "sku_stock",
+        "orders",
+        "photos",
         "sku"
       ],
       "risk": "low"
@@ -9338,6 +9381,7 @@
       "isPathParam": true,
       "mutates": true,
       "touched": [
+        "photo_entity_links",
         "receiving",
         "sku_stock",
         "photos"
@@ -9361,6 +9405,28 @@
       "mutates": false,
       "touched": [
         "photos"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/photos/upload",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "photos",
+        "types"
       ],
       "risk": "low"
     },
@@ -9901,6 +9967,30 @@
       "risk": "low"
     },
     {
+      "route": "/api/receiving-lines/incoming/todo",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "email_missing_purchase_orders",
+        "receiving",
+        "items",
+        "staff"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/receiving-logs/search",
       "methods": [
         "GET"
@@ -9922,7 +10012,135 @@
       "risk": "low"
     },
     {
+      "route": "/api/receiving-photos",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "receiving_scans",
+        "receiving",
+        "photos"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/[id]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "local_pickup_orders",
+        "inventory_events",
+        "receiving_lines",
+        "receiving_scans",
+        "serial_units",
+        "locations",
+        "platforms",
+        "receiving",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/add-unmatched-line",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "api_idempotency_responses",
+        "sku_platform_ids",
+        "receiving_lines",
+        "receiving",
+        "orders",
+        "items",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/lines/[id]/condition",
+      "methods": [
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "receiving"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/receiving/lines/[id]/move",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "inventory_events",
+        "receiving_lines",
+        "serial_units",
+        "locations",
+        "receiving",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/lines/[id]/putaway",
       "methods": [
         "POST"
       ],
@@ -9970,6 +10188,29 @@
       "risk": "low"
     },
     {
+      "route": "/api/receiving/lines/[id]/status",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "receiving_lines",
+        "serial_units",
+        "receiving",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/receiving/lines/[id]/timeline",
       "methods": [
         "GET"
@@ -9989,6 +10230,96 @@
         "serial_units",
         "locations",
         "receiving",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/lookup-po",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.scan_po",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "tracking_exceptions",
+        "receiving_lines",
+        "receiving_scans",
+        "zoho_po_mirror",
+        "sku_catalog",
+        "receiving",
+        "orders",
+        "items",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/mark-received",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "inventory_events",
+        "sku_stock_ledger",
+        "receiving_lines",
+        "serial_units",
+        "audit_logs",
+        "locations",
+        "receiving",
+        "sku_stock",
+        "items",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/mark-received-po",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "shipping_tracking_numbers",
+        "inventory_events",
+        "sku_stock_ledger",
+        "receiving_lines",
+        "serial_units",
+        "audit_logs",
+        "receiving",
+        "items",
         "staff",
         "sku"
       ],
@@ -10094,6 +10425,56 @@
       "risk": "low"
     },
     {
+      "route": "/api/receiving/scan-serial",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "tech_serial_numbers",
+        "receiving_lines",
+        "serial_units",
+        "receiving",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/serials",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "tech_serial_numbers",
+        "receiving_lines",
+        "serial_units",
+        "receiving"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/receiving/touch-scan",
       "methods": [
         "POST"
@@ -10111,6 +10492,78 @@
       "touched": [
         "receiving_scans",
         "receiving"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/unfound-queue/[kind]/[id]",
+      "methods": [
+        "PATCH",
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "email_missing_purchase_orders",
+        "orders_exceptions",
+        "unfound_overlay",
+        "serial_units",
+        "receiving",
+        "staff"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "unfound_overlay",
+        "receiving"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/receiving/zendesk-claim",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "receiving.mark_received",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "photo_entity_links",
+        "receiving_lines",
+        "photo_storage",
+        "ticket_links",
+        "receiving",
+        "photos"
       ],
       "risk": "low"
     },
@@ -10521,6 +10974,33 @@
         "bin_contents",
         "serial_units",
         "locations",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/serial-units/[id]/photos",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "sku_stock.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "photo_entity_links",
+        "inventory_events",
+        "serial_units",
+        "receiving",
+        "sku_stock",
+        "photos",
         "sku"
       ],
       "risk": "low"
@@ -11147,6 +11627,37 @@
       "risk": "low"
     },
     {
+      "route": "/api/sku-stock/[sku]",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "withAuth": true,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": true,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "location_transfers",
+        "photo_entity_links",
+        "inventory_events",
+        "sku_stock_ledger",
+        "serial_units",
+        "sku_catalog",
+        "locations",
+        "sku_stock",
+        "photos",
+        "items",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/sku-stock/[sku]/bins",
       "methods": [
         "GET"
@@ -11210,6 +11721,7 @@
       "isPathParam": false,
       "mutates": true,
       "touched": [
+        "photo_entity_links",
         "serial_units",
         "sku_stock",
         "photos",
@@ -11354,6 +11866,29 @@
       "risk": "low"
     },
     {
+      "route": "/api/stations",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "dashboard.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "station_definitions",
+        "receiving",
+        "staff"
+      ],
+      "risk": "low"
+    },
+    {
       "route": "/api/stations/publish",
       "methods": [
         "POST"
@@ -11462,16 +11997,34 @@
       "isPathParam": true,
       "mutates": true,
       "touched": [
-        "workflow_definitions",
-        "station_definitions",
-        "workflow_edges",
-        "workflow_nodes",
-        "items"
+        "items",
+        "types"
       ],
       "risk": "low"
     },
     {
-      "route": "/api/studio/definitions/draft",
+      "route": "/api/studio/nodes/[id]/station",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "withAuth": true,
+      "permission": "studio.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "station_definitions"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/studio/nodes/[id]/station/publish",
       "methods": [
         "POST"
       ],
@@ -11483,12 +12036,31 @@
       "drizzle": false,
       "transitional": false,
       "isCron": false,
-      "isPathParam": false,
+      "isPathParam": true,
       "mutates": true,
       "touched": [
-        "workflow_definitions",
-        "workflow_edges",
-        "workflow_nodes"
+        "station_definitions"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/studio/people",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "studio.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": true,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "staff_stations",
+        "staff"
       ],
       "risk": "low"
     },
@@ -11550,6 +12122,30 @@
       "mutates": true,
       "touched": [
         "station_activity_logs"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/tech/delete",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "tech.scan_serial",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "station_activity_logs",
+        "tech_serial_numbers",
+        "fba_fnsku_logs",
+        "orders",
+        "staff"
       ],
       "risk": "low"
     },
@@ -11659,6 +12255,53 @@
         "items",
         "staff",
         "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/tech/scan-sku",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "tech.scan_serial",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "sku_stock_ledger",
+        "serial_units",
+        "sku_stock",
+        "orders",
+        "staff",
+        "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/tech/serial",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "tech.scan_serial",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [
+        "station_activity_logs",
+        "tech_serial_numbers",
+        "orders"
       ],
       "risk": "low"
     },
@@ -11793,6 +12436,31 @@
         "tracking_exceptions",
         "receiving",
         "staff"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/tracking-exceptions/[id]/refresh",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [
+        "tracking_exceptions",
+        "receiving_lines",
+        "receiving_scans",
+        "receiving",
+        "orders",
+        "sku"
       ],
       "risk": "low"
     },
@@ -11945,8 +12613,6 @@
       "mutates": true,
       "touched": [
         "shipping_tracking_numbers",
-        "station_activity_logs",
-        "order_shipment_links",
         "work_assignments",
         "receiving_lines",
         "repair_service",
@@ -11955,7 +12621,28 @@
         "sku_stock",
         "orders",
         "staff",
+        "types",
         "sku"
+      ],
+      "risk": "low"
+    },
+    {
+      "route": "/api/work-orders/mine",
+      "methods": [
+        "GET"
+      ],
+      "withAuth": true,
+      "permission": "work_orders.view",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": false,
+      "touched": [
+        "orders"
       ],
       "risk": "low"
     },
@@ -12079,24 +12766,6 @@
       "isCron": false,
       "isPathParam": false,
       "mutates": true,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/admin/po-gmail/connect",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "admin.view",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": false,
       "touched": [],
       "risk": "info"
     },
@@ -12246,24 +12915,6 @@
       "risk": "info"
     },
     {
-      "route": "/api/amazon/health",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "integrations.amazon",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
       "route": "/api/amazon/oauth/start",
       "methods": [
         "GET"
@@ -12282,12 +12933,15 @@
       "risk": "info"
     },
     {
-      "route": "/api/amazon/sync",
+      "route": "/api/assignments",
       "methods": [
-        "POST"
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
       ],
       "withAuth": true,
-      "permission": "integrations.amazon",
+      "permission": "work_orders.view",
       "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": false,
@@ -12300,16 +12954,13 @@
       "risk": "info"
     },
     {
-      "route": "/api/assignments",
+      "route": "/api/auth/account/passkey/authenticate/begin",
       "methods": [
-        "GET",
-        "POST",
-        "PATCH",
-        "DELETE"
+        "POST"
       ],
-      "withAuth": true,
-      "permission": "work_orders.view",
-      "orgIdRef": true,
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
       "tenantWrapped": false,
       "rawPool": false,
       "drizzle": false,
@@ -12391,25 +13042,6 @@
       "isCron": false,
       "isPathParam": false,
       "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/catalog/platform-accounts/[id]",
-      "methods": [
-        "PATCH",
-        "DELETE"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": true,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": true,
-      "mutates": true,
       "touched": [],
       "risk": "info"
     },
@@ -12504,97 +13136,7 @@
       "risk": "info"
     },
     {
-      "route": "/api/cron/replenishment/sync",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
       "route": "/api/cron/shipping/metrics",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/cron/shipping/subscribe-fedex",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/cron/shipping/subscribe-ups",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/cron/shipping/subscribe-usps",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": true,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/cron/sourcing/replenish",
       "methods": [
         "GET"
       ],
@@ -12666,62 +13208,6 @@
       "risk": "info"
     },
     {
-      "route": "/api/ebay/health",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "integrations.ebay",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/ebay/refresh-tokens",
-      "methods": [
-        "POST",
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "integrations.ebay",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/ebay/sync",
-      "methods": [
-        "POST",
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "integrations.ebay",
-      "orgIdRef": false,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
-      "touched": [],
-      "risk": "info"
-    },
-    {
       "route": "/api/ecwid-square/sync",
       "methods": [
         "POST"
@@ -12764,7 +13250,7 @@
       ],
       "withAuth": true,
       "permission": "handling_unit.manage",
-      "orgIdRef": false,
+      "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": true,
       "drizzle": false,
@@ -12782,7 +13268,7 @@
       ],
       "withAuth": true,
       "permission": "handling_unit.manage",
-      "orgIdRef": false,
+      "orgIdRef": true,
       "tenantWrapped": false,
       "rawPool": true,
       "drizzle": false,
@@ -12895,6 +13381,24 @@
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/org/invitations/[id]",
+      "methods": [
+        "DELETE"
+      ],
+      "withAuth": true,
+      "permission": "admin.manage_staff",
+      "orgIdRef": true,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
       "mutates": true,
       "touched": [],
       "risk": "info"
@@ -13041,25 +13545,6 @@
       "isCron": false,
       "isPathParam": false,
       "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/repair-service",
-      "methods": [
-        "GET",
-        "PATCH"
-      ],
-      "withAuth": true,
-      "permission": "repair.view",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": true,
       "touched": [],
       "risk": "info"
     },
@@ -13308,6 +13793,42 @@
       "permission": null,
       "orgIdRef": false,
       "tenantWrapped": false,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/studio/definitions/draft",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "studio.manage",
+      "orgIdRef": true,
+      "tenantWrapped": true,
+      "rawPool": true,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/studio/templates/[id]/import",
+      "methods": [
+        "POST"
+      ],
+      "withAuth": true,
+      "permission": "studio.manage",
+      "orgIdRef": true,
+      "tenantWrapped": true,
       "rawPool": true,
       "drizzle": false,
       "transitional": false,
@@ -13759,42 +14280,6 @@
       "risk": "info"
     },
     {
-      "route": "/api/zoho/health",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": true,
-      "permission": "integrations.zoho",
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
-      "route": "/api/zoho/oauth/callback",
-      "methods": [
-        "GET"
-      ],
-      "withAuth": false,
-      "permission": null,
-      "orgIdRef": true,
-      "tenantWrapped": false,
-      "rawPool": false,
-      "drizzle": false,
-      "transitional": false,
-      "isCron": false,
-      "isPathParam": false,
-      "mutates": false,
-      "touched": [],
-      "risk": "info"
-    },
-    {
       "route": "/api/zoho/refresh-token",
       "methods": [
         "GET",
@@ -13809,6 +14294,44 @@
       "transitional": false,
       "isCron": false,
       "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/zoho/webhooks",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": false,
+      "mutates": true,
+      "touched": [],
+      "risk": "info"
+    },
+    {
+      "route": "/api/zoho/webhooks/[token]",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "withAuth": false,
+      "permission": null,
+      "orgIdRef": false,
+      "tenantWrapped": false,
+      "rawPool": false,
+      "drizzle": false,
+      "transitional": false,
+      "isCron": false,
+      "isPathParam": true,
       "mutates": true,
       "touched": [],
       "risk": "info"

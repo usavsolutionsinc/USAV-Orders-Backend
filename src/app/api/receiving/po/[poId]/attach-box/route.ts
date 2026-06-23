@@ -180,7 +180,12 @@ export async function POST(
 
     const receivingId = await ensureReceivingForPo({ poId, poNumber, organizationId: ctx.organizationId });
 
-    const result = await attachBoxToReceiving({ receivingId, trackingNumber: tracking, staffId });
+    const result = await attachBoxToReceiving({
+      receivingId,
+      trackingNumber: tracking,
+      staffId,
+      organizationId: ctx.organizationId,
+    });
     if (!result.ok) {
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }

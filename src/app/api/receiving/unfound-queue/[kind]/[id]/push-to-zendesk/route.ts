@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { after } from 'next/server';
@@ -114,7 +114,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
   const ticketNumber = `#${ticket.id}`;
 
   // Persist the ticket id onto the overlay (upsert — overlay row may not exist yet).
-  await pool.query(
+  // GUC-wrapped so RLS (app_tenant) isolates the write; explicit organization_id
+  // stays as defense-in-depth alongside the per-tx app.current_org GUC.
+  await tenantQuery(
+    ctx.organizationId,
     `INSERT INTO unfound_overlay
        (organization_id, source_kind, source_id, zendesk_ticket_id, zendesk_synced_at, updated_by)
      VALUES ($1, $2, $3, $4, NOW(), $5)

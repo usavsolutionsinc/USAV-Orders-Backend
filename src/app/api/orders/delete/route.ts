@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -42,37 +42,59 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         NULLIF('sku:' || lower(trim(${a}.sku)), 'sku:'),
         NULLIF('title:' || lower(regexp_replace(trim(coalesce(${a}.product_title, '')), '\\s+', ' ', 'g')), 'title:')
       )`;
-    const expanded = await pool.query(
-      `WITH targets AS (
-         SELECT t.order_id, ${productKeyExpr('t')} AS pkey
-           FROM orders t
-          WHERE t.id = ANY($1::int[]) AND t.order_id IS NOT NULL AND t.order_id <> ''
-       )
-       SELECT o.id, o.order_id, o.product_title, o.sku, o.condition, o.status, o.shipment_id, o.created_at
-         FROM orders o
-        WHERE o.id = ANY($1::int[])
-           OR EXISTS (
-                SELECT 1 FROM targets tg
-                 WHERE tg.order_id = o.order_id
-                   AND tg.pkey IS NOT DISTINCT FROM ${productKeyExpr('o')}
-              )`,
-      [requestedIds],
-    );
-    const beforeRows = expanded;
-    const idsToDelete: number[] = expanded.rows.map((r) => Number(r.id));
-
-    if (idsToDelete.length === 0) {
-      return NextResponse.json(
-        { error: 'No matching orders were deleted', deleted: 0 },
-        { status: 404 }
+    const txOutcome = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const expanded = await client.query(
+        `WITH targets AS (
+           SELECT t.order_id, ${productKeyExpr('t')} AS pkey
+             FROM orders t
+            WHERE t.id = ANY($1::int[]) AND t.order_id IS NOT NULL AND t.order_id <> ''
+              AND t.organization_id = $2
+         )
+         SELECT o.id, o.order_id, o.product_title, o.sku, o.condition, o.status, o.shipment_id, o.created_at
+           FROM orders o
+          WHERE o.organization_id = $2
+            AND (
+              o.id = ANY($1::int[])
+              OR EXISTS (
+                   SELECT 1 FROM targets tg
+                    WHERE tg.order_id = o.order_id
+                      AND tg.pkey IS NOT DISTINCT FROM ${productKeyExpr('o')}
+                 )
+            )`,
+        [requestedIds, ctx.organizationId],
       );
-    }
+      const beforeRows = expanded;
+      const idsToDelete: number[] = expanded.rows.map((r) => Number(r.id));
 
-    const result = await pool.query(
-      `DELETE FROM orders WHERE id = ANY($1::int[])`,
-      [idsToDelete]
-    );
-    if ((result.rowCount || 0) === 0) {
+      if (idsToDelete.length === 0) {
+        return { notFound: true as const };
+      }
+
+      const result = await client.query(
+        `DELETE FROM orders WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [idsToDelete, ctx.organizationId]
+      );
+      if ((result.rowCount || 0) === 0) {
+        return { notFound: true as const };
+      }
+
+      // One audit row per deleted order, with full before snapshot.
+      for (const row of beforeRows.rows) {
+        await recordAudit(client, ctx, req, {
+          source: 'orders.delete',
+          action: 'orders.delete',
+          entityType: AUDIT_ENTITY.ORDER,
+          entityId: Number(row.id),
+          before: row,
+          after: null,
+          method: 'manual',
+        });
+      }
+
+      return { deleted: result.rowCount || 0, idsToDelete };
+    });
+
+    if ('notFound' in txOutcome) {
       return NextResponse.json(
         { error: 'No matching orders were deleted', deleted: 0 },
         { status: 404 }
@@ -82,22 +104,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // Dashboard shipped table is backed by /api/packerlogs cache ("packing-logs"),
     // not only /api/shipped, so delete must invalidate both domains.
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
-    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: idsToDelete, source: 'orders.delete' });
+    await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: txOutcome.idsToDelete, source: 'orders.delete' });
 
-    // One audit row per deleted order, with full before snapshot.
-    for (const row of beforeRows.rows) {
-      await recordAudit(pool, ctx, req, {
-        source: 'orders.delete',
-        action: 'orders.delete',
-        entityType: AUDIT_ENTITY.ORDER,
-        entityId: Number(row.id),
-        before: row,
-        after: null,
-        method: 'manual',
-      });
-    }
-
-    return NextResponse.json({ success: true, deleted: result.rowCount || 0 });
+    return NextResponse.json({ success: true, deleted: txOutcome.deleted });
   } catch (error: any) {
     console.error('Error deleting order(s):', error);
     return NextResponse.json(

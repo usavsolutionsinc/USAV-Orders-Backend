@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { getActiveLocations, logLocationTransfer, getTransfersForSku } from '@/lib/neon/location-queries';
 import { recordInventoryEvent } from '@/lib/inventory/events';
 import {
@@ -70,16 +71,23 @@ export async function GET(
     const ctx = await resolveCtx(_req);
     const orgId: OrgId = ctx.organizationId ?? USAV_ORG_ID;
 
-    // Run all queries in parallel
+    // Run all queries in parallel. Tenant-owned tables go through the GUC
+    // wrapper (tenantQuery) so RLS can isolate them; explicit
+    // organization_id predicates stay as a defense-in-depth backstop.
     const [stockResult, historyResult, catalogResult, photosResult, ledgerResult, allLocations, transfers] =
       await Promise.all([
         // 1. sku_stock row
-        pool.query(
-          `SELECT id, sku, product_title, stock FROM sku_stock WHERE sku = $1 LIMIT 1`,
-          [skuValue],
+        tenantQuery(
+          orgId,
+          `SELECT id, sku, product_title, stock FROM sku_stock WHERE sku = $1 AND organization_id = $2 LIMIT 1`,
+          [skuValue, orgId],
         ),
-        // 2. sku history rows (inventory log entries for this static_sku)
-        pool.query(
+        // 2. sku history rows (inventory log entries for this static_sku).
+        // v_sku is a view over serial_units and does not surface
+        // organization_id, so the GUC wrapper is the isolation mechanism —
+        // RLS filters the underlying serial_units rows by app.current_org.
+        tenantQuery(
+          orgId,
           `SELECT id, static_sku, serial_number, shipping_tracking_number, notes, location, created_at, updated_at
            FROM v_sku
            WHERE static_sku = $1
@@ -88,13 +96,15 @@ export async function GET(
           [skuValue],
         ),
         // 3. sku_catalog entry
-        pool.query(
+        tenantQuery(
+          orgId,
           `SELECT id, sku, product_title, category, upc, ean, image_url, is_active
-           FROM sku_catalog WHERE sku = $1 LIMIT 1`,
-          [skuValue],
+           FROM sku_catalog WHERE sku = $1 AND organization_id = $2 LIMIT 1`,
+          [skuValue, orgId],
         ),
         // 4. Photos for SKU records with this static_sku
-        pool.query(
+        tenantQuery(
+          orgId,
           `SELECT
              p.id,
              l.entity_id AS sku_id,
@@ -110,20 +120,22 @@ export async function GET(
           WHERE l.entity_type = 'SKU'
             AND l.link_role = 'primary'
             AND s.static_sku = $1
+            AND p.organization_id = $2
            ORDER BY p.created_at DESC`,
-          [skuValue],
+          [skuValue, orgId],
         ),
         // 5. Stock ledger (audit trail)
-        pool.query(
+        tenantQuery(
+          orgId,
           `SELECT id, sku, delta, reason, staff_id, created_at
            FROM sku_stock_ledger
-           WHERE sku = $1
+           WHERE sku = $1 AND organization_id = $2
            ORDER BY created_at DESC
            LIMIT 25`,
-          [skuValue],
+          [skuValue, orgId],
         ).catch(() => ({ rows: [] })), // table may not exist yet
         // 6. All defined locations
-        getActiveLocations().catch(() => []),
+        getActiveLocations(orgId).catch(() => []),
         // 7. Location transfer history for this SKU
         getTransfersForSku(skuValue, 25, orgId).catch(() => []),
       ]);
@@ -331,26 +343,35 @@ export async function PATCH(
     }
 
     if (action === 'adjust' && typeof delta === 'number') {
-      // Capture before-state for the audit diff.
-      const before = await pool.query(
-        `SELECT stock FROM sku_stock WHERE sku = $1`,
-        [skuValue],
-      );
-      const beforeQty = Number((before.rows as Array<{ stock: number | null }>)[0]?.stock ?? 0);
+      // Tenant-owned writes/reads run through the GUC wrapper so RLS isolates
+      // them and the inserted ledger row auto-stamps organization_id from the
+      // GUC default. Explicit organization_id predicates stay as a backstop.
+      const { beforeQty, afterRow } = await withTenantTransaction(idempotencyOrgId, async (client) => {
+        // Capture before-state for the audit diff.
+        const before = await client.query(
+          `SELECT stock FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+          [skuValue, idempotencyOrgId],
+        );
+        const beforeQty = Number((before.rows as Array<{ stock: number | null }>)[0]?.stock ?? 0);
 
-      // Ledger-only: the sku_stock_ledger row is the system of record. The
-      // trg_sku_stock_from_ledger trigger projects SUM(WAREHOUSE deltas) onto
-      // sku_stock.stock (creating the row if absent) — no direct write to
-      // sku_stock.stock. Load-bearing (no .catch swallow): a failed ledger write
-      // must surface, not silently no-op the adjustment.
-      await pool.query(
-        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-        [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
-      );
+        // Ledger-only: the sku_stock_ledger row is the system of record. The
+        // trg_sku_stock_from_ledger trigger projects SUM(WAREHOUSE deltas) onto
+        // sku_stock.stock (creating the row if absent) — no direct write to
+        // sku_stock.stock. Load-bearing (no .catch swallow): a failed ledger write
+        // must surface, not silently no-op the adjustment. organization_id is
+        // stamped by the GUC default.
+        await client.query(
+          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
+           VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
+          [skuValue, delta, reason || 'ADJUSTMENT', staffId || null],
+        );
 
-      const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
-      const afterRow = (after.rows as Array<{ stock: number | null }>)[0];
+        const after = await client.query(
+          `SELECT * FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+          [skuValue, idempotencyOrgId],
+        );
+        return { beforeQty, afterRow: (after.rows as Array<{ stock: number | null }>)[0] };
+      });
       const afterQty = Number(afterRow?.stock ?? beforeQty + delta);
 
       await recordAudit(pool, ctx, request, {
@@ -369,26 +390,34 @@ export async function PATCH(
     }
 
     if (action === 'set' && typeof absoluteQty === 'number') {
-      // Get current stock for ledger delta
-      const current = await pool.query(
-        `SELECT stock FROM sku_stock WHERE sku = $1`,
-        [skuValue],
-      );
-      const currentQty = Number(current.rows[0]?.stock) || 0;
-      const ledgerDelta = absoluteQty - currentQty;
+      // Tenant-owned writes/reads run through the GUC wrapper; the inserted
+      // ledger row auto-stamps organization_id from the GUC default. Explicit
+      // organization_id predicates stay as a backstop.
+      const { currentQty, ledgerDelta, afterRow } = await withTenantTransaction(idempotencyOrgId, async (client) => {
+        // Get current stock for ledger delta
+        const current = await client.query(
+          `SELECT stock FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+          [skuValue, idempotencyOrgId],
+        );
+        const currentQty = Number(current.rows[0]?.stock) || 0;
+        const ledgerDelta = absoluteQty - currentQty;
 
-      // Ledger-only: post a WAREHOUSE delta that brings the sum to absoluteQty;
-      // the trigger projects it onto sku_stock.stock (and creates the row if
-      // absent). Always post — a 0 delta still ensures the projected row exists
-      // at the intended value. Load-bearing (no .catch swallow).
-      await pool.query(
-        `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
-         VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
-        [skuValue, ledgerDelta, reason || 'SET', staffId || null],
-      );
+        // Ledger-only: post a WAREHOUSE delta that brings the sum to absoluteQty;
+        // the trigger projects it onto sku_stock.stock (and creates the row if
+        // absent). Always post — a 0 delta still ensures the projected row exists
+        // at the intended value. Load-bearing (no .catch swallow).
+        await client.query(
+          `INSERT INTO sku_stock_ledger (sku, delta, reason, dimension, staff_id)
+           VALUES ($1, $2, $3, 'WAREHOUSE', $4)`,
+          [skuValue, ledgerDelta, reason || 'SET', staffId || null],
+        );
 
-      const after = await pool.query(`SELECT * FROM sku_stock WHERE sku = $1`, [skuValue]);
-      const afterRow = (after.rows as Array<{ stock: number | null }>)[0];
+        const after = await client.query(
+          `SELECT * FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+          [skuValue, idempotencyOrgId],
+        );
+        return { currentQty, ledgerDelta, afterRow: (after.rows as Array<{ stock: number | null }>)[0] };
+      });
 
       await recordAudit(pool, ctx, request, {
         source: 'sku-stock-page',
@@ -406,19 +435,26 @@ export async function PATCH(
     }
 
     if (action === 'location' && typeof location === 'string') {
-      // Get current location for transfer log
-      const current = await pool.query(
-        `SELECT id, location FROM sku_stock WHERE sku = $1`,
-        [skuValue],
-      );
-      const fromLocation = current.rows[0]?.location || null;
-      const entityId = current.rows[0]?.id;
       const toLocation = location.trim();
 
-      await pool.query(
-        `UPDATE sku_stock SET location = $1 WHERE sku = $2`,
-        [toLocation, skuValue],
-      );
+      // Tenant-owned read + UPDATE run through the GUC wrapper; explicit
+      // organization_id predicates stay as a backstop. (This UPDATE only
+      // touches `location`, never current_status.)
+      const { fromLocation, entityId } = await withTenantTransaction(idempotencyOrgId, async (client) => {
+        // Get current location for transfer log
+        const current = await client.query(
+          `SELECT id, location FROM sku_stock WHERE sku = $1 AND organization_id = $2`,
+          [skuValue, idempotencyOrgId],
+        );
+        const fromLocation = current.rows[0]?.location || null;
+        const entityId = current.rows[0]?.id;
+
+        await client.query(
+          `UPDATE sku_stock SET location = $1 WHERE sku = $2 AND organization_id = $3`,
+          [toLocation, skuValue, idempotencyOrgId],
+        );
+        return { fromLocation, entityId };
+      });
 
       // Log the transfer. location_transfers is RLS-bound — pass the tenant so
       // the write runs through the GUC wrapper. Legacy QR scans can predate
@@ -469,25 +505,32 @@ export async function PATCH(
         );
       }
 
-      // Capture the prior title so the audit row carries the diff.
-      const prior = await pool
-        .query<{ display_name_override: string | null; product_title: string | null }>(
-          `SELECT display_name_override, product_title FROM sku_stock WHERE sku = $1 LIMIT 1`,
-          [skuValue],
-        )
-        .then((r) => r.rows[0] ?? null);
+      // Tenant-owned read + upsert run through the GUC wrapper; the fresh
+      // INSERT auto-stamps organization_id from the GUC default. The
+      // ON CONFLICT (sku) target is global by data-model (UNIQUE(sku)), left
+      // unchanged. Explicit organization_id predicate on the read is a backstop.
+      const prior = await withTenantTransaction(idempotencyOrgId, async (client) => {
+        // Capture the prior title so the audit row carries the diff.
+        const r = await client.query<{ display_name_override: string | null; product_title: string | null }>(
+          `SELECT display_name_override, product_title FROM sku_stock WHERE sku = $1 AND organization_id = $2 LIMIT 1`,
+          [skuValue, idempotencyOrgId],
+        );
+        const prior = r.rows[0] ?? null;
 
-      await pool.query(
-        `INSERT INTO sku_stock (sku, display_name_override, stock)
-         VALUES ($1, $2, 0)
-         ON CONFLICT (sku)
-         DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
-                       updated_at = NOW()`,
-        [skuValue, nextTitle],
-      );
+        await client.query(
+          `INSERT INTO sku_stock (sku, display_name_override, stock)
+           VALUES ($1, $2, 0)
+           ON CONFLICT (sku)
+           DO UPDATE SET display_name_override = EXCLUDED.display_name_override,
+                         updated_at = NOW()`,
+          [skuValue, nextTitle],
+        );
+        return prior;
+      });
 
       // Audit — non-quantity event lives in inventory_events alongside the
-      // ledger rows so /audit can show the full lifecycle of a SKU.
+      // ledger rows so /audit can show the full lifecycle of a SKU. Thread the
+      // tenant so the inventory_events row stamps + GUC-isolates correctly.
       try {
         await recordInventoryEvent({
           event_type: 'NOTE',
@@ -503,7 +546,7 @@ export async function PATCH(
             next_title: nextTitle,
             catalog_title: prior?.product_title ?? null,
           },
-        });
+        }, undefined, idempotencyOrgId);
       } catch (err) {
         console.warn('rename: audit insert failed (non-fatal)', err);
       }

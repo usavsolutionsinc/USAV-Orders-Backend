@@ -12,6 +12,21 @@ multi-tenant SaaS.
 
 ---
 
+## Status snapshot — 2026-06-22 (verified against the live DB, not assumptions)
+
+**Part 1 (engine):** 1.0 (real lock + unpark + Studio recovery), 1.1 (`applyTransition` + `recordTestVerdict` reference), 1.2 (receiving dual-spine de-drift), 1.4 (`listed` + `packed` taps), 1.5 (`shipped` tap — shipped LIVE, not the observe-only-first variant), and 1.6 **Stage 1** (a `decision` node + in-house evaluator) are DONE. Phase **1.3** (one guarded writer): `hold`/`release`, `parts-sort`, `order-release`, `returns-intake`, `rma-restock`, `allocate`, `fba-ship-units`, **`putaway`**, and the **`pack/ship` SHIPPED flip** now route through `transition()`. The `pick/scan` override and `returns/undo` raw writes are deliberate guard-bypasses (force-pick / compensating rewind), kept raw by design. 1.6 **Stage 2** (GoRules ZEN) and **1.7** (non-serialized enrollment, the state-mapping doc, read-model re-point) remain.
+
+**Part 3 (RLS) — substantially further along than the tables below imply:**
+- **E1 keystone DONE:** `app_tenant` role (NOBYPASSRLS) + two-pool split are live (`TENANT_APP_DATABASE_URL` set; `src/lib/db.ts` `tenantPool`). Verified isolating via a real cross-org probe (org's rows under its GUC, 0 under another org) — RLS genuinely bites.
+- **105 of 126 tenant tables FORCEd & verified** (started at 9) — including the ENTIRE high-traffic core (`orders`, `items`, `sku`, `sku_catalog`, `sku_stock`, `sku_stock_ledger`, `inventory_events`, `work_assignments`, `locations`, `packages`, `order_unit_allocations`, `invoices`, `fba_*`, `station_activity_logs`, `rma_authorizations`, `picking_sessions`, `suppliers`, `warehouses`, `product_manuals`, `testing_results`, `repair_*`, …). Cross-org canary green; direct probes confirm 0 cross-org rows (orders 2695/0, sku_stock 2654/0, work_assignments 5782/0, …). Applied via 11 guarded, per-table-fault-tolerant migrations (leaf cohorts 1–3, reason_codes, ready_cohort, core_lowfanin, nullable_business, sku_platform_ids, core_usav_fallback, loudfail_verified, remaining_business).
+- **The 21 still-unforced are ALL by-design exclusions:** external-writer `hermes_*`; system `pipeline_*`/`training_*`; global-by-design STN (`shipping_tracking_numbers`/`shipment_tracking_events`); nullable analytics `operations_kpi_*`; external `google_photos_*`; engine `zoho_locations` (C5); system-nullable `audit_logs`/`order_ingest_queue`/`stripe_events`.
+- **~37 routes GUC-wrapped** across 6 workflow waves + manual on the status-writers (`putaway`, `status`, `condition`, `pack/ship`, `orders/delete`, `mark-received(+po)`, `assignments/sku-search`, …); tsc clean throughout.
+- **Residual (does NOT block "switches flipped"; for tenant-#2 isolation-completeness):** ~36 genuine "wrap" routes remain (most of 600+ are already helper-safe — the static audit under-counts); C5 (engine tables off `neon-http`); D1 (Ably); Phase F (identity/billing).
+
+The Part 3 table further down is the original (2026-06-13) plan; trust this snapshot + `docs/tenancy/coverage.generated.json` + the auto-memory `tenancy-part3-live-state` for current truth.
+
+---
+
 ## Part 0 — Operating principles (non-negotiable)
 
 1. **Expand the existing node-graph engine; never build a second engine.** No XState, no parallel

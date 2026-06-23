@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
-import { transaction } from '@/lib/neon-client';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged, publishReturnPendingTest, publishOrderReadyShip } from '@/lib/realtime/publish';
@@ -25,26 +25,31 @@ import { transition } from '@/lib/inventory/state-machine';
 // the UNSORTED bin so the unit still progresses RECEIVED → STOCKED. Without
 // this, units pile up at RECEIVED and the picker has nothing to allocate.
 // See migration 2026-05-21_inventory_v2_unsorted_default_bin.sql.
-let cachedDefaultPutawayBinId: number | null | undefined;
-async function resolveDefaultPutawayBinId(): Promise<number | null> {
-  if (cachedDefaultPutawayBinId !== undefined) return cachedDefaultPutawayBinId;
+// Per-org cache (bins are tenant-owned, so the default bin id differs per org).
+const cachedDefaultPutawayBinId = new Map<string, number | null>();
+async function resolveDefaultPutawayBinId(orgId: string): Promise<number | null> {
+  if (cachedDefaultPutawayBinId.has(orgId)) return cachedDefaultPutawayBinId.get(orgId)!;
   const barcode = (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+  let resolved: number | null = null;
   try {
-    const r = await pool.query<{ id: number }>(
+    const r = await tenantQuery<{ id: number }>(
+      orgId,
       `SELECT id FROM locations
         WHERE barcode = $1
           AND is_active = true
           AND bin_role = 'RESERVE'
+          AND organization_id = $2
         ORDER BY id ASC
         LIMIT 1`,
-      [barcode],
+      [barcode, orgId],
     );
-    cachedDefaultPutawayBinId = r.rows[0]?.id ?? null;
+    resolved = r.rows[0]?.id ?? null;
   } catch (err) {
     console.warn(`[mark-received] default-putaway bin lookup failed for barcode=${barcode}:`, err);
-    cachedDefaultPutawayBinId = null;
+    resolved = null;
   }
-  return cachedDefaultPutawayBinId;
+  cachedDefaultPutawayBinId.set(orgId, resolved);
+  return resolved;
 }
 
 /**
@@ -54,22 +59,24 @@ async function resolveDefaultPutawayBinId(): Promise<number | null> {
  * when the SKU has no prior putaway (caller falls back to the UNSORTED default).
  * Only consulted when the operator didn't scan an explicit destination bin.
  */
-async function suggestPutawayBinIdForSku(sku: string | null): Promise<number | null> {
+async function suggestPutawayBinIdForSku(sku: string | null, orgId: string): Promise<number | null> {
   if (!sku) return null;
   try {
-    const r = await pool.query<{ bin_id: number }>(
+    const r = await tenantQuery<{ bin_id: number }>(
+      orgId,
       `SELECT ie.bin_id
          FROM inventory_events ie
         WHERE ie.sku = $1
           AND ie.event_type = 'PUTAWAY'
           AND ie.bin_id IS NOT NULL
+          AND ie.organization_id = $2
           AND EXISTS (
             SELECT 1 FROM locations l
              WHERE l.id = ie.bin_id AND l.is_active = true
           )
         ORDER BY ie.id DESC
         LIMIT 1`,
-      [sku],
+      [sku, orgId],
     );
     return r.rows[0]?.bin_id ?? null;
   } catch (err) {
@@ -121,7 +128,7 @@ async function applyInventoryV2Effects(input: {
   notes: string | null;
   nowPst: string;
 }): Promise<{ ledgerId: number | null; receivedEventId: number; putawayEventId: number | null; serialUnitId: number | null }> {
-  return transaction(async (client) => {
+  return withTenantTransaction(input.organizationId, async (client) => {
     // 1. Serial unit. Normally the caller already created it via the canonical
     //    upsertSerialUnit and passed the id in — reuse it. The raw upsert below
     //    is a defensive fallback for a serial that somehow arrived without a
@@ -232,8 +239,8 @@ async function applyInventoryV2Effects(input: {
     let receivedEventId = receivedEvent.rows[0]?.id;
     if (receivedEventId == null && receivedClientEventId) {
       const existing = await client.query<{ id: number }>(
-        `SELECT id FROM inventory_events WHERE client_event_id = $1 LIMIT 1`,
-        [receivedClientEventId],
+        `SELECT id FROM inventory_events WHERE client_event_id = $1 AND organization_id = $2 LIMIT 1`,
+        [receivedClientEventId, input.organizationId],
       );
       receivedEventId = existing.rows[0]?.id;
     }
@@ -276,8 +283,8 @@ async function applyInventoryV2Effects(input: {
         if (t.ok) {
           putawayEventId = t.eventId;
           await client.query(
-            `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2`,
-            [String(input.destinationBinId), serialUnitId],
+            `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2 AND organization_id = $3`,
+            [String(input.destinationBinId), serialUnitId, input.organizationId],
           );
         } else {
           console.warn(`mark-received putaway: STOCKED transition skipped for unit ${serialUnitId}: ${t.error}`);
@@ -355,7 +362,7 @@ export const POST = withAuth(async (request, ctx) => {
       destinationBinId == null &&
       String(body?.disposition_code || 'ACCEPT').trim() === 'ACCEPT'
     ) {
-      destinationBinId = await resolveDefaultPutawayBinId();
+      destinationBinId = await resolveDefaultPutawayBinId(ctx.organizationId);
       putawayBinSource = 'default';
     }
     // Idempotency token from the client (mobile scanner generates a UUID
@@ -372,9 +379,10 @@ export const POST = withAuth(async (request, ctx) => {
     let staffName = String(body?.staff_name || '').trim();
     if (!staffName && staffId != null && Number.isFinite(staffId) && staffId > 0) {
       try {
-        const staffLookup = await pool.query<{ name: string | null }>(
-          `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
-          [staffId],
+        const staffLookup = await tenantQuery<{ name: string | null }>(
+          ctx.organizationId,
+          `SELECT name FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [staffId, ctx.organizationId],
         );
         staffName = (staffLookup.rows[0]?.name || '').trim();
       } catch { /* silent — fall through to generic label */ }
@@ -392,9 +400,10 @@ export const POST = withAuth(async (request, ctx) => {
     // leaving the line received but the bin assignment skipped. Bin storage
     // lives in `locations` (see inventory_events.bin_id FK).
     if (destinationBinId != null) {
-      const binCheck = await pool.query<{ id: number }>(
-        `SELECT id FROM locations WHERE id = $1 LIMIT 1`,
-        [destinationBinId],
+      const binCheck = await tenantQuery<{ id: number }>(
+        ctx.organizationId,
+        `SELECT id FROM locations WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [destinationBinId, ctx.organizationId],
       );
       if (binCheck.rows.length === 0) {
         return NextResponse.json(
@@ -409,11 +418,12 @@ export const POST = withAuth(async (request, ctx) => {
     const hasZohoReceive = Boolean(zohoPoId && zohoLineItemId);
 
     // Capture before-state for audit_logs diff.
-    const beforeRes = await pool.query(
+    const beforeRes = await tenantQuery(
+      ctx.organizationId,
       `SELECT quantity_received, quantity_expected, workflow_status, qa_status,
               disposition_code, condition_grade
-         FROM receiving_lines WHERE id = $1`,
-      [receivingLineId],
+         FROM receiving_lines WHERE id = $1 AND organization_id = $2`,
+      [receivingLineId, ctx.organizationId],
     );
     const beforeRow = (beforeRes.rows as Array<{
       quantity_received: number | null;
@@ -429,7 +439,8 @@ export const POST = withAuth(async (request, ctx) => {
     //    createPurchaseReceive succeeds; then we set DONE. UNBOXED — not
     //    MATCHED — so a Zoho-pending line can't be mistaken for (or re-queued
     //    as) a merely door-scanned carton.
-    const lineUpdate = await pool.query(
+    const lineUpdate = await tenantQuery(
+      ctx.organizationId,
       `UPDATE receiving_lines
        SET qa_status = $1,
            disposition_code = $2,
@@ -443,9 +454,9 @@ export const POST = withAuth(async (request, ctx) => {
              COALESCE(quantity_received, 0),
              COALESCE(quantity_expected, 1)
            )
-       WHERE id = $5
+       WHERE id = $5 AND organization_id = $7
        RETURNING *`,
-      [qaStatus, dispositionCode, conditionGrade, notes, receivingLineId, hasZohoReceive],
+      [qaStatus, dispositionCode, conditionGrade, notes, receivingLineId, hasZohoReceive, ctx.organizationId],
     );
 
     if (lineUpdate.rows.length === 0) {
@@ -465,7 +476,7 @@ export const POST = withAuth(async (request, ctx) => {
       dispositionCode === 'ACCEPT' &&
       (line.sku ?? null)
     ) {
-      const affinityBin = await suggestPutawayBinIdForSku(line.sku ?? null);
+      const affinityBin = await suggestPutawayBinIdForSku(line.sku ?? null, ctx.organizationId);
       if (affinityBin != null) {
         destinationBinId = affinityBin;
         putawayBinSource = 'sku_affinity';
@@ -540,18 +551,17 @@ export const POST = withAuth(async (request, ctx) => {
     // one that newly unboxed the carton (COALESCE keeps an existing timestamp),
     // plus the carton flags, so the tech-station inbox is nudged exactly once.
     if (receivingId) {
-      const cartonUpd = await pool
-        .query<{ is_return: boolean | null; is_priority: boolean | null; just_unboxed: boolean; tracking: string | null }>(
-          `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
-                                unboxed_by = COALESCE(unboxed_by, $2),
-                                updated_at = $1
-            WHERE id = $3
-            RETURNING is_return, is_priority,
-                      (unboxed_at = $1) AS just_unboxed,
-                      receiving_tracking_number AS tracking`,
-          [now, staffId, receivingId],
-        )
-        .catch(() => null);
+      const cartonUpd = await tenantQuery<{ is_return: boolean | null; is_priority: boolean | null; just_unboxed: boolean; tracking: string | null }>(
+        ctx.organizationId,
+        `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
+                              unboxed_by = COALESCE(unboxed_by, $2),
+                              updated_at = $1
+          WHERE id = $3 AND organization_id = $4
+          RETURNING is_return, is_priority,
+                    (unboxed_at = $1) AS just_unboxed,
+                    receiving_tracking_number AS tracking`,
+        [now, staffId, receivingId, ctx.organizationId],
+      ).catch(() => null);
       const carton = cartonUpd?.rows?.[0];
       if (carton?.just_unboxed) {
         after(async () => {
@@ -585,17 +595,18 @@ export const POST = withAuth(async (request, ctx) => {
     let trackingShipmentId: number | null = null;
     if (receivingId) {
       try {
-        const trackingRes = await pool.query<{
+        const trackingRes = await tenantQuery<{
           tracking: string | null;
           shipment_id: number | null;
         }>(
+          ctx.organizationId,
           `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
                   r.shipment_id
              FROM receiving r
              LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
-            WHERE r.id = $1
+            WHERE r.id = $1 AND r.organization_id = $2
             LIMIT 1`,
-          [receivingId],
+          [receivingId, ctx.organizationId],
         );
         localTracking = (trackingRes.rows[0]?.tracking || '').trim() || null;
         trackingShipmentId = trackingRes.rows[0]?.shipment_id ?? null;
@@ -614,11 +625,12 @@ export const POST = withAuth(async (request, ctx) => {
           sourceSystem: 'receiving.mark-received',
         }, ctx.organizationId);
         if (shipment?.id) {
-          await pool.query(
+          await tenantQuery(
+            ctx.organizationId,
             `UPDATE receiving
                 SET shipment_id = $1, updated_at = NOW()
-              WHERE id = $2 AND shipment_id IS NULL`,
-            [shipment.id, receivingId],
+              WHERE id = $2 AND shipment_id IS NULL AND organization_id = $3`,
+            [shipment.id, receivingId, ctx.organizationId],
           );
         }
       } catch (err) {
@@ -672,13 +684,14 @@ export const POST = withAuth(async (request, ctx) => {
           bills: poResp.purchaseorder?.bills,
         });
         zohoReceiveOk = true;
-        const doneUp = await pool.query(
+        const doneUp = await tenantQuery(
+          ctx.organizationId,
           `UPDATE receiving_lines
              SET workflow_status = 'DONE'::inbound_workflow_status_enum,
                  updated_at = NOW()
-           WHERE id = $1
+           WHERE id = $1 AND organization_id = $2
            RETURNING *`,
-          [receivingLineId],
+          [receivingLineId, ctx.organizationId],
         );
         if (doneUp.rows[0]) line = doneUp.rows[0];
 

@@ -28,7 +28,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
@@ -224,214 +224,236 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         ? 'ecwid'
         : null;
 
-  // ─── Idempotency ──────────────────────────────────────────────────────────
+  // ─── Idempotency + all tenant-table access on the per-org GUC path ────────
+  // Everything that touches receiving / receiving_lines / sku_platform_ids runs
+  // inside one withTenantTransaction so RLS (app.current_org) isolates it. The
+  // idempotency cache rows are org-stamped, so they ride the same client.
   const idempotencyKey = readIdempotencyKey(request, clientEventId);
-  if (idempotencyKey) {
-    const cached = await getApiIdempotencyResponse(
-      pool,
-      ctx.organizationId,
-      idempotencyKey,
-      IDEMPOTENCY_ROUTE,
-    );
-    if (cached) {
-      return NextResponse.json(cached.response_body, { status: cached.status_code });
-    }
-  }
 
-  const respond = async (
-    payload: Record<string, unknown>,
-    init?: { status?: number },
-  ) => {
-    const status = init?.status ?? 200;
-    if (idempotencyKey && status < 500) {
-      await saveApiIdempotencyResponse(pool, {
-        orgId: ctx.organizationId,
+  const result = await withTenantTransaction(ctx.organizationId, async (client) => {
+    if (idempotencyKey) {
+      const cached = await getApiIdempotencyResponse(
+        client,
+        ctx.organizationId,
         idempotencyKey,
-        route: IDEMPOTENCY_ROUTE,
-        staffId: ctx.staffId,
-        statusCode: status,
-        responseBody: payload,
-      });
-    }
-    return NextResponse.json(payload, { status });
-  };
-
-  // ─── Verify receiving row exists and is unmatched ─────────────────────────
-  const receivingResult = await pool.query<ReceivingRow>(
-    `SELECT id, source, source_platform, organization_id, zoho_purchaseorder_id
-       FROM receiving
-      WHERE id = $1
-      LIMIT 1`,
-    [receivingId],
-  );
-  const receiving = receivingResult.rows[0];
-
-  if (!receiving) {
-    return respond(
-      { success: false, error: `receiving ${receivingId} not found` },
-      { status: 404 },
-    );
-  }
-
-  // An Ecwid-derived carton (flipped to zoho_po by a per-line return/repair
-  // link, no real Zoho PO id) must keep accepting items — a box mixing several
-  // returns/repairs adds them one at a time, and the FIRST link already flipped
-  // source to zoho_po. Treat it like an unmatched carton for additions.
-  const isEcwidDerivedCarton =
-    receiving.source_platform === 'ecwid' && !receiving.zoho_purchaseorder_id;
-  if (receiving.source !== 'unmatched' && !allowOffPo && !isEcwidDerivedCarton) {
-    return respond(
-      {
-        success: false,
-        error:
-          'add-unmatched-line is only valid on source=unmatched cartons (pass allow_off_po:true to add an off-PO extra item to a matched carton)',
-        actual_source: receiving.source,
-      },
-      { status: 409 },
-    );
-  }
-
-  // ─── Resolve sku_catalog_id from sku_platform_id_row when omitted ─────────
-  // The popover passes sku_platform_id_row (the specific Ecwid listing) but
-  // can't cheaply resolve the paired sku_catalog_id from the platform-search
-  // response. Look it up here so manually-added lines carry the catalog FK
-  // whenever the platform row is paired. Unpaired listings leave it NULL.
-  let resolvedSkuCatalogId = skuCatalogId;
-  let resolvedSku = sku;
-  let resolvedItemName = itemName;
-  if (resolvedSkuCatalogId == null && skuPlatformIdRow != null) {
-    const platformLookup = await pool.query<{
-      sku_catalog_id: number | null;
-      platform_sku: string | null;
-      display_name: string | null;
-    }>(
-      `SELECT sku_catalog_id, platform_sku, display_name
-         FROM sku_platform_ids
-        WHERE id = $1
-        LIMIT 1`,
-      [skuPlatformIdRow],
-    );
-    const platformRow = platformLookup.rows[0];
-    if (platformRow) {
-      resolvedSkuCatalogId = platformRow.sku_catalog_id;
-      if (!resolvedSku) resolvedSku = platformRow.platform_sku;
-      if (!resolvedItemName) resolvedItemName = platformRow.display_name;
-    }
-  }
-
-  // ─── Insert the line ──────────────────────────────────────────────────────
-  // zoho_item_id is NULL (we relaxed the NOT NULL constraint in migration
-  // 2026-05-22_receiving_lines_unfound_columns.sql for exactly this case).
-  // workflow_status='MATCHED' because the line is already linked to its
-  // package — no pre-staging EXPECTED row to reconcile.
-  const insertResult = await pool.query<InsertedLineRow>(
-    `INSERT INTO receiving_lines (
-       receiving_id,
-       sku,
-       item_name,
-       sku_catalog_id,
-       sku_platform_id_row,
-       source_platform_pill,
-       intake_type,
-       condition_grade,
-       listing_url,
-       listing_reference,
-       location_code,
-       quantity_expected,
-       quantity_received,
-       workflow_status,
-       source_system,
-       source_order_id,
-       is_repair_service,
-       organization_id,
-       manual_entry_at,
-       created_at,
-       updated_at
-     ) VALUES (
-       $1, $2, $3, $4, $5, $6, $7, $8::condition_grade_enum,
-       $9, $10, $11, $12, 0,
-       'MATCHED'::inbound_workflow_status_enum,
-       $13, $14, $15, $16::uuid,
-       NOW(), NOW(), NOW()
-     )
-     RETURNING
-       id, receiving_id, sku, item_name,
-       sku_catalog_id, sku_platform_id_row,
-       source_platform_pill, intake_type, condition_grade,
-       listing_url, listing_reference, location_code,
-       quantity_expected, quantity_received, workflow_status,
-       source_system, source_order_id, is_repair_service,
-       manual_entry_at`,
-    [
-      receivingId,
-      resolvedSku,
-      resolvedItemName,
-      resolvedSkuCatalogId,
-      skuPlatformIdRow,
-      sourcePlatformPill,
-      intakeType,
-      conditionGrade,
-      listingUrl,
-      listingReference,
-      locationCode,
-      quantityExpected,
-      sourceSystem,
-      sourceOrderId,
-      isRepairService,
-      ctx.organizationId,
-    ],
-  );
-
-  const line = insertResult.rows[0];
-  if (!line) {
-    return respond(
-      { success: false, error: 'insert returned no row' },
-      { status: 500 },
-    );
-  }
-
-  // ─── Re-derive the carton's source linkage from its lines ─────────────────
-  // The carton's PO# is only a first-linked DISPLAY representative; this flips
-  // an unmatched carton to zoho_po (off the Unfound queue) when the line carries
-  // a source order, and keeps a multi-order box's representative stable. Owns
-  // the state server-side so the client no longer PATCHes the carton itself.
-  let carton: { zoho_purchaseorder_number: string | null; source: string | null; source_platform: string | null } | null = null;
-  if (sourceOrderId || isRepairService) {
-    try {
-      await recomputeCartonSourceLink(receivingId);
-      const cartonRes = await pool.query<{
-        zoho_purchaseorder_number: string | null;
-        source: string | null;
-        source_platform: string | null;
-      }>(
-        `SELECT zoho_purchaseorder_number, source, source_platform FROM receiving WHERE id = $1 LIMIT 1`,
-        [receivingId],
+        IDEMPOTENCY_ROUTE,
       );
-      carton = cartonRes.rows[0] ?? null;
-    } catch (err) {
-      console.warn('add-unmatched-line: carton source recompute failed', err);
+      if (cached) {
+        return { payload: cached.response_body, status: cached.status_code, cached: true };
+      }
     }
-  }
 
-  // ─── Background: cache invalidation + realtime publish ────────────────────
-  after(async () => {
-    try {
-      await invalidateCacheTags([
-        'receiving-lines',
-        'receiving-logs',
-        'pending-unboxing',
-        'unfound-queue',
-      ]);
-      await publishReceivingLogChanged({
-        organizationId: ctx.organizationId,
-        action: 'update',
-        rowId: String(receivingId),
-        source: 'receiving.add-unmatched-line',
-      });
-    } catch (err) {
-      console.warn('add-unmatched-line: cache/realtime update failed', err);
+    const respond = async (
+      payload: Record<string, unknown>,
+      init?: { status?: number },
+    ): Promise<{ payload: Record<string, unknown>; status: number; cached?: boolean }> => {
+      const status = init?.status ?? 200;
+      if (idempotencyKey && status < 500) {
+        await saveApiIdempotencyResponse(client, {
+          orgId: ctx.organizationId,
+          idempotencyKey,
+          route: IDEMPOTENCY_ROUTE,
+          staffId: ctx.staffId,
+          statusCode: status,
+          responseBody: payload,
+        });
+      }
+      return { payload, status };
+    };
+
+    // ─── Verify receiving row exists and is unmatched ───────────────────────
+    const receivingResult = await client.query<ReceivingRow>(
+      `SELECT id, source, source_platform, organization_id, zoho_purchaseorder_id
+         FROM receiving
+        WHERE id = $1
+          AND organization_id = $2
+        LIMIT 1`,
+      [receivingId, ctx.organizationId],
+    );
+    const receiving = receivingResult.rows[0];
+
+    if (!receiving) {
+      return respond(
+        { success: false, error: `receiving ${receivingId} not found` },
+        { status: 404 },
+      );
     }
+
+    // An Ecwid-derived carton (flipped to zoho_po by a per-line return/repair
+    // link, no real Zoho PO id) must keep accepting items — a box mixing several
+    // returns/repairs adds them one at a time, and the FIRST link already flipped
+    // source to zoho_po. Treat it like an unmatched carton for additions.
+    const isEcwidDerivedCarton =
+      receiving.source_platform === 'ecwid' && !receiving.zoho_purchaseorder_id;
+    if (receiving.source !== 'unmatched' && !allowOffPo && !isEcwidDerivedCarton) {
+      return respond(
+        {
+          success: false,
+          error:
+            'add-unmatched-line is only valid on source=unmatched cartons (pass allow_off_po:true to add an off-PO extra item to a matched carton)',
+          actual_source: receiving.source,
+        },
+        { status: 409 },
+      );
+    }
+
+    // ─── Resolve sku_catalog_id from sku_platform_id_row when omitted ───────
+    // The popover passes sku_platform_id_row (the specific Ecwid listing) but
+    // can't cheaply resolve the paired sku_catalog_id from the platform-search
+    // response. Look it up here so manually-added lines carry the catalog FK
+    // whenever the platform row is paired. Unpaired listings leave it NULL.
+    let resolvedSkuCatalogId = skuCatalogId;
+    let resolvedSku = sku;
+    let resolvedItemName = itemName;
+    if (resolvedSkuCatalogId == null && skuPlatformIdRow != null) {
+      const platformLookup = await client.query<{
+        sku_catalog_id: number | null;
+        platform_sku: string | null;
+        display_name: string | null;
+      }>(
+        `SELECT sku_catalog_id, platform_sku, display_name
+           FROM sku_platform_ids
+          WHERE id = $1
+            AND organization_id = $2
+          LIMIT 1`,
+        [skuPlatformIdRow, ctx.organizationId],
+      );
+      const platformRow = platformLookup.rows[0];
+      if (platformRow) {
+        resolvedSkuCatalogId = platformRow.sku_catalog_id;
+        if (!resolvedSku) resolvedSku = platformRow.platform_sku;
+        if (!resolvedItemName) resolvedItemName = platformRow.display_name;
+      }
+    }
+
+    // ─── Insert the line ────────────────────────────────────────────────────
+    // zoho_item_id is NULL (we relaxed the NOT NULL constraint in migration
+    // 2026-05-22_receiving_lines_unfound_columns.sql for exactly this case).
+    // workflow_status='MATCHED' because the line is already linked to its
+    // package — no pre-staging EXPECTED row to reconcile. organization_id is
+    // passed explicitly (the column is loud-fail, not GUC-defaulted) and matches
+    // the GUC set by withTenantTransaction.
+    const insertResult = await client.query<InsertedLineRow>(
+      `INSERT INTO receiving_lines (
+         receiving_id,
+         sku,
+         item_name,
+         sku_catalog_id,
+         sku_platform_id_row,
+         source_platform_pill,
+         intake_type,
+         condition_grade,
+         listing_url,
+         listing_reference,
+         location_code,
+         quantity_expected,
+         quantity_received,
+         workflow_status,
+         source_system,
+         source_order_id,
+         is_repair_service,
+         organization_id,
+         manual_entry_at,
+         created_at,
+         updated_at
+       ) VALUES (
+         $1, $2, $3, $4, $5, $6, $7, $8::condition_grade_enum,
+         $9, $10, $11, $12, 0,
+         'MATCHED'::inbound_workflow_status_enum,
+         $13, $14, $15, $16::uuid,
+         NOW(), NOW(), NOW()
+       )
+       RETURNING
+         id, receiving_id, sku, item_name,
+         sku_catalog_id, sku_platform_id_row,
+         source_platform_pill, intake_type, condition_grade,
+         listing_url, listing_reference, location_code,
+         quantity_expected, quantity_received, workflow_status,
+         source_system, source_order_id, is_repair_service,
+         manual_entry_at`,
+      [
+        receivingId,
+        resolvedSku,
+        resolvedItemName,
+        resolvedSkuCatalogId,
+        skuPlatformIdRow,
+        sourcePlatformPill,
+        intakeType,
+        conditionGrade,
+        listingUrl,
+        listingReference,
+        locationCode,
+        quantityExpected,
+        sourceSystem,
+        sourceOrderId,
+        isRepairService,
+        ctx.organizationId,
+      ],
+    );
+
+    const line = insertResult.rows[0];
+    if (!line) {
+      return respond(
+        { success: false, error: 'insert returned no row' },
+        { status: 500 },
+      );
+    }
+
+    // ─── Re-derive the carton's source linkage from its lines ───────────────
+    // The carton's PO# is only a first-linked DISPLAY representative; this flips
+    // an unmatched carton to zoho_po (off the Unfound queue) when the line carries
+    // a source order, and keeps a multi-order box's representative stable. Owns
+    // the state server-side so the client no longer PATCHes the carton itself.
+    // recomputeCartonSourceLink takes the tenant client so its reads/writes stay
+    // on the GUC path.
+    let carton: { zoho_purchaseorder_number: string | null; source: string | null; source_platform: string | null } | null = null;
+    if (sourceOrderId || isRepairService) {
+      try {
+        await recomputeCartonSourceLink(receivingId, client);
+        const cartonRes = await client.query<{
+          zoho_purchaseorder_number: string | null;
+          source: string | null;
+          source_platform: string | null;
+        }>(
+          `SELECT zoho_purchaseorder_number, source, source_platform
+             FROM receiving
+            WHERE id = $1
+              AND organization_id = $2
+            LIMIT 1`,
+          [receivingId, ctx.organizationId],
+        );
+        carton = cartonRes.rows[0] ?? null;
+      } catch (err) {
+        console.warn('add-unmatched-line: carton source recompute failed', err);
+      }
+    }
+
+    return respond({ success: true, line, carton });
   });
 
-  return respond({ success: true, line, carton });
+  // ─── Background: cache invalidation + realtime publish ────────────────────
+  // Only on a real insert (success) — the cached/404/409/500 paths short-circuit
+  // before this, matching the original early-return behavior.
+  if (result.payload.success === true && !result.cached) {
+    after(async () => {
+      try {
+        await invalidateCacheTags([
+          'receiving-lines',
+          'receiving-logs',
+          'pending-unboxing',
+          'unfound-queue',
+        ]);
+        await publishReceivingLogChanged({
+          organizationId: ctx.organizationId,
+          action: 'update',
+          rowId: String(receivingId),
+          source: 'receiving.add-unmatched-line',
+        });
+      } catch (err) {
+        console.warn('add-unmatched-line: cache/realtime update failed', err);
+      }
+    });
+  }
+
+  return NextResponse.json(result.payload, { status: result.status });
 });

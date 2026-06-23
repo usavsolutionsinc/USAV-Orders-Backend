@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import {
   recordInventoryEvent,
   type InventoryEventStation,
 } from '@/lib/inventory/events';
+import { transition } from '@/lib/inventory/state-machine';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 
 /**
@@ -71,113 +72,208 @@ export async function POST(
       );
     }
 
-    // Resolve the bin.
+    // GUC-wrapped: receiving_lines + serial_units are FORCEd, so the whole
+    // putaway (bin/line lookups, the guarded status write, the location move, and
+    // the per-unit events) runs on the app_tenant pool under app.current_org so
+    // RLS isolates it AND the status flip + event commit atomically (the old code
+    // wrote status on the raw pool, then events separately — non-atomic).
+    const orgId = ctx.organizationId;
     type BinRow = { id: number; name: string; barcode: string | null };
-    let bin: BinRow | null = null;
-    if (binIdFromBody) {
-      const r = await pool.query<BinRow>(
-        `SELECT id, name, barcode FROM locations WHERE id = $1 LIMIT 1`,
-        [binIdFromBody],
-      );
-      bin = r.rows[0] ?? null;
-    } else {
-      const r = await pool.query<BinRow>(
-        `SELECT id, name, barcode FROM locations
-         WHERE barcode = $1 OR LOWER(name) = LOWER($1)
-         LIMIT 1`,
-        [binBarcode],
-      );
-      bin = r.rows[0] ?? null;
-    }
-    if (!bin) {
-      return NextResponse.json(
-        { success: false, error: `Bin not found: ${binBarcode || binIdFromBody}` },
-        { status: 404 },
-      );
-    }
+    type PutawayResult =
+      | { ok: false; status: number; error: string }
+      | { ok: true; bin: BinRow; receivingId: number | null; events: Array<{ id: number }> };
 
-    // Load line state for receiving_id + sku.
-    const lineRes = await pool.query<{
-      id: number;
-      receiving_id: number | null;
-      sku: string | null;
-    }>(
-      `SELECT id, receiving_id, sku FROM receiving_lines WHERE id = $1 LIMIT 1`,
-      [lineId],
-    );
-    const line = lineRes.rows[0];
-    if (!line) {
-      return NextResponse.json(
-        { success: false, error: `receiving_line ${lineId} not found` },
-        { status: 404 },
-      );
-    }
+    const result = await withTenantTransaction<PutawayResult>(orgId, async (client) => {
+      // Resolve the bin (org-scoped — locations is tenant-owned).
+      let bin: BinRow | null = null;
+      if (binIdFromBody) {
+        const r = await client.query<BinRow>(
+          `SELECT id, name, barcode FROM locations WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [binIdFromBody, orgId],
+        );
+        bin = r.rows[0] ?? null;
+      } else {
+        const r = await client.query<BinRow>(
+          `SELECT id, name, barcode FROM locations
+            WHERE (barcode = $1 OR LOWER(name) = LOWER($1)) AND organization_id = $2
+            LIMIT 1`,
+          [binBarcode, orgId],
+        );
+        bin = r.rows[0] ?? null;
+      }
+      if (!bin) {
+        return { ok: false, status: 404, error: `Bin not found: ${binBarcode || binIdFromBody}` };
+      }
 
-    // Find prior bin for this line/serial (most recent PUTAWAY or MOVED event).
-    const priorBinRes = await pool.query<{ bin_id: number | null }>(
-      `SELECT bin_id FROM inventory_events
-       WHERE event_type IN ('PUTAWAY','MOVED')
-         AND (
-           ($1::int IS NOT NULL AND serial_unit_id = $1)
-           OR ($1::int IS NULL AND serial_unit_id IS NULL AND receiving_line_id = $2)
-         )
-       ORDER BY occurred_at DESC, id DESC
-       LIMIT 1`,
-      [serialUnitId, lineId],
-    );
-    const prevBinId = priorBinRes.rows[0]?.bin_id ?? null;
-
-    // Update serial_units location/status (only when serialized).
-    if (serialUnitId) {
-      await pool.query(
-        `UPDATE serial_units
-         SET current_location = $2,
-             current_status   = 'STOCKED'::serial_status_enum,
-             updated_at       = NOW()
-         WHERE id = $1`,
-        [serialUnitId, bin.name],
+      // Load line state for receiving_id + sku (org-scoped — receiving_lines is FORCEd).
+      const lineRes = await client.query<{ id: number; receiving_id: number | null; sku: string | null }>(
+        `SELECT id, receiving_id, sku FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [lineId, orgId],
       );
-    }
+      const line = lineRes.rows[0];
+      if (!line) {
+        return { ok: false, status: 404, error: `receiving_line ${lineId} not found` };
+      }
 
-    // Write one PUTAWAY event per unit so the timeline stays per-unit even
-    // for non-serialized putaways. Idempotent via client_event_id:N.
-    const events: Array<{ id: number }> = [];
-    for (let i = 0; i < qty; i++) {
-      const ev = await recordInventoryEvent(
-        {
-          event_type: 'PUTAWAY',
-          actor_staff_id: staffId,
-          station,
-          receiving_id: line.receiving_id,
-          receiving_line_id: line.id,
-          serial_unit_id: serialUnitId,
-          sku: line.sku,
-          bin_id: bin.id,
-          prev_bin_id: prevBinId,
-          prev_status: null,
-          next_status: serialUnitId ? 'STOCKED' : null,
-          scan_token: scanToken,
-          client_event_id: clientEventId ? `${clientEventId}:put-${i + 1}` : null,
-          notes,
-          payload: { qty: 1, unit_index: i + 1, of_qty: qty, bin_name: bin.name },
-        },
-        // No shared txn client here (the route uses the raw pool), so thread the
-        // tenant explicitly: this stamps inventory_events.organization_id via the
-        // org-scoped insert path instead of falling back to the column default.
-        undefined,
-        ctx.organizationId,
+      // Find prior bin for this line/serial (most recent PUTAWAY or MOVED event).
+      const priorBinRes = await client.query<{ bin_id: number | null }>(
+        `SELECT bin_id FROM inventory_events
+          WHERE event_type IN ('PUTAWAY','MOVED')
+            AND organization_id = $3
+            AND (
+              ($1::int IS NOT NULL AND serial_unit_id = $1)
+              OR ($1::int IS NULL AND serial_unit_id IS NULL AND receiving_line_id = $2)
+            )
+          ORDER BY occurred_at DESC, id DESC
+          LIMIT 1`,
+        [serialUnitId, lineId, orgId],
       );
-      events.push({ id: ev.id });
+      const prevBinId = priorBinRes.rows[0]?.bin_id ?? null;
+
+      const events: Array<{ id: number }> = [];
+
+      if (serialUnitId) {
+        // Putaway = "ensure STOCKED + move to bin". Lock + read the unit's status:
+        // the status flip to STOCKED only fires when it is NOT already there, so a
+        // re-putaway / bin-move of an already-STOCKED unit stays idempotent
+        // (transition() rejects STOCKED→STOCKED as an identity transition).
+        const uq = await client.query<{ current_status: string }>(
+          `SELECT current_status::text AS current_status FROM serial_units
+            WHERE id = $1 AND organization_id = $2 LIMIT 1 FOR UPDATE`,
+          [serialUnitId, orgId],
+        );
+        const unit = uq.rows[0];
+        if (!unit) {
+          return { ok: false, status: 404, error: `serial_unit ${serialUnitId} not found` };
+        }
+
+        const firstPayload = { qty: 1, unit_index: 1, of_qty: qty, bin_name: bin.name };
+        const firstEventKey = clientEventId ? `${clientEventId}:put-1` : null;
+        if (unit.current_status !== 'STOCKED') {
+          // Guarded status write + the canonical PUTAWAY event (SoT: never raw
+          // current_status). transition() emits the event atomically on this client.
+          const tr = await transition(
+            {
+              unitId: serialUnitId,
+              to: 'STOCKED',
+              eventType: 'PUTAWAY',
+              actorStaffId: staffId,
+              station,
+              binId: bin.id,
+              prevBinId,
+              receivingId: line.receiving_id,
+              receivingLineId: line.id,
+              scanToken,
+              clientEventId: firstEventKey,
+              notes,
+              payload: firstPayload,
+            },
+            client,
+            orgId,
+          );
+          if (!tr.ok) {
+            return { ok: false, status: tr.status, error: `putaway ${unit.current_status}→STOCKED: ${tr.error}` };
+          }
+          events.push({ id: tr.eventId });
+        } else {
+          // Already STOCKED → location-only move; emit a PUTAWAY event (no status change).
+          const ev = await recordInventoryEvent(
+            {
+              event_type: 'PUTAWAY',
+              actor_staff_id: staffId,
+              station,
+              receiving_id: line.receiving_id,
+              receiving_line_id: line.id,
+              serial_unit_id: serialUnitId,
+              sku: line.sku,
+              bin_id: bin.id,
+              prev_bin_id: prevBinId,
+              prev_status: 'STOCKED',
+              next_status: 'STOCKED',
+              scan_token: scanToken,
+              client_event_id: firstEventKey,
+              notes,
+              payload: firstPayload,
+            },
+            client,
+          );
+          events.push({ id: ev.id });
+        }
+
+        // Apply the location move (transition() writes status only).
+        await client.query(
+          `UPDATE serial_units SET current_location = $1, updated_at = NOW()
+            WHERE id = $2 AND organization_id = $3`,
+          [bin.name, serialUnitId, orgId],
+        );
+
+        // Preserve the per-qty timeline for the (rare) qty>1 serialized case.
+        for (let i = 1; i < qty; i++) {
+          const ev = await recordInventoryEvent(
+            {
+              event_type: 'PUTAWAY',
+              actor_staff_id: staffId,
+              station,
+              receiving_id: line.receiving_id,
+              receiving_line_id: line.id,
+              serial_unit_id: serialUnitId,
+              sku: line.sku,
+              bin_id: bin.id,
+              prev_bin_id: prevBinId,
+              prev_status: null,
+              next_status: 'STOCKED',
+              scan_token: scanToken,
+              client_event_id: clientEventId ? `${clientEventId}:put-${i + 1}` : null,
+              notes,
+              payload: { qty: 1, unit_index: i + 1, of_qty: qty, bin_name: bin.name },
+            },
+            client,
+          );
+          events.push({ id: ev.id });
+        }
+      } else {
+        // Non-serialized: one PUTAWAY event per unit, no status/location write.
+        for (let i = 0; i < qty; i++) {
+          const ev = await recordInventoryEvent(
+            {
+              event_type: 'PUTAWAY',
+              actor_staff_id: staffId,
+              station,
+              receiving_id: line.receiving_id,
+              receiving_line_id: line.id,
+              serial_unit_id: null,
+              sku: line.sku,
+              bin_id: bin.id,
+              prev_bin_id: prevBinId,
+              prev_status: null,
+              next_status: null,
+              scan_token: scanToken,
+              client_event_id: clientEventId ? `${clientEventId}:put-${i + 1}` : null,
+              notes,
+              payload: { qty: 1, unit_index: i + 1, of_qty: qty, bin_name: bin.name },
+            },
+            client,
+          );
+          events.push({ id: ev.id });
+        }
+      }
+
+      return { ok: true, bin, receivingId: line.receiving_id, events };
+    });
+
+    if (!result.ok) {
+      return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
+    const { bin, events } = result;
 
     after(async () => {
       try {
         await invalidateCacheTags(['receiving-lines', 'sku-stock', 'serial-units']);
-        if (line.receiving_id != null) {
+        if (result.receivingId != null) {
           await publishReceivingLogChanged({
             organizationId: ctx.organizationId,
             action: 'update',
-            rowId: String(line.receiving_id),
+            rowId: String(result.receivingId),
             source: 'receiving.lines.putaway',
           });
         }

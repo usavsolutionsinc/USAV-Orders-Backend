@@ -28,7 +28,9 @@
  * Digital Link URLs via parseScannedUrl before invoking).
  */
 
+import type { PoolClient } from 'pg';
 import { transaction } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { transition } from '@/lib/inventory/state-machine';
 
@@ -86,8 +88,14 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
 
   const trackingNumber = input.trackingNumber?.trim() || null;
   const reason = input.reason?.trim() || 'customer return';
+  const orgId = input.organizationId ?? null;
 
-  return transaction<ReturnsIntakeResult>(async (client) => {
+  // Org path runs inside withTenantTransaction (app_tenant + the app.current_org
+  // GUC) so the serial_units / order_unit_allocations RLS policies apply and the
+  // sku_stock_ledger INSERT auto-stamps org from the GUC column default. Legacy
+  // callers that don't thread an org keep the raw-pool transaction (byte-identical
+  // behavior — orgId-null skips every org predicate via the $n IS NULL guard).
+  const run = async (client: PoolClient): Promise<ReturnsIntakeResult> => {
     const unitsQ = await client.query<{
       id: number;
       sku: string | null;
@@ -96,10 +104,11 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
     }>(
       `SELECT id, sku, current_status::text AS current_status, normalized_serial
          FROM serial_units
-        WHERE id = ANY($1::int[])
-           OR normalized_serial = ANY($2::text[])
+        WHERE (id = ANY($1::int[])
+            OR normalized_serial = ANY($2::text[]))
+          AND ($3::uuid IS NULL OR organization_id = $3::uuid)
         FOR UPDATE`,
-      [input.serialUnitIds, input.serials],
+      [input.serialUnitIds, input.serials, orgId],
     );
     const units = unitsQ.rows;
 
@@ -138,8 +147,9 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
       const flipQ = await client.query(
         `UPDATE order_unit_allocations
             SET state = 'RETURNED', returned_at = NOW(), returned_reason = $2
-          WHERE serial_unit_id = $1 AND state = 'SHIPPED'`,
-        [u.id, reason],
+          WHERE serial_unit_id = $1 AND state = 'SHIPPED'
+            AND ($3::uuid IS NULL OR organization_id = $3::uuid)`,
+        [u.id, reason, orgId],
       );
       const allocationReturned = (flipQ.rowCount ?? 0) > 0;
 
@@ -213,5 +223,9 @@ export async function processReturnsIntake(input: ReturnsIntakeInput): Promise<R
       trackingNumber,
       units: perUnit,
     };
-  });
+  };
+
+  return orgId
+    ? withTenantTransaction<ReturnsIntakeResult>(orgId, run)
+    : transaction<ReturnsIntakeResult>(run);
 }

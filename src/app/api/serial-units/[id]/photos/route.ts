@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordInventoryEvent } from '@/lib/inventory/events';
 import { getOrganization } from '@/lib/tenancy/organizations';
@@ -36,24 +36,34 @@ function extractIdSegment(pathname: string): string {
   return m ? decodeURIComponent(m[1] || '').trim() : '';
 }
 
-/** Resolve [id] → a live serial_units row (numeric id → normalized serial → unit_uid). */
-async function resolveUnit(raw: string): Promise<{ id: number; sku: string | null } | null> {
+/**
+ * Resolve [id] → a live serial_units row (numeric id → normalized serial → unit_uid),
+ * org-scoped so a cross-tenant unit id 404s. Org filter is explicit (defense in depth)
+ * alongside the GUC that tenantQuery sets, so RLS isolates the lookup under app_tenant.
+ */
+async function resolveUnit(
+  raw: string,
+  orgId: string,
+): Promise<{ id: number; sku: string | null } | null> {
   if (!raw) return null;
   if (/^\d+$/.test(raw)) {
-    const r = await pool.query<{ id: number; sku: string | null }>(
-      `SELECT id, sku FROM serial_units WHERE id = $1 LIMIT 1`,
-      [Number(raw)],
+    const r = await tenantQuery<{ id: number; sku: string | null }>(
+      orgId,
+      `SELECT id, sku FROM serial_units WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [Number(raw), orgId],
     );
     if (r.rows[0]) return r.rows[0];
   }
-  const bySerial = await pool.query<{ id: number; sku: string | null }>(
-    `SELECT id, sku FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) LIMIT 1`,
-    [raw],
+  const bySerial = await tenantQuery<{ id: number; sku: string | null }>(
+    orgId,
+    `SELECT id, sku FROM serial_units WHERE normalized_serial = UPPER(TRIM($1)) AND organization_id = $2 LIMIT 1`,
+    [raw, orgId],
   );
   if (bySerial.rows[0]) return bySerial.rows[0];
-  const byUid = await pool.query<{ id: number; sku: string | null }>(
-    `SELECT id, sku FROM serial_units WHERE unit_uid = $1 LIMIT 1`,
-    [raw],
+  const byUid = await tenantQuery<{ id: number; sku: string | null }>(
+    orgId,
+    `SELECT id, sku FROM serial_units WHERE unit_uid = $1 AND organization_id = $2 LIMIT 1`,
+    [raw, orgId],
   );
   return byUid.rows[0] ?? null;
 }
@@ -61,7 +71,7 @@ async function resolveUnit(raw: string): Promise<{ id: number; sku: string | nul
 export const GET = withAuth(
   async (request: NextRequest, ctx) => {
     try {
-      const unit = await resolveUnit(extractIdSegment(request.nextUrl.pathname));
+      const unit = await resolveUnit(extractIdSegment(request.nextUrl.pathname), ctx.organizationId);
       if (!unit) {
         return NextResponse.json({ success: false, error: 'Serial unit not found' }, { status: 404 });
       }
@@ -114,7 +124,7 @@ export const GET = withAuth(
 export const POST = withAuth(
   async (request: NextRequest, ctx) => {
     try {
-      const unit = await resolveUnit(extractIdSegment(request.nextUrl.pathname));
+      const unit = await resolveUnit(extractIdSegment(request.nextUrl.pathname), ctx.organizationId);
       if (!unit) {
         return NextResponse.json({ success: false, error: 'Serial unit not found' }, { status: 404 });
       }

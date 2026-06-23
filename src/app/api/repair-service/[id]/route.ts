@@ -26,7 +26,7 @@ export async function GET(
       );
     }
 
-    const repair = await getRepairById(repairId);
+    const repair = await getRepairById(repairId, gate.ctx.organizationId);
 
     if (!repair) {
       return NextResponse.json(
@@ -65,9 +65,9 @@ export async function DELETE(
     }
 
     const reason = req.nextUrl.searchParams.get('reason')?.trim() || null;
-    const before = await getRepairById(repairId);
+    const before = await getRepairById(repairId, gate.ctx.organizationId);
 
-    const result = await cancelRepair(repairId, reason);
+    const result = await cancelRepair(repairId, reason, gate.ctx.organizationId);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { normalizeTrackingNumber } from '@/lib/tracking-format';
 import {
   searchPurchaseOrdersByTracking,
@@ -44,12 +44,15 @@ export async function POST(
     return NextResponse.json({ success: false, error: 'invalid id' }, { status: 400 });
   }
 
-  const lookup = await pool.query<ExceptionRow>(
+  const orgId = gate.ctx.organizationId;
+  const lookup = await tenantQuery<ExceptionRow>(
+    orgId,
     `SELECT id, tracking_number, domain, status, receiving_id, zoho_check_count
        FROM tracking_exceptions
       WHERE id = $1
+        AND organization_id = $2
       LIMIT 1`,
-    [id],
+    [id, orgId],
   );
   const row = lookup.rows[0];
   if (!row) {
@@ -121,19 +124,22 @@ export async function POST(
 
   // Miss or unreachable — record the retry attempt and return unchanged state.
   if (zohoPoIds.size === 0) {
-    const updated = await pool.query(
-      `UPDATE tracking_exceptions
-          SET last_zoho_check_at = NOW(),
-              zoho_check_count   = zoho_check_count + 1,
-              last_error         = $2,
-              exception_reason   = CASE
-                WHEN $3::boolean THEN exception_reason
-                ELSE 'zoho_unreachable'
-              END,
-              updated_at         = NOW()
-        WHERE id = $1
-        RETURNING *`,
-      [id, lastError, zohoReachable],
+    const updated = await withTenantTransaction(orgId, (client) =>
+      client.query(
+        `UPDATE tracking_exceptions
+            SET last_zoho_check_at = NOW(),
+                zoho_check_count   = zoho_check_count + 1,
+                last_error         = $2,
+                exception_reason   = CASE
+                  WHEN $3::boolean THEN exception_reason
+                  ELSE 'zoho_unreachable'
+                END,
+                updated_at         = NOW()
+          WHERE id = $1
+            AND organization_id = $4
+          RETURNING *`,
+        [id, lastError, zohoReachable, orgId],
+      ),
     );
     return NextResponse.json({
       success: true,
@@ -151,24 +157,30 @@ export async function POST(
 
   if (row.receiving_id) {
     try {
-      const promoted = await pool.query<{ id: number }>(
-        `UPDATE receiving
-            SET source = 'zoho_po',
-                zoho_purchaseorder_id = $1,
-                updated_at = NOW()
-          WHERE id = $2
-            AND (source = 'unmatched' OR zoho_purchaseorder_id IS NULL)
-          RETURNING id`,
-        [primaryPoId, row.receiving_id],
-      );
-      if (promoted.rows[0]) {
-        promotedReceivingId = Number(promoted.rows[0].id);
+      const promotedId = await withTenantTransaction(orgId, async (client) => {
+        const promoted = await client.query<{ id: number }>(
+          `UPDATE receiving
+              SET source = 'zoho_po',
+                  zoho_purchaseorder_id = $1,
+                  updated_at = NOW()
+            WHERE id = $2
+              AND organization_id = $3
+              AND (source = 'unmatched' OR zoho_purchaseorder_id IS NULL)
+            RETURNING id`,
+          [primaryPoId, row.receiving_id, orgId],
+        );
+        await client.query(
+          `UPDATE receiving_scans SET source = 'zoho_po'
+            WHERE receiving_id = $1
+              AND organization_id = $2
+              AND source = 'unmatched'`,
+          [row.receiving_id, orgId],
+        );
+        return promoted.rows[0] ? Number(promoted.rows[0].id) : null;
+      });
+      if (promotedId != null) {
+        promotedReceivingId = promotedId;
       }
-      await pool.query(
-        `UPDATE receiving_scans SET source = 'zoho_po'
-          WHERE receiving_id = $1 AND source = 'unmatched'`,
-        [row.receiving_id],
-      );
     } catch (err) {
       console.warn(`tracking-exceptions/refresh: promote receiving ${row.receiving_id} failed`, err);
     }
@@ -177,7 +189,7 @@ export async function POST(
   // Import Zoho PO lines into receiving_lines for the primary (and any extras).
   if (promotedReceivingId) {
     try {
-      await importZohoPurchaseOrderToReceiving(gate.ctx.organizationId, primaryPoId, {
+      await importZohoPurchaseOrderToReceiving(orgId, primaryPoId, {
         receivingId: promotedReceivingId,
         workflowStatus: 'MATCHED',
       });
@@ -186,10 +198,16 @@ export async function POST(
     }
   }
 
-  const resolved = await resolveTrackingException(id, {
-    receivingId: promotedReceivingId ?? undefined,
-    notes: `Resolved by refresh — matched to Zoho PO ${primaryPoId}`,
-  });
+  const resolved = await withTenantTransaction(orgId, (client) =>
+    resolveTrackingException(
+      id,
+      {
+        receivingId: promotedReceivingId ?? undefined,
+        notes: `Resolved by refresh — matched to Zoho PO ${primaryPoId}`,
+      },
+      client,
+    ),
+  );
 
   after(async () => {
     try {
@@ -202,7 +220,7 @@ export async function POST(
       ]);
       if (promotedReceivingId) {
         await publishReceivingLogChanged({
-          organizationId: gate.ctx.organizationId,
+          organizationId: orgId,
           action: 'update',
           rowId: String(promotedReceivingId),
           source: 'tracking-exceptions.refresh',

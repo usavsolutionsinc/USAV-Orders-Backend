@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
@@ -233,17 +234,20 @@ export const POST = withAuth(async (request, ctx) => {
     // "Mark as scanned" can flip a previously-DONE line back to MATCHED for
     // re-testing. Non-scan flows keep the DONE guard to avoid double-receiving
     // in Zoho.
-    const candidates = await pool.query<CandidateRow>(
+    const candidates = await tenantQuery<CandidateRow>(
+      ctx.organizationId,
       skipZohoReceive
         ? `SELECT id, sku, item_name, quantity_expected, quantity_received,
                   zoho_purchaseorder_id, zoho_line_item_id
            FROM receiving_lines
            WHERE receiving_id = $1
+             AND organization_id = $2
            ORDER BY id ASC`
         : `SELECT id, sku, item_name, quantity_expected, quantity_received,
                   zoho_purchaseorder_id, zoho_line_item_id
            FROM receiving_lines
            WHERE receiving_id = $1
+             AND organization_id = $2
              AND (
                workflow_status IS DISTINCT FROM 'DONE'::inbound_workflow_status_enum
                OR (
@@ -252,7 +256,7 @@ export const POST = withAuth(async (request, ctx) => {
                )
              )
            ORDER BY id ASC`,
-      [receivingId],
+      [receivingId, ctx.organizationId],
     );
 
     const openForReceive = candidates.rows;
@@ -272,13 +276,15 @@ export const POST = withAuth(async (request, ctx) => {
     /** When every line is already DONE locally, we still verify/receive in Zoho — load carton lines, skip receiveLineUnits. */
     let verifyOnlyLines: Array<CandidateRow & { workflow_status: string | null }> | null = null;
     if (openForReceive.length === 0) {
-      const allLines = await pool.query<CandidateRow & { workflow_status: string | null }>(
+      const allLines = await tenantQuery<CandidateRow & { workflow_status: string | null }>(
+        ctx.organizationId,
         `SELECT id, sku, item_name, quantity_expected, quantity_received,
                 zoho_purchaseorder_id, zoho_line_item_id, workflow_status
          FROM receiving_lines
          WHERE receiving_id = $1
+           AND organization_id = $2
          ORDER BY id ASC`,
-        [receivingId],
+        [receivingId, ctx.organizationId],
       );
       if (allLines.rows.length === 0) {
         // No receiving_lines exist for this carton. For an unfound/unmatched
@@ -288,27 +294,29 @@ export const POST = withAuth(async (request, ctx) => {
         // "Unfound PO" placeholder advance from SCANNED → RECEIVED without
         // forcing the operator to invent a line item. scan_only ("Mark as
         // scanned") deliberately does NOT receive, so it falls through.
-        const metaRes = await pool.query<{
+        const metaRes = await tenantQuery<{
           source: string | null;
           zoho_purchaseorder_id: string | null;
         }>(
-          `SELECT source, zoho_purchaseorder_id FROM receiving WHERE id = $1 LIMIT 1`,
-          [receivingId],
+          ctx.organizationId,
+          `SELECT source, zoho_purchaseorder_id FROM receiving
+            WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+          [receivingId, ctx.organizationId],
         );
         const recvSource = String(metaRes.rows[0]?.source || '').trim();
         const recvZohoPo = String(metaRes.rows[0]?.zoho_purchaseorder_id || '').trim();
         const isUnfoundCarton = recvSource === 'unmatched' && !recvZohoPo;
 
         if (isUnfoundCarton && !skipZohoReceive) {
-          await pool
-            .query(
+          await withTenantTransaction(ctx.organizationId, (client) =>
+            client.query(
               `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
                                     unboxed_by = COALESCE(unboxed_by, $2),
                                     updated_at = $1
-               WHERE id = $3`,
-              [now, staffId, receivingId],
-            )
-            .catch(() => {});
+               WHERE id = $3 AND organization_id = $4`,
+              [now, staffId, receivingId, ctx.organizationId],
+            ),
+          ).catch(() => {});
           return respond({
             success: true,
             updated_count: 0,
@@ -467,15 +475,17 @@ export const POST = withAuth(async (request, ctx) => {
     let aggregatedSerials: string[] = [];
     const serialsByReceivingLineId = new Map<number, string[]>();
     if (updatedLineIds.length > 0) {
-      const serialsRes = await pool.query<{
+      const serialsRes = await tenantQuery<{
         origin_receiving_line_id: number;
         serial_number: string;
       }>(
+        ctx.organizationId,
         `SELECT origin_receiving_line_id, serial_number
            FROM serial_units
           WHERE origin_receiving_line_id = ANY($1::int[])
+            AND organization_id = $2
           ORDER BY created_at ASC, id ASC`,
-        [updatedLineIds],
+        [updatedLineIds, ctx.organizationId],
       );
       const seenGlobal = new Set<string>();
       for (const r of serialsRes.rows) {
@@ -495,25 +505,27 @@ export const POST = withAuth(async (request, ctx) => {
       }
     }
 
-    await pool
-      .query(
+    await withTenantTransaction(ctx.organizationId, (client) =>
+      client.query(
         `UPDATE receiving SET unboxed_at = COALESCE(unboxed_at, $1),
                               unboxed_by = COALESCE(unboxed_by, $2),
                               updated_at = $1
-         WHERE id = $3`,
-        [now, staffId, receivingId],
-      )
-      .catch(() => {});
+         WHERE id = $3 AND organization_id = $4`,
+        [now, staffId, receivingId, ctx.organizationId],
+      ),
+    ).catch(() => {});
 
     let localTracking: string | null = null;
     try {
-      const trackingRes = await pool.query<{ tracking: string | null }>(
+      const trackingRes = await tenantQuery<{ tracking: string | null }>(
+        ctx.organizationId,
         `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
           WHERE r.id = $1
+            AND r.organization_id = $2
           LIMIT 1`,
-        [receivingId],
+        [receivingId, ctx.organizationId],
       );
       localTracking = (trackingRes.rows[0]?.tracking || '').trim() || null;
     } catch {
@@ -522,9 +534,11 @@ export const POST = withAuth(async (request, ctx) => {
 
     let packageZohoPoId: string | null = null;
     try {
-      const pkgPoRes = await pool.query<{ zoho_purchaseorder_id: string | null }>(
-        `SELECT zoho_purchaseorder_id FROM receiving WHERE id = $1 LIMIT 1`,
-        [receivingId],
+      const pkgPoRes = await tenantQuery<{ zoho_purchaseorder_id: string | null }>(
+        ctx.organizationId,
+        `SELECT zoho_purchaseorder_id FROM receiving
+          WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [receivingId, ctx.organizationId],
       );
       packageZohoPoId = String(pkgPoRes.rows[0]?.zoho_purchaseorder_id || '').trim() || null;
     } catch {
@@ -545,9 +559,12 @@ export const POST = withAuth(async (request, ctx) => {
       if (!poId && packageZohoPoId) {
         l.zoho_purchaseorder_id = packageZohoPoId;
         try {
-          await pool.query(
-            `UPDATE receiving_lines SET zoho_purchaseorder_id = $1, updated_at = $2 WHERE id = $3`,
-            [packageZohoPoId, now, l.id],
+          await withTenantTransaction(ctx.organizationId, (client) =>
+            client.query(
+              `UPDATE receiving_lines SET zoho_purchaseorder_id = $1, updated_at = $2
+                WHERE id = $3 AND organization_id = $4`,
+              [packageZohoPoId, now, l.id, ctx.organizationId],
+            ),
           );
         } catch {
           /* silent */
@@ -585,21 +602,27 @@ export const POST = withAuth(async (request, ctx) => {
         else localOnlyIds.push(l.id);
       }
       if (zohoPendingIds.length > 0) {
-        await pool.query(
-          `UPDATE receiving_lines
-             SET workflow_status = 'UNBOXED'::inbound_workflow_status_enum,
-                 updated_at = NOW()
-           WHERE id = ANY($1::int[])`,
-          [zohoPendingIds],
+        await withTenantTransaction(ctx.organizationId, (client) =>
+          client.query(
+            `UPDATE receiving_lines
+               SET workflow_status = 'UNBOXED'::inbound_workflow_status_enum,
+                   updated_at = NOW()
+             WHERE id = ANY($1::int[])
+               AND organization_id = $2`,
+            [zohoPendingIds, ctx.organizationId],
+          ),
         );
       }
       if (localOnlyIds.length > 0) {
-        await pool.query(
-          `UPDATE receiving_lines
-             SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                 updated_at = NOW()
-           WHERE id = ANY($1::int[])`,
-          [localOnlyIds],
+        await withTenantTransaction(ctx.organizationId, (client) =>
+          client.query(
+            `UPDATE receiving_lines
+               SET workflow_status = 'DONE'::inbound_workflow_status_enum,
+                   updated_at = NOW()
+             WHERE id = ANY($1::int[])
+               AND organization_id = $2`,
+            [localOnlyIds, ctx.organizationId],
+          ),
         );
       }
       for (const l of updatedLines) {
@@ -667,9 +690,12 @@ export const POST = withAuth(async (request, ctx) => {
             liId = resolved;
             l.zoho_line_item_id = resolved;
             try {
-              await pool.query(
-                `UPDATE receiving_lines SET zoho_line_item_id = $1, updated_at = $2 WHERE id = $3`,
-                [resolved, formatPSTTimestamp(), l.id],
+              await withTenantTransaction(ctx.organizationId, (client) =>
+                client.query(
+                  `UPDATE receiving_lines SET zoho_line_item_id = $1, updated_at = $2
+                    WHERE id = $3 AND organization_id = $4`,
+                  [resolved, formatPSTTimestamp(), l.id, ctx.organizationId],
+                ),
               );
             } catch {
               /* silent */
@@ -825,13 +851,16 @@ export const POST = withAuth(async (request, ctx) => {
           .map((l) => l.id);
         if (confirmIds.length > 0) {
           try {
-            await pool.query(
-              `UPDATE receiving_lines
-                 SET workflow_status = 'DONE'::inbound_workflow_status_enum,
-                     updated_at = NOW()
-               WHERE id = ANY($1::int[])
-                 AND workflow_status = 'UNBOXED'::inbound_workflow_status_enum`,
-              [confirmIds],
+            await withTenantTransaction(ctx.organizationId, (client) =>
+              client.query(
+                `UPDATE receiving_lines
+                   SET workflow_status = 'DONE'::inbound_workflow_status_enum,
+                       updated_at = NOW()
+                 WHERE id = ANY($1::int[])
+                   AND organization_id = $2
+                   AND workflow_status = 'UNBOXED'::inbound_workflow_status_enum`,
+                [confirmIds, ctx.organizationId],
+              ),
             );
           } catch (err) {
             console.warn('mark-received-po: UNBOXED→DONE promotion failed', err);

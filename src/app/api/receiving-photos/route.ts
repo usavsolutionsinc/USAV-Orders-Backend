@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getActiveNasBaseUrl, getAllNasBaseUrls } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
@@ -75,7 +75,8 @@ function mapRow(row: {
 }
 
 async function countReceivingPhotos(organizationId: string, receivingId: number): Promise<number> {
-  const result = await pool.query<{ photo_count: number }>(
+  const result = await tenantQuery<{ photo_count: number }>(
+    organizationId as OrgId,
     `SELECT ${sqlReceivingPhotoCount('$2', '$1')}::int AS photo_count`,
     [organizationId, receivingId],
   );
@@ -118,7 +119,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     // long before the package is scanned, so created_at would anchor on a stale
     // time and surface the oldest photos in the folder. ISO/UTC so the client
     // can Date.parse it unambiguously against the NAS file mtimes.
-    const cartonRes = await pool.query<{ created_at: string | null }>(
+    const cartonRes = await tenantQuery<{ created_at: string | null }>(
+      ctx.organizationId as OrgId,
       `SELECT to_char(
                 COALESCE(
                   r.received_at,
@@ -127,8 +129,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
                 ) AT TIME ZONE 'UTC',
                 'YYYY-MM-DD"T"HH24:MI:SS"Z"'
               ) AS created_at
-         FROM receiving r WHERE r.id = $1 LIMIT 1`,
-      [receivingId],
+         FROM receiving r WHERE r.id = $1 AND r.organization_id = $2 LIMIT 1`,
+      [receivingId, ctx.organizationId],
     );
 
     // Resolve the folder the picker should auto-open for THIS operator (their

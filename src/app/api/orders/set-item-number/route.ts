@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -22,13 +22,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'item_number is required' }, { status: 400 });
     }
 
-    const result = await pool.query(
+    const result = await tenantQuery(
+      ctx.organizationId,
       `UPDATE orders
        SET item_number = $1
        WHERE id = $2
          AND (item_number IS NULL OR item_number = '')
+         AND organization_id = $3
        RETURNING id, order_id, item_number`,
-      [itemNumber, id]
+      [itemNumber, id, ctx.organizationId]
     );
 
     if (result.rowCount === 0) {

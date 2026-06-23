@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization } from '@/lib/tenancy/organizations';
@@ -66,6 +67,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       throw ApiError.badRequest('Valid orderId is required');
     }
 
+    // `documents` has no organization_id; gate tenant access on the owning
+    // order instead. 404 (not 403) on a cross-org / missing order.
+    const owner = await tenantQuery(
+      ctx.organizationId as OrgId,
+      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [orderId, ctx.organizationId],
+    );
+    if (owner.rowCount === 0) throw ApiError.notFound('order', orderId);
+
     const result = await pool.query<DbRow>(
       `SELECT id, entity_id, document_data, created_at
          FROM documents
@@ -120,6 +130,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
     if (!labelUrl) throw ApiError.badRequest('labelUrl is required');
 
+    // `documents` has no organization_id; gate tenant access on the owning
+    // order before attaching a label. 404 (not 403) on a cross-org / missing order.
+    const owner = await tenantQuery(
+      ctx.organizationId as OrgId,
+      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [orderId, ctx.organizationId],
+    );
+    if (owner.rowCount === 0) throw ApiError.notFound('order', orderId);
+
     // Origin allowlist — identical boundary to receiving photos: once a NAS base
     // is known, the URL must point at it (or the same-origin dev proxy). Stays
     // permissive only when nothing is configured.
@@ -172,10 +191,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         metadata: { orderId },
       });
       // First-time stamp (fast read projection; audit_logs is the SoT).
-      await pool.query(
-        `UPDATE orders SET label_printed_at = NOW(), label_printed_by = $1
-           WHERE id = $2 AND label_printed_at IS NULL`,
-        [uploadedBy ?? null, orderId],
+      // `orders` is tenant-owned → run on the GUC path with an explicit org filter.
+      await withTenantTransaction(ctx.organizationId as OrgId, (client) =>
+        client.query(
+          `UPDATE orders SET label_printed_at = NOW(), label_printed_by = $1
+             WHERE id = $2 AND label_printed_at IS NULL AND organization_id = $3`,
+          [uploadedBy ?? null, orderId, ctx.organizationId],
+        ),
       );
     }
 
@@ -185,16 +207,26 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 }, { permission: 'orders.create' });
 
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   try {
     const id = Number(new URL(req.url).searchParams.get('id'));
     if (!Number.isFinite(id) || id <= 0) throw ApiError.badRequest('Valid id is required');
 
-    const existing = await pool.query(
-      `SELECT id FROM documents WHERE id = $1 AND entity_type = 'SHIPPING_LABEL'`,
+    const existing = await pool.query<{ entity_id: number }>(
+      `SELECT entity_id FROM documents WHERE id = $1 AND entity_type = 'SHIPPING_LABEL'`,
       [id],
     );
     if (existing.rowCount === 0) throw ApiError.notFound('label', id);
+
+    // `documents` has no organization_id; gate tenant access on the owning order
+    // (entity_id). 404 (not 403) on a cross-org label so existence stays opaque.
+    const orderId = Number(existing.rows[0].entity_id);
+    const owner = await tenantQuery(
+      ctx.organizationId as OrgId,
+      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [orderId, ctx.organizationId],
+    );
+    if (owner.rowCount === 0) throw ApiError.notFound('label', id);
 
     // Unlink the DB row; the NAS file is removed browser-direct (deleteNasPhoto),
     // mirroring how receiving photo deletes work.

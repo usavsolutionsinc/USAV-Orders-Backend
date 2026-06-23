@@ -8,6 +8,7 @@ import { PHOTO_ENTITY_TYPES, PHOTO_LINK_ROLES } from '@/lib/photos/types';
 import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,7 +77,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       const receivingId =
         entityType === 'RECEIVING'
           ? entityId
-          : await resolveReceivingId(entityId);
+          : await resolveReceivingId(entityId, ctx.organizationId);
       if (receivingId) {
         await publishReceivingPhotoChanged({
           organizationId: ctx.organizationId as OrgId,
@@ -99,11 +100,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 }, {});
 
-async function resolveReceivingId(lineId: number): Promise<number | null> {
-  const pool = (await import('@/lib/db')).default;
-  const r = await pool.query<{ receiving_id: number }>(
-    `SELECT receiving_id FROM receiving_lines WHERE id = $1 LIMIT 1`,
-    [lineId],
+async function resolveReceivingId(
+  lineId: number,
+  organizationId: string,
+): Promise<number | null> {
+  const r = await tenantQuery<{ receiving_id: number }>(
+    organizationId,
+    `SELECT receiving_id FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+    [lineId, organizationId],
   );
   return r.rows[0]?.receiving_id ?? null;
 }

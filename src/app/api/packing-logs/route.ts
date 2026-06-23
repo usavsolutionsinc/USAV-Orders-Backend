@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { classifyScan } from '@/utils/packer';
 import { normalizeSku } from '@/utils/sku';
 import { upsertOpenOrderException } from '@/lib/orders-exceptions';
@@ -95,7 +96,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             return NextResponse.json(cached, { headers: { 'x-cache': 'HIT' } });
         }
 
-        const result = await pool.query(`
+        const result = await tenantQuery(ctx.organizationId, `
             SELECT
                 pl.id,
                 pl.created_at as timestamp,
@@ -106,9 +107,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             LEFT JOIN shipping_tracking_numbers stn ON stn.id = pl.shipment_id
             LEFT JOIN orders o ON o.shipment_id = pl.shipment_id AND pl.shipment_id IS NOT NULL
             WHERE pl.packed_by = $1
+              AND pl.organization_id = $4
             ORDER BY pl.id DESC
             LIMIT $2 OFFSET $3
-        `, [staffId, limit, offset]);
+        `, [staffId, limit, offset, ctx.organizationId]);
 
         // Map to format expected by StationHistory (include all fields for compatibility)
         const formattedLogs = result.rows.map((log: any) => ({
@@ -170,9 +172,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         
         const classification = classifyScan(scanInput);
 
-        const staffNameResult = await pool.query(
-            `SELECT name FROM staff WHERE id = $1 LIMIT 1`,
-            [staffId]
+        return await withTenantTransaction(ctx.organizationId, async (client) => {
+        const staffNameResult = await client.query(
+            `SELECT name FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [staffId, ctx.organizationId]
         );
         const fallbackPackerName = String(packerName || '').trim() || null;
         const staffName = staffNameResult.rows[0]?.name || fallbackPackerName;
@@ -184,48 +187,51 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             }
             const normalizedInput = normalizeTrackingNumber(scanInput);
             // Primary: exact normalized match via shipment_id FK (fast)
-            let orderLookup = await pool.query(
+            let orderLookup = await client.query(
                 `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
                         o.product_title, o.condition, o.quantity, o.sku
                  FROM   orders o
                  JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
                  WHERE  stn.tracking_number_normalized = $1
+                   AND  o.organization_id = $2
                  ORDER BY o.id DESC
                  LIMIT 1`,
-                [normalizedInput]
+                [normalizedInput, ctx.organizationId]
             );
 
             // Fallback 1: key18 suffix match (more specific than last8)
             if (orderLookup.rows.length === 0) {
-                orderLookup = await pool.query(
+                orderLookup = await client.query(
                     `SELECT o.id, o.order_id, s.tracking_number_raw AS tracking_number, o.shipment_id,
                             o.product_title, o.condition, o.quantity, o.sku
                      FROM   shipping_tracking_numbers s
                      JOIN   orders o ON o.shipment_id = s.id
                      WHERE  RIGHT(regexp_replace(UPPER(s.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+                       AND  o.organization_id = $2
                      ORDER BY o.id DESC
                      LIMIT 1`,
-                    [normalizeTrackingKey18(scanInput)]
+                    [normalizeTrackingKey18(scanInput), ctx.organizationId]
                 );
             }
 
             // Fallback 2: last-8 digit suffix match (handles barcode with 420-zip prefix, etc.)
             if (orderLookup.rows.length === 0) {
-                orderLookup = await pool.query(
+                orderLookup = await client.query(
                     `SELECT o.id, o.order_id, stn.tracking_number_raw AS tracking_number, o.shipment_id,
                             o.product_title, o.condition, o.quantity, o.sku
                      FROM   orders o
                      JOIN   shipping_tracking_numbers stn ON stn.id = o.shipment_id
                      WHERE  RIGHT(regexp_replace(stn.tracking_number_normalized, '[^0-9]', '', 'g'), 8) = $1
+                       AND  o.organization_id = $2
                      ORDER BY o.id DESC
                      LIMIT 1`,
-                    [trackingLast8]
+                    [trackingLast8, ctx.organizationId]
                 );
             }
 
             // ── FBA path: check if this tracking belongs to an FBA shipment ──
             if (orderLookup.rows.length === 0) {
-                const fbaLookup = await pool.query(
+                const fbaLookup = await client.query(
                     `SELECT
                        fs.id              AS plan_id,
                        fs.shipment_ref,
@@ -250,17 +256,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                      JOIN shipping_tracking_numbers stn ON stn.id = fst.tracking_id
                      JOIN fba_shipments fs ON fs.id = fst.shipment_id
                      WHERE stn.tracking_number_normalized = $1
+                       AND fs.organization_id = $2
                      ORDER BY fs.created_at DESC
                      LIMIT 1`,
-                    [normalizedInput],
+                    [normalizedInput, ctx.organizationId],
                 );
 
                 if (fbaLookup.rows.length > 0) {
                     const fba = fbaLookup.rows[0];
-                    const { shipmentId: fbaShipId, scanRef: fbaScanRef } = await resolveShipmentId(scanInput);
+                    const { shipmentId: fbaShipId, scanRef: fbaScanRef } = await resolveShipmentId(scanInput, ctx.organizationId);
 
                     // Log the packer scan
-                    const fbaPackerInsert = await pool.query(`
+                    const fbaPackerInsert = await client.query(`
                         INSERT INTO packer_logs (shipment_id, scan_ref, tracking_type, created_at, packed_by, organization_id)
                         VALUES ($1, $2, 'FBA', $3, $4, $5)
                         ON CONFLICT DO NOTHING
@@ -275,10 +282,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                             packerLogId: fbaPackerLogId,
                             shipmentId: fbaShipId ?? null,
                             actorStaffId: staffId,
-                        });
+                        }, ctx.organizationId);
                     }
 
-                    await createStationActivityLog(pool, {
+                    await createStationActivityLog(client, {
                         organizationId: ctx.organizationId,
                         station: 'PACK',
                         activityType: 'PACK_COMPLETED',
@@ -372,32 +379,33 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     staffName,
                     reason: 'not_found',
                     notes: 'Packer scan: tracking not found in orders',
-                });
+                }, pool, ctx.organizationId);
                 const ordersExceptionId = upsertResult.exception?.id ?? null;
 
-                const { shipmentId: nfShipmentId, scanRef: nfScanRef } = await resolveShipmentId(scanInput);
+                const { shipmentId: nfShipmentId, scanRef: nfScanRef } = await resolveShipmentId(scanInput, ctx.organizationId);
 
                 // Check for an existing row by shipment_id or scan_ref last-8 to avoid duplicates
-                const nfExisting = await pool.query(`
+                const nfExisting = await client.query(`
                     SELECT id, created_at::text
                     FROM packer_logs
-                    WHERE (shipment_id IS NOT NULL AND shipment_id = $1)
+                    WHERE organization_id = $3
+                      AND ((shipment_id IS NOT NULL AND shipment_id = $1)
                        OR (shipment_id IS NULL AND scan_ref IS NOT NULL
-                           AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 8) = $2)
+                           AND RIGHT(regexp_replace(UPPER(scan_ref), '[^A-Z0-9]', '', 'g'), 8) = $2))
                     ORDER BY id DESC LIMIT 1
-                `, [nfShipmentId, trackingLast8]);
+                `, [nfShipmentId, trackingLast8, ctx.organizationId]);
 
                 let notFoundPackerLogId: number | null;
                 let notFoundCreatedAt: string;
                 if (nfExisting.rows.length > 0) {
                     notFoundPackerLogId = nfExisting.rows[0].id;
                     notFoundCreatedAt = nfExisting.rows[0].created_at ?? packDateTime;
-                    await pool.query(
-                        `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1`,
-                        [notFoundPackerLogId, staffId]
+                    await client.query(
+                        `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1 AND organization_id = $3`,
+                        [notFoundPackerLogId, staffId, ctx.organizationId]
                     );
                 } else {
-                    const notFoundInsert = await pool.query(`
+                    const notFoundInsert = await client.query(`
                         INSERT INTO packer_logs (
                             shipment_id,
                             scan_ref,
@@ -417,7 +425,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                         packerLogId: notFoundPackerLogId,
                         shipmentId: nfShipmentId ?? null,
                         actorStaffId: staffId,
-                    });
+                    }, ctx.organizationId);
                 }
 
                 if (notFoundPackerLogId && photoUrls.length > 0) {
@@ -446,7 +454,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     sku: null,
                 };
 
-                const nfSalId = await createStationActivityLog(pool, {
+                const nfSalId = await createStationActivityLog(client, {
                     organizationId: ctx.organizationId,
                     station: 'PACK',
                     activityType: 'PACK_COMPLETED',
@@ -517,16 +525,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             const order = orderLookup.rows[0];
 
             // Update status only — shipped state is derived from shipping_tracking_numbers
-            await pool.query(`
+            await client.query(`
                 UPDATE orders
                 SET status = 'shipped'
                 WHERE id = $1
+                  AND organization_id = $2
                   AND (status IS NULL OR status != 'shipped')
-            `, [order.id]);
+            `, [order.id, ctx.organizationId]);
 
             // Upsert a PACK work_assignment as DONE.
             // completed_by_packer_id records the scanner-station actor (staffId).
-            await pool.query(`
+            await client.query(`
                 INSERT INTO work_assignments
                     (entity_type, entity_id, work_type, assigned_packer_id,
                      completed_by_packer_id, status, priority, notes, completed_at)
@@ -544,24 +553,25 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             const orderShipmentId: number | null = order.shipment_id ?? null;
 
             // Check for an existing row by shipment_id to avoid duplicate rows on re-scan
-            const foundExisting = await pool.query(`
+            const foundExisting = await client.query(`
                 SELECT id, created_at::text
                 FROM packer_logs
                 WHERE shipment_id = $1
+                  AND organization_id = $2
                 ORDER BY id DESC LIMIT 1
-            `, [orderShipmentId]);
+            `, [orderShipmentId, ctx.organizationId]);
 
             let foundPackerLogId: number | null;
             let foundCreatedAt: string;
             if (foundExisting.rows.length > 0) {
                 foundPackerLogId = foundExisting.rows[0].id;
                 foundCreatedAt = foundExisting.rows[0].created_at ?? packDateTime;
-                await pool.query(
-                    `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1`,
-                    [foundPackerLogId, staffId]
+                await client.query(
+                    `UPDATE packer_logs SET updated_at = NOW(), packed_by = $2 WHERE id = $1 AND organization_id = $3`,
+                    [foundPackerLogId, staffId, ctx.organizationId]
                 );
             } else {
-                const foundInsert = await pool.query(`
+                const foundInsert = await client.query(`
                     INSERT INTO packer_logs (
                         shipment_id,
                         scan_ref,
@@ -581,7 +591,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     packerLogId: foundPackerLogId,
                     shipmentId: orderShipmentId ?? null,
                     actorStaffId: staffId,
-                });
+                }, ctx.organizationId);
             }
 
             if (foundPackerLogId && photoUrls.length > 0) {
@@ -610,7 +620,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 sku: order.sku ?? null,
             };
 
-            const foundSalId = await createStationActivityLog(pool, {
+            const foundSalId = await createStationActivityLog(client, {
                 organizationId: ctx.organizationId,
                 station: 'PACK',
                 activityType: 'PACK_COMPLETED',
@@ -719,7 +729,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             //    platform_sku/platform_item_id and read the canonical product_title
             //    from sku_catalog (falling back to the platform display_name if the
             //    Ecwid row is unpaired).
-            const ecwidLookup = await pool.query(
+            const ecwidLookup = await client.query(
                 `SELECT COALESCE(
                             NULLIF(BTRIM(sc.product_title), ''),
                             NULLIF(BTRIM(sp.display_name), '')
@@ -728,6 +738,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                  LEFT JOIN sku_catalog sc ON sc.id = sp.sku_catalog_id
                  WHERE sp.platform = 'ecwid'
                    AND sp.is_active = true
+                   AND sp.organization_id = $2
                    AND (
                        BTRIM(sp.platform_sku) = $1
                        OR BTRIM(sp.platform_item_id) = $1
@@ -739,12 +750,15 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                    sp.created_at DESC NULLS LAST,
                    sp.id DESC
                  LIMIT 1`,
-                [normalizedBase],
+                [normalizedBase, ctx.organizationId],
             );
             resolvedSkuTitle = ecwidLookup.rows[0]?.product_title || null;
 
             // 2) Fall back to sku_stock for the SKU update + title.
-            const skuRows = await pool.query('SELECT id, stock, sku, product_title FROM sku_stock');
+            const skuRows = await client.query(
+                'SELECT id, stock, sku, product_title FROM sku_stock WHERE organization_id = $1',
+                [ctx.organizationId],
+            );
             const target = skuRows.rows.find(
                 (r: any) => normalizeSku(String(r.sku || '')) === normalizedBase
             );
@@ -756,15 +770,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             if (target) {
                 const currentQty = parseInt(target.stock || '0', 10) || 0;
                 const nextQty = Math.max(0, currentQty + addQty);
-                await pool.query(
+                await client.query(
                     `UPDATE sku_stock
                      SET stock = $1,
                          product_title = COALESCE(product_title, $2)
-                     WHERE id = $3`,
-                    [String(nextQty), resolvedSkuTitle, target.id]
+                     WHERE id = $3
+                       AND organization_id = $4`,
+                    [String(nextQty), resolvedSkuTitle, target.id, ctx.organizationId]
                 );
             } else {
-                await pool.query(
+                await client.query(
                     `INSERT INTO sku_stock (stock, sku, product_title)
                      VALUES ($1, $2, $3)`,
                     [String(Math.max(0, addQty)), normalizedBase, resolvedSkuTitle]
@@ -773,7 +788,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             skuUpdated = true;
         }
 
-        const nonOrderInsert = await pool.query(`
+        const nonOrderInsert = await client.query(`
             INSERT INTO packer_logs (
                 scan_ref,
                 shipment_id,
@@ -792,7 +807,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 packerLogId: nonOrderPackerLogId,
                 shipmentId: null,
                 actorStaffId: staffId,
-            });
+            }, ctx.organizationId);
         }
         if (nonOrderPackerLogId && photoUrls.length > 0) {
             for (const url of photoUrls) {
@@ -820,7 +835,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             sku: resolvedSkuBase,
         };
 
-        const nonOrderSalId = await createStationActivityLog(pool, {
+        const nonOrderSalId = await createStationActivityLog(client, {
             organizationId: ctx.organizationId,
             station: 'PACK',
             activityType: 'PACK_SCAN',
@@ -851,6 +866,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             packerRecord: nonOrderRecord,
             photosCount: Array.isArray(photos) ? photos.length : 0,
             skuUpdated,
+        });
         });
     } catch (error: any) {
         console.error('Error updating order:', error);

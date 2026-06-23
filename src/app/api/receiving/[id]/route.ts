@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
@@ -42,6 +43,7 @@ export async function GET(
   try {
     const gate = await requireRoutePerm(request, 'receiving.view');
     if (gate.denied) return gate.denied;
+    const orgId = gate.ctx.organizationId;
     const { id: idRaw } = await params;
     const id = Number(idRaw);
     if (!Number.isFinite(id) || id <= 0) {
@@ -51,7 +53,8 @@ export async function GET(
       );
     }
 
-    const cartonRes = await pool.query(
+    const cartonRes = await tenantQuery(
+      orgId,
       `SELECT
          r.id,
          r.receiving_tracking_number,
@@ -98,21 +101,23 @@ export async function GET(
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
        LEFT JOIN LATERAL (
-         SELECT id FROM local_pickup_orders WHERE receiving_id = r.id ORDER BY id DESC LIMIT 1
+         SELECT id FROM local_pickup_orders
+         WHERE receiving_id = r.id AND organization_id = $2
+         ORDER BY id DESC LIMIT 1
        ) lpo ON TRUE
        LEFT JOIN LATERAL (
          SELECT rs.scanned_at, rs.scanned_by
          FROM receiving_scans rs
-         WHERE rs.receiving_id = r.id
+         WHERE rs.receiving_id = r.id AND rs.organization_id = $2
          ORDER BY rs.scanned_at ASC, rs.id ASC
          LIMIT 1
        ) rs_first ON TRUE
        LEFT JOIN staff staff_scan ON staff_scan.id = COALESCE(rs_first.scanned_by, r.received_by)
        LEFT JOIN staff staff_unbox ON staff_unbox.id = r.unboxed_by
        LEFT JOIN staff staff_recv ON staff_recv.id = r.received_by
-       WHERE r.id = $1
+       WHERE r.id = $1 AND r.organization_id = $2
        LIMIT 1`,
-      [id],
+      [id, orgId],
     );
     const carton = cartonRes.rows[0];
     if (!carton) {
@@ -122,7 +127,8 @@ export async function GET(
       );
     }
 
-    const linesRes = await pool.query(
+    const linesRes = await tenantQuery(
+      orgId,
       `SELECT
          rl.id,
          rl.receiving_id,
@@ -149,23 +155,25 @@ export async function GET(
        FROM receiving_lines rl
        LEFT JOIN receiving r_cart ON r_cart.id = rl.receiving_id
        LEFT JOIN shipping_tracking_numbers stn_line ON stn_line.id = r_cart.shipment_id
-       WHERE rl.receiving_id = $1
+       WHERE rl.receiving_id = $1 AND rl.organization_id = $2
        ORDER BY rl.id ASC`,
-      [id],
+      [id, orgId],
     );
     const lines = linesRes.rows;
 
     const lineIds = lines.map((l) => Number(l.id)).filter(Number.isFinite);
     let serialsByLine = new Map<number, Array<Record<string, unknown>>>();
     if (lineIds.length > 0) {
-      const serialsRes = await pool.query(
+      const serialsRes = await tenantQuery(
+        orgId,
         `SELECT id, serial_number, current_status::text AS current_status,
                 current_location, condition_grade::text AS condition_grade,
                 origin_receiving_line_id, received_at, updated_at
          FROM serial_units
          WHERE origin_receiving_line_id = ANY($1::int[])
+           AND organization_id = $2
          ORDER BY created_at ASC, id ASC`,
-        [lineIds],
+        [lineIds, orgId],
       );
       for (const row of serialsRes.rows) {
         const lid = Number(row.origin_receiving_line_id);
@@ -222,7 +230,7 @@ export async function GET(
     // Recent timeline for this carton — non-fatal if inventory_events is unavailable.
     let recentEvents: Awaited<ReturnType<typeof readTimeline>> = [];
     try {
-      recentEvents = await readTimeline({ receiving_id: id, limit: 30 });
+      recentEvents = await readTimeline({ receiving_id: id, limit: 30 }, orgId);
     } catch (timelineErr) {
       console.warn('receiving/[id] GET: readTimeline failed (events omitted)', timelineErr);
     }
@@ -247,23 +255,26 @@ export async function GET(
     const serialMap = new Map<number, string>();
 
     if (staffIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM staff WHERE id = ANY($1::int[])`,
-        [staffIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM staff WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [staffIds, orgId],
       );
       for (const row of r.rows) staffMap.set(row.id, row.name);
     }
     if (binIds.length > 0) {
-      const r = await pool.query<{ id: number; name: string }>(
-        `SELECT id, name FROM locations WHERE id = ANY($1::int[])`,
-        [binIds],
+      const r = await tenantQuery<{ id: number; name: string }>(
+        orgId,
+        `SELECT id, name FROM locations WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [binIds, orgId],
       );
       for (const row of r.rows) binMap.set(row.id, row.name);
     }
     if (serialIds.length > 0) {
-      const r = await pool.query<{ id: number; serial_number: string }>(
-        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[])`,
-        [serialIds],
+      const r = await tenantQuery<{ id: number; serial_number: string }>(
+        orgId,
+        `SELECT id, serial_number FROM serial_units WHERE id = ANY($1::int[]) AND organization_id = $2`,
+        [serialIds, orgId],
       );
       for (const row of r.rows) serialMap.set(row.id, row.serial_number);
     }
@@ -320,15 +331,6 @@ export async function PATCH(
     if (!Number.isFinite(id) || id <= 0) {
       return NextResponse.json({ success: false, error: 'Valid id is required' }, { status: 400 });
     }
-
-    // Snapshot the row before the update so the audit row carries a real diff.
-    const beforeRow = await pool.query(
-      `SELECT id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number,
-              shipment_id, support_notes, listing_url, source, receiving_tracking_number
-       FROM receiving WHERE id = $1 LIMIT 1`,
-      [id],
-    );
-    const before = beforeRow.rows[0] ?? null;
 
     // Body parse with explicit failure modes. Bad/missing JSON used to silently
     // become {} → downstream "No valid fields to update" 400, which gave ops no
@@ -493,21 +495,38 @@ export async function PATCH(
 
     updates.push(`updated_at = NOW()`);
     values.push(id);
+    const orgParamIdx = values.push(ctx.organizationId);
 
-    const result = await pool.query<{
-      id: number;
-      source_platform: string | null;
-      intake_type: string | null;
-      zoho_purchaseorder_id: string | null;
-      zoho_purchaseorder_number: string | null;
-      shipment_id: number | null;
-      support_notes: string | null;
-      listing_url: string | null;
-    }>(
-      `UPDATE receiving SET ${updates.join(', ')} WHERE id = $${values.length}
-       RETURNING id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
-      values,
-    );
+    // Snapshot + UPDATE in one GUC-scoped transaction so the audit diff and the
+    // write see the same tenant. The UPDATE carries an explicit org predicate
+    // (defense in depth alongside RLS); a row owned by another org never matches.
+    const { before, result } = await withTenantTransaction(ctx.organizationId, async (client) => {
+      // Snapshot the row before the update so the audit row carries a real diff.
+      const beforeRow = await client.query(
+        `SELECT id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number,
+                shipment_id, support_notes, listing_url, source, receiving_tracking_number
+         FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+        [id, ctx.organizationId],
+      );
+      const before = beforeRow.rows[0] ?? null;
+
+      const result = await client.query<{
+        id: number;
+        source_platform: string | null;
+        intake_type: string | null;
+        zoho_purchaseorder_id: string | null;
+        zoho_purchaseorder_number: string | null;
+        shipment_id: number | null;
+        support_notes: string | null;
+        listing_url: string | null;
+      }>(
+        `UPDATE receiving SET ${updates.join(', ')}
+         WHERE id = $${values.length - 1} AND organization_id = $${orgParamIdx}
+         RETURNING id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
+        values,
+      );
+      return { before, result };
+    });
 
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'receiving not found' }, { status: 404 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
 import {
@@ -31,19 +31,35 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   try {
     const staffId = techId;
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    // Tenant-scoped transaction: withTenantTransaction owns BEGIN/COMMIT/ROLLBACK
+    // and SET LOCAL app.current_org, so the GUC flows through every delegated
+    // helper (resolveTechSerialSalContext / insertTechSerialForSalContext) and
+    // the standalone DELETEs below. Domain-error branches throw a typed sentinel
+    // so the wrapper ROLLBACKs (preserving the original abort-without-commit
+    // behavior, e.g. an 'update' that DELETEd before a later insert failed); the
+    // sentinel is caught below and mapped to its original HTTP status.
+    type HandlerOutcome =
+      | { kind: 'add'; serialNumbers: string[]; tsnId: number }
+      | { kind: 'ok'; serialNumbers: string[] }
+      | { kind: 'undo'; serialNumbers: string[]; removedSerial: string };
 
-      const salCtxResult = await resolveTechSerialSalContext(client, salId, ctx.organizationId);
-      if (!salCtxResult.ok) {
-        await client.query('ROLLBACK');
-        return NextResponse.json(
-          { success: false, error: salCtxResult.error },
-          { status: salCtxResult.status },
-        );
+    class HandlerError extends Error {
+      constructor(public readonly status: number, message: string) {
+        super(message);
+        this.name = 'HandlerError';
       }
-      const salCtx = salCtxResult.ctx;
+    }
+
+    let logAction: 'insert' | 'update' = 'update';
+
+    let outcome: HandlerOutcome;
+    try {
+      outcome = await withTenantTransaction<HandlerOutcome>(ctx.organizationId, async (client) => {
+        const salCtxResult = await resolveTechSerialSalContext(client, salId, ctx.organizationId);
+        if (!salCtxResult.ok) {
+          throw new HandlerError(salCtxResult.status, salCtxResult.error);
+        }
+        const salCtx = salCtxResult.ctx;
 
       if (action === 'add') {
         const serial = normalizeTechSerial(body.serial);
@@ -56,39 +72,31 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           sourceMethod: 'SCAN',
         });
         if (!ins.ok) {
-          await client.query('ROLLBACK');
-          return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
+          throw new HandlerError(ins.status, ins.error);
         }
 
         const serialNumbers = await getTechSerialsBySalId(client, salId);
-        await client.query('COMMIT');
-
-        await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'insert', source: 'tech.serial' });
-
-        return NextResponse.json({ success: true, serialNumbers, tsnId: ins.techSerialId });
+        logAction = 'insert';
+        return { kind: 'add', serialNumbers, tsnId: ins.techSerialId };
       }
 
       if (action === 'remove') {
         const tsnId = Number(body.tsnId);
         if (!Number.isFinite(tsnId) || tsnId <= 0) {
-          await client.query('ROLLBACK');
-          return NextResponse.json({ success: false, error: 'tsnId is required for remove' }, { status: 400 });
+          throw new HandlerError(400, 'tsnId is required for remove');
         }
 
         await client.query(
-          `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`,
-          [tsnId],
+          `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED' AND organization_id = $2`,
+          [tsnId, ctx.organizationId],
         );
-        await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1 AND context_station_activity_log_id = $2`, [tsnId, salId]);
+        await client.query(
+          `DELETE FROM tech_serial_numbers WHERE id = $1 AND context_station_activity_log_id = $2 AND organization_id = $3`,
+          [tsnId, salId, ctx.organizationId],
+        );
 
         const serialNumbers = await getTechSerialsBySalId(client, salId);
-        await client.query('COMMIT');
-
-        await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
-
-        return NextResponse.json({ success: true, serialNumbers });
+        return { kind: 'ok', serialNumbers };
       }
 
       if (action === 'update') {
@@ -97,8 +105,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         const existing = await client.query(
           `SELECT id, UPPER(TRIM(serial_number)) AS serial FROM tech_serial_numbers
-           WHERE context_station_activity_log_id = $1 ORDER BY id`,
-          [salId],
+           WHERE context_station_activity_log_id = $1 AND organization_id = $2 ORDER BY id`,
+          [salId, ctx.organizationId],
         );
         const existingMap = new Map<string, number>();
         for (const row of existing.rows) existingMap.set(row.serial, row.id);
@@ -107,8 +115,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
         for (const [serial, id] of existingMap) {
           if (!desiredSet.has(serial)) {
-            await client.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [id]);
-            await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [id]);
+            await client.query(
+              `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED' AND organization_id = $2`,
+              [id, ctx.organizationId],
+            );
+            await client.query(
+              `DELETE FROM tech_serial_numbers WHERE id = $1 AND organization_id = $2`,
+              [id, ctx.organizationId],
+            );
           }
         }
 
@@ -123,52 +137,56 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             sourceMethod: 'SCAN',
           });
           if (!ins.ok) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({ success: false, error: ins.error }, { status: ins.status });
+            throw new HandlerError(ins.status, ins.error);
           }
         }
 
         const serialNumbers = await getTechSerialsBySalId(client, salId);
-        await client.query('COMMIT');
-
-        await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
-
-        return NextResponse.json({ success: true, serialNumbers });
+        return { kind: 'ok', serialNumbers };
       }
 
       if (action === 'undo') {
         const last = await client.query(
           `SELECT id, serial_number FROM tech_serial_numbers
-           WHERE context_station_activity_log_id = $1 ORDER BY id DESC LIMIT 1`,
-          [salId],
+           WHERE context_station_activity_log_id = $1 AND organization_id = $2 ORDER BY id DESC LIMIT 1`,
+          [salId, ctx.organizationId],
         );
         if (last.rows.length === 0) {
-          await client.query('ROLLBACK');
-          return NextResponse.json({ success: false, error: 'No serials to undo' }, { status: 400 });
+          throw new HandlerError(400, 'No serials to undo');
         }
         const lastRow = last.rows[0];
-        await client.query(`DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED'`, [lastRow.id]);
-        await client.query(`DELETE FROM tech_serial_numbers WHERE id = $1`, [lastRow.id]);
+        await client.query(
+          `DELETE FROM station_activity_logs WHERE tech_serial_number_id = $1 AND activity_type = 'SERIAL_ADDED' AND organization_id = $2`,
+          [lastRow.id, ctx.organizationId],
+        );
+        await client.query(
+          `DELETE FROM tech_serial_numbers WHERE id = $1 AND organization_id = $2`,
+          [lastRow.id, ctx.organizationId],
+        );
 
         const serialNumbers = await getTechSerialsBySalId(client, salId);
-        await client.query('COMMIT');
-
-        await invalidateCacheTags(['tech-logs', 'orders-next']);
-        await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: 'update', source: 'tech.serial' });
-
-        return NextResponse.json({ success: true, serialNumbers, removedSerial: lastRow.serial_number });
+        return { kind: 'undo', serialNumbers, removedSerial: lastRow.serial_number };
       }
 
-      await client.query('ROLLBACK');
-      return NextResponse.json({ success: false, error: 'Unknown action' }, { status: 400 });
-    } catch (error: any) {
-      await client.query('ROLLBACK');
-      console.error('Error in tech serial:', error);
-      return NextResponse.json({ success: false, error: 'Failed', details: error.message }, { status: 500 });
-    } finally {
-      client.release();
+      throw new HandlerError(400, 'Unknown action');
+      });
+    } catch (err) {
+      if (err instanceof HandlerError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: err.status });
+      }
+      throw err;
     }
+
+    await invalidateCacheTags(['tech-logs', 'orders-next']);
+    await publishTechLogChanged({ organizationId: ctx.organizationId, techId: staffId, action: logAction, source: 'tech.serial' });
+
+    if (outcome.kind === 'add') {
+      return NextResponse.json({ success: true, serialNumbers: outcome.serialNumbers, tsnId: outcome.tsnId });
+    }
+    if (outcome.kind === 'undo') {
+      return NextResponse.json({ success: true, serialNumbers: outcome.serialNumbers, removedSerial: outcome.removedSerial });
+    }
+    return NextResponse.json({ success: true, serialNumbers: outcome.serialNumbers });
   } catch (error: any) {
     console.error('Error in tech serial:', error);
     return NextResponse.json({ success: false, error: 'Failed', details: error.message }, { status: 500 });

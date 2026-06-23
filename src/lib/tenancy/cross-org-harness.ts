@@ -21,6 +21,7 @@
  */
 
 import type { Pool } from 'pg';
+import { USAV_ORG_ID } from './constants';
 
 export const TEST_ORG_A = '00000000-0000-0000-0000-0000000000aa';
 export const TEST_ORG_B = '00000000-0000-0000-0000-0000000000bb';
@@ -148,6 +149,47 @@ export async function proveRlsIsolatesScratch(
     } catch {
       /* ignore */
     }
+    client.release();
+  }
+}
+
+/**
+ * Read-only proof that RLS isolates an EXISTING FORCEd table under a non-bypass
+ * role, WITHOUT needing CREATE (the runtime `app_tenant` role correctly lacks
+ * CREATE on `public`, so `proveRlsIsolatesScratch` cannot run there). Counts
+ * rows under the populated org's GUC (expects > 0) and under a different org's
+ * GUC (expects 0) — isolation comes entirely from the `tenant_isolation` policy
+ * (no WHERE filter). Fully read-only: runs in a transaction it always ROLLBACKs.
+ *
+ * `table` is a trusted constant supplied by the caller (validated via the
+ * `::regclass` cast, which throws on a bad name) — not user input.
+ *
+ * Returns `{ forced:false }` when the table isn't FORCEd yet so the canary can
+ * skip cleanly (a slice not yet promoted), mirroring the self-arming pattern of
+ * the reason_codes spec.
+ */
+export async function proveRlsIsolatesForcedTable(
+  pool: Pool,
+  table: string,
+  populatedOrg: string = USAV_ORG_ID,
+  otherOrg: string = TEST_ORG_B,
+): Promise<{ forced: boolean; own: number; cross: number }> {
+  const f = await pool.query<{ forced: boolean }>(
+    `SELECT relforcerowsecurity AS forced FROM pg_class WHERE oid = $1::regclass`,
+    [table],
+  );
+  if (!f.rows[0]?.forced) return { forced: false, own: 0, cross: 0 };
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT set_config('app.current_org',$1,true)`, [populatedOrg]);
+    const own = await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table}`);
+    await client.query(`SELECT set_config('app.current_org',$1,true)`, [otherOrg]);
+    const cross = await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM ${table}`);
+    return { forced: true, own: own.rows[0].n, cross: cross.rows[0].n };
+  } finally {
+    await client.query('ROLLBACK').catch(() => {});
     client.release();
   }
 }

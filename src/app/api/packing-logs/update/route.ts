@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishPackerLogChanged, publishOrderChanged } from '@/lib/realtime/publish';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
@@ -80,14 +80,23 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     console.log('Pack Date:', canonicalPackDate);
     console.log('Photos Count:', photoUrlList.length);
 
-    // Begin transaction
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    // Run the whole write inside the per-org GUC transaction (app.current_org)
+    // so RLS isolates every tenant-table touch. withTenantTransaction owns
+    // BEGIN/COMMIT/ROLLBACK + SET LOCAL; the callback returns a discriminated
+    // result the route maps to a response and after-commit side-effects.
+    type TxResult =
+      | { deduplicated: true; existingId: number }
+      | {
+          deduplicated: false;
+          packerLogId: number | undefined;
+          ledgerRows: Array<{ id: number; sku: string; delta: number }>;
+          updatedRows: Array<{ id: number; order_id: string | number | null }>;
+        };
 
+    const txResult = await withTenantTransaction<TxResult>(ctx.organizationId, async (client) => {
       // 1. Resolve shipment_id, then insert into packer_logs
       const { shipmentId: resolvedShipmentId, scanRef: resolvedScanRef } =
-        await resolveShipmentId(shippingTrackingNumber);
+        await resolveShipmentId(shippingTrackingNumber, ctx.organizationId);
 
       // Idempotency: the mobile flow auto-finalizes when uploads complete AND
       // tapping "Done" calls this endpoint. If both reach the server, the
@@ -109,6 +118,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             AND pl.packed_by = $2
             AND pl.tracking_type = $3
             AND pl.created_at > NOW() - INTERVAL '5 minutes'
+            AND pl.organization_id = $4
             AND EXISTS (
               SELECT 1
                 FROM photos p
@@ -122,28 +132,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             )
           ORDER BY pl.id DESC
           LIMIT 1`,
-        [resolvedScanRef, staffId, trackingType],
+        [resolvedScanRef, staffId, trackingType, ctx.organizationId],
       );
 
       if (dupCheck.rows.length > 0) {
-        await client.query('ROLLBACK');
         const existingId = dupCheck.rows[0].id;
         console.log(
           '[packer_logs.update] duplicate finalize detected — returning existing id',
           existingId,
         );
-        return NextResponse.json({
-          success: true,
-          message: 'Packer log already finalized (idempotent)',
-          packerLogId: existingId,
-          ordersUpdated: 0,
-          trackingNumber: shippingTrackingNumber,
-          trackingType,
-          photosCount: photoUrlList.length,
-          deduplicated: true,
-        });
+        // No writes occurred; COMMIT of this read-only tx is harmless.
+        return { deduplicated: true, existingId };
       }
 
+      // organization_id is stamped from the app.current_org GUC default.
       const insertResult = await client.query(`
         INSERT INTO packer_logs (
           shipment_id,
@@ -164,7 +166,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           packerLogId,
           shipmentId: resolvedShipmentId ?? null,
           actorStaffId: staffId,
-        });
+        }, ctx.organizationId);
       }
 
       const salId = await createStationActivityLog(client, {
@@ -214,19 +216,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
 
       // 3. Update orders table — mark status only; shipped state derived from stn carrier status
-      const updateResult = await client.query(`
+      const updateResult = await client.query<{ id: number; order_id: string | number | null }>(`
         UPDATE orders
         SET status = 'shipped'
         WHERE shipment_id = $1
           AND shipment_id IS NOT NULL
           AND (status IS NULL OR status != 'shipped')
+          AND organization_id = $2
         RETURNING id, order_id
-      `, [resolvedShipmentId]);
+      `, [resolvedShipmentId, ctx.organizationId]);
 
       console.log('=== UPDATE RESULT ===');
       if (updateResult.rows.length === 0) {
         // Fallback: match via shipping_tracking_numbers join for legacy unlinked rows
-        const fallbackUpdate = await client.query(`
+        const fallbackUpdate = await client.query<{ id: number; order_id: string | number | null }>(`
           UPDATE orders o
           SET status = 'shipped'
           FROM shipping_tracking_numbers stn
@@ -234,10 +237,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             AND RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 8)
                 = RIGHT(regexp_replace(UPPER($1), '[^A-Z0-9]', '', 'g'), 8)
             AND (o.status IS NULL OR o.status != 'shipped')
+            AND o.organization_id = $2
           RETURNING o.id, o.order_id
-        `, [shippingTrackingNumber]);
+        `, [shippingTrackingNumber, ctx.organizationId]);
         if (fallbackUpdate.rows.length > 0) {
-          const orderId = fallbackUpdate.rows[0].id;
+          const targetOrderId = fallbackUpdate.rows[0].id;
           await client.query(`
             INSERT INTO work_assignments
                 (entity_type, entity_id, work_type, assigned_packer_id,
@@ -251,11 +255,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     status                 = 'DONE',
                     completed_at           = NOW(),
                     updated_at             = NOW()
-          `, [orderId, staffId]);
+              WHERE work_assignments.organization_id = $3
+          `, [targetOrderId, staffId, ctx.organizationId]);
         }
+        return { deduplicated: false, packerLogId, ledgerRows: [], updatedRows: fallbackUpdate.rows };
       } else {
         console.log('✅ Updated orders table status = shipped');
-        const orderId = updateResult.rows[0].id;
+        const targetOrderId = updateResult.rows[0].id;
         await client.query(`
           INSERT INTO work_assignments
               (entity_type, entity_id, work_type, assigned_packer_id,
@@ -269,12 +275,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                   status                 = 'DONE',
                   completed_at           = NOW(),
                   updated_at             = NOW()
-        `, [orderId, staffId]);
+            WHERE work_assignments.organization_id = $3
+        `, [targetOrderId, staffId, ctx.organizationId]);
       }
 
       // 4. Emit PACKED ledger rows per SKU in the shipment. The trigger
       //    fn_recompute_sku_stock updates sku_stock.boxed_stock automatically.
       //    orders.quantity is TEXT, coerce per-row before aggregation.
+      //    sku_stock_ledger.organization_id is stamped from the GUC default.
       const ledgerRows: Array<{ id: number; sku: string; delta: number }> = [];
       if (resolvedShipmentId) {
         const ledgerResult = await client.query<{ id: number; sku: string; delta: number }>(
@@ -301,78 +309,88 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
              WHERE o.shipment_id = $3
                AND o.sku IS NOT NULL
                AND BTRIM(o.sku) <> ''
+               AND o.organization_id = $5
            ) q
            GROUP BY q.sku
            RETURNING id, sku, delta`,
-          [staffId, packerLogId, resolvedShipmentId, 'Mobile pack scan'],
+          [staffId, packerLogId, resolvedShipmentId, 'Mobile pack scan', ctx.organizationId],
         );
         ledgerRows.push(...ledgerResult.rows);
       }
 
-      await client.query('COMMIT');
+      return { deduplicated: false, packerLogId, ledgerRows, updatedRows: updateResult.rows };
+    });
 
-      // Publish one Ably event per ledger row so ActivityFeed updates live.
-      for (const row of ledgerRows) {
-        try {
-          await publishStockLedgerEvent({
-            organizationId: ctx.organizationId,
-            ledgerId: row.id,
-            sku: row.sku,
-            delta: row.delta,
-            reason: 'PACKED',
-            dimension: 'BOXED',
-            staffId,
-            source: 'packing-logs.update',
-          });
-        } catch (err) {
-          console.warn('[packing-logs.update] realtime publish failed', err);
-        }
-      }
-
-      await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
-
-      // Build packer-log row for live surgical insert on all subscribed web sessions.
-      const shippedOrderId = updateResult.rows[0]?.id ?? null;  // may be null for unlinked rows
-      const packerRow = {
-        id: packerLogId,
-        created_at: canonicalPackDate,
-        shipping_tracking_number: shippingTrackingNumber,
-        packed_by: staffId,
-        order_id: updateResult.rows[0]?.order_id ?? null,
-        product_title: null,
-        quantity: null,
-        condition: null,
-        sku: null,
-        photos: photoUrlList,
-      };
-      await publishPackerLogChanged({
-        organizationId: ctx.organizationId,
-        packerId: staffId,
-        action: 'insert',
-        packerLogId,
-        row: packerRow,
-        source: 'packing-logs.update',
-      });
-      if (shippedOrderId) {
-        await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [shippedOrderId], source: 'packing-logs.update' });
-      }
-
+    if (txResult.deduplicated) {
       return NextResponse.json({
         success: true,
-        message: 'Packer logs updated and order marked as shipped',
-        packerLogId,
-        ordersUpdated: updateResult.rows.length,
+        message: 'Packer log already finalized (idempotent)',
+        packerLogId: txResult.existingId,
+        ordersUpdated: 0,
         trackingNumber: shippingTrackingNumber,
         trackingType,
-        photosCount: photoUrlList.length
+        photosCount: photoUrlList.length,
+        deduplicated: true,
       });
-
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
     }
+
+    const { packerLogId, ledgerRows, updatedRows } = txResult;
+
+    // Publish one Ably event per ledger row so ActivityFeed updates live.
+    for (const row of ledgerRows) {
+      try {
+        await publishStockLedgerEvent({
+          organizationId: ctx.organizationId,
+          ledgerId: row.id,
+          sku: row.sku,
+          delta: row.delta,
+          reason: 'PACKED',
+          dimension: 'BOXED',
+          staffId,
+          source: 'packing-logs.update',
+        });
+      } catch (err) {
+        console.warn('[packing-logs.update] realtime publish failed', err);
+      }
+    }
+
+    await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
+
+    // Build packer-log row for live surgical insert on all subscribed web sessions.
+    const shippedOrderId = updatedRows[0]?.id ?? null;  // may be null for unlinked rows
+    const packerRow = {
+      id: packerLogId,
+      created_at: canonicalPackDate,
+      shipping_tracking_number: shippingTrackingNumber,
+      packed_by: staffId,
+      order_id: updatedRows[0]?.order_id ?? null,
+      product_title: null,
+      quantity: null,
+      condition: null,
+      sku: null,
+      photos: photoUrlList,
+    };
+    await publishPackerLogChanged({
+      organizationId: ctx.organizationId,
+      packerId: staffId,
+      action: 'insert',
+      packerLogId,
+      row: packerRow,
+      source: 'packing-logs.update',
+    });
+    if (shippedOrderId) {
+      await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: [shippedOrderId], source: 'packing-logs.update' });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Packer logs updated and order marked as shipped',
+      packerLogId,
+      ordersUpdated: updatedRows.length,
+      trackingNumber: shippingTrackingNumber,
+      trackingType,
+      photosCount: photoUrlList.length
+    });
 
   } catch (error: any) {
     console.error('Error updating packer_logs:', error);

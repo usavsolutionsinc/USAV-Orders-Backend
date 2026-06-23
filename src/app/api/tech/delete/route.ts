@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishTechLogChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -18,57 +18,50 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 
   try {
-    // Verify SAL row exists and get staff for cache invalidation
-    const salRow = await pool.query(
-      `SELECT id, staff_id, fnsku FROM station_activity_logs WHERE id = $1`,
-      [salId],
+    // Verify SAL row exists (org-scoped) and get staff for cache invalidation
+    const salRow = await tenantQuery(
+      ctx.organizationId,
+      `SELECT id, staff_id, fnsku FROM station_activity_logs WHERE id = $1 AND organization_id = $2`,
+      [salId, ctx.organizationId],
     );
     if (salRow.rows.length === 0) {
       return NextResponse.json({ success: false, error: 'Scan session not found' }, { status: 404 });
     }
     const staffId = salRow.rows[0].staff_id;
 
-    let deletedSerialCount = 0;
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
+    const deletedSerialCount = await withTenantTransaction(ctx.organizationId, async (client) => {
       // 1. Delete SERIAL_ADDED SAL rows that reference TSN rows for this session
       await client.query(
         `DELETE FROM station_activity_logs
          WHERE activity_type = 'SERIAL_ADDED'
+           AND organization_id = $2
            AND tech_serial_number_id IN (
-             SELECT id FROM tech_serial_numbers WHERE context_station_activity_log_id = $1
+             SELECT id FROM tech_serial_numbers
+             WHERE context_station_activity_log_id = $1 AND organization_id = $2
            )`,
-        [salId],
+        [salId, ctx.organizationId],
       );
 
       // 2. Delete TSN rows linked to this SAL
       const deletedTsn = await client.query(
-        `DELETE FROM tech_serial_numbers WHERE context_station_activity_log_id = $1`,
-        [salId],
+        `DELETE FROM tech_serial_numbers WHERE context_station_activity_log_id = $1 AND organization_id = $2`,
+        [salId, ctx.organizationId],
       );
-      deletedSerialCount = deletedTsn.rowCount ?? 0;
 
       // 3. Delete fba_fnsku_logs linked to this SAL
       await client.query(
-        `DELETE FROM fba_fnsku_logs WHERE station_activity_log_id = $1`,
-        [salId],
+        `DELETE FROM fba_fnsku_logs WHERE station_activity_log_id = $1 AND organization_id = $2`,
+        [salId, ctx.organizationId],
       );
 
       // 4. Delete the anchor SAL row itself
       await client.query(
-        `DELETE FROM station_activity_logs WHERE id = $1`,
-        [salId],
+        `DELETE FROM station_activity_logs WHERE id = $1 AND organization_id = $2`,
+        [salId, ctx.organizationId],
       );
 
-      await client.query('COMMIT');
-    } catch (txError) {
-      await client.query('ROLLBACK');
-      throw txError;
-    } finally {
-      client.release();
-    }
+      return deletedTsn.rowCount ?? 0;
+    });
 
     await invalidateCacheTags(['tech-logs', 'orders-next', 'shipped', 'orders']);
     if (staffId) {

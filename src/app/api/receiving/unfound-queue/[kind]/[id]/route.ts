@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { after } from 'next/server';
@@ -123,7 +123,9 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
 
   let result;
   try {
-    result = await pool.query(sql, insertVals);
+    result = await withTenantTransaction(ctx.organizationId, (client) =>
+      client.query(sql, insertVals),
+    );
   } catch (err) {
     // Surface Postgres errors with their code so the client can show
     // something better than a generic "update failed". 23502 = NOT NULL,
@@ -196,56 +198,55 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
     );
   }
 
-  const client = await pool.connect();
+  // Early-exit signals returned from inside the transaction callback.
+  // withTenantTransaction handles BEGIN/COMMIT/ROLLBACK + SET LOCAL
+  // app.current_org. A thrown error rolls the tx back; these sentinels are
+  // returned (so the tx COMMITs) but only on no-op paths — the 400 path runs
+  // before any DELETE, and the 404 path means zero rows were affected — so the
+  // commit is harmless and the response status is mapped below.
+  type TxOutcome = { ok: true } | { status: 400 | 404; error: string };
+
+  let outcome: TxOutcome;
   try {
-    await client.query('BEGIN');
-
-    let deleted = 0;
-    if (kind === 'email_po') {
-      const res = await client.query(
-        `DELETE FROM email_missing_purchase_orders
-          WHERE id = $1 AND organization_id = $2`,
-        [sourceId, ctx.organizationId],
-      );
-      deleted = res.rowCount ?? 0;
-    } else if (kind === 'station_exception') {
-      // orders_exceptions.id is INTEGER; the URL carries it as string.
-      const numericId = Number(sourceId);
-      if (!Number.isFinite(numericId) || numericId <= 0) {
-        await client.query('ROLLBACK');
-        return NextResponse.json(
-          { success: false, error: 'station_exception id must be numeric' },
-          { status: 400 },
+    outcome = await withTenantTransaction<TxOutcome>(ctx.organizationId, async (client) => {
+      let deleted = 0;
+      if (kind === 'email_po') {
+        const res = await client.query(
+          `DELETE FROM email_missing_purchase_orders
+            WHERE id = $1 AND organization_id = $2`,
+          [sourceId, ctx.organizationId],
         );
+        deleted = res.rowCount ?? 0;
+      } else if (kind === 'station_exception') {
+        // orders_exceptions.id is INTEGER; the URL carries it as string.
+        const numericId = Number(sourceId);
+        if (!Number.isFinite(numericId) || numericId <= 0) {
+          return { status: 400, error: 'station_exception id must be numeric' };
+        }
+        const res = await client.query(
+          `DELETE FROM orders_exceptions
+            WHERE id = $1 AND organization_id = $2`,
+          [numericId, ctx.organizationId],
+        );
+        deleted = res.rowCount ?? 0;
       }
-      const res = await client.query(
-        `DELETE FROM orders_exceptions
-          WHERE id = $1 AND organization_id = $2`,
-        [numericId, ctx.organizationId],
+
+      if (deleted === 0) {
+        return { status: 404, error: 'source row not found' };
+      }
+
+      // Best-effort overlay cleanup. If no overlay row exists, this is a no-op.
+      await client.query(
+        `DELETE FROM unfound_overlay
+          WHERE organization_id = $1
+            AND source_kind = $2
+            AND source_id = $3`,
+        [ctx.organizationId, kind, sourceId],
       );
-      deleted = res.rowCount ?? 0;
-    }
 
-    if (deleted === 0) {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { success: false, error: 'source row not found' },
-        { status: 404 },
-      );
-    }
-
-    // Best-effort overlay cleanup. If no overlay row exists, this is a no-op.
-    await client.query(
-      `DELETE FROM unfound_overlay
-        WHERE organization_id = $1
-          AND source_kind = $2
-          AND source_id = $3`,
-      [ctx.organizationId, kind, sourceId],
-    );
-
-    await client.query('COMMIT');
+      return { ok: true };
+    });
   } catch (err) {
-    await client.query('ROLLBACK');
     const pgErr = err as { code?: string; message?: string };
     console.error(
       `[unfound-queue.DELETE] failed kind=${kind} source_id=${sourceId}`,
@@ -255,8 +256,13 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       { success: false, error: `delete failed: ${pgErr.message ?? 'unknown'}` },
       { status: 500 },
     );
-  } finally {
-    client.release();
+  }
+
+  if (!('ok' in outcome)) {
+    return NextResponse.json(
+      { success: false, error: outcome.error },
+      { status: outcome.status },
+    );
   }
 
   after(async () => {

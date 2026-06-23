@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { syncTsnToSerialUnit } from '@/lib/neon/serial-units-queries';
@@ -34,7 +34,7 @@ function normalizeRow(row: SerialRow) {
   };
 }
 
-export const GET = withAuth(async (request: NextRequest) => {
+export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const receivingLineId = Number(searchParams.get('receiving_line_id'));
@@ -46,14 +46,16 @@ export const GET = withAuth(async (request: NextRequest) => {
       );
     }
 
-    const result = await pool.query<SerialRow>(
+    const result = await tenantQuery<SerialRow>(
+      ctx.organizationId,
       `SELECT id, serial_number, serial_type, tested_by, station_source, receiving_line_id,
               created_at::text, updated_at::text
        FROM tech_serial_numbers
        WHERE station_source = 'RECEIVING'
          AND receiving_line_id = $1
+         AND organization_id = $2
        ORDER BY created_at ASC, id ASC`,
-      [receivingLineId],
+      [receivingLineId, ctx.organizationId],
     );
 
     return NextResponse.json({
@@ -90,30 +92,44 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    const lineRes = await pool.query<{ id: number; receiving_id: number | null }>(
-      `SELECT id, receiving_id
-       FROM receiving_lines
-       WHERE id = $1
-       LIMIT 1`,
-      [receivingLineId],
+    const { lineReceivingId, inserted, notFound } = await withTenantTransaction(
+      ctx.organizationId,
+      async (client) => {
+        const lineRes = await client.query<{ id: number; receiving_id: number | null }>(
+          `SELECT id, receiving_id
+           FROM receiving_lines
+           WHERE id = $1
+             AND organization_id = $2
+           LIMIT 1`,
+          [receivingLineId, ctx.organizationId],
+        );
+        if (lineRes.rows.length === 0) {
+          return { lineReceivingId: null, inserted: null, notFound: true };
+        }
+
+        const insertedRes = await client.query<SerialRow>(
+          `INSERT INTO tech_serial_numbers
+             (serial_number, serial_type, tested_by, station_source, receiving_line_id, shipment_id, scan_ref, organization_id)
+           VALUES ($1, $2, $3, 'RECEIVING', $4, NULL, NULL, $5::uuid)
+           RETURNING id, serial_number, serial_type, tested_by, station_source, receiving_line_id,
+                     created_at::text, updated_at::text`,
+          [serialNumber, serialType, testedBy, receivingLineId, ctx.organizationId],
+        );
+
+        return {
+          lineReceivingId: lineRes.rows[0]?.receiving_id ?? null,
+          inserted: insertedRes,
+          notFound: false,
+        };
+      },
     );
-    if (lineRes.rows.length === 0) {
+
+    if (notFound || !inserted) {
       return NextResponse.json(
         { success: false, error: `receiving_line ${receivingLineId} not found` },
         { status: 404 },
       );
     }
-
-    const lineReceivingId = lineRes.rows[0]?.receiving_id ?? null;
-
-    const inserted = await pool.query<SerialRow>(
-      `INSERT INTO tech_serial_numbers
-         (serial_number, serial_type, tested_by, station_source, receiving_line_id, shipment_id, scan_ref, organization_id)
-       VALUES ($1, $2, $3, 'RECEIVING', $4, NULL, NULL, $5::uuid)
-       RETURNING id, serial_number, serial_type, tested_by, station_source, receiving_line_id,
-                 created_at::text, updated_at::text`,
-      [serialNumber, serialType, testedBy, receivingLineId, ctx.organizationId],
-    );
 
     await invalidateCacheTags([
       'receiving-lines',
@@ -184,14 +200,19 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    const deleted = await pool.query<{ id: number; receiving_line_id: number | null; receiving_id: number | null }>(
-      `DELETE FROM tech_serial_numbers tsn
-       USING receiving_lines rl
-       WHERE tsn.id = $1
-         AND tsn.station_source = 'RECEIVING'
-         AND rl.id = tsn.receiving_line_id
-       RETURNING tsn.id, tsn.receiving_line_id, rl.receiving_id`,
-      [id],
+    const deleted = await withTenantTransaction(
+      ctx.organizationId,
+      (client) =>
+        client.query<{ id: number; receiving_line_id: number | null; receiving_id: number | null }>(
+          `DELETE FROM tech_serial_numbers tsn
+           USING receiving_lines rl
+           WHERE tsn.id = $1
+             AND tsn.station_source = 'RECEIVING'
+             AND rl.id = tsn.receiving_line_id
+             AND tsn.organization_id = $2
+           RETURNING tsn.id, tsn.receiving_line_id, rl.receiving_id`,
+          [id, ctx.organizationId],
+        ),
     );
 
     if (deleted.rows.length === 0) {

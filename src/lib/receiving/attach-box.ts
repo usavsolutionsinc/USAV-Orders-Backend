@@ -1,4 +1,6 @@
+import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 
 /**
@@ -38,8 +40,11 @@ export type AttachBoxResult =
     };
 
 /** Full box list for a carton — what both attach routes return after a POST. */
-export async function listBoxesForReceiving(receivingId: number): Promise<AttachedBox[]> {
-  const boxesRes = await pool.query<AttachedBox>(
+export async function listBoxesForReceiving(
+  receivingId: number,
+  db: Pick<PoolClient, 'query'> = pool,
+): Promise<AttachedBox[]> {
+  const boxesRes = await db.query<AttachedBox>(
     `SELECT rs.id, rs.shipment_id, rs.box_seq, rs.is_primary,
             to_char(rs.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at,
             stn.tracking_number_raw                 AS tracking_number,
@@ -66,81 +71,90 @@ export async function attachBoxToReceiving(params: {
   receivingId: number;
   trackingNumber: string;
   staffId: number | null;
+  /**
+   * Tenant scope. The attach runs under the `app.current_org` GUC so RLS on
+   * `receiving` / `receiving_shipments` (both FORCEd) isolates it; the
+   * org-stamping subqueries align with the GUC's WITH CHECK. Required.
+   */
+  organizationId: string;
 }): Promise<AttachBoxResult> {
   const tracking = params.trackingNumber.trim();
   if (!tracking) return { ok: false, error: 'trackingNumber is required', status: 400 };
 
-  const { receivingId, staffId } = params;
+  const { receivingId, staffId, organizationId } = params;
 
-  const cartonRes = await pool.query<{ shipment_id: number | null; received_by: number | null }>(
-    `SELECT shipment_id, received_by FROM receiving WHERE id = $1 LIMIT 1`,
-    [receivingId],
-  );
-  const carton = cartonRes.rows[0];
-  if (!carton) return { ok: false, error: 'Receiving carton not found', status: 404 };
+  return withTenantTransaction<AttachBoxResult>(organizationId, async (client) => {
+    const cartonRes = await client.query<{ shipment_id: number | null; received_by: number | null }>(
+      `SELECT shipment_id, received_by FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [receivingId, organizationId],
+    );
+    const carton = cartonRes.rows[0];
+    if (!carton) return { ok: false, error: 'Receiving carton not found', status: 404 };
 
-  const shipment = await registerShipmentPermissive({
-    trackingNumber: tracking,
-    sourceSystem: 'receiving.attach-box',
-  });
-  if (!shipment?.id) {
-    return { ok: false, error: 'Could not register that tracking number', status: 422 };
-  }
-  const shipmentId = Number(shipment.id);
+    const shipment = await registerShipmentPermissive({
+      trackingNumber: tracking,
+      sourceSystem: 'receiving.attach-box',
+    });
+    if (!shipment?.id) {
+      return { ok: false, error: 'Could not register that tracking number', status: 422 };
+    }
+    const shipmentId = Number(shipment.id);
 
-  // Self-heal: ensure the carton's primary box (reference# anchor) exists in the
-  // junction before we add an extra (covers cartons the backfill hasn't reached).
-  if (carton.shipment_id) {
-    await pool.query(
+    // Self-heal: ensure the carton's primary box (reference# anchor) exists in the
+    // junction before we add an extra (covers cartons the backfill hasn't reached).
+    if (carton.shipment_id) {
+      await client.query(
+        `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
+         VALUES ($1, $2, 1, true, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
+         ON CONFLICT (receiving_id, shipment_id) DO NOTHING`,
+        [receivingId, carton.shipment_id, carton.received_by ?? null],
+      );
+    }
+
+    // No primary yet (carton scanned/created with no reference# anchor) → the first
+    // attached box becomes the primary so "exactly one primary per carton" holds.
+    const primaryRes = await client.query(
+      `SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND is_primary LIMIT 1`,
+      [receivingId],
+    );
+    const makePrimary = primaryRes.rows.length === 0;
+
+    const inserted = await client.query<{ box_seq: number; is_primary: boolean }>(
       `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
-       VALUES ($1, $2, 1, true, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
-       ON CONFLICT (receiving_id, shipment_id) DO NOTHING`,
-      [receivingId, carton.shipment_id, carton.received_by ?? null],
+       SELECT $1, $2,
+              COALESCE((SELECT MAX(box_seq) FROM receiving_shipments WHERE receiving_id = $1), 0) + 1,
+              $4, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1)
+       WHERE NOT EXISTS (
+         SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND shipment_id = $2
+       )
+       RETURNING box_seq, is_primary`,
+      [receivingId, shipmentId, staffId, makePrimary],
     );
-  }
+    const alreadyAttached = inserted.rows.length === 0;
 
-  // No primary yet (carton scanned/created with no reference# anchor) → the first
-  // attached box becomes the primary so "exactly one primary per carton" holds.
-  const primaryRes = await pool.query(
-    `SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND is_primary LIMIT 1`,
-    [receivingId],
-  );
-  const makePrimary = primaryRes.rows.length === 0;
+    // When this box became the carton's primary anchor, stamp receiving.shipment_id
+    // (only if empty — never overwrite the reference# anchor).
+    if (makePrimary && !carton.shipment_id && !alreadyAttached) {
+      await client.query(
+        `UPDATE receiving SET shipment_id = $2, updated_at = NOW()
+         WHERE id = $1 AND shipment_id IS NULL`,
+        [receivingId, shipmentId],
+      );
+    }
 
-  const inserted = await pool.query<{ box_seq: number; is_primary: boolean }>(
-    `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
-     SELECT $1, $2,
-            COALESCE((SELECT MAX(box_seq) FROM receiving_shipments WHERE receiving_id = $1), 0) + 1,
-            $4, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1)
-     WHERE NOT EXISTS (
-       SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND shipment_id = $2
-     )
-     RETURNING box_seq, is_primary`,
-    [receivingId, shipmentId, staffId, makePrimary],
-  );
-  const alreadyAttached = inserted.rows.length === 0;
+    // Read on the SAME tx client so it sees the just-inserted (uncommitted) box.
+    const boxes = await listBoxesForReceiving(receivingId, client);
 
-  // When this box became the carton's primary anchor, stamp receiving.shipment_id
-  // (only if empty — never overwrite the reference# anchor).
-  if (makePrimary && !carton.shipment_id && !alreadyAttached) {
-    await pool.query(
-      `UPDATE receiving SET shipment_id = $2, updated_at = NOW()
-       WHERE id = $1 AND shipment_id IS NULL`,
-      [receivingId, shipmentId],
-    );
-  }
-
-  const boxes = await listBoxesForReceiving(receivingId);
-
-  return {
-    ok: true,
-    shipmentId,
-    alreadyAttached,
-    boxSeq: inserted.rows[0]?.box_seq ?? null,
-    isPrimary: inserted.rows[0]?.is_primary ?? null,
-    boxCount: boxes.length,
-    boxes,
-  };
+    return {
+      ok: true,
+      shipmentId,
+      alreadyAttached,
+      boxSeq: inserted.rows[0]?.box_seq ?? null,
+      isPrimary: inserted.rows[0]?.is_primary ?? null,
+      boxCount: boxes.length,
+      boxes,
+    };
+  });
 }
 
 /**

@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { after } from 'next/server';
@@ -53,17 +53,18 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     );
   }
 
-  const result = await pool.query<{
+  const result = await tenantQuery<{
     id: number;
     receiving_id: number | null;
     condition_grade: Grade;
   }>(
+    ctx.organizationId,
     `UPDATE receiving_lines
         SET condition_grade = $1::condition_grade_enum,
             updated_at = NOW()
-      WHERE id = $2
+      WHERE id = $2 AND organization_id = $3
       RETURNING id, receiving_id, condition_grade`,
-    [grade, lineId],
+    [grade, lineId, ctx.organizationId],
   );
   const updated = result.rows[0];
   if (!updated) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse, after } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantConnection } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
@@ -26,14 +27,21 @@ interface ReceivingLineCandidate {
   zoho_purchaseorder_id: string | null;
 }
 
-async function loadCandidateLines(receivingId: number): Promise<ReceivingLineCandidate[]> {
-  const r = await pool.query<ReceivingLineCandidate>(
+async function loadCandidateLines(
+  receivingId: number,
+  orgId: OrgId,
+): Promise<ReceivingLineCandidate[]> {
+  // GUC-scoped read: app.current_org is set for the duration and the explicit
+  // organization_id predicate keeps another tenant's lines invisible (defense in
+  // depth alongside RLS once enforced).
+  const r = await tenantQuery<ReceivingLineCandidate>(
+    orgId,
     `SELECT id, receiving_id, sku, quantity_expected, quantity_received,
             zoho_item_id, zoho_purchaseorder_id
      FROM receiving_lines
-     WHERE receiving_id = $1
+     WHERE receiving_id = $1 AND organization_id = $2
      ORDER BY id ASC`,
-    [receivingId],
+    [receivingId, orgId],
   );
   return r.rows;
 }
@@ -81,11 +89,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // (already_received / already_complete / success) without re-running the scan.
     const idempotencyKey = readIdempotencyKey(request, clientEventId);
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(
-        pool,
-        ctx.organizationId,
-        idempotencyKey,
-        IDEMPOTENCY_ROUTE,
+      // GUC-scoped: run the idempotency-cache read on the tenant client so RLS
+      // backstops the explicit organization_id predicate the helper already uses.
+      const cached = await withTenantConnection(ctx.organizationId, (client) =>
+        getApiIdempotencyResponse(
+          client,
+          ctx.organizationId,
+          idempotencyKey,
+          IDEMPOTENCY_ROUTE,
+        ),
       );
       if (cached) {
         return NextResponse.json(cached.response_body, {
@@ -103,14 +115,17 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     ) => {
       const status = init?.status ?? 200;
       if (idempotencyKey && status < 500) {
-        await saveApiIdempotencyResponse(pool, {
-          orgId: ctx.organizationId,
-          idempotencyKey,
-          route: IDEMPOTENCY_ROUTE,
-          staffId,
-          statusCode: status,
-          responseBody: body,
-        });
+        // GUC-scoped: stamp/serve the idempotency-cache row on the tenant client.
+        await withTenantConnection(ctx.organizationId, (client) =>
+          saveApiIdempotencyResponse(client, {
+            orgId: ctx.organizationId,
+            idempotencyKey,
+            route: IDEMPOTENCY_ROUTE,
+            staffId,
+            statusCode: status,
+            responseBody: body,
+          }),
+        );
       }
       return NextResponse.json(body, init);
     };
@@ -132,7 +147,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     let targetReceivingId = receivingId;
 
     if (!receivingLineId && receivingId) {
-      const candidates = await loadCandidateLines(receivingId);
+      const candidates = await loadCandidateLines(receivingId, ctx.organizationId);
       if (candidates.length === 0) {
         return NextResponse.json(
           { success: false, error: `no lines found for receiving ${receivingId}` },
@@ -340,13 +355,16 @@ export const DELETE = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    const result = await detachSerialFromLine({
-      receiving_line_id: receivingLineId,
-      serial_unit_id: serialUnitId,
-      serial_number: serialNumberRaw || null,
-      staff_id: ctx.staffId ?? null,
-      station: 'RECEIVING',
-    });
+    const result = await detachSerialFromLine(
+      {
+        receiving_line_id: receivingLineId,
+        serial_unit_id: serialUnitId,
+        serial_number: serialNumberRaw || null,
+        staff_id: ctx.staffId ?? null,
+        station: 'RECEIVING',
+      },
+      ctx.organizationId,
+    );
 
     if (!result.removed) {
       return NextResponse.json(

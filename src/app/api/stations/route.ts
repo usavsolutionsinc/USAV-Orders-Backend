@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
 import { parseBody } from '@/lib/schemas/parse';
@@ -62,7 +62,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // Active rows + the single newest row per mode (the draft candidate).
-    const { rows } = await pool.query<DbRow>(
+    const { rows } = await tenantQuery<DbRow>(
+      ctx.organizationId,
       `SELECT DISTINCT ON (mode_key, is_active)
               id, page_key, mode_key, label, workflow_node_id, config,
               version, is_active, updated_by, updated_at::text
@@ -112,8 +113,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // are intentionally not honored: the upsert IS the idempotency story — a
     // retried save lands on the same draft row, and a surplus version row in
     // the worst race is harmless (publish targets an explicit id).
-    const { rows } = await pool.query<DbRow>(
-      `WITH active AS (
+    const draft = await withTenantTransaction(ctx.organizationId, async (client) => {
+      const { rows } = await client.query<DbRow>(
+        `WITH active AS (
          SELECT COALESCE(MAX(version), 0) AS v
            FROM station_definitions
           WHERE organization_id = $1 AND page_key = $2 AND mode_key = $3 AND is_active
@@ -152,31 +154,37 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
        SELECT id, page_key, mode_key, label, workflow_node_id, config,
               version, is_active, updated_by, updated_at::text
          FROM inserted`,
-      [
-        ctx.organizationId,
-        parsed.pageKey,
-        parsed.modeKey,
-        parsed.label,
-        parsed.workflowNodeId ?? null,
-        JSON.stringify(parsed.config),
-        ctx.staffId,
-      ],
-    );
+        [
+          ctx.organizationId,
+          parsed.pageKey,
+          parsed.modeKey,
+          parsed.label,
+          parsed.workflowNodeId ?? null,
+          JSON.stringify(parsed.config),
+          ctx.staffId,
+        ],
+      );
 
-    const draft = rows[0];
+      const row = rows[0];
+      if (!row) return null;
+
+      await recordAudit(client, ctx, req, {
+        source: 'stations-api',
+        action: AUDIT_ACTION.STATION_DRAFT_SAVE,
+        entityType: AUDIT_ENTITY.STATION_DEFINITION,
+        entityId: row.id,
+        after: { pageKey: row.page_key, modeKey: row.mode_key, version: row.version },
+      });
+
+      return row;
+    });
+
     if (!draft) {
       return NextResponse.json(
         { success: false, error: 'Draft upsert produced no row' },
         { status: 500 },
       );
     }
-    await recordAudit(pool, ctx, req, {
-      source: 'stations-api',
-      action: AUDIT_ACTION.STATION_DRAFT_SAVE,
-      entityType: AUDIT_ENTITY.STATION_DEFINITION,
-      entityId: draft.id,
-      after: { pageKey: draft.page_key, modeKey: draft.mode_key, version: draft.version },
-    });
 
     return NextResponse.json({ success: true, draft: toApi(draft) });
   } catch (error) {

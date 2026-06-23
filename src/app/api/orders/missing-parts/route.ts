@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { clearReplenishmentForOrder, ensureReplenishmentForOrder } from '@/lib/replenishment';
@@ -21,9 +21,10 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     }
 
     // Update order to mark missing parts and set reason
-    await pool.query(
-      'UPDATE orders SET out_of_stock = $1 WHERE id = $2',
-      [reason || null, orderId]
+    await tenantQuery(
+      ctx.organizationId,
+      'UPDATE orders SET out_of_stock = $1 WHERE id = $2 AND organization_id = $3',
+      [reason || null, orderId, ctx.organizationId]
     );
 
     if (process.env.FEATURE_REPLENISHMENT === 'true') {

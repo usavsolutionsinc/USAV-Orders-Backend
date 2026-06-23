@@ -10,6 +10,7 @@ import { createAuditLog } from '@/lib/audit-logs';
 import { withAuth } from '@/lib/auth/withAuth';
 import { fetchPackerLogRows, type PackerLogsTrackingFilter } from '@/lib/neon/packer-logs-week';
 import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
@@ -149,70 +150,59 @@ export const PUT = withAuth(async (req: NextRequest) => {
     }
 }, { permission: 'packing.complete_order' });
 
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const activityLogId = searchParams.get('activityLogId');
+    const orgId = ctx.organizationId;
 
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN');
-
-        if (activityLogId) {
-            const salId = parseInt(activityLogId, 10);
-            if (Number.isNaN(salId)) {
-                await client.query('ROLLBACK');
-                return NextResponse.json({ error: 'Invalid activityLogId' }, { status: 400 });
+        // Tenant-scoped transaction: SET LOCAL app.current_org so RLS isolates
+        // the station_activity_logs / packer_logs deletes; explicit
+        // organization_id predicates are kept as defense-in-depth alongside the GUC.
+        return await withTenantTransaction(orgId, async (client) => {
+            if (activityLogId) {
+                const salId = parseInt(activityLogId, 10);
+                if (Number.isNaN(salId)) {
+                    return NextResponse.json({ error: 'Invalid activityLogId' }, { status: 400 });
+                }
+                const sel = await client.query(
+                    'SELECT packer_log_id FROM station_activity_logs WHERE id = $1 AND organization_id = $2',
+                    [salId, orgId]
+                );
+                if (!sel.rows[0]) {
+                    return NextResponse.json({ error: 'Log not found' }, { status: 404 });
+                }
+                const plId: number | null = sel.rows[0].packer_log_id ?? null;
+                await client.query('DELETE FROM station_activity_logs WHERE id = $1 AND organization_id = $2', [salId, orgId]);
+                if (plId != null) {
+                    await client.query('DELETE FROM packer_logs WHERE id = $1 AND organization_id = $2', [plId, orgId]);
+                }
+                await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
+                return NextResponse.json({ success: true });
             }
-            const sel = await client.query(
-                'SELECT packer_log_id FROM station_activity_logs WHERE id = $1',
-                [salId]
-            );
-            if (!sel.rows[0]) {
-                await client.query('ROLLBACK');
+
+            if (!id) {
+                return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+            }
+
+            const plId = parseInt(id, 10);
+            if (Number.isNaN(plId)) {
+                return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+            }
+
+            const plCheck = await client.query('SELECT id FROM packer_logs WHERE id = $1 AND organization_id = $2', [plId, orgId]);
+            if (!plCheck.rows[0]) {
                 return NextResponse.json({ error: 'Log not found' }, { status: 404 });
             }
-            const plId: number | null = sel.rows[0].packer_log_id ?? null;
-            await client.query('DELETE FROM station_activity_logs WHERE id = $1', [salId]);
-            if (plId != null) {
-                await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
-            }
-            await client.query('COMMIT');
+
+            await client.query('DELETE FROM station_activity_logs WHERE packer_log_id = $1 AND organization_id = $2', [plId, orgId]);
+            await client.query('DELETE FROM packer_logs WHERE id = $1 AND organization_id = $2', [plId, orgId]);
             await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
-            return NextResponse.json({ success: true });
-        }
-
-        if (!id) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-        }
-
-        const plId = parseInt(id, 10);
-        if (Number.isNaN(plId)) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
-        }
-
-        const plCheck = await client.query('SELECT id FROM packer_logs WHERE id = $1', [plId]);
-        if (!plCheck.rows[0]) {
-            await client.query('ROLLBACK');
-            return NextResponse.json({ error: 'Log not found' }, { status: 404 });
-        }
-
-        await client.query('DELETE FROM station_activity_logs WHERE packer_log_id = $1', [plId]);
-        await client.query('DELETE FROM packer_logs WHERE id = $1', [plId]);
-        await client.query('COMMIT');
-        await invalidateCacheTags(['packing-logs', 'orders', 'shipped']);
-        return NextResponse.json({ success: true, deletedLog: { id: plId } });
+            return NextResponse.json({ success: true, deletedLog: { id: plId } });
+        });
     } catch (error: any) {
-        try {
-            await client.query('ROLLBACK');
-        } catch {
-            /* ignore */
-        }
         console.error('Error deleting packer log:', error);
         return NextResponse.json({ error: 'Failed to delete log', details: error.message }, { status: 500 });
-    } finally {
-        client.release();
     }
 }, { permission: 'packing.complete_order' });

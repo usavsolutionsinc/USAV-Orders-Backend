@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
-import { transaction } from '@/lib/neon-client';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseScannedUrl } from '@/lib/scan-resolver';
 import { transition } from '@/lib/inventory/state-machine';
@@ -103,17 +103,24 @@ export const POST = withAuth(async (request, ctx) => {
 
   const actorStaffId: number | null =
     typeof ctx.staffId === 'number' && ctx.staffId > 0 ? ctx.staffId : null;
+  const orgId = ctx.organizationId;
 
   try {
-    const result = await transaction(async (client) => {
+    // GUC-wrapped: every tenant table this route touches (orders, order_unit_allocations,
+    // serial_units, inventory_events, sku_stock_ledger, packer_logs, station_activity_logs)
+    // has RLS enabled, so under the app_tenant pool the policies scope each statement to
+    // this org and the GUC column default stamps org on the raw INSERTs. Explicit
+    // organization_id predicates below are kept as defense-in-depth.
+    const result = await withTenantTransaction(orgId, async (client) => {
       // 1. Resolve all units in one round trip.
       const unitsQ = await client.query<{ id: number; sku: string | null; current_status: string; normalized_serial: string }>(
         `SELECT id, sku, current_status::text AS current_status, normalized_serial
            FROM serial_units
-          WHERE id = ANY($1::int[])
-             OR normalized_serial = ANY($2::text[])
+          WHERE (id = ANY($1::int[])
+             OR normalized_serial = ANY($2::text[]))
+            AND organization_id = $3
           FOR UPDATE`,
-        [explicitIds, normalizedSerials],
+        [explicitIds, normalizedSerials, orgId],
       );
       const units = unitsQ.rows;
 
@@ -149,8 +156,9 @@ export const POST = withAuth(async (request, ctx) => {
            FROM order_unit_allocations
           WHERE serial_unit_id = ANY($1::int[])
             AND state <> 'RELEASED'
+            AND organization_id = $2
           FOR UPDATE`,
-        [unitIds],
+        [unitIds, orgId],
       );
       const allocByUnit = new Map<number, typeof allocQ.rows[number]>();
       for (const a of allocQ.rows) allocByUnit.set(a.serial_unit_id, a);
@@ -180,8 +188,8 @@ export const POST = withAuth(async (request, ctx) => {
 
       // 4. Resolve order metadata.
       const orderQ = await client.query<{ id: number; sku: string | null; shipment_id: number | null; status: string | null }>(
-        `SELECT id, sku, shipment_id, status FROM orders WHERE id = $1 LIMIT 1 FOR UPDATE`,
-        [orderId],
+        `SELECT id, sku, shipment_id, status FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1 FOR UPDATE`,
+        [orderId, orgId],
       );
       const order = orderQ.rows[0];
       if (!order) {
@@ -205,8 +213,8 @@ export const POST = withAuth(async (request, ctx) => {
 
         // 5a. Allocation → SHIPPED.
         await client.query(
-          `UPDATE order_unit_allocations SET state = 'SHIPPED' WHERE id = $1`,
-          [a.id],
+          `UPDATE order_unit_allocations SET state = 'SHIPPED' WHERE id = $1 AND organization_id = $2`,
+          [a.id, orgId],
         );
 
         // 5b. inventory_events PACKED (idempotent).
@@ -288,6 +296,7 @@ export const POST = withAuth(async (request, ctx) => {
             },
           },
           client,
+          orgId,
         );
         if (!t.ok) {
           throw new UnitTransitionError(t.status, u.id, t.from ?? null, t.error);
@@ -338,8 +347,8 @@ export const POST = withAuth(async (request, ctx) => {
 
       // 8. Flip the order status last so observers see the events first.
       await client.query(
-        `UPDATE orders SET status = 'shipped' WHERE id = $1`,
-        [orderId],
+        `UPDATE orders SET status = 'shipped' WHERE id = $1 AND organization_id = $2`,
+        [orderId, orgId],
       );
 
       return {
