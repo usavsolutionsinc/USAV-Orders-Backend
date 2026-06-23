@@ -24,6 +24,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
+import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { useEscapeClose } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
@@ -212,49 +213,56 @@ export function PhotoPeekFan({
         </div>
       ) : null}
 
-      {/* Expanded display — fan over a dark-gray backdrop. Click backdrop /
-          press Escape / hit × to close. Click a card → fullscreen viewer. */}
-      <AnimatePresence>
-        {expanded ? (
-          <motion.div
-            key="photo-fan-expanded"
-            data-testid="photo-peek-expanded"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: motionBezier.easeOut }}
-            onClick={close}
-            style={{ backgroundColor: FAN_BG }}
-            className="absolute inset-0 z-30 flex items-center justify-center overflow-hidden backdrop-blur-sm"
-          >
-            {/* Fan's own close — hidden while the fullscreen viewer is open so
-                its button doesn't stack a second X above the viewer. */}
-            {!viewerOpen ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); close(); }}
-                aria-label="Close"
-                className={`${CTRL_BTN} absolute right-3 top-3 z-50 h-9 w-9`}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
+      {/* Expanded display — a full-viewport overlay portaled to <body> (like the
+          photo viewer), so the fan centers on the absolute middle of the PAGE and
+          sits above the unbox panels/sidebars — not boxed into the right pane.
+          Click backdrop / press Escape / hit × to close. Click a card → viewer. */}
+      {gallery.mounted && typeof document !== 'undefined'
+        ? createPortal(
+            <AnimatePresence>
+              {expanded ? (
+                <motion.div
+                  key="photo-fan-expanded"
+                  data-testid="photo-peek-expanded"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2, ease: motionBezier.easeOut }}
+                  onClick={close}
+                  style={{ backgroundColor: FAN_BG, zIndex: zLayer.modalBackdrop }}
+                  className="fixed inset-0 flex items-center justify-center overflow-hidden backdrop-blur-sm"
+                >
+                  {/* Fan's own close — hidden while the fullscreen viewer is open so
+                      its button doesn't stack a second X above the viewer. */}
+                  {!viewerOpen ? (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); close(); }}
+                      aria-label="Close"
+                      className={`${CTRL_BTN} absolute right-3 top-3 z-50 h-9 w-9`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : null}
 
-            {/* Fan stage — the shared GSAP card-fan carousel (hover to spread,
-                arrows/dots to page when >7 photos). `isolate` keeps card stacking
-                in its own context so a mid-hover card can't bleed above the
-                viewer; `stopPropagation` keeps card/arrow clicks from closing the
-                backdrop; pointer-events off while the viewer is up. */}
-            <div
-              className={`isolate w-full ${viewerOpen ? 'pointer-events-none' : ''}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <SocialCards cards={fanItems} onCardClick={openViewer} cardTestId="fan-card" />
-            </div>
-
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+                  {/* Fan stage — the shared GSAP card-fan carousel (hover to spread,
+                      arrows/dots to page when >7 photos). `isolate` keeps card
+                      stacking in its own context so a mid-hover card can't bleed
+                      above the viewer; `stopPropagation` keeps card/arrow clicks
+                      from closing the backdrop; pointer-events off while the viewer
+                      is up. */}
+                  <div
+                    className={`isolate w-full ${viewerOpen ? 'pointer-events-none' : ''}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <SocialCards cards={fanItems} onCardClick={openViewer} cardTestId="fan-card" />
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>,
+            document.body,
+          )
+        : null}
 
       {/* Shared fullscreen viewer — portaled to <body>, opened from a fan card
           or Space. X / Esc / backdrop close it (usePhotoGallery), returning to

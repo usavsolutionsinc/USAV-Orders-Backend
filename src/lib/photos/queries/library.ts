@@ -13,8 +13,33 @@ export interface LibraryFilters {
   linkRole?: string | null;
   poRef?: string | null;
   receivingId?: number | null;
+  /** Keep only RECEIVING-linked photos whose receiving.source matches (e.g. 'local_pickup'). */
+  receivingSource?: string | null;
+  /** Drop RECEIVING-linked photos whose receiving.source matches (exclude local pickups from unboxing). */
+  receivingSourceExclude?: string | null;
   staffId?: number | null;
   hasAnalysis?: boolean | null;
+}
+
+/**
+ * Build an EXISTS subquery matching photos linked (directly via RECEIVING, or
+ * indirectly via RECEIVING_LINE) to a `receiving` row with the given `source`.
+ * Returns the SQL fragment; pushes the source value onto `params`.
+ */
+function receivingSourceExists(params: unknown[], source: string): string {
+  params.push(source);
+  const src = `$${params.length}`;
+  return `EXISTS (
+        SELECT 1 FROM photo_entity_links l
+         JOIN receiving r ON r.organization_id = p.organization_id AND (
+                (l.entity_type = 'RECEIVING' AND r.id = l.entity_id)
+             OR (l.entity_type = 'RECEIVING_LINE' AND r.id = (
+                   SELECT rl.receiving_id FROM receiving_lines rl WHERE rl.id = l.entity_id))
+              )
+         WHERE l.photo_id = p.id
+           AND l.organization_id = p.organization_id
+           AND r.source = ${src}
+      )`;
 }
 
 export async function listPhotoLibrary(filters: LibraryFilters) {
@@ -82,6 +107,14 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
              OR (l.entity_type = 'RECEIVING_LINE' AND rl.receiving_id = ${rid})
            )
       )`);
+  }
+  // Local pickups create a `receiving` row with source='local_pickup'; scope to
+  // (or exclude) those to split the RECEIVING entity into the two sidebar folders.
+  if (filters.receivingSource) {
+    clauses.push(receivingSourceExists(params, filters.receivingSource));
+  }
+  if (filters.receivingSourceExclude) {
+    clauses.push(`NOT ${receivingSourceExists(params, filters.receivingSourceExclude)}`);
   }
   if (filters.linkRole) {
     params.push(filters.linkRole);

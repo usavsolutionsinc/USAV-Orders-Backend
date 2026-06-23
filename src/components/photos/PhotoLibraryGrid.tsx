@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import type { LibraryPhoto } from './photo-library-types';
@@ -57,14 +57,27 @@ function groupPhotosByTicket(photos: LibraryPhoto[]): TicketGroup[] {
   return order.map((key) => map.get(key)!);
 }
 
+/** Modifiers carried from a tile click into the selection model. */
+export interface TileSelectMods {
+  /** Shift was held — extend a range from the last anchor. */
+  shift: boolean;
+}
+
 interface PhotoLibraryGridProps {
   photos: LibraryPhoto[];
   view: PhotoLibraryViewMode;
   /** Source scope drives folder labels (PO# for unboxing, Order# for packing). */
   sourceScope?: PhotoLibrarySourceScope;
-  selectMode: boolean;
+  /** Whether selection UI (checkmarks, toggle-on-click) is engaged. */
+  selectionActive: boolean;
+  /** The currently-selected photo ids. */
   selected: Set<number>;
-  onToggleSelect: (id: number) => void;
+  /** Select/toggle a tile (the page owns range/anchor logic). */
+  onSelectTile: (id: number, mods: TileSelectMods) => void;
+  /** Resolve the id set to drag for a given tile (selection or just that one). */
+  resolveDragIds: (id: number) => number[];
+  /** Drag start for a set of ids — the page sets dataTransfer + mints links. */
+  onDragStart: (e: DragEvent<HTMLElement>, ids: number[]) => void;
   /** Called after a photo is deleted from the folder viewer so the list refreshes. */
   onPhotoDeleted?: (photoId: number) => void;
   isLoading: boolean;
@@ -103,23 +116,55 @@ function toGalleryInputs(photos: LibraryPhoto[], scope: PhotoLibrarySourceScope)
   return photos.map((p) => ({ id: p.id, url: p.displayUrl, meta: libraryPhotoMeta(p, scope) }));
 }
 
+/**
+ * Decide what a tile click means. A modifier key (Shift / Ctrl / Cmd) or an
+ * already-active selection routes the click to selection; otherwise it opens the
+ * lightbox. This is the Google-Photos model: browse by default, modifier-click
+ * (or the hover checkmark) to start selecting, then plain clicks toggle.
+ */
+function clickSelectsInstead(e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }, selectionActive: boolean): boolean {
+  return selectionActive || e.shiftKey || e.metaKey || e.ctrlKey;
+}
+
+/**
+ * The hover/active selection checkmark. Rendered as its own button (a sibling of
+ * the tile's activation button, never nested inside it) so it toggles selection
+ * without nested-interactive markup. Hidden until hover unless selection is
+ * active, then always shown so the whole grid reads as selectable.
+ */
 function SelectionMark({
   checked,
+  active,
+  onToggle,
 }: {
   checked: boolean;
+  active: boolean;
+  onToggle: () => void;
 }) {
   return (
-    <span
-      aria-hidden="true"
+    <button
+      type="button"
+      aria-pressed={checked}
+      aria-label={checked ? 'Deselect photo' : 'Select photo'}
+      // Don't let grabbing the checkmark begin a tile drag with odd state.
+      onDragStart={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
       className={cn(
         'absolute left-2 top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition',
         checked
-          ? 'border-blue-600 bg-blue-600 text-white'
-          : 'border-white/80 bg-white/90 text-gray-400 backdrop-blur-sm hover:border-blue-200 hover:text-blue-600',
+          ? 'border-blue-600 bg-blue-600 text-white opacity-100'
+          : cn(
+              'border-white/80 bg-white/90 text-gray-400 backdrop-blur-sm hover:border-blue-200 hover:text-blue-600 focus:opacity-100',
+              active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+            ),
       )}
     >
       <Check className="h-3.5 w-3.5 stroke-[2.5]" />
-    </span>
+    </button>
   );
 }
 
@@ -184,9 +229,11 @@ export function PhotoLibraryGrid({
   photos,
   view,
   sourceScope = 'all',
-  selectMode,
+  selectionActive,
   selected,
-  onToggleSelect,
+  onSelectTile,
+  resolveDragIds,
+  onDragStart,
   onPhotoDeleted,
   isLoading,
   error,
@@ -201,6 +248,11 @@ export function PhotoLibraryGrid({
     [photos],
   );
   const openAt = (id: number) => setOpenIndex(indexById.get(id) ?? 0);
+
+  // Bind a tile's drag handler to its resolved id set (the whole selection if the
+  // tile is selected, else just that tile). Mints links lazily on drag start.
+  const bindTileDrag = (id: number) => (e: DragEvent<HTMLElement>) =>
+    onDragStart(e, resolveDragIds(id));
 
   // Rendered inside each flat-view branch (folders excluded). Mounts lazily so
   // images preload only once a photo is actually opened.
@@ -233,71 +285,70 @@ export function PhotoLibraryGrid({
   if (view === 'list') {
     return (
       <>
-      <ul className="divide-y divide-gray-100 rounded-lg border border-border bg-card">
-        {photos.map((photo) => {
-          const isSelected = selected.has(photo.id);
-          const takenAt = formatDateTimePST(photo.createdAt);
-          const fileName = photoFileName(photo);
-          const rowBody = (
-            <>
-              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
-                {selectMode ? <SelectionMark checked={isSelected} /> : null}
-                <PhotoThumb src={photo.thumbUrl} alt="" damage={Boolean(photo.damageDetected)} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {photoPrimaryLabel(photo)}
-                  {photo.damageDetected ? ' · damage' : ''}
-                  {photo.hasAnalysis && !photo.damageDetected ? ' · analyzed' : ''}
-                </p>
-              </div>
-              <time className="shrink-0 text-xs tabular-nums text-muted-foreground">{takenAt}</time>
-            </>
-          );
-          return (
-            <li key={photo.id}>
-              {selectMode ? (
+        <ul className="divide-y divide-gray-100 rounded-lg border border-border bg-card">
+          {photos.map((photo) => {
+            const isSelected = selected.has(photo.id);
+            const takenAt = formatDateTimePST(photo.createdAt);
+            const fileName = photoFileName(photo);
+            return (
+              <li
+                key={photo.id}
+                className="group relative"
+                draggable
+                onDragStart={bindTileDrag(photo.id)}
+              >
                 <button
                   type="button"
-                  className={cn(
-                    'flex w-full items-center gap-4 px-4 py-3 text-left',
-                    isSelected && 'bg-blue-50/50',
-                  )}
-                  onClick={() => onToggleSelect(photo.id)}
-                >
-                  {rowBody}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openAt(photo.id)}
+                  onClick={(e) => {
+                    if (clickSelectsInstead(e, selectionActive)) {
+                      e.preventDefault();
+                      onSelectTile(photo.id, { shift: e.shiftKey });
+                    } else {
+                      openAt(photo.id);
+                    }
+                  }}
                   className={cn(
                     'flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50',
                     isSelected && 'bg-blue-50/50',
                   )}
                 >
-                  {rowBody}
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
+                    <PhotoThumb src={photo.thumbUrl} alt="" damage={Boolean(photo.damageDetected)} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{fileName}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {photoPrimaryLabel(photo)}
+                      {photo.damageDetected ? ' · damage' : ''}
+                      {photo.hasAnalysis && !photo.damageDetected ? ' · analyzed' : ''}
+                    </p>
+                  </div>
+                  <time className="shrink-0 text-xs tabular-nums text-muted-foreground">{takenAt}</time>
                 </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {lightbox}
+                <SelectionMark
+                  checked={isSelected}
+                  active={selectionActive}
+                  onToggle={() => onSelectTile(photo.id, { shift: false })}
+                />
+              </li>
+            );
+          })}
+        </ul>
+        {lightbox}
       </>
     );
   }
 
   // Folders: one collapsed folder per group (PO# for unboxing, order# for
   // packing, Zendesk ticket for claims) — open a folder to browse its photos in
-  // the shared fullscreen viewer.
+  // the shared fullscreen viewer. A whole folder can also be dragged to share
+  // every photo it contains.
   if (view === 'folders') {
     return (
       <FoldersView
         photos={photos}
         scope={sourceScope}
-        selectMode={selectMode}
+        onDragStart={onDragStart}
         onPhotoDeleted={onPhotoDeleted}
       />
     );
@@ -309,39 +360,40 @@ export function PhotoLibraryGrid({
     const groups = groupPhotosByTicket(photos);
     return (
       <>
-      <div className="space-y-5">
-        {groups.map((group) => (
-          <section key={group.key}>
-            <header className="mb-2 flex items-center gap-2 border-b border-gray-100 pb-1.5">
-              <Layers className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-              <span className="truncate text-sm font-semibold text-gray-900">
-                {group.key === UNLINKED_TICKET_KEY ? group.label : `Ticket ${group.label}`}
-              </span>
-              <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-500">
-                {group.photos.length}
-              </span>
-              <time className="ml-auto shrink-0 text-[10px] tabular-nums text-gray-400">
-                {formatDateTimePST(group.latestAt)}
-              </time>
-            </header>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
-              {group.photos.map((photo) => (
-                <PhotoCard
-                  key={photo.id}
-                  photo={photo}
-                  imageUrl={photo.thumbUrl}
-                  showLabel={false}
-                  selectMode={selectMode}
-                  selected={selected.has(photo.id)}
-                  onToggleSelect={onToggleSelect}
-                  onOpen={() => openAt(photo.id)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-      {lightbox}
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <section key={group.key}>
+              <header className="mb-2 flex items-center gap-2 border-b border-gray-100 pb-1.5">
+                <Layers className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                <span className="truncate text-sm font-semibold text-gray-900">
+                  {group.key === UNLINKED_TICKET_KEY ? group.label : `Ticket ${group.label}`}
+                </span>
+                <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-500">
+                  {group.photos.length}
+                </span>
+                <time className="ml-auto shrink-0 text-[10px] tabular-nums text-gray-400">
+                  {formatDateTimePST(group.latestAt)}
+                </time>
+              </header>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
+                {group.photos.map((photo) => (
+                  <PhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    imageUrl={photo.thumbUrl}
+                    showLabel={false}
+                    selectionActive={selectionActive}
+                    selected={selected.has(photo.id)}
+                    onSelect={(mods) => onSelectTile(photo.id, mods)}
+                    onOpen={() => openAt(photo.id)}
+                    onDragStart={bindTileDrag(photo.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+        {lightbox}
       </>
     );
   }
@@ -370,10 +422,11 @@ export function PhotoLibraryGrid({
                   ratio={isMasonry ? 'natural' : 'square'}
                   masonry={isMasonry}
                   showLabel={isMasonry}
-                  selectMode={selectMode}
+                  selectionActive={selectionActive}
                   selected={selected.has(photo.id)}
-                  onToggleSelect={onToggleSelect}
+                  onSelect={(mods) => onSelectTile(photo.id, mods)}
                   onOpen={() => openAt(photo.id)}
+                  onDragStart={bindTileDrag(photo.id)}
                 />
               ))}
             </div>
@@ -392,10 +445,11 @@ function PhotoCard({
   ratio = 'square',
   masonry = false,
   showLabel,
-  selectMode,
+  selectionActive,
   selected,
-  onToggleSelect,
+  onSelect,
   onOpen,
+  onDragStart,
 }: {
   photo: LibraryPhoto;
   imageUrl: string;
@@ -403,62 +457,61 @@ function PhotoCard({
   /** Render as a CSS-columns masonry child (avoid mid-tile column breaks). */
   masonry?: boolean;
   showLabel: boolean;
-  selectMode: boolean;
+  selectionActive: boolean;
   selected: boolean;
-  onToggleSelect: (id: number) => void;
+  onSelect: (mods: TileSelectMods) => void;
   /** Open the shared fullscreen viewer at this photo (flat views only). */
   onOpen?: () => void;
+  /** Begin a drag-to-share for this tile's resolved id set. */
+  onDragStart?: (e: DragEvent<HTMLElement>) => void;
 }) {
-  const cardBody = (
-    <>
-      <div className="relative">
-        {selectMode ? <SelectionMark checked={selected} /> : null}
+  return (
+    <div
+      className={cn(
+        'group relative overflow-hidden rounded-lg border bg-white text-left transition-colors',
+        masonry && 'mb-3 block w-full break-inside-avoid',
+        selected ? 'border-primary ring-2 ring-primary' : 'border-border hover:border-gray-300',
+      )}
+      // The whole tile is the drag handle — grabbing anywhere on it starts the
+      // share drag; the inner button still owns click (open/select) + keyboard.
+      draggable
+      onDragStart={onDragStart}
+    >
+      <SelectionMark
+        checked={selected}
+        active={selectionActive}
+        onToggle={() => onSelect({ shift: false })}
+      />
+      <button
+        type="button"
+        data-testid="photo-tile"
+        className="block w-full text-left"
+        onClick={(e) => {
+          if (clickSelectsInstead(e, selectionActive)) {
+            e.preventDefault();
+            onSelect({ shift: e.shiftKey });
+          } else {
+            onOpen?.();
+          }
+        }}
+      >
         <PhotoThumb
           src={imageUrl}
           alt={photo.poRef ? `PO ${photo.poRef}` : `Photo ${photo.id}`}
           ratio={ratio}
           damage={Boolean(photo.damageDetected)}
         />
-      </div>
-      {showLabel ? (
-        <div className="flex items-start justify-between gap-2 px-2.5 py-2">
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-semibold text-gray-900">
-              {photoPrimaryLabel(photo)}
+        {showLabel ? (
+          <div className="flex items-start justify-between gap-2 px-2.5 py-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[11px] font-semibold text-gray-900">
+                {photoPrimaryLabel(photo)}
+              </div>
+              <div className="truncate text-[10px] text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
             </div>
-            <div className="truncate text-[10px] text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
           </div>
-        </div>
-      ) : null}
-    </>
-  );
-  return (
-    <div
-      className={cn(
-        'group overflow-hidden rounded-lg border bg-white text-left transition-colors',
-        masonry && 'mb-3 block w-full break-inside-avoid',
-        selected ? 'border-primary ring-2 ring-primary' : 'border-border',
-        !selectMode && 'hover:border-gray-300',
-        selectMode && 'cursor-pointer hover:border-primary/70 hover:bg-slate-50',
-      )}
-    >
-      {selectMode ? (
-        <button
-          type="button"
-          className="block w-full text-left"
-          onClick={() => onToggleSelect(photo.id)}
-        >
-          {cardBody}
-        </button>
-      ) : onOpen ? (
-        <button type="button" data-testid="photo-tile" className="block w-full text-left" onClick={onOpen}>
-          {cardBody}
-        </button>
-      ) : (
-        <a href={photo.displayUrl} target="_blank" rel="noreferrer" className="block">
-          {cardBody}
-        </a>
-      )}
+        ) : null}
+      </button>
     </div>
   );
 }
@@ -513,19 +566,21 @@ function groupPhotosIntoFolders(
 
 function folderRefLabel(poRef: string, scope: PhotoLibrarySourceScope): string {
   if (scope === 'unboxing') return `PO ${poRef}`;
+  if (scope === 'local_pickup') return `Pickup ${poRef}`;
   if (scope === 'packing') return `Order ${poRef}`;
+  if (scope === 'repair') return `Unit ${poRef}`;
   return `#${poRef}`;
 }
 
 function FoldersView({
   photos,
   scope,
-  selectMode,
+  onDragStart,
   onPhotoDeleted,
 }: {
   photos: LibraryPhoto[];
   scope: PhotoLibrarySourceScope;
-  selectMode: boolean;
+  onDragStart: (e: DragEvent<HTMLElement>, ids: number[]) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
   const folders = groupPhotosIntoFolders(photos, scope);
@@ -540,8 +595,8 @@ function FoldersView({
             key={folder.key}
             folder={folder}
             scope={scope}
-            disabled={selectMode}
             onOpen={() => setOpenKey(folder.key)}
+            onDragStart={(e) => onDragStart(e, folder.photos.map((p) => p.id))}
           />
         ))}
       </div>
@@ -561,13 +616,13 @@ function FoldersView({
 function FolderTile({
   folder,
   scope,
-  disabled,
   onOpen,
+  onDragStart,
 }: {
   folder: PhotoFolder;
   scope: PhotoLibrarySourceScope;
-  disabled: boolean;
   onOpen: () => void;
+  onDragStart: (e: DragEvent<HTMLElement>) => void;
 }) {
   // Claim folders resolve their Zendesk ticket title lazily (best-effort).
   const ticketSubject = useZendeskTicketSubject(folder.ticketId);
@@ -583,13 +638,12 @@ function FolderTile({
     <button
       type="button"
       data-testid="photo-folder"
-      disabled={disabled}
       onClick={onOpen}
+      // Dragging a folder shares every photo it contains.
+      draggable
+      onDragStart={onDragStart}
       title={`${label} · ${count} photo${count === 1 ? '' : 's'}`}
-      className={cn(
-        'group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors',
-        disabled ? 'cursor-default opacity-60' : 'hover:border-primary/70 hover:bg-slate-50',
-      )}
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
     >
       <div className="relative h-40 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}

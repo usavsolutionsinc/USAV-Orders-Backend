@@ -90,6 +90,7 @@ export const AUDIT_ENTITY = {
   ORDER: 'order',
   PACKER_LOG: 'PACKER_LOG',
   STAFF: 'staff',
+  PHOTO: 'photo',
   STAFF_TODO: 'staff_todo',
   STAFF_MESSAGE: 'staff_message',
   STAFF_PREFERENCE: 'staff_preference',
@@ -162,6 +163,8 @@ export const AUDIT_ACTION = {
   STAFF_TODO_UNARCHIVE:    'staff_todo.unarchive',
   // Staff-to-staff messages (clipboard "send to staff")
   STAFF_MESSAGE_SEND:      'staff_message.send',
+  // Photo library — minted N temporary signed share links for selected photos
+  PHOTO_SHARE_LINK:        'photo.share_link',
   // Personal UI preferences (e.g. configurable focus-scan hotkey)
   STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
   // Per-unit repair records

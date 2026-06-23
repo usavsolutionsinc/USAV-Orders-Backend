@@ -19,7 +19,13 @@ export interface PhotoLibraryFilterState {
 }
 
 /** Sidebar source folders — mapped to API entity types internally. */
-export type PhotoLibrarySourceScope = 'all' | 'unboxing' | 'packing' | 'claims';
+export type PhotoLibrarySourceScope =
+  | 'all'
+  | 'unboxing'
+  | 'local_pickup'
+  | 'packing'
+  | 'repair'
+  | 'claims';
 
 export type PhotoLibraryDatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'custom';
 
@@ -32,7 +38,9 @@ export const PHOTO_LIBRARY_PAGE_SIZE = 24;
 export const PHOTO_SOURCE_SCOPE_LABELS: Record<PhotoLibrarySourceScope, string> = {
   all: 'All photos',
   unboxing: 'Unboxing',
+  local_pickup: 'Local pickups',
   packing: 'Packing',
+  repair: 'Repair services',
   claims: 'Zendesk Claims',
 };
 
@@ -50,15 +58,35 @@ export function sourceScopeFromFilters(filters: PhotoLibraryFilterState): PhotoL
 
 export function entityTypeForSourceScope(scope: PhotoLibrarySourceScope): string | undefined {
   switch (scope) {
+    // Both unboxing and local pickup are RECEIVING-linked photos; they're split
+    // apart by `receiving.source` (see `receivingSourceForScope`), not entity type.
     case 'unboxing':
+    case 'local_pickup':
       return 'RECEIVING';
     case 'packing':
       return 'PACKER_LOG';
+    // Repair photos flow through the serialized unit (testing + repair captures).
+    case 'repair':
+      return 'SERIAL_UNIT';
     case 'claims':
       return 'ZENDESK_TICKET';
     default:
       return undefined;
   }
+}
+
+/** The `receiving.source` value to scope to (`local_pickup`), or undefined. */
+export function receivingSourceForScope(scope: PhotoLibrarySourceScope): string | undefined {
+  return scope === 'local_pickup' ? 'local_pickup' : undefined;
+}
+
+/**
+ * The `receiving.source` value to *exclude* for a scope. Unboxing means
+ * "received goods that aren't local pickups", so it excludes the local-pickup
+ * source — keeping the two receiving scopes disjoint in the sidebar.
+ */
+export function receivingSourceExcludeForScope(scope: PhotoLibrarySourceScope): string | undefined {
+  return scope === 'unboxing' ? 'local_pickup' : undefined;
 }
 
 export function parsePhotoLibraryViewMode(raw: string | null): PhotoLibraryViewMode {
@@ -73,7 +101,16 @@ function ymd(d: Date): string {
 }
 
 function parseSourceScope(raw: string | null): PhotoLibrarySourceScope | undefined {
-  if (raw === 'all' || raw === 'unboxing' || raw === 'packing' || raw === 'claims') return raw as PhotoLibrarySourceScope;
+  if (
+    raw === 'all' ||
+    raw === 'unboxing' ||
+    raw === 'local_pickup' ||
+    raw === 'packing' ||
+    raw === 'repair' ||
+    raw === 'claims'
+  ) {
+    return raw as PhotoLibrarySourceScope;
+  }
   return undefined;
 }
 

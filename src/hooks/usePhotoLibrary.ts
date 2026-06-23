@@ -5,6 +5,8 @@ import { useMemo } from 'react';
 import type { LibraryPhoto } from '@/components/photos/photo-library-types';
 import {
   entityTypeForSourceScope,
+  receivingSourceExcludeForScope,
+  receivingSourceForScope,
   type PhotoLibraryFilterState,
 } from '@/lib/photos/library-filter-state';
 
@@ -16,6 +18,14 @@ function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | nu
   if (filters.dateTo) params.set('dateTo', filters.dateTo);
   const entityType = filters.sourceScope ? entityTypeForSourceScope(filters.sourceScope) : undefined;
   if (entityType) params.set('entityType', entityType);
+  // Unboxing and local pickup share the RECEIVING entity type; the receiving
+  // `source` splits them (local pickup = source 'local_pickup', unboxing = the rest).
+  if (filters.sourceScope) {
+    const includeSource = receivingSourceForScope(filters.sourceScope);
+    if (includeSource) params.set('receivingSource', includeSource);
+    const excludeSource = receivingSourceExcludeForScope(filters.sourceScope);
+    if (excludeSource) params.set('receivingSourceExclude', excludeSource);
+  }
   if (filters.sort) params.set('sort', filters.sort);
   if (filters.poRef) params.set('poRef', filters.poRef);
   if (filters.receivingId) params.set('receivingId', filters.receivingId);

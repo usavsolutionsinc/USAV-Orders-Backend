@@ -60,6 +60,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       linkRole: params.get('linkRole'),
       poRef: params.get('poRef'),
       receivingId,
+      // Split RECEIVING-linked photos by receiving.source: local pickups vs the
+      // rest (unboxing). See library-filter-state.receivingSourceForScope.
+      receivingSource: params.get('receivingSource'),
+      receivingSourceExclude: params.get('receivingSourceExclude'),
       staffId,
       hasAnalysis:
         hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,

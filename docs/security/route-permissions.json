@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-22T08:05:31Z",
-  "totalRoutes": 650,
+  "generatedAt": "2026-06-23T04:22:00Z",
+  "totalRoutes": 652,
   "summary": {
-    "permissionGated": 555,
+    "permissionGated": 557,
     "authenticatedNoPermission": 28,
     "anonymousIntentional": 57,
     "serviceToService": 2,
@@ -2847,6 +2847,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/download-zip/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/library/route.ts",
       "methods": [
         "GET"
@@ -2894,6 +2903,15 @@
     },
     {
       "path": "/api/photos/share-packs/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.share",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/share/route.ts",
       "methods": [
         "POST"
       ],

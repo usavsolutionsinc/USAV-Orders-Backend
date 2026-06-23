@@ -3,7 +3,7 @@ import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-  AlertCircle, Check, Trash2, Link2 as LinkIcon, Plus, Info, RotateCcw,
+  AlertCircle, Check, Trash2, Link2 as LinkIcon, Plus, Info, RotateCcw, RefreshCw,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
 import type { PhotoGalleryController } from './usePhotoGallery';
@@ -11,6 +11,9 @@ import type { PhotoGalleryController } from './usePhotoGallery';
 /** Fullscreen lightbox: zoomable image, nav arrows, thumbnail strip, toolbar. */
 export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
   const { photoItems, currentIndex, zoomLevel } = g;
+  // Reset is always shown (fixed-width icon button) so the toolbar never reflows:
+  // grayed + disabled at the default view, filled once zoom/rotation is applied.
+  const canReset = zoomLevel > 1 || g.rotation !== 0;
   // Info panel rides alongside the stage as a flex sibling (not an overlay) so
   // the stage shrinks and the centered controls/arrows recenter automatically.
   const panelVisible = g.hasContext && g.panelOpen;
@@ -27,23 +30,63 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       {/* Stage — image + all floating controls. flex-1 so it yields width to the
           panel; its absolute children stay centered within the visible area. */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-      {/* Top Bar */}
-      <div className="absolute top-0 left-0 right-0 p-6 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent z-10">
+      {/* Top Bar — image controls (counter + zoom) on the left, global actions on
+          the right. The close X is NOT here: it's pinned to the WINDOW corner
+          below so it never moves when the panel opens. When the panel is closed
+          the right group reserves room (pr-20) so it clears that pinned X. */}
+      <div className={`absolute top-0 left-0 right-0 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent py-6 pl-6 z-10 ${panelVisible ? 'pr-6' : 'pr-20'}`}>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/20">
             <span className="text-white text-sm font-black">
               {currentIndex + 1} / {photoItems.length}
             </span>
           </div>
-          {zoomLevel > 1 && (
-            <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="px-3 py-2 bg-blue-500/20 backdrop-blur-md rounded-full border border-blue-400/30"
+          {/* Zoom · rotate · reset — grouped pill beside the counter (image
+              controls left, global actions right; kept out of the bottom region
+              so it never collides with the filmstrip). */}
+          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
+            <button
+              onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
+              disabled={zoomLevel <= 1}
+              className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Zoom out"
+              title="Zoom out (-)"
             >
-              <span className="text-blue-200 text-xs font-black">{Math.round(zoomLevel * 100)}%</span>
-            </motion.div>
-          )}
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <span className="min-w-[44px] text-center text-xs font-bold tabular-nums text-white">
+              {Math.round(zoomLevel * 100)}%
+            </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); g.zoomIn(); }}
+              disabled={zoomLevel >= 3}
+              className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+              aria-label="Zoom in"
+              title="Zoom in (+)"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+            <div className="mx-0.5 h-5 w-px bg-white/20" aria-hidden="true" />
+            <button
+              onClick={(e) => { e.stopPropagation(); g.rotateCw(); }}
+              className="rounded-full p-2 text-white transition-all hover:bg-white/10"
+              aria-label="Rotate 90 degrees"
+              title="Rotate (r)"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); g.resetZoom(); }}
+              disabled={!canReset}
+              className={`ml-0.5 rounded-full p-2 transition-all ${
+                canReset ? 'bg-white/20 text-white hover:bg-white/30' : 'text-white/30'
+              }`}
+              aria-label="Reset view"
+              title="Reset (0)"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -116,15 +159,6 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               <Info className="h-5 w-5" />
             </button>
           )}
-
-          <button
-            onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
-            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
-            aria-label="Close photo viewer"
-            title="Close (Esc)"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
       </div>
 
@@ -171,54 +205,6 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           </div>
         )}
       </motion.div>
-
-      {/* Zoom Controls */}
-      <div
-        className={`absolute left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 backdrop-blur-md rounded-full p-2 border border-white/20 z-10 ${
-          photoItems.length > 1 ? 'bottom-32' : 'bottom-8'
-        }`}
-      >
-        <button
-          onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
-          disabled={zoomLevel <= 1}
-          className="p-2 hover:bg-white/10 rounded-full transition-all text-white disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="Zoom out"
-          title="Zoom out (-)"
-        >
-          <ZoomOut className="h-5 w-5" />
-        </button>
-        <div className="px-3 py-1 min-w-[60px] text-center">
-          <span className="text-white text-sm font-bold">{Math.round(zoomLevel * 100)}%</span>
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); g.zoomIn(); }}
-          disabled={zoomLevel >= 3}
-          className="p-2 hover:bg-white/10 rounded-full transition-all text-white disabled:opacity-30 disabled:cursor-not-allowed"
-          aria-label="Zoom in"
-          title="Zoom in (+)"
-        >
-          <ZoomIn className="h-5 w-5" />
-        </button>
-        <div className="mx-1 h-5 w-px bg-white/20" aria-hidden="true" />
-        <button
-          onClick={(e) => { e.stopPropagation(); g.rotateCw(); }}
-          className="p-2 hover:bg-white/10 rounded-full transition-all text-white"
-          aria-label="Rotate 90 degrees"
-          title="Rotate (r)"
-        >
-          <RotateCcw className="h-5 w-5" />
-        </button>
-        {(zoomLevel > 1 || g.rotation !== 0) && (
-          <button
-            onClick={(e) => { e.stopPropagation(); g.resetZoom(); }}
-            className="ml-1 px-3 py-1 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white text-xs font-bold"
-            aria-label="Reset view"
-            title="Reset (0)"
-          >
-            Reset
-          </button>
-        )}
-      </div>
 
       {/* Navigation Arrows */}
       {photoItems.length > 1 && (
@@ -277,6 +263,18 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       <AnimatePresence initial={false}>
         {panelVisible ? <PhotoContextPanel photo={photoItems[currentIndex]} /> : null}
       </AnimatePresence>
+
+      {/* Close — pinned to the WINDOW's top-right corner (outside the shrinking
+          stage, above the panel via z-50) so it stays in the exact same place
+          whether the info panel is open or closed. */}
+      <button
+        onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
+        className="absolute right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-white/30 hover:bg-white/20"
+        aria-label="Close photo viewer"
+        title="Close (Esc)"
+      >
+        <X className="h-5 w-5" />
+      </button>
     </motion.div>
   );
 }

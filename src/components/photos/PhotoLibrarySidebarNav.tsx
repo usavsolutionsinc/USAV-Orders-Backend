@@ -1,6 +1,15 @@
 'use client';
 
-import { Camera, Clock, History, MessageSquare, Package, PackageOpen } from '@/components/Icons';
+import {
+  Camera,
+  Clock,
+  History,
+  MessageSquare,
+  Package,
+  PackageOpen,
+  Truck,
+  Wrench,
+} from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import type {
   PhotoLibrarySortMode,
@@ -14,7 +23,9 @@ const SOURCE_ITEMS: Array<{
 }> = [
   { id: 'all', label: 'All photos', icon: Camera },
   { id: 'unboxing', label: 'Unboxing', icon: PackageOpen },
+  { id: 'local_pickup', label: 'Local pickups', icon: Truck },
   { id: 'packing', label: 'Packing', icon: Package },
+  { id: 'repair', label: 'Repair services', icon: Wrench },
   { id: 'claims', label: 'Zendesk claims', icon: MessageSquare },
 ];
 

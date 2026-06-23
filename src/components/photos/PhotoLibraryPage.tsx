@@ -1,13 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, Trash2 } from '@/components/Icons';
+import { Archive, Download, Link2, Share2, Trash2 } from '@/components/Icons';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { useTableSelection } from '@/hooks/useTableSelection';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
+import { usePhotoSelection } from '@/hooks/usePhotoSelection';
+import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
 import { PHOTO_LIBRARY_PAGE_SIZE, sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
 import { PHOTO_LIBRARY_SELECTION_SCOPE } from '@/lib/photos/photo-library-selection';
@@ -21,6 +23,17 @@ import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
+import { ShareExpiryControl } from './ShareExpiryControl';
+
+/** Default share-link lifetime (24h) until the operator picks another in the band. */
+const DEFAULT_SHARE_TTL_SECONDS = 24 * 60 * 60;
+
+/** Derive a human title for share pages / ZIPs from the selection. */
+function shareTitleForRows(rows: { poRef: string | null }[]): string {
+  const refs = new Set(rows.map((r) => r.poRef?.trim()).filter(Boolean));
+  if (refs.size === 1) return `PO ${[...refs][0]}`;
+  return `Photos (${rows.length})`;
+}
 
 // `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
 // without importing this page (cycle). Re-exported here for compatibility.
@@ -32,8 +45,19 @@ export function PhotoLibraryPage() {
   const { filters, display, setView, setPage } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
   const queryClient = useQueryClient();
+
+  // `selectMode` is the explicit pencil toggle; selection can also start via a
+  // modifier-click / hover checkmark even when it's off (Google-Photos model).
   const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Selection persists across the client pages (see usePhotoSelection): a drag
+  // or bulk action carries the whole set, not just the visible page.
+  const { selected, selectedPhotos, isActive, selectTile, selectAll, clear, resolveDragIds } =
+    usePhotoSelection(photos);
+  const selectionActive = selectMode || isActive;
+
+  const shareLinks = usePhotoShareLinks();
+  // Lifetime applied to copied/dragged signed links (operator-chosen band).
+  const [shareTtlSeconds, setShareTtlSeconds] = useState(DEFAULT_SHARE_TTL_SECONDS);
   const selectedRows = useTableSelection<LibraryPhoto>(
     PHOTO_LIBRARY_SELECTION_SCOPE,
     (photo) => photo.id,
@@ -54,16 +78,16 @@ export function PhotoLibraryPage() {
 
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
-    setSelected(new Set());
+    clear();
     emitSelection(PHOTO_LIBRARY_SELECTION_SCOPE, []);
-  }, []);
+  }, [clear]);
 
   usePageSelection(
     {
-      active: selectMode,
-      onToggle: () => (selectMode ? exitSelectMode() : setSelectMode(true)),
+      active: selectionActive,
+      onToggle: () => (selectionActive ? exitSelectMode() : setSelectMode(true)),
     },
-    [selectMode, exitSelectMode],
+    [selectionActive, exitSelectMode],
   );
 
   useEffect(() => {
@@ -79,51 +103,50 @@ export function PhotoLibraryPage() {
     }
   }, [page, setPage, totalPages]);
 
+  // Broadcast the *full* selection (cross-page) to the shared selection bar.
   useEffect(() => {
-    if (!selectMode) {
-      emitSelection(PHOTO_LIBRARY_SELECTION_SCOPE, []);
-      return;
-    }
-    const rows = pagePhotos.filter((photo) => selected.has(photo.id));
-    emitSelection(PHOTO_LIBRARY_SELECTION_SCOPE, rows);
-  }, [selectMode, selected, pagePhotos]);
+    emitSelection(PHOTO_LIBRARY_SELECTION_SCOPE, selectionActive ? selectedPhotos : []);
+  }, [selectionActive, selectedPhotos]);
 
+  // Total selectable = everything loaded, so "select all" / "N of M" is honest.
   useEffect(() => {
-    emitSelectionTotal(PHOTO_LIBRARY_SELECTION_SCOPE, selectMode ? pagePhotos.length : 0);
-  }, [selectMode, pagePhotos.length]);
+    emitSelectionTotal(PHOTO_LIBRARY_SELECTION_SCOPE, selectionActive ? photos.length : 0);
+  }, [selectionActive, photos.length]);
 
   useEffect(() => {
     return onToggleAll(PHOTO_LIBRARY_SELECTION_SCOPE, (mode) => {
-      if (mode === 'all') setSelected(new Set(pagePhotos.map((photo) => photo.id)));
-      else setSelected(new Set());
+      if (mode === 'all') selectAll();
+      else clear();
     });
-  }, [pagePhotos]);
-
-  useEffect(() => {
-    if (!selectMode) return;
-    setSelected((prev) => {
-      const visible = new Set(pagePhotos.map((photo) => photo.id));
-      const next = new Set<number>();
-      for (const id of prev) {
-        if (visible.has(id)) next.add(id);
-      }
-      return next.size === prev.size ? prev : next;
-    });
-  }, [pagePhotos, selectMode]);
+  }, [selectAll, clear]);
 
   const metaLine = query.isLoading
     ? 'Loading…'
     : `${photos.length} photo${photos.length === 1 ? '' : 's'} in view · ${subtitle}`;
 
-  const toggleSelect = useCallback((id: number) => {
-    if (!selectMode) return;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, [selectMode]);
+  /**
+   * Drag-to-share: on drag start we populate `dataTransfer` *synchronously* with
+   * the session-protected proxy URLs (a DragEvent can't be held open across an
+   * await), then kick off the async signing call which mints public, time-limited
+   * GCS links and copies the formatted block to the clipboard. Nothing is minted
+   * until a drag actually begins, so idle selection never hits the API.
+   */
+  const onShareDragStart = useCallback(
+    (e: DragEvent<HTMLElement>, ids: number[]) => {
+      if (ids.length === 0) return;
+      const origin = window.location.origin;
+      const proxy = ids.map((id) => `${origin}/api/photos/${id}/content?download=1`).join('\n');
+      try {
+        e.dataTransfer.setData('text/uri-list', proxy);
+        e.dataTransfer.setData('text/plain', proxy);
+        e.dataTransfer.effectAllowed = 'copy';
+      } catch {
+        /* some browsers lock dataTransfer outside the native handler */
+      }
+      void shareLinks.generateAndCopy(ids, { ttlSeconds: shareTtlSeconds });
+    },
+    [shareLinks, shareTtlSeconds],
+  );
 
   const downloadPhotoFile = useCallback(async (url: string, filename: string) => {
     const res = await fetch(url);
@@ -141,6 +164,52 @@ export function PhotoLibraryPage() {
 
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
     () => [
+      {
+        // The fallback "Copy shareable links" button for the current selection —
+        // the same path the drag uses, for when drag-and-drop isn't available
+        // (touch, accessibility) or the operator just wants the links on the
+        // clipboard without dragging anywhere.
+        key: 'share',
+        label: 'Copy shareable links',
+        icon: <Link2 className="h-4 w-4" />,
+        tone: 'emerald',
+        primary: true,
+        run: async (rows) => {
+          await shareLinks.generateAndCopy(rows.map((row) => row.id), {
+            ttlSeconds: shareTtlSeconds,
+          });
+        },
+      },
+      {
+        // Durable group link: one tokenized /share/photos page instead of N URLs.
+        key: 'share-page',
+        label: 'Create share page',
+        icon: <Share2 className="h-4 w-4" />,
+        tone: 'violet',
+        primary: false,
+        run: async (rows) => {
+          await shareLinks.createSharePage(rows.map((row) => row.id), {
+            title: shareTitleForRows(rows),
+            // Reuse the link-expiry choice for multi-day windows; sub-day falls
+            // back to the share-pack default (the page is a durable artifact).
+            expiresInDays:
+              shareTtlSeconds >= 24 * 60 * 60
+                ? Math.round(shareTtlSeconds / (24 * 60 * 60))
+                : undefined,
+          });
+        },
+      },
+      {
+        // One ZIP attachment for the whole selection (server-built).
+        key: 'zip',
+        label: 'Download as ZIP',
+        icon: <Archive className="h-4 w-4" />,
+        tone: 'blue',
+        primary: false,
+        run: (rows) => {
+          shareLinks.downloadZip(rows.map((row) => row.id), { title: shareTitleForRows(rows) });
+        },
+      },
       {
         key: 'download',
         label: 'Download selected',
@@ -202,7 +271,7 @@ export function PhotoLibraryPage() {
         },
       },
     ],
-    [downloadPhotoFile, exitSelectMode, queryClient],
+    [downloadPhotoFile, exitSelectMode, queryClient, shareLinks, shareTtlSeconds],
   );
 
   return (
@@ -219,14 +288,19 @@ export function PhotoLibraryPage() {
       />
 
       <div className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-20 lg:p-6 lg:pb-24">
+        {selectionActive ? (
+          <ShareExpiryControl value={shareTtlSeconds} onChange={setShareTtlSeconds} />
+        ) : null}
         <PhotoLibraryGrid
           photos={pagePhotos}
           view={view}
           sourceScope={sourceScopeFromFilters(filters)}
           onPhotoDeleted={() => void query.refetch()}
-          selectMode={selectMode}
+          selectionActive={selectionActive}
           selected={selected}
-          onToggleSelect={toggleSelect}
+          onSelectTile={selectTile}
+          resolveDragIds={resolveDragIds}
+          onDragStart={onShareDragStart}
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
@@ -235,13 +309,13 @@ export function PhotoLibraryPage() {
             {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
           </p>
         ) : null}
-        {selectMode ? (
+        {selectionActive ? (
           <ContextualSelectionBar
             scope={PHOTO_LIBRARY_SELECTION_SCOPE}
             rows={selectedRows}
             actions={photoBulkActions}
             onDismiss={exitSelectMode}
-            visible={selectMode}
+            visible={selectionActive}
           />
         ) : null}
       </div>
