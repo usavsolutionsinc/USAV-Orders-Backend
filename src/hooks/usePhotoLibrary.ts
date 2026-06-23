@@ -33,6 +33,7 @@ function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | nu
   if (filters.q) params.set('q', filters.q);
   if (filters.damageDetected) params.set('damageDetected', filters.damageDetected);
   if (filters.hasAnalysis) params.set('hasAnalysis', filters.hasAnalysis);
+  if (filters.folderId) params.set('folderId', filters.folderId);
   return params.toString();
 }
 

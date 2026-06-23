@@ -10,6 +10,7 @@ import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
 } from '@/lib/photos/library-refinements';
+import { PhotoFolderTree } from './PhotoFolderTree';
 import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoLibrarySidebarNav } from './PhotoLibrarySidebarNav';
@@ -104,6 +105,13 @@ export function PhotoLibrarySidebarPanel() {
         onSelectScope={setSourceScope}
         onSelectSort={(sort) => patch({ sort })}
       />
+
+      <div className="mt-4 border-t border-gray-100 pt-4">
+        <PhotoFolderTree
+          selectedFolderId={filters.folderId ? Number(filters.folderId) : null}
+          onSelectFolder={(id) => patch({ folderId: id ? String(id) : undefined })}
+        />
+      </div>
     </SidebarShell>
   );
 }

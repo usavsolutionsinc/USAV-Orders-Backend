@@ -19,6 +19,8 @@ export interface LibraryFilters {
   receivingSourceExclude?: string | null;
   staffId?: number | null;
   hasAnalysis?: boolean | null;
+  /** Keep only photos assigned to this master folder (photo_folder_items). */
+  folderId?: number | null;
 }
 
 /**
@@ -122,6 +124,16 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
       EXISTS (
         SELECT 1 FROM photo_entity_links l
          WHERE l.photo_id = p.id AND l.link_role = $${params.length}
+      )`);
+  }
+  if (filters.folderId) {
+    params.push(filters.folderId);
+    clauses.push(`
+      EXISTS (
+        SELECT 1 FROM photo_folder_items fi
+         WHERE fi.photo_id = p.id
+           AND fi.organization_id = p.organization_id
+           AND fi.folder_id = $${params.length}
       )`);
   }
   if (filters.hasAnalysis === true) {

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { X } from '@/components/Icons';
 import {
   resolveSelectionAction,
@@ -23,6 +24,8 @@ interface PhotoLibraryToolbarProps<T> {
   total: number;
   /** Bulk actions — same {@link SelectionAction} set the bottom bar used. */
   actions: SelectionAction<T>[];
+  /** Optional control rendered before the action buttons (e.g. "Add to folder"). */
+  leading?: ReactNode;
   onSelectAll: () => void;
   onClear: () => void;
 }
@@ -39,6 +42,7 @@ export function PhotoLibraryToolbar<T>({
   rows,
   total,
   actions,
+  leading,
   onSelectAll,
   onClear,
 }: PhotoLibraryToolbarProps<T>) {
@@ -60,6 +64,7 @@ export function PhotoLibraryToolbar<T>({
       </button>
 
       <div className="ml-auto flex items-center gap-1">
+        {leading}
         {visible.map((a) => (
           <button
             key={a.key}

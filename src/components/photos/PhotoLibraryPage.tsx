@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, Link2, Share2, Trash2 } from '@/components/Icons';
+import { Archive, Download, Link2, Share2, Trash2, X } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
+import { usePhotoFolders } from '@/hooks/usePhotoFolders';
 import { usePhotoSelection } from '@/hooks/usePhotoSelection';
 import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
@@ -13,6 +14,7 @@ import { PHOTO_LIBRARY_PAGE_SIZE, sourceScopeFromFilters } from '@/lib/photos/li
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
+import { AddToFolderMenu } from './AddToFolderMenu';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
 import { PhotoLibraryToolbar } from './PhotoLibraryToolbar';
@@ -48,6 +50,10 @@ export function PhotoLibraryPage() {
   const selectionActive = selectMode || isActive;
 
   const shareLinks = usePhotoShareLinks();
+  const { removePhotos } = usePhotoFolders();
+  // When a master folder is the active filter, the grid shows only its photos —
+  // so a "Remove from folder" bulk action becomes meaningful.
+  const selectedFolderId = filters.folderId ? Number(filters.folderId) : null;
   const { title, subtitle } = describePhotoLibraryContext(filters);
 
   const { page, view } = display;
@@ -171,6 +177,26 @@ export function PhotoLibraryPage() {
           }
         },
       },
+      ...(selectedFolderId
+        ? [
+            {
+              key: 'remove-folder',
+              label: 'Remove from folder',
+              icon: <X className="h-4 w-4" />,
+              tone: 'gray' as const,
+              primary: false,
+              run: async (rows: LibraryPhoto[]) => {
+                if (rows.length === 0) return;
+                await removePhotos.mutateAsync({
+                  folderId: selectedFolderId,
+                  photoIds: rows.map((row) => row.id),
+                });
+                exitSelectMode();
+                toast.success(`Removed ${rows.length} photo${rows.length === 1 ? '' : 's'} from folder`);
+              },
+            } satisfies SelectionAction<LibraryPhoto>,
+          ]
+        : []),
       {
         key: 'delete',
         label: 'Delete selected',
@@ -208,7 +234,7 @@ export function PhotoLibraryPage() {
         },
       },
     ],
-    [downloadPhotoFile, exitSelectMode, queryClient, shareLinks],
+    [downloadPhotoFile, exitSelectMode, queryClient, removePhotos, selectedFolderId, shareLinks],
   );
 
   return (
@@ -229,6 +255,7 @@ export function PhotoLibraryPage() {
           rows={selectedPhotos}
           total={photos.length}
           actions={photoBulkActions}
+          leading={<AddToFolderMenu photoIds={selectedPhotos.map((p) => p.id)} />}
           onSelectAll={selectAll}
           onClear={exitSelectMode}
         />

@@ -218,3 +218,17 @@ test('regression: handling_unit.manage gates the assign/unassign mutations', () 
     'handling_unit.manage should gate unit removal',
   );
 });
+
+test('regression: photos.manage gates the photo-folder CRUD + assignment routes', () => {
+  // Phase 2 photo-library master folders. Reads (list folders) stay on
+  // photos.view; every folder mutation + photo assignment requires photos.manage.
+  const paths = routesGatedBy('photos.manage').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/photos/folders/[id]/route.ts'),
+    'photos.manage should gate folder rename/move/delete',
+  );
+  assert.ok(
+    paths.includes('/api/photos/folders/[id]/items/route.ts'),
+    'photos.manage should gate folder photo assignment',
+  );
+});

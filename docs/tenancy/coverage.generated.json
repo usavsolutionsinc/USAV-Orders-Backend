@@ -1,12 +1,12 @@
 {
   "generatedFrom": "live DB (pg_catalog)",
   "summary": {
-    "total": 207,
-    "with_org": 167,
-    "org_not_null": 147,
-    "rls_enabled": 126,
-    "rls_forced": 105,
-    "has_iso_policy": 126,
+    "total": 209,
+    "with_org": 169,
+    "org_not_null": 149,
+    "rls_enabled": 128,
+    "rls_forced": 107,
+    "has_iso_policy": 128,
     "needs_col": 8,
     "child_scoped": 23,
     "reference_decide": 6,
@@ -179,7 +179,7 @@
       "rls_forced": true,
       "has_iso_policy": true,
       "hermes_read": true,
-      "approx_rows": 274,
+      "approx_rows": 239,
       "fk_parents": []
     },
     {
@@ -349,7 +349,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 29351,
+      "approx_rows": 30893,
       "fk_parents": []
     },
     {
@@ -802,7 +802,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 390,
+      "approx_rows": 480,
       "fk_parents": []
     },
     {
@@ -1423,6 +1423,37 @@
         "photo_share_packs",
         "photos"
       ]
+    },
+    {
+      "table": "photo_folder_items",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": true,
+      "rls_forced": true,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": -1,
+      "fk_parents": [
+        "photo_folders",
+        "photos"
+      ]
+    },
+    {
+      "table": "photo_folders",
+      "classification": "tenant-owned",
+      "has_org": true,
+      "not_null": true,
+      "default_kind": "loud-fail",
+      "fk_to_orgs": false,
+      "rls_enabled": true,
+      "rls_forced": true,
+      "has_iso_policy": true,
+      "hermes_read": true,
+      "approx_rows": -1,
+      "fk_parents": []
     },
     {
       "table": "photo_jobs",
@@ -2597,7 +2628,7 @@
       "rls_forced": false,
       "has_iso_policy": false,
       "hermes_read": false,
-      "approx_rows": 977,
+      "approx_rows": 992,
       "fk_parents": [
         "staff"
       ]
