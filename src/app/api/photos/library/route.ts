@@ -65,6 +65,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       receivingSource: params.get('receivingSource'),
       receivingSourceExclude: params.get('receivingSourceExclude'),
       staffId,
+      folderId: params.get('folderId') ? Number(params.get('folderId')) : null,
       hasAnalysis:
         hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,
     });

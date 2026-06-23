@@ -41,9 +41,12 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               {currentIndex + 1} / {photoItems.length}
             </span>
           </div>
-          {/* Zoom · rotate · reset — grouped pill beside the counter (image
-              controls left, global actions right; kept out of the bottom region
-              so it never collides with the filmstrip). */}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Zoom · rotate · reset — grouped pill on the right with the global
+              actions; kept out of the bottom region so it never collides with the
+              filmstrip. */}
           <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
             <button
               onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
@@ -87,9 +90,9 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2">
+          <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
+
           {g.onAddPhotos && (
             <button
               onClick={(e) => { e.stopPropagation(); g.addPhotosFromViewer(); }}

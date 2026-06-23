@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-23T04:22:00Z",
-  "totalRoutes": 652,
+  "generatedAt": "2026-06-23T19:31:25Z",
+  "totalRoutes": 657,
   "summary": {
-    "permissionGated": 557,
+    "permissionGated": 562,
     "authenticatedNoPermission": 28,
     "anonymousIntentional": 57,
     "serviceToService": 2,
@@ -2856,6 +2856,45 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/folders/[id]/items/route.ts",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/folders/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/folders/reorder/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/folders/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/library/route.ts",
       "methods": [
         "GET"
@@ -3696,6 +3735,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/zendesk-claim/archive-only/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/zendesk-claim/assist-seller/route.ts",
       "methods": [
         "POST"
@@ -3774,7 +3822,8 @@
     {
       "path": "/api/receiving/zendesk-claim/thread/route.ts",
       "methods": [
-        "GET"
+        "GET",
+        "POST"
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",

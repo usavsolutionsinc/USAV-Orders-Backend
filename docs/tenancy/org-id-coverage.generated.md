@@ -7,12 +7,12 @@
 
 | metric | count |
 |---|---|
-| base tables | 207 |
-| with `organization_id` | 167 |
-| `organization_id NOT NULL` | 147 |
-| RLS enabled | 126 |
-| **RLS FORCEd** | **105** |
-| has tenant_isolation policy | 126 |
+| base tables | 209 |
+| with `organization_id` | 169 |
+| `organization_id NOT NULL` | 149 |
+| RLS enabled | 128 |
+| **RLS FORCEd** | **107** |
+| has tenant_isolation policy | 128 |
 | still on USAV-fallback default (footgun) | 25 |
 | tenant-owned, **missing org_id col** | 8 |
 | child-scoped (FK to a tenant parent) | 23 |
@@ -56,7 +56,7 @@ Legend: org=has organization_id · NN=NOT NULL · dflt=default kind · FK=FK→o
 | `return_dispositions` | reference-decide | ✅ | — | usav-fallback | ✅ | ✅ | — | ✅ | — | ? |
 | `admin_features` | system-global | — | — | none | — | — | — | — | — | ? |
 | `config` | system-global | — | — | none | — | — | — | — | — | ? |
-| `cron_runs` | system-global | — | — | none | — | — | — | — | — | 29351 |
+| `cron_runs` | system-global | — | — | none | — | — | — | — | — | 30893 |
 | `organization_integrations` | system-global | ✅ | ✅ | none | ✅ | — | — | — | — | ? |
 | `organizations` | system-global | — | — | none | — | — | — | — | — | ? |
 | `roles` | system-global | — | — | none | — | — | — | — | — | 8 |
@@ -69,7 +69,7 @@ Legend: org=has organization_id · NN=NOT NULL · dflt=default kind · FK=FK→o
 | `ai_chat_sessions` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 15 |
 | `amazon_accounts` | tenant-owned | ✅ | ✅ | loud-fail | — | — | — | — | — | ? |
 | `amazon_api_calls` | tenant-owned | ✅ | ✅ | loud-fail | — | — | — | — | — | ? |
-| `api_idempotency_responses` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 274 |
+| `api_idempotency_responses` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 239 |
 | `audit_logs` | tenant-owned | ✅ | — | usav-fallback | — | — | — | — | — | 7255 |
 | `billing_subscriptions` | tenant-owned | ✅ | ✅ | none | ✅ | — | — | — | — | ? |
 | `bin_contents` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | ? |
@@ -99,7 +99,7 @@ Legend: org=has organization_id · NN=NOT NULL · dflt=default kind · FK=FK→o
 | `hermes_outcomes` | tenant-owned | ✅ | — | loud-fail | ✅ | ✅ | — | ✅ | ✅ | ? |
 | `hermes_precision_scores` | tenant-owned | ✅ | — | loud-fail | ✅ | ✅ | — | ✅ | ✅ | ? |
 | `hermes_thresholds` | tenant-owned | ✅ | — | loud-fail | ✅ | ✅ | — | ✅ | ✅ | 7 |
-| `integration_credential_audit` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | 390 |
+| `integration_credential_audit` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | 480 |
 | `inventory_events` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 3118 |
 | `invoices` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | ? |
 | `item_adjustments` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | ? |
@@ -130,6 +130,8 @@ Legend: org=has organization_id · NN=NOT NULL · dflt=default kind · FK=FK→o
 | `photo_analysis_runs` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
 | `photo_entity_links` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | 6 |
 | `photo_exports` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
+| `photo_folder_items` | tenant-owned | ✅ | ✅ | loud-fail | — | ✅ | ✅ | ✅ | ✅ | ? |
+| `photo_folders` | tenant-owned | ✅ | ✅ | loud-fail | — | ✅ | ✅ | ✅ | ✅ | ? |
 | `photo_jobs` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
 | `photo_share_pack_access` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
 | `photo_share_pack_links` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
@@ -188,7 +190,7 @@ Legend: org=has organization_id · NN=NOT NULL · dflt=default kind · FK=FK→o
 | `staff_goals` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 5 |
 | `staff_messages` | tenant-owned | ✅ | ✅ | none | — | — | — | — | — | ? |
 | `staff_preferences` | tenant-owned | ✅ | ✅ | loud-fail | — | ✅ | ✅ | ✅ | ✅ | ? |
-| `staff_sessions` | tenant-owned | ✅ | ✅ | usav-fallback | ✅ | — | — | — | — | 977 |
+| `staff_sessions` | tenant-owned | ✅ | ✅ | usav-fallback | ✅ | — | — | — | — | 992 |
 | `staff_stations` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 2 |
 | `staff_todo_completions` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | ? |
 | `staff_todos` | tenant-owned | ✅ | ✅ | loud-fail | ✅ | ✅ | ✅ | ✅ | ✅ | 6 |

@@ -16,6 +16,8 @@ export interface PhotoLibraryFilterState {
   q?: string;
   damageDetected?: string;
   hasAnalysis?: string;
+  /** Selected master folder (photo_folders.id) — keeps only its assigned photos. */
+  folderId?: string;
 }
 
 /** Sidebar source folders — mapped to API entity types internally. */
@@ -183,12 +185,13 @@ export function formatPhotoLibraryDateRange(filters: PhotoLibraryFilterState): s
 
 export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryFilterState {
   const next: PhotoLibraryFilterState = {};
-  const set = (key: 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q' | 'damageDetected' | 'hasAnalysis', param: string) => {
+  const set = (key: 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q' | 'damageDetected' | 'hasAnalysis' | 'folderId', param: string) => {
     const v = params.get(param)?.trim();
     if (v) next[key] = v;
   };
   set('dateFrom', 'dateFrom');
   set('dateTo', 'dateTo');
+  set('folderId', 'folderId');
   const sourceScope = parseSourceScope(params.get('sourceScope'));
   if (sourceScope) next.sourceScope = sourceScope;
   const sort = params.get('sort');
@@ -227,6 +230,7 @@ export function photoLibraryFiltersToParams(
     'q',
     'damageDetected',
     'hasAnalysis',
+    'folderId',
   ];
   if (filters.sourceScope && filters.sourceScope !== 'all') {
     params.set('sourceScope', filters.sourceScope);

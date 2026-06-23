@@ -121,7 +121,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'sourcing',          label: 'Sourcing',    href: '/sourcing',           icon: Search,          kind: 'main',    requires: 'sourcing.view' },
   { id: 'products',          label: 'Products',    href: '/products',           icon: Tags,            kind: 'main',    requires: 'sku_stock.view' },
   { id: 'inventory',         label: 'Inventory',   href: '/inventory',          icon: ShelvingUnit,    kind: 'main',    requires: 'sku_stock.view' },
-  { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: MapPin,          kind: 'main',    requires: 'sku_stock.view' },
+  { id: 'warehouse',         label: 'Warehouse',   href: '/warehouse',          icon: Warehouse,       kind: 'main',    requires: 'sku_stock.view' },
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
@@ -470,7 +470,7 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
   // ── Warehouse ─────────────────────────────────────────────────────────────
   // `?tab=labels|racks|rooms|bins|map`; default `labels` (param cleared).
   {
-    id: 'warehouse', label: 'Warehouse', href: WAREHOUSE, icon: MapPin, kind: 'main', requires: 'sku_stock.view',
+    id: 'warehouse', label: 'Warehouse', href: WAREHOUSE, icon: Warehouse, kind: 'main', requires: 'sku_stock.view',
     modes: [
       { id: 'labels', label: 'Labels', icon: Printer,  to: () => ({ pathname: WAREHOUSE, params: { tab: null } }) },
       { id: 'racks',  label: 'Racks',  icon: Layers,   to: () => ({ pathname: WAREHOUSE, params: { tab: 'racks' } }) },
