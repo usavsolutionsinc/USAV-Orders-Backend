@@ -11,14 +11,21 @@ interface Props {
  * operator edits a field we stop overwriting it; "Reset to template" refetches.
  */
 export function ClaimTemplateEditor({ template, filedTicket }: Props) {
-  const { subject, description, previewLoading, edited, onSubjectChange, onDescriptionChange, resetTemplate } =
-    template;
+  const {
+    subject,
+    description,
+    previewLoading,
+    edited,
+    onSubjectChange,
+    onDescriptionChange,
+    resetTemplate,
+  } = template;
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="rounded-2xl border border-slate-300 bg-slate-100 p-3.5 shadow-sm">
+      <div className="mb-2.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
             Zendesk ticket {previewLoading ? '(updating…)' : '(editable)'}
           </p>
           {filedTicket ? (
@@ -29,7 +36,7 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
           <button
             type="button"
             onClick={resetTemplate}
-            className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900"
+            className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 hover:text-gray-900"
           >
             Reset to template
           </button>
@@ -48,23 +55,34 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
         value={subject}
         onChange={(e) => onSubjectChange(e.target.value)}
         placeholder={previewLoading ? 'Generating…' : 'Subject'}
-        className="mb-3 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-label font-semibold text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+        className="mb-3 block h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-label font-medium text-slate-900 shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
       />
 
-      <label
-        htmlFor="claim-body"
-        className="mb-1 block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
-      >
-        Body
-      </label>
-      <textarea
-        id="claim-body"
-        value={description}
-        onChange={(e) => onDescriptionChange(e.target.value)}
-        rows={10}
-        placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
-        className="block w-full resize-y rounded-lg border border-gray-200 bg-white px-3 py-2 font-mono text-caption leading-snug text-gray-900 outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
-      />
+      <div>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <label
+            htmlFor="claim-body"
+            className="block text-eyebrow font-black uppercase tracking-[0.14em] text-gray-400"
+          >
+            Body
+          </label>
+          <button
+            type="button"
+            onClick={() => onDescriptionChange('')}
+            className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 transition-colors hover:text-slate-700"
+          >
+            Clear
+          </button>
+        </div>
+        <textarea
+          id="claim-body"
+          value={description}
+          onChange={(e) => onDescriptionChange(e.target.value)}
+          rows={8}
+          placeholder={previewLoading ? 'Generating…' : 'Ticket body'}
+          className="block min-h-[14rem] w-full resize-y rounded-2xl border border-slate-300 bg-white px-4 py-3 text-label font-medium leading-5 tracking-[0.01em] text-slate-900 shadow-inner outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+        />
+      </div>
     </div>
   );
 }

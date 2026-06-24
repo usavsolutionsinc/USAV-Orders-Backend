@@ -5,6 +5,7 @@ import type { RSRecord } from '@/lib/neon/repair-service-queries';
 import { usePanelActions } from '@/hooks/usePanelActions';
 import { zendeskTicketUrl as buildZendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
+import type { RepairTabId } from './repair-details-shared';
 
 /**
  * Owns the repair details panel's interactive concerns: ticket-number /
@@ -20,9 +21,11 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingTicket, setIsSavingTicket] = useState(false);
   const [isEditingTicket, setIsEditingTicket] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [showPickupFlow, setShowPickupFlow] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<RepairTabId>('overview');
   const ticketInputRef = useRef<HTMLInputElement>(null);
 
   // Manual pairing — link a ticket to an order / inbound tracking / serial /
@@ -60,7 +63,9 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
     setNotes(repair.notes || '');
     setTicketNumber(repair.ticket_number || '');
     setIsEditingTicket(false);
+    setIsEditingNotes(false);
     setIsSavingTicket(false);
+    setActiveTab('overview');
   }, [repair.id, repair.notes, repair.ticket_number]);
 
   // Re-sync the linkage editors whenever a different ticket (or fresh server
@@ -165,6 +170,9 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
 
   const panelActions = usePanelActions(
     { entityType: 'repair', entityId: repair.id },
+    {
+      notes: () => setIsEditingNotes(true),
+    },
   );
 
   // Shared helper already returns null for the `RS-<id>` fallback (non-numeric)
@@ -172,7 +180,10 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
   const zendeskTicketUrl = buildZendeskTicketUrl(ticketNumber);
 
   const handleSaveNotes = async () => {
-    if (notes === repair.notes) return;
+    if (notes === repair.notes) {
+      setIsEditingNotes(false);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -187,6 +198,7 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
       }
 
       onUpdate();
+      setIsEditingNotes(false);
     } catch (error) {
       console.error('Error saving notes:', error);
       setNotes(repair.notes || '');
@@ -222,11 +234,13 @@ export function useRepairDetailsPanel({ repair, onUpdate }: { repair: RSRecord; 
 
   return {
     notes, setNotes,
+    isEditingNotes, setIsEditingNotes,
     ticketNumber, setTicketNumber,
     isSaving, isSavingTicket, isEditingTicket, setIsEditingTicket,
     updatingStatus,
     showPickupFlow, setShowPickupFlow,
     isMounted,
+    activeTab, setActiveTab,
     ticketInputRef,
     linkOrderId, setLinkOrderId,
     linkTracking, setLinkTracking,

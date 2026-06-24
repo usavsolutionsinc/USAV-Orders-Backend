@@ -61,3 +61,51 @@ test('punctuation/spacing in a pasted number is normalized away before matching'
   assert.equal(extractCanonicalTracking('3821 4115 2045'), '382141152045');
   assert.equal(extractCanonicalTracking('382-141-152-045'), '382141152045');
 });
+
+// ─── §3.1 cross-carrier hardening — never truncate a USPS number ──────────────
+// The earlier (unsafe) strip guessed by trailing pattern: a valid 22-digit USPS
+// IMpb number routinely ends in a 12-digit run matching FedEx Express
+// `[39]\d{11}`, so it got folded onto a FedEx tail — which would have merged
+// ~500 distinct USPS shipments. The hardened strip anchors on the 96-prefixed
+// GS1 envelope, so every 92/93/94/95-prefixed USPS number passes through whole.
+
+test('USPS 22-digit number whose tail looks like FedEx Express is left WHOLE (plan example)', () => {
+  // The literal regression from the plan: trailing 12 = 314810260579 → [39]\d{11}.
+  const usps = '9235990407314810260579';
+  assert.equal(stripFedexConcatPrefix(usps), usps);
+  assert.equal(extractCanonicalTracking(usps), usps);
+});
+
+test('USPS number ending in a FedEx-Express-looking 9-prefixed run is left WHOLE', () => {
+  const usps = '9405998877912345678901'; // trailing 12 = 912345678901 → [39]\d{11}
+  assert.equal(stripFedexConcatPrefix(usps), usps);
+  assert.equal(extractCanonicalTracking(usps), usps);
+});
+
+test('USPS number ending in a FedEx-Ground-looking 96-prefixed run is left WHOLE', () => {
+  const usps = '94001961234567890123'; // trailing 15 = 961234567890123 → 96\d{13}
+  assert.equal(stripFedexConcatPrefix(usps), usps);
+  assert.equal(extractCanonicalTracking(usps), usps);
+});
+
+// ─── §3.1 cross-carrier hardening — leave already-human numbers untouched ─────
+
+test('a real 15-digit FedEx Ground number is NOT truncated to its trailing 12', () => {
+  const ground = '961234567890123'; // valid 96-prefixed Ground, already human-readable
+  assert.equal(stripFedexConcatPrefix(ground), ground);
+  assert.equal(extractCanonicalTracking(ground), ground);
+});
+
+test('a plain 12-digit FedEx Express number passes through unchanged', () => {
+  assert.equal(stripFedexConcatPrefix('382141152045'), '382141152045');
+});
+
+test('a UPS 1Z label is never mistaken for a FedEx GS1 envelope', () => {
+  assert.equal(stripFedexConcatPrefix('1Z999AA10123456784'), '1Z999AA10123456784');
+  assert.equal(extractCanonicalTracking('1Z999AA10123456784'), '1Z999AA10123456784');
+});
+
+test('only the 96-prefixed GS1-34 FedEx envelope collapses to its human number', () => {
+  const scanned = '9632001960200651497200382141152045'; // 34-digit, 96-prefixed
+  assert.equal(stripFedexConcatPrefix(scanned), '382141152045');
+});

@@ -1,6 +1,10 @@
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, sep, join, extname, basename } from 'node:path';
 import type { NextRequest } from 'next/server';
+import { getPrimaryPhotoStorage } from '@/lib/photos/storage/resolve-primary';
+import { getStorageAdapter } from '@/lib/photos/storage/registry';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { nasOrgHeader } from '@/lib/nas-agent-client';
 
 /**
  * Server-side reader for a receiving photo's raw bytes, so the claim route can
@@ -23,6 +27,9 @@ const NAS_DEV_ROOT = resolve(
 const NAS_APP_PREFIX = '/api/nas/';
 const NAS_DEV_PREFIX = '/api/nas-dev/';
 const NAS_AGENT_RECEIVING_PREFIX = '/_agent/file/receiving/';
+const ARCHIVE_SIGNED_URL_TTL_SECONDS = Number(
+  process.env.PHOTOS_ARCHIVE_SIGNED_URL_TTL_SECONDS || 15 * 60,
+);
 
 const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -36,6 +43,36 @@ export interface PhotoBytes {
   bytes: Uint8Array;
   filename: string;
   contentType: string;
+}
+
+/**
+ * Resolve a photo into a URL the NAS archive worker can read:
+ *   - GCS primary storage => short-lived signed URL
+ *   - NAS/legacy-backed storage => stored legacy URL/path
+ *
+ * Returns null only when no direct archive source can be derived.
+ */
+export async function resolveClaimArchivePhotoUrl(
+  photoId: number,
+  organizationId: string,
+): Promise<string | null> {
+  const storage = await getPrimaryPhotoStorage(photoId, organizationId);
+  if (!storage) return null;
+
+  if (storage.provider === 'gcs' && storage.bucket) {
+    try {
+      return await getStorageAdapter('gcs').getSignedReadUrl({
+        bucket: storage.bucket,
+        objectKey: storage.objectKey,
+        ttlSeconds: ARCHIVE_SIGNED_URL_TTL_SECONDS,
+      });
+    } catch {
+      // fall through to any legacy path we still have for this object
+    }
+  }
+
+  const legacyUrl = String(storage.legacyUrl || '').trim();
+  return legacyUrl || null;
 }
 
 function decodePath(pathname: string): string {
@@ -108,7 +145,8 @@ async function readReceivingPhotoViaAgent(relPath: string): Promise<PhotoBytes |
 export async function readPhotoBytes(rawUrl: string): Promise<PhotoBytes | null> {
   const url = (rawUrl || '').trim();
   if (!url) return null;
-  // Drop any query (e.g. ?thumb=128) — the attachment should be the full original.
+  // Use a query-less path only for route-shape checks; signed external URLs
+  // (GCS) require their query string to remain intact for the fetch itself.
   const noQuery = url.split('?')[0];
 
   // NAS app route → office media agent. This is the production path for photos
@@ -130,7 +168,7 @@ export async function readPhotoBytes(rawUrl: string): Promise<PhotoBytes | null>
   // Absolute URL (Vercel Blob / nginx tunnel) → fetch.
   if (/^https?:\/\//i.test(noQuery)) {
     try {
-      const parsed = new URL(noQuery);
+      const parsed = new URL(url);
       if (parsed.pathname.startsWith(NAS_APP_PREFIX)) {
         return readReceivingPhotoViaAgent(parsed.pathname.slice(NAS_APP_PREFIX.length));
       }
@@ -143,7 +181,7 @@ export async function readPhotoBytes(rawUrl: string): Promise<PhotoBytes | null>
         );
       }
 
-      const res = await fetch(noQuery, { cache: 'no-store' });
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) return null;
       const ab = await res.arrayBuffer();
       const pathname = parsed.pathname;
@@ -238,6 +276,7 @@ export async function archiveClaimViaAgent(opts: {
   ticketId: number | string;
   photos: Array<{ url: string }>;
   info: string;
+  organizationId?: OrgId;
   archiveRoot?: string;
   archiveFolder?: string;
 }): Promise<{ folder: string; copied: number; total: number } | null> {
@@ -247,7 +286,11 @@ export async function archiveClaimViaAgent(opts: {
 
   const res = await fetch(`${base}/archive`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-agent-token': token },
+    headers: {
+      'content-type': 'application/json',
+      'x-agent-token': token,
+      ...nasOrgHeader(opts.organizationId),
+    },
     body: JSON.stringify({
       ticketId: opts.ticketId,
       photos: opts.photos,

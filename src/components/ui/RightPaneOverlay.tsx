@@ -4,8 +4,10 @@ import {
   createContext,
   useContext,
   useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -78,6 +80,13 @@ interface RightPaneOverlayProps {
   lockScroll?: boolean;
   /** Close on Escape. Default true. */
   closeOnEscape?: boolean;
+  /** Bottom-right drag-to-resize grip. Center align only. Default false. */
+  resizable?: boolean;
+  /** localStorage key to persist the resized dimensions across opens. */
+  storageKey?: string;
+  /** Resize lower clamps in px. */
+  minWidth?: number;
+  minHeight?: number;
   /** Extra classes on the panel surface (the white card / drawer). */
   className?: string;
   children: ReactNode;
@@ -108,6 +117,10 @@ export function RightPaneOverlay({
   backdrop = true,
   lockScroll = true,
   closeOnEscape = true,
+  resizable = false,
+  storageKey,
+  minWidth = 420,
+  minHeight = 360,
   className,
   children,
   'aria-label': ariaLabel,
@@ -142,6 +155,63 @@ export function RightPaneOverlay({
     };
   }, [open, host]);
 
+  // ─── Drag-to-resize (center align, opt-in) ──────────────────────────────────
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+
+  // Hydrate the persisted size when a resizable center overlay opens, clamped to
+  // the current viewport so a size saved on a big screen still fits a small one.
+  useLayoutEffect(() => {
+    if (!open || !resizable || align !== 'center' || !storageKey) return;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { w?: unknown; h?: unknown };
+      if (typeof parsed.w !== 'number' || typeof parsed.h !== 'number') return;
+      const w = Math.max(minWidth, Math.min(parsed.w, window.innerWidth - 24));
+      const h = Math.max(minHeight, Math.min(parsed.h, window.innerHeight - 24));
+      setSize({ w, h });
+    } catch {
+      /* ignore malformed persisted size */
+    }
+  }, [open, resizable, align, storageKey, minWidth, minHeight]);
+
+  const startResize = (e: ReactPointerEvent) => {
+    if (!resizable) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect0 = panel.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const maxW = window.innerWidth - 24;
+    const maxH = window.innerHeight - 24;
+    let latest = { w: rect0.width, h: rect0.height };
+    const onMove = (ev: PointerEvent) => {
+      latest = {
+        w: Math.max(minWidth, Math.min(maxW, rect0.width + (ev.clientX - startX))),
+        h: Math.max(minHeight, Math.min(maxH, rect0.height + (ev.clientY - startY))),
+      };
+      setSize(latest);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      document.body.style.userSelect = '';
+      if (storageKey) {
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(latest));
+        } catch {
+          /* ignore quota / disabled storage */
+        }
+      }
+    };
+    document.body.style.userSelect = 'none';
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
   const target = typeof document !== 'undefined' ? document.body : null;
   if (!target) return null;
 
@@ -172,6 +242,15 @@ export function RightPaneOverlay({
       ? 'pointer-events-auto h-full border-l border-gray-200 shadow-[-20px_0_50px_rgba(0,0,0,0.05)]'
       : 'pointer-events-auto max-h-full w-[min(92%,32rem)] rounded-xl border border-slate-200 shadow-xl';
 
+  // A resized center panel switches to explicit px dims; `none` lifts the
+  // className max-* clamps so the operator can grow past the default frame.
+  const panelStyle: CSSProperties | undefined =
+    align === 'right'
+      ? { width }
+      : resizable && size
+        ? { width: size.w, height: size.h, maxWidth: 'none', maxHeight: 'none' }
+        : undefined;
+
   return createPortal(
     <AnimatePresence>
       {open && backdrop ? (
@@ -194,16 +273,30 @@ export function RightPaneOverlay({
           className={cn('pointer-events-none', frameClass)}
         >
           <motion.div
+            ref={panelRef}
             role="dialog"
             aria-modal="true"
             aria-label={ariaLabel}
             aria-labelledby={ariaLabelledby}
             onClick={(e) => e.stopPropagation()}
             {...panelMotion}
-            style={align === 'right' ? { width } : undefined}
-            className={cn('flex flex-col overflow-hidden bg-white', panelClass, className)}
+            style={panelStyle}
+            className={cn('relative flex flex-col overflow-hidden bg-white', panelClass, className)}
           >
             {children}
+            {resizable && align === 'center' ? (
+              <div
+                role="presentation"
+                aria-hidden
+                onPointerDown={startResize}
+                title="Drag to resize"
+                className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize items-end justify-end p-0.5 text-gray-300 transition-colors hover:text-gray-500"
+              >
+                <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+                  <path d="M9 3 L3 9 M9 6.5 L6.5 9" />
+                </svg>
+              </div>
+            ) : null}
           </motion.div>
         </motion.div>
       ) : null}

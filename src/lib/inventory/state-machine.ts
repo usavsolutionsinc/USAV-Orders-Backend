@@ -16,6 +16,7 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { recordInventoryEvent, type InventoryEventStation, type InventoryEventType } from './events';
 
 // ─── State vocabulary (mirrors serial_status_enum in schema.ts) ──────────────
@@ -325,6 +326,10 @@ async function runTransition(
         payload: input.payload ?? {},
       },
       client,
+      // runTransition's orgId is optional during the strangler migration; when a
+      // caller hasn't threaded one yet, fall back to USAV so the tenant-required
+      // inventory_events insert stamps a concrete org instead of NULL-violating.
+      orgId ?? USAV_ORG_ID,
     );
 
     if (useOwnTx) await client.query('COMMIT');

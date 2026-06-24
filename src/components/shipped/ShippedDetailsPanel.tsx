@@ -63,10 +63,14 @@ export function ShippedDetailsPanel({
     setItemNumber,
     shippingTrackingNumber,
     setShippingTrackingNumber,
+    notes,
+    setNotes,
     shipByDate,
     setShipByDate,
     isSavingInlineFields,
+    isSavingNotes,
     isSavingShipByDate,
+    saveNotes,
     saveInlineFields,
     saveShipByDate,
   } = useShippedDetailState(initialShipped, onUpdate);
@@ -109,6 +113,13 @@ export function ShippedDetailsPanel({
 
   // Compose the action list directly (assign + entity actions) for the flat,
   // full-width bar in PaneHeader.belowSlot — bypassing the rounded-card adapter.
+  const mappedPanelActions = panelActions.map((action) => ({
+    key: action.key,
+    label: action.label,
+    icon: <span className={action.toneClassName}>{action.icon}</span>,
+    onClick: action.onAction,
+  }));
+  const notesAction = mappedPanelActions.find((action) => action.key === 'notes');
   const headerBarActions: PaneHeaderActionBarAction[] = [
     ...(meta.canEditAssignment
       ? [{
@@ -120,13 +131,9 @@ export function ShippedDetailsPanel({
         }]
       : []),
     ...(showDashboardExtras
-      ? panelActions.map((a) => ({
-          key: a.key,
-          label: a.label,
-          icon: <span className={a.toneClassName}>{a.icon}</span>,
-          onClick: a.onAction,
-        }))
+      ? mappedPanelActions.filter((action) => action.key !== 'notes')
       : []),
+    ...(notesAction ? [notesAction] : []),
   ];
 
   const stackActionBar = {
@@ -194,6 +201,10 @@ export function ShippedDetailsPanel({
             onSaveInline: saveInlineFields,
             onSaveShipByDate: saveShipByDate,
           }}
+          notes={notes}
+          setNotes={setNotes}
+          isSavingNotes={isSavingNotes}
+          onSaveNotes={() => { void saveNotes(notes); }}
           isDeleteArmed={isDeleteArmed}
           isDeletingOrder={isDeleting}
           onDeleteOrder={handleDelete}

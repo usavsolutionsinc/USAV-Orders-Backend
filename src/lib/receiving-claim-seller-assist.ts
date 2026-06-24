@@ -14,9 +14,15 @@ export const SELLER_ONLY_SYSTEM_PROMPT = [
   '',
   'Rules:',
   '- Include the internal Zendesk ticket number as plain text (e.g. "Our case reference: #5637").',
-  '- Include PO, tracking, item, and issue type from the context provided.',
+  '- Include PO, tracking, item, serial number(s), and issue type from the context provided.',
+  '  If a Serial / Serials line is present in the body, list the serial number(s) verbatim.',
   '- Do not invent facts, quantities, refunds, or outcomes.',
+  '- If the claim type is Return, frame this as a return / RMA request — ask for',
+  '  return authorization and the next steps — NOT a damage or defect complaint.',
   '- Tone: professional, concise, direct, non-accusatory.',
+  '- Format as a short email, NOT one run-on paragraph: a greeting line, then one or',
+  '  two short body paragraphs, then a closing line. Separate paragraphs with a blank',
+  '  line (\\n\\n). Put the case reference / PO / tracking on their own lines.',
   '- Ask for the next practical resolution or evidence — do not threaten escalation.',
   '- seller_message MUST be plain text only: NEVER URLs or link-like text (marketplace TOS).',
   '- Do NOT include http/https, www., or domain paths. Ticket # is plain text, not a link.',
@@ -27,29 +33,49 @@ function lineValue(description: string, label: string): string {
   return match?.[1]?.trim() || 'n/a';
 }
 
+/** PO#/tracking now ride in the SUBJECT (// PO … // TRK#…), not the body. */
+function valueFromSubject(subject: string, kind: 'po' | 'tracking'): string | null {
+  if (kind === 'po') return subject.match(/\/\/\s*PO\s+(.+?)\s*(?:\/\/|$)/i)?.[1]?.trim() || null;
+  return subject.match(/TRK#\s*(\S+)/i)?.[1]?.trim() || null;
+}
+
 export function buildDeterministicSellerMessage(opts: {
   claimType: ClaimType;
   reason?: string;
   description: string;
+  /** Ticket subject — the source of truth for PO#/tracking now. */
+  subject?: string;
   zendeskTicketNumber: string;
 }): string {
   const issue = CLAIM_TYPE_LABEL[opts.claimType];
-  const po = lineValue(opts.description, 'Purchase Order');
-  const tracking = lineValue(opts.description, 'Tracking');
+  const subject = opts.subject ?? '';
+  const po = valueFromSubject(subject, 'po') || lineValue(opts.description, 'Purchase Order');
+  const tracking = valueFromSubject(subject, 'tracking') || lineValue(opts.description, 'Tracking');
   const item = lineValue(opts.description, 'Item') || lineValue(opts.description, 'Scope');
+  // Serials live on a "Serials:" (plural) or "Serial:" line in the body.
+  const serialsLine = lineValue(opts.description, 'Serials');
+  const serials = serialsLine !== 'n/a' ? serialsLine : lineValue(opts.description, 'Serial');
   const note = String(opts.reason ?? '').trim();
   const ticketRef = opts.zendeskTicketNumber.replace(/^#/, '').trim();
+
+  // Returns read differently from defect/damage claims.
+  const isReturn = opts.claimType === 'return';
+  const opening = isReturn
+    ? 'We are processing a return for this order and opened an internal case for our records.'
+    : `We received this order with a ${issue.toLowerCase()} issue and opened an internal case for our records.`;
+  const detailLabel = isReturn ? 'Return details' : 'Issue details';
 
   return [
     'Hello,',
     '',
-    `We received this order with a ${issue.toLowerCase()} issue and opened an internal case for our records.`,
+    opening,
     '',
     `Our case reference: #${ticketRef}`,
     `Purchase Order: ${po}`,
     `Tracking: ${tracking}`,
     `Item: ${item}`,
-    note ? `Issue details: ${note}` : null,
+    serials !== 'n/a' ? `Serial${serials.includes(',') ? 's' : ''}: ${serials}` : null,
+    note ? `${detailLabel}: ${note}` : null,
     '',
     'Please advise on the next resolution step. We can provide photos or additional evidence from our receiving record if needed.',
     '',
@@ -115,6 +141,7 @@ export async function draftSellerMessageWithHermes(
     claimType: input.claimType,
     reason: input.reason,
     description: input.description,
+    subject: input.subject,
     zendeskTicketNumber: input.zendeskTicketNumber,
   });
 

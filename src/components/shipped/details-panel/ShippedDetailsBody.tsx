@@ -10,6 +10,8 @@ import type { DetailsStackDurationData, ShippedActiveInput } from '@/components/
 import { ShippedDetailsPanelContent, type ShippedActiveSection } from '@/components/shipped/ShippedDetailsPanelContent';
 import { OrderTimelineSection } from '@/components/shipped/OrderTimelineSection';
 import { OrderLabelsSection } from '@/components/shipped/OrderLabelsSection';
+import { ShippedNotesComposer } from './ShippedNotesComposer';
+import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderControl';
 
 export interface ShippedStackActionBar {
   onClose: () => void;
@@ -52,6 +54,10 @@ export interface ShippedDetailsBodyProps {
   stackActionBar: ShippedStackActionBar;
   // Default content — inline-editable shipping fields:
   editableFields: ShippedEditableFields;
+  notes: string;
+  setNotes: (value: string) => void;
+  isSavingNotes: boolean;
+  onSaveNotes: () => void;
   // Delete (shipped context only):
   isDeleteArmed: boolean;
   isDeletingOrder: boolean;
@@ -79,10 +85,17 @@ export function ShippedDetailsBody({
   setIsMarkAsShippedOpen,
   stackActionBar,
   editableFields,
+  notes,
+  setNotes,
+  isSavingNotes,
+  onSaveNotes,
   isDeleteArmed,
   isDeletingOrder,
   onDeleteOrder,
 }: ShippedDetailsBodyProps) {
+  const hasSavedNotes = String(shipped.notes || '').trim().length > 0;
+  const showDashboardDelete = context === 'dashboard' || isFulfillmentPanel || isLabelsPanel;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
       {activeSection === 'timeline' && shipped?.id ? (
@@ -90,7 +103,56 @@ export function ShippedDetailsBody({
         // (label → tech verdict → packed → scanned out), same pattern as the
         // Customer tab. Only reachable in contexts where the tab is shown.
         <div className="flex min-h-full flex-col pb-8 pt-2">
-          <OrderTimelineSection orderId={Number(shipped.id)} />
+          <div className="flex-1 pt-2">
+            <OrderTimelineSection orderId={Number(shipped.id)} />
+          </div>
+          {(activeInput === 'notes' || hasSavedNotes) && (
+            activeInput === 'notes' ? (
+              <ShippedNotesComposer
+                value={notes}
+                onChange={setNotes}
+                onCancel={() => {
+                  setNotes(shipped.notes || '');
+                  setActiveInput('none');
+                }}
+                onSubmit={onSaveNotes}
+                isSaving={isSavingNotes}
+              />
+            ) : (
+              <ShippedNotesComposer
+                value={String(shipped.notes || '')}
+                readOnly
+                onClick={() => setActiveInput('notes')}
+              />
+            )
+          )}
+          {showDashboardDelete ? (
+            <section className="mx-8 pt-2 space-y-2">
+              <DeleteOrderControl
+                orderId={shipped.id}
+                packerLogId={(shipped as any).packer_log_id ?? null}
+                stationActivityLogId={(shipped as any).station_activity_log_id ?? (shipped as any).sal_id ?? null}
+                trackingType={shipped.tracking_type}
+                onDeleted={() => onUpdate?.()}
+              />
+            </section>
+          ) : context === 'shipped' ? (
+            <section className="mx-8 pt-2">
+              <button
+                type="button"
+                onClick={onDeleteOrder}
+                disabled={isDeletingOrder}
+                className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {isDeletingOrder
+                  ? 'Deleting...'
+                  : isDeleteArmed
+                    ? 'Click Again To Confirm'
+                    : 'Delete'}
+              </button>
+            </section>
+          ) : null}
         </div>
       ) : context === 'dashboard' || isFulfillmentPanel || isLabelsPanel ? (
         <DashboardDetailsStack
@@ -106,6 +168,10 @@ export function ShippedDetailsBody({
           setActiveInput={setActiveInput}
           isMarkAsShippedOpen={isMarkAsShippedOpen}
           setIsMarkAsShippedOpen={setIsMarkAsShippedOpen}
+          notes={notes}
+          setNotes={setNotes}
+          isSavingNotes={isSavingNotes}
+          onSaveNotes={onSaveNotes}
         />
       ) : context === 'station' ? (
         <TechDetailsStack
@@ -117,6 +183,12 @@ export function ShippedDetailsBody({
           showShippingTimestamp={false}
           actionBar={stackActionBar}
           activeSection={activeSection}
+          activeInput={activeInput}
+          setActiveInput={setActiveInput}
+          notes={notes}
+          setNotes={setNotes}
+          isSavingNotes={isSavingNotes}
+          onSaveNotes={onSaveNotes}
         />
       ) : context === 'packer' ? (
         <PackerDetailsStack
@@ -128,6 +200,12 @@ export function ShippedDetailsBody({
           showShippingTimestamp={false}
           actionBar={stackActionBar}
           activeSection={activeSection}
+          activeInput={activeInput}
+          setActiveInput={setActiveInput}
+          notes={notes}
+          setNotes={setNotes}
+          isSavingNotes={isSavingNotes}
+          onSaveNotes={onSaveNotes}
         />
       ) : (
         <div className="flex min-h-full flex-col pb-8 pt-4">
@@ -161,6 +239,26 @@ export function ShippedDetailsBody({
               showShippingTimestamp={false}
             />
           </div>
+          {(activeInput === 'notes' || hasSavedNotes) && (
+            activeInput === 'notes' ? (
+              <ShippedNotesComposer
+                value={notes}
+                onChange={setNotes}
+                onCancel={() => {
+                  setNotes(shipped.notes || '');
+                  setActiveInput('none');
+                }}
+                onSubmit={onSaveNotes}
+                isSaving={isSavingNotes}
+              />
+            ) : (
+              <ShippedNotesComposer
+                value={String(shipped.notes || '')}
+                readOnly
+                onClick={() => setActiveInput('notes')}
+              />
+            )
+          )}
 
           {context === 'shipped' && (
             <section className="mx-8 pt-2">

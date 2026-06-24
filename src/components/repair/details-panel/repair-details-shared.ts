@@ -14,6 +14,13 @@ export interface RepairDetailsPanelProps {
   disableMoveDown?: boolean;
 }
 
+export type RepairTabId = 'overview' | 'links';
+
+export const REPAIR_TABS: Array<{ value: RepairTabId; label: string }> = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'links', label: 'Links' },
+];
+
 export const STATUS_OPTIONS = [
   'Awaiting Parts',
   'Pending Repair',

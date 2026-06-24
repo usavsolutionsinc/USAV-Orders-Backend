@@ -8,6 +8,7 @@ import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlide
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   claimWizardStepStates,
+  type ArchiveState,
   type ClaimModalMode,
   type CreateClaimStep,
   type FiledTicket,
@@ -17,6 +18,7 @@ import { useClaimPhotos } from './useClaimPhotos';
 import { useClaimTicketSearch } from './useClaimTicketSearch';
 import { useClaimTemplate } from './useClaimTemplate';
 import { useClaimSellerMessage } from './useClaimSellerMessage';
+import { useClaimTicketReply } from './useClaimTicketReply';
 
 export interface ClaimModalProps {
   open: boolean;
@@ -47,9 +49,21 @@ export function useReceivingClaimController({
 }: ClaimModalProps) {
   const receivingId = row.receiving_id;
   const lineId = row.id;
-  // Auto-select 'unfound' when the carton has no Zoho match — support routes
-  // unmatched-tracking claims differently from damage/missing.
-  const initialClaimType: ClaimType = row.receiving_source === 'unmatched' ? 'unfound' : 'damage';
+  // A real PO# (number or id) — when present, 'unfound' is neither defaulted nor
+  // offered, even if the carton came in as an unmatched scan.
+  const hasPo = !!(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id);
+  // RETURN intake (per-line receiving_type, else carton default, else line
+  // intake_type) auto-selects the 'return' claim type.
+  const isReturnIntake =
+    row.receiving_type === 'RETURN' ||
+    row.carton_intake_type === 'RETURN' ||
+    row.intake_type === 'return';
+  // Default: return → 'return'; unmatched w/o PO → 'unfound'; otherwise 'damage'.
+  const initialClaimType: ClaimType = isReturnIntake
+    ? 'return'
+    : row.receiving_source === 'unmatched' && !hasPo
+      ? 'unfound'
+      : 'damage';
 
   // ── Wizard / mode state ──────────────────────────────────────────────────
   const [claimType, setClaimType] = useState<ClaimType>(initialClaimType);
@@ -61,6 +75,23 @@ export function useReceivingClaimController({
   // ── Create-flow submit state ─────────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
   const [draftBody, setDraftBody] = useState<string | null>(null);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
+
+  // ── Dry-run test state (no Zendesk ticket / NAS / DB side-effects) ────────
+  const [testCreating, setTestCreating] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    subject: string;
+    description: string;
+    attachCount: number;
+  } | null>(null);
+  const [testSellerLoading, setTestSellerLoading] = useState(false);
+  const [testSellerPreview, setTestSellerPreview] = useState<{ message: string; model: string } | null>(
+    null,
+  );
+  // NAS backup result — set by both the auto-archive on ticket creation and the
+  // manual "Archive to NAS" action, so the seller step can DISPLAY whether the
+  // backup landed (and offer a retry when it failed/was partial).
+  const [archiveState, setArchiveState] = useState<ArchiveState | null>(null);
   // Stable per-submission idempotency key — generated on open and reused across
   // retries so a failed-then-retried submit never files two tickets.
   const idempotencyKey = useRef('');
@@ -78,7 +109,6 @@ export function useReceivingClaimController({
     receivingId,
     lineId,
     claimType,
-    reason,
   });
   const search = useClaimTicketSearch({
     open,
@@ -99,6 +129,7 @@ export function useReceivingClaimController({
     readDescription: template.readDescription,
     onClose,
   });
+  const reply = useClaimTicketReply({ open, ticketId: filedTicket?.id ?? null });
 
   // Reset the controller-owned cells each time the modal opens. Sub-hooks reset
   // their own state on `open`.
@@ -106,19 +137,27 @@ export function useReceivingClaimController({
     if (!open) return;
     setReason(prefillReason ?? '');
     setDraftBody(null);
-    setClaimType(row.receiving_source === 'unmatched' ? 'unfound' : 'damage');
+    setClaimType(initialClaimType);
     idempotencyKey.current = crypto.randomUUID();
     setMode('create');
     setCreateStep('internal');
     setFiledTicket(null);
     setLinkCommitted(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, receivingId, lineId, row.receiving_source, prefillReason]);
+    setTestResult(null);
+    setTestSellerPreview(null);
+    setArchiveState(null);
+  }, [open, receivingId, lineId, initialClaimType, prefillReason]);
 
   // ── Derived view-model ───────────────────────────────────────────────────
+  // Hide 'unfound' once a real PO# is present — an order with a PO can't be
+  // "unfound". Every other claim type (incl. 'return') stays available.
   const claimTypeItems = useMemo<HorizontalSliderItem[]>(
-    () => CLAIM_TYPE_OPTIONS.map((opt) => ({ id: opt.value, label: opt.label })),
-    [],
+    () =>
+      CLAIM_TYPE_OPTIONS.filter((opt) => opt.value !== 'unfound' || !hasPo).map((opt) => ({
+        id: opt.value,
+        label: opt.label,
+      })),
+    [hasPo],
   );
   const claimStepStates = useMemo(
     () => claimWizardStepStates(createStep, filedTicket, mode),
@@ -235,8 +274,21 @@ export function useReceivingClaimController({
       } else {
         toast.success('Claim filed — continue to seller message when the ticket # is assigned');
       }
-      if (data.archiveWarning) {
-        toast.warning(String(data.archiveWarning), { duration: 8000 });
+      // Capture the auto-archive result so the seller step DISPLAYS the NAS
+      // backup status — and a retry when it failed/was partial.
+      const archiveWarning = data.archiveWarning ? String(data.archiveWarning) : null;
+      setArchiveState({
+        ok: data.archiveOk === true && !archiveWarning,
+        copied: Number(data.archiveCopied ?? 0),
+        total: Number(data.archiveTotal ?? 0),
+        folder:
+          typeof data.archiveFolder === 'string' && data.archiveFolder
+            ? data.archiveFolder
+            : ticketNumber.replace(/^#/, '') || null,
+        warning: archiveWarning,
+      });
+      if (archiveWarning) {
+        toast.warning(archiveWarning, { duration: 8000 });
       }
       if (typeof data.sharePackUrl === 'string' && data.sharePackUrl) {
         const shareUrl = data.sharePackUrl;
@@ -258,6 +310,178 @@ export function useReceivingClaimController({
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Archive the carton's photos to a NAS folder via the office agent. The
+  // folder is the filed/linked ticket # when we have one, else the PO#, else a
+  // receiving fallback — so the operator can publish to NAS before OR after a
+  // ticket exists. No free-text target.
+  const archiveToNas = async () => {
+    if (archiveSubmitting || submitting || !receivingId) return;
+    const folder =
+      filedTicket?.number?.replace(/^#/, '').trim() ||
+      String(row.zoho_purchaseorder_number || '').trim() ||
+      `RCV-${receivingId}`;
+    setArchiveSubmitting(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/archive-only', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receivingId,
+          lineId,
+          ticketNumber: folder,
+          claimType,
+          reason: reason.trim(),
+          subject: template.readSubject().trim(),
+          description: template.readDescription().trim(),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Could not archive claim photos');
+        return;
+      }
+      // Display the backup result on the seller step (folder + counts), and a
+      // retry affordance when it was partial.
+      const warning = data.archiveWarning ? String(data.archiveWarning) : null;
+      setArchiveState({
+        ok: !warning,
+        copied: Number(data.copied ?? 0),
+        total: Number(data.total ?? 0),
+        folder: typeof data.folderName === 'string' ? data.folderName : null,
+        warning,
+      });
+      if (warning) toast.warning(warning, { duration: 8000 });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setArchiveSubmitting(false);
+    }
+  };
+
+  // ── Dry-run tests: rehearse the flow without filing/saving anything ───────
+  const submitTestCreate = async () => {
+    if (testCreating || submitting || !receivingId) return;
+    setTestCreating(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun: true,
+          receivingId,
+          lineId,
+          claimType,
+          reason: reason.trim(),
+          subject: template.readSubject().trim(),
+          description: template.readDescription().trim(),
+          attachPhotoIds: [...photos.selectedPhotoIds],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Test create failed');
+        return;
+      }
+      setTestResult({
+        subject: String(data.subject ?? ''),
+        description: String(data.description ?? ''),
+        attachCount: Number(data.attachCount ?? 0),
+      });
+      toast.success('Test create OK — no ticket was filed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setTestCreating(false);
+    }
+  };
+
+  const submitTestSeller = async () => {
+    if (testSellerLoading || !receivingId) return;
+    const subject = template.readSubject().trim();
+    const description = template.readDescription().trim();
+    if (!subject || !description) {
+      toast.error('Add a subject and body before testing the seller message');
+      return;
+    }
+    setTestSellerLoading(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/assist-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun: true,
+          receivingId,
+          lineId,
+          claimType,
+          reason: reason.trim(),
+          subject,
+          description,
+          zendeskTicketNumber: '#TEST',
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Test seller message failed');
+        return;
+      }
+      setTestSellerPreview({
+        message: typeof data.sellerMessage === 'string' ? data.sellerMessage : '',
+        model: typeof data.model === 'string' ? data.model : '',
+      });
+      if (data.linksStripped) {
+        toast.warning('Links were removed (marketplace TOS)', { duration: 5000 });
+      }
+      toast.success('Test seller message drafted — not saved');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setTestSellerLoading(false);
+    }
+  };
+
+  const clearTestOutputs = () => {
+    setTestResult(null);
+    setTestSellerPreview(null);
+  };
+
+  // "Test next step": jump to the seller-message step against a sentinel #TEST
+  // ticket — NO real ticket is filed and nothing is persisted (the seller hook
+  // recognises #TEST) — and draft the seller message via Hermes dry-run so the
+  // step shows a real preview. Lets the operator rehearse the whole flow.
+  const continueTest = async () => {
+    setFiledTicket({ number: '#TEST', url: null, id: null });
+    setCreateStep('seller');
+    if (!receivingId) return;
+    const subject = template.readSubject().trim();
+    const description = template.readDescription().trim();
+    if (!subject || !description) return;
+    setTestSellerLoading(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim/assist-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun: true,
+          receivingId,
+          lineId,
+          claimType,
+          reason: reason.trim(),
+          subject,
+          description,
+          zendeskTicketNumber: '#TEST',
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && typeof data.sellerMessage === 'string') {
+        seller.setSellerMessage(data.sellerMessage);
+      }
+    } catch {
+      /* best-effort preview — the step still renders without a draft */
+    } finally {
+      setTestSellerLoading(false);
     }
   };
 
@@ -337,7 +561,7 @@ export function useReceivingClaimController({
     claimType,
     setClaimType,
     reason,
-    setReason,
+    archiveSubmitting,
     claimTypeItems,
     claimStepStates,
     sellerStepReady,
@@ -349,6 +573,17 @@ export function useReceivingClaimController({
     submitting,
     draftBody,
     submitInternal,
+    archiveToNas,
+    // dry-run tests
+    testCreating,
+    testResult,
+    testSellerLoading,
+    testSellerPreview,
+    submitTestCreate,
+    submitTestSeller,
+    clearTestOutputs,
+    continueTest,
+    archiveState,
     // link flow
     linking,
     unlinking,
@@ -359,6 +594,7 @@ export function useReceivingClaimController({
     template,
     search,
     seller,
+    reply,
   };
 }
 

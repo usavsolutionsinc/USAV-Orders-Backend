@@ -8,7 +8,13 @@ import {
   type ClaimType,
 } from '@/lib/zendesk-claim-template';
 import { createTicket, uploadFileToZendesk, ZendeskNotConfiguredError, addTicketComment } from '@/lib/zendesk';
-import { readPhotoBytes, archiveClaimToFolder, archiveClaimViaAgent, poReceivingLink } from '@/lib/receiving-claim-photos';
+import {
+  readPhotoBytes,
+  archiveClaimToFolder,
+  archiveClaimViaAgent,
+  poReceivingLink,
+  resolveClaimArchivePhotoUrl,
+} from '@/lib/receiving-claim-photos';
 import { readPhotoBytesById } from '@/lib/photos/read-bytes';
 import {
   getReceivingPhotosByIds,
@@ -19,7 +25,6 @@ import { linkPhoto } from '@/lib/photos/service';
 import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
-import { tenantQuery } from '@/lib/tenancy/db';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getNasStorageTarget } from '@/lib/tenancy/settings';
 import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
@@ -40,6 +45,11 @@ interface ClaimRequest {
   sellerMessage?: string;
   /** Photo row ids (from /api/receiving-photos) to upload to Zendesk as files. */
   attachPhotoIds?: number[];
+  /**
+   * Operator "Test create": assemble the ticket exactly as it would be filed,
+   * but create nothing — no Zendesk ticket, no NAS archive, no DB writes.
+   */
+  dryRun?: boolean;
 }
 
 /**
@@ -71,25 +81,47 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const editedSubject = typeof body.subject === 'string' ? body.subject.trim() : '';
     const editedDescription = typeof body.description === 'string' ? body.description.trim() : '';
 
-    let subject: string;
-    let description: string;
-    if (editedSubject && editedDescription) {
-      subject = editedSubject;
-      description = editedDescription;
-    } else {
-      const template = await buildReceivingClaimTemplate({
-        receivingId,
-        lineId,
-        claimType,
-        reason: body.reason,
-        poReceivingLink: poReceivingLink(req, receivingId),
-      });
-      subject = editedSubject || template.subject;
-      description = editedDescription || template.description;
-    }
+    // Always build the template — even when the operator edited the subject/body
+    // — so we have the PO#/tracking to name the photo attachments after the PO.
+    const template = await buildReceivingClaimTemplate({
+      receivingId,
+      lineId,
+      claimType,
+      reason: body.reason,
+      poReceivingLink: poReceivingLink(req, receivingId),
+    });
+    const subject = editedSubject || template.subject;
+    const description = editedDescription || template.description;
+
+    // Label every uploaded image with the PO# (falls back to tracking, then the
+    // receiving id) so the attachments in Zendesk read e.g. "PO-06-14788_001.jpg".
+    const fileLabel = (
+      template.poNumber
+        ? `PO-${template.poNumber}`
+        : template.tracking
+          ? `TRK-${template.tracking}`
+          : `RCV-${receivingId}`
+    ).replace(/[^A-Za-z0-9._-]+/g, '-');
 
     const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
     const entityId = lineId != null ? lineId : receivingId;
+
+    // Dry-run ("Test create"): we've assembled the exact subject/body that would
+    // be filed; now short-circuit before any side-effect — no Zendesk ticket, no
+    // NAS archive, no DB writes, no share pack. Lets staff rehearse the flow.
+    if (body.dryRun === true) {
+      const attachCount = Array.isArray(body.attachPhotoIds)
+        ? body.attachPhotoIds.map(Number).filter((n) => Number.isFinite(n) && n > 0).length
+        : 0;
+      return NextResponse.json({
+        success: true,
+        dryRun: true,
+        ticketNumber: '#TEST',
+        subject,
+        description,
+        attachCount,
+      });
+    }
 
     // Idempotency: a per-submit key (client UUID via Idempotency-Key header)
     // dedupes double-clicks / network retries so we never file two tickets for
@@ -112,12 +144,20 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             receivingId,
             photoIds: ids,
           });
+          let seq = 0;
           for (const row of photoRows) {
             let pb = await readPhotoBytesById(row.id, ctx.organizationId);
             if (!pb) pb = await readPhotoBytes(String(row.url || ''));
             if (!pb) continue;
+            seq += 1;
+            const ext = (
+              /\.([A-Za-z0-9]+)$/.exec(pb.filename)?.[1] ||
+              pb.contentType.split('/')[1] ||
+              'jpg'
+            ).toLowerCase();
+            const fileName = `${fileLabel}_${String(seq).padStart(3, '0')}.${ext}`;
             try {
-              uploads.push(await uploadFileToZendesk(pb.filename, pb.bytes, pb.contentType));
+              uploads.push(await uploadFileToZendesk(fileName, pb.bytes, pb.contentType));
             } catch (upErr) {
               console.warn('[zendesk-claim] photo upload failed', row.id, upErr);
             }
@@ -164,28 +204,19 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // so a hiccup never fails the claim — but we DO surface a warning so a
         // claim whose photos silently didn't archive is visible to the operator.
         let archiveWarning: string | null = null;
+        let archiveResult: { folder: string; copied: number; total: number } | null = null;
         try {
-          const allPhotosRes = await tenantQuery<{ legacy_url: string | null }>(
-            ctx.organizationId,
-            `SELECT ps.legacy_url
-               FROM photos p
-               JOIN photo_entity_links l
-                 ON l.photo_id = p.id AND l.organization_id = p.organization_id
-               JOIN photo_storage ps
-                 ON ps.photo_id = p.id AND ps.organization_id = p.organization_id AND ps.is_primary
-               LEFT JOIN receiving_lines rl
-                      ON l.entity_type = 'RECEIVING_LINE' AND rl.id = l.entity_id
-              WHERE p.organization_id = $1
-                AND (
-                  (l.entity_type = 'RECEIVING' AND l.entity_id = $2)
-                  OR (l.entity_type = 'RECEIVING_LINE' AND rl.receiving_id = $2)
-                )
-              ORDER BY p.created_at ASC`,
-            [ctx.organizationId, receivingId],
-          );
-          const allPhotos = allPhotosRes.rows
-            .map((r) => ({ url: String(r.legacy_url || '') }))
-            .filter((p) => p.url);
+          const allPhotoIds = await listAllReceivingPhotoIds(ctx.organizationId, receivingId);
+          const allPhotos = (
+            await Promise.all(
+              allPhotoIds.map(async (photoId) => ({
+                photoId,
+                url: await resolveClaimArchivePhotoUrl(photoId, ctx.organizationId),
+              })),
+            )
+          )
+            .filter((p): p is { photoId: number; url: string } => Boolean(p.url))
+            .map((p) => ({ url: p.url }));
           const info = [
             `Zendesk Ticket: ${ticketNumber}`,
             `URL: ${zendeskTicketUrl(ticket.id)}`,
@@ -193,7 +224,8 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             `Claim type: ${CLAIM_TYPE_LABEL[claimType]}`,
             `Filed: ${new Date().toISOString()}`,
             `Photos uploaded to Zendesk: ${uploads.length}`,
-            `Photos archived locally: ${allPhotos.length}`,
+            `Photos on claim record: ${allPhotoIds.length}`,
+            `Photos resolved for NAS archive: ${allPhotos.length}`,
             '',
             '--- Ticket body ---',
             description,
@@ -215,6 +247,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 ticketId: ticket.id,
                 photos: allPhotos,
                 info,
+                organizationId: ctx.organizationId,
                 archiveRoot: claimTarget.root,
                 archiveFolder: claimTarget.folder,
               })
@@ -223,8 +256,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             archiveWarning = 'Photos were NOT archived to the NAS (archive agent/mount unavailable).';
             console.warn('[zendesk-claim] archive skipped — no agent/mount configured');
           } else {
-            console.log(`[zendesk-claim] archived ${archived.copied}/${archived.total} photo(s) → ${archived.folder}`);
-            if (archived.copied < archived.total) {
+            archiveResult = archived;
+            console.warn(`[zendesk-claim] archived ${archived.copied}/${archived.total} photo(s) → ${archived.folder}`);
+            if (allPhotos.length < allPhotoIds.length) {
+              archiveWarning = `Only ${archived.copied} of ${allPhotoIds.length} photos archived to the NAS. ${allPhotoIds.length - allPhotos.length} photo source(s) could not be resolved for archiving.`;
+            } else if (archived.copied < archived.total) {
               archiveWarning = `Only ${archived.copied} of ${archived.total} photos archived to the NAS.`;
             }
           }
@@ -329,6 +365,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             ticketNumber,
             ticketUrl: zendeskTicketUrl(ticket.id),
             archiveWarning,
+            // Archive result so the client can DISPLAY the NAS backup status on
+            // the seller step (and offer a retry when it failed/was partial).
+            archiveOk: !!archiveResult && !archiveWarning,
+            archiveCopied: archiveResult?.copied ?? 0,
+            archiveTotal: archiveResult?.total ?? 0,
+            archiveFolder: archiveResult?.folder ?? null,
             sharePackUrl,
           },
         };

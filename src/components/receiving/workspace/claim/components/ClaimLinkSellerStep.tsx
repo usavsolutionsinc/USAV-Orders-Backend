@@ -2,6 +2,7 @@ import type { ReceivingClaimController } from '../hooks/useReceivingClaimControl
 import { ClaimTicketPicker } from './ClaimTicketPicker';
 import { ClaimFiledBanner } from './ClaimFiledBanner';
 import { ClaimSellerMessagePanel } from './ClaimSellerMessagePanel';
+import { ClaimTicketReply } from './ClaimTicketReply';
 
 /**
  * The seller step (and the link-mode picker that precedes it): pick/confirm a
@@ -25,6 +26,12 @@ export function ClaimLinkSellerStep({ c }: { c: ReceivingClaimController }) {
       ) : null}
 
       <ClaimSellerMessagePanel seller={c.seller} filedTicket={c.filedTicket} />
+
+      <ClaimTicketReply
+        reply={c.reply}
+        filedTicket={c.filedTicket}
+        prefill={c.seller.sellerMessage}
+      />
     </>
   );
 }

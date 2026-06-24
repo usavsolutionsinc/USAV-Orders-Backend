@@ -567,6 +567,7 @@ export type ClaimType =
   | 'missing'
   | 'wrong_item'
   | 'vendor_defect'
+  | 'return'
   | 'unfound'
   | 'repair_service';
 export type ClaimSeverity = 'low' | 'medium' | 'high';
@@ -583,7 +584,10 @@ export const CLAIM_TYPE_OPTIONS: ReadonlyArray<{
   { value: 'missing',        label: 'Missing',        active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
   { value: 'wrong_item',     label: 'Wrong item',     active: 'bg-violet-600 text-white',  inactive: 'bg-violet-50 text-violet-700' },
   { value: 'vendor_defect',  label: 'Vendor defect',  active: 'bg-orange-600 text-white',  inactive: 'bg-orange-50 text-orange-700' },
-  // Auto-selected by ReceivingClaimModal when row.receiving_source === 'unmatched'.
+  // Auto-selected by ReceivingClaimModal for RETURN-type intake.
+  { value: 'return',         label: 'Return',         active: 'bg-teal-600 text-white',    inactive: 'bg-teal-50 text-teal-700' },
+  // Auto-selected by ReceivingClaimModal when row.receiving_source === 'unmatched'
+  // and no PO# is present; hidden once a PO# is found/filled.
   { value: 'unfound',        label: 'Unfound',        active: 'bg-yellow-600 text-white',  inactive: 'bg-yellow-50 text-yellow-700' },
   // Repair routing — entry point for warranty / in-house bench work.
   { value: 'repair_service', label: 'Repair service', active: 'bg-sky-600 text-white',     inactive: 'bg-sky-50 text-sky-700' },

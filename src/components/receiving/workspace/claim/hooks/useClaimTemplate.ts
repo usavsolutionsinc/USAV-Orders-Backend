@@ -23,17 +23,15 @@ interface Params {
   receivingId: number | null | undefined;
   lineId: number | null | undefined;
   claimType: ClaimType;
-  reason: string;
 }
 
 /**
  * Owns the editable Zendesk ticket template. Fetches the server-rendered
- * preview (PO #, tracking, photo URLs, line summary) whenever inputs change —
- * debounced 250ms so typing in "reason" doesn't hammer the endpoint — and stops
- * overwriting a field once the operator has touched it. "Reset to template"
- * clears the touched flags and forces a refetch.
+ * preview (PO #, tracking, photo URLs, line summary) when the modal/claim type
+ * changes, and stops overwriting a field once the operator has touched it.
+ * "Reset to template" clears the touched flags and forces a refetch.
  */
-export function useClaimTemplate({ open, active, receivingId, lineId, claimType, reason }: Params): UseClaimTemplate {
+export function useClaimTemplate({ open, active, receivingId, lineId, claimType }: Params): UseClaimTemplate {
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -62,41 +60,37 @@ export function useClaimTemplate({ open, active, receivingId, lineId, claimType,
   useEffect(() => {
     if (!open || !active || !receivingId) return;
     const ctrl = new AbortController();
-    const handle = window.setTimeout(() => {
-      setPreviewLoading(true);
-      fetch('/api/receiving/zendesk-claim/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receivingId,
-          lineId,
-          claimType,
-          reason: reason.trim(),
-        }),
-        signal: ctrl.signal,
+    setPreviewLoading(true);
+    fetch('/api/receiving/zendesk-claim/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        receivingId,
+        lineId,
+        claimType,
+      }),
+      signal: ctrl.signal,
+    })
+      .then((r) => r.json().catch(() => null))
+      .then((data) => {
+        if (!data?.success) return;
+        if (!subjectTouched.current && typeof data.subject === 'string') {
+          setSubject(data.subject);
+        }
+        if (!descriptionTouched.current && typeof data.description === 'string') {
+          setDescription(data.description);
+        }
       })
-        .then((r) => r.json().catch(() => null))
-        .then((data) => {
-          if (!data?.success) return;
-          if (!subjectTouched.current && typeof data.subject === 'string') {
-            setSubject(data.subject);
-          }
-          if (!descriptionTouched.current && typeof data.description === 'string') {
-            setDescription(data.description);
-          }
-        })
-        .catch((err) => {
-          if ((err as Error)?.name !== 'AbortError') {
-            // Preview is best-effort — operator can still type their own.
-          }
-        })
-        .finally(() => setPreviewLoading(false));
-    }, 250);
+      .catch((err) => {
+        if ((err as Error)?.name !== 'AbortError') {
+          // Preview is best-effort — operator can still type their own.
+        }
+      })
+      .finally(() => setPreviewLoading(false));
     return () => {
       ctrl.abort();
-      window.clearTimeout(handle);
     };
-  }, [open, active, receivingId, lineId, claimType, reason, resetNonce]);
+  }, [open, active, receivingId, lineId, claimType, resetNonce]);
 
   const onSubjectChange = (v: string) => {
     subjectTouched.current = true;

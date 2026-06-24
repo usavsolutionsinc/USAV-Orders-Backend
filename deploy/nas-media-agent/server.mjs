@@ -3,6 +3,7 @@ import http from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve, sep } from 'node:path';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +21,7 @@ const ROOTS = {
   shipping: cleanRoot(process.env.NAS_ROOT_SHIPPING || '/Volumes/Shipping/2026'),
   claims: cleanRoot(process.env.NAS_ROOT_CLAIMS || '/Volumes/USAV Media/Puchasing photos/2026/2 Zendesk 2026'),
 };
+const ORG_ROOTS = new Map();
 
 const IMAGE_RE = /\.(jpe?g|png|webp|gif)$/i;
 const WRITE_RE = /\.(jpe?g|png|webp|gif|pdf|txt)$/i;
@@ -88,10 +90,26 @@ function rootPath(rootKey) {
   return ROOTS[rootKey];
 }
 
+function requestOrgId(req) {
+  return String(req.headers['x-nas-org-id'] || '').trim();
+}
+
+function orgRootPath(orgId, rootKey) {
+  if (!orgId) return null;
+  const roots = ORG_ROOTS.get(orgId);
+  if (!roots || !Object.hasOwn(roots, rootKey)) return null;
+  return roots[rootKey];
+}
+
 /** Per-request root override from Vercel (Admin → NAS Photos workflow roots). */
 function effectiveRoot(req, rootKey) {
-  const fallback = rootPath(rootKey);
+  const orgId = requestOrgId(req);
+  const orgScoped = orgRootPath(orgId, rootKey);
+  const fallback = orgScoped || rootPath(rootKey);
   if (!fallback) return null;
+  // When an org id is present, NEVER allow a different caller-supplied root to
+  // escape that org's synced root mapping.
+  if (orgScoped) return orgScoped;
   const headerRoot = String(req.headers['x-nas-root'] || '').trim();
   return requestRootPath(headerRoot, fallback);
 }
@@ -288,8 +306,12 @@ async function readPhotoBytes(rawUrl) {
   if (/^https?:\/\//i.test(String(rawUrl || ''))) {
     const res = await fetch(rawUrl);
     if (!res.ok || !res.body) return null;
+    const stream =
+      typeof Readable.fromWeb === 'function' && typeof res.body.getReader === 'function'
+        ? Readable.fromWeb(res.body)
+        : res.body;
     return {
-      stream: res.body,
+      stream,
       filename: basename(new URL(rawUrl).pathname) || 'photo.jpg',
     };
   }
@@ -330,7 +352,12 @@ async function handleArchive(req, res) {
     try {
       await pipeline(source.stream, createWriteStream(join(folder, name)));
       copied++;
-    } catch {
+    } catch (err) {
+      console.warn('[nas-media-agent] archive copy failed', {
+        url: photo?.url,
+        name,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Keep archiving the rest of the ticket.
     }
   }
@@ -367,12 +394,22 @@ async function handlePutRoots(req, res) {
   } catch {
     return json(res, 400, { ok: false, error: 'invalid JSON' });
   }
+  const orgId = requestOrgId(req);
+  const targetRoots = orgId
+    ? { ...(ORG_ROOTS.get(orgId) || ROOTS) }
+    : ROOTS;
   for (const key of ['receiving', 'shipping', 'claims']) {
     if (typeof body[key] === 'string' && body[key].trim()) {
-      const next = requestRootPath(body[key], ROOTS[key]);
-      if (next) ROOTS[key] = next;
+      const next = requestRootPath(body[key], targetRoots[key]);
+      if (next) targetRoots[key] = next;
     }
   }
+  if (orgId) {
+    ORG_ROOTS.set(orgId, targetRoots);
+    console.log('[nas-media-agent] org roots updated', { orgId, roots: targetRoots });
+    return json(res, 200, { ok: true, orgId, roots: targetRoots });
+  }
+  Object.assign(ROOTS, targetRoots);
   console.log('[nas-media-agent] roots updated', ROOTS);
   return json(res, 200, { ok: true, roots: ROOTS });
 }
@@ -388,7 +425,14 @@ async function route(req, res) {
 
   if (url.pathname === '/roots') {
     if (req.method === 'PUT') return handlePutRoots(req, res);
-    if (req.method === 'GET') return json(res, 200, { ok: true, roots: ROOTS });
+    if (req.method === 'GET') {
+      const orgId = requestOrgId(req);
+      return json(res, 200, {
+        ok: true,
+        roots: orgId ? (ORG_ROOTS.get(orgId) || null) : ROOTS,
+        ...(orgId ? { orgId } : {}),
+      });
+    }
   }
   if (url.pathname === '/archive' && req.method === 'POST') {
     return handleArchive(req, res);

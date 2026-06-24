@@ -135,7 +135,7 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   if ('nasStorageTargets' in patch) {
     const org = await getOrganization(ctx.organizationId as OrgId);
     if (org) {
-      agentSync = await syncAgentRootsFromSettings(org.settings);
+      agentSync = await syncAgentRootsFromSettings(org.settings, ctx.organizationId as OrgId);
     }
   }
 

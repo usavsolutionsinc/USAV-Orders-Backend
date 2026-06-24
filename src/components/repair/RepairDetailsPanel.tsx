@@ -10,15 +10,34 @@
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Clock, Pencil } from '../Icons';
-import { PanelActionBar } from '@/components/shipped/details-panel/PanelActionBar';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
-import type { RepairDetailsPanelProps } from './details-panel/repair-details-shared';
+import {
+  PaneHeader,
+  PaneHeaderActionBar,
+  PaneHeaderCloseButton,
+  PaneHeaderIconBadge,
+  PaneHeaderLabel,
+  PaneHeaderStatusPill,
+  PaneHeaderTabs,
+} from '@/components/ui/pane-header';
+import {
+  REPAIR_TABS,
+  type RepairDetailsPanelProps,
+} from './details-panel/repair-details-shared';
 import { useRepairDetailsPanel } from './details-panel/useRepairDetailsPanel';
-import { RepairStatusSection } from './details-panel/RepairStatusSection';
-import { RepairInfoSections } from './details-panel/RepairInfoSections';
 import { RepairLinkageSection } from './details-panel/RepairLinkageSection';
+import { RepairOverviewTab } from './details-panel/RepairOverviewTab';
+import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
+
+function getRepairStatusTone(status: string | null | undefined) {
+  if (!status) return 'neutral' as const;
+  if (status === 'Done') return 'emerald' as const;
+  if (status.includes('Awaiting')) return 'amber' as const;
+  if (status.includes('Pending')) return 'blue' as const;
+  return 'neutral' as const;
+}
 
 export function RepairDetailsPanel({
   repair,
@@ -30,6 +49,7 @@ export function RepairDetailsPanel({
   disableMoveDown = false,
 }: RepairDetailsPanelProps) {
   const c = useRepairDetailsPanel({ repair, onUpdate });
+  const hasSavedNotes = String(repair.notes || '').trim().length > 0;
 
   return (
     <>
@@ -38,122 +58,160 @@ export function RepairDetailsPanel({
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
-        transition={{ type: 'spring', damping: 25, stiffness: 120 }}
-        className="fixed right-0 top-0 h-screen w-[420px] bg-white border-l border-gray-200 shadow-2xl z-panel flex flex-col overflow-hidden"
+        transition={{ type: 'spring', damping: 25, stiffness: 350, mass: 0.5 }}
+        className="fixed right-0 top-0 z-panel flex h-screen w-[420px] flex-col overflow-hidden border-l border-gray-200 bg-white shadow-[-20px_0_50px_rgba(0,0,0,0.05)]"
       >
-      {/* Header */}
-      <div className="shrink-0 border-b border-gray-100 bg-white p-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-            <Clock className="w-5 h-5 text-orange-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            {c.isEditingTicket ? (
-              <input
-                ref={c.ticketInputRef}
-                type="text"
-                value={c.ticketNumber}
-                onChange={(e) => c.setTicketNumber(e.target.value)}
-                onBlur={c.handleSaveTicket}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                  }
-                  if (e.key === 'Escape') {
-                    c.setTicketNumber(repair.ticket_number || '');
-                    c.setIsEditingTicket(false);
-                  }
-                }}
-                className="text-xl font-black text-gray-900 tracking-tight leading-none w-full border-none focus:ring-0 p-0 bg-transparent uppercase"
-                placeholder="TK Number"
-                disabled={c.isSavingTicket}
+        <PaneHeader
+          className="border-gray-100 bg-white/90 backdrop-blur-xl"
+          rowClassName="px-6"
+          leftSlot={
+            <>
+              <PaneHeaderIconBadge Icon={Clock} bg="bg-orange-100" tint="text-orange-600" />
+              <PaneHeaderLabel
+                eyebrow={c.isSavingTicket ? 'Saving ticket...' : 'Repair ticket'}
+                value={
+                  c.isEditingTicket ? (
+                    <input
+                      ref={c.ticketInputRef}
+                      type="text"
+                      value={c.ticketNumber}
+                      onChange={(e) => c.setTicketNumber(e.target.value)}
+                      onBlur={c.handleSaveTicket}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        }
+                        if (e.key === 'Escape') {
+                          c.setTicketNumber(repair.ticket_number || '');
+                          c.setIsEditingTicket(false);
+                        }
+                      }}
+                      className="w-full border-none bg-transparent p-0 text-sm font-black uppercase tracking-tight text-gray-900 focus:ring-0"
+                      placeholder="TK Number"
+                      disabled={c.isSavingTicket}
+                    />
+                  ) : c.zendeskTicketUrl ? (
+                    <a
+                      href={c.zendeskTicketUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block truncate transition-colors hover:text-blue-600"
+                      title={`Open Zendesk ticket ${c.ticketNumber}`}
+                    >
+                      {c.ticketNumber}
+                    </a>
+                  ) : (
+                    <span className="text-gray-400">TK Number</span>
+                  )
+                }
+                valueTitle={c.ticketNumber || 'TK Number'}
               />
-            ) : c.zendeskTicketUrl ? (
-              <a
-                href={c.zendeskTicketUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-xl font-black text-gray-900 tracking-tight leading-none uppercase hover:text-blue-600 transition-colors truncate"
-                title={`Open Zendesk ticket ${c.ticketNumber}`}
+            </>
+          }
+          rightSlot={
+            <>
+              <button
+                type="button"
+                onClick={() => c.setIsEditingTicket(true)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
+                aria-label="Edit ticket number"
+                disabled={c.isSavingTicket}
               >
-                {c.ticketNumber}
-              </a>
-            ) : (
-              <p className="text-xl font-black text-gray-400 tracking-tight leading-none uppercase">
-                TK Number
-              </p>
-            )}
-            <p className="text-micro font-bold text-orange-600 uppercase tracking-widest mt-1">
-              {c.isSavingTicket ? 'Saving...' : 'Repair In-Progress'}
-            </p>
-          </div>
-          <button
-            onClick={() => c.setIsEditingTicket(true)}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-all shrink-0"
-            aria-label="Edit ticket number"
-            disabled={c.isSavingTicket}
-          >
-            <Pencil className="w-4 h-4 text-gray-600" />
-          </button>
+                <Pencil className="h-4 w-4" />
+              </button>
+              <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close repair details" />
+            </>
+          }
+          belowSlot={
+            <>
+              <div className="flex flex-wrap items-center gap-2 px-6 pb-2">
+                <PaneHeaderStatusPill
+                  tone={getRepairStatusTone(repair.status)}
+                  pulse
+                  className={
+                    repair.status === 'Repaired, Contact Customer'
+                      ? 'text-[10px] tracking-[0.14em]'
+                      : undefined
+                  }
+                >
+                  {repair.status || 'No status'}
+                </PaneHeaderStatusPill>
+              </div>
+              <div className="px-6 py-2">
+                <PaneHeaderActionBar
+                  iconOnly
+                  variant="card"
+                  actions={c.panelActions.map((action) => ({
+                    key: action.key,
+                    label: action.label,
+                    icon: <span className={action.toneClassName}>{action.icon}</span>,
+                    onClick: action.onAction,
+                  }))}
+                  onPrev={onMoveUp}
+                  onNext={onMoveDown}
+                  prevDisabled={disableMoveUp}
+                  nextDisabled={disableMoveDown}
+                  prevTitle="Move up a row"
+                  nextTitle="Move down a row"
+                />
+              </div>
+              <PaneHeaderTabs
+                tabs={REPAIR_TABS}
+                value={c.activeTab}
+                onChange={c.setActiveTab}
+                className="px-6"
+              />
+            </>
+          }
+        />
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {c.activeTab === 'overview' ? <RepairOverviewTab repair={repair} c={c} /> : null}
+          {c.activeTab === 'links' ? <RepairLinkageSection c={c} /> : null}
         </div>
-      </div>
 
-      <PanelActionBar
-        onClose={onClose}
-        onMoveUp={onMoveUp}
-        onMoveDown={onMoveDown}
-        disableMoveUp={disableMoveUp}
-        disableMoveDown={disableMoveDown}
-        actions={c.panelActions}
-      />
+        <div className="shrink-0 bg-white pb-8">
+          {(c.isEditingNotes || hasSavedNotes) ? (
+            c.isEditingNotes ? (
+              <ShippedNotesComposer
+                value={c.notes}
+                onChange={c.setNotes}
+                onCancel={() => {
+                  c.setNotes(repair.notes || '');
+                  c.setIsEditingNotes(false);
+                }}
+                onSubmit={c.handleSaveNotes}
+                isSaving={c.isSaving}
+              />
+            ) : (
+              <ShippedNotesComposer
+                value={String(repair.notes || '')}
+                readOnly
+                onClick={() => c.setIsEditingNotes(true)}
+              />
+            )
+          ) : null}
+          <section className="mx-8 pt-2">
+            <DeleteButton
+              onConfirm={c.handleDelete}
+              onDeleted={onClose}
+              label="Delete"
+              armedLabel="Click Again To Confirm"
+              className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 text-white text-micro font-black uppercase tracking-wider transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </section>
+        </div>
 
-      {/* Content sections */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <RepairStatusSection repair={repair} c={c} />
-        <RepairInfoSections repair={repair} />
-        <RepairLinkageSection c={c} />
-
-        {/* Editable Notes */}
-        <section>
-          <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-            Notes
-          </h3>
-          <textarea
-            value={c.notes}
-            onChange={(e) => c.setNotes(e.target.value)}
-            onBlur={c.handleSaveNotes}
-            className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
-            rows={4}
-            placeholder="Add notes about this repair..."
-            disabled={c.isSaving}
-          />
-          {c.isSaving && (
-            <p className="text-xs text-gray-500 mt-2">Saving...</p>
-          )}
-        </section>
-
-        {/* Danger zone — soft-cancel (delete) this repair via shared DeleteButton. */}
-        <section className="border-t border-gray-200 pt-4">
-          <DeleteButton
-            onConfirm={c.handleDelete}
-            onDeleted={onClose}
-            label="Delete Repair"
-            armedLabel="Click again to confirm"
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-        </section>
-      </div>
-
-      {c.isMounted && c.showPickupFlow
-        ? createPortal(
-            <RepairPickupFlow
-              repair={repair}
-              onUpdate={onUpdate}
-              onClose={() => c.setShowPickupFlow(false)}
-            />,
-            document.body,
-          )
-        : null}
+        {c.isMounted && c.showPickupFlow
+          ? createPortal(
+              <RepairPickupFlow
+                repair={repair}
+                onUpdate={onUpdate}
+                onClose={() => c.setShowPickupFlow(false)}
+              />,
+              document.body,
+            )
+          : null}
       </motion.div>
     </>
   );

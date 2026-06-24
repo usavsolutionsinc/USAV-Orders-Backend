@@ -6,10 +6,7 @@ import type { RepairDetailsController } from './useRepairDetailsPanel';
 export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
   return (
     <section>
-      <div className="flex items-center justify-between mb-3 border-b border-gray-200 pb-2">
-        <h3 className="text-micro font-black uppercase tracking-wider text-gray-500">
-          Linkage
-        </h3>
+      <div className="flex items-center justify-end mb-3">
         {c.hasAnyLink && (
           <button
             type="button"

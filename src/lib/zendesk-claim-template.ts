@@ -10,6 +10,7 @@ export type ClaimType =
   | 'missing'
   | 'wrong_item'
   | 'vendor_defect'
+  | 'return'
   | 'unfound'
   | 'repair_service';
 export type ClaimSeverity = 'low' | 'medium' | 'high';
@@ -19,6 +20,7 @@ export const CLAIM_TYPE_LABEL: Record<ClaimType, string> = {
   missing: 'Missing item',
   wrong_item: 'Wrong item',
   vendor_defect: 'Vendor defect',
+  return: 'Return',
   unfound: 'Unfound — no PO match',
   repair_service: 'Repair service',
 };
@@ -28,6 +30,18 @@ export const CLAIM_SEVERITY_LABEL: Record<ClaimSeverity, string> = {
   medium: 'Medium',
   high: 'High',
 };
+
+/** Render an unboxing timestamp in the shop's local time for the ticket body. */
+function formatUnboxedAt(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+}
 
 export interface ClaimTemplateInput {
   receivingId: number;
@@ -41,6 +55,10 @@ export interface ClaimTemplateInput {
 export interface ClaimTemplateResult {
   subject: string;
   description: string;
+  /** Real PO# when present (in the title), else null. Drives ticket filenames. */
+  poNumber: string | null;
+  /** Raw tracking number for the carton, or null. */
+  tracking: string | null;
 }
 
 export async function buildReceivingClaimTemplate(
@@ -59,12 +77,15 @@ export async function buildReceivingClaimTemplate(
     ? `SELECT r.id,
             r.source_platform,
             r.intake_type,
+            r.unboxed_at,
+            su.name AS unboxed_by_name,
             s.tracking_number_raw AS tracking_number,
             COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
             COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id,
             rl.receiving_type
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
+     LEFT JOIN staff su ON su.id = r.unboxed_by AND su.organization_id = r.organization_id
      LEFT JOIN receiving_lines rl
             ON rl.receiving_id = r.id
            AND rl.organization_id = r.organization_id
@@ -76,12 +97,15 @@ export async function buildReceivingClaimTemplate(
     : `SELECT r.id,
             r.source_platform,
             r.intake_type,
+            r.unboxed_at,
+            su.name AS unboxed_by_name,
             s.tracking_number_raw AS tracking_number,
             COALESCE(rl.zoho_purchaseorder_number, r.zoho_purchaseorder_number) AS zoho_purchaseorder_number,
             COALESCE(rl.zoho_purchaseorder_id, r.zoho_purchaseorder_id) AS zoho_purchaseorder_id,
             rl.receiving_type
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers s ON s.id = r.shipment_id
+     LEFT JOIN staff su ON su.id = r.unboxed_by
      LEFT JOIN receiving_lines rl
             ON rl.receiving_id = r.id
            AND ($2::int IS NULL OR rl.id = $2)
@@ -96,6 +120,8 @@ export async function buildReceivingClaimTemplate(
         id: number;
         source_platform: string | null;
         intake_type: string | null;
+        unboxed_at: string | Date | null;
+        unboxed_by_name: string | null;
         tracking_number: string | null;
         zoho_purchaseorder_number: string | null;
         zoho_purchaseorder_id: string | null;
@@ -103,6 +129,66 @@ export async function buildReceivingClaimTemplate(
       }
     | undefined;
   if (!carton) throw new Error('Receiving not found');
+
+  // Serials scanned against the carton/line during unboxing. serial_units is the
+  // master the receiving pipeline writes to. Best-effort — a serial-read hiccup
+  // must never block filing a claim. Scope to the line when one is given.
+  let serials: string[] = [];
+  try {
+    // Receiving serials live in two stores, both keyed to the line: serial_units
+    // (origin_receiving_line_id — NOTE: this table has NO receiving_line_id
+    // column; that linkage is origin_receiving_line_id only) and
+    // tech_serial_numbers (station_source='RECEIVING', receiving_line_id). We
+    // UNION both so a serial shows even if one store lags the other. A CTE
+    // resolves the carton's lines once for both halves.
+    const serialSql = orgId
+      ? `WITH lines AS (
+           SELECT id FROM receiving_lines WHERE receiving_id = $1 AND organization_id = $3
+         )
+         SELECT DISTINCT serial_number FROM (
+           SELECT BTRIM(tsn.serial_number) AS serial_number
+             FROM tech_serial_numbers tsn
+            WHERE tsn.station_source = 'RECEIVING'
+              AND tsn.organization_id = $3
+              AND tsn.receiving_line_id IN (SELECT id FROM lines)
+              AND ($2::int IS NULL OR tsn.receiving_line_id = $2)
+           UNION
+           SELECT BTRIM(su.serial_number) AS serial_number
+             FROM serial_units su
+            WHERE su.organization_id = $3
+              AND su.origin_receiving_line_id IN (SELECT id FROM lines)
+              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+         ) s
+         WHERE BTRIM(COALESCE(serial_number, '')) <> ''
+         ORDER BY serial_number
+         LIMIT 50`
+      : `WITH lines AS (
+           SELECT id FROM receiving_lines WHERE receiving_id = $1
+         )
+         SELECT DISTINCT serial_number FROM (
+           SELECT BTRIM(tsn.serial_number) AS serial_number
+             FROM tech_serial_numbers tsn
+            WHERE tsn.station_source = 'RECEIVING'
+              AND tsn.receiving_line_id IN (SELECT id FROM lines)
+              AND ($2::int IS NULL OR tsn.receiving_line_id = $2)
+           UNION
+           SELECT BTRIM(su.serial_number) AS serial_number
+             FROM serial_units su
+            WHERE su.origin_receiving_line_id IN (SELECT id FROM lines)
+              AND ($2::int IS NULL OR su.origin_receiving_line_id = $2)
+         ) s
+         WHERE BTRIM(COALESCE(serial_number, '')) <> ''
+         ORDER BY serial_number
+         LIMIT 50`;
+    const serialRes = orgId
+      ? await tenantQuery(orgId, serialSql, [receivingId, lineId ?? null, orgId])
+      : await pool.query(serialSql, [receivingId, lineId ?? null]);
+    serials = serialRes.rows
+      .map((r: { serial_number: string | null }) => String(r.serial_number ?? '').trim())
+      .filter(Boolean);
+  } catch (err) {
+    console.warn('[zendesk-claim-template] serial lookup failed', err);
+  }
 
   let lineSummary = '';
   if (lineId) {
@@ -150,16 +236,34 @@ export async function buildReceivingClaimTemplate(
     platformLabel && platformLabel !== 'Unknown'
       ? (typeLabel ? `${platformLabel} - ${typeLabel}` : platformLabel)
       : typeLabel || 'Unknown';
-  const subject = `Claim // ${subjectPlatform} // ${CLAIM_TYPE_LABEL[claimType]} // TRK#${trackingRef}`;
+  // Include the PO# in the title when one is present (it's the operator's
+  // primary handle); omit it for unfound cartons where there is no real PO.
+  const poSegment = hasPo ? ` // PO ${poRef}` : '';
+  const subject = `Claim // ${subjectPlatform} // ${CLAIM_TYPE_LABEL[claimType]}${poSegment} // TRK#${trackingRef}`;
+
+  const unboxedByName = String(carton.unboxed_by_name ?? '').trim();
+  const unboxedAtText = formatUnboxedAt(carton.unboxed_at);
 
   const trimmedReason = String(reason ?? '').trim();
+  // Tracking AND the PO# are omitted from the body when they're already in the
+  // subject (TRK#… and // PO …). For unfound cartons (no PO in the title) we
+  // still note the missing PO so the agent sees it.
   const descriptionLines: string[] = [
     `Issue: ${CLAIM_TYPE_LABEL[claimType]}`,
-    `Purchase Order: ${poRef}`,
-    `Tracking: ${trackingRef}`,
+    ...(hasPo ? [] : [`Purchase Order: ${poRef}`]),
     lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,
-    '',
   ];
+  if (serials.length) {
+    descriptionLines.push(`Serial${serials.length > 1 ? 's' : ''}: ${serials.join(', ')}`);
+  }
+  if (unboxedByName && unboxedAtText) {
+    descriptionLines.push(`Unboxed by: ${unboxedByName} · ${unboxedAtText}`);
+  } else if (unboxedByName) {
+    descriptionLines.push(`Unboxed by: ${unboxedByName}`);
+  } else if (unboxedAtText) {
+    descriptionLines.push(`Unboxed: ${unboxedAtText}`);
+  }
+  descriptionLines.push('');
   // Photos ride along as real Zendesk attachments (uploaded at submit from the
   // operator's selection) — no boilerplate line about them in the body. A link
   // back to the carton's receiving workspace gives the agent full context.
@@ -170,7 +274,12 @@ export async function buildReceivingClaimTemplate(
     descriptionLines.push('', 'Claim reason:', trimmedReason, '');
   }
 
-  return { subject, description: descriptionLines.join('\n') };
+  return {
+    subject,
+    description: descriptionLines.join('\n'),
+    poNumber: hasPo ? poRef : null,
+    tracking: carton.tracking_number || null,
+  };
 }
 
 /**

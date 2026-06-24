@@ -11,6 +11,7 @@ import { StaffSwitcherProvider } from "../contexts/StaffSwitcherContext";
 import { SwitchStaffSheet } from "../components/auth/SwitchStaffSheet";
 import { ScanHotkeySync } from "../components/scan/ScanHotkeySync";
 import { ThemeSync } from "../components/theme/ThemeSync";
+import { AuthenticatedAblyProvider } from "../components/providers/AuthenticatedAblyProvider";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import { designTokenStyleText } from '@/styles/tokens';
 import { OfflineBanner } from "../components/station/OfflineBanner";
@@ -52,24 +53,26 @@ export default async function RootLayout({
                 <OfflineBanner />
                 <Providers>
                     <AuthProvider initial={initialUser}>
-                        <ActivityInboxProvider>
-                        <StaffColorsProvider>
-                        <StaffSwitcherProvider>
-                            <HeaderProvider>
-                                <FbaWorkspaceProvider>
-                                    <StudioWorkspaceProvider>
-                                        <ResponsiveLayout>
-                                            {children}
-                                        </ResponsiveLayout>
-                                    </StudioWorkspaceProvider>
-                                </FbaWorkspaceProvider>
-                            </HeaderProvider>
-                            <SwitchStaffSheet />
-                            <ScanHotkeySync />
-                            <ThemeSync />
-                        </StaffSwitcherProvider>
-                        </StaffColorsProvider>
-                        </ActivityInboxProvider>
+                        <AuthenticatedAblyProvider>
+                            <ActivityInboxProvider>
+                            <StaffColorsProvider>
+                            <StaffSwitcherProvider>
+                                <HeaderProvider>
+                                    <FbaWorkspaceProvider>
+                                        <StudioWorkspaceProvider>
+                                            <ResponsiveLayout>
+                                                {children}
+                                            </ResponsiveLayout>
+                                        </StudioWorkspaceProvider>
+                                    </FbaWorkspaceProvider>
+                                </HeaderProvider>
+                                <SwitchStaffSheet />
+                                <ScanHotkeySync />
+                                <ThemeSync />
+                            </StaffSwitcherProvider>
+                            </StaffColorsProvider>
+                            </ActivityInboxProvider>
+                        </AuthenticatedAblyProvider>
                     </AuthProvider>
                 </Providers>
                 <InstallPrompt />

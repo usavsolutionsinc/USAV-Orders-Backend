@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, ExternalLink, Loader2, MessageSquare, Unlink } from '@/components/Icons';
+import { Archive, Clock, ExternalLink, Loader2, MessageSquare, Unlink } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { cn } from '@/utils/_cn';
 import { formatDateTimePST } from '@/utils/date';
@@ -171,6 +171,29 @@ function TicketThreadPanel({
     onError: (err) => toast.error(err.message || 'Could not unlink the ticket'),
   });
 
+  // Archive this carton's photos to the NAS folder named after the ticket (via
+  // the office agent) — the same publish the claim modal does, available here so
+  // it can be (re)triggered from the filed-ticket dropdown.
+  const archive = useMutation<{ folderName: string; copied: number; total: number }, Error>({
+    mutationFn: async () => {
+      if (receivingId == null || ticketId == null) {
+        throw new Error('Missing receiving link');
+      }
+      const res = await fetch('/api/receiving/zendesk-claim/archive-only', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receivingId, lineId, ticketNumber: String(ticketId) }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error || `Request failed (${res.status})`);
+      }
+      return { folderName: json.folderName, copied: json.copied, total: json.total };
+    },
+    onSuccess: (d) => toast.success(`Archived ${d.copied}/${d.total} photo(s) → ${d.folderName}`),
+    onError: (err) => toast.error(err.message || 'Could not archive photos'),
+  });
+
   return (
     <div
       role="dialog"
@@ -253,6 +276,16 @@ function TicketThreadPanel({
         <span className="min-w-0 flex-1 text-[11px] leading-snug text-gray-400">
           Unlinking only removes our reference — the ticket stays in Zendesk.
         </span>
+        <button
+          type="button"
+          disabled={archive.isPending || receivingId == null || ticketId == null}
+          onClick={() => archive.mutate()}
+          title="Archive this carton's photos to the ticket's NAS folder"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+        >
+          {archive.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+          Archive
+        </button>
         <button
           type="button"
           disabled={unlink.isPending || receivingId == null}

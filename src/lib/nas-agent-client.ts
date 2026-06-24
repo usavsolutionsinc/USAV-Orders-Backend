@@ -29,6 +29,11 @@ export function nasRootHeader(root: string | undefined | null): Record<string, s
   return r ? { 'x-nas-root': r } : {};
 }
 
+export function nasOrgHeader(orgId: OrgId | undefined | null): Record<string, string> {
+  const id = String(orgId || '').trim();
+  return id ? { 'x-nas-org-id': id } : {};
+}
+
 export function getNasStorageRoots(settings: OrgSettings): Record<NasStorageTargetKey, string> {
   return {
     receiving: getNasStorageTarget(settings, 'receiving').root,
@@ -43,6 +48,7 @@ export function getNasStorageRoots(settings: OrgSettings): Record<NasStorageTarg
  */
 export async function syncAgentRootsFromSettings(
   settings: OrgSettings,
+  orgId?: OrgId,
 ): Promise<{ ok: boolean; error?: string }> {
   const base = nasAgentUrl();
   const token = nasAgentToken();
@@ -63,6 +69,7 @@ export async function syncAgentRootsFromSettings(
       headers: {
         'content-type': 'application/json',
         'x-agent-token': token,
+        ...nasOrgHeader(orgId),
       },
       body: JSON.stringify(payload),
       cache: 'no-store',
@@ -86,6 +93,7 @@ export async function buildNasAgentProxyHeaders(
   const headers: Record<string, string> = {};
   const token = nasAgentToken();
   if (token) headers['x-agent-token'] = token;
+  Object.assign(headers, nasOrgHeader(organizationId));
   if (!usesNasAgentUpstream(upstreamBase)) return headers;
   try {
     const org = await getOrganization(organizationId);

@@ -91,14 +91,24 @@ export function ReceivingScannedRail({
       autoSelectFirstWhenEmpty
       getStatusDot={getReceivingStatusDot}
       getStatusDotLabel={getReceivingStatusDotLabel}
-      renderQuantity={(row) => (
-        <span className="text-gray-600">
-          {row.quantity_received}/{row.quantity_expected ?? '?'}
-        </span>
-      )}
-      previewQtyLabel="Received"
+      // SCANNED semantics — NOT the unbox rail's Received count. Every row in the
+      // view=scanned feed has quantity_received = 0 by definition (it drops out
+      // the instant it's unboxed), so rendering quantity_received here always
+      // read "0/N" — the bug. A door scan brings the WHOLE carton in physically,
+      // so scanned == expected: a single-line PO reads "1/1". Falls back to 1/?
+      // when the expected qty is unknown. This is what keeps the Prioritize tab
+      // and the unbox Queue (both render this rail) on scanned, not unbox, logic.
+      renderQuantity={(row) => {
+        const expected = row.quantity_expected;
+        return (
+          <span className="text-gray-600">
+            {expected ?? 1}/{expected ?? '?'}
+          </span>
+        );
+      }}
+      previewQtyLabel="Scanned"
       getPreviewQty={(row) => ({
-        current: row.quantity_received,
+        current: row.quantity_expected ?? 1,
         total: row.quantity_expected,
       })}
     />

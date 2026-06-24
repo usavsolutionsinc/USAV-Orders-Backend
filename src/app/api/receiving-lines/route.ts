@@ -584,11 +584,31 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       // off the instant it's unboxed (unboxed_at set, qty>0, or workflow
       // advances), where it surfaces in the unbox/activity rail instead.
       conditions.push(
-        `r.received_at IS NOT NULL
+        // "Scanned" = physically at the dock. received_at is the intended signal,
+        // but the Incoming sync pre-creates a zoho_po receiving row (received_at
+        // NULL) for every issued PO, and historically the door scan's upsert hit
+        // ON CONFLICT and never stamped it — so keying solely on received_at left
+        // the whole Prioritize / unbox Queue empty. The door scan ALWAYS writes a
+        // receiving_scans row, so treat an existing scan as proof of arrival too.
+        // Self-healing for rows scanned before the upsert was fixed; new scans now
+        // stamp received_at directly.
+        `(r.received_at IS NOT NULL
+          OR EXISTS (SELECT 1 FROM receiving_scans rs_scanned WHERE rs_scanned.receiving_id = r.id))
          AND r.unboxed_at IS NULL
          AND COALESCE(rl.quantity_received, 0) = 0
          AND (rl.workflow_status IS NULL
-              OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))`,
+              OR rl.workflow_status IN ('EXPECTED','ARRIVED','MATCHED'))
+         -- …and the line has produced NO units. A serial_unit means the carton
+         -- was already unboxed/labeled/received at the unit level — but a
+         -- unit-level receive doesn't always roll up to the line's
+         -- quantity_received / workflow_status / receiving.unboxed_at, so those
+         -- alone let an already-unboxed carton leak back into the "to unbox"
+         -- queue. Origin-line existence is the authoritative "this was opened"
+         -- signal, so exclude it here.
+         AND NOT EXISTS (
+           SELECT 1 FROM serial_units su_unboxed
+            WHERE su_unboxed.origin_receiving_line_id = rl.id
+         )`,
       );
       // Phase 2: only hide Zoho-received POs when the physical-state-first flag
       // is off OR the operator opted in via the "Hide Zoho-received" toggle

@@ -29,6 +29,7 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
   const [orderNumber, setOrderNumber] = useState(initialShipped.order_id || '');
   const [itemNumber, setItemNumber] = useState(initialShipped.item_number || '');
   const [shippingTrackingNumber, setShippingTrackingNumber] = useState(initialShipped.shipping_tracking_number || '');
+  const [notes, setNotes] = useState(initialShipped.notes || '');
 
   const fieldSave = useOrderFieldSave({
     orderId: shipped.id,
@@ -39,8 +40,10 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
   });
   const {
     isSavingInlineFields,
+    isSavingNotes,
     isSavingShipByDate,
     saveInlineFields: persistInlineFields,
+    saveNotes,
     saveShipByDate,
     resetRefs,
   } = fieldSave;
@@ -52,6 +55,7 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
     setOrderNumber(initialShipped.order_id || '');
     setItemNumber(initialShipped.item_number || '');
     setShippingTrackingNumber(initialShipped.shipping_tracking_number || '');
+    setNotes(initialShipped.notes || '');
     resetRefs(
       initialShipped.order_id || '',
       initialShipped.item_number || '',
@@ -72,11 +76,15 @@ export function useShippedDetailState(initialShipped: ShippedOrder, onUpdate: ()
     setItemNumber,
     shippingTrackingNumber,
     setShippingTrackingNumber,
+    notes,
+    setNotes,
     shipByDate,
     setShipByDate,
     isSavingInlineFields,
+    isSavingNotes,
     isSavingShipByDate,
     saveInlineFields,
+    saveNotes,
     saveShipByDate,
   };
 }
@@ -162,7 +170,7 @@ export interface UseShippedAssignmentOptions {
  * technician / packer option lists, and persists tech/packer/deadline changes
  * (optimistically updating the local order and firing refresh events).
  */
-export function useShippedAssignment({ shipped, setShipped, onUpdate }: UseShippedAssignmentOptions) {
+export function useShippedAssignment({ shipped: _shipped, setShipped, onUpdate }: UseShippedAssignmentOptions) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showAssignmentCard, setShowAssignmentCard] = useState(false);
 

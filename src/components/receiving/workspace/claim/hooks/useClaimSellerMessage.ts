@@ -83,7 +83,9 @@ export function useClaimSellerMessage({
   }, [open, receivingId, lineId]);
 
   const draftSellerMessage = async (ticket: FiledTicket | undefined = filedTicket ?? undefined) => {
-    if (aiLoading || !receivingId || !ticket?.number || ticket.number === 'pending') return;
+    // '#TEST' is the "Continue test" sentinel — never hit the assist endpoint
+    // (which would persist a seller-message row) for it.
+    if (aiLoading || !receivingId || !ticket?.number || ticket.number === 'pending' || ticket.number === '#TEST') return;
     setAiLoading(true);
     try {
       const res = await fetch('/api/receiving/zendesk-claim/assist-seller', {
@@ -126,6 +128,8 @@ export function useClaimSellerMessage({
   // Step 2: restore saved draft or auto-generate (includes the filed ticket #).
   useEffect(() => {
     if (!open || createStep !== 'seller' || !filedTicket || !receivingId) return;
+    // Test sentinel: leave the pre-filled preview in place, fetch/draft nothing.
+    if (filedTicket.number === '#TEST') return;
 
     const bootstrapKey = `${filedTicket.id ?? ''}:${filedTicket.number}`;
     if (sellerBootstrapKey.current === bootstrapKey) return;
@@ -202,6 +206,11 @@ export function useClaimSellerMessage({
   };
 
   const finishSellerStep = async () => {
+    // Test sentinel: close without persisting the PATCH.
+    if (filedTicket?.number === '#TEST') {
+      onClose();
+      return;
+    }
     const text = sellerMessage.trim();
     if (text && receivingId) {
       try {

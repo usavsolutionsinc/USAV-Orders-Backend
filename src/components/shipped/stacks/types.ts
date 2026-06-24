@@ -28,4 +28,9 @@ export interface DetailsStackProps {
   /** Lifted MarkAsShipped toggle state. */
   isMarkAsShippedOpen?: boolean;
   setIsMarkAsShippedOpen?: (next: boolean | ((prev: boolean) => boolean)) => void;
+  /** Shared notes composer state rendered above destructive actions. */
+  notes?: string;
+  setNotes?: (value: string) => void;
+  isSavingNotes?: boolean;
+  onSaveNotes?: () => void;
 }

@@ -23,6 +23,7 @@ import { transition } from '@/lib/inventory/state-machine';
 import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -361,6 +362,7 @@ export async function recordDisposition(
               },
             },
             client,
+            orgId ?? USAV_ORG_ID,
           );
           eventId = event.id;
 

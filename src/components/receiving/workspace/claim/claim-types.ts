@@ -13,6 +13,18 @@ export interface FiledTicket {
   id: number | null;
 }
 
+/** NAS backup result, displayed on the seller step (with a retry on failure). */
+export interface ArchiveState {
+  /** True when every photo archived cleanly (no warning / partial). */
+  ok: boolean;
+  copied: number;
+  total: number;
+  /** Folder the photos landed in (the ticket #), or null. */
+  folder: string | null;
+  /** Warning text when the backup failed or was partial. */
+  warning: string | null;
+}
+
 /** Slim ticket shape returned by GET /api/receiving/zendesk-claim/link. */
 export interface LinkCandidate {
   id: number;

@@ -1,7 +1,17 @@
 {
-  "generatedAt": "2026-06-22T23:19:19.393Z",
+  "generatedAt": "2026-06-22T23:48:43.632Z",
   "count": 199,
   "commits": [
+    {
+      "sha": "9b9877fe9d0a2278b80f3c5bc8e1d4046438acfd",
+      "shortSha": "9b9877fe",
+      "date": "2026-06-22T16:47:35-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "feat: FedEx GS1 tracking canonicalization, tenancy hardening sweep, repair print flow",
+      "body": "- tracking-format: add stripFedexConcatPrefix + extractCanonicalTracking so scanned\n  GS1-128/\"96\" concat barcodes and pasted human tracking numbers resolve to the same\n  key — fixing receive/reconcile mismatches that last-8 suffix matching couldn't cover\n- tenancy sweep: thread orgId through ~35 API routes, order-intake, serial-attach,\n  replenishment (tasks now stamp organization_id), markUnitListed, inventory events, and\n  supporting lib helpers; remove legacy raw-pool fallback paths where orgId is now required\n- repair intake: onSubmit resolves RepairSubmitResult; on success, stay in full-screen\n  overlay and show printable paperwork — never reveal walk-in dashboard to customer\n- docs: regenerated route-audit + route-scoping-audit; add tracking-canonicalization plan\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01Xx9BGPFk6odzL6otyWDAr9",
+      "type": "feature",
+      "title": "FedEx GS1 tracking canonicalization, tenancy hardening sweep, repair print flow"
+    },
     {
       "sha": "8d68b72290913919e188cffee4f6b2cdd77fea4a",
       "shortSha": "8d68b722",
@@ -1981,16 +1991,6 @@
       "body": "Phase D cleanup (the legacy /sku-stock surface is now fully gone):\n- Delete /sku-stock route tree (3 pages); next.config.ts redirects keep\n  printed labels + operator bookmarks working\n- Delete dead components: SkuBrowser, SkuStockSidebarList,\n  SkuStockWorkspace, SkuStockSidebarPanel (the post-rename strip left\n  these unreachable)\n- Drop SkuStockSidebarPanel routeKey branch + 'sku-stock' title-map\n  entry from DashboardSidebar\n- Drop 'sku-stock' from SidebarRouteKey union, getSidebarRouteKey\n  classifier, and ROUTE_PERMISSIONS\n- Phase A copies /inventory/sku/[sku] and /inventory/location/[barcode]\n  now redirect to the canonical shell view (?sku= and ?bin=) instead of\n  rendering the legacy SkuDetailView / LocationDetailView via RouteShell\n\nClient URL sweep — everything that pointed at /sku-stock now targets\n/inventory directly (no 308 hop):\n- bin/[barcode]/page.tsx, m/b/[barcode]/page.tsx\n- GlobalDesktopSkuScanner, MobileScanFab (ROUTE_SPECIFIC_PREFIXES)\n- ShippingInformationSection PrepackedSkuRow drilldown\n- LocationDetailView SKU click + view-all-locations\n- SkuDetailView panel-close fallback\n- warehouse/BinDetailFlyout, warehouse/SkuLocationFinder hrefs\n- lib/barcode-routing — scan-route redirect + printed-QR builder; the\n  /sku-stock/location regex stays so older printed labels still parse\n- admin/StaffManagementTab default_home_path: drop /sku-stock, add\n  /warehouse and /products\n\nP3 — ByUnit view (/inventory?unit=ref):\n- New components/inventory-v2/ByUnitView.tsx: fetches /api/serial-units\n  by id or serial number; renders header, 4-field grid, event timeline\n- types.ts: 'by-unit' added to InventoryV2View; SerialUnitDetailPayload\n- InventoryV2Shell: handles ?unit=, mutual-exclusion across sku/bin/unit\n- InventoryV2SearchBar: GS1 /21/serial scans + serial_full/partial\n  classifier hits + bare numeric (<=7 digits) all resolve to unit\n\nP3 — empty-bin opacity toggle on /warehouse Map (plan §15 #5):\n- WarehouseMap: new showEmpty prop (default false); empty cells render\n  at opacity-30 with hover-restore\n- WarehouseShell MapTabBody: Show/Hide empty bins pill, persisted to\n  ?showEmpty=1\n\nMisc:\n- Fix unrelated type error in api/auth/signout: detail: null ->\n  detail: undefined to match audit() signature\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "other",
       "title": "inventory rename Phase D + ByUnit view + empty-bin toggle"
-    },
-    {
-      "sha": "a418c2cd8a9af467443602e8e642e9b8d298eaea",
-      "shortSha": "a418c2cd",
-      "date": "2026-05-18T16:40:50-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "inventory/warehouse rename Phase B/C + pinless signin",
-      "body": "Renames the bin/room/zone surface from inventory/* to warehouse/*\n(components, sidebar panel, /warehouse route) and adds /products and\n/warehouse to the sidebar nav. /sku-stock keeps redirecting to\n/inventory/* via next.config.ts.\n\nAdds pinless sign-in behind AUTH_PINLESS_SIGNIN: when set, the staff\npicker exposes a `pinless` flag, the signin route skips PIN verification\nand audits as `signin.pinless`. Default behavior unchanged when the env\nvar is off.\n\nOther fixes bundled in this stash:\n- Zoho OAuth scope adds ZohoInventory.bills.READ for billed-PO receives\n- debug-bills route accepts ?bill_id to inspect a single bill payload\n- @simplewebauthn type imports moved to @simplewebauthn/types\n- src/lib/db.ts pool typed as PgPool instead of any\n- mark-received null-safety on staffId\n- scan/resolve redirectTo paths point at /inventory/sku|location\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory/warehouse rename Phase B/C + pinless signin"
     }
   ]
 }

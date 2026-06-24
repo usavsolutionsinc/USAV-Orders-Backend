@@ -30,10 +30,25 @@ export function ReceivingClaimModal(props: ClaimModalProps) {
   const showInternal = c.createStep === 'internal' && c.mode === 'create';
 
   return (
-    <RightPaneOverlay open={c.open} onClose={c.onClose} align="right" width={672} aria-label="File a claim">
-      <ClaimModalHeader row={c.row} submitting={c.submitting} onClose={c.onClose} />
+    <RightPaneOverlay
+      open={c.open}
+      onClose={c.onClose}
+      align="center"
+      resizable
+      storageKey="receiving-claim-modal-size"
+      minWidth={460}
+      minHeight={420}
+      className="-mt-8 h-[min(86vh,44rem)] w-[min(94vw,52rem)]"
+      aria-label="File a claim"
+    >
+      <ClaimModalHeader
+        row={c.row}
+        submitting={c.submitting}
+        archiveSubmitting={c.archiveSubmitting}
+        onClose={c.onClose}
+      />
 
-      <div className="space-y-4 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-[13px]">
         <ClaimWizardNav c={c} />
         {showInternal ? <ClaimInternalStep c={c} /> : <ClaimLinkSellerStep c={c} />}
       </div>

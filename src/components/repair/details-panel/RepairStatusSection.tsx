@@ -10,9 +10,6 @@ import type { RepairDetailsController } from './useRepairDetailsPanel';
 export function RepairStatusSection({ repair, c }: { repair: RSRecord; c: RepairDetailsController }) {
   return (
     <section>
-      <h3 className="text-micro font-black uppercase tracking-wider text-gray-500 mb-3 border-b border-gray-200 pb-2">
-        Update Status
-      </h3>
       <select
         value={repair.status || ''}
         onChange={(e) => c.handleStatusChange(e.target.value)}

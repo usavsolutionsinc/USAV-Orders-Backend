@@ -5,6 +5,7 @@ import { Trash2 } from '@/components/Icons';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { DetailsStackProps } from './types';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
+import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
 
 export function PackerDetailsStack({
   shipped,
@@ -14,9 +15,16 @@ export function PackerDetailsStack({
   onUpdate,
   actionBar: _actionBar,
   activeSection,
+  activeInput = 'none',
+  setActiveInput,
+  notes = '',
+  setNotes,
+  isSavingNotes = false,
+  onSaveNotes,
 }: DetailsStackProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteArmed, setIsDeleteArmed] = useState(false);
+  const hasSavedNotes = String(shipped.notes || '').trim().length > 0;
   const deleteArmTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -92,6 +100,27 @@ export function PackerDetailsStack({
         activeSection={activeSection}
       />
       </div>
+
+      {(activeInput === 'notes' || hasSavedNotes) && (
+        activeInput === 'notes' && setNotes && onSaveNotes ? (
+          <ShippedNotesComposer
+            value={notes}
+            onChange={setNotes}
+            onCancel={() => {
+              setNotes(shipped.notes || '');
+              setActiveInput?.('none');
+            }}
+            onSubmit={onSaveNotes}
+            isSaving={isSavingNotes}
+          />
+        ) : (
+          <ShippedNotesComposer
+            value={String(shipped.notes || '')}
+            readOnly
+            onClick={() => setActiveInput?.('notes')}
+          />
+        )
+      )}
 
       <section className="mx-8 pt-2">
         <button

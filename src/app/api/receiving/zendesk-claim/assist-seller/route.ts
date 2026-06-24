@@ -22,6 +22,8 @@ interface AssistSellerRequest {
   /** Filed ticket ref, e.g. "#5637" — required so the draft includes case context. */
   zendeskTicketNumber: string;
   zendeskTicketId?: number | null;
+  /** "Test seller msg": draft only, skip persistence so no test row is written. */
+  dryRun?: boolean;
 }
 
 function asString(value: unknown): string {
@@ -66,20 +68,22 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     });
 
     let sellerMessageId: number | undefined;
-    try {
-      const saved = await upsertClaimSellerMessage({
-        orgId: ctx.organizationId,
-        receivingId,
-        lineId,
-        sellerMessage: result.sellerMessage,
-        subjectSnapshot: subject,
-        model: result.model,
-        zendeskTicketId: body.zendeskTicketId ?? null,
-        staffId: ctx.staffId ?? null,
-      });
-      sellerMessageId = saved.id;
-    } catch (err) {
-      console.warn('[zendesk-claim/assist-seller] persist failed', err);
+    if (body.dryRun !== true) {
+      try {
+        const saved = await upsertClaimSellerMessage({
+          orgId: ctx.organizationId,
+          receivingId,
+          lineId,
+          sellerMessage: result.sellerMessage,
+          subjectSnapshot: subject,
+          model: result.model,
+          zendeskTicketId: body.zendeskTicketId ?? null,
+          staffId: ctx.staffId ?? null,
+        });
+        sellerMessageId = saved.id;
+      } catch (err) {
+        console.warn('[zendesk-claim/assist-seller] persist failed', err);
+      }
     }
 
     return NextResponse.json({

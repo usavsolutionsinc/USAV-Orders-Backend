@@ -17,6 +17,7 @@ import {
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
 import { recordReceivingScan } from '@/lib/receiving/record-scan';
+import { resolveShipmentForScan } from '@/lib/receiving/resolve-shipment-for-scan';
 import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
 import {
   upsertOpenTrackingException,
@@ -192,14 +193,14 @@ async function memoizeLookupHit(
  * `receiving` via `receiving.shipment_id`. Zoho webhooks populate STN, so
  * once webhooks are live, this function handles almost every scan locally.
  *
- * Matching rule (uniform across every layer): **last 8 digits of the carrier
- * tracking number.** Scanners emit a wild range of envelopes — USPS IMpb
- * prefix, UPS short form, hand-typed digits — but they all share the same
- * trailing carrier-tracking digits. Using last-8 everywhere removes the
- * "exact then fuzzy then variant" stack and gives every layer the same key.
+ * Matching is delegated to `resolveShipmentForScan`, which prefers STN's EXACT
+ * `tracking_number_normalized` key (UNIQUE → one physical package) and only
+ * falls back to last-8 — with a log — on an exact miss. Last-8 is lossy (15
+ * live collision groups), so it must stay a fallback, not the primary key. See
+ * docs/new-additions/tracking-canonicalization-stn-plan.md §3.2.
  *
  * Order of attempts:
- *   1. STN (`tracking_number_raw` OR `tracking_number_normalized`) ⋈ receiving.
+ *   1. STN exact-normalized ⋈ receiving (then last-8 fallback, logged).
  *   2. `receiving_scans` — fallback for rows where `shipment_id` is NULL
  *      (unmatched walk-in scans / pre-webhook legacy data).
  *
@@ -210,29 +211,25 @@ async function findScanByTracking(
   trackingNumber: string,
   staffId: number | null,
   carrier: string,
+  orgId: string,
 ): Promise<{ scan_id: number; receiving_id: number } | null> {
-  const digits = String(trackingNumber || '').replace(/\D/g, '');
-  if (digits.length < 8) return null;
-  const last8 = digits.slice(-8);
-
-  // ── 1. STN last-8 (canonical) ───────────────────────────────────────────
-  const stnHit = await pool.query<{ receiving_id: number; source: string }>(
-    `SELECT r.id AS receiving_id, r.source
-       FROM shipping_tracking_numbers stn
-       JOIN receiving r ON r.shipment_id = stn.id
-      WHERE RIGHT(regexp_replace(stn.tracking_number_normalized, '\\D', '', 'g'), 8) = $1
-         OR RIGHT(regexp_replace(stn.tracking_number_raw,        '\\D', '', 'g'), 8) = $1
-      ORDER BY r.id DESC
-      LIMIT 2`,
-    [last8],
-  );
-  if (stnHit.rows.length === 1) {
-    const { receiving_id, source } = stnHit.rows[0];
-    const scan_id = await memoizeLookupHit(receiving_id, trackingNumber, source, staffId, carrier);
-    return { scan_id, receiving_id };
+  // ── 1. STN exact-normalized (last-8 demoted to a logged fallback) ────────
+  const resolved = await resolveShipmentForScan(trackingNumber, orgId);
+  if (resolved.receivingId != null) {
+    const scan_id = await memoizeLookupHit(
+      resolved.receivingId,
+      trackingNumber,
+      resolved.receivingSource ?? 'unmatched',
+      staffId,
+      carrier,
+    );
+    return { scan_id, receiving_id: resolved.receivingId };
   }
 
   // ── 2. receiving_scans fallback (STN-less rows) ─────────────────────────
+  const digits = String(trackingNumber || '').replace(/\D/g, '');
+  if (digits.length < 8) return null;
+  const last8 = digits.slice(-8);
   const scanHit = await pool.query<{ scan_id: number; receiving_id: number }>(
     `SELECT id AS scan_id, receiving_id
        FROM receiving_scans
@@ -377,6 +374,15 @@ async function upsertMatchedReceiving(
      ON CONFLICT (zoho_purchaseorder_id) WHERE source = 'zoho_po' AND zoho_purchaseorder_id IS NOT NULL
      DO UPDATE SET
        updated_at = EXCLUDED.updated_at,
+       -- The Incoming Zoho sync pre-creates this PO's zoho_po receiving row with
+       -- received_at NULL (see zoho-receiving-sync.ts). The door scan IS the
+       -- physical-arrival event, so stamp received_at/by on first scan even when
+       -- the row already existed — otherwise the matched carton never satisfies
+       -- the view=scanned predicate (r.received_at IS NOT NULL) and stays
+       -- invisible in the Prioritize / unbox Queue feeds. COALESCE keeps the
+       -- original scan time + scanner on re-scans (idempotent, never resets).
+       received_at = COALESCE(receiving.received_at, EXCLUDED.received_at),
+       received_by = COALESCE(receiving.received_by, EXCLUDED.received_by),
        carrier = COALESCE(receiving.carrier, EXCLUDED.carrier),
        organization_id = COALESCE(receiving.organization_id, EXCLUDED.organization_id)
      RETURNING id, xmax::text`,
@@ -702,7 +708,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     //    empty (e.g. receiving_lines was truncated, or the row was created
     //    as 'unmatched' before Zoho synced the PO), fall through to the
     //    Zoho lookup so we can repopulate the PO linkage on this same row.
-    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier);
+    const existingScan = await findScanByTracking(trackingNumber, staffId, carrier, ctx.organizationId);
     let preassignedReceivingId: number | null = null;
     let preassignedScanId: number | null = null;
     if (existingScan) {

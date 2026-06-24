@@ -27,6 +27,15 @@ import { attachTechSerial } from '@/lib/inventory/tech-serial';
  * Stock and received-quantity are owned exclusively by the PO line item via
  * the Receive action (`receiveLineUnits` in {@link ./receive-line}). These two
  * concerns are deliberately independent: scanning serials never moves stock.
+ *
+ * It DOES stamp the parent carton's `receiving.unboxed_at` (the first serial
+ * scanned off a carton means the box was physically opened). Without this, a
+ * serial-scanned-but-not-yet-Received carton stayed MATCHED/qty-0 and leaked
+ * back into the "to unbox" scanned queue even though it had clearly been opened
+ * (and labeled). The unboxed_at stamp moves it out of `view=scanned` and into
+ * the unboxed/Recent rail (both key on unboxed_at) — while received-qty and
+ * stock still wait for the explicit Receive action. Opening a box ≠ receiving
+ * its units.
  */
 
 interface SerialLineTarget {
@@ -230,6 +239,25 @@ export async function attachSerialToLine(
         client,
         orgId,
       );
+
+      // Stamp the carton "opened" — the first serial scanned off it is proof it
+      // was physically unboxed. COALESCE so re-scans / sibling-line scans never
+      // reset the original unbox time. Carton-scoped on purpose: opening one box
+      // moves the whole carton (all its lines) out of the scanned queue and into
+      // the unboxed rail. Deliberately NOT touching quantity_received /
+      // workflow_status / the stock ledger — those stay owned by the Receive
+      // action (receiveLineUnits). Best-effort: a failure here must not lose the
+      // serial, so it never throws the transaction (the attach is the point).
+      if (line.receiving_id != null) {
+        await client.query(
+          `UPDATE receiving
+              SET unboxed_at = COALESCE(unboxed_at, NOW()),
+                  unboxed_by = COALESCE(unboxed_by, $2),
+                  updated_at = NOW()
+            WHERE id = $1 AND organization_id = $3`,
+          [line.receiving_id, input.staff_id ?? null, orgId],
+        );
+      }
 
       return {
         line_id: line.id,

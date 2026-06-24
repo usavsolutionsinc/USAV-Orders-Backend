@@ -82,28 +82,51 @@ export function collapseRepeatedTracking(input: string): string {
 }
 
 /**
+ * FedEx GS1-128 / "96" concatenated-barcode envelope.
+ *
+ * Anchored on the structurally-unambiguous FedEx application-identifier form:
+ * a "96"-prefixed 33-34 digit label (covers the 9621/9622/9627… AIs). This is
+ * the same long-label shape `TRACKING_PATTERNS` recognizes as FedEx
+ * (`^96\d{31,32}$` in carrier-patterns.ts) — kept in lock-step here so the two
+ * never drift. USPS IMpb numbers use the 92/93/94/95 service-banner prefix (and
+ * 420… routing), NEVER 96, and are at most 22 digits — so anchoring on this
+ * 96-prefixed 33-34 digit envelope can collide with a USPS number on neither
+ * prefix nor length.
+ */
+const FEDEX_GS1_CONCAT_RE = /^96\d{31,32}$/;
+
+/**
  * Strip the FedEx GS1-128 / "96" concatenated-barcode envelope down to the
  * human-readable carrier tracking number.
  *
  * Barcode guns read the FULL application-identifier label (e.g.
- * `9632001960200651497200382141152045`, ~22-34 digits), while the number a
+ * `9632001960200651497200382141152045`, 33-34 digits), while the number a
  * buyer/vendor types or pastes into Zoho's reference# is the SHORT human form
  * (`382141152045`). FedEx embeds that human number in the trailing digits of
  * the long label, so both must canonicalize to the SAME key — otherwise a
  * scanned carton and its pasted PO reference never reconcile except by the
  * fragile last-8 suffix.
  *
- * Conservative by construction: only acts on long all-digit strings, and only
- * collapses to a trailing slice that independently detects as a FedEx number
- * (longest-first, so a 15-digit Ground number is never truncated to its
+ * HARDENED (2026-06-23): fires ONLY on a `FEDEX_GS1_CONCAT_RE` envelope, never
+ * on a bare trailing-pattern guess. The earlier `^\d{18,34}$` gate folded the
+ * trailing 12-digit run of valid 22-digit USPS IMpb numbers
+ * (e.g. `9235990407314810260579` → `314810260579`) onto FedEx Express tails —
+ * which would have merged ~500 distinct USPS shipments onto one key. Anchoring
+ * on the 96-prefixed 33-34 digit form drops those USPS rewrites to zero. See
+ * docs/new-additions/tracking-canonicalization-stn-plan.md §3.1.
+ *
+ * Conservative by construction: only acts on a 96-prefixed GS1 concat label,
+ * and only collapses to a trailing slice that independently detects as a FedEx
+ * number (longest-first, so a 15-digit Ground number is never truncated to its
  * trailing 12). Anything else is returned untouched — so this can only make a
  * value MORE canonical, never corrupt a number that was already human-readable.
  */
 export function stripFedexConcatPrefix(input: string): string {
   const clean = normalizeTrackingCanonical(input);
-  // A pasted human FedEx number is ≤15 digits; only a scanned concatenated
-  // label is longer. Bail on anything that isn't a long pure-digit barcode.
-  if (!/^\d{18,34}$/.test(clean)) return clean;
+  // Only a 96-prefixed GS1 concat label is an envelope to unwrap. Everything
+  // else — every USPS 92/93/94/95 number, every already-human FedEx number, any
+  // shorter/longer string — is returned untouched.
+  if (!FEDEX_GS1_CONCAT_RE.test(clean)) return clean;
   // FedEx human tracking lengths, longest-first. Accept the longest trailing
   // slice that (a) is shorter than the full label and (b) detects as FedEx.
   for (const n of [15, 12]) {

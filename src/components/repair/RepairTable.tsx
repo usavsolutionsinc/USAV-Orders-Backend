@@ -14,6 +14,7 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
 import { toPSTDateKey } from '@/utils/date';
+import { mobileIconSize } from '@/design-system/tokens/touch';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -175,6 +176,9 @@ export function RepairTable({ filter }: RepairTableProps) {
     if (selectedIndex < flatRepairs.length - 1) setSelectedRepair(flatRepairs[selectedIndex + 1]);
   };
 
+  const rowActionButtonClass =
+    'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-gray-50 text-gray-400 transition-colors hover:border-gray-200 disabled:cursor-not-allowed disabled:opacity-40';
+
   return (
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -311,25 +315,27 @@ export function RepairTable({ filter }: RepairTableProps) {
                             />
                           </div>
                           <button
+                            type="button"
                             onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
-                            className="p-1.5 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-lg transition-all"
+                            className={`${rowActionButtonClass} hover:bg-blue-50 hover:text-blue-600`}
                             title="View Repair Document"
                           >
-                            <PrinterAlt className="w-3.5 h-3.5" />
+                            <PrinterAlt className={mobileIconSize.inline} />
                           </button>
                           <button
+                            type="button"
                             onClick={() => void openSquarePayment(repair)}
                             disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
-                            className="p-1.5 bg-gray-50 hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                            className={`${rowActionButtonClass} hover:bg-emerald-50 hover:text-emerald-600`}
                             title={
                               !canCreateSquarePayment(repair)
                                 ? 'Set source SKU or valid price to enable Square payment'
                                 : getRepairSourceSku(repair)
                                   ? 'Create Square payment link from matching catalog SKU'
-                                  : 'Create Square payment link (price fallback)'
+                                : 'Create Square payment link (price fallback)'
                             }
                           >
-                            <DollarSign className={`w-3.5 h-3.5 ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
+                            <DollarSign className={`${mobileIconSize.inline} ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
                           </button>
                         </div>
                       </motion.div>

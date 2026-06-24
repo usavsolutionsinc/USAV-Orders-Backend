@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { useState } from 'react';
 import { zIndex } from '@/design-system/tokens/z-index';
-import { AblyProvider } from '@/contexts/AblyContext';
 import { SiteTooltipProvider } from '@/components/providers/SiteTooltipProvider';
 import { StepUpProvider } from '@/components/providers/StepUpProvider';
 import { UIModeProvider } from '@/design-system/providers/UIModeProvider';
@@ -24,16 +23,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <AblyProvider>
-                <UIModeProvider>
-                    <SiteTooltipProvider>
-                        <StepUpProvider>
-                            {children}
-                        </StepUpProvider>
-                    </SiteTooltipProvider>
-                </UIModeProvider>
-                <Toaster position="bottom-right" richColors closeButton style={{ zIndex: zIndex.toast }} />
-            </AblyProvider>
+            <UIModeProvider>
+                <SiteTooltipProvider>
+                    <StepUpProvider>
+                        {children}
+                    </StepUpProvider>
+                </SiteTooltipProvider>
+            </UIModeProvider>
+            <Toaster position="bottom-right" richColors closeButton style={{ zIndex: zIndex.toast }} />
         </QueryClientProvider>
     );
 }
