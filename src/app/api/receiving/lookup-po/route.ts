@@ -46,6 +46,18 @@ function errMessage(err: unknown): string {
 }
 
 /**
+ * A PO line-item import that fails because the org's Zoho integration is not
+ * connected (no vault row AND no legacy bridge) throws CredentialNotConnectedError
+ * (code 'CREDENTIAL_NOT_CONNECTED'). Detect it so the carton response can say
+ * "Zoho not connected" instead of silently coming back matched-but-empty, which
+ * the client renders as "No PO found". Checked by code so we stay decoupled from
+ * the error class across the async boundary.
+ */
+function isCredentialNotConnected(err: unknown): boolean {
+  return (err as { code?: string } | null)?.code === 'CREDENTIAL_NOT_CONNECTED';
+}
+
+/**
  * Which of this carton's line SKUs are needed by a currently-pending order.
  * Read-only enhancement — never fails the scan; on error returns [].
  */
@@ -628,13 +640,24 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       }
 
       const { receivingId } = await upsertMatchedReceiving(poId, carrier, staffId, ctx.organizationId);
+      let integrationError: 'zoho_not_connected' | null = null;
       const linked = await linkLocalPoLinesToReceiving(poId, receivingId);
       // Only hit Zoho for line items when there was nothing local to adopt.
       if (linked === 0) {
         await importZohoPurchaseOrderToReceiving(ctx.organizationId, poId, {
           receivingId,
           workflowStatus: 'MATCHED',
-        }).catch((err) => console.warn(`[lookup-po.order] import(${poId}) failed`, errMessage(err)));
+        }).catch((err) => {
+          if (isCredentialNotConnected(err)) {
+            integrationError = 'zoho_not_connected';
+            console.error(
+              `[lookup-po.order] Zoho not connected — PO ${poId} matched but its line items could not import`,
+              { receiving_id: receivingId, message: errMessage(err) },
+            );
+          } else {
+            console.warn(`[lookup-po.order] import(${poId}) failed`, errMessage(err));
+          }
+        });
       }
       await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
       await applyIntakeClassification(receivingId, classification);
@@ -689,6 +712,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         unbox_verdict: pendingOrderSkus.length > 0 ? 'expedited' : 'normal',
         po_ids: [poId],
         pending_order_skus: pendingOrderSkus,
+        integration_error: integrationError,
         receiving_package,
         lines: lines.map((l) => ({
           id: l.id,
@@ -1004,13 +1028,24 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       // path and fixes the regression where a multi-line PO already in the
       // Incoming mirror came back with zero lines (the Zoho re-import didn't
       // re-attach them) → matched-but-empty → the client rendered it 'unfound'.
+      // Track an integration-connectivity failure so a matched-but-empty carton
+      // is reported as "Zoho not connected" rather than a silent "No PO found".
+      let integrationError: 'zoho_not_connected' | null = null;
       const linkedPrimary = await linkLocalPoLinesToReceiving(primaryPoId, primaryReceivingId);
       if (linkedPrimary === 0) {
         await importZohoPurchaseOrderToReceiving(ctx.organizationId, primaryPoId, {
           receivingId: primaryReceivingId,
           workflowStatus: 'MATCHED',
         }).catch((err) => {
-          console.warn(`lookup-po: import(${primaryPoId}) failed`, err);
+          if (isCredentialNotConnected(err)) {
+            integrationError = 'zoho_not_connected';
+            console.error(
+              `[lookup-po] Zoho not connected — PO ${primaryPoId} matched but its line items could not import`,
+              { receiving_id: primaryReceivingId, message: errMessage(err) },
+            );
+          } else {
+            console.warn(`lookup-po: import(${primaryPoId}) failed`, err);
+          }
         });
       }
 
@@ -1162,6 +1197,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         secondary_receiving_ids: secondaryReceivingIds,
         multi_po_warning: secondaryPoIds.length > 0,
         zoho_reachable: true,
+        // Non-null when the PO header matched but its lines could not import
+        // because Zoho isn't connected — lets the client show a connect prompt
+        // instead of a misleading "No PO found".
+        integration_error: integrationError,
         receiving_package: receiving_package_matched,
         lines: lines.map((l) => ({
           id: l.id,

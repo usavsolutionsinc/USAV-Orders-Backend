@@ -216,6 +216,37 @@ function envFallback(provider: IntegrationProvider): unknown | null {
   }
 }
 
+// ─── Legacy DB bridge (USAV Zoho only, transitional) ───────────────────────
+// USAV's durable Zoho refresh token lives in `ebay_accounts.ZOHO_MAIN`, NOT in
+// env (ZOHO_REFRESH_TOKEN is unset). The sync env fallback above therefore
+// returns null for zoho, which used to let the vault-gated path
+// (withCredentialScope → getIntegrationCredentials) throw CredentialNotConnected
+// even though the runtime token path (zoho/core.ts loadZohoCredentials) worked
+// off this same bridge — the asymmetry that produced "matched PO, empty carton".
+// Mirror core.ts loadLegacyZohoCredentials here so BOTH paths resolve identically.
+async function legacyZohoFromDb(): Promise<ZohoCredentials | null> {
+  const clientId = (process.env.ZOHO_CLIENT_ID ?? '').trim();
+  const clientSecret = (process.env.ZOHO_CLIENT_SECRET ?? '').trim();
+  const zohoOrgId = (process.env.ZOHO_ORG_ID || process.env.ZOHO_ORGANIZATION_ID || '').trim();
+  const domain = (process.env.ZOHO_DOMAIN ?? '').trim() || 'accounts.zoho.com';
+  if (!clientId || !clientSecret || !zohoOrgId) return null;
+
+  let refreshToken = (process.env.ZOHO_REFRESH_TOKEN ?? '').trim();
+  if (!refreshToken) {
+    try {
+      const { rows } = await pool.query<{ refresh_token: string | null }>(
+        `SELECT refresh_token FROM ebay_accounts WHERE account_name = 'ZOHO_MAIN' LIMIT 1`,
+      );
+      refreshToken = (rows[0]?.refresh_token ?? '').trim();
+    } catch {
+      /* table/row may not exist — treat as not connected */
+    }
+  }
+  if (!refreshToken) return null;
+
+  return { clientId, clientSecret, refreshToken, orgId: zohoOrgId, domain };
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 interface IntegrationDbRow {
@@ -263,6 +294,16 @@ export async function getIntegrationCredentials<T = unknown>(
     if (fallback) {
       credCache.set(key, { value: fallback, expiresAt: Date.now() + CACHE_TTL_MS });
       return fallback;
+    }
+    // Zoho's refresh token lives in ebay_accounts.ZOHO_MAIN, not env — so the
+    // sync envFallback can't see it. Bridge to the DB so the vault-gated import
+    // path resolves the same working credential the search path already uses.
+    if (provider === 'zoho') {
+      const legacy = (await legacyZohoFromDb()) as T | null;
+      if (legacy) {
+        credCache.set(key, { value: legacy, expiresAt: Date.now() + CACHE_TTL_MS });
+        return legacy;
+      }
     }
   }
 

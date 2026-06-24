@@ -284,6 +284,22 @@ export function useTrackingScan({
             throw new Error(data?.error || 'Lookup failed');
           }
 
+          // The PO header matched but its line items could not import because the
+          // Zoho integration isn't connected. Without this, the carton comes back
+          // matched-but-empty and reads as a misleading "No PO found". Surface the
+          // real cause and route the operator to reconnect.
+          if (data.integration_error === 'zoho_not_connected') {
+            opts?.onResult?.({
+              tracking: trackingNumber,
+              matched: false,
+              po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
+              receiving_id: Number(data.receiving_id) || undefined,
+            });
+            window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
+            toast.error('Zoho not connected — PO matched but items could not load. Reconnect Zoho in Settings → Integrations.');
+            return;
+          }
+
           const isMatched =
             Boolean(data.matched) && Array.isArray(data.lines) && data.lines.length > 0;
 
