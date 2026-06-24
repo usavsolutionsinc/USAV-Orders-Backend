@@ -10,7 +10,7 @@ import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson
 import { formatPSTTimestamp, normalizePSTTimestamp, getCurrentPSTDateKey } from '@/utils/date';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
 import { createStationActivityLog } from '@/lib/station-activity';
-import { createAuditLog } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION } from '@/lib/audit-logs';
 import { publishActivityLogged, publishOrderChanged, publishPackerLogChanged, publishPackerScanReady } from '@/lib/realtime/publish';
 import { ensureReplenishmentForOrder } from '@/lib/replenishment';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -471,14 +471,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     },
                     createdAt: notFoundCreatedAt,
                 });
-                await createAuditLog(pool, {
-                    actorStaffId: staffId,
+                await recordAudit(client, ctx, req, {
                     source: 'api.packing-logs',
-                    action: 'PACK_COMPLETED',
+                    action: AUDIT_ACTION.PACK_COMPLETED,
                     entityType: nfShipmentId ? 'SHIPMENT' : 'ORDERS_EXCEPTION',
                     entityId: String(nfShipmentId ?? ordersExceptionId ?? scanInput),
                     stationActivityLogId: nfSalId,
-                    metadata: {
+                    actorStaffIdOverride: staffId,
+                    extra: {
                         tracking_type: classification.trackingType,
                         tracking: scanInput,
                         matchedOrder: false,
@@ -637,14 +637,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                 },
                 createdAt: foundCreatedAt,
             });
-            await createAuditLog(pool, {
-                actorStaffId: staffId,
+            await recordAudit(client, ctx, req, {
                 source: 'api.packing-logs',
-                action: 'PACK_COMPLETED',
+                action: AUDIT_ACTION.PACK_COMPLETED,
                 entityType: 'ORDER',
                 entityId: String(order.id),
                 stationActivityLogId: foundSalId,
-                metadata: {
+                actorStaffIdOverride: staffId,
+                extra: {
                     shipment_id: orderShipmentId,
                     order_id: order.order_id ?? null,
                     tracking_type: classification.trackingType,
