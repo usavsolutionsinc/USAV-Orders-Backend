@@ -49,7 +49,6 @@ function fallbackTicketBody(ticketId: number | null): string {
     'Issue: Damage',
     'Purchase Order: n/a',
     'Tracking: n/a',
-    'Scope: package-wide (no specific item)',
     '',
     ticketId ? `Zendesk ticket: #${ticketId}` : null,
   ].filter(Boolean).join('\n');

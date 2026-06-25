@@ -70,7 +70,7 @@ test.describe('receiving — Zoho overall notes + unit price', () => {
     expect(Number(hit!.unit_price)).toBeGreaterThan(0);
   });
 
-  test('UI shows the Zoho unit price and the Overall PO note', async ({ page, request }) => {
+  test('UI shows the Zoho unit price and the Zoho notes field', async ({ page, request }) => {
     const hit = await findCandidate(request);
     test.skip(!hit, 'no backfilled carton available');
     const { receiving_id, id } = hit!;
@@ -82,25 +82,25 @@ test.describe('receiving — Zoho overall notes + unit price', () => {
     await expect(price, 'Zoho unit price chip is visible in the line row').toBeVisible({ timeout: 25_000 });
     await expect(price).toContainText('$');
 
-    // Open the Zoho Notes tab and confirm the OVERALL PO note shows (not empty).
+    // Open the Zoho notes tab and confirm the overall note shows (not empty).
     // The HorizontalButtonSlider nav variant renders tabs as role="tab"; fall back
     // to the visible label to stay robust to the slider's internal markup.
     const zohoTab = page
-      .getByRole('tab', { name: /Zoho Notes/i })
-      .or(page.getByText('Zoho Notes', { exact: true }))
+      .getByRole('tab', { name: /Zoho notes/i })
+      .or(page.getByText('Zoho notes', { exact: true }))
       .first();
     await expect(zohoTab).toBeVisible({ timeout: 15_000 });
     await zohoTab.click();
 
     await expect(page.getByText(/No notes imported from Zoho/i)).toHaveCount(0);
-    // The overall note is now an EDITABLE field labelled "Overall PO note",
-    // pre-filled with the carton's Zoho note + a "Save to Zoho" check action.
-    const overallField = page.getByRole('textbox', { name: /Overall PO note/i });
+    // The overall note is an editable "Zoho notes" field, pre-filled with the
+    // carton's Zoho note + a "Save to Zoho" check action.
+    const overallField = page.getByRole('textbox', { name: /Zoho notes/i });
     await expect(overallField).toBeVisible({ timeout: 10_000 });
     await expect(overallField).toHaveValue(/\S/); // non-empty (carton note loaded)
     await expect(page.getByRole('button', { name: /Save to Zoho/i })).toBeVisible();
     // When the line carries a Zoho item description, it shows as a SEPARATE block
-    // ("Item description") — distinct from the editable overall PO note.
+    // ("Item description") — distinct from the editable Zoho notes field.
     if (hit!.zoho_notes && hit!.zoho_notes.trim()) {
       await expect(page.getByText('Item description', { exact: false })).toBeVisible({ timeout: 5_000 });
     }

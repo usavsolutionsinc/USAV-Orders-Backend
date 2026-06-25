@@ -2,7 +2,7 @@
  * Smoke tests for the three workspace mode displays that were refactored to
  * share components as part of the mode-first architecture:
  *
- *   1. Unbox mode  (/receiving)              — LineEditPanel, Print · receive bar
+ *   1. Unbox mode  (/receiving)              — LineEditPanel, Receive bar
  *   2. Triage mode (/receiving?mode=triage)  — LineEditPanel, Save for unbox button
  *   3. Testing mode (/tech?view=testing)     — TestingPanel (shared CartonContextCard
  *                                              + LineEditToolbar) + Pass · … action
@@ -34,7 +34,7 @@ test.use({ storageState: 'tests/.auth/admin.json' });
 
 test.describe('Receiving + Tech workspace mode smoke tests', () => {
   // ── 1. UNBOX MODE (/receiving) ────────────────────────────────────────────
-  test('unbox mode — page loads and right pane shows Print · receive bar when a line is present', async ({
+  test('unbox mode — page loads and right pane shows Receive bar when a line is present', async ({
     page,
   }) => {
     await page.goto('/receiving');
@@ -79,7 +79,7 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
     // CartonContextCard Platform pill + the unbox terminal action.
     await expect(page.getByRole('button', { name: /Platform/i }).first()).toBeVisible({ timeout: PANEL_TIMEOUT });
     await expect(
-      page.getByRole('button', { name: /Print\s*[·•]\s*receive/i }),
+      page.getByRole('button', { name: /^Receive(\s+all)?$/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
   });
 
@@ -114,9 +114,9 @@ test.describe('Receiving + Tech workspace mode smoke tests', () => {
       page.getByRole('button', { name: /Save for unbox/i }),
     ).toBeVisible({ timeout: PANEL_TIMEOUT });
 
-    // …and the unbox-only "Print · receive" action bar must be ABSENT in triage.
+    // …and the unbox-only Receive action bar must be ABSENT in triage.
     await expect(
-      page.getByRole('button', { name: /Print\s*[·•]\s*receive/i }),
+      page.getByRole('button', { name: /^Receive(\s+all)?$/i }),
     ).toHaveCount(0);
   });
 

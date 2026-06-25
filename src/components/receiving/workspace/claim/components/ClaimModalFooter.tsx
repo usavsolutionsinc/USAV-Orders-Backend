@@ -127,27 +127,15 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
         ) : null}
 
         {isCreate && step === 'review' ? (
-          <>
-            <button
-              type="button"
-              onClick={() => void c.submitDryRun()}
-              disabled={c.testCreating || c.submitting || !c.row.receiving_id || !c.composeComplete}
-              title="Rehearse the whole flow (Review → Confirm → Seller) without filing a real ticket — uses #TEST, no Zendesk/local/DB writes"
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {c.testCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Dry run →
-            </button>
-            <button
-              type="button"
-              onClick={c.submitInternal}
-              disabled={c.submitting || c.archiveSubmitting || !c.row.receiving_id || !c.composeComplete}
-              className={roseBtn}
-            >
-              {c.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-              {c.submitting ? 'Filing…' : 'File ticket & back up →'}
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={c.submitInternal}
+            disabled={c.submitting || c.archiveSubmitting || !c.row.receiving_id || !c.composeComplete}
+            className={roseBtn}
+          >
+            {c.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            {c.submitting ? 'Filing…' : 'File ticket & back up →'}
+          </button>
         ) : null}
 
         {isCreate && step === 'confirm' ? (

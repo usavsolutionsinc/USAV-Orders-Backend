@@ -30,6 +30,8 @@ import {
 const IDEMPOTENCY_ROUTE = 'receiving.mark-received-po';
 import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { conditionLabel } from '@/lib/conditions';
+import { mergeSerialNoteIntoLineDescription } from '@/lib/zoho';
 
 function normalizeSkuKey(s: string | null | undefined): string {
   return String(s ?? '').trim().toLowerCase();
@@ -183,6 +185,13 @@ export const POST = withAuth(async (request, ctx) => {
 
     const receiveIntentRaw = String(body?.receive_intent ?? 'zoho_receive').trim().toLowerCase();
     const skipZohoReceive = receiveIntentRaw === 'scan_only';
+    // 'local_receive' = unfound carton: mark its lines RECEIVED (promoted to
+    // DONE) locally, but never create a Zoho purchase receive — there is no PO
+    // to reconcile against. It is NOT scan_only: scan_only stays SCANNED
+    // (MATCHED); local_receive advances to RECEIVED just like a real receive,
+    // minus the Zoho call. Treated as a non-scan receive everywhere the DONE
+    // promotion runs (`!skipZohoReceive`), and guarded out of the Zoho POST.
+    const localReceive = receiveIntentRaw === 'local_receive';
 
     if (receivingId == null) {
       return NextResponse.json(
@@ -516,6 +525,39 @@ export const POST = withAuth(async (request, ctx) => {
       ),
     ).catch(() => {});
 
+    // Stamp each serialized line's local Zoho item description with
+    // "SN: <serial> · <condition>" so the PO-items description toggle shows the
+    // condition + serial right away. The SAME snippet is pushed to the Zoho
+    // line-item description in after() (serialNotesByPo) — local and Zoho match.
+    // We APPEND via the shared merge helper (never overwrite): any manually-typed
+    // description is preserved, a prior bare-serial note is upgraded in place,
+    // and only serialized lines are touched.
+    if (linesUpdatedViaReceiveUnits && updatedLines.length > 0) {
+      const itemDescCond = conditionLabel(conditionGrade, 'full');
+      await withTenantTransaction(ctx.organizationId, async (client) => {
+        for (const l of updatedLines) {
+          const serials = serialsByReceivingLineId.get(l.id) ?? [];
+          if (serials.length === 0) continue;
+          const serialPart =
+            serials.length === 1 ? `SN: ${serials[0]}` : `SNs: ${serials.join(', ')}`;
+          const snippet = itemDescCond ? `${serialPart} · ${itemDescCond}` : serialPart;
+          const cur = await client.query<{ zoho_notes: string | null }>(
+            `SELECT zoho_notes FROM receiving_lines
+              WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [l.id, ctx.organizationId],
+          );
+          const existing = String(cur.rows[0]?.zoho_notes ?? '');
+          const merged = mergeSerialNoteIntoLineDescription(existing, snippet);
+          if (merged === existing) continue;
+          await client.query(
+            `UPDATE receiving_lines SET zoho_notes = $1, updated_at = $2
+              WHERE id = $3 AND organization_id = $4`,
+            [merged, now, l.id, ctx.organizationId],
+          );
+        }
+      }).catch(() => {});
+    }
+
     let localTracking: string | null = null;
     try {
       const trackingRes = await tenantQuery<{ tracking: string | null }>(
@@ -724,11 +766,16 @@ export const POST = withAuth(async (request, ctx) => {
           }
           liMap.set(liId, cur);
         }
+        // The condition grade applied by this receive — appended to the serial
+        // so the Zoho line-item description reads "SN: … · For Parts". The merge
+        // helper upgrades a prior bare-serial note in place (no duplicate SN).
+        const zohoCondLabel = conditionLabel(conditionGrade, 'full');
         for (const [poId, liMap] of serialMergeScratch) {
           const rec: Record<string, string> = {};
           for (const [liId, serials] of liMap) {
-            rec[liId] =
+            const serialPart =
               serials.length === 1 ? `SN: ${serials[0]}` : `SNs: ${serials.join(', ')}`;
+            rec[liId] = zohoCondLabel ? `${serialPart} · ${zohoCondLabel}` : serialPart;
           }
           serialNotesByPo.set(poId, rec);
         }
@@ -762,7 +809,10 @@ export const POST = withAuth(async (request, ctx) => {
               );
             }
           }
-        } else {
+        } else if (!localReceive) {
+          // localReceive intentionally skips the Zoho purchase receive — an
+          // unfound carton has no PO to reconcile (byPo is empty anyway; this
+          // guard enforces the invariant even if an off-PO line carried an id).
           for (const zohoPoId of byPo.keys()) {
             let lineItemsPosted: {
               line_item_id: string;
@@ -1030,6 +1080,10 @@ export const POST = withAuth(async (request, ctx) => {
     let skipReason: string | null = null;
     if (skipZohoReceive) {
       skipReason = 'scan_only';
+    } else if (localReceive) {
+      // Unfound carton received locally — lines are RECEIVED (DONE), Zoho is
+      // intentionally untouched. Emerald success, not a "no PO link" warning.
+      skipReason = 'received_local';
     } else if (attemptedPoIds.size === 0 && updatedLines.length > 0) {
       skipReason = 'no_zoho_link';
     } else if (circuitOpen) {
@@ -1051,7 +1105,7 @@ export const POST = withAuth(async (request, ctx) => {
 
     return respond({
       success: true,
-      receive_intent: skipZohoReceive ? 'scan_only' : 'zoho_receive',
+      receive_intent: skipZohoReceive ? 'scan_only' : localReceive ? 'local_receive' : 'zoho_receive',
       updated_count: linesUpdatedViaReceiveUnits ? updatedLines.length : 0,
       receiving_lines: updatedLines,
       receiving_id: receivingId,

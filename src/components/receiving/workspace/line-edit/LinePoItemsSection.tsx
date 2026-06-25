@@ -16,6 +16,7 @@ import { markConditionSet } from '../ReceivingProgressStepper';
 import { ActiveLineConditionSerial } from './ActiveLineConditionSerial';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { WorkspaceCapabilities } from '../workspace-capabilities';
+import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
 import type { UnboxLineController } from './unbox-line-controller';
 
 interface LinePoItemsSectionProps {
@@ -23,9 +24,18 @@ interface LinePoItemsSectionProps {
   staffId: string;
   caps: WorkspaceCapabilities;
   c: UnboxLineController;
+  onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
+  onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
 }
 
-export function LinePoItemsSection({ row, staffId, caps, c }: LinePoItemsSectionProps) {
+export function LinePoItemsSection({
+  row,
+  staffId,
+  caps,
+  c,
+  onItemDescFeedback,
+  onItemDescSaved,
+}: LinePoItemsSectionProps) {
   const router = useRouter();
 
   if (row.receiving_id == null) return null;
@@ -66,6 +76,8 @@ export function LinePoItemsSection({ row, staffId, caps, c }: LinePoItemsSection
       receivingId={row.receiving_id}
       activeLineId={row.id}
       readOnly={!caps.editLines}
+      onItemDescFeedback={onItemDescFeedback}
+      onItemDescSaved={onItemDescSaved}
       activeConditionOverride={c.isMultiQtyLine ? (c.unitLabelCondition ?? c.cond) : c.cond}
       activeSerialActions={{
         editingSerialId: c.headerSerialEdit?.id ?? null,

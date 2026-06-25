@@ -366,12 +366,14 @@ export function useUnboxLineController(
 
   // Unfound cartons have no Zoho PO to receive against — never fire a Zoho
   // purchase-receive for them. The primary CTA becomes "Receive locally"
-  // (print + scan_only) and the Zoho-receive menu option is disabled.
+  // (print + local_receive): lines advance to RECEIVED locally (NOT just
+  // SCANNED), and Zoho is left untouched. The Zoho-receive menu option is
+  // disabled. ("Mark as scanned" stays available as the explicit scan_only path.)
   const isUnfound = row.receiving_source === 'unmatched';
 
   const handlePrintAndReceive = useCallback(() => {
     runPrintLabel();
-    handleReceive(isUnfound ? 'scan_only' : 'zoho_receive');
+    handleReceive(isUnfound ? 'local_receive' : 'zoho_receive');
   }, [runPrintLabel, handleReceive, isUnfound]);
 
   const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
@@ -381,13 +383,19 @@ export function useUnboxLineController(
   const combinedReviewDisabled = !canReceiveReview || !canPrintReview;
   const isSinglePoItem = itemTotal === 1;
   const receiveMenuLabel = isSinglePoItem ? 'Receive' : 'Receive all';
-  const printReceivePrimaryLabel = isUnfound ? 'Receive locally' : 'Print · receive';
-  const splitMenuAriaLabel = isSinglePoItem
-    ? 'Print only, mark as scanned, or receive (no print)'
-    : 'Print only, mark as scanned, or receive all (no print)';
-  const splitMenuHoverTitle = isSinglePoItem
-    ? 'Hover for print-only, mark as scanned, or receive without print'
-    : 'Hover for print-only, mark as scanned, or receive all without print';
+  const printReceivePrimaryLabel = isUnfound ? 'Receive locally' : receiveMenuLabel;
+  // Unfound cartons have no Zoho/scan options in the menu — just print-only and
+  // a local "receive all". Keep the menu copy honest so it matches what's shown.
+  const splitMenuAriaLabel = isUnfound
+    ? 'Print only, or receive all locally (no print)'
+    : isSinglePoItem
+      ? 'Print only, mark as scanned, or receive (no print)'
+      : 'Print only, mark as scanned, or receive all (no print)';
+  const splitMenuHoverTitle = isUnfound
+    ? 'Hover for print-only or receive all locally — Zoho is not touched'
+    : isSinglePoItem
+      ? 'Hover for print-only, mark as scanned, or receive without print'
+      : 'Hover for print-only, mark as scanned, or receive all without print';
   const receiveMenuTitle = isUnfound
     ? 'Unfound carton — no Zoho PO to receive against; use Receive locally'
     : row.receiving_id == null

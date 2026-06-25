@@ -251,7 +251,7 @@ export async function buildReceivingClaimTemplate(
   const descriptionLines: string[] = [
     `Issue: ${CLAIM_TYPE_LABEL[claimType]}`,
     ...(hasPo ? [] : [`Purchase Order: ${poRef}`]),
-    lineSummary ? lineSummary : `Scope: package-wide (no specific item)`,
+    ...(lineSummary ? [lineSummary] : hasPo ? [`Scope: package-wide (no specific item)`] : []),
   ];
   if (serials.length) {
     descriptionLines.push(`Serial${serials.length > 1 ? 's' : ''}: ${serials.join(', ')}`);

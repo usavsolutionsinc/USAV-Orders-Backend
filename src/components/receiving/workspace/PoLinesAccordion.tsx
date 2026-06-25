@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup } from 'framer-motion';
-import { ChevronDown, Plus, FileText, Check, X } from '@/components/Icons';
+import { ChevronDown, Plus, FileText, Check } from '@/components/Icons';
+import type { InlineActionFeedbackPayload } from './InlineActionFeedbackCard';
 import { toast } from '@/lib/toast';
 import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
@@ -93,6 +94,10 @@ interface Props {
    * always kept visible. Off in the unbox workspace, where every line matters.
    */
   hideNoTestLines?: boolean;
+  /** Success/error feedback renders below the label preview in LineEditPanel. */
+  onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
+  /** Called after a successful local + Zoho item-description save. */
+  onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
 }
 
 /**
@@ -112,6 +117,8 @@ export function PoLinesAccordion({
   activeSerialActions,
   readOnly = false,
   hideNoTestLines = false,
+  onItemDescFeedback,
+  onItemDescSaved,
 }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
@@ -194,30 +201,89 @@ export function PoLinesAccordion({
       ),
     [localRows],
   );
-  // Inline item-description (Zoho line desc) edit — the notes icon on a row
-  // toggles this; it swaps in for the condition/serial meta row and the green
-  // check saves to receiving_lines.zoho_notes.
+  // Inline item-description (Zoho line desc). The notes icon toggles the row's
+  // meta display between (a) the condition + serial chips and (b) the Zoho item
+  // description, in the same slot — `descShown` holds the line whose description
+  // is currently swapped in. Clicking the shown description opens `descEdit`, an
+  // inline editor whose green check saves to receiving_lines.zoho_notes and
+  // pushes the same text to the linked Zoho PO line item description.
+  const [descShown, setDescShown] = useState<number | null>(null);
   const [descEdit, setDescEdit] = useState<{ id: number; draft: string } | null>(null);
-  const [savingDesc, setSavingDesc] = useState(false);
+  const [descSavingLineId, setDescSavingLineId] = useState<number | null>(null);
+  const descInputRef = useRef<HTMLInputElement>(null);
+
+  function zohoSkipNote(zoho?: { skipped?: string }): string | undefined {
+    switch (zoho?.skipped) {
+      case 'no_zoho_link':
+        return 'Saved locally — no Zoho PO link on this line.';
+      case 'no_line_item_id':
+        return 'Saved locally — sync with Zoho first.';
+      case 'po_not_editable':
+        return 'Saved locally — Zoho PO is not editable.';
+      default:
+        return undefined;
+    }
+  }
+
+  useEffect(() => {
+    if (descShown == null) return;
+    requestAnimationFrame(() => {
+      const el = descInputRef.current;
+      if (!el) return;
+      const len = el.value.length;
+      el.focus();
+      el.setSelectionRange(len, len);
+      el.scrollLeft = el.scrollWidth;
+    });
+  }, [descShown, descEdit?.id]);
   const saveItemDesc = async (lineId: number) => {
-    if (!descEdit || descEdit.id !== lineId || savingDesc) return;
+    if (!descEdit || descEdit.id !== lineId || descSavingLineId != null) return;
     const next = descEdit.draft.trim() || null;
-    setSavingDesc(true);
+    setDescSavingLineId(lineId);
+    onItemDescFeedback?.(null);
     try {
       const res = await fetch(`/api/receiving/lines/${lineId}/zoho-note`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ zoho_notes: next }),
       });
+      const data = (await res.json().catch(() => null)) as {
+        error?: string;
+        zoho?: { patched?: boolean; skipped?: string };
+      } | null;
       if (res.ok) {
         setLocalRows((prev) =>
           prev.map((r) => (r.id === lineId ? ({ ...r, zoho_notes: next } as ReceivingLineRow) : r)),
         );
-        setDescEdit(null);
+        setDescEdit({ id: lineId, draft: next ?? '' });
+        onItemDescSaved?.(lineId, next);
+        onItemDescFeedback?.({
+          tone: 'emerald',
+          headline: next ? 'Item description updated' : 'Item description cleared',
+          items: next ? [next] : [],
+          note: data?.zoho?.patched ? undefined : zohoSkipNote(data?.zoho),
+          at: Date.now(),
+        });
         queryClient.invalidateQueries({ queryKey });
+      } else {
+        onItemDescFeedback?.({
+          tone: 'amber',
+          headline: 'Could not save item description',
+          items: [],
+          note: data?.error?.trim() || 'Save failed',
+          at: Date.now(),
+        });
       }
+    } catch {
+      onItemDescFeedback?.({
+        tone: 'amber',
+        headline: 'Could not save item description',
+        items: [],
+        note: 'Save failed',
+        at: Date.now(),
+      });
     } finally {
-      setSavingDesc(false);
+      setDescSavingLineId(null);
     }
   };
 
@@ -314,35 +380,6 @@ export function PoLinesAccordion({
                       clip the SerialChipWithMenu dropdown (positioned below the
                       row). The chip menu is not portaled, so any clipping
                       ancestor hides it. */}
-                  {descEdit?.id === line.id ? (
-                    // Item-description editor — swaps in for condition/serial.
-                    <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        value={descEdit.draft}
-                        onChange={(e) => setDescEdit({ id: line.id, draft: e.target.value })}
-                        placeholder="Item description (Zoho)"
-                        autoFocus
-                        className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-caption normal-case tracking-normal text-gray-800"
-                      />
-                      <button
-                        type="button"
-                        title="Save item description"
-                        onClick={(e) => { e.stopPropagation(); void saveItemDesc(line.id); }}
-                        disabled={savingDesc}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white ring-1 ring-inset ring-emerald-700 transition disabled:opacity-40"
-                      >
-                        <Check className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                      <button
-                        type="button"
-                        title="Cancel"
-                        onClick={(e) => { e.stopPropagation(); setDescEdit(null); }}
-                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                      >
-                        <X className="h-3.5 w-3.5" aria-hidden />
-                      </button>
-                    </div>
-                  ) : (
                   <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
@@ -432,30 +469,70 @@ export function PoLinesAccordion({
                       </>
                     ) : null}
                   </div>
-                  )}
                 </div>
                 {!readOnly ? (
                   <button
                     type="button"
-                    title="Edit item description (Zoho)"
-                    aria-label="Edit item description"
+                    title="Toggle item description (Zoho)"
+                    aria-label="Toggle item description"
+                    aria-pressed={descShown === line.id}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setDescEdit(descEdit?.id === line.id ? null : { id: line.id, draft: line.zoho_notes ?? '' });
+                      // Toggle the 2nd row (condition/serial entry) between the
+                      // pills + serial adder and the Zoho item-description editor.
+                      const opening = descShown !== line.id;
+                      const next = opening ? line.id : null;
+                      setDescShown(next);
+                      // Seed / clear the inline editor draft as the row toggles.
+                      setDescEdit(next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' });
+                      onItemDescFeedback?.(null);
+                      if (opening && isActive) setActiveCollapsed(false);
                     }}
-                    className="-m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                    className={`-m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 transition-colors hover:bg-blue-100 hover:text-gray-600 ${
+                      descShown === line.id ? 'bg-blue-100 text-blue-600' : 'text-gray-400'
+                    }`}
                   >
                     <FileText className="h-3.5 w-3.5" aria-hidden />
                   </button>
                 ) : null}
               </div>
-              {/* Active row only — slot for condition pills, serial adder,
-                  etc. Passes the line's own serials (from this accordion's
-                  query) so the inline adder shows the same chips the row
-                  header shows. Hidden while the chevron has collapsed the row. */}
-              {isActive && !activeCollapsed && activeRowSlot ? (
+              {/* Active row only — the 2nd row. By default it holds the
+                  condition pills + serial adder (activeRowSlot). The notes icon
+                  toggles this same row to the Zoho item-description editor
+                  (descShown) — full-width entry, green check all the way right.
+                  Hidden while the chevron has collapsed the row. */}
+              {isActive && !activeCollapsed && (activeRowSlot || descShown === line.id) ? (
                 <div className="border-t border-blue-200/60 px-3 py-3">
-                  {typeof activeRowSlot === 'function'
+                  {descShown === line.id ? (
+                    <div className="space-y-1">
+                      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
+                        Item description
+                      </p>
+                      <div className="flex h-10 items-stretch gap-2">
+                        <input
+                          ref={descInputRef}
+                          value={descEdit?.draft ?? ''}
+                          onChange={(e) => {
+                            setDescEdit({ id: line.id, draft: e.target.value });
+                            onItemDescFeedback?.(null);
+                          }}
+                          placeholder="Zoho line description"
+                          onKeyDown={(e) => { if (e.key === 'Enter') void saveItemDesc(line.id); }}
+                          className="h-10 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-caption normal-case tracking-normal text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                        />
+                        <button
+                          type="button"
+                          title="Save item description"
+                          aria-label="Save item description"
+                          onClick={() => void saveItemDesc(line.id)}
+                          disabled={descSavingLineId === line.id}
+                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white ring-1 ring-inset ring-emerald-700 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <Check className="h-4 w-4" aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                  ) : typeof activeRowSlot === 'function'
                     ? activeRowSlot({ serials: line.serials ?? [] })
                     : activeRowSlot}
                 </div>

@@ -135,12 +135,18 @@ export function FloatingButton({
             )}
           >
             <div className="group/split-menu relative flex shrink-0 self-stretch">
+              {/* The chevron stays interactive even when the PRIMARY CTA is
+                  disabled — each menu item carries its own `disabled`, and a
+                  disabled <button> here would suppress pointer events over the
+                  chevron, so `group-hover` never fires and the menu can't open
+                  at all (the classic "hover does nothing" bug). Only an in-flight
+                  action (`loading`) locks it. */}
               <button
                 type="button"
                 aria-haspopup="menu"
                 aria-label={menuLabel ?? 'More actions'}
                 title={menuTitle}
-                disabled={isDisabled}
+                disabled={loading}
                 className="flex h-12 items-center justify-center rounded-l-2xl border-r border-white/20 bg-transparent px-3 text-white outline-none transition-[filter] focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/70 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ChevronDown className="h-4 w-4 opacity-95" />

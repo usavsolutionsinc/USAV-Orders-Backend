@@ -168,6 +168,16 @@ export function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']
       detail: '',
     };
   }
+  if (zoho.skip_reason === 'received_local' || zoho.skip_reason === 'unfound_no_po') {
+    // Unfound carton received locally — lines are RECEIVED, Zoho is
+    // intentionally not touched (there is no PO to reconcile against).
+    return {
+      verdict: 'success',
+      headline: 'Received locally — Zoho not touched',
+      tone: 'emerald',
+      detail: '',
+    };
+  }
   if (!zoho.attempted) {
     return {
       verdict: 'skipped',

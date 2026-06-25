@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { syncPoHeaderNotesToZoho } from '@/lib/receiving/zoho-po-notes-sync';
+import { resolveCartonZohoPoId } from '@/lib/receiving/resolve-carton-po-id';
 import pool from '@/lib/db';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -375,14 +377,23 @@ export async function PATCH(
     }
 
     // Carton-level OVERALL Zoho note (Zoho PO header `notes`). Editable in the
-    // workspace Zoho Notes tab; the operator's edit is persisted here and pushed
-    // back to the Zoho PO via after() (best-effort) when `push_to_zoho` is set.
+    // workspace Zoho Notes tab; persisted here and pushed to Zoho when
+    // `push_to_zoho` is set (Save to Zoho).
+    const pushToZoho = body.push_to_zoho === true;
     let zohoNoteEdited: string | null | undefined;
     if (Object.prototype.hasOwnProperty.call(body, 'zoho_notes')) {
       const raw = body.zoho_notes;
       zohoNoteEdited = raw == null || raw === '' ? null : String(raw).trim() || null;
       updates.push(`zoho_notes = $${idx++}`);
       values.push(zohoNoteEdited);
+    }
+    let zohoPoIdForNotes: string | null = null;
+    if (zohoNoteEdited !== undefined && pushToZoho) {
+      // Resolve the PO id from the carton header OR any linked line — eBay-
+      // imported cartons keep the PO id on the LINE, so a header-only lookup
+      // skipped the push with `no_zoho_link`. Mirrors the per-line description
+      // sync (which already reads the line), so notes now sync just like it.
+      zohoPoIdForNotes = await resolveCartonZohoPoId(ctx.organizationId, id);
     }
 
     // Carton-level listing URL (sourced from Zoho PO parse or operator input
@@ -561,7 +572,36 @@ export async function PATCH(
       method: 'manual',
     });
 
-    return NextResponse.json({ success: true, receiving: result.rows[0] });
+    let zoho:
+      | Awaited<ReturnType<typeof syncPoHeaderNotesToZoho>>
+      | undefined;
+    if (zohoNoteEdited !== undefined && pushToZoho) {
+      zoho = await syncPoHeaderNotesToZoho({
+        zohoPoId: zohoPoIdForNotes,
+        notes: zohoNoteEdited ?? null,
+      });
+      after(async () => {
+        try { await invalidateCacheTags(['receiving-lines', 'receiving-logs']); } catch { /* best-effort */ }
+      });
+      if (!zoho.ok && !zoho.skipped) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: zoho.error || 'Zoho PO notes update failed',
+            receiving: result.rows[0],
+            zoho_notes: zohoNoteEdited,
+            zoho,
+          },
+          { status: 502 },
+        );
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      receiving: result.rows[0],
+      ...(zoho != null ? { zoho_notes: zohoNoteEdited, zoho } : {}),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to update receiving';
     console.error('receiving/[id] PATCH failed:', error);

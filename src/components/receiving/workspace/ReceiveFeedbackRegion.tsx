@@ -20,8 +20,8 @@
  * ────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
-import { AlertTriangle, Check, ChevronDown, Loader2, X } from '@/components/Icons';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, ChevronDown, Loader2 } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
 import {
   framerPresence,
@@ -34,6 +34,7 @@ import {
 import { getStationChannelName, safeChannelName } from '@/lib/realtime/channels';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
+import { InlineActionFeedbackCard } from './InlineActionFeedbackCard';
 import { ReceiveResponsePanel } from './ReceiveResponsePanel';
 import type {
   ReceiveInFlight,
@@ -124,37 +125,6 @@ function buildView(summary: ReceiveSummary, failed: boolean): ChecklistView {
   return { tone: 'emerald', headline: 'Receive complete', items };
 }
 
-// Gentle pop on each check as its row staggers in. Module-level + typed so the
-// `type: 'spring'` literal doesn't widen to `string` under inference. Damping is
-// tuned high (minimal overshoot) — this is a serious ops surface, not a toy.
-const CHECK_ICON_VARIANTS: Variants = {
-  initial: { scale: 0.5, opacity: 0 },
-  animate: {
-    scale: 1,
-    opacity: 1,
-    transition: { type: 'spring', stiffness: 500, damping: 26 },
-  },
-};
-
-const TONE = {
-  emerald: {
-    border: 'border-emerald-200',
-    bg: 'bg-emerald-50',
-    bar: 'bg-emerald-500',
-    title: 'text-emerald-900',
-    icon: 'text-emerald-500',
-    body: 'text-emerald-900',
-  },
-  amber: {
-    border: 'border-amber-200',
-    bg: 'bg-amber-50',
-    bar: 'bg-amber-500',
-    title: 'text-amber-900',
-    icon: 'text-amber-500',
-    body: 'text-amber-900',
-  },
-} as const;
-
 function ReceiveSuccessChecklist({
   result,
   onDismiss,
@@ -162,8 +132,6 @@ function ReceiveSuccessChecklist({
   result: Extract<ReceiveResult, { kind: 'success' }>;
   onDismiss: () => void;
 }) {
-  const reduce = useReducedMotion();
-  const item = useMotionPresence({ initial: { opacity: 0, y: 6 }, animate: { opacity: 1, y: 0 } });
   // House collapse preset for the details dropdown (height:auto is the one
   // sanctioned layout animation — low-frequency expand only). Reduced motion
   // collapses it to a pure opacity fade via the hook.
@@ -195,78 +163,32 @@ function ReceiveSuccessChecklist({
   );
 
   const view = buildView(result.summary, status === 'failed');
-  const tone = TONE[view.tone];
-  const timestamp = new Date(result.at).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
 
-  // Key/value rows for the details dropdown.
+  // Key/value rows for the details dropdown — show real note/description text
+  // when present; omit internal ids (receiving / line ids).
   const detailRows: Array<[string, string]> = [
-    ['Intent', result.summary.intent === 'scan_only' ? 'Scan only (local)' : 'Zoho receive'],
-    ['Receiving', `#${result.receivingId}`],
-    ['Lines', result.lineIds.length ? result.lineIds.map((id) => `#${id}`).join(', ') : '—'],
-    ['Descriptions', String(result.summary.descriptionsUpdated)],
-    ['Notes pushed', result.summary.notesUpdated ? 'Yes' : 'No'],
+    ['Intent', result.summary.intent === 'scan_only' ? 'Scan only (local)' : result.summary.intent === 'local_receive' ? 'Received locally' : 'Zoho receive'],
+    ...(result.summary.itemDescription
+      ? [['Item description', result.summary.itemDescription] as [string, string]]
+      : []),
+    ...(result.summary.poNotes
+      ? [['PO notes', result.summary.poNotes] as [string, string]]
+      : []),
     ['Marked received', result.summary.markedReceived ? 'Yes' : 'No'],
     ['Sync', result.reconcile ? status : 'n/a'],
     ['Response', `HTTP ${result.response.httpStatus || '—'} · ${result.response.durationMs}ms`],
   ];
 
   return (
-    <div className={`relative overflow-hidden rounded-lg border ${tone.border} ${tone.bg}`}>
-      <span className={`absolute inset-y-0 left-0 w-[3px] ${tone.bar}`} aria-hidden />
-      <div className="flex items-start gap-2 px-3 py-2.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className={`text-eyebrow font-black uppercase tracking-widest ${tone.title}`}>
-              {view.headline}
-            </p>
-            <span className="shrink-0 text-eyebrow font-semibold tabular-nums text-slate-400">
-              {timestamp}
-            </span>
-          </div>
-
-          <motion.ul
-            className="mt-1.5 space-y-1"
-            initial="initial"
-            animate="animate"
-            variants={{
-              animate: {
-                transition: {
-                  staggerChildren: reduce ? 0 : 0.08,
-                  delayChildren: reduce ? 0 : 0.04,
-                },
-              },
-            }}
-          >
-            {view.items.map((label, i) => (
-              <motion.li
-                key={`${i}-${label}`}
-                variants={item as Variants}
-                className={`flex items-start gap-1.5 text-caption font-semibold leading-snug ${tone.body}`}
-              >
-                <motion.span
-                  variants={reduce ? undefined : CHECK_ICON_VARIANTS}
-                  className="mt-px shrink-0"
-                >
-                  <Check className={`h-4 w-4 ${tone.icon}`} />
-                </motion.span>
-                <span className="min-w-0">{label}</span>
-              </motion.li>
-            ))}
-          </motion.ul>
-
-          {view.note ? (
-            <p className="mt-1.5 flex items-start gap-1.5 text-micro font-medium leading-snug text-slate-600">
-              {view.tone === 'amber' ? (
-                <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
-              ) : null}
-              <span className="min-w-0">{view.note}</span>
-            </p>
-          ) : null}
-
+    <InlineActionFeedbackCard
+      tone={view.tone}
+      headline={view.headline}
+      items={view.items}
+      note={view.note}
+      at={result.at}
+      onDismiss={onDismiss}
+      footer={
+        <>
           {/* Reconcile footer — only while a real Zoho receive is in flight. */}
           {result.reconcile && status === 'pending' && view.tone === 'emerald' ? (
             <p className="mt-1.5 flex items-center gap-1.5 text-micro font-semibold uppercase tracking-wider text-slate-400">
@@ -310,7 +232,11 @@ function ReceiveSuccessChecklist({
                       <dt className="text-micro font-semibold uppercase tracking-wide text-slate-400">
                         {k}
                       </dt>
-                      <dd className="min-w-0 break-words text-micro font-medium text-slate-700">
+                      <dd
+                        className={`min-w-0 break-words text-micro font-medium text-slate-700 ${
+                          k === 'Item description' || k === 'PO notes' ? 'whitespace-pre-wrap' : ''
+                        }`}
+                      >
                         {v}
                       </dd>
                     </div>
@@ -319,19 +245,9 @@ function ReceiveSuccessChecklist({
               </motion.div>
             ) : null}
           </AnimatePresence>
-        </div>
-
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          title="Dismiss"
-          className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 

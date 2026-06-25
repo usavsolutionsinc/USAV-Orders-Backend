@@ -14,8 +14,11 @@
  * in exactly one place.
  */
 
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { ReceiveFeedbackRegion } from './ReceiveFeedbackRegion';
+import { WorkspaceActionFeedbackSlot } from './WorkspaceActionFeedbackSlot';
+import type { InlineActionFeedbackPayload } from './InlineActionFeedbackCard';
 import { workspaceCapabilities, type ReceivingWorkspaceVariant } from './workspace-capabilities';
 import { LineNotesTabbedCard } from './line-edit/LineNotesTabbedCard';
 import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
@@ -28,7 +31,18 @@ import { LineEditModals } from './line-edit/LineEditModals';
 import { useUnboxLineController } from './line-edit/hooks/useUnboxLineController';
 import { PackageCheck } from '@/components/Icons';
 import { FloatingButton } from '@/design-system/primitives';
-import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
+
+function zohoPoNotesSkipNote(zoho?: { patched?: boolean; skipped?: string }): string | undefined {
+  switch (zoho?.skipped) {
+    case 'no_zoho_link':
+      return 'Saved locally — no Zoho PO link on this carton.';
+    case 'po_not_editable':
+      return 'Saved locally — Zoho PO is not editable.';
+    default:
+      return undefined;
+  }
+}
 
 export function LineEditPanel({
   row,
@@ -52,6 +66,26 @@ export function LineEditPanel({
   // All state, effects, and handlers live in the controller — this panel is pure
   // composition. See useUnboxLineController / useReceivingLineCore.
   const c = useUnboxLineController(row, staffId, { itemTotal });
+  const [actionFeedback, setActionFeedback] = useState<InlineActionFeedbackPayload | null>(null);
+
+  useEffect(() => {
+    setActionFeedback(null);
+  }, [row.id]);
+
+  const handleItemDescFeedback = useCallback((feedback: InlineActionFeedbackPayload | null) => {
+    setActionFeedback(feedback);
+  }, []);
+
+  const handleItemDescSaved = useCallback(
+    (lineId: number, zohoNotes: string | null) => {
+      if (lineId === row.id) {
+        dispatchLineUpdated({ id: row.id, zoho_notes: zohoNotes });
+      }
+    },
+    [row.id],
+  );
+
+  const showReceiveFeedback = Boolean(c.receiving || c.receiveResult);
 
   return (
     <>
@@ -77,7 +111,14 @@ export function LineEditPanel({
           <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
             <LineCartonContextSection row={row} staffId={staffId} caps={caps} c={c} />
 
-            <LinePoItemsSection row={row} staffId={staffId} caps={caps} c={c} />
+            <LinePoItemsSection
+              row={row}
+              staffId={staffId}
+              caps={caps}
+              c={c}
+              onItemDescFeedback={handleItemDescFeedback}
+              onItemDescSaved={handleItemDescSaved}
+            />
 
             {/* Notes — tabbed: operator Notes · read-only Zoho Notes · Checklist
                 (future). The Zoho-import and operator notes are separate columns
@@ -94,23 +135,55 @@ export function LineEditPanel({
                 }}
                 onSaveOverallNote={async (text) => {
                   if (row.receiving_id == null) return;
+                  setActionFeedback(null);
                   try {
                     const res = await fetch(`/api/receiving/${row.receiving_id}`, {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      // push_to_zoho: server-side best-effort live PO-notes push (once wired).
                       body: JSON.stringify({ zoho_notes: text, push_to_zoho: true }),
                     });
+                    const data = (await res.json().catch(() => null)) as {
+                      error?: string;
+                      zoho?: { patched?: boolean; skipped?: string };
+                    } | null;
                     if (res.ok) {
-                      toast.success('Saved Zoho note');
-                      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                      dispatchLineUpdated({ id: row.id, receiving_zoho_notes: text || null });
+                      setActionFeedback({
+                        tone: 'emerald',
+                        headline: text ? 'Zoho notes updated' : 'Zoho notes cleared',
+                        // Show the FULL PO notes (multi-line, pre-wrapped) so the
+                        // operator sees exactly what landed in Zoho — not a
+                        // truncated first-line preview.
+                        items: text ? [text] : [],
+                        note: data?.zoho?.patched ? undefined : zohoPoNotesSkipNote(data?.zoho),
+                        at: Date.now(),
+                      });
                     } else {
-                      toast.error('Could not save the Zoho note');
+                      setActionFeedback({
+                        tone: 'amber',
+                        headline: 'Could not save Zoho notes',
+                        items: [],
+                        note: data?.error?.trim() || 'Save failed',
+                        at: Date.now(),
+                      });
                     }
                   } catch {
-                    toast.error('Could not save the Zoho note');
+                    setActionFeedback({
+                      tone: 'amber',
+                      headline: 'Could not save Zoho notes',
+                      items: [],
+                      note: 'Save failed',
+                      at: Date.now(),
+                    });
                   }
                 }}
+                onOverallDraftChange={() => setActionFeedback(null)}
+                showZohoTab={!c.isUnfound}
+                onLoadZohoNotes={
+                  row.receiving_id != null && !c.isUnfound
+                    ? () => c.syncCartonFromZoho()
+                    : undefined
+                }
               />
             ) : null}
 
@@ -128,24 +201,28 @@ export function LineEditPanel({
               />
             ) : null}
 
-            {/* Receive feedback — replaces the old bottom-right toast. One
-                crossfading region: in-flight progress → animated success
-                checklist (optimistic, realtime-reconciled) → diagnostic panel
-                for skips/cooldowns/errors. */}
-            <ReceiveFeedbackRegion
-              receiving={c.receiving}
-              receiveResult={c.receiveResult}
-              responseExpanded={c.responseExpanded}
-              setResponseExpanded={c.setResponseExpanded}
-              onDismiss={() => {
-                c.setReceiveResult(null);
-                c.setResponseExpanded(false);
-              }}
-            />
+            {/* Below label — receive feedback OR item-desc / Zoho-notes saves. */}
+            {showReceiveFeedback ? (
+              <ReceiveFeedbackRegion
+                receiving={c.receiving}
+                receiveResult={c.receiveResult}
+                responseExpanded={c.responseExpanded}
+                setResponseExpanded={c.setResponseExpanded}
+                onDismiss={() => {
+                  c.setReceiveResult(null);
+                  c.setResponseExpanded(false);
+                }}
+              />
+            ) : (
+              <WorkspaceActionFeedbackSlot
+                feedback={actionFeedback}
+                onDismiss={() => setActionFeedback(null)}
+              />
+            )}
           </div>
         </div>
 
-        {/* Print·receive — unbox-only; triage just identifies. A direct child of
+        {/* Receive — unbox-only; triage just identifies. A direct child of
             the (relative, full-height) panel so the FloatingButton docks to the
             bottom of the right pane regardless of how short the content is. */}
         {caps.receiveBar ? (
@@ -159,12 +236,14 @@ export function LineEditPanel({
             canPrint={c.canPrintReview}
             canReceive={c.canReceiveReview}
             canZohoReceive={c.canZohoReceive}
+            isLocalReceive={c.isUnfound}
             receiveMenuLabel={c.receiveMenuLabel}
             receiveMenuTitle={c.receiveMenuTitle}
             onPrintAndReceive={() => void c.handlePrintAndReceive()}
             onPrintOnly={() => c.runPrintLabel()}
             onMarkScanned={() => void c.handleReceive('scan_only')}
             onReceive={() => void c.handleReceive('zoho_receive')}
+            onLocalReceive={() => void c.handleReceive('local_receive')}
           />
         ) : null}
 

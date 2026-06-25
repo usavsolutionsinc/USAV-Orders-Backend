@@ -3,12 +3,13 @@
 /**
  * Compact carton-photos control for the condensed CartonContextCard row.
  *
- * The button is always the send-to-phone trigger (camera + "+"), whether or not
- * photos exist yet — capture happens on mobile. Once photos exist it also shows
- * the count (×N) and hovering reveals the read/delete gallery toolbar.
+ * One pill: camera + (×N when photos exist) + "+". Click sends a capture
+ * request to the paired phone. When photos exist, hovering the pill reveals
+ * the read/delete gallery toolbar — the wrapper owns hover (with a short leave
+ * delay) so the cursor can cross the gap to the popover without it collapsing.
  */
 
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
@@ -33,6 +34,8 @@ interface PhotosPayload {
   receivingCreatedAt?: string | null;
   initialNasFolder?: string | null;
 }
+
+const HOVER_LEAVE_MS = 140;
 
 export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   receivingId,
@@ -87,59 +90,77 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   );
 
   const count = photos.length;
+  const [galleryHover, setGalleryHover] = useState(false);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
 
-  const btnBase =
-    'inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-lg px-2.5 text-caption font-black tabular-nums shadow-sm transition-colors';
+  const openGallery = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (count > 0) setGalleryHover(true);
+  }, [count]);
 
-  // Empty state — camera + "+", display only. Capture now happens on mobile.
-  if (count === 0) {
-    return (
-      <button
-        type="button"
-        onClick={handleRequestOnPhone}
-        title="Send to phone to take photos"
-        aria-label="Send to phone to take photos"
-        className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100`}
-      >
-        <Camera className="h-4 w-4" />
-        <Plus className="h-3 w-3" />
-      </button>
-    );
-  }
+  const scheduleCloseGallery = useCallback(() => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setGalleryHover(false), HOVER_LEAVE_MS);
+  }, []);
 
-  // With photos — camera + ×N + "+"; the button itself still sends to phone
-  // (the "+" affordance stays even once photos exist), and hovering reveals the
-  // gallery toolbar for viewing/deleting. The in-popover add button is gone —
-  // send-to-phone now lives on this top-bar button only.
+  useEffect(() => () => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+  }, []);
+
+  const btnClass =
+    'inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-caption font-black tabular-nums text-blue-700 shadow-sm transition-colors hover:bg-blue-100';
+
+  const title =
+    count > 0
+      ? `${count} photo${count === 1 ? '' : 's'} — click to send to phone, hover for gallery`
+      : 'Send to phone to take photos';
+
+  const ariaLabel =
+    count > 0
+      ? `${count} carton photo${count === 1 ? '' : 's'}; send to phone or hover for gallery`
+      : 'Send to phone to take photos';
+
   return (
-    <div className="group/photos relative shrink-0">
+    <div
+      className="relative shrink-0"
+      onMouseEnter={openGallery}
+      onMouseLeave={scheduleCloseGallery}
+      onFocusCapture={openGallery}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCloseGallery();
+      }}
+    >
       <button
         type="button"
         onClick={handleRequestOnPhone}
-        title={`${count} photo${count === 1 ? '' : 's'} — click "+" to send to phone, hover for options`}
-        aria-label={`${count} photo${count === 1 ? '' : 's'}; send to phone to add more`}
-        className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}
+        title={title}
+        aria-label={ariaLabel}
+        aria-expanded={count > 0 ? galleryHover : undefined}
+        className={btnClass}
       >
         <Camera className="h-4 w-4" />
-        ×{count}
+        {count > 0 ? <>×{count}</> : null}
         <Plus className="h-3 w-3" />
       </button>
-      {/* Hover popover. `pt-1.5` is inside the group so the gap between button
-          and card doesn't drop the hover. Only rendered when photos exist. */}
-      <div className="invisible absolute right-0 top-full z-30 pt-1.5 opacity-0 transition-opacity duration-100 group-hover/photos:visible group-hover/photos:opacity-100">
-        <div className="w-fit max-w-[80vw] rounded-xl border border-gray-200 bg-white p-1 shadow-xl">
-          <PhotoGallery
-            photos={photos}
-            orderId={`RCV-${receivingId}`}
-            launcherLayout="toolbar"
-            showCopyLinks={false}
-            toolbarShowLabel={false}
-            compact
-            libraryHref={`/ops/photos?receivingId=${receivingId}`}
-            onPhotoDeleted={refresh}
-          />
+
+      {count > 0 && galleryHover ? (
+        // `pt-1.5` bridges the gap so the pointer stays inside the hover target
+        // while moving from the pill to the gallery card.
+        <div className="absolute right-0 top-full z-30 pt-1.5">
+          <div className="w-fit max-w-[80vw] rounded-xl border border-gray-200 bg-white p-1 shadow-xl">
+            <PhotoGallery
+              photos={photos}
+              orderId={`RCV-${receivingId}`}
+              launcherLayout="toolbar"
+              showCopyLinks={false}
+              toolbarShowLabel={false}
+              compact
+              libraryHref={`/ops/photos?receivingId=${receivingId}`}
+              onPhotoDeleted={refresh}
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 });

@@ -8,7 +8,9 @@ import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { classifyReceiveResponse } from '../../ReceiveResponsePanel';
 
-type ReceiveIntent = 'zoho_receive' | 'scan_only';
+// 'local_receive' = unfound carton: mark RECEIVED locally, never touch Zoho.
+// Distinct from 'scan_only', which stays SCANNED.
+type ReceiveIntent = 'zoho_receive' | 'scan_only' | 'local_receive';
 
 /**
  * Last response from POST /api/receiving/mark-received-po. Surfaced inline
@@ -49,6 +51,10 @@ export type ReceiveSummary = {
   isUnfound: boolean;
   /** Zoho was already fully received — local now matches the dashboard. */
   alreadyReceived: boolean;
+  /** Per-line Zoho item description for the details dropdown. */
+  itemDescription?: string | null;
+  /** PO / operator notes text for the details dropdown. */
+  poNotes?: string | null;
 };
 
 /**
@@ -245,6 +251,8 @@ export function useReceiveAction(
                 intent: receiveIntent,
                 isUnfound,
                 alreadyReceived,
+                itemDescription: row.zoho_notes?.trim() || null,
+                poNotes: perLineNotes || row.receiving_zoho_notes?.trim() || null,
               };
 
               setReceiveResult({

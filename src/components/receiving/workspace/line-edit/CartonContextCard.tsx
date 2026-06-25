@@ -394,7 +394,7 @@ export function CartonContextCard({
               ) : null
             ) : null}
 
-            {/* Photos — camera + ×N. Unbox-only. */}
+            {/* Photos — camera + ×N + send-to-phone (+); hover opens gallery. Unbox-only. */}
             {showStaffPhotoRow && receivingId != null ? (
               <ReceivingPhotoButton receivingId={receivingId} staffId={Number(staffId) || 0} />
             ) : null}
