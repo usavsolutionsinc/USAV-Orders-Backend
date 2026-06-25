@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-06-25T04:04:57.735Z",
+  "generatedAt": "2026-06-25T06:55:00.330Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "7a1f2ed8a086075c9bb4d6d5aade8ad2f3b82444",
+      "shortSha": "7a1f2ed8",
+      "date": "2026-06-24T21:57:39-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore: sync in-flight work — support console rebuild, receiving claim wizard, ops journey, kit parts, packer photos",
+      "body": "Support console (Zendesk) — deleted 8 monolithic components; rebuilt as\nmodular chat/claim/queue architecture under src/components/support/zendesk/;\nadded photo-ticket route, ticket-assign route, zendesk users route, and\nenhanced comment + Zendesk client lib with attachment helpers.\n\nReceiving claim wizard — multi-step flow (compose/confirm/photos/review/seller)\nreplaces single ClaimInternalStep; useReceivingClaimController extended with\nstep machine and photo upload; claim-types updated for new step shape.\n\nOperations — new OperationsSidebarPanel + sidebar/operations/ modules;\nOperationsWorkspace + feature workspace under src/features/operations/;\n/api/operations/journey and /api/operations/saved-views CRUD; useOperationsJourney\n+ useOperationsSavedViews hooks; journey timeline adapter (lib/timeline/journey.ts).\n\nKit parts — /api/sku-catalog/[id]/kit-parts route; KitPartsSection +\nKitPartsWorkspace UI; useSkuKitParts hook; schema lib; Products sidebar + workspace\nwired to ?view=kit mode.\n\nPacker photos — PackerPhotoCaptureSurface + PackerPhotoUploadQueue (mobile);\n/api/packing-photos + /api/packing/policy routes; /api/packerlogs/for-order;\nusePackerPhotosRealtimeRefresh; packing-logs save-photo route extended.\n\nPhoto library — PhotoDateTree, PhotoSortMenu, PhotoStationFolders, PhotoContextMenu;\ndate-tree query lib; deleted PhotoLibrarySidebarNav (consolidated into panel);\nPhotoLibraryPage extended; MobileSwipePhotoViewer rebuilt.\n\nSchema & migrations — receiving lifecycle columns, shipment links, support ticket\nassignments, operations saved views, receiving exceptions, tenant isolation for\nengine/kpi/photos, email-login tokens, staff org email; Drizzle schema updated.\n\nEmail login — /api/auth/email-login/request + /verify routes; signin page gains\nOTP flow.\n\nSettings — LegalSection added; SettingsSidebarPanel + settings-sections wired.\n\nDisplay archetype rules — .claude/rules/contextual-display.md + display/* docs\n(station, workbench, monitor-and-canvas, motion-crossfade, reference-timeline).\n\nOther — global-search expanded; scan/resolve refactored; HorizontalButtonSlider\ngains dense mode; motion-framer.ts new workbenchPane preset; DateGroupHeader +\nEventTimeline + TimelineSection polished; workflow tap additions; sidebar-navigation\ntest + types updated; tenancy coverage docs regenerated; UnshippedShelfBoard;\nIdentifierToggle; OperationsSidebarPanel; MobileSidebarDrawer.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>",
+      "type": "chore",
+      "title": "sync in-flight work — support console rebuild, receiving claim wizard, ops journey, kit parts, packer photos"
+    },
+    {
+      "sha": "828fd06822e64ca3ab8752da29bd3c32650b24ac",
+      "shortSha": "828fd068",
+      "date": "2026-06-24T16:58:07-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "zoho fixes",
+      "body": "",
+      "type": "other",
+      "title": "zoho fixes"
+    },
     {
       "sha": "e291d44e53c348f7267cfafd5330558c17a84ffe",
       "shortSha": "e291d44e",
@@ -1961,26 +1981,6 @@
       "body": "- Receiving: refactored line workspace, serial scanning, condition pills, photo capture, audit timeline, and mobile receiving flow\n- SKU catalog: new pairing hub with batch pairing, pairing queue, suggestion seeding, and pairing-queries lib\n- PO mailbox: added triage routes/components and LLM-based extraction helper\n- Barcode/labels: new GS1 DataMatrix, location/rack label printers, label room sidebar, and printer store hook\n- Warehouse: rack detail/label workspace, room finder context, room sidebar list\n- Shipped details panel: removed legacy panel and shipping edit card, updated stacks and action bar\n- Mobile: new bottom nav, mobile home/history routes, scan FAB improvements\n- Inventory v2: controls panel, URL state hook, removed moved-banner\n- Misc: barcode routing updates, receiving label helpers, manifest/icon updates, cleanup of unused hooks/components\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
       "type": "feature",
       "title": "receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements"
-    },
-    {
-      "sha": "dac10049ce9d7d40b18d879bfe7c99c1c981c139",
-      "shortSha": "dac10049",
-      "date": "2026-05-21T17:00:21-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "sku and receiving and products mutlisku component",
-      "body": "",
-      "type": "other",
-      "title": "sku and receiving and products mutlisku component"
-    },
-    {
-      "sha": "7a7b8108393066d8537b9249fc8dbf53a10b76cd",
-      "shortSha": "7a7b8108",
-      "date": "2026-05-21T13:48:15-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated picker and receiving mobile display",
-      "body": "",
-      "type": "other",
-      "title": "updated picker and receiving mobile display"
     }
   ]
 }

@@ -6,6 +6,7 @@ import { SerialCard } from '../SerialCard';
 import { SerialMatchResult, type SerialMatchedOrder } from '../SerialMatchResult';
 import { ReceivingUnitRows, type UnitSerial } from '../ReceivingUnitRows';
 import type { ActiveRowSerial } from '../PoLinesAccordion';
+import { useSetting } from '@/hooks/useSettings';
 
 type SerialLookupView = Pick<
   ComponentProps<typeof SerialMatchResult>,
@@ -21,8 +22,8 @@ type SerialLookupView = Pick<
  * RETURN-type lines additionally surface a serial-match band.
  *
  * Purely presentational: every mutation is delegated to the parent's existing
- * handlers. `window.confirm` guards on delete are kept here to preserve the
- * original UX exactly.
+ * handlers. The `window.confirm` guards on delete are gated by the
+ * `receiving.confirmSerialRemoval` org setting (Settings Registry; default on).
  */
 export function ActiveLineConditionSerial({
   serials,
@@ -65,6 +66,13 @@ export function ActiveLineConditionSerial({
   onConditionChange: (next: string) => void;
   onEditingSerialChange: (next: ActiveRowSerial | null) => void;
 }) {
+  // Settings Registry: org policy for the destructive serial-remove confirm
+  // (default on — falls back to the prior always-confirm UX while loading).
+  const { value: confirmSerialRemoval } = useSetting<boolean>(
+    'receiving',
+    'receiving.confirmSerialRemoval',
+  );
+  const shouldConfirmRemoval = confirmSerialRemoval ?? true;
   const isMultiQty = (quantityExpected ?? 0) > 1;
   const matchResult =
     receivingType === 'RETURN' ? (
@@ -95,7 +103,7 @@ export function ActiveLineConditionSerial({
             serialEditTarget={editingSerial?.id != null ? (editingSerial as UnitSerial) : null}
             onAddSerial={(sn, grade) => onSubmitSerial(sn, grade)}
             onDeleteSerial={(id) => {
-              if (!window.confirm('Remove this serial?')) return;
+              if (shouldConfirmRemoval && !window.confirm('Remove this serial?')) return;
               onDeleteSerialUnit(id);
             }}
             onReplaceSerial={(original, next) => onReplaceSerialUnit(original, next)}
@@ -136,7 +144,7 @@ export function ActiveLineConditionSerial({
           }}
           onDeleteSerial={(s) => {
             if (s.id == null) return;
-            if (!window.confirm(`Remove serial ${s.serial_number}?`)) return;
+            if (shouldConfirmRemoval && !window.confirm(`Remove serial ${s.serial_number}?`)) return;
             onDeleteSerialUnit(s.id);
           }}
         />

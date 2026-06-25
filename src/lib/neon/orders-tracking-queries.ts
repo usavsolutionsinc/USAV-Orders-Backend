@@ -23,6 +23,8 @@ import type { PoolClient } from 'pg';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { transitionalUsavOrgId, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { linkShipment } from '@/lib/shipping/shipment-links';
+import { isShipmentLinksDualWrite } from '@/lib/feature-flags';
 
 /** Minimal pg client surface the helpers need (a pool client mid-transaction). */
 type Tx = Pick<PoolClient, 'query'>;
@@ -307,6 +309,18 @@ export async function upsertOrderTracking(
                updated_at = NOW()`,
         [orderIds, shipmentId, orgId]
       );
+      // Dual-write the unified shipment_links table (flag-gated; legacy
+      // order_shipment_links stays the read path during the bake). Same tx →
+      // can't drift. Mirrors the primary link just written above.
+      if (isShipmentLinksDualWrite()) {
+        for (const orderId of orderIds) {
+          await linkShipment(
+            orgId,
+            { ownerType: 'ORDER', ownerId: orderId, shipmentId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.assign' },
+            client,
+          );
+        }
+      }
     } catch (error) {
       if (!isMissingOrderShipmentLinksRelation(error)) throw error;
     }

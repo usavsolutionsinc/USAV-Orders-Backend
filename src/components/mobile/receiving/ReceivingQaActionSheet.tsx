@@ -20,6 +20,7 @@
  */
 
 import { useState } from 'react';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { toast } from 'sonner';
 import { BottomSheet, ConfirmSheet } from '@/components/ui/BottomSheet';
 
@@ -58,10 +59,7 @@ async function markAllLines(
           disposition_code: dispositionCode,
           condition_grade: qaStatus === 'PASSED' ? 'USED_A' : 'PARTS',
           notes,
-          client_event_id:
-            typeof crypto !== 'undefined' && 'randomUUID' in crypto
-              ? crypto.randomUUID()
-              : `${Date.now()}-${line.id}`,
+          client_event_id: safeRandomUUID(),
         }),
       });
       if (res.ok) ok += 1;

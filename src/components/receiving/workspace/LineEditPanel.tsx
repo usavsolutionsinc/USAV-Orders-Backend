@@ -15,9 +15,9 @@
  */
 
 import { toast } from '@/lib/toast';
-import { ReceiveResponsePanel } from './ReceiveResponsePanel';
+import { ReceiveFeedbackRegion } from './ReceiveFeedbackRegion';
 import { workspaceCapabilities, type ReceivingWorkspaceVariant } from './workspace-capabilities';
-import { LineNotesCard } from './line-edit/LineNotesCard';
+import { LineNotesTabbedCard } from './line-edit/LineNotesTabbedCard';
 import { LineLabelPreviewCard } from './line-edit/LineLabelPreviewCard';
 import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
 import { LineEditToolbar } from './line-edit/LineEditToolbar';
@@ -27,7 +27,6 @@ import { LinePoItemsSection } from './line-edit/LinePoItemsSection';
 import { LineEditModals } from './line-edit/LineEditModals';
 import { useUnboxLineController } from './line-edit/hooks/useUnboxLineController';
 import { PackageCheck } from '@/components/Icons';
-import { WorkspaceCard } from '@/design-system/components';
 import { FloatingButton } from '@/design-system/primitives';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 
@@ -68,6 +67,7 @@ export function LineEditPanel({
             share: () => void c.handleShare(),
             audit: () => c.setAuditOpen(true),
             copy: () => void c.handleCopyAll(),
+            photoNote: () => c.setPhotoNoteOpen(true),
           }}
         />
 
@@ -79,14 +79,37 @@ export function LineEditPanel({
 
             <LinePoItemsSection row={row} staffId={staffId} caps={caps} c={c} />
 
-            {/* Notes card — standalone so the operator can leave context next to
-                the photos + chips. Saves on blur. Hidden in triage. */}
+            {/* Notes — tabbed: operator Notes · read-only Zoho Notes · Checklist
+                (future). The Zoho-import and operator notes are separate columns
+                now, so they no longer collide. Saves on blur. Hidden in triage. */}
             {caps.notes ? (
-              <LineNotesCard
-                value={c.notes}
+              <LineNotesTabbedCard
+                notes={c.notes}
+                overallZohoNotes={row.receiving_zoho_notes ?? null}
+                lineId={row.id}
+                sku={row.sku}
                 onChange={c.setNotes}
                 onBlur={() => {
                   if (c.notes !== (row.notes || '')) void c.patch({ notes: c.notes });
+                }}
+                onSaveOverallNote={async (text) => {
+                  if (row.receiving_id == null) return;
+                  try {
+                    const res = await fetch(`/api/receiving/${row.receiving_id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      // push_to_zoho: server-side best-effort live PO-notes push (once wired).
+                      body: JSON.stringify({ zoho_notes: text, push_to_zoho: true }),
+                    });
+                    if (res.ok) {
+                      toast.success('Saved Zoho note');
+                      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+                    } else {
+                      toast.error('Could not save the Zoho note');
+                    }
+                  } catch {
+                    toast.error('Could not save the Zoho note');
+                  }
                 }}
               />
             ) : null}
@@ -105,19 +128,20 @@ export function LineEditPanel({
               />
             ) : null}
 
-            {c.lastReceiveResponse ? (
-              <WorkspaceCard label="Last receive" bodyClassName="px-0 py-0">
-                <ReceiveResponsePanel
-                  response={c.lastReceiveResponse}
-                  expanded={c.responseExpanded}
-                  onToggle={() => c.setResponseExpanded((v) => !v)}
-                  onDismiss={() => {
-                    c.setLastReceiveResponse(null);
-                    c.setResponseExpanded(false);
-                  }}
-                />
-              </WorkspaceCard>
-            ) : null}
+            {/* Receive feedback — replaces the old bottom-right toast. One
+                crossfading region: in-flight progress → animated success
+                checklist (optimistic, realtime-reconciled) → diagnostic panel
+                for skips/cooldowns/errors. */}
+            <ReceiveFeedbackRegion
+              receiving={c.receiving}
+              receiveResult={c.receiveResult}
+              responseExpanded={c.responseExpanded}
+              setResponseExpanded={c.setResponseExpanded}
+              onDismiss={() => {
+                c.setReceiveResult(null);
+                c.setResponseExpanded(false);
+              }}
+            />
           </div>
         </div>
 
@@ -134,10 +158,9 @@ export function LineEditPanel({
             splitMenuHoverTitle={c.splitMenuHoverTitle}
             canPrint={c.canPrintReview}
             canReceive={c.canReceiveReview}
+            canZohoReceive={c.canZohoReceive}
             receiveMenuLabel={c.receiveMenuLabel}
-            receiveMenuTitle={
-              row.receiving_id == null ? 'Line must be linked to a shipment' : undefined
-            }
+            receiveMenuTitle={c.receiveMenuTitle}
             onPrintAndReceive={() => void c.handlePrintAndReceive()}
             onPrintOnly={() => c.runPrintLabel()}
             onMarkScanned={() => void c.handleReceive('scan_only')}

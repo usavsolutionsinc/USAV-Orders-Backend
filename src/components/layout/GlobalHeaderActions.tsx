@@ -50,32 +50,11 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
   const inboxCount = inbox?.items.length ?? 0;
 
   const [popover, setPopover] = useState<OpenPopover>('none');
-  const [staffName, setStaffName] = useState('');
   // Each control owns its own anchor so its popover portals out of the header
   // (escaping any transformed/blurred ancestor) yet still pins to the trigger.
   const clipboardAnchorRef = useRef<HTMLDivElement>(null);
   const inboxAnchorRef = useRef<HTMLDivElement>(null);
   const accountAnchorRef = useRef<HTMLDivElement>(null);
-
-  // Staff name for the account avatar's initials (same source as the popover).
-  useEffect(() => {
-    if (!user) {
-      setStaffName('');
-      return;
-    }
-    let cancelled = false;
-    fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { staff?: { name?: string } } | null) => {
-        if (!cancelled && data?.staff?.name) setStaffName(data.staff.name);
-      })
-      .catch(() => {
-        /* fall back to the dot glyph */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
 
   // Close everything on navigation.
   useEffect(() => {
@@ -91,8 +70,25 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
 
   const sc = stationThemeColors[getStaffThemeById(user.staffId)];
 
+  // `user.name` is the single source of truth (the auth session envelope) and
+  // is present synchronously on first paint — no per-surface `/api/staff` fetch.
+  // The server coalesces a blank name to `Staff #id`, so the initial is always
+  // meaningful; the `'·'` is only an unreachable last resort.
+  const displayName = user.name;
+  const accountInitial = initials(displayName) || '·';
+
+  // On mobile, controls match the sidebar menu button (h-10 w-10) for thumb-sized
+  // hit targets; desktop stays compact.
+  const ctrlSize = isMobile ? 'h-10 w-10' : 'h-9 w-9';
+  const iconSize = isMobile ? 'h-5 w-5' : 'h-4 w-4';
+  // Initial is sized PROPORTIONALLY to the circle so it reads the same as the
+  // FAB avatar in QuickAccessPopover (~0.33 text-to-circle ratio: 14px in its
+  // ~42px inner circle). Matching the absolute px instead makes the M look
+  // oversized in these smaller header dots.
+  const avatarSize = isMobile ? 'h-10 w-10 text-sm' : 'h-8 w-8 text-caption';
+
   return (
-    <div className="flex items-center gap-2">
+    <div className={cn('flex items-center', isMobile ? 'gap-1.5' : 'gap-2')}>
       {/* Selection toggle — registered per page via usePageSelection(). A
           pencil that flips the active surface into select mode. */}
       {!isMobile && selection && (
@@ -135,11 +131,12 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           aria-expanded={clipboardOpen}
           title="Clipboard history"
           className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            'flex items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            ctrlSize,
             clipboardOpen && 'bg-gray-100',
           )}
         >
-          <Clipboard className="h-4 w-4" />
+          <Clipboard className={iconSize} />
         </button>
         <AnchoredLayer
           open={clipboardOpen}
@@ -161,16 +158,19 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           aria-expanded={inboxOpen}
           title="Notifications"
           className={cn(
-            'relative flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            'relative flex items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+            ctrlSize,
             inboxOpen && 'bg-gray-100',
           )}
         >
-          <Inbox className="h-4 w-4" />
-          {inboxCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-eyebrow font-bold tabular-nums text-white">
-              {inboxCount > 9 ? '9+' : inboxCount}
-            </span>
-          )}
+          <span className="relative inline-flex shrink-0">
+            <Inbox className={iconSize} />
+            {inboxCount > 0 && (
+              <span className="pointer-events-none absolute -right-1 -top-1 flex h-3 min-w-[12px] items-center justify-center rounded-full bg-rose-600 px-0.5 text-[8px] font-bold leading-none tabular-nums text-white ring-1 ring-white">
+                {inboxCount > 9 ? '9+' : inboxCount}
+              </span>
+            )}
+          </span>
         </button>
         <AnchoredLayer
           open={inboxOpen}
@@ -193,14 +193,20 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           onClick={() => setPopover((p) => (p === 'account' ? 'none' : 'account'))}
           aria-label="Account & quick access"
           aria-expanded={accountOpen}
-          title={staffName || `Staff #${user.staffId}`}
+          title={displayName || `Staff #${user.staffId}`}
           className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-full text-eyebrow font-bold text-white transition-transform active:scale-95',
+            'flex items-center justify-center rounded-full font-bold transition-transform active:scale-95',
+            avatarSize,
             sc.bg,
+            // `text-white` must come AFTER avatarSize: tailwind-merge treats the
+            // custom `text-eyebrow`/`text-caption` size tokens as text-color
+            // classes, so an earlier `text-white` gets stripped and the initial
+            // falls back to the dark inherited body color.
+            'text-white',
             accountOpen && 'ring-2 ring-gray-300 ring-offset-1',
           )}
         >
-          {staffName ? initials(staffName) : '·'}
+          {accountInitial}
         </button>
         <AnchoredLayer
           open={accountOpen}

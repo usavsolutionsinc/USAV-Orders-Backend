@@ -16,6 +16,7 @@ import {
   ShoppingCart,
 } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { SOURCE_PLATFORMS } from '@/lib/source-platform';
 
@@ -296,10 +297,7 @@ export function resolvePoScanValue(
 // ── Scan / exception types ──────────────────────────────────────────────────
 
 export function randomId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ── Listing URL helpers ─────────────────────────────────────────────────────

@@ -1,16 +1,70 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
 import {
   addTicketComment,
+  getUsers,
   isZendeskConfigured,
+  listAgents,
   listTicketComments,
   ZendeskApiError,
   ZendeskNotConfiguredError,
+  type ZendeskComment,
 } from '@/lib/zendesk';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { getCachedUsers, upsertCachedUsers } from '@/lib/zendesk-users-cache';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Attach author identity (name/email/photo) to each comment server-side, so the
+ * chat thread renders names on first paint instead of flickering "User #<id>".
+ * Sources: the in-proc agent roster + the zendesk_users cache table. Author ids
+ * missing from both are backfilled in the background (after()) so the next load
+ * is resolved — we never block the response on a live user fetch.
+ */
+async function enrichCommentAuthors(
+  organizationId: OrgId,
+  comments: ZendeskComment[],
+): Promise<ZendeskComment[]> {
+  const ids = Array.from(new Set(comments.map((c) => c.author_id).filter((n) => n > 0)));
+  if (!ids.length) return comments;
+
+  const [agents, cached] = await Promise.all([
+    listAgents().catch(() => []),
+    getCachedUsers(organizationId, ids),
+  ]);
+  const agentsById = new Map(agents.map((a) => [a.id, a]));
+
+  const enriched = comments.map((c) => {
+    const agent = agentsById.get(c.author_id);
+    const user = cached.get(c.author_id);
+    const src = agent ?? user;
+    if (!src) return c;
+    return {
+      ...c,
+      author_name: src.name,
+      author_email: src.email ?? null,
+      author_photo: src.photo ?? null,
+      author_is_agent: Boolean(agent),
+    } as ZendeskComment;
+  });
+
+  // Backfill any ids we couldn't resolve, without blocking the response.
+  const missing = ids.filter((id) => !agentsById.has(id) && !cached.has(id));
+  if (missing.length) {
+    after(async () => {
+      try {
+        const fetched = await getUsers(missing);
+        if (fetched.length) await upsertCachedUsers(organizationId, fetched);
+      } catch (err) {
+        console.warn('[comments] author backfill failed', err);
+      }
+    });
+  }
+  return enriched;
+}
 
 /**
  * Zendesk ticket comment thread.
@@ -54,7 +108,7 @@ const ListQuery = z.object({
 });
 
 export const GET = withAuth(
-  async (req: NextRequest) => {
+  async (req: NextRequest, ctx) => {
     const context = 'GET /api/zendesk/tickets/[id]/comments';
     try {
       if (!isZendeskConfigured()) return notConfigured(context);
@@ -65,7 +119,8 @@ export const GET = withAuth(
         perPage: sp.get('perPage') ?? sp.get('per_page') ?? undefined,
       });
       const result = await listTicketComments(id, { page, perPage });
-      return NextResponse.json({ success: true, ...result });
+      const comments = await enrichCommentAuthors(ctx.organizationId, result.comments);
+      return NextResponse.json({ success: true, ...result, comments });
     } catch (err) {
       return mapZendeskError(err, context);
     }

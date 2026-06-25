@@ -235,6 +235,7 @@ export async function readJourneyEntity(
   // 1) SAL — all stations (the journey wants PACK/SHIP, not just TECH/OUTBOUND).
   if (want('sal') && anchors.shipmentId != null) {
     const stationFilter = filters.stations?.length ? mapStationsToSpines(filters.stations).sal : null;
+    const typeFilter = filters.types?.length ? filters.types : null;
     const sal = await client.query<StationActivityRow>(
       `SELECT sal.id, sal.created_at, sal.station, sal.activity_type, s.name AS actor_name,
               sal.scan_ref, sal.tech_serial_number_id,
@@ -247,9 +248,10 @@ export async function readJourneyEntity(
           AND (sal.shipment_id = $2 OR (sal.activity_type = 'SERIAL_ADDED' AND tsn.shipment_id = $2))
           AND sal.created_at >= $3 AND sal.created_at < $4
           AND ($5::text[] IS NULL OR sal.station = ANY($5::text[]))
+          AND ($6::text[] IS NULL OR sal.activity_type = ANY($6::text[]))
         ORDER BY sal.created_at DESC, sal.id DESC
-        LIMIT $6`,
-      [orgId, anchors.shipmentId, from, to, stationFilter, limit],
+        LIMIT $7`,
+      [orgId, anchors.shipmentId, from, to, stationFilter, typeFilter, limit],
     );
     for (const r of sal.rows) {
       const raw: StationActivityRow = {
@@ -277,7 +279,12 @@ export async function readJourneyEntity(
   // 2) inventory_events — the unit lifecycle (reuse the shared spine reader).
   if (want('inventory') && anchors.serialUnitIds.length > 0) {
     const spine = await deps.readInventorySpine(
-      { serialUnitIds: anchors.serialUnitIds, order: 'desc', limit },
+      {
+        serialUnitIds: anchors.serialUnitIds,
+        order: 'desc',
+        limit,
+        eventTypes: filters.types?.length ? filters.types : undefined,
+      },
       orgId,
     );
     for (const r of spine) {

@@ -374,6 +374,17 @@ export async function PATCH(
       values.push(next);
     }
 
+    // Carton-level OVERALL Zoho note (Zoho PO header `notes`). Editable in the
+    // workspace Zoho Notes tab; the operator's edit is persisted here and pushed
+    // back to the Zoho PO via after() (best-effort) when `push_to_zoho` is set.
+    let zohoNoteEdited: string | null | undefined;
+    if (Object.prototype.hasOwnProperty.call(body, 'zoho_notes')) {
+      const raw = body.zoho_notes;
+      zohoNoteEdited = raw == null || raw === '' ? null : String(raw).trim() || null;
+      updates.push(`zoho_notes = $${idx++}`);
+      values.push(zohoNoteEdited);
+    }
+
     // Carton-level listing URL (sourced from Zoho PO parse or operator input
     // on the receiving page). Same trim+nullify pattern as support_notes so
     // explicit clears land as NULL rather than empty strings.

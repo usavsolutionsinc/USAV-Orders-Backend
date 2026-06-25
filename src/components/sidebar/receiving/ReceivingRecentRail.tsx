@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
@@ -87,6 +87,37 @@ export function getReceivingStatusDotLabel(row: ReceivingLineRow): string {
   return 'Scanned';
 }
 
+/**
+ * Inline quantity for the unbox rails (Recent + Viewed). A carton that's only
+ * been SCANNED (matched/arrived, not yet unboxed) reads as scanned == expected:
+ * the door scan brings the WHOLE carton in physically, so a single-line PO
+ * shows "1/1" rather than "0/1". Mirrors the Scanned rail
+ * (ReceivingScannedRail), gated on the same `getReceivingStatusDotLabel ===
+ * 'Scanned'` stage. Once units are actually unboxed the dot leaves the Scanned
+ * stage and we show real received/expected progress (emerald when complete).
+ */
+export function renderReceivingRailQuantity(row: ReceivingLineRow): ReactNode {
+  const expected = row.quantity_expected;
+  if (getReceivingStatusDotLabel(row) === 'Scanned') {
+    return (
+      <span className="text-gray-600">
+        {expected ?? 1}/{expected ?? '?'}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={
+        expected != null && row.quantity_received >= expected
+          ? 'text-emerald-600'
+          : 'text-gray-600'
+      }
+    >
+      {row.quantity_received}/{expected ?? '?'}
+    </span>
+  );
+}
+
 interface Props {
   selectedLineId: number | null;
   selectedRow?: ReceivingLineRow | null;
@@ -166,15 +197,7 @@ export function ReceivingRecentRail({
       getActivityAt={getUnboxActivityAt}
       getStatusDot={getReceivingStatusDot}
       getStatusDotLabel={getReceivingStatusDotLabel}
-      renderQuantity={(row) => (
-        <span className={
-          row.quantity_expected != null && row.quantity_received >= row.quantity_expected 
-            ? 'text-emerald-600' 
-            : 'text-gray-600'
-        }>
-          {row.quantity_received}/{row.quantity_expected ?? '?'}
-        </span>
-      )}
+      renderQuantity={renderReceivingRailQuantity}
       previewQtyLabel="Received"
       getPreviewQty={(row) => ({
         current: row.quantity_received,

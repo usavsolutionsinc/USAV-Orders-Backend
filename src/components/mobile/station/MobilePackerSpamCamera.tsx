@@ -10,6 +10,7 @@ import {
 import { Camera, X, Check } from '@/components/Icons';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import {
   MobileSwipePhotoViewer,
   type SwipePhotoSlide,
@@ -199,10 +200,7 @@ export function MobilePackerSpamCamera({
     const compressed = await compressPhotoForUpload(rawBlob, { source: 'packer-spam' });
     const blob = compressed.blob;
     const previewUrl = URL.createObjectURL(blob);
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = safeRandomUUID();
 
     setShots((prev) => [...prev, { id, blob, previewUrl }]);
     setFlash(true);
@@ -306,10 +304,7 @@ export function MobilePackerSpamCamera({
     if (!blob) return;
 
     const previewUrl = URL.createObjectURL(blob);
-    const id =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `shot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = safeRandomUUID();
 
     handedOffRef.current = true;
     onDone([{ id, blob, previewUrl }]);

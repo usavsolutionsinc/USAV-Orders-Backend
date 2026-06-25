@@ -70,16 +70,29 @@ export function PhotoLibraryToolbar<T>({
             key={a.key}
             type="button"
             title={a.label}
+            aria-label={a.label}
             onClick={() => void a.run(rows)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors',
+              // Expandable icon button: icon always shows; the label expands on
+              // hover/focus (width + opacity, GPU-cheap). The primary action
+              // keeps its label always visible.
+              'group/action inline-flex items-center rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors',
               a.primary
                 ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
                 : (GHOST_TONE[a.tone ?? 'gray'] ?? GHOST_TONE.gray),
             )}
           >
             {a.icon}
-            <span className="hidden sm:inline">{a.label}</span>
+            <span
+              className={cn(
+                'overflow-hidden whitespace-nowrap transition-all duration-200',
+                a.primary
+                  ? 'ml-1.5 max-w-[10rem]'
+                  : 'ml-0 max-w-0 opacity-0 group-hover/action:ml-1.5 group-hover/action:max-w-[10rem] group-hover/action:opacity-100 group-focus-visible/action:ml-1.5 group-focus-visible/action:max-w-[10rem] group-focus-visible/action:opacity-100',
+              )}
+            >
+              {a.label}
+            </span>
           </button>
         ))}
         <button

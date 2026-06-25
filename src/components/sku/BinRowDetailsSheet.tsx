@@ -2,15 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, X } from '@/components/Icons';
+import { Loader2 } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStaffRole } from '@/hooks/useStaffRole';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────

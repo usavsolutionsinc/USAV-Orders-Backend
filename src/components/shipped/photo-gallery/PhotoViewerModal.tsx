@@ -4,9 +4,98 @@ import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
   AlertCircle, Check, Trash2, Link2 as LinkIcon, Plus, Info, RotateCcw, RefreshCw,
+  Folder, LayoutDashboard,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
+import type { PhotoItem } from './photo-gallery-utils';
 import type { PhotoGalleryController } from './usePhotoGallery';
+
+/** PO#-section for the grouped grid overview. */
+interface ViewerGroup {
+  key: string;
+  label: string;
+  items: PhotoItem[];
+}
+
+/**
+ * Bucket the flat photo list into PO# sections (the same "stack = PO#" model the
+ * library folders use), ordered oldest→newest within each section so they read
+ * left→right. Items keep their original flat `index` so a tile click drills to
+ * the right single image.
+ */
+function groupViewerItemsByPo(items: PhotoItem[]): ViewerGroup[] {
+  const order: string[] = [];
+  const map = new Map<string, ViewerGroup>();
+  for (const item of items) {
+    const ref = item.meta?.poRef?.trim();
+    const ticketId = item.meta?.ticketId ?? null;
+    const key = ref ? `po:${ref}` : ticketId != null ? `t:${ticketId}` : '__unlinked__';
+    const label = ref ? `PO ${ref}` : ticketId != null ? `Ticket #${ticketId}` : 'Unlinked';
+    let group = map.get(key);
+    if (!group) {
+      group = { key, label, items: [] };
+      map.set(key, group);
+      order.push(key);
+    }
+    group.items.push(item);
+  }
+  for (const group of map.values()) {
+    group.items.sort((a, b) => (a.meta?.createdAt ?? '').localeCompare(b.meta?.createdAt ?? ''));
+  }
+  return order.map((key) => map.get(key)!);
+}
+
+/** A tile in the grouped grid overview — preloaded thumb + status fallback. */
+function ViewerGridTile({ item, onOpen }: { item: PhotoItem; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      className="group relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-white/5 transition hover:border-white/40 focus:border-white/60 focus:outline-none"
+    >
+      {item.status === 'loaded' ? (
+        <img src={item.url} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" draggable={false} />
+      ) : item.status === 'error' ? (
+        <div className="flex h-full w-full items-center justify-center bg-red-900/30">
+          <AlertCircle className="h-6 w-6 text-red-400" />
+        </div>
+      ) : (
+        <div className="h-full w-full animate-pulse bg-white/10" />
+      )}
+    </button>
+  );
+}
+
+/**
+ * The grid overview the viewer opens to (when `overview="grid"`): PO#-grouped
+ * sections of large tiles on the dark stage. Clicking a tile drills into the
+ * single-image view at that photo.
+ */
+function ViewerGroupedGrid({ g }: { g: PhotoGalleryController }) {
+  const groups = groupViewerItemsByPo(g.photoItems);
+  return (
+    <div className="absolute inset-0 overflow-y-auto px-6 pb-10 pt-24 sm:px-10">
+      <div className="mx-auto max-w-6xl space-y-8">
+        {groups.map((group) => (
+          <section key={group.key}>
+            <header className="mb-3 flex items-center gap-2 border-b border-white/10 pb-2">
+              <Folder className="h-4 w-4 shrink-0 text-white/50" />
+              <span className="truncate text-base font-bold text-white">{group.label}</span>
+              <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold tabular-nums text-white/70">
+                {group.items.length}
+              </span>
+            </header>
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6">
+              {group.items.map((item) => (
+                <ViewerGridTile key={item.index} item={item} onOpen={() => g.openSingleAt(item.index)} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /** Fullscreen lightbox: zoomable image, nav arrows, thumbnail strip, toolbar. */
 export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
@@ -16,7 +105,10 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
   const canReset = zoomLevel > 1 || g.rotation !== 0;
   // Info panel rides alongside the stage as a flex sibling (not an overlay) so
   // the stage shrinks and the centered controls/arrows recenter automatically.
-  const panelVisible = g.hasContext && g.panelOpen;
+  // It applies to a single photo only — never the grid overview.
+  const panelVisible = g.hasContext && g.panelOpen && !g.gridMode;
+  // Whether a "back to grid" affordance belongs here (we opened on the grid).
+  const canBackToGrid = g.overview === 'grid' && !g.gridMode;
 
   return (
     <motion.div
@@ -44,9 +136,19 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Zoom · rotate · reset — grouped pill on the right with the global
-              actions; kept out of the bottom region so it never collides with the
-              filmstrip. */}
+          {canBackToGrid ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); g.backToGrid(); }}
+              className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-3 text-sm font-bold text-white backdrop-blur-md transition-all hover:bg-white/20"
+              aria-label="Back to the PO group"
+              title="Back to the PO group (Esc)"
+            >
+              <LayoutDashboard className="h-4 w-4" /> Back
+            </button>
+          ) : null}
+
+          {/* Zoom · rotate · reset — single-image only (no target in the grid). */}
+          {!g.gridMode ? (
           <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
             <button
               onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
@@ -90,8 +192,9 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
+          ) : null}
 
-          <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
+          {!g.gridMode ? <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" /> : null}
 
           {g.onAddPhotos && (
             <button
@@ -126,7 +229,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </button>
           ) : null}
 
-          {g.canDeleteCurrent && (
+          {!g.gridMode && g.canDeleteCurrent && (
             <button
               onClick={(e) => { e.stopPropagation(); g.handleDeleteClick(); }}
               disabled={g.deletingPhoto}
@@ -147,7 +250,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </button>
           )}
 
-          {g.hasContext && (
+          {!g.gridMode && g.hasContext && (
             <button
               onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
               aria-pressed={g.panelOpen}
@@ -174,6 +277,10 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         </div>
       )}
 
+      {g.gridMode ? (
+        <ViewerGroupedGrid g={g} />
+      ) : (
+      <>
       {/* Main Photo */}
       <motion.div
         key={currentIndex}
@@ -260,6 +367,8 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
       </div>
       {/* Info panel — flex sibling of the stage; mount/unmount animated. */}

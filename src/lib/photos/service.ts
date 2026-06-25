@@ -14,6 +14,7 @@ import {
   type ListForEntityInput,
 } from './queries/list-for-entity';
 import { buildGcsObjectKey } from './storage/path-builder';
+import { resolveGcsPrefix } from './image-types';
 import { defaultGcsBucket, gcsAdapter, isGcsConfigured } from './storage/gcs-adapter';
 import { getDefaultStorageProvider } from './storage/resolve-primary';
 import { getStorageAdapter, isAdapterUploadEnabled } from './storage/registry';
@@ -153,6 +154,10 @@ async function uploadPhotoToAdapter(input: UploadPhotoInput): Promise<UploadPhot
     (providerCfg.config.bucket as string | undefined) ||
     defaultGcsBucket();
 
+  // A custom image type (photoType matching a photo_image_types row) routes the
+  // object to its own bucket path; built-ins resolve to undefined → entity flow.
+  const prefix = await resolveGcsPrefix(input.organizationId, input.photoType);
+
   return withTenantTransaction(input.organizationId, async (client) => {
     const poRef = input.poRef ?? (await resolvePoRef(input.entityType, input.entityId));
 
@@ -168,6 +173,7 @@ async function uploadPhotoToAdapter(input: UploadPhotoInput): Promise<UploadPhot
       entityType: input.entityType,
       photoId,
       poRef,
+      prefix,
     });
 
     let thumbBuffer: Buffer | null = null;

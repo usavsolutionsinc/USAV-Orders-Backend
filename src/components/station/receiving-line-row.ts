@@ -55,8 +55,15 @@ export interface ReceivingLineRow {
    */
   carton_intake_type?: string | null;
   notes: string | null;
+  /** Zoho PO line description (read-only import); shown in the Zoho Notes tab. 2026-06-24. */
+  zoho_notes?: string | null;
+  /** Zoho PO line unit cost (read-only mirror of Zoho line.rate); pg numeric → string. 2026-06-24. */
+  unit_price?: string | null;
   /** Carton-level support notes from `receiving.support_notes` (same for all lines on the package). */
   receiving_support_notes?: string | null;
+  /** Carton-level OVERALL Zoho PO note (`receiving.zoho_notes`, from the Zoho PO header).
+   *  The Zoho Notes tab's primary content; distinct from the per-line `zoho_notes` (item desc). */
+  receiving_zoho_notes?: string | null;
   /** Carton-level listing URL from `receiving.listing_url` (same for all lines on the package). */
   receiving_listing_url?: string | null;
   /**

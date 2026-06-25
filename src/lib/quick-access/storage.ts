@@ -7,6 +7,7 @@
  * serialize the full settings + pinned list on each write.
  */
 
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import {
   MAX_PINS,
   MAX_RECENTS,
@@ -73,10 +74,7 @@ export function setSettings(patch: Partial<QuickAccessSettings>): QuickAccessSet
 }
 
 function makeId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `pin_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  return safeRandomUUID();
 }
 
 export function isPinned(href: string): boolean {

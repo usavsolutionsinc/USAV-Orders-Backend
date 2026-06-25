@@ -372,7 +372,9 @@ async function syncPurchaseOrderLines(
       disposition_code: 'HOLD',
       condition_grade: 'BRAND_NEW',
       disposition_audit: JSON.stringify([]),
-      notes: asString(line.description),
+      // Zoho line description → its own read-only column (NOT `notes`, which is
+      // operator-owned) so a re-sync can never clobber operator notes. 2026-06-24.
+      zoho_notes: asString(line.description),
       workflow_status: workflowStatus,
       receiving_id: desiredReceivingId,
       zoho_sync_source: 'purchase_order',
@@ -389,7 +391,7 @@ async function syncPurchaseOrderLines(
         'sku',
         'unit_price',
         'quantity_expected',
-        'notes',
+        'zoho_notes',
         'zoho_sync_source',
         'zoho_last_modified_time',
         'zoho_synced_at',
@@ -475,6 +477,29 @@ async function syncPurchaseOrderLines(
         WHERE id = $2`,
       [shipmentId, options.receivingId],
     );
+  }
+
+  // Overall PO note (Zoho PO header `notes`) → carton-level receiving.zoho_notes
+  // (the "Zoho Notes" tab's primary content; distinct from the per-line item
+  // description in receiving_lines.zoho_notes). Best-effort — never breaks the sync.
+  const poNotes = asString(po.notes);
+  if (poNotes) {
+    try {
+      if (options.receivingId) {
+        await client.query(
+          `UPDATE receiving SET zoho_notes = $1, updated_at = NOW() WHERE id = $2`,
+          [poNotes, options.receivingId],
+        );
+      } else {
+        await client.query(
+          `UPDATE receiving SET zoho_notes = $1, updated_at = NOW()
+            WHERE source = 'zoho_po' AND zoho_purchaseorder_id = $2 AND organization_id = $3`,
+          [poNotes, normalizedPoId, orgId],
+        );
+      }
+    } catch (err) {
+      console.warn('[zoho-sync] receiving.zoho_notes update skipped:', err instanceof Error ? err.message : err);
+    }
   }
 
   return {
@@ -724,7 +749,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         disposition_code: 'HOLD',
         condition_grade: 'BRAND_NEW',
         disposition_audit: JSON.stringify([]),
-        notes: null,
+        zoho_notes: asString(line.description),
         zoho_sync_source: 'purchase_receive',
         zoho_last_modified_time: lastModifiedTime,
         zoho_synced_at: syncedAt,
@@ -740,7 +765,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
           'unit_price',
           'quantity_received',
           'quantity_expected',
-          'notes',
+          'zoho_notes',
           'zoho_sync_source',
           'zoho_last_modified_time',
           'zoho_synced_at',

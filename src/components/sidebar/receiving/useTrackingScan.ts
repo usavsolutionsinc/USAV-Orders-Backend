@@ -18,7 +18,7 @@
  * verbatim from ReceivingSidebarPanel; behaviour is unchanged.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { toast } from '@/lib/toast';
@@ -40,6 +40,7 @@ import {
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import type { PhotoRequestPublisher } from '@/components/sidebar/receiving/usePhotoRequestPublisher';
+import { useSetting } from '@/hooks/useSettings';
 
 export interface TrackingScanResult {
   tracking: string;
@@ -98,6 +99,21 @@ export function useTrackingScan({
   const [bulkTracking, setBulkTracking] = useState('');
   const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
   const [trackingLookupInFlight, setTrackingLookupInFlight] = useState(0);
+
+  // Settings Registry — gate the on-resolve auto-actions. Read into refs so the
+  // submitTrackingScan callback identity stays stable (no dep churn / stale
+  // closures); defaults preserve the prior always-on behavior while loading.
+  const { value: autoFocusSerialPref } = useSetting<boolean>('receiving', 'receiving.autoFocusSerial');
+  const { value: autoPushCameraPref } = useSetting<boolean>('receiving', 'receiving.autoPushPhoneCamera');
+  const { value: accordionExpandPref } = useSetting<'active' | 'all'>('receiving', 'receiving.accordionExpand');
+  const autoFocusSerialRef = useRef(true);
+  const autoPushCameraRef = useRef(true);
+  const accordionBootstrapRef = useRef<'default' | 'all'>('default');
+  useEffect(() => { autoFocusSerialRef.current = autoFocusSerialPref ?? true; }, [autoFocusSerialPref]);
+  useEffect(() => { autoPushCameraRef.current = autoPushCameraPref ?? true; }, [autoPushCameraPref]);
+  useEffect(() => {
+    accordionBootstrapRef.current = accordionExpandPref === 'all' ? 'all' : 'default';
+  }, [accordionExpandPref]);
 
   const submitTrackingScan = useCallback(
     (
@@ -190,7 +206,7 @@ export function useTrackingScan({
                     ? openRows[0]
                     : openRows[0] ?? rows[0] ?? null;
               setScanMatchedRows(rows);
-              setLineAccordionBootstrap('default');
+              setLineAccordionBootstrap(accordionBootstrapRef.current);
               setSelectedLine(pick);
               setScanDriven(true);
               if (code.via === 'serial') {
@@ -213,11 +229,15 @@ export function useTrackingScan({
           // Rows without a receiving_id (incoming EXPECTED lines that were never
           // scanned in) still fall through: lookup-po owns creating/adopting the
           // receiving carton and stamping received_at on first scan.
+          // Defaults for the lookup-po call below. The local-first block may
+          // re-target these to the order-mode local-adopt path (no Zoho) when
+          // the scanned tracking is already linked to a known incoming PO.
+          let lookupValueForCall = trackingNumber;
+          let lookupModeForCall: UnboxScanMode = lookupMode;
           if (lookupMode === 'tracking') {
             try {
-              const localRows = (await fetchLinesByTracking(trackingNumber)).filter(
-                (r) => r.receiving_id != null,
-              );
+              const trackingRows = await fetchLinesByTracking(trackingNumber);
+              const localRows = trackingRows.filter((r) => r.receiving_id != null);
               if (localRows.length > 0) {
                 const receivingId = localRows[0].receiving_id as number;
                 // Client short-circuit skips lookup-po — still stamp scanned_by
@@ -254,15 +274,35 @@ export function useTrackingScan({
                 );
                 const pick = openRows[0] ?? localRows[0];
                 setScanMatchedRows(localRows);
-                setLineAccordionBootstrap('default');
+                setLineAccordionBootstrap(accordionBootstrapRef.current);
                 setSelectedLine(pick);
                 setScanDriven(true);
                 // Same unbox ritual as the lookup-po matched path: nudge the
                 // paired phone's camera open and arm the serial input.
-                void publishPhotoRequestFor(receivingId, trackingNumber);
-                setTimeout(() => serialInputRef.current?.focus(), 60);
+                if (autoPushCameraRef.current) void publishPhotoRequestFor(receivingId, trackingNumber);
+                if (autoFocusSerialRef.current) setTimeout(() => serialInputRef.current?.focus(), 60);
                 window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
                 return;
+              }
+              // No local carton yet, but the tracking is already linked to a
+              // known PO in the Incoming feed (EXPECTED lines: PO number set,
+              // receiving_id NULL). Re-target the lookup to the order-mode
+              // local-adopt path (resolvePoIdLocally → linkLocalPoLinesToReceiving):
+              // it reuses the existing incoming receiving row, adopts the local
+              // lines, and skips the Zoho tracking search entirely — so the
+              // "Opening your PO" loader never takes over for an already-known
+              // incoming carton. Only when the tracking maps to exactly one PO;
+              // a multi-PO tracking still needs the Zoho path (resolves up to 3).
+              const incomingPoNumbers = [
+                ...new Set(
+                  trackingRows
+                    .map((r) => (r.zoho_purchaseorder_number || '').trim())
+                    .filter((x) => x.length > 0),
+                ),
+              ];
+              if (incomingPoNumbers.length === 1) {
+                lookupModeForCall = 'order';
+                lookupValueForCall = incomingPoNumbers[0];
               }
             } catch {
               /* local miss/error — fall through to lookup-po */
@@ -273,9 +313,9 @@ export function useTrackingScan({
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              trackingNumber,
+              trackingNumber: lookupValueForCall,
               staffId: Number(staffId),
-              mode: lookupMode,
+              mode: lookupModeForCall,
             }),
           });
           const data = await res.json();
@@ -382,7 +422,7 @@ export function useTrackingScan({
                 // selected line → a BLANK workspace (a single-line PO worked, two
                 // line items did not). Only stays null when the carton has no lines.
                 const pick = openRows[0] ?? rows[0] ?? null;
-                setLineAccordionBootstrap('default');
+                setLineAccordionBootstrap(accordionBootstrapRef.current);
                 setSelectedLine(pick);
                 setScanDriven(true);
               } catch {
@@ -392,8 +432,8 @@ export function useTrackingScan({
 
             // Signal any phone listening on station:{staffId} that this carton
             // is the active one — the phone will auto-open its camera page.
-            void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
-            setTimeout(() => serialInputRef.current?.focus(), 60);
+            if (autoPushCameraRef.current) void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
+            if (autoFocusSerialRef.current) setTimeout(() => serialInputRef.current?.focus(), 60);
 
             // Tell the right-pane loader we're done — workspace open will
             // cover the swap once the line picker resolves.
@@ -425,7 +465,7 @@ export function useTrackingScan({
             if (unmatchedReceivingId != null) {
               // Open the same staff's phone camera for this unmatched carton too
               // — a tracking scan still needs unboxing photos even with no PO.
-              void publishPhotoRequestFor(unmatchedReceivingId, trackingNumber);
+              if (autoPushCameraRef.current) void publishPhotoRequestFor(unmatchedReceivingId, trackingNumber);
               void (async () => {
                 let openRow: ReceivingLineRow | null = null;
                 try {
@@ -443,7 +483,7 @@ export function useTrackingScan({
                 if (!openRow) {
                   openRow = buildUnmatchedStubRow(unmatchedReceivingId, trackingNumber);
                 }
-                setLineAccordionBootstrap('default');
+                setLineAccordionBootstrap(accordionBootstrapRef.current);
                 setSelectedLine(openRow);
                 setScanDriven(true);
                 window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));

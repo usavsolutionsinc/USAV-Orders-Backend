@@ -37,6 +37,7 @@ import {
   type NodeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { buildStaticFlowGraph } from '@/lib/studio/static-flow-graph';
 import type { Diagnostic } from './studio-types';
 import {
@@ -197,7 +198,7 @@ export function StudioCanvas({
         edges: [
           ...kept,
           {
-            id: `e-${crypto.randomUUID()}`,
+            id: `e-${safeRandomUUID()}`,
             source: connection.source,
             sourcePort,
             target: connection.target,

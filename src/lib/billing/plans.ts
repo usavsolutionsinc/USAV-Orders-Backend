@@ -31,6 +31,13 @@ export interface Entitlements {
     auditLogExport: boolean;
     prioritySupport: boolean;
     customBranding: boolean;
+    // Receiving photos written browser-direct to the office NAS over WebDAV
+    // (beyond the always-on background mirror). The Settings Registry gates the
+    // `receiving.nasBackup = direct` option on this. Growth+.
+    nasArchive: boolean;
+    // Advanced receiving vision tuning — the label-OCR consensus / scan-interval
+    // / send-resolution knobs (Settings Registry `receiving.vision.*`). Pro+.
+    advancedVision: boolean;
     // Operations Studio capability (entitlement tiers — Part-2 Track 2).
     //
     // For now this is a single boolean that simply EXISTS so the studio gate
@@ -65,6 +72,8 @@ const STARTER_FEATURES: Entitlements['features'] = {
   auditLogExport: false,
   prioritySupport: false,
   customBranding: false,
+  nasArchive: false,
+  advancedVision: false,
   // Studio is granted on EVERY plan by default (it spreads up through
   // GROWTH/PRO/ENTERPRISE) so turning the mechanism on never revokes Studio
   // from an existing trial/internal org. Tighten per-tier later if/when the
@@ -79,6 +88,8 @@ const GROWTH_FEATURES: Entitlements['features'] = {
   advancedRoles: true,
   aiCopilot: true,
   customBranding: true,
+  // Growth unlocks NAS direct-write (the background mirror is free on all plans).
+  nasArchive: true,
 };
 
 const PRO_FEATURES: Entitlements['features'] = {
@@ -86,6 +97,8 @@ const PRO_FEATURES: Entitlements['features'] = {
   automations: true,
   webhooksOut: true,
   auditLogExport: true,
+  // Pro unlocks the advanced receiving vision tuning knobs.
+  advancedVision: true,
 };
 
 const ENTERPRISE_FEATURES: Entitlements['features'] = {

@@ -185,3 +185,20 @@ export function isUnifiedEngineFulfillmentTaps(): boolean {
   return readBoolEnv('UNIFIED_ENGINE_FULFILLMENT_TAPS');
 }
 
+/**
+ * Dual-write owner↔tracking linkage into the unified `shipment_links` table.
+ *
+ * When ON, the linkage writers (attachBoxToReceiving inbound, applyOrderTrackingOps
+ * outbound — wired incrementally) ALSO upsert shipment_links alongside their legacy
+ * junction (receiving_shipments / order_shipment_links). The READ path stays on the
+ * legacy junctions during the bake; this just keeps shipment_links current beyond
+ * the one-time backfill (2026-06-24_shipment_links.sql). Default OFF: until flipped,
+ * behavior is byte-identical to today. Enable once parity is verified, ahead of the
+ * read cutover. Default ON as of the Phase 4b cutover (the dual-write is
+ * additive + same-tx so shipment_links can't drift from the junction); set
+ * RECEIVING_SHIPMENT_LINKS_DUAL_WRITE=false to disable if ever needed.
+ */
+export function isShipmentLinksDualWrite(): boolean {
+  return readBoolEnv('RECEIVING_SHIPMENT_LINKS_DUAL_WRITE', true);
+}
+

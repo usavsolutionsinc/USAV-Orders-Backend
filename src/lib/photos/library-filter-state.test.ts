@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  clearStructuredPhotoFilters,
+  countActivePhotoLibraryFilters,
   formatPhotoLibraryDateRange,
   parsePhotoLibraryFilters,
   photoLibraryFiltersToParams,
@@ -34,4 +36,46 @@ test('formatPhotoLibraryDateRange renders explicit custom ranges', () => {
     formatPhotoLibraryDateRange({ dateFrom: '2026-06-01', dateTo: '2026-06-03' }),
     'Jun 1 to Jun 3',
   );
+});
+
+test('business-ID filters survive the URL round-trip', () => {
+  const qs =
+    'tracking=1Z999&serial=SN-42&sku=ABC-001&ticketId=12345&pickupId=77&rma=RMA-9';
+  const filters = parsePhotoLibraryFilters(new URLSearchParams(qs));
+  assert.equal(filters.tracking, '1Z999');
+  assert.equal(filters.serial, 'SN-42');
+  assert.equal(filters.sku, 'ABC-001');
+  assert.equal(filters.ticketId, '12345');
+  assert.equal(filters.pickupId, '77');
+  assert.equal(filters.rma, 'RMA-9');
+
+  // Re-serializing reproduces every business id (deep-link safe).
+  const params = photoLibraryFiltersToParams(filters);
+  for (const [key, val] of Object.entries({
+    tracking: '1Z999',
+    serial: 'SN-42',
+    sku: 'ABC-001',
+    ticketId: '12345',
+    pickupId: '77',
+    rma: 'RMA-9',
+  })) {
+    assert.equal(params.get(key), val);
+  }
+});
+
+test('business-ID filters count as structured and clear together', () => {
+  const filters = parsePhotoLibraryFilters(
+    new URLSearchParams('tracking=1Z999&serial=SN-42&sku=ABC-001&ticketId=5&pickupId=6&rma=RMA-9'),
+  );
+  // 6 business ids, each counted once.
+  assert.equal(countActivePhotoLibraryFilters(filters), 6);
+
+  const cleared = clearStructuredPhotoFilters(filters);
+  assert.equal(cleared.tracking, undefined);
+  assert.equal(cleared.serial, undefined);
+  assert.equal(cleared.sku, undefined);
+  assert.equal(cleared.ticketId, undefined);
+  assert.equal(cleared.pickupId, undefined);
+  assert.equal(cleared.rma, undefined);
+  assert.equal(countActivePhotoLibraryFilters(cleared), 0);
 });

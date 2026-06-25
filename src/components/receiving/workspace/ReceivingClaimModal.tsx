@@ -18,7 +18,8 @@ import { ClaimComposeStep } from './claim/components/ClaimComposeStep';
 import { ClaimReviewStep } from './claim/components/ClaimReviewStep';
 import { ClaimConfirmStep } from './claim/components/ClaimConfirmStep';
 import { ClaimSellerStep } from './claim/components/ClaimSellerStep';
-import { ClaimLinkSellerStep } from './claim/components/ClaimLinkSellerStep';
+import { ClaimLinkFindStep } from './claim/components/ClaimLinkFindStep';
+import { ClaimLinkedStep } from './claim/components/ClaimLinkedStep';
 import { ClaimModalFooter } from './claim/components/ClaimModalFooter';
 import type { ReceivingClaimController } from './claim/hooks/useReceivingClaimController';
 
@@ -75,8 +76,8 @@ export function ReceivingClaimModal(props: ClaimModalProps) {
 function ClaimStepBody({ c }: { c: ReceivingClaimController }) {
   const presence = useMotionPresence(framerPresence.workbenchPane);
   const transition = useMotionTransition(framerTransition.workbenchPaneMount);
-  // In link mode the picker+seller is one logical body; key it distinctly.
-  const stepKey = c.mode === 'link' ? 'link' : c.createStep;
+  // Key the crossfade on the active step of whichever wizard is running.
+  const stepKey = c.mode === 'link' ? `link:${c.linkStep}` : `create:${c.createStep}`;
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -89,7 +90,13 @@ function ClaimStepBody({ c }: { c: ReceivingClaimController }) {
         className="space-y-3 pt-3"
       >
         {c.mode === 'link' ? (
-          <ClaimLinkSellerStep c={c} />
+          c.linkStep === 'find' ? (
+            <ClaimLinkFindStep c={c} />
+          ) : c.linkStep === 'linked' ? (
+            <ClaimLinkedStep c={c} />
+          ) : (
+            <ClaimSellerStep c={c} />
+          )
         ) : c.createStep === 'photos' ? (
           <ClaimPhotosStep c={c} />
         ) : c.createStep === 'compose' ? (

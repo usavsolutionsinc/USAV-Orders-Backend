@@ -18,6 +18,7 @@ export function GoalRing({ percent, color, size = 26 }: { percent: number; color
           fill="none"
           strokeLinecap="round"
           strokeDasharray={c}
+          initial={{ strokeDashoffset: c }}
           animate={{ strokeDashoffset: c * (1 - clamped / 100) }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
         />

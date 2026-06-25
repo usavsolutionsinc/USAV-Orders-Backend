@@ -60,6 +60,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
   const trackingValue = (row.tracking_number || '').trim();
   const qtyExpected = row.quantity_expected ?? 0;
   const qtyReceived = row.quantity_received;
+  const photoCount = row.photo_count ?? 0;
   const quantityText = `${qtyReceived}/${row.quantity_expected ?? '?'}`;
   const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
   const conditionLabel = conditionGradeTableLabel(row.condition_grade);
@@ -120,7 +121,6 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
               </span>
               <span className="text-gray-400">•</span>
               <span className={conditionColor}>{conditionLabel}</span>
-              {row.needs_test ? <span className="ml-2 text-orange-600">NEEDS TEST</span> : null}
             </span>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -137,7 +137,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             receivingId={receivingId}
             staffId={staffId}
             galleryHref={galleryHref}
-            countHint={row.photo_count ?? 0}
+            countHint={photoCount}
             onNavigate={onClose}
           />
         ) : receivingId ? null : (
@@ -152,10 +152,11 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             href={photosHref}
             prefetch={false}
             onClick={onClose}
-            aria-label="Take photos"
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
+            aria-label={`Take photos (${photoCount} so far)`}
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />
+            <span className="text-base font-black tabular-nums">x{photoCount}</span>
           </Link>
         ) : null}
       </div>

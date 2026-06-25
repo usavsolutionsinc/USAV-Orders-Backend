@@ -5,6 +5,7 @@ import {
   blobToBase64DataUrl,
   downscaleImageTo720,
 } from '@/lib/image/downscale';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 /**
  * Module-singleton store for in-flight PACKER photo uploads — the packing
@@ -90,8 +91,7 @@ function patch(id: string, partial: Partial<UploadEntry>) {
 }
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ─── localStorage mirror ────────────────────────────────────────────────────

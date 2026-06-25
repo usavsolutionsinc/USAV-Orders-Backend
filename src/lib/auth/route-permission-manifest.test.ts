@@ -219,16 +219,13 @@ test('regression: handling_unit.manage gates the assign/unassign mutations', () 
   );
 });
 
-test('regression: photos.manage gates the photo-folder CRUD + assignment routes', () => {
-  // Phase 2 photo-library master folders. Reads (list folders) stay on
-  // photos.view; every folder mutation + photo assignment requires photos.manage.
-  const paths = routesGatedBy('photos.manage').map((r) => r.path);
-  assert.ok(
-    paths.includes('/api/photos/folders/[id]/route.ts'),
-    'photos.manage should gate folder rename/move/delete',
-  );
-  assert.ok(
-    paths.includes('/api/photos/folders/[id]/items/route.ts'),
-    'photos.manage should gate folder photo assignment',
-  );
+test('regression: the image-type registry route is permission-gated', () => {
+  // The saved-folder system was replaced by the image-type registry. The
+  // route file is gated (manifest records the per-file minimum, photos.view for
+  // the GET list); the POST that creates a custom type additionally enforces
+  // photos.manage in-handler (see /api/photos/image-types/route.ts).
+  const route = routeByPath('/api/photos/image-types/route.ts');
+  assert.ok(route, 'the image-types route should be in the manifest');
+  assert.equal(route.gate, 'withAuth');
+  assert.equal(route.permission, 'photos.view');
 });

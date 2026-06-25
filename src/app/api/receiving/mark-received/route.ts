@@ -19,6 +19,9 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { upsertSerialUnit } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { transition } from '@/lib/inventory/state-machine';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getReceivingDefaultPutawayBin } from '@/lib/settings/accessors';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 // Default putaway bin (cached per Function instance). When the receive
 // caller doesn't supply destination_bin_id, mark-received falls back to
@@ -26,10 +29,16 @@ import { transition } from '@/lib/inventory/state-machine';
 // this, units pile up at RECEIVED and the picker has nothing to allocate.
 // See migration 2026-05-21_inventory_v2_unsorted_default_bin.sql.
 // Per-org cache (bins are tenant-owned, so the default bin id differs per org).
+// Cache key is `${orgId}:${barcode}` so an org changing its default-putaway-bin
+// setting (Settings Registry `receiving.defaultPutawayBin`) busts the cache.
 const cachedDefaultPutawayBinId = new Map<string, number | null>();
 async function resolveDefaultPutawayBinId(orgId: string): Promise<number | null> {
-  if (cachedDefaultPutawayBinId.has(orgId)) return cachedDefaultPutawayBinId.get(orgId)!;
-  const barcode = (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+  const org = await getOrganization(orgId as OrgId);
+  const barcode = org
+    ? getReceivingDefaultPutawayBin(org.settings, process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE)
+    : (process.env.RECEIVING_DEFAULT_PUTAWAY_BIN_BARCODE || 'UNSORTED').trim();
+  const cacheKey = `${orgId}:${barcode}`;
+  if (cachedDefaultPutawayBinId.has(cacheKey)) return cachedDefaultPutawayBinId.get(cacheKey)!;
   let resolved: number | null = null;
   try {
     const r = await tenantQuery<{ id: number }>(
@@ -48,7 +57,7 @@ async function resolveDefaultPutawayBinId(orgId: string): Promise<number | null>
     console.warn(`[mark-received] default-putaway bin lookup failed for barcode=${barcode}:`, err);
     resolved = null;
   }
-  cachedDefaultPutawayBinId.set(orgId, resolved);
+  cachedDefaultPutawayBinId.set(cacheKey, resolved);
   return resolved;
 }
 

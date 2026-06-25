@@ -12,6 +12,7 @@ import {
   type CapturedShot,
 } from '@/components/mobile/station/MobilePackerSpamCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -39,10 +40,7 @@ interface BinStockNumpadSheetProps {
 type Mode = 'minus' | 'plus';
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 const KEYS: ReadonlyArray<string | number> = [

@@ -137,8 +137,11 @@ export async function selectPhotosForNasMirror(
     `SELECT ps.photo_id, ps.organization_id
        FROM photo_storage ps
        JOIN photos p ON p.id = ps.photo_id
+       JOIN organizations o ON o.id = ps.organization_id
       WHERE ps.provider = 'gcs'
         AND ps.is_primary = TRUE
+        -- Settings Registry: skip orgs that turned NAS backup off (unset = mirror).
+        AND COALESCE(o.settings->>'receiving.nasBackup', 'mirror') <> 'off'
         ${ageClause}
         ${orgClause}
         AND NOT EXISTS (

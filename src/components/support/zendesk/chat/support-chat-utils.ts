@@ -59,6 +59,24 @@ export function resolveAuthor(
   const agent = maps.agentsById.get(c.author_id);
   const user = maps.usersById.get(c.author_id);
   const optimisticOurs = (c as { __ours?: boolean }).__ours === true;
+
+  // Prefer identity the comments route already resolved server-side (from the
+  // zendesk_users cache + agent roster) — present on first paint, so no flicker.
+  const server = c as {
+    author_name?: string;
+    author_email?: string | null;
+    author_photo?: string | null;
+    author_is_agent?: boolean;
+  };
+  if (server.author_name) {
+    return {
+      name: server.author_name,
+      email: server.author_email ?? null,
+      photo: server.author_photo ?? null,
+      isOurs: Boolean(server.author_is_agent) || c.public === false || optimisticOurs,
+    };
+  }
+
   const isOurs = Boolean(agent) || c.public === false || optimisticOurs;
 
   if (agent) {

@@ -24,11 +24,11 @@ export function ClaimPhotosStep({ c }: { c: ReceivingClaimController }) {
         />
       </div>
 
-      <ClaimPhotoPicker photos={c.photos} />
+      <ClaimPhotoPicker photos={c.photos} receivingId={c.row.receiving_id} />
 
       <p className="text-[11px] font-semibold leading-5 text-gray-500">
         Pick the claim type and the evidence photos. Checked photos upload to the Zendesk ticket;
-        every PO photo is also backed up to a local folder named after the case #.
+        every PO photo is also saved to local storage in a folder named after the case #.
       </p>
     </>
   );

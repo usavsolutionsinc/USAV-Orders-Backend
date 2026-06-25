@@ -23,6 +23,14 @@ const UNSHIPPED_SORTS = ['priority', 'newest', 'deadline', 'price', 'staff'] as 
 const UNSHIPPED_LANE_STATES = ['PENDING', 'TESTED', 'BLOCKED'] as const;
 
 /** Per-lane prefs for the unshipped shelf board (sort order + expand state). */
+/** ISO day-range filter — `null` clears it. Shared by board + per-lane prefs. */
+const UNSHIPPED_RANGE = z
+  .object({
+    from: z.string().nullable().optional(),
+    to: z.string().nullable().optional(),
+  })
+  .strict();
+
 const UNSHIPPED_LANE_PREF = z
   .object({
     sort: z.enum(UNSHIPPED_SORTS).optional(),
@@ -30,6 +38,8 @@ const UNSHIPPED_LANE_PREF = z
     /** Drag-resized body height (px). `null` clears it; absent leaves it unchanged
      *  — both snap back to the expanded/collapsed preset. */
     height: z.number().int().positive().max(4000).nullable().optional(),
+    /** Per-lane date-range filter (each table header owns its own picker). */
+    range: UNSHIPPED_RANGE.nullable().optional(),
   })
   .strict();
 
@@ -48,16 +58,9 @@ export const StaffPreferencesPutBody = z
     theme: z.enum(STAFF_THEMES).nullable().optional(),
     unshippedBoard: z
       .object({
-        columns: z.union([z.literal(1), z.literal(2)]).optional(),
+        columns: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
         order: z.array(z.enum(UNSHIPPED_LANE_STATES)).optional(),
-        range: z
-          .object({
-            from: z.string().nullable().optional(),
-            to: z.string().nullable().optional(),
-          })
-          .strict()
-          .nullable()
-          .optional(),
+        range: UNSHIPPED_RANGE.nullable().optional(),
         lanes: z
           .object({
             PENDING: UNSHIPPED_LANE_PREF.optional(),

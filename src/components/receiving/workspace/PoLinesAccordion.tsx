@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup } from 'framer-motion';
-import { ChevronDown, Plus } from '@/components/Icons';
+import { ChevronDown, Plus, FileText, Check, X } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
@@ -194,6 +194,33 @@ export function PoLinesAccordion({
       ),
     [localRows],
   );
+  // Inline item-description (Zoho line desc) edit — the notes icon on a row
+  // toggles this; it swaps in for the condition/serial meta row and the green
+  // check saves to receiving_lines.zoho_notes.
+  const [descEdit, setDescEdit] = useState<{ id: number; draft: string } | null>(null);
+  const [savingDesc, setSavingDesc] = useState(false);
+  const saveItemDesc = async (lineId: number) => {
+    if (!descEdit || descEdit.id !== lineId || savingDesc) return;
+    const next = descEdit.draft.trim() || null;
+    setSavingDesc(true);
+    try {
+      const res = await fetch(`/api/receiving/lines/${lineId}/zoho-note`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zoho_notes: next }),
+      });
+      if (res.ok) {
+        setLocalRows((prev) =>
+          prev.map((r) => (r.id === lineId ? ({ ...r, zoho_notes: next } as ReceivingLineRow) : r)),
+        );
+        setDescEdit(null);
+        queryClient.invalidateQueries({ queryKey });
+      }
+    } finally {
+      setSavingDesc(false);
+    }
+  };
+
   // Always render — even for single-line POs the row layout (title, qty,
   // condition, sku, serial chip) is the canonical context display the
   // workspace expects above the body.
@@ -287,6 +314,35 @@ export function PoLinesAccordion({
                       clip the SerialChipWithMenu dropdown (positioned below the
                       row). The chip menu is not portaled, so any clipping
                       ancestor hides it. */}
+                  {descEdit?.id === line.id ? (
+                    // Item-description editor — swaps in for condition/serial.
+                    <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        value={descEdit.draft}
+                        onChange={(e) => setDescEdit({ id: line.id, draft: e.target.value })}
+                        placeholder="Item description (Zoho)"
+                        autoFocus
+                        className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-caption normal-case tracking-normal text-gray-800"
+                      />
+                      <button
+                        type="button"
+                        title="Save item description"
+                        onClick={(e) => { e.stopPropagation(); void saveItemDesc(line.id); }}
+                        disabled={savingDesc}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white ring-1 ring-inset ring-emerald-700 transition disabled:opacity-40"
+                      >
+                        <Check className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        title="Cancel"
+                        onClick={(e) => { e.stopPropagation(); setDescEdit(null); }}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    </div>
+                  ) : (
                   <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
                     <ProgressBadge
                       received={line.quantity_received}
@@ -300,6 +356,16 @@ export function PoLinesAccordion({
                           : line.condition_grade
                       }
                     />
+                    {/* Zoho unit cost — sits between Condition and the SKU chip
+                        (read-only mirror of the Zoho PO line rate). */}
+                    {line.unit_price != null && Number(line.unit_price) > 0 ? (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="tabular-nums normal-case tracking-normal text-emerald-700" title="Zoho unit cost">
+                          ${Number(line.unit_price).toFixed(2)}
+                        </span>
+                      </>
+                    ) : null}
                     {(line.sku || '').trim() ? (
                       <>
                         <span aria-hidden>·</span>
@@ -366,7 +432,22 @@ export function PoLinesAccordion({
                       </>
                     ) : null}
                   </div>
+                  )}
                 </div>
+                {!readOnly ? (
+                  <button
+                    type="button"
+                    title="Edit item description (Zoho)"
+                    aria-label="Edit item description"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDescEdit(descEdit?.id === line.id ? null : { id: line.id, draft: line.zoho_notes ?? '' });
+                    }}
+                    className="-m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                  >
+                    <FileText className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                ) : null}
               </div>
               {/* Active row only — slot for condition pills, serial adder,
                   etc. Passes the line's own serials (from this accordion's

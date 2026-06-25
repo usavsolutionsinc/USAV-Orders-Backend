@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { useFbaDragAndDrop } from '@/components/fba/sidebar/useFbaDragAndDrop';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome, stationThemeColors } from '@/utils/staff-colors';
@@ -105,7 +106,7 @@ export function usePairedReview({
       // Seed one UPS box if there are none yet.
       const seededBuckets = prev.buckets.length > 0
         ? prev.buckets
-        : [{ bucketId: crypto.randomUUID(), trackingNumber: '', carrier: 'UPS', allocations: [], collapsed: false }];
+        : [{ bucketId: safeRandomUUID(), trackingNumber: '', carrier: 'UPS', allocations: [], collapsed: false }];
 
       // Collect all item IDs currently in allocations
       const allocatedIds = new Set<number>();
@@ -185,7 +186,7 @@ export function usePairedReview({
         setAllocations({
           unallocated: [],
           buckets: [{
-            bucketId: crypto.randomUUID(),
+            bucketId: safeRandomUUID(),
             trackingNumber: ups,
             carrier: 'UPS',
             allocations: itemAllocations,
@@ -270,7 +271,7 @@ export function usePairedReview({
     setAllocations((prev) => {
       const soleUnallocated = prev.unallocated.length === 1 ? prev.unallocated[0] : null;
       const newBucket = {
-        bucketId: crypto.randomUUID(),
+        bucketId: safeRandomUUID(),
         trackingNumber: '',
         carrier: 'UPS',
         allocations: soleUnallocated ? [soleUnallocated] : [],

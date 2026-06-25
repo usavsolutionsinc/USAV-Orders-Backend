@@ -112,11 +112,11 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         <Link
           href={photosHref}
           prefetch={false}
-          aria-label="Take photos"
+          aria-label={`Take photos (${photoCount} so far)`}
           className="pointer-events-auto mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-label font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] transition-transform active:scale-[0.98] active:bg-blue-700"
         >
           <Camera className="h-5 w-5" />
-          {photoCount > 0 ? <span className="tabular-nums lowercase">x{photoCount}</span> : null}
+          <span className="tabular-nums lowercase">x{photoCount}</span>
         </Link>
       )}
     </MobileRowCard>

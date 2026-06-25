@@ -1,56 +1,45 @@
 'use client';
 
 /**
- * Operations → History mode: the Master Operations Journey.
+ * Operations → History mode: the Master Operations Journey, as a RECORD LOOKUP.
  *
- * Never a loose firehose — it renders a timeline PER order / serial / tracking
- * number, showing the stations and points each one hit along the process:
- *   • FOCUSED (a serial/order/tracking in the URL) → that entity's complete
- *     cross-station journey, chronological (optionally re-grouped by unit).
- *   • BROWSE (no entity) → recent activity as per-entity journey bands, paged.
- *
- * Aggregates all five spines (SAL + inventory + audit + carrier + warranty) via
- * `useOperationsJourney`, and renders through the shared `EventTimeline`
- * primitive (Monitor archetype — observe-only, URL-driven, no edit affordances).
+ * The right panel never shows a loose firehose of all events — it stays empty
+ * until you paste an order / serial / tracking number in the sidebar, then it
+ * renders THAT record's complete event timeline across every station
+ * (receiving → tested → packed → shipped → carrier → returned/warranty),
+ * aggregated from all five spines. The record number renders as a last-4
+ * copy chip. Monitor archetype: observe-only, URL-driven, no edit affordances,
+ * one shared `EventTimeline` primitive.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { History, Loader2, X } from '@/components/Icons';
+import { OrderIdChip, SerialChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
 import { IdentifierToggle } from '@/components/ui/IdentifierToggle';
 import type { TimelineGroupMode } from '@/components/ui/EventTimeline';
-import { journeyKeyOf } from '@/lib/timeline/journey';
+import { journeyKeyOf, type JourneyDimension } from '@/lib/timeline/journey';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
 import { useOperationsJourney } from '@/hooks/useOperationsJourney';
 
-const DIM_LABEL: Record<string, string> = { order: 'Order', serial: 'Serial', tracking: 'Tracking' };
+const DIM_LABEL: Record<JourneyDimension, string> = {
+  order: 'Order',
+  serial: 'Serial',
+  tracking: 'Tracking',
+};
 
 const FOCUSED_TOGGLE_OPTIONS: ReadonlyArray<{ value: TimelineGroupMode; label: string }> = [
   { value: 'time', label: 'Timeline' },
   { value: 'serial', label: 'By unit' },
 ];
 
-/** IntersectionObserver sentinel — fires `onIntersect` when scrolled into view. */
-function InfiniteSentinel({ onIntersect, disabled }: { onIntersect: () => void; disabled: boolean }) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const cbRef = useRef(onIntersect);
-  cbRef.current = onIntersect;
-
-  useEffect(() => {
-    if (disabled) return;
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) cbRef.current();
-      },
-      { rootMargin: '320px' },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [disabled]);
-
-  return <div ref={ref} aria-hidden className="h-4 w-full" />;
+/** The looked-up record number, rendered as a last-4 CopyChip per dimension. */
+function RecordChip({ dim, value }: { dim: JourneyDimension; value: string }) {
+  const v = value.trim();
+  if (!v) return null;
+  if (dim === 'serial') return <SerialChip value={v} display={getLast4(v)} width="w-auto" dense />;
+  if (dim === 'tracking') return <TrackingChip value={v} display={getLast4(v)} dense />;
+  return <OrderIdChip value={v} display={getLast4(v)} dense />;
 }
 
 export function OperationsHistoryView() {
@@ -59,21 +48,9 @@ export function OperationsHistoryView() {
   const [focusedMode, setFocusedMode] = useState<TimelineGroupMode>('time');
 
   const { focused, items, groupOf, entity } = journey;
-  const dimLabel = DIM_LABEL[url.dim] ?? 'Order';
+  const dimLabel = DIM_LABEL[url.dim];
   const eventCount = items.length;
-
-  // Band bucketing: focused = one entity (time, or "by unit" via serial keys);
-  // browse = one band per order/serial/tracking (the active dimension).
-  const groupMode: TimelineGroupMode = focused ? focusedMode : 'serial';
-  const groupKeyOf =
-    focused
-      ? focusedMode === 'serial'
-        ? journeyKeyOf('serial', groupOf)
-        : undefined
-      : journeyKeyOf(url.dim, groupOf);
-
-  const showFocusedToggle = focused && (entity?.serials.length ?? 0) > 1;
-  const isEmpty = !journey.isLoading && items.length === 0;
+  const showUnitToggle = (entity?.serials.length ?? 0) > 1;
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
@@ -85,39 +62,47 @@ export function OperationsHistoryView() {
             </span>
             <div>
               <h1 className="text-2xl font-black tracking-tight text-gray-900 leading-none">
-                {focused ? `${dimLabel} journey` : 'Operations journey'}
+                {focused ? `${dimLabel} record` : 'Operations record'}
               </h1>
-              <p className="mt-1 flex items-center gap-1.5 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+              <div className="mt-1 flex items-center gap-1.5">
                 {focused ? (
                   <>
-                    <span className="rounded bg-blue-50 px-1.5 py-0.5 text-blue-700 ring-1 ring-inset ring-blue-200 normal-case tracking-normal">
-                      {url.entityValue}
-                    </span>
+                    <RecordChip dim={url.dim} value={url.entityValue} />
                     <button
                       type="button"
                       onClick={() => url.setEntity('')}
-                      className="inline-flex items-center gap-0.5 text-gray-400 hover:text-gray-600"
-                      aria-label="Clear focused entity"
+                      className="inline-flex items-center gap-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600"
+                      aria-label="Clear record"
                     >
                       <X className="h-3 w-3" /> Clear
                     </button>
                   </>
                 ) : (
-                  <span>
-                    By {url.dim} · {eventCount.toLocaleString()} event{eventCount === 1 ? '' : 's'}
-                    {url.activeFilterCount > 0 ? ` · ${url.activeFilterCount} filter${url.activeFilterCount === 1 ? '' : 's'}` : ''}
-                  </span>
+                  <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">
+                    Paste a record number to begin
+                  </p>
                 )}
-              </p>
+              </div>
             </div>
           </div>
         </header>
 
         <section className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-          {journey.isError && focused ? (
-            <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-8 text-center">
+          {!focused ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center">
+              <History className="mx-auto h-7 w-7 text-gray-300" />
+              <p className="mt-3 text-caption font-semibold text-gray-700">
+                Paste a record number to see its complete timeline
+              </p>
+              <p className="mt-1 text-micro leading-5 text-gray-400">
+                Search an order, serial, or tracking number in the sidebar — its full journey across
+                every station appears here.
+              </p>
+            </div>
+          ) : journey.isError ? (
+            <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-10 text-center">
               <p className="text-caption font-semibold text-rose-600">
-                No journey found for this {url.dim}.
+                No record found for this {url.dim} number.
               </p>
               <button
                 type="button"
@@ -127,65 +112,34 @@ export function OperationsHistoryView() {
                 <Loader2 className="h-3.5 w-3.5" /> Retry
               </button>
             </div>
-          ) : journey.isError ? (
-            <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-8 text-center text-caption font-semibold text-rose-600">
-              Could not load the operations journey.
-            </div>
-          ) : isEmpty && !focused && url.activeFilterCount === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center">
-              <History className="mx-auto h-6 w-6 text-gray-300" />
-              <p className="mt-2 text-caption font-semibold text-gray-600">
-                Search a serial, order, or tracking number
-              </p>
-              <p className="mt-1 text-micro text-gray-400">
-                See its complete journey across every station — or browse recent activity here.
-              </p>
-            </div>
           ) : (
             <TimelineSection
-              title={focused ? 'Journey' : 'Recent journeys'}
+              title="Record timeline"
               loading={journey.isLoading}
               items={items}
-              groupMode={groupMode}
-              groupKeyOf={groupKeyOf}
-              emptyMessage={
-                url.activeFilterCount > 0 || focused
-                  ? 'No operations match this filter.'
-                  : 'No recent operations.'
-              }
+              groupMode={focusedMode}
+              groupKeyOf={focusedMode === 'serial' ? journeyKeyOf('serial', groupOf) : undefined}
+              emptyMessage="No events recorded for this record yet."
               className=""
               headerRight={
                 !journey.isLoading && items.length > 0 ? (
                   <div className="flex items-center gap-3">
-                    {showFocusedToggle ? (
+                    {showUnitToggle ? (
                       <IdentifierToggle
                         value={focusedMode}
                         onChange={setFocusedMode}
                         options={FOCUSED_TOGGLE_OPTIONS}
-                        ariaLabel="Journey grouping"
+                        ariaLabel="Record grouping"
                       />
                     ) : null}
-                    <span>{eventCount.toLocaleString()} events</span>
+                    <span>
+                      {eventCount.toLocaleString()} event{eventCount === 1 ? '' : 's'}
+                    </span>
                   </div>
                 ) : undefined
               }
             />
           )}
-
-          {/* Browse pagination */}
-          {!focused && !journey.isError ? (
-            <>
-              <InfiniteSentinel
-                onIntersect={() => journey.fetchNextPage()}
-                disabled={!journey.hasNextPage || journey.isFetchingNextPage}
-              />
-              {journey.isFetchingNextPage ? (
-                <div className="flex items-center justify-center gap-2 py-3 text-caption font-semibold text-gray-400">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading more…
-                </div>
-              ) : null}
-            </>
-          ) : null}
         </section>
       </main>
     </div>

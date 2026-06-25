@@ -16,9 +16,9 @@ import { TOKENS } from '@/components/mobile/redesign/DesignSystem';
 export default function RedesignedMobileDashboard() {
   return (
     <div className={`flex h-full flex-col ${TOKENS.colors.background}`}>
-      {/* Header lives in the shell. pb-20 keeps the newest (bottom-pinned) row
-          clear of the fixed nav. */}
-      <div className="min-h-0 flex-1 pb-20">
+      {/* Header lives in the shell; nav moved to the left drawer, so the feed
+          runs to the bottom (shell's pb-safe clears the home indicator). */}
+      <div className="min-h-0 flex-1 pb-3">
         <MobileReceivingList limit={25} />
       </div>
     </div>

@@ -12,7 +12,7 @@ export function claimThumb(url: string, photoId?: number): string {
   }
   const normalized = normalizePhotoDisplayUrl(url);
   if (normalized.startsWith('/api/nas-dev/')) {
-    return normalized + (normalized.includes('?') ? '&' : '?') + 'thumb=96';
+    return normalized + (normalized.includes('?') ? '&' : '?') + 'thumb=200';
   }
   return normalized;
 }

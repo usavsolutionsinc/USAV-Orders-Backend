@@ -16,8 +16,22 @@ export interface PhotoLibraryFilterState {
   q?: string;
   damageDetected?: string;
   hasAnalysis?: string;
-  /** Selected master folder (photo_folders.id) — keeps only its assigned photos. */
-  folderId?: string;
+  /** Selected custom image type (photo_image_types.key → photos.photo_type). */
+  imageType?: string;
+  /**
+   * Business-ID filters — each resolves through `photo_entity_links` to a domain
+   * table (see `src/lib/photos/queries/library.ts`). Stored as strings in the URL;
+   * coerced to the right type at the route. All tenant-scoped.
+   */
+  tracking?: string;
+  serial?: string;
+  sku?: string;
+  /** Zendesk claim ticket number (photo_entity_links ZENDESK_TICKET.entity_id). */
+  ticketId?: string;
+  /** Local pickup order id (local_pickup_orders.id). */
+  pickupId?: string;
+  /** Returns RMA number (rma_authorizations.rma_number). */
+  rma?: string;
 }
 
 /** Sidebar source folders — mapped to API entity types internally. */
@@ -185,13 +199,19 @@ export function formatPhotoLibraryDateRange(filters: PhotoLibraryFilterState): s
 
 export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryFilterState {
   const next: PhotoLibraryFilterState = {};
-  const set = (key: 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q' | 'damageDetected' | 'hasAnalysis' | 'folderId', param: string) => {
+  const set = (
+    key:
+      | 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q'
+      | 'damageDetected' | 'hasAnalysis' | 'imageType'
+      | 'tracking' | 'serial' | 'sku' | 'ticketId' | 'pickupId' | 'rma',
+    param: string,
+  ) => {
     const v = params.get(param)?.trim();
     if (v) next[key] = v;
   };
   set('dateFrom', 'dateFrom');
   set('dateTo', 'dateTo');
-  set('folderId', 'folderId');
+  set('imageType', 'imageType');
   const sourceScope = parseSourceScope(params.get('sourceScope'));
   if (sourceScope) next.sourceScope = sourceScope;
   const sort = params.get('sort');
@@ -199,6 +219,12 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
   set('poRef', 'poRef');
   set('receivingId', 'receivingId');
   set('staffId', 'staffId');
+  set('tracking', 'tracking');
+  set('serial', 'serial');
+  set('sku', 'sku');
+  set('ticketId', 'ticketId');
+  set('pickupId', 'pickupId');
+  set('rma', 'rma');
   set('q', 'q');
   set('damageDetected', 'damageDetected');
   set('hasAnalysis', 'hasAnalysis');
@@ -227,10 +253,16 @@ export function photoLibraryFiltersToParams(
     'poRef',
     'receivingId',
     'staffId',
+    'tracking',
+    'serial',
+    'sku',
+    'ticketId',
+    'pickupId',
+    'rma',
     'q',
     'damageDetected',
     'hasAnalysis',
-    'folderId',
+    'imageType',
   ];
   if (filters.sourceScope && filters.sourceScope !== 'all') {
     params.set('sourceScope', filters.sourceScope);
@@ -265,6 +297,12 @@ export function countActivePhotoLibraryFilters(filters: PhotoLibraryFilterState)
   if (filters.poRef) n++;
   if (filters.receivingId) n++;
   if (filters.staffId) n++;
+  if (filters.tracking) n++;
+  if (filters.serial) n++;
+  if (filters.sku) n++;
+  if (filters.ticketId) n++;
+  if (filters.pickupId) n++;
+  if (filters.rma) n++;
   if (filters.damageDetected) n++;
   if (filters.hasAnalysis) n++;
   if (filters.dateFrom || filters.dateTo) n++;
@@ -281,6 +319,12 @@ export function clearStructuredPhotoFilters(
     poRef: undefined,
     receivingId: undefined,
     staffId: undefined,
+    tracking: undefined,
+    serial: undefined,
+    sku: undefined,
+    ticketId: undefined,
+    pickupId: undefined,
+    rma: undefined,
     damageDetected: undefined,
     hasAnalysis: undefined,
   };

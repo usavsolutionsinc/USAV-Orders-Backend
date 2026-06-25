@@ -1,24 +1,31 @@
 import pool from '@/lib/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
-import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
 import { extractCanonicalTracking } from '@/lib/tracking-format';
 
 export type ReceivingScanSource = 'zoho_po' | 'unmatched';
 
+/**
+ * Register the scanned tracking into the STN master and link it to the scan +
+ * carton. Returns true when STN owns the tracking (so the carton needs no legacy
+ * tracking string — MAIN criterion). Runs on EVERY scan now (the old
+ * RECEIVING_UNIFIED_INBOUND gate is removed): STN is the tracking source of
+ * record, and the legacy `receiving.receiving_tracking_number` is written ONLY
+ * as a fallback when this returns false (see recordReceivingScan). Best-effort:
+ * a registration failure returns false so the fallback still records the scan.
+ */
 async function linkScanToStn(
   scanId: number,
   receivingId: number,
   trackingNumber: string,
   source: ReceivingScanSource,
-): Promise<void> {
-  if (!isReceivingUnifiedInbound()) return;
+): Promise<boolean> {
   try {
     const stn = await registerShipmentPermissive({
       trackingNumber,
       sourceSystem: `receiving_scan:${source}`,
     });
     const shipmentId = stn?.id ?? null;
-    if (shipmentId == null) return;
+    if (shipmentId == null) return false;
     await pool.query(
       `UPDATE receiving_scans SET shipment_id = $2 WHERE id = $1 AND shipment_id IS DISTINCT FROM $2`,
       [scanId, shipmentId],
@@ -27,8 +34,10 @@ async function linkScanToStn(
       `UPDATE receiving SET shipment_id = $2 WHERE id = $1 AND shipment_id IS NULL`,
       [receivingId, shipmentId],
     );
+    return true;
   } catch (err) {
     console.warn(`[recordReceivingScan] linkScanToStn skipped for scan=${scanId}:`, err);
+    return false;
   }
 }
 
@@ -52,31 +61,37 @@ export async function recordReceivingScan(
     [receivingId, trackingNumber, carrier || null, staffId, source],
   );
   const scanId = Number(result.rows[0].id);
+  const canonicalTracking = extractCanonicalTracking(trackingNumber) || trackingNumber;
+
+  // Register the scan's tracking into the STN master FIRST so we know whether STN
+  // owns it. STN-backed → the carton needs no legacy tracking string (MAIN
+  // criterion: tracking lives only in shipping_tracking_numbers by shipment_id).
+  const stnLinked = await linkScanToStn(scanId, receivingId, trackingNumber, source);
+
   // A recorded scan IS the physical door-arrival event, so stamp received_at on
   // the carton here — the one chokepoint every scan path funnels through
   // (lookup-po, touch-scan, the local-first re-scan, test cartons). COALESCE so
   // only the FIRST scan sets it (idempotent; re-scans never reset the arrival
-  // time). Without this, a scan of a carton whose zoho_po receiving row was
-  // pre-created by the Incoming sync (received_at NULL) left received_at unset,
-  // so the carton sorted last (NULLS LAST) — or vanished — in the Prioritize /
-  // unbox Queue feeds, which key on received_at.
-  // Persist the scanned tracking onto the carton too. The scanned barcode is the
-  // tracking number (for Goodwill/marketplace POs it's the Zoho reference#), but
-  // it was only ever written to receiving_scans — so the workspace tracking chip
-  // (which reads receiving.receiving_tracking_number when no shipment is linked)
-  // rendered the empty "----" placeholder even though the scan found the PO.
-  // Canonicalize (a scanned GS1/"96" FedEx barcode → its core number) and
-  // COALESCE so an existing reference#/tracking is never overwritten.
-  const canonicalTracking = extractCanonicalTracking(trackingNumber) || trackingNumber;
+  // time).
+  //
+  // receiving_tracking_number is now written ONLY as a FALLBACK when STN did not
+  // claim the tracking (stnLinked=false — e.g. a non-carrier reference# that
+  // failed registration). When STN owns it the column is left untouched: the
+  // workspace tracking chip already reads STN-by-shipment_id first
+  // (COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)), so the chip
+  // still renders. This stops legacy tracking CRUD on the receiving table for the
+  // ~88% of scans STN claims, while the 287 legacy-only rows keep their value.
   await pool.query(
     `UPDATE receiving
         SET received_at = COALESCE(received_at, NOW()),
             received_by = COALESCE(received_by, $2),
-            receiving_tracking_number = COALESCE(receiving_tracking_number, $3),
+            receiving_tracking_number = CASE
+              WHEN $4::boolean THEN receiving_tracking_number
+              ELSE COALESCE(receiving_tracking_number, $3)
+            END,
             updated_at  = NOW()
       WHERE id = $1`,
-    [receivingId, staffId, canonicalTracking || null],
+    [receivingId, staffId, canonicalTracking || null, stnLinked],
   );
-  await linkScanToStn(scanId, receivingId, trackingNumber, source);
   return scanId;
 }

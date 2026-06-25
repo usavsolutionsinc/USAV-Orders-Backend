@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { unitStatusBadgeTone } from '@/components/station/receiving-constants';
 import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,8 +42,7 @@ interface TimelineEvent {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 function formatAgo(iso: string): string {

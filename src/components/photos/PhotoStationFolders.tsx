@@ -1,96 +1,153 @@
 'use client';
 
+import { useState } from 'react';
 import {
-  Camera,
+  Folder,
+  Image as ImageIcon,
+  Loader2,
   MessageSquare,
   Package,
   PackageOpen,
+  Plus,
   ShoppingCart,
   Wrench,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
-import type {
-  PhotoLibraryFilterState,
-  PhotoLibrarySourceScope,
-} from '@/lib/photos/library-filter-state';
-import type { LibraryPhoto } from './photo-library-types';
-import { PhotoDateTree, type PhotoDateSelection } from './PhotoDateTree';
+import { useImageTypes } from '@/hooks/useImageTypes';
+import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
+import { toast } from '@/lib/toast';
+
+/** A paired icon component (mirrors the Icons.tsx glyph signature). */
+type IconCmp = typeof Package;
 
 /**
- * Two-step contextual browse: first **pick the image type** (unboxing / packing /
- * …), then **drill one date tree** for that type. The type picker is a single
- * grouped control (not six individual expandable folders), and the date tree is a
- * single grouped section below it — so years/months/days stay scoped to one
- * stream instead of mixing every station. "All" is the flat, sorted overview.
+ * Image-type picker — the library's primary sidebar navigator. The five built-in
+ * types (Unboxing / Pickups / Packing / Repair / Claims) scope the grid by
+ * capture entity; operator-added custom types scope it by `photo_type` and route
+ * uploads to their own GCS path. Picking a type scopes the grid (and its date
+ * "folders"); the "+" adds a new custom type. Date navigation lives in the right
+ * panel, not here.
  */
-const TYPES: { id: PhotoLibrarySourceScope; label: string; icon: typeof Camera }[] = [
-  { id: 'all', label: 'All', icon: Camera },
-  { id: 'unboxing', label: 'Unboxing', icon: PackageOpen },
-  { id: 'local_pickup', label: 'Pickups', icon: ShoppingCart },
-  { id: 'packing', label: 'Packing', icon: Package },
-  { id: 'repair', label: 'Repair', icon: Wrench },
-  { id: 'claims', label: 'Claims', icon: MessageSquare },
-];
+const ICONS: Record<string, IconCmp> = {
+  PackageOpen,
+  ShoppingCart,
+  Package,
+  Wrench,
+  MessageSquare,
+  Folder,
+  Image: ImageIcon,
+};
 
 export function PhotoStationFolders({
   activeScope,
-  photos,
-  filters,
-  onSelectScope,
-  onSelectDate,
+  activeImageType,
+  onSelect,
 }: {
   activeScope: PhotoLibrarySourceScope;
-  /** Loaded photos for the active type — feeds the date tree below. */
-  photos: LibraryPhoto[];
-  filters: PhotoLibraryFilterState;
-  onSelectScope: (scope: PhotoLibrarySourceScope) => void;
-  onSelectDate: (sel: PhotoDateSelection) => void;
+  /** Active custom image type key, or null when a built-in scope is active. */
+  activeImageType: string | null;
+  /** Built-in → `{ scope }`; custom → `{ imageType }`. */
+  onSelect: (sel: { scope?: PhotoLibrarySourceScope; imageType?: string }) => void;
 }) {
-  const activeType = TYPES.find((t) => t.id === activeScope) ?? TYPES[0];
-  const ActiveIcon = activeType.icon;
-  const showDates = activeScope !== 'all';
+  const { builtIn, custom, isLoading, createType } = useImageTypes();
+  const [adding, setAdding] = useState(false);
+
+  const addType = async () => {
+    const label = window.prompt('New image type name')?.trim();
+    if (!label) return;
+    setAdding(true);
+    try {
+      const created = await createType.mutateAsync({ label });
+      onSelect({ imageType: created.key });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create image type');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
-    <div className="space-y-3">
-      {/* Step 1 — pick the image type. */}
-      <div className="space-y-1.5">
-        <p className="px-1 text-micro font-black uppercase tracking-wider text-gray-400">Image type</p>
-        <div className="flex flex-wrap gap-1">
-          {TYPES.map((type) => {
-            const active = activeScope === type.id;
-            const Icon = type.icon;
-            return (
-              <button
-                key={type.id}
-                type="button"
-                onClick={() => onSelectScope(type.id)}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold transition',
-                  active ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                )}
-              >
-                <Icon className="h-3 w-3" />
-                {type.label}
-              </button>
-            );
-          })}
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Image type</p>
+        <button
+          type="button"
+          onClick={addType}
+          disabled={adding}
+          title="Add image type"
+          aria-label="Add image type"
+          className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+        >
+          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+        </button>
       </div>
 
-      {/* Step 2 — drill the selected type's calendar (one grouped tree). */}
-      {showDates ? (
-        <div className="space-y-1.5 border-t border-gray-100 pt-3">
-          <p className="flex items-center gap-1 px-1 text-micro font-black uppercase tracking-wider text-gray-400">
-            <ActiveIcon className="h-3 w-3" /> {activeType.label} · by date
-          </p>
-          <PhotoDateTree photos={photos} filters={filters} onSelect={onSelectDate} embedded />
-        </div>
-      ) : (
-        <p className="border-t border-gray-100 px-1 pt-3 text-[11px] leading-relaxed text-gray-400">
-          Showing all photos, newest first. Pick a type above to browse it by date.
-        </p>
-      )}
+      <ul className="space-y-1">
+        {builtIn.map((type) => {
+          const active = activeScope === type.key && !activeImageType;
+          const Icon = ICONS[type.icon] ?? Folder;
+          return (
+            <TypeRow
+              key={type.key}
+              label={type.label}
+              Icon={Icon}
+              active={active}
+              onClick={() => onSelect({ scope: type.key })}
+            />
+          );
+        })}
+
+        {custom.map((type) => {
+          const active = activeImageType === type.key;
+          const Icon = (type.icon && ICONS[type.icon]) || Folder;
+          return (
+            <TypeRow
+              key={type.id}
+              label={type.label}
+              Icon={Icon}
+              active={active}
+              onClick={() => onSelect({ imageType: type.key })}
+            />
+          );
+        })}
+
+        {isLoading && custom.length === 0 ? (
+          <li className="flex items-center gap-2 px-3 py-2 text-caption text-gray-400">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </li>
+        ) : null}
+      </ul>
     </div>
+  );
+}
+
+function TypeRow({
+  label,
+  Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  Icon: IconCmp;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition',
+          active
+            ? 'bg-blue-50 text-blue-900 ring-1 ring-inset ring-blue-400'
+            : 'text-gray-700 hover:bg-gray-50',
+        )}
+      >
+        <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-blue-600' : 'text-gray-400')} />
+        <span className="flex-1 truncate">{label}</span>
+      </button>
+    </li>
   );
 }

@@ -92,13 +92,17 @@ export const AUDIT_ENTITY = {
   STAFF: 'staff',
   PHOTO: 'photo',
   PHOTO_FOLDER: 'photo_folder',
+  PHOTO_IMAGE_TYPE: 'photo_image_type',
   STAFF_TODO: 'staff_todo',
   STAFF_MESSAGE: 'staff_message',
   STAFF_PREFERENCE: 'staff_preference',
+  // Settings Registry — per-page org/staff configurable behavior (docs/settings-registry.md)
+  SETTINGS: 'settings',
   REASON_CODE: 'reason_code',
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
   QC_CHECK_TEMPLATE: 'qc_check_template',
+  CHECKLIST_TEMPLATE: 'checklist_template',
   KIT_PART_TEMPLATE: 'kit_part_template',
   FAILURE_MODE: 'failure_mode',
   UNIT_FAILURE_TAG: 'unit_failure_tag',
@@ -155,6 +159,10 @@ export const AUDIT_ACTION = {
   QC_CHECK_UPDATE:  'qc_check.update',
   QC_CHECK_DELETE:  'qc_check.delete',
   QC_CHECK_PUBLISH: 'qc_check.publish',
+  CHECKLIST_CREATE:  'checklist.create',
+  CHECKLIST_UPDATE:  'checklist.update',
+  CHECKLIST_DELETE:  'checklist.delete',
+  CHECKLIST_PUBLISH: 'checklist.publish',
   QC_RESULT_RECORD: 'qc_result.record',
   // Kit-parts / BOM templates ("what's in the box" authoring CRUD)
   KIT_PART_CREATE: 'kit_part.create',
@@ -182,8 +190,11 @@ export const AUDIT_ACTION = {
   PHOTO_FOLDER_DELETE:     'photo_folder.delete',
   PHOTO_FOLDER_ASSIGN:     'photo_folder.assign',
   PHOTO_FOLDER_UNASSIGN:   'photo_folder.unassign',
+  PHOTO_IMAGE_TYPE_CREATE: 'photo_image_type.create',
   // Personal UI preferences (e.g. configurable focus-scan hotkey)
   STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
+  // Settings Registry — org/staff per-page setting change (docs/settings-registry.md)
+  SETTINGS_UPDATE: 'settings.update',
   // Per-unit repair records
   REPAIR_OPEN:     'unit_repair.open',
   REPAIR_UPDATE:   'unit_repair.update',

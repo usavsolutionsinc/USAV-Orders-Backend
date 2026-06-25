@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Calendar, Clock, History } from '@/components/Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import {
@@ -22,6 +23,55 @@ const DATE_PRESET_ITEMS: HorizontalSliderItem[] = [
 const fieldClass =
   'h-10 w-full rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10';
 const labelClass = 'mb-1.5 block text-[11px] font-black uppercase tracking-[0.2em] text-gray-400';
+
+/**
+ * A business-ID text field that commits to the URL on blur / Enter (not every
+ * keystroke) so a long scan doesn't fire a refetch per character. Re-seeds from
+ * the URL value when it changes elsewhere (chip removal, clear-all).
+ */
+function IdField({
+  label,
+  value,
+  placeholder,
+  numeric,
+  onCommit,
+}: {
+  label: string;
+  value: string | undefined;
+  placeholder?: string;
+  numeric?: boolean;
+  onCommit: (next: string | undefined) => void;
+}) {
+  const [local, setLocal] = useState(value ?? '');
+  useEffect(() => {
+    setLocal(value ?? '');
+  }, [value]);
+  const commit = () => {
+    const trimmed = local.trim();
+    if (trimmed === (value ?? '')) return;
+    onCommit(trimmed || undefined);
+  };
+  return (
+    <label className="block">
+      <span className={labelClass}>{label}</span>
+      <input
+        type="text"
+        inputMode={numeric ? 'numeric' : undefined}
+        className={fieldClass}
+        placeholder={placeholder}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          }
+        }}
+      />
+    </label>
+  );
+}
 
 interface PhotoLibraryFilterDropdownProps {
   filters: PhotoLibraryFilterState;
@@ -107,6 +157,63 @@ export function PhotoLibraryFilterDropdown({
               Clear staff
             </button>
           ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <p className={labelClass}>Business IDs</p>
+        <div className="grid grid-cols-2 gap-3">
+          <IdField
+            label="PO / Order #"
+            value={filters.poRef}
+            placeholder="PO-12345"
+            onCommit={(v) => onPatch({ poRef: v })}
+          />
+          <IdField
+            label="Tracking #"
+            value={filters.tracking}
+            placeholder="1Z… / 92…"
+            onCommit={(v) => onPatch({ tracking: v })}
+          />
+          <IdField
+            label="Serial #"
+            value={filters.serial}
+            placeholder="Serial number"
+            onCommit={(v) => onPatch({ serial: v })}
+          />
+          <IdField
+            label="SKU #"
+            value={filters.sku}
+            placeholder="Catalog SKU"
+            onCommit={(v) => onPatch({ sku: v })}
+          />
+          <IdField
+            label="Claim ticket #"
+            value={filters.ticketId}
+            placeholder="Zendesk #"
+            numeric
+            onCommit={(v) => onPatch({ ticketId: v })}
+          />
+          <IdField
+            label="Local pickup #"
+            value={filters.pickupId}
+            placeholder="Pickup order"
+            numeric
+            onCommit={(v) => onPatch({ pickupId: v })}
+          />
+          <IdField
+            label="Returns RMA #"
+            value={filters.rma}
+            placeholder="RMA number"
+            onCommit={(v) => onPatch({ rma: v })}
+          />
+          <IdField
+            label="Receiving ID"
+            value={filters.receivingId}
+            placeholder="Receiving #"
+            numeric
+            onCommit={(v) => onPatch({ receivingId: v })}
+          />
         </div>
       </div>
 

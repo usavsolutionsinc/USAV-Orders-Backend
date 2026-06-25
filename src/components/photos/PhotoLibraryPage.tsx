@@ -1,16 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, ExternalLink, Link2, MessageSquare, Share2, Trash2, X } from '@/components/Icons';
+import { Archive, Download, ExternalLink, Link2, Loader2, MessageSquare, Share2, Trash2 } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
-import { usePhotoFolders } from '@/hooks/usePhotoFolders';
 import { usePhotoSelection } from '@/hooks/usePhotoSelection';
 import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
-import { PHOTO_LIBRARY_PAGE_SIZE, sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
+import { buildPhotoDateTree } from '@/lib/photos/date-tree';
+import { sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
@@ -18,8 +18,8 @@ import { usePackerPhotosRealtimeRefresh } from '@/hooks/usePackerPhotosRealtimeR
 import { useAuth } from '@/contexts/AuthContext';
 import { ZendeskClaimModal } from '@/components/support/zendesk/claim/ZendeskClaimModal';
 import type { ClaimPhotoInput } from '@/components/support/zendesk/claim/claim-types';
-import { AddToFolderMenu } from './AddToFolderMenu';
 import { PhotoContextMenu, type PhotoContextMenuItem } from './PhotoContextMenu';
+import { PhotoDateBreadcrumb } from './PhotoDateBreadcrumb';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
 import { PhotoLibraryToolbar } from './PhotoLibraryToolbar';
@@ -41,7 +41,7 @@ import type { LibraryPhoto } from './photo-library-types';
 
 /** Right pane: 40px header + inline bulk toolbar + photo grid. Filters in sidebar. */
 export function PhotoLibraryPage() {
-  const { filters, display, setView, setPage, patch } = usePhotoLibraryUrlState();
+  const { filters, display, setView, patch } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
   const queryClient = useQueryClient();
   const { has } = useAuth();
@@ -69,23 +69,27 @@ export function PhotoLibraryPage() {
   const selectionActive = selectMode || isActive;
 
   const shareLinks = usePhotoShareLinks();
-  const { removePhotos } = usePhotoFolders();
-  // When a master folder is the active filter, the grid shows only its photos —
-  // so a "Remove from folder" bulk action becomes meaningful.
-  const selectedFolderId = filters.folderId ? Number(filters.folderId) : null;
   const { title, subtitle } = describePhotoLibraryContext(filters);
 
-  const { page, view } = display;
-  const pageSize = PHOTO_LIBRARY_PAGE_SIZE;
+  const { view } = display;
 
-  const loadedPages = Math.max(1, Math.ceil(photos.length / pageSize));
-  const hasMore = Boolean(query.hasNextPage);
-  const totalPages = hasMore ? Math.max(loadedPages, page) : loadedPages;
-
-  const pagePhotos = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return photos.slice(start, start + pageSize);
-  }, [page, pageSize, photos]);
+  // Date breadcrumb defaults (right-panel footer): today + the most recent
+  // capture day across the loaded photos — both keyed off `created_at` (PST),
+  // never the most-recent PO or photo type.
+  const today = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date()),
+    [],
+  );
+  const mostRecentDay = useMemo(
+    () => buildPhotoDateTree(photos)[0]?.months[0]?.days[0]?.ymd,
+    [photos],
+  );
 
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
@@ -100,18 +104,24 @@ export function PhotoLibraryPage() {
     [selectionActive, exitSelectMode],
   );
 
+  // Infinite scroll: load the next page when the sentinel near the bottom of the
+  // scroll region scrolls into view. `rootMargin` pre-fetches ~600px early so the
+  // grid fills before the user reaches the end. Replaces the old prev/next pager.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const needed = page * pageSize;
-    if (photos.length < needed && hasMore && !query.isFetchingNextPage) {
-      void query.fetchNextPage();
-    }
-  }, [page, pageSize, photos.length, hasMore, query]);
-
-  useEffect(() => {
-    if (page > totalPages && totalPages > 0) {
-      setPage(totalPages);
-    }
-  }, [page, setPage, totalPages]);
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && query.hasNextPage && !query.isFetchingNextPage) {
+          void query.fetchNextPage();
+        }
+      },
+      { rootMargin: '600px 0px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [query.hasNextPage, query.isFetchingNextPage, query]);
 
   const metaLine = query.isLoading
     ? 'Loading…'
@@ -290,26 +300,6 @@ export function PhotoLibraryPage() {
             } satisfies SelectionAction<LibraryPhoto>,
           ]
         : []),
-      ...(selectedFolderId
-        ? [
-            {
-              key: 'remove-folder',
-              label: 'Remove from folder',
-              icon: <X className="h-4 w-4" />,
-              tone: 'gray' as const,
-              primary: false,
-              run: async (rows: LibraryPhoto[]) => {
-                if (rows.length === 0) return;
-                await removePhotos.mutateAsync({
-                  folderId: selectedFolderId,
-                  photoIds: rows.map((row) => row.id),
-                });
-                exitSelectMode();
-                toast.success(`Removed ${rows.length} photo${rows.length === 1 ? '' : 's'} from folder`);
-              },
-            } satisfies SelectionAction<LibraryPhoto>,
-          ]
-        : []),
       {
         key: 'delete',
         label: 'Delete selected',
@@ -347,7 +337,7 @@ export function PhotoLibraryPage() {
         },
       },
     ],
-    [canZendesk, downloadPhotoFile, exitSelectMode, queryClient, removePhotos, selectedFolderId, shareLinks],
+    [canZendesk, downloadPhotoFile, exitSelectMode, queryClient, shareLinks],
   );
 
   return (
@@ -359,10 +349,6 @@ export function PhotoLibraryPage() {
         onViewChange={setView}
         sort={filters.sort ?? 'recent'}
         onSortChange={(sort) => patch({ sort })}
-        page={page}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        isLoading={query.isLoading || query.isFetchingNextPage}
       />
 
       {selectionActive ? (
@@ -370,7 +356,6 @@ export function PhotoLibraryPage() {
           rows={selectedPhotos}
           total={photos.length}
           actions={photoBulkActions}
-          leading={<AddToFolderMenu photoIds={selectedPhotos.map((p) => p.id)} />}
           onSelectAll={selectAll}
           onClear={exitSelectMode}
         />
@@ -378,9 +363,13 @@ export function PhotoLibraryPage() {
 
       <div className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-6 lg:p-6">
         <PhotoLibraryGrid
-          photos={pagePhotos}
+          photos={photos}
           view={view}
           sourceScope={sourceScopeFromFilters(filters)}
+          dateFrom={filters.dateFrom}
+          dateTo={filters.dateTo}
+          poRef={filters.poRef}
+          onNavigate={({ dateFrom, dateTo, poRef }) => patch({ dateFrom, dateTo, poRef })}
           onPhotoDeleted={() => void query.refetch()}
           selectionActive={selectionActive}
           selected={selected}
@@ -392,11 +381,31 @@ export function PhotoLibraryPage() {
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
-        {!query.isLoading && pagePhotos.length > 0 && !hasMore && page >= totalPages ? (
+        {query.hasNextPage ? (
+          <div
+            ref={sentinelRef}
+            className="flex items-center justify-center py-6 text-[10px] font-bold uppercase tracking-widest text-gray-400"
+          >
+            {query.isFetchingNextPage ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading more…
+              </>
+            ) : null}
+          </div>
+        ) : !query.isLoading && photos.length > 0 ? (
           <p className="mt-6 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
             {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
           </p>
         ) : null}
+      </div>
+
+      <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2 lg:px-6">
+        <PhotoDateBreadcrumb
+          filters={filters}
+          today={today}
+          mostRecentDay={mostRecentDay}
+          onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}
+        />
       </div>
 
       <ZendeskClaimModal

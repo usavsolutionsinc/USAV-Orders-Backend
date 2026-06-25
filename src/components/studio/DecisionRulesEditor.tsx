@@ -17,6 +17,7 @@
  */
 
 import type { ChangeEvent } from 'react';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 interface OutputPort {
   id: string;
@@ -65,7 +66,7 @@ function readRules(config: Record<string, unknown>): RuleRow[] {
     const row = (r ?? {}) as Record<string, unknown>;
     const when = (row.when ?? {}) as Record<string, unknown>;
     return {
-      id: asString(row.id) || crypto.randomUUID(),
+      id: asString(row.id) || safeRandomUUID(),
       when: {
         grade: asString(when.grade) || undefined,
         channel: asString(when.channel) || undefined,
@@ -95,7 +96,7 @@ export function DecisionRulesEditor({ nodeId, config, onChange }: DecisionRulesE
 
   // ── Rules ──
   const addRule = () =>
-    writeRules([...rules, { id: crypto.randomUUID(), when: {}, thenPort: outputs[0]?.id ?? '' }]);
+    writeRules([...rules, { id: safeRandomUUID(), when: {}, thenPort: outputs[0]?.id ?? '' }]);
   const updateRuleWhen = (i: number, field: keyof RuleRow['when'], value: string) =>
     writeRules(
       rules.map((r, idx) =>

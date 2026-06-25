@@ -12,7 +12,7 @@ import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewer
 import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import { PhotoThumb } from './PhotoThumb';
-import { useZendeskTicketSubject } from '@/hooks/useZendeskTicketSubject';
+import { describePhotoDatePath, isoWeekNumber, weekRange } from '@/lib/photos/date-hierarchy';
 import { cn } from '@/utils/_cn';
 
 /**
@@ -33,7 +33,7 @@ interface TicketGroup {
   latestAt: string;
 }
 
-/** Group photos by ticket number (`poRef`), preserving the incoming sort order. */
+/** Group photos by PO# (`poRef`); within a group order oldest→newest (left→right). */
 function groupPhotosByTicket(photos: LibraryPhoto[]): TicketGroup[] {
   const order: string[] = [];
   const map = new Map<string, TicketGroup>();
@@ -54,6 +54,9 @@ function groupPhotosByTicket(photos: LibraryPhoto[]): TicketGroup[] {
     group.photos.push(photo);
     if (photo.createdAt > group.latestAt) group.latestAt = photo.createdAt;
   }
+  for (const group of map.values()) {
+    group.photos.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
   return order.map((key) => map.get(key)!);
 }
 
@@ -68,6 +71,13 @@ interface PhotoLibraryGridProps {
   view: PhotoLibraryViewMode;
   /** Source scope drives folder labels (PO# for unboxing, Order# for packing). */
   sourceScope?: PhotoLibrarySourceScope;
+  /** Active date filter (drives the folders-view drill level). */
+  dateFrom?: string;
+  dateTo?: string;
+  /** Active PO# filter (folders-view PO leaf). */
+  poRef?: string;
+  /** Narrow/widen the date+PO filter from a folder click or path-bar crumb. */
+  onNavigate?: (nav: PhotoDateNav) => void;
   /** Whether selection UI (checkmarks, toggle-on-click) is engaged. */
   selectionActive: boolean;
   /** The currently-selected photo ids. */
@@ -211,6 +221,10 @@ export function PhotoLibraryGrid({
   photos,
   view,
   sourceScope = 'all',
+  dateFrom,
+  dateTo,
+  poRef,
+  onNavigate,
   selectionActive,
   selected,
   onSelectTile,
@@ -220,27 +234,35 @@ export function PhotoLibraryGrid({
   error,
 }: PhotoLibraryGridProps) {
   // The folders view owns its own per-folder viewer; the flat views (list,
-  // grid, grid-ticket) share one page-level lightbox opened at the clicked
-  // photo. Gallery inputs carry full context so the viewer's info panel works.
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const galleryInputs = useMemo(() => toGalleryInputs(photos, sourceScope), [photos, sourceScope]);
-  const indexById = useMemo(
-    () => new Map(photos.map((p, i) => [p.id, i] as const)),
-    [photos],
-  );
-  const openAt = (id: number) => setOpenIndex(indexById.get(id) ?? 0);
+  // grid, grid-ticket) share one page-level lightbox. Opening a photo scopes the
+  // viewer to that photo's PO# group ONLY — the same single-PO display you get by
+  // opening a folder — rather than the entire filtered set (which would just
+  // mirror the page behind it). Group photos read oldest→newest.
+  const [openPhotoId, setOpenPhotoId] = useState<number | null>(null);
+  const openScope = useMemo(() => {
+    if (openPhotoId == null) return null;
+    const clicked = photos.find((p) => p.id === openPhotoId);
+    if (!clicked) return null;
+    const ref = clicked.poRef?.trim();
+    const group = ref ? photos.filter((p) => p.poRef?.trim() === ref) : [clicked];
+    const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return {
+      inputs: toGalleryInputs(sorted, sourceScope),
+      startIndex: Math.max(0, sorted.findIndex((p) => p.id === openPhotoId)),
+    };
+  }, [openPhotoId, photos, sourceScope]);
+  const openAt = (id: number) => setOpenPhotoId(id);
 
   // Rendered inside each flat-view branch (folders excluded). Mounts lazily so
   // images preload only once a photo is actually opened.
-  const lightbox =
-    openIndex !== null ? (
-      <LightboxPortal
-        photos={galleryInputs}
-        startIndex={openIndex}
-        onClose={() => setOpenIndex(null)}
-        onPhotoDeleted={onPhotoDeleted}
-      />
-    ) : null;
+  const lightbox = openScope ? (
+    <LightboxPortal
+      photos={openScope.inputs}
+      startIndex={openScope.startIndex}
+      onClose={() => setOpenPhotoId(null)}
+      onPhotoDeleted={onPhotoDeleted}
+    />
+  ) : null;
 
   if (isLoading) {
     return <PhotoGridSkeleton />;
@@ -254,7 +276,10 @@ export function PhotoLibraryGrid({
       </div>
     );
   }
-  if (photos.length === 0) {
+  // The folders view owns its own empty-handling — an empty day widens to its
+  // week, and each level renders the right teaching state — so don't pre-empt it
+  // with the global empty card (that hid the day→week fallback entirely).
+  if (photos.length === 0 && view !== 'folders') {
     return <PhotoEmptyState />;
   }
 
@@ -320,6 +345,10 @@ export function PhotoLibraryGrid({
       <FoldersView
         photos={photos}
         scope={sourceScope}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        poRef={poRef}
+        onNavigate={onNavigate ?? (() => {})}
         selectionActive={selectionActive}
         selected={selected}
         onSelectTile={onSelectTile}
@@ -341,7 +370,7 @@ export function PhotoLibraryGrid({
               <header className="mb-2 flex items-center gap-2 border-b border-gray-100 pb-1.5">
                 <Layers className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                 <span className="truncate text-sm font-semibold text-gray-900">
-                  {group.key === UNLINKED_TICKET_KEY ? group.label : `Ticket ${group.label}`}
+                  {group.key === UNLINKED_TICKET_KEY ? group.label : `PO ${group.label}`}
                 </span>
                 <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-500">
                   {group.photos.length}
@@ -374,12 +403,14 @@ export function PhotoLibraryGrid({
     );
   }
 
-  // grid-sm: dense square contact sheet. grid-lg: editorial masonry of
-  // natural-aspect, labeled cards. Both render as one flat sheet (Finder-style —
-  // no day-separator bands).
-  const isMasonry = view === 'grid-lg';
-  const containerClass = isMasonry
-    ? 'columns-2 gap-3 sm:columns-3 md:columns-4 xl:columns-6'
+  // grid-sm: dense square contact sheet. grid-lg: larger natural-aspect labeled
+  // cards. BOTH are CSS grids so items flow left→right, top→bottom — i.e. the
+  // active sort reads across rows. (grid-lg used CSS multi-column masonry, which
+  // fills top→bottom DOWN each column, so chronological order ran down columns,
+  // not across — `items-start` keeps the natural-height cards top-aligned.)
+  const isLarge = view === 'grid-lg';
+  const containerClass = isLarge
+    ? 'grid grid-cols-2 items-start gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'
     : 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8';
 
   return (
@@ -391,9 +422,8 @@ export function PhotoLibraryGrid({
             photo={photo}
             imageUrl={photo.thumbUrl}
             scope={sourceScope}
-            ratio={isMasonry ? 'natural' : 'square'}
-            masonry={isMasonry}
-            showLabel={isMasonry}
+            ratio={isLarge ? 'natural' : 'square'}
+            showLabel={isLarge}
             selectionActive={selectionActive}
             selected={selected.has(photo.id)}
             onSelect={(mods) => onSelectTile(photo.id, mods)}
@@ -413,7 +443,6 @@ function PhotoCard({
   imageUrl,
   scope,
   ratio = 'square',
-  masonry = false,
   showLabel,
   selectionActive,
   selected,
@@ -426,8 +455,6 @@ function PhotoCard({
   /** Source scope — drives the PO# vs Zendesk-ticket# label. */
   scope: PhotoLibrarySourceScope;
   ratio?: 'square' | 'natural';
-  /** Render as a CSS-columns masonry child (avoid mid-tile column breaks). */
-  masonry?: boolean;
   showLabel: boolean;
   selectionActive: boolean;
   selected: boolean;
@@ -442,7 +469,6 @@ function PhotoCard({
       onContextMenu={onContextMenu ? (e) => onContextMenu(photo, e) : undefined}
       className={cn(
         'group relative overflow-hidden rounded-lg border bg-white text-left transition-colors',
-        masonry && 'mb-3 block w-full break-inside-avoid',
         selected ? 'border-primary ring-2 ring-primary' : 'border-border hover:border-gray-300',
       )}
     >
@@ -485,89 +511,149 @@ function PhotoCard({
   );
 }
 
-// ── Folders view ──────────────────────────────────────────────────────────────
+// ── Folders view (date drill) ───────────────────────────────────────────────
+//
+// The folders view is a Year → Month → Week → Day → PO# drill, all keyed off
+// `created_at` (PST). Each level renders as a grid of folder tiles; drilling a
+// day reveals that day's PO# folders, and opening a PO# folder shows its photos
+// as a contact sheet with the shared lightbox. There are no saved/master
+// folders any more — the hierarchy is derived from capture time.
 
-interface PhotoFolder {
-  key: string;
-  poRef: string | null;
-  ticketId: number | null;
-  cover: LibraryPhoto;
-  photos: LibraryPhoto[];
-  latestAt: string;
+const UNLINKED_PO_KEY = '__unlinked__';
+
+const PST_YMD = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Los_Angeles',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** PST `YYYY-MM-DD` for a photo's capture time (en-CA already emits that shape). */
+function pstYmd(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return PST_YMD.format(date);
 }
 
-const UNLINKED_FOLDER_KEY = '__unlinked__';
-
-/**
- * Bucket photos into folders. Claims (Zendesk) group by linked ticket id;
- * everything else groups by `poRef` (PO# for receiving, order#/scan ref for
- * packing). Photos with no key fall into a single "Unlinked" folder.
- */
-function groupPhotosIntoFolders(
-  photos: LibraryPhoto[],
-  scope: PhotoLibrarySourceScope,
-): PhotoFolder[] {
-  const order: string[] = [];
-  const map = new Map<string, PhotoFolder>();
-  for (const photo of photos) {
-    const ticketId = photo.ticketId ?? null;
-    const useTicket = scope === 'claims' && ticketId != null;
-    const ref = photo.poRef?.trim();
-    const key = useTicket ? `t:${ticketId}` : ref ? `po:${ref}` : UNLINKED_FOLDER_KEY;
-    let group = map.get(key);
-    if (!group) {
-      group = {
-        key,
-        poRef: useTicket ? null : ref || null,
-        ticketId: useTicket ? ticketId : null,
-        cover: photo,
-        photos: [],
-        latestAt: photo.createdAt,
-      };
-      map.set(key, group);
-      order.push(key);
-    }
-    group.photos.push(photo);
-    if (photo.createdAt > group.latestAt) group.latestAt = photo.createdAt;
-  }
-  return order.map((key) => map.get(key)!);
+/** ISO week number for a `YYYY-MM-DD` string (computed in UTC to dodge DST). */
+function isoWeekForYmd(ymd: string): number {
+  return isoWeekNumber(new Date(`${ymd}T00:00:00Z`));
 }
 
-function folderRefLabel(poRef: string, scope: PhotoLibrarySourceScope): string {
-  if (scope === 'unboxing') return `PO ${poRef}`;
+function poLabel(poRef: string, scope: PhotoLibrarySourceScope): string {
   if (scope === 'local_pickup') return `Pickup ${poRef}`;
   if (scope === 'packing') return `Order ${poRef}`;
   if (scope === 'repair') return `Unit ${poRef}`;
-  return `#${poRef}`;
+  return `PO ${poRef}`;
 }
 
-function folderRefLabelFallback(folder: PhotoFolder, scope: PhotoLibrarySourceScope): string {
-  if (folder.ticketId != null) return `Ticket #${folder.ticketId}`;
-  if (folder.poRef) return folderRefLabel(folder.poRef, scope);
-  return 'Unlinked';
+interface DayBucket {
+  ymd: string;
+  photos: LibraryPhoto[];
+}
+interface WeekBucket {
+  key: string;
+  week: number;
+  days: Map<string, DayBucket>;
+}
+interface MonthBucket {
+  key: string; // YYYY-MM
+  month: number; // 0-based
+  weeks: Map<string, WeekBucket>;
+}
+interface YearBucket {
+  year: string;
+  months: Map<string, MonthBucket>;
+}
+
+/** Bucket photos into Year → Month → Week → Day by PST capture date. */
+function buildDateFolderTree(photos: LibraryPhoto[]): Map<string, YearBucket> {
+  const years = new Map<string, YearBucket>();
+  for (const photo of photos) {
+    const ymd = pstYmd(photo.createdAt);
+    if (!ymd) continue;
+    const [y, m] = ymd.split('-');
+    const year = years.get(y) ?? { year: y, months: new Map() };
+    years.set(y, year);
+    const mKey = `${y}-${m}`;
+    const month = year.months.get(mKey) ?? { key: mKey, month: Number(m) - 1, weeks: new Map() };
+    year.months.set(mKey, month);
+    const week = isoWeekForYmd(ymd);
+    const wKey = `${y}-W${week}`;
+    const wk = month.weeks.get(wKey) ?? { key: wKey, week, days: new Map() };
+    month.weeks.set(wKey, wk);
+    const dayBucket = wk.days.get(ymd) ?? { ymd, photos: [] };
+    wk.days.set(ymd, dayBucket);
+    dayBucket.photos.push(photo);
+  }
+  return years;
+}
+
+interface FolderTileData {
+  key: string;
+  label: string;
+  /** Newest photo in the subtree — drives the cover + meta timestamp. */
+  cover: LibraryPhoto | undefined;
+  count: number;
+  latestAt: string;
+}
+
+/** Reduce a list of photos to a folder tile's cover/count/latest meta. */
+function tileMeta(key: string, label: string, photos: LibraryPhoto[]): FolderTileData {
+  let cover = photos[0];
+  let latestAt = photos[0]?.createdAt ?? '';
+  for (const p of photos) {
+    if (p.createdAt > latestAt) {
+      latestAt = p.createdAt;
+      cover = p;
+    }
+  }
+  return { key, label, cover, count: photos.length, latestAt };
+}
+
+/** Range a folder click applies, by level. */
+function yearRangeOf(y: string): PhotoDateNav {
+  return { dateFrom: `${y}-01-01`, dateTo: `${y}-12-31` };
+}
+function monthRangeOf(mKey: string): PhotoDateNav {
+  const [y, m] = mKey.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { dateFrom: `${mKey}-01`, dateTo: `${mKey}-${String(last).padStart(2, '0')}` };
+}
+function weekRangeOf(ymd: string): PhotoDateNav {
+  const r = weekRange(new Date(`${ymd}T00:00:00Z`));
+  return { dateFrom: r.dateFrom, dateTo: r.dateTo };
+}
+
+export interface PhotoDateNav {
+  dateFrom?: string;
+  dateTo?: string;
+  poRef?: string;
 }
 
 /**
- * Resolve a folder's display label. Claim folders (with a Zendesk ticket id)
- * lazily resolve the ticket subject and fall back to "Ticket #id"; PO/order
- * folders use the scope-aware ref label.
- */
-function useFolderLabel(folder: PhotoFolder, scope: PhotoLibrarySourceScope): string {
-  const ticketSubject = useZendeskTicketSubject(folder.ticketId);
-  if (folder.ticketId != null) return ticketSubject.data || `Ticket #${folder.ticketId}`;
-  return folderRefLabelFallback(folder, scope);
-}
-
-/**
- * Finder-style folders view. At the root it shows a grid of folder tiles; click
- * one to drill *into* it — a breadcrumb path appears and the folder's photos
- * render inline as a contact sheet. Click a photo to open the shared lightbox;
- * with a selection active, photos toggle so the top bulk bar can share/download
- * the chosen set (replacing the old drag-a-folder-to-share gesture).
+ * Date-drill folders view, driven by the active URL date filter (single source
+ * of truth — the same state the bottom breadcrumb reads). The drill LEVEL is the
+ * granularity of the active range: no date → Years, a year span → Months, a
+ * month → Weeks, a week → Days, a day → that day's PO# folders, and a PO# (or a
+ * single-PO day / custom range) → a photo contact sheet. Clicking a folder
+ * *narrows* the filter via `onNavigate`; the breadcrumb *widens* it. Because the
+ * server already scopes `photos` to the active range, every level reads straight
+ * off the loaded photos — so "on week 26" shows that week's day folders, not a
+ * stale Years view.
  */
 function FoldersView({
   photos,
   scope,
+  dateFrom,
+  dateTo,
+  poRef,
+  onNavigate,
   selectionActive,
   selected,
   onSelectTile,
@@ -576,48 +662,114 @@ function FoldersView({
 }: {
   photos: LibraryPhoto[];
   scope: PhotoLibrarySourceScope;
+  dateFrom?: string;
+  dateTo?: string;
+  poRef?: string;
+  onNavigate: (nav: PhotoDateNav) => void;
   selectionActive: boolean;
   selected: Set<number>;
   onSelectTile: (id: number, mods: TileSelectMods) => void;
   onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
-  const folders = useMemo(() => groupPhotosIntoFolders(photos, scope), [photos, scope]);
-  // Finder/Runway-style split: real (linked) folders render as folder tiles;
-  // photos with no PO/ticket are surfaced as a loose "Ungrouped" sheet at the
-  // root instead of being buried in a folder you have to open.
-  const linkedFolders = useMemo(
-    () => folders.filter((f) => f.key !== UNLINKED_FOLDER_KEY),
-    [folders],
-  );
-  const loosePhotos = useMemo(
-    () => folders.find((f) => f.key === UNLINKED_FOLDER_KEY)?.photos ?? [],
-    [folders],
-  );
-
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  const openFolder = linkedFolders.find((f) => f.key === openKey) ?? null;
-  // Lightbox index when drilled into a folder (flat list/grid use their own).
+  const tree = useMemo(() => buildDateFolderTree(photos), [photos]);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  // Lightbox index for the root-level "Ungrouped photos" sheet.
-  const [looseIndex, setLooseIndex] = useState<number | null>(null);
-  const folderInputs = useMemo(
-    () => (openFolder ? toGalleryInputs(openFolder.photos, scope) : []),
-    [openFolder, scope],
-  );
-  const looseInputs = useMemo(() => toGalleryInputs(loosePhotos, scope), [loosePhotos, scope]);
 
-  // Leaving a folder (or it vanishing after a refetch) closes any open image.
+  // Classify the active range into a level via the shared date-path model, then
+  // resolve the matching tree nodes off the (already range-scoped) photos.
+  const datePath = useMemo(() => describePhotoDatePath({ dateFrom, dateTo }), [dateFrom, dateTo]);
+  const level = datePath.length === 0 ? 'root' : datePath[datePath.length - 1].key;
+  const anchor = dateFrom;
+  const yKey = anchor?.slice(0, 4);
+  const mKey = anchor?.slice(0, 7);
+
+  const year = yKey ? tree.get(yKey) : undefined;
+  const month = year && mKey ? year.months.get(mKey) : undefined;
+  const week = month && anchor ? month.weeks.get(`${yKey}-W${isoWeekForYmd(anchor)}`) : undefined;
+  const day = week && anchor ? week.days.get(anchor) : undefined;
+
+  const dayPhotos = day?.photos ?? [];
+  const poGroups = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, LibraryPhoto[]>();
+    for (const p of dayPhotos) {
+      const ref = p.poRef?.trim();
+      const key = ref ? `po:${ref}` : UNLINKED_PO_KEY;
+      const list = map.get(key) ?? [];
+      if (list.length === 0) order.push(key);
+      list.push(p);
+      map.set(key, list);
+    }
+    for (const list of map.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return { order, map };
+  }, [dayPhotos]);
+
+  // The leaf is a flat contact sheet: an explicit PO#, a single-PO day, or any
+  // custom range. `photos` is already server-scoped, so it IS the leaf set.
+  const isLeaf =
+    Boolean(poRef) ||
+    level === 'custom' ||
+    (level === 'day' && poGroups.order.length <= 1);
+  const leafInputs = useMemo(() => toGalleryInputs(photos, scope), [photos, scope]);
+  useEffect(() => setOpenIndex(null), [dateFrom, dateTo, poRef]);
+
+  // Empty-day fallback: if a single day is selected (e.g. the "Today" chip) but
+  // it has no photos, widen up to that day's week so the operator lands on the
+  // week's day folders instead of a dead-empty day. Fires once — after widening
+  // the level is 'week', so the guard no longer holds (no loop).
   useEffect(() => {
-    if (!openFolder) setOpenIndex(null);
-  }, [openFolder]);
+    if (level === 'day' && !poRef && anchor && photos.length === 0) {
+      onNavigate(weekRangeOf(anchor));
+    }
+  }, [level, poRef, anchor, photos.length, onNavigate]);
 
-  if (openFolder) {
+  // ── Breadcrumb path bar — climbs by widening the filter (shared model) ─────
+  const crumbs: { label: string; nav: PhotoDateNav; current: boolean }[] = datePath.map((c) => ({
+    label: c.label,
+    nav: { dateFrom: c.range.dateFrom, dateTo: c.range.dateTo },
+    current: c.current && !poRef,
+  }));
+  if (poRef && dateFrom) {
+    crumbs.push({ label: poLabel(poRef, scope), nav: { dateFrom, dateTo, poRef }, current: true });
+  }
+
+  const pathBar =
+    crumbs.length > 0 ? (
+      <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label="Folder path">
+        <button
+          type="button"
+          onClick={() => onNavigate({ dateFrom: undefined, dateTo: undefined, poRef: undefined })}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" /> All folders
+        </button>
+        {crumbs.map((c, i) => (
+          <span key={`${c.label}-${i}`} className="flex items-center gap-1">
+            <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" aria-hidden="true" />
+            <button
+              type="button"
+              disabled={c.current}
+              onClick={() => onNavigate(c.nav)}
+              className={cn(
+                'shrink-0 truncate rounded-md px-2 py-1 font-semibold transition-colors',
+                c.current ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+              )}
+            >
+              {c.label}
+            </button>
+          </span>
+        ))}
+      </nav>
+    ) : null;
+
+  // ── Leaf: a contact sheet of photos (PO# folder, single-PO day, custom) ────
+  if (isLeaf) {
+    if (photos.length === 0) return <PhotoEmptyState />;
     return (
       <div className="space-y-3">
-        <FolderPathBar folder={openFolder} scope={scope} onBack={() => setOpenKey(null)} />
+        {pathBar}
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
-          {openFolder.photos.map((photo, i) => (
+          {photos.map((photo, i) => (
             <PhotoCard
               key={photo.id}
               photo={photo}
@@ -634,7 +786,7 @@ function FoldersView({
         </div>
         {openIndex !== null ? (
           <LightboxPortal
-            photos={folderInputs}
+            photos={leafInputs}
             startIndex={openIndex}
             onPhotoDeleted={onPhotoDeleted}
             onClose={() => setOpenIndex(null)}
@@ -644,56 +796,88 @@ function FoldersView({
     );
   }
 
+  // ── Folder grid for the current level ─────────────────────────────────────
+  let eyebrow = 'Years';
+  let tiles: FolderTileData[] = [];
+  let onOpen: (tile: FolderTileData) => void = () => {};
+
+  if (level === 'day' && day) {
+    eyebrow = 'POs';
+    tiles = poGroups.order.map((key) => {
+      const list = poGroups.map.get(key)!;
+      const ref = key === UNLINKED_PO_KEY ? null : key.replace(/^po:/, '');
+      return tileMeta(key, ref ? poLabel(ref, scope) : 'Unlinked', list);
+    });
+    onOpen = (t) =>
+      onNavigate({
+        dateFrom,
+        dateTo,
+        poRef: t.key === UNLINKED_PO_KEY ? undefined : t.key.replace(/^po:/, ''),
+      });
+  } else if (level === 'week' && week) {
+    eyebrow = 'Days';
+    tiles = [...week.days.values()]
+      .sort((a, b) => b.ymd.localeCompare(a.ymd))
+      .map((d) => tileMeta(d.ymd, dayTileLabel(d.ymd), d.photos));
+    onOpen = (t) => onNavigate({ dateFrom: t.key, dateTo: t.key });
+  } else if (level === 'month' && month) {
+    eyebrow = 'Weeks';
+    tiles = [...month.weeks.values()]
+      .sort((a, b) => b.week - a.week)
+      .map((w) => tileMeta(w.key, `Week ${w.week}`, [...w.days.values()].flatMap((d) => d.photos)));
+    // Anchor the week range on its earliest day so the filter spans Mon–Sun.
+    onOpen = (t) => {
+      const wk = month.weeks.get(t.key);
+      const firstDay = wk ? [...wk.days.keys()].sort()[0] : undefined;
+      if (firstDay) onNavigate(weekRangeOf(firstDay));
+    };
+  } else if (level === 'year' && year) {
+    eyebrow = 'Months';
+    tiles = [...year.months.values()]
+      .sort((a, b) => b.month - a.month)
+      .map((m) =>
+        tileMeta(
+          m.key,
+          MONTH_NAMES[m.month] ?? m.key,
+          [...m.weeks.values()].flatMap((w) => [...w.days.values()].flatMap((d) => d.photos)),
+        ),
+      );
+    onOpen = (t) => onNavigate(monthRangeOf(t.key));
+  } else {
+    eyebrow = 'Years';
+    tiles = [...tree.values()]
+      .sort((a, b) => Number(b.year) - Number(a.year))
+      .map((y) =>
+        tileMeta(
+          y.year,
+          y.year,
+          [...y.months.values()].flatMap((m) =>
+            [...m.weeks.values()].flatMap((w) => [...w.days.values()].flatMap((d) => d.photos)),
+          ),
+        ),
+      );
+    onOpen = (t) => onNavigate(yearRangeOf(t.key));
+  }
+
+  if (tiles.length === 0) return <PhotoEmptyState />;
+
   return (
-    <div className="space-y-6">
-      {linkedFolders.length > 0 ? (
-        <section className="space-y-2">
-          <SectionEyebrow icon={Folder} label="Folders" count={linkedFolders.length} />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-            {linkedFolders.map((folder) => (
-              <FolderTile
-                key={folder.key}
-                folder={folder}
-                scope={scope}
-                onOpen={() => setOpenKey(folder.key)}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {loosePhotos.length > 0 ? (
-        <section className="space-y-2">
-          <SectionEyebrow icon={ImageIcon} label="Ungrouped photos" count={loosePhotos.length} />
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
-            {loosePhotos.map((photo, i) => (
-              <PhotoCard
-                key={photo.id}
-                photo={photo}
-                imageUrl={photo.thumbUrl}
-                scope={scope}
-                showLabel={false}
-                selectionActive={selectionActive}
-                selected={selected.has(photo.id)}
-                onSelect={(mods) => onSelectTile(photo.id, mods)}
-                onOpen={() => setLooseIndex(i)}
-                onContextMenu={onPhotoContextMenu}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {looseIndex !== null ? (
-        <LightboxPortal
-          photos={looseInputs}
-          startIndex={looseIndex}
-          onPhotoDeleted={onPhotoDeleted}
-          onClose={() => setLooseIndex(null)}
-        />
-      ) : null}
+    <div className="space-y-3">
+      {pathBar}
+      <SectionEyebrow icon={Folder} label={eyebrow} count={tiles.length} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+        {tiles.map((t) => (
+          <DateFolderTile key={t.key} tile={t} onOpen={() => onOpen(t)} />
+        ))}
+      </div>
     </div>
   );
+}
+
+/** `Jun 23` from a `YYYY-MM-DD` string. */
+function dayTileLabel(ymd: string): string {
+  const [, m, d] = ymd.split('-');
+  return `${MONTH_NAMES[Number(m) - 1]?.slice(0, 3) ?? m} ${Number(d)}`;
 }
 
 /** Eyebrow section header with a count chip (Runway/Squarespace asset library). */
@@ -709,7 +893,10 @@ function SectionEyebrow({
   return (
     <div className="flex items-center gap-1.5">
       <Icon className="h-3.5 w-3.5 text-gray-400" />
-      <span className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
+      <span
+        data-testid="folder-level"
+        className="text-eyebrow font-black uppercase tracking-widest text-gray-500"
+      >
         {label}
       </span>
       <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-500">
@@ -719,77 +906,36 @@ function SectionEyebrow({
   );
 }
 
-/** Breadcrumb path bar shown while drilled into a folder — back to "All folders". */
-function FolderPathBar({
-  folder,
-  scope,
-  onBack,
-}: {
-  folder: PhotoFolder;
-  scope: PhotoLibrarySourceScope;
-  onBack: () => void;
-}) {
-  const label = useFolderLabel(folder, scope);
-  const count = folder.photos.length;
-  return (
-    <nav className="flex items-center gap-1 text-sm" aria-label="Folder path">
-      <button
-        type="button"
-        onClick={onBack}
-        className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" /> All folders
-      </button>
-      <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" aria-hidden="true" />
-      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-gray-100 px-2 py-1 font-semibold text-gray-900">
-        <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-        <span className="truncate">{label}</span>
-        <span className="shrink-0 tabular-nums text-gray-400">· {count}</span>
-      </span>
-    </nav>
-  );
-}
-
-/** A single folder tile — folder-tab cover + count + scope-aware label. */
-function FolderTile({
-  folder,
-  scope,
-  onOpen,
-}: {
-  folder: PhotoFolder;
-  scope: PhotoLibrarySourceScope;
-  onOpen: () => void;
-}) {
-  const label = useFolderLabel(folder, scope);
-  const count = folder.photos.length;
-
+/** A single folder tile — folder-tab cover + count + latest-capture meta. */
+function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => void }) {
   return (
     <button
       type="button"
       data-testid="photo-folder"
       onClick={onOpen}
-      title={`${label} · ${count} photo${count === 1 ? '' : 's'}`}
+      title={`${tile.label} · ${tile.count} photo${tile.count === 1 ? '' : 's'}`}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
     >
       <div className="relative h-32 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
         <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
         <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
-          <PhotoThumb src={folder.cover.thumbUrl} alt="" ratio="fill" />
+          {tile.cover ? <PhotoThumb src={tile.cover.thumbUrl} alt="" ratio="fill" /> : null}
           <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-white">
-            {count}
+            {tile.count}
           </span>
         </div>
       </div>
       <div className="flex flex-col gap-0.5 px-2.5 py-2">
         <div className="flex items-center gap-1.5">
           <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-          <span className="truncate text-[11px] font-semibold text-gray-900">{label}</span>
+          <span className="truncate text-[11px] font-semibold text-gray-900">{tile.label}</span>
         </div>
-        {/* Frame.io-style meta line: latest capture in the folder. */}
-        <span className="truncate pl-5 text-[10px] tabular-nums text-gray-400">
-          {formatDateTimePST(folder.latestAt)}
-        </span>
+        {tile.latestAt ? (
+          <span className="truncate pl-5 text-[10px] tabular-nums text-gray-400">
+            {formatDateTimePST(tile.latestAt)}
+          </span>
+        ) : null}
       </div>
     </button>
   );
@@ -812,7 +958,9 @@ function LightboxPortal({
   onPhotoDeleted?: (photoId: number) => void;
 }) {
   // {id,url,meta} (not bare urls) so the viewer's delete + info panel show.
-  const gallery = usePhotoGallery({ photos, showCopyLinks: false, onPhotoDeleted });
+  // `overview: 'grid'` opens the viewer to the PO#-grouped contact sheet (the
+  // folder-style display) regardless of which library view launched it.
+  const gallery = usePhotoGallery({ photos, showCopyLinks: false, onPhotoDeleted, overview: 'grid' });
   const { openViewer, viewerOpen } = gallery;
   const openedRef = useRef(false);
 

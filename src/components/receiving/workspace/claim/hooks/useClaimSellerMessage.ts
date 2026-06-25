@@ -3,7 +3,7 @@ import { toast } from '@/lib/toast';
 import { copySellerClaimMessageWithPersist } from '@/lib/receiving-claim-seller-copy';
 import { sellerDraftMatchesTicket } from '@/lib/receiving-claim-seller-ticket-match';
 import type { ClaimType } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import type { ClaimModalMode, CreateClaimStep, FiledTicket } from '../claim-types';
+import type { ClaimModalMode, FiledTicket } from '../claim-types';
 
 export interface UseClaimSellerMessage {
   sellerMessage: string;
@@ -28,7 +28,8 @@ export interface UseClaimSellerMessage {
 interface Params {
   open: boolean;
   mode: ClaimModalMode;
-  createStep: CreateClaimStep;
+  /** True only while the seller step is the active step (either mode). */
+  sellerActive: boolean;
   filedTicket: FiledTicket | null;
   receivingId: number | null | undefined;
   lineId: number | null | undefined;
@@ -49,7 +50,7 @@ interface Params {
 export function useClaimSellerMessage({
   open,
   mode,
-  createStep,
+  sellerActive,
   filedTicket,
   receivingId,
   lineId,
@@ -127,7 +128,7 @@ export function useClaimSellerMessage({
 
   // Step 2: restore saved draft or auto-generate (includes the filed ticket #).
   useEffect(() => {
-    if (!open || createStep !== 'seller' || !filedTicket || !receivingId) return;
+    if (!open || !sellerActive || !filedTicket || !receivingId) return;
     // Test sentinel: leave the pre-filled preview in place, fetch/draft nothing.
     if (filedTicket.number === '#TEST') return;
 
@@ -170,7 +171,7 @@ export function useClaimSellerMessage({
     void bootstrap();
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, createStep, filedTicket, receivingId, lineId]);
+  }, [open, mode, sellerActive, filedTicket, receivingId, lineId]);
 
   const handleCopySellerMessage = async () => {
     const text = sellerMessage.trim();

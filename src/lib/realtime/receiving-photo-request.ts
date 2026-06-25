@@ -1,4 +1,5 @@
 import { getStaffStationBridgeChannelName, safeChannelName } from './channels';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 export interface ReceivingPhotoRequestClient {
   channels: {
@@ -14,10 +15,7 @@ export function getReceivingPhotoRequestChannelName(orgId: string | null | undef
 }
 
 function makeRequestId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 export async function publishReceivingPhotoRequest(

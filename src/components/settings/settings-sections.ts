@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
   | 'security' | 'organization' | 'billing' | 'integrations' | 'team'
-  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal';
+  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal' | 'receiving';
 
 export type SettingsGroup = 'Personal' | 'Organization';
 
@@ -22,6 +22,7 @@ export const SETTINGS_SECTION_OPTIONS: SettingsSectionOption[] = [
   { id: 'workstation',   label: 'Workstation',   description: 'Station, role, location',                          group: 'Personal' },
   { id: 'quick-access',  label: 'Quick Access',  description: 'Bottom-right shortcuts & pins',                    group: 'Personal' },
   { id: 'appearance',    label: 'Appearance',    description: 'Density, text size',                               group: 'Personal' },
+  { id: 'receiving',     label: 'Receiving',     description: 'Unboxing scan, photos & org policy',               group: 'Personal' },
   { id: 'security',      label: 'Security',      description: 'PIN and passkeys',                                 group: 'Personal' },
   { id: 'about',         label: 'About',         description: 'Version & diagnostics',                            group: 'Personal' },
   { id: 'legal',         label: 'Legal & Policies', description: 'Terms, Privacy & DPA',                          group: 'Personal' },

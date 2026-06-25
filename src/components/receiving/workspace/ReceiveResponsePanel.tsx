@@ -45,7 +45,7 @@ type ZohoResultRow = {
   error_kind?: 'rate_limit' | 'circuit_open' | 'api' | 'other' | null;
 };
 
-function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
+export function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
   verdict: 'success' | 'skipped' | 'rate_limit' | 'circuit_open' | 'api_error' | 'http_error' | 'network';
   headline: string;
   detail: string;
@@ -120,7 +120,21 @@ function classifyReceiveResponse(r: ReceiveResponsePanelProps['response']): {
     error?: string | null;
     skip_reason?: string | null;
     results?: ZohoResultRow[];
+    circuit?: { isOpen?: boolean; retryAfterMs?: number; consecutiveFailures?: number };
   };
+  if (zoho.skip_reason === 'zoho_circuit_open') {
+    // Cooldown is recoverable, not a hard failure: the lines committed locally
+    // and the background sync replays once Zoho's breaker closes. Amber, with a
+    // concrete retry window (surfaced from the server's in-process breaker —
+    // this is what replaced the former 3s client-side /api/zoho/health check).
+    const secs = Math.max(1, Math.ceil((zoho.circuit?.retryAfterMs ?? 0) / 1000));
+    return {
+      verdict: 'circuit_open',
+      headline: `Zoho cooldown — retry in ~${secs}s`,
+      tone: 'amber',
+      detail: `Circuit breaker open after ${zoho.circuit?.consecutiveFailures ?? 0} recent Zoho failures. Lines saved locally and stay in Scanned; the PO syncs once Zoho recovers.`,
+    };
+  }
   if (zoho.skip_reason === 'zoho_already_fully_received') {
     return {
       verdict: 'success',

@@ -6,37 +6,41 @@ import { Button } from '@/design-system/primitives';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import { useSupportReply } from '@/hooks/useSupportReply';
 import { useZendeskAgents } from '@/hooks/useZendeskQueries';
+import type { TicketPhotoStaging } from '@/hooks/useTicketPhotoStaging';
+import { useAuth } from '@/contexts/AuthContext';
 import { markdownToHtml } from '@/lib/support/markdown';
 import { cn } from '@/utils/_cn';
-
-interface Added {
-  id: string;
-  file: File;
-  url: string;
-}
-let seq = 0;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * Chat composer — public reply / internal note toggle, drag-drop (or click) photo
- * attach, ⌘↵ to send. Posts through {@link useSupportReply} (the shared
- * photo→ticket pipeline) so replies and the modal attach files identically.
+ * Chat composer — public reply / internal note toggle, CC collaborators, photo
+ * attach (via the ticket-level drop overlay or the Attach button), ⌘↵ to send.
+ * Internal notes auto-sign with the current staffer's name for attribution.
+ * Posts through {@link useSupportReply} (the shared photo→ticket pipeline).
  */
 export function SupportChatComposer({
   ticketId,
   requesterEmail,
+  staging,
 }: {
   ticketId: number;
   requesterEmail?: string | null;
+  staging: TicketPhotoStaging;
 }) {
   const [body, setBody] = useState('');
-  const [isPublic, setIsPublic] = useState(true);
-  const [files, setFiles] = useState<Added[]>([]);
+  // Default to internal note — public replies are the deliberate exception.
+  const [isPublic, setIsPublic] = useState(false);
   const [ccs, setCcs] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState('');
   const reply = useSupportReply();
   const { data: agents = [] } = useZendeskAgents();
+  const { user } = useAuth();
+  const staffName = user?.name?.trim() || '';
+
+  // Reuse the dropzone hook purely for its file-picker plumbing (the ticket
+  // panel owns the actual drag overlay, so we don't spread rootProps here).
+  const picker = usePhotoDropzone(staging.addFiles);
 
   // Type-ahead pool: the ticket requester + every agent email, minus the ones
   // already added. Free entry is still allowed (any valid email).
@@ -57,23 +61,19 @@ export function SupportChatComposer({
   };
   const removeCc = (email: string) => setCcs((prev) => prev.filter((e) => e !== email));
 
-  const dz = usePhotoDropzone((incoming) =>
-    setFiles((prev) => [
-      ...prev,
-      ...incoming.map((file) => ({ id: `f-${(seq += 1)}`, file, url: URL.createObjectURL(file) })),
-    ]),
-  );
+  /** Internal notes are signed with the staffer's name for exact attribution. */
+  const signNote = (text: string) => {
+    if (isPublic || !staffName) return text;
+    const sig = `— ${staffName}`;
+    return text.trimEnd().endsWith(sig) ? text : `${text}\n\n${sig}`;
+  };
 
-  const removeFile = (id: string) =>
-    setFiles((prev) => {
-      const target = prev.find((f) => f.id === id);
-      if (target) URL.revokeObjectURL(target.url);
-      return prev.filter((f) => f.id !== id);
-    });
+  const stagedDone = staging.staged.filter((s) => s.status === 'done' && typeof s.photoId === 'number');
 
   const submit = () => {
     const text = body.trim();
-    if (!text || reply.isPending) return;
+    if (!text || reply.isPending || staging.uploading) return;
+    const finalText = signNote(text);
     // Fold a half-typed CC into the list so it isn't silently dropped.
     const pendingCc = ccInput.trim();
     const allCcs = isPublic
@@ -82,44 +82,38 @@ export function SupportChatComposer({
     reply.mutate(
       {
         ticketId,
-        body: text,
+        body: finalText,
         isPublic,
-        files: files.map((f) => f.file),
+        photoIds: stagedDone.map((s) => s.photoId!),
+        attachmentPreviews: stagedDone.map((s) => ({ url: s.url!, thumbUrl: s.thumbUrl })),
         emailCcs: allCcs.length ? allCcs : undefined,
-        htmlBody: markdownToHtml(text),
+        htmlBody: markdownToHtml(finalText),
       },
       {
         onSuccess: () => {
           setBody('');
-          files.forEach((f) => URL.revokeObjectURL(f.url));
-          setFiles([]);
           setCcs([]);
           setCcInput('');
+          staging.clear();
         },
       },
     );
   };
 
+  // Contextual QoL microcopy in the footer (the ⌘↵ + formatting hints live in
+  // the textarea placeholder, so they're omitted here to avoid duplication).
+  const hint = staging.uploading
+    ? 'Uploading photo…'
+    : staging.staged.length
+      ? `${staging.staged.length} photo${staging.staged.length === 1 ? '' : 's'} ready to attach`
+      : isPublic
+        ? `Drag photos to attach${ccs.length ? ` · ${ccs.length} cc` : ''}`
+        : `${staffName ? `Signs as — ${staffName} · ` : ''}Not emailed`;
+
   return (
-    <div
-      {...dz.rootProps}
-      className={cn(
-        'shrink-0 border-t bg-white px-4 py-3 transition-colors',
-        dz.isDragging ? 'border-blue-300 bg-blue-50/40' : 'border-gray-100',
-      )}
-    >
+    <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
         <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
-          <button
-            type="button"
-            onClick={() => setIsPublic(true)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[11px] font-bold transition',
-              isPublic ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
-            )}
-          >
-            <Globe className="h-3.5 w-3.5" /> Public reply
-          </button>
           <button
             type="button"
             onClick={() => setIsPublic(false)}
@@ -130,15 +124,25 @@ export function SupportChatComposer({
           >
             <Lock className="h-3.5 w-3.5" /> Internal note
           </button>
+          <button
+            type="button"
+            onClick={() => setIsPublic(true)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[11px] font-bold transition',
+              isPublic ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
+            )}
+          >
+            <Globe className="h-3.5 w-3.5" /> Public reply
+          </button>
         </div>
         <button
           type="button"
-          onClick={dz.openPicker}
+          onClick={picker.openPicker}
           className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
         >
           <Paperclip className="h-3.5 w-3.5" /> Attach
         </button>
-        <input ref={dz.inputRef} {...dz.inputProps} />
+        <input ref={picker.inputRef} {...picker.inputProps} />
       </div>
 
       {/* CC collaborators — public replies only (CCs make no sense on a note). */}
@@ -187,15 +191,30 @@ export function SupportChatComposer({
         </div>
       ) : null}
 
-      {files.length ? (
+      {staging.staged.length ? (
         <div className="mb-2.5 flex flex-wrap gap-2">
-          {files.map((f) => (
-            <div key={f.id} className="relative h-14 w-14 overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200">
-              {/* blob preview of a just-dropped file */}
-              <img src={f.url} alt={f.file.name} className="h-full w-full object-cover" />
+          {staging.staged.map((s) => (
+            <div
+              key={s.tempId}
+              className={cn(
+                'relative h-14 w-14 overflow-hidden rounded-lg ring-1 ring-inset',
+                s.status === 'error' ? 'ring-rose-300' : 'ring-gray-200',
+              )}
+            >
+              <img src={s.thumbUrl || s.previewUrl} alt={s.name} className="h-full w-full object-cover" />
+              {s.status === 'uploading' ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                </div>
+              ) : null}
+              {s.status === 'error' ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-rose-900/40 text-[8px] font-black uppercase text-white">
+                  Failed
+                </div>
+              ) : null}
               <button
                 type="button"
-                onClick={() => removeFile(f.id)}
+                onClick={() => staging.remove(s.tempId)}
                 aria-label="Remove"
                 className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-white transition hover:bg-gray-900"
               >
@@ -227,18 +246,12 @@ export function SupportChatComposer({
           className="block w-full resize-none rounded-xl bg-transparent px-3.5 py-2.5 text-[13px] leading-relaxed text-gray-900 outline-none placeholder:text-gray-400"
         />
         <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-          <span className="text-[11px] text-gray-400">
-            {dz.isDragging
-              ? 'Drop to attach'
-              : files.length
-                ? `${files.length} attachment${files.length === 1 ? '' : 's'}`
-                : 'Drag photos in · **bold** *italic* `code` supported'}
-          </span>
+          <span className="text-[11px] text-gray-400">{hint}</span>
           <Button
             variant={isPublic ? 'primary' : 'secondary'}
             size="sm"
             loading={reply.isPending}
-            disabled={!body.trim()}
+            disabled={!body.trim() || staging.uploading}
             onClick={submit}
             icon={<Send className="h-3.5 w-3.5" />}
           >

@@ -162,12 +162,15 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
     <RightPaneOverlay
       open={open}
       onClose={onClose}
-      align="right"
-      anchor="pane"
-      width={460}
+      align="center"
+      resizable
+      storageKey="receiving-audit-modal-size"
+      minWidth={420}
+      minHeight={420}
+      className="-mt-8 h-[min(86vh,44rem)] w-[min(94vw,40rem)]"
       aria-labelledby="receiving-audit-title"
     >
-      <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div className="min-w-0">
           <p
             id="receiving-audit-title"

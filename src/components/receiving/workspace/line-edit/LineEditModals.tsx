@@ -9,6 +9,7 @@
 
 import { ReceivingAuditModal } from '../ReceivingAuditModal';
 import { ReceivingClaimModal } from '../ReceivingClaimModal';
+import { SendPhotoNoteModal } from '../SendPhotoNoteModal';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { UnboxLineController } from './unbox-line-controller';
 
@@ -27,6 +28,11 @@ export function LineEditModals({ row, c }: LineEditModalsProps) {
           receivingId={row.receiving_id}
         />
       ) : null}
+      <SendPhotoNoteModal
+        open={c.photoNoteOpen}
+        row={row}
+        onClose={() => c.setPhotoNoteOpen(false)}
+      />
       <ReceivingClaimModal
         open={c.claimModalOpen}
         row={row}

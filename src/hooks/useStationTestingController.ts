@@ -10,6 +10,7 @@ import { handleTrackingScan } from './station/handleTrackingScan';
 import { handleFnskuScan } from './station/handleFnskuScan';
 import { handleSkuScan } from './station/handleSkuScan';
 import { handleSerialScan } from './station/handleSerialScan';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { handleRepairScan } from './station/handleRepairScan';
 import { handleCommand } from './station/handleCommand';
 import { normalizeTrackingKey } from '@/lib/tracking-format';
@@ -27,10 +28,7 @@ const LAST_MANUAL_STORAGE_PREFIX = 'usav:last-manual:tech:';
 const COMPLETED_ORDER_AUTO_HIDE_MS = 2 * 60 * 1000;
 
 function newStationIdempotencyKey(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  return safeRandomUUID();
 }
 
 /**

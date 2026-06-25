@@ -10,10 +10,11 @@ import {
 } from '@/hooks/useZendeskQueries';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
-import { ChevronLeft, ExternalLink } from '@/components/Icons';
+import { Check, ChevronLeft, ExternalLink, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { ZendeskSelect, type SelectOption } from '../ZendeskSelect';
 import { PRIORITY_OPTIONS, STATUS_OPTIONS, statusBadge } from '../badges';
+import { SupportDetailsStack } from './SupportDetailsStack';
 import { initials, requesterFrom } from './support-chat-utils';
 
 const UNASSIGNED = 'unassigned';
@@ -34,6 +35,19 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
   const requester = requesterFrom(ticket);
   const reqName = requester.name || requester.email || 'Requester';
   const sb = statusBadge(ticket.status);
+
+  // Inline title (subject) edit — click the title, confirm with the checkmark.
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const startEditTitle = () => {
+    setTitleDraft(ticket.subject || '');
+    setEditingTitle(true);
+  };
+  const saveTitle = () => {
+    const next = titleDraft.trim();
+    if (next && next !== (ticket.subject || '')) update.mutate({ id: ticket.id, patch: { subject: next } });
+    setEditingTitle(false);
+  };
 
   // Our own staff roster for the in-website follow-up assignment.
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -77,12 +91,57 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h2 className="truncate text-[15px] font-bold tracking-tight text-gray-900">
-              {ticket.subject || '(no subject)'}
-            </h2>
-            <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', sb.className)}>
-              {sb.label}
-            </span>
+            {editingTitle ? (
+              <>
+                <input
+                  autoFocus
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveTitle();
+                    } else if (e.key === 'Escape') {
+                      setEditingTitle(false);
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-blue-300 bg-white px-2 py-0.5 text-[15px] font-bold tracking-tight text-gray-900 outline-none focus:ring-2 focus:ring-blue-100"
+                />
+                <button
+                  type="button"
+                  onClick={saveTitle}
+                  disabled={update.isPending}
+                  aria-label="Save title"
+                  title="Save title"
+                  className="shrink-0 rounded-md bg-blue-600 p-1 text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(false)}
+                  aria-label="Cancel"
+                  title="Cancel"
+                  className="shrink-0 rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={startEditTitle}
+                  title="Click to edit title"
+                  className="min-w-0 truncate text-left text-[15px] font-bold tracking-tight text-gray-900 transition hover:text-blue-700"
+                >
+                  {ticket.subject || '(no subject)'}
+                </button>
+                <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', sb.className)}>
+                  {sb.label}
+                </span>
+              </>
+            )}
           </div>
           <p className="mt-0.5 truncate text-[12px] text-gray-500">
             <span className="font-semibold text-gray-600">{reqName}</span>
@@ -90,6 +149,8 @@ export function SupportChatHeader({ ticket, onBack }: { ticket: ZendeskTicket; o
             <span className="text-gray-300"> · #{ticket.id}</span>
           </p>
         </div>
+        {/* Details stack — secondary detail + tags, just left of the Zendesk link. */}
+        <SupportDetailsStack ticket={ticket} />
         {url ? (
           <a
             href={url}

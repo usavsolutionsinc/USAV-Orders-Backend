@@ -1,4 +1,4 @@
-import { Archive, ChevronLeft, Copy, Link2, Loader2 } from '@/components/Icons';
+import { ChevronLeft, Copy, Link2, Loader2 } from '@/components/Icons';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 
 function ProgressChip({ label, dotClass = 'bg-rose-400' }: { label: string; dotClass?: string }) {
@@ -55,29 +55,40 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
   const archiveLabel = c.archiveState
     ? c.archiveState.ok
       ? `Backed up ${c.archiveState.copied}/${c.archiveState.total}`
-      : 'NAS backup incomplete'
+      : 'Local backup incomplete'
     : null;
+  const linkStep = c.linkStep;
   const progressDot = !busy && c.archiveState?.ok ? 'bg-emerald-500' : 'bg-rose-400';
   const progressLabel = c.submitting
     ? 'Filing ticket'
     : c.archiveSubmitting
-      ? 'Archiving photos'
+      ? 'Saving photos'
       : c.linking
         ? 'Linking ticket'
         : c.unlinking
           ? 'Unlinking ticket'
-          : step === 'confirm'
-            ? (archiveLabel ?? 'Ticket filed')
-            : step === 'seller'
-              ? 'Seller message'
-              : step === 'review'
-                ? 'Ready to file'
-                : c.mode === 'link'
-                  ? 'Choose a ticket'
+          : !isCreate
+            ? linkStep === 'find'
+              ? search.selectedTicket
+                ? `Ticket #${search.selectedTicket.id} selected`
+                : 'Choose a ticket'
+              : linkStep === 'linked'
+                ? (archiveLabel ?? 'Ticket linked')
+                : 'Seller message'
+            : step === 'confirm'
+              ? (archiveLabel ?? 'Ticket filed')
+              : step === 'seller'
+                ? 'Seller message'
+                : step === 'review'
+                  ? 'Ready to file'
                   : 'Draft claim';
 
-  // The "Back" affordance only on the editable pre-file create steps.
-  const showBack = isCreate && (step === 'compose' || step === 'review');
+  // The "Back" affordance: editable pre-file create steps, or the post-link
+  // link steps (back to the picker / confirmation).
+  const showBack = isCreate
+    ? step === 'compose' || step === 'review'
+    : linkStep === 'linked' || linkStep === 'seller';
+  const onBack = isCreate ? c.goBack : c.goLinkBack;
 
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-4 py-2.5">
@@ -86,7 +97,7 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
           Cancel
         </button>
         {showBack ? (
-          <button type="button" onClick={c.goBack} disabled={busy} className={ghostBtn}>
+          <button type="button" onClick={onBack} disabled={busy} className={ghostBtn}>
             <ChevronLeft className="h-3.5 w-3.5" />
             Back
           </button>
@@ -121,7 +132,7 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
               type="button"
               onClick={() => void c.submitDryRun()}
               disabled={c.testCreating || c.submitting || !c.row.receiving_id || !c.composeComplete}
-              title="Rehearse the whole flow (Review → Confirm → Seller) without filing a real ticket — uses #TEST, no Zendesk/NAS/DB writes"
+              title="Rehearse the whole flow (Review → Confirm → Seller) without filing a real ticket — uses #TEST, no Zendesk/local/DB writes"
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-amber-800 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {c.testCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
@@ -148,38 +159,29 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
         {isCreate && step === 'seller' ? <SellerActions c={c} /> : null}
 
         {/* ── Link flow ───────────────────────────────────────────────── */}
-        {!isCreate ? (
-          <>
-            {c.filedTicket && !c.linkCommitted ? (
-              <button
-                type="button"
-                onClick={c.submitLink}
-                disabled={c.linking || !c.row.receiving_id || !search.selectedTicket}
-                className={roseBtn}
-              >
-                {c.linking ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {c.linking
-                  ? 'Linking…'
-                  : search.selectedTicket
-                    ? `Link ticket #${search.selectedTicket.id} →`
-                    : 'Link ticket'}
-              </button>
-            ) : null}
-            {c.filedTicket && c.linkCommitted ? (
-              <button
-                type="button"
-                onClick={c.archiveToNas}
-                disabled={c.archiveSubmitting || !c.row.receiving_id}
-                title={`Back up this carton's photos to the NAS folder named ${c.filedTicket.number}`}
-                className={blueOutlineBtn}
-              >
-                {c.archiveSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                {c.archiveSubmitting ? 'Archiving…' : 'Archive to NAS'}
-              </button>
-            ) : null}
-            <SellerActions c={c} />
-          </>
+        {!isCreate && linkStep === 'find' ? (
+          <button
+            type="button"
+            onClick={c.submitLink}
+            disabled={c.linking || !c.row.receiving_id || !search.selectedTicket}
+            className={roseBtn}
+          >
+            {c.linking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
+            {c.linking
+              ? 'Linking…'
+              : search.selectedTicket
+                ? `Link ticket #${search.selectedTicket.id} →`
+                : 'Choose a ticket'}
+          </button>
         ) : null}
+
+        {!isCreate && linkStep === 'linked' ? (
+          <button type="button" onClick={c.continueToSeller} className={blueBtn}>
+            Continue to seller →
+          </button>
+        ) : null}
+
+        {!isCreate && linkStep === 'seller' ? <SellerActions c={c} /> : null}
       </div>
     </div>
   );

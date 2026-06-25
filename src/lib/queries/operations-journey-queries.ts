@@ -49,18 +49,9 @@ export function buildFocusedQueryString(f: JourneyUrlFilters): string {
   return p.toString();
 }
 
-export function buildBrowseQueryString(f: JourneyUrlFilters, cursor: string | null): string {
-  const p = new URLSearchParams();
-  p.set('dim', f.dim);
-  appendFilters(p, f);
-  if (cursor) p.set('cursor', cursor);
-  return p.toString();
-}
-
 export const journeyKeys = {
   all: ['ops-journey'] as const,
   focused: (f: JourneyUrlFilters) => ['ops-journey', 'focused', buildFocusedQueryString(f)] as const,
-  browse: (f: JourneyUrlFilters) => ['ops-journey', 'browse', buildBrowseQueryString(f, null)] as const,
 };
 
 async function fetchJourney(qs: string): Promise<JourneyResponse> {
@@ -69,23 +60,11 @@ async function fetchJourney(qs: string): Promise<JourneyResponse> {
   return (await res.json()) as JourneyResponse;
 }
 
-/** Focused (single-entity) journey — a plain query, no pagination. */
+/** Focused record lookup — a plain query, no browse/pagination. */
 export function operationsJourneyFocusedQuery(f: JourneyUrlFilters) {
   return queryOptions({
     queryKey: journeyKeys.focused(f),
     queryFn: () => fetchJourney(buildFocusedQueryString(f)),
     staleTime: 10_000,
   });
-}
-
-/** Browse infinite-query config (spread into `useInfiniteQuery`). */
-export function operationsJourneyBrowseQueryConfig(f: JourneyUrlFilters) {
-  return {
-    queryKey: journeyKeys.browse(f),
-    initialPageParam: null as string | null,
-    queryFn: ({ pageParam }: { pageParam: string | null }) =>
-      fetchJourney(buildBrowseQueryString(f, pageParam)),
-    getNextPageParam: (last: JourneyResponse) => last.nextCursor ?? undefined,
-    staleTime: 10_000,
-  };
 }

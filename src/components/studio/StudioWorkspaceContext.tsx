@@ -41,6 +41,7 @@ import {
   type ReactNode,
 } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStepUp } from '@/components/providers/StepUpProvider';
 import { fetchWithStepUp } from '@/components/auth/StepUpModal';
@@ -477,7 +478,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
         return [
           ...prev,
           {
-            id: `n-${crypto.randomUUID()}`,
+            id: `n-${safeRandomUUID()}`,
             type,
             x: 40 + (prev.length % 5) * 290,
             y: maxY + 260,
@@ -530,7 +531,7 @@ export function StudioWorkspaceProvider({ children }: { children: ReactNode }) {
       const baseY = prev.length ? Math.min(...prev.map((a) => a.y)) - 20 : 80;
       return [
         ...prev,
-        { id: `a-${crypto.randomUUID()}`, text: '', x: baseX, y: baseY },
+        { id: `a-${safeRandomUUID()}`, text: '', x: baseX, y: baseY },
       ];
     });
     markDirty();

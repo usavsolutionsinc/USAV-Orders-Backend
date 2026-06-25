@@ -44,8 +44,8 @@ export default function RedesignedMobilePack() {
         />
       </div>
 
-      {/* pb-20 keeps content clear of the fixed bottom nav. */}
-      <div className="min-h-0 flex-1 pb-20">
+      {/* Nav moved to the left drawer — content runs to the bottom (shell pb-safe). */}
+      <div className="min-h-0 flex-1 pb-3">
         {view === 'flow' ? (
           <MobilePackerFlow />
         ) : packerId ? (

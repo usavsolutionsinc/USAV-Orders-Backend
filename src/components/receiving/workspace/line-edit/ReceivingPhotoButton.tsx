@@ -3,8 +3,9 @@
 /**
  * Compact carton-photos control for the condensed CartonContextCard row.
  *
- * When there are no photos yet, the button acts as the send-to-phone trigger
- * for starting capture. Once photos exist, hovering reveals the gallery toolbar.
+ * The button is always the send-to-phone trigger (camera + "+"), whether or not
+ * photos exist yet — capture happens on mobile. Once photos exist it also shows
+ * the count (×N) and hovering reveals the read/delete gallery toolbar.
  */
 
 import { memo, useCallback, useMemo } from 'react';
@@ -106,17 +107,22 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     );
   }
 
-  // With photos — camera + ×N; hovering reveals the gallery toolbar.
+  // With photos — camera + ×N + "+"; the button itself still sends to phone
+  // (the "+" affordance stays even once photos exist), and hovering reveals the
+  // gallery toolbar for viewing/deleting. The in-popover add button is gone —
+  // send-to-phone now lives on this top-bar button only.
   return (
     <div className="group/photos relative shrink-0">
       <button
         type="button"
-        aria-haspopup="true"
-        title={`${count} photo${count === 1 ? '' : 's'} — hover for options`}
+        onClick={handleRequestOnPhone}
+        title={`${count} photo${count === 1 ? '' : 's'} — click "+" to send to phone, hover for options`}
+        aria-label={`${count} photo${count === 1 ? '' : 's'}; send to phone to add more`}
         className={`${btnBase} border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}
       >
         <Camera className="h-4 w-4" />
         ×{count}
+        <Plus className="h-3 w-3" />
       </button>
       {/* Hover popover. `pt-1.5` is inside the group so the gap between button
           and card doesn't drop the hover. Only rendered when photos exist. */}
@@ -126,7 +132,6 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
             photos={photos}
             orderId={`RCV-${receivingId}`}
             launcherLayout="toolbar"
-            onAddPhotos={handleRequestOnPhone}
             showCopyLinks={false}
             toolbarShowLabel={false}
             compact

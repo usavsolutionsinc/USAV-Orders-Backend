@@ -535,10 +535,11 @@ function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
         {/* Teaching card */}
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
-          <p className="text-caption font-semibold text-gray-700">Operations journey</p>
+          <p className="text-caption font-semibold text-gray-700">Operations record</p>
           <p className="mt-1 text-micro leading-5 text-gray-500">
-            Search a serial, order, or tracking number to see its complete journey across every
-            station — or browse recent journeys here. Pick the dimension above.
+            Pick a dimension above and paste a record number to open its complete timeline across
+            every station. Event-type and station filters narrow that record&rsquo;s logs; save
+            frequently-checked records as views.
           </p>
         </div>
       </div>

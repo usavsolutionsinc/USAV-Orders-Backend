@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   History,
   Barcode,
   ShoppingCart,
   PackageOpen,
-  Packer,
+  Box,
+  ClipboardList,
   Lock,
   Wrench,
   MapPin,
@@ -57,18 +58,19 @@ type GroupItem = {
 
 type NavItem = LeafItem | GroupItem;
 
-// Single source of truth for the drawer's destinations. Order matches the old
-// bottom bar (Recent · Picks · Scan · Unbox · Packing) with Unbox promoted to a
-// "Receiving" group that drills into its photo-capable modes.
+// Single source of truth for the drawer's destinations. Scan is pinned to the
+// very top (the headline action). Receiving is a drill-down group into its
+// photo-capable modes. Icons mirror the desktop nav: Receiving = ClipboardList,
+// Packing = Box.
 const NAV_ITEMS: NavItem[] = [
+  { kind: 'leaf', id: 'scan', label: 'Scan', icon: Barcode, href: '/m/scan' },
   { kind: 'leaf', id: 'home', label: 'Recent', icon: History, href: '/m/home' },
   { kind: 'leaf', id: 'picks', label: 'Picks', icon: ShoppingCart, href: '/m/pick' },
-  { kind: 'leaf', id: 'scan', label: 'Scan', icon: Barcode, href: '/m/scan' },
   {
     kind: 'group',
     id: 'receiving',
     label: 'Receiving',
-    icon: PackageOpen,
+    icon: ClipboardList,
     matchPrefixes: ['/m/receiving', '/m/receive', '/m/r/'],
     children: [
       { kind: 'leaf', id: 'unboxing', label: 'Unboxing', icon: PackageOpen, href: '/m/receiving' },
@@ -76,21 +78,39 @@ const NAV_ITEMS: NavItem[] = [
       { kind: 'leaf', id: 'repair', label: 'Repair Service', icon: Wrench, href: '/m/receiving?mode=repair' },
     ],
   },
-  { kind: 'leaf', id: 'packing', label: 'Packing', icon: Packer, href: '/m/pack' },
+  { kind: 'leaf', id: 'packing', label: 'Packing', icon: Box, href: '/m/pack' },
 ];
 
 const isLeafActive = (pathname: string | null, href: string) => {
   if (!pathname) return false;
   const base = href.split('?')[0];
   if (base === '/m/home') return pathname === base;
-  // For query-param modes, exact-match isn't possible from pathname alone, so the
-  // bare receiving paths only mark "Unboxing" active — the sub-modes light up via
-  // their own pages once those exist. Keep prefix-match for nested detail routes.
+  // Top-level (mode-less) leaves: exact match, plus prefix-match for nested
+  // detail routes. Receiving sub-modes use isChildActive (query-aware) instead.
   return pathname === base || pathname.startsWith(`${base}/`);
 };
 
 const isGroupActive = (pathname: string | null, prefixes: string[]) =>
   !!pathname && prefixes.some((p) => pathname === p || pathname.startsWith(p));
+
+/** The `?mode=` a child href encodes (null for the bare Unboxing path). */
+const hrefMode = (href: string): string | null => {
+  const q = href.split('?')[1];
+  return q ? new URLSearchParams(q).get('mode') : null;
+};
+
+/**
+ * A receiving sub-mode child is active only when BOTH its base path AND its
+ * `?mode=` match the current location — so on /m/receiving (no mode) ONLY
+ * "Unboxing" lights up, not Local Pickup / Repair (which share the base path).
+ * This is the fix for all three rows appearing selected at once.
+ */
+const isChildActive = (pathname: string | null, currentMode: string | null, href: string) => {
+  if (!pathname) return false;
+  const base = href.split('?')[0];
+  if (pathname !== base && !pathname.startsWith(`${base}/`)) return false;
+  return hrefMode(href) === currentMode;
+};
 
 export const MobileSidebarDrawer = ({
   open,
@@ -101,6 +121,8 @@ export const MobileSidebarDrawer = ({
 }) => {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentMode = searchParams?.get('mode') ?? null;
   const { user, signOut } = useAuth();
 
   // Auto-expand the Receiving group when the user is somewhere inside it.
@@ -248,7 +270,7 @@ export const MobileSidebarDrawer = ({
                             <div className="ml-2 space-y-1 border-l border-slate-100 pl-2 pt-1">
                               {item.children.map((child) => {
                                 const ChildIcon = child.icon;
-                                const childActive = isLeafActive(pathname, child.href);
+                                const childActive = isChildActive(pathname, currentMode, child.href);
                                 return (
                                   <li key={child.id}>
                                     <button

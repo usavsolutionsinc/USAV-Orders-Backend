@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Settings } from '@/components/Icons';
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
@@ -50,18 +50,10 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
   // a color, this hook bumps and the avatar + wheel re-render with the new hex.
   useStaffColorVersion();
 
-  const [staffName, setStaffName] = useState<string>('');
-  useEffect(() => {
-    if (!user) { setStaffName(''); return; }
-    let cancelled = false;
-    fetch(`/api/staff?id=${user.staffId}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { staff?: { name?: string } } | null) => {
-        if (!cancelled && data?.staff?.name) setStaffName(data.staff.name);
-      })
-      .catch(() => { /* ignore */ });
-    return () => { cancelled = true; };
-  }, [user]);
+  // Name comes from the auth session envelope (single source of truth, present
+  // synchronously) — not a per-mount `/api/staff` fetch. The server coalesces a
+  // blank name to `Staff #id`, so this is always a usable display string.
+  const staffName = user?.name ?? '';
 
   const staffColorHex = user ? getStaffColorHex({ id: user.staffId }) : '#10b981';
 

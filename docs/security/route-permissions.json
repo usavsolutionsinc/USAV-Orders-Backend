@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-25T04:45:30Z",
+  "generatedAt": "2026-06-25T15:35:40Z",
   "totalRoutes": 670,
   "summary": {
-    "permissionGated": 573,
-    "authenticatedNoPermission": 30,
+    "permissionGated": 572,
+    "authenticatedNoPermission": 31,
     "anonymousIntentional": 57,
     "serviceToService": 2,
     "ungatedRead": 8,
@@ -1168,6 +1168,18 @@
       ],
       "gate": "withAuth",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/checklists/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
       "exemptReason": null
     },
     {
@@ -2931,36 +2943,7 @@
       "exemptReason": null
     },
     {
-      "path": "/api/photos/folders/[id]/items/route.ts",
-      "methods": [
-        "DELETE",
-        "POST"
-      ],
-      "gate": "requireRoutePerm",
-      "permission": "photos.manage",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/photos/folders/[id]/route.ts",
-      "methods": [
-        "DELETE",
-        "PATCH"
-      ],
-      "gate": "requireRoutePerm",
-      "permission": "photos.manage",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/photos/folders/reorder/route.ts",
-      "methods": [
-        "POST"
-      ],
-      "gate": "withAuth",
-      "permission": "photos.manage",
-      "exemptReason": null
-    },
-    {
-      "path": "/api/photos/folders/route.ts",
+      "path": "/api/photos/image-types/route.ts",
       "methods": [
         "GET",
         "POST"
@@ -3648,6 +3631,15 @@
       ],
       "gate": "requireRoutePerm",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/zoho-note/route.ts",
+      "methods": [
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
       "exemptReason": null
     },
     {
@@ -4458,6 +4450,16 @@
       "path": "/api/serial-units/lookup/route.ts",
       "methods": [
         "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/settings/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
       ],
       "gate": "withAuth (no permission)",
       "permission": null,

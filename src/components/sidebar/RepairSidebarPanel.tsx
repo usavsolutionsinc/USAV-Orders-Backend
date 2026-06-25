@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, Plus, Tool } from '@/components/Icons';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
@@ -118,7 +119,7 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
 
   const handleSubmitForm = async (data: RepairFormData): Promise<RepairSubmitResult | null> => {
     setIsSubmitting(true);
-    if (!repairIdemKey.current) repairIdemKey.current = crypto.randomUUID();
+    if (!repairIdemKey.current) repairIdemKey.current = safeRandomUUID();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {

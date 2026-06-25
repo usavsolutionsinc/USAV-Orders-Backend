@@ -389,6 +389,29 @@ export const Layout = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
+// Column-count layout glyphs — one framed rect, split into N vertical columns.
+// Paired with the board's column toggle (1 / 2 / 3 up).
+export const ColumnsOne = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+    </svg>
+);
+
+export const ColumnsTwo = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <line x1="12" x2="12" y1="3" y2="21" />
+    </svg>
+);
+
+export const ColumnsThree = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <line x1="9" x2="9" y1="3" y2="21" />
+        <line x1="15" x2="15" y1="3" y2="21" />
+    </svg>
+);
+
 export const Barcode = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h.01M7 11h.01M7 15h.01M7 19h.01M7 21h.01M10 3h.01M10 7h.01M10 11h.01M10 15h.01M10 19h.01M10 21h.01M14 3h.01M14 7h.01M14 11h.01M14 15h.01M14 19h.01M14 21h.01M17 3h.01M17 7h.01M17 11h.01M17 15h.01M17 19h.01M17 21h.01" />

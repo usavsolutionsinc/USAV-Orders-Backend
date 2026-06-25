@@ -23,6 +23,7 @@ export type HeaderActionKey =
   | 'share' // copy/native-share a deep link to this package
   | 'audit' // open the inventory-events audit modal
   | 'copy' // copy package + PO details to the clipboard
+  | 'photoNote' // send this PO's photos to a Zendesk ticket as an internal note
   | 'pair' // open the cross-platform SKU pairing modal (testing only)
   | 'details'; // right-slot Info → receiving-details overlay
 
@@ -47,13 +48,13 @@ export interface ModeDef {
 export const WORKSPACE_MODES: Record<WorkspaceMode, ModeDef> = {
   unbox: {
     label: 'Unbox',
-    headerActions: ['refresh', 'share', 'audit', 'copy'],
+    headerActions: ['refresh', 'share', 'audit', 'copy', 'photoNote'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },
   triage: {
     label: 'Receiving',
-    headerActions: ['refresh', 'share', 'audit', 'copy'],
+    headerActions: ['refresh', 'share', 'audit', 'copy', 'photoNote'],
     showDetails: true,
     navChannel: 'receiving-navigate-table',
   },

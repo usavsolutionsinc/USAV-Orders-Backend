@@ -25,7 +25,7 @@ export interface StaffPreferences {
    * merge is shallow at this key.
    */
   unshippedBoard?: {
-    columns?: 1 | 2;
+    columns?: 1 | 2 | 3;
     range?: { from?: string | null; to?: string | null } | null;
     /** Drag-reordered lane order. Any state missing here falls back to the
      *  canonical SHELF_ORDER (appended in order), so a partial list is safe. */
@@ -38,6 +38,8 @@ export interface StaffPreferences {
           expanded?: boolean;
           /** Drag-resized body height (px); `null`/absent → expanded/collapsed preset. */
           height?: number | null;
+          /** Per-lane date-range filter (each table header owns its own picker). */
+          range?: { from?: string | null; to?: string | null } | null;
         }
       >
     >;
@@ -68,6 +70,31 @@ export async function updateStaffPreferences(
   patch: StaffPreferences,
 ): Promise<StaffPreferences> {
   const { rows } = await tenantQuery<{ prefs: StaffPreferences }>(
+    orgId,
+    `INSERT INTO staff_preferences (organization_id, staff_id, prefs)
+     VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (organization_id, staff_id)
+     DO UPDATE SET prefs = staff_preferences.prefs || EXCLUDED.prefs,
+                   updated_at = now()
+     RETURNING prefs`,
+    [orgId, staffId, JSON.stringify(patch)],
+  );
+  return rows[0]?.prefs ?? {};
+}
+
+/**
+ * Settings-Registry raw merge — write arbitrary top-level namespaced keys (e.g.
+ * 'receiving.defaultScanMode') into the prefs bag. Same shallow `||` upsert as
+ * updateStaffPreferences but typed for the framework's flat key space (the
+ * static StaffPreferences shape is `.strict()` and intentionally doesn't list
+ * these framework keys). Returns the full merged bag. See docs/settings-registry.md.
+ */
+export async function mergeStaffPreferencesRaw(
+  staffId: number,
+  orgId: OrgId,
+  patch: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { rows } = await tenantQuery<{ prefs: Record<string, unknown> }>(
     orgId,
     `INSERT INTO staff_preferences (organization_id, staff_id, prefs)
      VALUES ($1, $2, $3::jsonb)

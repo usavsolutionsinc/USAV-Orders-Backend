@@ -11,6 +11,7 @@ import { SecuritySection } from '@/components/settings/sections/SecuritySection'
 import { SessionsSection } from '@/components/settings/sections/SessionsSection';
 import { CatalogSection } from '@/components/settings/sections/CatalogSection';
 import { LegalSection } from '@/components/settings/sections/LegalSection';
+import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { getActiveSettingsSection } from '@/components/settings/settings-sections';
 
 const LEGACY_REDIRECTS: Record<string, string> = {
@@ -49,6 +50,7 @@ export default function SettingsPage() {
           {active === 'workstation' && <WorkstationSection />}
           {active === 'quick-access' && <QuickAccessSection />}
           {active === 'appearance' && <AppearanceSection />}
+          {active === 'receiving' && <SettingsPanel page="receiving" />}
           {active === 'security' && <SecuritySection />}
           {active === 'sessions' && <SessionsSection />}
           {active === 'catalog' && <CatalogSection />}

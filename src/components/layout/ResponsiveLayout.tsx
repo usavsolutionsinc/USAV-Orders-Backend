@@ -6,9 +6,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import DashboardSidebar from '@/components/DashboardSidebar';
 import { CommandBar } from '@/components/CommandBar';
+import { ErrorBoundary } from '@/components/error/ErrorBoundary';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useBodyScrollLock } from '@/design-system/hooks';
-import { X } from '@/components/Icons';
+import { AlertTriangle, RotateCcw, X } from '@/components/Icons';
 import { isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
@@ -36,6 +37,33 @@ function PhoneScanBridgeMount() {
 function GlobalWedgeScannerMount() {
   useGlobalWedgeScanner();
   return null;
+}
+
+/**
+ * Slim fallback shown when the sidebar subtree throws. It must be narrow chrome,
+ * not a full-frame takeover: the whole point of wrapping the sidebar in an
+ * `ErrorBoundary` is that the *main content keeps rendering* while only the rail
+ * degrades. Offers a retry that re-mounts the sidebar.
+ */
+function SidebarFallback({ reset }: { reset: () => void }) {
+  return (
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
+      <div className="m-3 rounded-lg border border-dashed border-rose-200 bg-rose-50 px-3 py-4 text-center">
+        <AlertTriangle className="mx-auto h-5 w-5 text-rose-500" />
+        <p className="mt-2 text-caption font-bold text-rose-700">Sidebar unavailable</p>
+        <p className="mt-1 text-eyebrow font-semibold uppercase tracking-widest text-rose-500">
+          The rest of the page still works
+        </p>
+        <button
+          type="button"
+          onClick={reset}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-caption font-bold text-rose-700 hover:bg-rose-50"
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> Retry
+        </button>
+      </div>
+    </aside>
+  );
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -201,9 +229,14 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             >
               <X className="h-5 w-5" />
             </button>
-            <Suspense fallback={null}>
-              <DashboardSidebar inDrawer onNavigate={closeDrawer} />
-            </Suspense>
+            <ErrorBoundary
+              label="sidebar-drawer"
+              fallback={(_e, reset) => <SidebarFallback reset={reset} />}
+            >
+              <Suspense fallback={null}>
+                <DashboardSidebar inDrawer onNavigate={closeDrawer} />
+              </Suspense>
+            </ErrorBoundary>
           </motion.div>
         </div>
       )}
@@ -220,9 +253,14 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
         <PhoneScanBridgeMount />
         <OfflineBanner />
         {!sidebarCollapsed && (
-          <Suspense fallback={null}>
-            <DashboardSidebar />
-          </Suspense>
+          <ErrorBoundary
+            label="sidebar"
+            fallback={(_e, reset) => <SidebarFallback reset={reset} />}
+          >
+            <Suspense fallback={null}>
+              <DashboardSidebar />
+            </Suspense>
+          </ErrorBoundary>
         )}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
           <GlobalHeader

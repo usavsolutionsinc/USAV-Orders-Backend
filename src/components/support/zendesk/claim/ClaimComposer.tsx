@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, type KeyboardEvent } from 'react';
-import { AtSign, Globe, Lock, Tag, X } from '@/components/Icons';
+import { AtSign, Globe, Lock } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { ZendeskSelect } from '../ZendeskSelect';
+import { TagInput } from '../TagInput';
 import { ClaimAttachments } from './ClaimAttachments';
 import { ClaimTicketPicker } from './ClaimTicketPicker';
 import { PRIORITY_OPTIONS } from './claim-types';
@@ -47,52 +47,6 @@ function VisibilityToggle({
       >
         <Globe className="h-3.5 w-3.5" /> {publicLabel}
       </button>
-    </div>
-  );
-}
-
-function TagInput({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
-  const [draft, setDraft] = useState('');
-  const add = () => {
-    const v = draft.trim().replace(/\s+/g, '_').toLowerCase();
-    if (v && !tags.includes(v)) onChange([...tags, v]);
-    setDraft('');
-  };
-  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      add();
-    } else if (e.key === 'Backspace' && !draft && tags.length) {
-      onChange(tags.slice(0, -1));
-    }
-  };
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-2.5 py-2 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
-      {tags.map((t) => (
-        <span
-          key={t}
-          className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-700"
-        >
-          <Tag className="h-3 w-3 text-gray-400" />
-          {t}
-          <button
-            type="button"
-            onClick={() => onChange(tags.filter((x) => x !== t))}
-            aria-label={`Remove ${t}`}
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </span>
-      ))}
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={onKey}
-        onBlur={add}
-        placeholder={tags.length ? '' : 'Add tags…'}
-        className="min-w-[80px] flex-1 bg-transparent text-[12px] outline-none"
-      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { formatPSTTimestamp } from '@/utils/date';
@@ -17,6 +17,7 @@ import {
   sumWarehouseReceivedByPoLineItem,
   updatePurchaseOrder,
 } from '@/lib/zoho';
+import { getZohoHttpClientStatus } from '@/lib/zoho/httpClient';
 import { receiveLineUnits } from '@/lib/receiving/receive-line';
 import { attachSerialToLine } from '@/lib/receiving/serial-attach';
 import { tapWorkflow } from '@/lib/workflow/tap';
@@ -948,11 +949,21 @@ export const POST = withAuth(async (request, ctx) => {
       try {
         await invalidateCacheTags(['receiving-logs', 'receiving-lines', 'serial-units']);
         for (const l of updatedLines) {
+          // Terminal Zoho verdict for this line so the inline checklist can
+          // confirm ('ok') or flip to a retryable failure ('failed'). Only
+          // meaningful for a real zoho_receive against a linked PO — scan-only
+          // (markasunreceived) and local-only lines carry no verdict.
+          let zohoReceive: 'ok' | 'failed' | undefined;
+          if (!skipZohoReceive) {
+            const poId = String(l.zoho_purchaseorder_id || '').trim();
+            if (poId) zohoReceive = poZohoReceiveSucceeded.get(poId) ? 'ok' : 'failed';
+          }
           await publishReceivingLogChanged({
             organizationId: ctx.organizationId,
             action: 'update',
             rowId: String(l.id),
             source: 'receiving.mark-received-po',
+            ...(zohoReceive ? { zohoReceive } : {}),
           });
         }
       } catch (err) {
@@ -1000,14 +1011,43 @@ export const POST = withAuth(async (request, ctx) => {
     // Optimistic response: Zoho work is in after() above. We report the local
     // truth right now — operator sees 1/1 + DONE immediately. Zoho status will
     // arrive via the realtime channel once the background sync settles.
+    // Surface an already-open Zoho circuit at response time. This is a cheap
+    // in-process read of the shared breaker (no token mint, no network), and it
+    // replaces the former client-side /api/zoho/health pre-check that cost up to
+    // 3s on EVERY receive. The local DB commit already stands; after() will
+    // retry/skip the Zoho purchase receive per the breaker — we just tell the
+    // operator a cooldown is in effect instead of showing three false checks.
+    let circuitStatus: { isOpen: boolean; retryAfterMs: number; consecutiveFailures: number } | null =
+      null;
+    try {
+      circuitStatus = getZohoHttpClientStatus().circuit;
+    } catch {
+      circuitStatus = null;
+    }
+    const circuitOpen =
+      !skipZohoReceive && attemptedPoIds.size > 0 && circuitStatus?.isOpen === true;
+
     let skipReason: string | null = null;
     if (skipZohoReceive) {
       skipReason = 'scan_only';
     } else if (attemptedPoIds.size === 0 && updatedLines.length > 0) {
       skipReason = 'no_zoho_link';
+    } else if (circuitOpen) {
+      skipReason = 'zoho_circuit_open';
     }
 
     const zohoPending = !skipReason && attemptedPoIds.size > 0;
+
+    // Checklist summary for the inline success display. descriptions_updated =
+    // lines carrying a serial (the background description PUT writes `SN: …` per
+    // line); notes_updated = a notes string was provided AND a PO is linked to
+    // receive the note against. Both collapse to 0/false when nothing reaches
+    // Zoho (scan-only, no-PO-link, cooldown).
+    const descriptionsUpdated =
+      attemptedPoIds.size > 0 && !skipZohoReceive
+        ? updatedLines.filter((l) => (serialsByReceivingLineId.get(l.id)?.length ?? 0) > 0).length
+        : 0;
+    const notesUpdated = Boolean(notes) && attemptedPoIds.size > 0 && !skipZohoReceive;
 
     return respond({
       success: true,
@@ -1015,6 +1055,15 @@ export const POST = withAuth(async (request, ctx) => {
       updated_count: linesUpdatedViaReceiveUnits ? updatedLines.length : 0,
       receiving_lines: updatedLines,
       receiving_id: receivingId,
+      // Per-action breakdown the inline ReceiveSuccessChecklist renders as
+      // staggered green checks. Optimistic — the Zoho writes run in after();
+      // the realtime `zohoReceive` verdict reconciles a background failure.
+      summary: {
+        marked_received: !skipZohoReceive && attemptedPoIds.size > 0 && !circuitOpen,
+        descriptions_updated: descriptionsUpdated,
+        notes_updated: notesUpdated,
+        local_only: attemptedPoIds.size === 0,
+      },
       zoho: {
         attempted: attemptedPoIds.size,
         ok: true, // local SoT — pending state is informational only
@@ -1023,6 +1072,15 @@ export const POST = withAuth(async (request, ctx) => {
         results: [],
         error: null,
         ...(skipReason ? { skip_reason: skipReason } : {}),
+        ...(circuitOpen && circuitStatus
+          ? {
+              circuit: {
+                isOpen: true,
+                retryAfterMs: circuitStatus.retryAfterMs,
+                consecutiveFailures: circuitStatus.consecutiveFailures,
+              },
+            }
+          : {}),
       },
     });
   } catch (error) {

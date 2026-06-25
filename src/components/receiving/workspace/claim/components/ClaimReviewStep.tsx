@@ -30,7 +30,7 @@ function ReviewBlock({
 /**
  * Step 3 — Review. A single read-only summary of everything that is about to
  * happen: the claim type, the photos that will attach + back up, the exact
- * Zendesk subject/body, and the NAS folder the evidence lands in. The Submit
+ * Zendesk subject/body, and the local-storage folder the evidence lands in. The Submit
  * action lives in the footer; on success the flow advances to Confirmation.
  */
 export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
@@ -97,14 +97,14 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
         </div>
       </ReviewBlock>
 
-      <ReviewBlock icon={<Archive className="h-3.5 w-3.5" />} label="NAS backup">
+      <ReviewBlock icon={<Archive className="h-3.5 w-3.5" />} label="Local backup">
         <p className="text-[11px] font-medium leading-5 text-gray-600">
-          On file, the office NAS agent copies the {photos.photos.length || 'carton'}
-          {photos.photos.length === 1 ? ' photo' : ' photos'} into a folder named after the new case
-          # (fallback{' '}
-          <span className="font-bold text-gray-800">{folderFallback}</span>) and writes a{' '}
+          On file, this carton&apos;s {photos.photos.length || 'carton'}
+          {photos.photos.length === 1 ? ' photo' : ' photos'} are saved to local storage in a folder
+          named after the new case # (fallback{' '}
+          <span className="font-bold text-gray-800">{folderFallback}</span>), alongside a{' '}
           <span className="font-bold text-gray-800">case-info.txt</span> notepad with the ticket
-          details alongside them.
+          details.
         </p>
       </ReviewBlock>
 

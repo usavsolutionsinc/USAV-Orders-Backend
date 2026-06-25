@@ -1,15 +1,18 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   isNotConfigured,
   useTicketComments,
   useTicketPhotos,
   useZendeskTicket,
 } from '@/hooks/useZendeskQueries';
+import { useTicketPhotoStaging } from '@/hooks/useTicketPhotoStaging';
+import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import type { ZendeskComment } from '@/lib/zendesk';
 import { EmptyState, Spinner } from '@/design-system/primitives';
+import { Upload } from '@/components/Icons';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import { SupportChatHeader } from './SupportChatHeader';
@@ -65,6 +68,11 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
     [photoUrls, openViewer],
   );
 
+  // Drag-a-photo-onto-the-ticket: the dropzone covers the whole panel; dropping
+  // uploads to GCS (linked to this ticket) and stages it in the composer.
+  const staging = useTicketPhotoStaging(ticketId);
+  const dz = usePhotoDropzone(staging.addFiles);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -91,7 +99,7 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
   const requester = requesterFrom(ticket);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-gray-50/40">
+    <div {...dz.rootProps} className="relative flex h-full min-h-0 flex-col bg-gray-50/40">
       <SupportChatHeader ticket={ticket} onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SupportChatThread
@@ -103,7 +111,26 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
         />
         <SupportLinkedContext ticketId={ticketId} onOpenPhoto={onOpenPhoto} />
       </div>
-      <SupportChatComposer ticketId={ticketId} requesterEmail={requester.email} />
+      <SupportChatComposer ticketId={ticketId} requesterEmail={requester.email} staging={staging} />
+
+      {/* Full-panel drop overlay while dragging an OS file over the ticket. */}
+      <AnimatePresence>
+        {dz.isDragging ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
+            className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-blue-400 bg-blue-50/80 backdrop-blur-sm"
+          >
+            <div className="flex flex-col items-center gap-2 text-blue-700">
+              <Upload className="h-7 w-7" />
+              <p className="text-sm font-bold">Drop photo to add to ticket #{ticketId}</p>
+              <p className="text-[11px] font-semibold text-blue-500">Uploads to the library, attaches on your next reply</p>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Shared fullscreen viewer for every photo on this ticket. */}
       <AnimatePresence>

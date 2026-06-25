@@ -5,6 +5,7 @@ import {
   blobToBase64DataUrl,
   downscaleImageTo720,
 } from '@/lib/image/downscale';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 
 /**
  * Module-singleton store for in-flight receiving photo uploads.
@@ -105,8 +106,7 @@ function patch(id: string, partial: Partial<UploadEntry>) {
 }
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 // ─── localStorage mirror ────────────────────────────────────────────────────
@@ -347,11 +347,17 @@ export const photoUploadQueue = {
   },
 };
 
+// Stable empty reference for the server snapshot. A fresh `[]` per call makes
+// useSyncExternalStore think the store changed every render → React throws
+// "The result of getServerSnapshot should be cached to avoid an infinite loop".
+const EMPTY_ENTRIES: UploadEntry[] = [];
+const getServerSnapshot = (): UploadEntry[] => EMPTY_ENTRIES;
+
 export function useUploadQueue(scopeFilter?: PhotoScope): UploadEntry[] {
   const all = useSyncExternalStore(
     photoUploadQueue.subscribe,
     photoUploadQueue.snapshot,
-    () => [] as UploadEntry[],
+    getServerSnapshot,
   );
   if (!scopeFilter) return all;
   return all.filter((e) => {

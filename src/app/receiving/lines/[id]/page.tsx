@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import {
   workflowStatusTableLabel,
   conditionGradeTableLabel,
@@ -54,8 +55,7 @@ interface TimelineEvent {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function randomId(): string {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return safeRandomUUID();
 }
 
 function StatusPill({ status }: { status: string | null }) {

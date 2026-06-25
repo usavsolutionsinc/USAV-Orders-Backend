@@ -106,7 +106,12 @@ async function buildCurrentUser(session: SessionRow | null): Promise<CurrentUser
   return {
     session,
     staffId: session.staffId,
-    name: overrides?.name ?? 'Unknown',
+    // `??` alone lets an empty-string `staff.name` (or a failed override load)
+    // reach the client as '', which renders as a bare dot avatar + "Staff #id"
+    // everywhere. Coalesce blank/whitespace to a stable `Staff #id` so the
+    // session envelope is always a usable display name — the single source of
+    // truth read synchronously by every surface (no per-surface name fetch).
+    name: overrides?.name?.trim() || `Staff #${session.staffId}`,
     organizationId: session.organizationId,
     role,
     roles,

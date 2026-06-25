@@ -2,6 +2,8 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { linkShipment } from '@/lib/shipping/shipment-links';
+import { isShipmentLinksDualWrite } from '@/lib/feature-flags';
 
 /**
  * Shared core for the multi-tracking → PO feature (docs/multi-tracking-po-plan.md).
@@ -140,6 +142,37 @@ export async function attachBoxToReceiving(params: {
          WHERE id = $1 AND shipment_id IS NULL`,
         [receivingId, shipmentId],
       );
+    }
+
+    // Dual-write the unified shipment_links table (flag-gated). Runs on the SAME
+    // tx client so shipment_links can never drift from the receiving_shipments
+    // junction (which stays the read path during the bake). Mirrors exactly the
+    // junction rows written above. See src/lib/shipping/shipment-links.ts.
+    if (isShipmentLinksDualWrite()) {
+      if (carton.shipment_id) {
+        await linkShipment(
+          organizationId,
+          {
+            ownerType: 'RECEIVING', ownerId: receivingId, shipmentId: carton.shipment_id,
+            direction: 'INBOUND', boxSeq: 1, isPrimary: true, role: 'PO_ANCHOR',
+            linkedBy: carton.received_by ?? null, source: 'receiving.attach-box',
+          },
+          client,
+        );
+      }
+      if (!alreadyAttached && inserted.rows[0]) {
+        const box = inserted.rows[0];
+        await linkShipment(
+          organizationId,
+          {
+            ownerType: 'RECEIVING', ownerId: receivingId, shipmentId,
+            direction: 'INBOUND', boxSeq: box.box_seq, isPrimary: box.is_primary,
+            role: box.is_primary ? 'PO_ANCHOR' : 'EXTRA_BOX',
+            linkedBy: staffId, source: 'receiving.attach-box',
+          },
+          client,
+        );
+      }
     }
 
     // Read on the SAME tx client so it sees the just-inserted (uncommitted) box.

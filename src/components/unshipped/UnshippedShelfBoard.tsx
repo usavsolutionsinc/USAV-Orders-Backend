@@ -6,17 +6,19 @@
  * real `OrdersQueueTable` rows (same exact component the dense table uses),
  * scrolled VERTICALLY only — no horizontal scroll, no bottom scrollbar.
  *
- * The board's controls (title + total, the real DateRangePickerField, and the
- * 1-up/2-up layout toggle) live in a dedicated 40px in-panel header that matches
- * the sidebar master-nav modes band — sitting ABOVE the scroll region so each
- * bubble's sticky chip date header still docks correctly. Each bubble has a
- * compact header (drag handle + state icon + label + count; sort top-right), a
- * body that sizes to content up to a cap (`autoHeight` → no trailing
- * whitespace), a footer that snaps to the expanded/collapsed preset, and a
- * bottom drag handle to resize the body. 2-up lays bubbles side by side.
+ * The board header is a dedicated 40px in-panel band (title + total + a staff
+ * filter + an icon-only 1/2/3-column toggle) that matches the sidebar master-nav
+ * modes band, sitting ABOVE the scroll region so each bubble's sticky chip date
+ * header still docks correctly. The staff filter writes the canonical `?staff=`
+ * param (whole-board, via the unshipped query). Each bubble owns its OWN header
+ * controls — a sort menu (which displays the active sort, e.g. "Staff") on the
+ * left and a date-range filter on the right — over a body
+ * that sizes to content up to a cap (`autoHeight` → no trailing whitespace), a
+ * footer that snaps to the expanded/collapsed preset, and a bottom drag handle to
+ * resize the body.
  *
  * Lanes can be drag-reordered (whole bubble, via @dnd-kit) and drag-resized from
- * the bottom edge; layout, date range, lane order, and per-lane sort/expand/height
+ * the bottom edge; column layout, lane order, and per-lane sort/expand/height/range
  * persist per staffer via `useStaffPreferences` (`unshippedBoard`), so the view
  * follows the operator across devices.
  *
@@ -28,16 +30,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { startOfDay, endOfDay } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
+import * as Popover from '@radix-ui/react-popover';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { AlertTriangle, ArrowUpDown, Check, ChevronDown, ChevronUp, Clock, GripVertical } from '@/components/Icons';
+import { AlertTriangle, ArrowUpDown, Check, ChevronDown, ChevronUp, Clock, ColumnsOne, ColumnsThree, ColumnsTwo, GripVertical, User } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
 import { ORDERS_QUEUE_SORTS, ORDERS_QUEUE_SORT_LABEL, type OrdersQueueSort } from '@/components/dashboard/orders-queue/helpers';
 import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
+import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { useStaffPreferences } from '@/hooks/useStaffPreferences';
 import type { StaffPreferences } from '@/lib/neon/staff-preferences-queries';
 import {
@@ -57,22 +61,25 @@ const STATE_ICON: Record<FulfillmentState, React.ComponentType<{ className?: str
   BLOCKED: AlertTriangle,
 };
 
-/** Board layout — bubbles stacked 1-up or laid 2-up side by side. */
+/** Board layout — bubbles stacked 1-up, or laid 2-up / 3-up side by side.
+ *  Icon-only: a framed rect split into N columns (no text, hover shows the label). */
+type ColumnCount = 1 | 2 | 3;
 const COLUMN_ITEMS: HorizontalSliderItem[] = [
-  { id: '1', label: '1 Col' },
-  { id: '2', label: '2 Col' },
+  { id: '1', label: '1 column', icon: ColumnsOne },
+  { id: '2', label: '2 columns', icon: ColumnsTwo },
+  { id: '3', label: '3 columns', icon: ColumnsThree },
 ];
 
-/** Per-card sort cycle — the full shared `OrdersQueueSort` set + labels. */
-const SORT_CYCLE = ORDERS_QUEUE_SORTS;
+/** Sort labels shared with the dense table; the per-lane menu displays the active one. */
 const SORT_LABEL = ORDERS_QUEUE_SORT_LABEL;
 
 type BoardPrefs = NonNullable<StaffPreferences['unshippedBoard']>;
-/** `height` is a drag-resized body cap (px); `null` → snap to expanded/collapsed preset. */
-type LaneState = { sort: OrdersQueueSort; expanded: boolean; height: number | null };
+/** `height` is a drag-resized body cap (px); `null` → snap to expanded/collapsed
+ *  preset. `range` is this lane's own date-range filter (its header owns the picker). */
+type LaneState = { sort: OrdersQueueSort; expanded: boolean; height: number | null; range?: DateRange };
 type LaneMap = Record<FulfillmentState, LaneState>;
 
-const DEFAULT_LANE: LaneState = { sort: 'priority', expanded: true, height: null };
+const DEFAULT_LANE: LaneState = { sort: 'priority', expanded: true, height: null, range: undefined };
 /** Resize clamps — keep a lane usably tall but never past the viewport. */
 const MIN_LANE_PX = 140;
 const maxLanePx = () => Math.round(window.innerHeight * 0.9);
@@ -95,9 +102,129 @@ function rowState(row: FulfillmentRow): FulfillmentState {
   });
 }
 
-function cycle<T>(arr: T[], current: T): T {
-  const i = arr.indexOf(current);
-  return arr[(i + 1) % arr.length];
+/** Serialize a lane for the JSONB prefs bag (Date → ISO; `null` clears a field). */
+function serializeLane(lane: LaneState) {
+  return {
+    sort: lane.sort,
+    expanded: lane.expanded,
+    height: lane.height,
+    range: lane.range?.from
+      ? { from: lane.range.from.toISOString(), to: (lane.range.to ?? lane.range.from).toISOString() }
+      : null,
+  };
+}
+
+/**
+ * Per-lane sort control — a ghost pill that *displays the active sort* (so
+ * "Staff" reads on the button) and opens a menu of every option. Replaces the
+ * old blind cycle so the staff sort is discoverable in the table header itself.
+ */
+function LaneSortMenu({ value, onChange }: { value: OrdersQueueSort; onChange: (sort: OrdersQueueSort) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Sort: ${SORT_LABEL[value]}`}
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-eyebrow font-bold uppercase tracking-widest text-gray-600 transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+        >
+          <ArrowUpDown className="h-3 w-3 text-gray-400" />
+          {SORT_LABEL[value]}
+          <ChevronDown className="h-3 w-3 text-gray-400" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={6}
+          className="z-dropdown w-36 overflow-hidden rounded-lg border border-gray-200 bg-white p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
+        >
+          {ORDERS_QUEUE_SORTS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                onChange(s);
+                setOpen(false);
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
+                s === value ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {SORT_LABEL[s]}
+              {s === value ? <Check className="h-3.5 w-3.5" /> : null}
+            </button>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/**
+ * Board-level staff filter — a ghost pill that opens a staff dropdown and writes
+ * the canonical `?staff=` param (via {@link useStaffFilter}). The unshipped query
+ * already narrows its rows to that staff, so picking one filters every lane at
+ * once; "All staff" clears it. Active state reads filled-blue.
+ */
+function BoardStaffFilter() {
+  const { staffId, options, selectedName, setStaff } = useStaffFilter();
+  const [open, setOpen] = useState(false);
+  const active = staffId != null;
+  const label = active ? selectedName || `#${staffId}` : 'All staff';
+
+  const Row = ({ id, name }: { id: number | null; name: string }) => {
+    const isActive = id === staffId || (id == null && !active);
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setStaff(id);
+          setOpen(false);
+        }}
+        className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
+          isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+        }`}
+      >
+        <span className="truncate">{name}</span>
+        {isActive ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+      </button>
+    );
+  };
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`Filter by staff: ${label}`}
+          className={`inline-flex h-8 max-w-[160px] shrink-0 items-center gap-1.5 rounded-md border px-2 text-eyebrow font-bold uppercase tracking-widest transition-colors ${
+            active
+              ? 'border-blue-300 bg-blue-50 text-blue-700'
+              : 'border-gray-200 bg-white text-gray-600 hover:border-blue-300 hover:bg-blue-50/40'
+          }`}
+        >
+          <User className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          <span className="truncate">{label}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="end"
+          sideOffset={6}
+          className="z-dropdown max-h-[60vh] w-52 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg ring-1 ring-black/5 focus:outline-none"
+        >
+          <Row id={null} name="All staff" />
+          {options.length > 0 ? <div className="my-1 h-px bg-gray-100" /> : null}
+          {options.map((o) => (
+            <Row key={o.id} id={o.id} name={o.name} />
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
 }
 
 /** Keep only rows whose created/deadline date falls in the picked range. */
@@ -116,12 +243,15 @@ interface ShelfBubbleProps {
   rows: ShippedOrder[];
   loading: boolean;
   searchValue: string;
-  twoUp: boolean;
+  colCount: ColumnCount;
   sort: OrdersQueueSort;
   expanded: boolean;
   /** Drag-resized body cap (px); null → snap to the expanded/collapsed preset. */
   height: number | null;
-  onSortCycle: () => void;
+  /** This lane's own date-range filter (its header owns the picker). */
+  range: DateRange | undefined;
+  onSortChange: (sort: OrdersQueueSort) => void;
+  onRangeChange: (range: DateRange | undefined) => void;
   onToggleExpanded: () => void;
   /** Commit a drag-resized body height (px) for this lane. */
   onResize: (px: number) => void;
@@ -137,11 +267,13 @@ function ShelfBubble({
   rows,
   loading,
   searchValue,
-  twoUp,
+  colCount,
   sort,
   expanded,
   height,
-  onSortCycle,
+  range,
+  onSortChange,
+  onRangeChange,
   onToggleExpanded,
   onResize,
   onOpenRecord,
@@ -152,8 +284,14 @@ function ShelfBubble({
 }: ShelfBubbleProps) {
   const meta = FULFILLMENT_STATE_META[state];
   const Icon = STATE_ICON[state];
-  // 2-up cards are narrower, so their default max height is shorter (tidy row).
-  const presetMaxClass = expanded ? (twoUp ? 'max-h-[56vh]' : 'max-h-[70vh]') : 'max-h-72';
+  // Narrower multi-column cards get a shorter default cap to keep the row tidy.
+  const presetMaxClass = !expanded
+    ? 'max-h-72'
+    : colCount === 1
+      ? 'max-h-[70vh]'
+      : colCount === 2
+        ? 'max-h-[56vh]'
+        : 'max-h-[48vh]';
 
   // Drag-to-resize the body from the bottom edge. `localHeight` drives the cap
   // live during a drag; it commits to staff prefs on pointer-up. Null → preset.
@@ -198,34 +336,32 @@ function ShelfBubble({
       style={style}
       className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white"
     >
-      {/* Compact header — drag handle + state dot + icon + label + count (left); sort (right). */}
-      <div className="flex items-center gap-2 border-b border-gray-100 px-2.5 py-1.5">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          aria-label={`Drag to reorder ${meta.label} lane`}
-          className="-ml-1 flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <HoverTooltip label={meta.description} focusable={false}>
-          <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
-        </HoverTooltip>
-        <Icon className="h-3.5 w-3.5 text-gray-400" />
-        <h3 className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{meta.label}</h3>
-        <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{rows.length}</span>
-        <div className="ml-auto">
-          <HoverTooltip label="Sort order" focusable={false}>
-            <button
-              type="button"
-              onClick={onSortCycle}
-              className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-600 transition hover:bg-gray-50"
-            >
-              <ArrowUpDown className="h-3 w-3" />
-              {SORT_LABEL[sort]}
-            </button>
+      {/* Header — identity row (drag handle + dot + icon + label + count) over a
+          controls row that owns this lane's own date filter + sort menu. */}
+      <div className="border-b border-gray-100">
+        <div className="flex items-center gap-2 px-2.5 pt-1.5">
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label={`Drag to reorder ${meta.label} lane`}
+            className="-ml-1 flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </button>
+          <HoverTooltip label={meta.description} focusable={false}>
+            <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
           </HoverTooltip>
+          <Icon className="h-3.5 w-3.5 text-gray-400" />
+          <h3 className="truncate text-eyebrow font-black uppercase tracking-widest text-gray-500">{meta.label}</h3>
+          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{rows.length}</span>
+        </div>
+        <div className="flex items-center gap-1.5 px-2.5 pb-1.5 pt-1">
+          <LaneSortMenu value={sort} onChange={onSortChange} />
+          {/* Date filter pinned to the right of the controls row. */}
+          <div className="ml-auto min-w-0">
+            <DateRangePickerField value={range} onChange={onRangeChange} placeholder="All dates" className="h-7 w-auto" />
+          </div>
         </div>
       </div>
 
@@ -315,8 +451,7 @@ export function UnshippedShelfBoard({
 }: UnshippedShelfBoardProps) {
   const { prefs, update } = useStaffPreferences();
 
-  const [columns, setColumns] = useState<1 | 2>(1);
-  const [range, setRange] = useState<DateRange | undefined>(undefined);
+  const [columns, setColumns] = useState<ColumnCount>(1);
   const [laneMap, setLaneMap] = useState<LaneMap>(defaultLaneMap);
   // Drag-reordered lane order (top → bottom). Defaults to the canonical order.
   const [order, setOrder] = useState<FulfillmentState[]>(SHELF_ORDER);
@@ -338,13 +473,10 @@ export function UnshippedShelfBoard({
     hydrated.current = true;
     const b = prefs.unshippedBoard;
     if (!b) return;
-    if (b.columns === 1 || b.columns === 2) setColumns(b.columns);
+    if (b.columns === 1 || b.columns === 2 || b.columns === 3) setColumns(b.columns);
     if (Array.isArray(b.order) && b.order.length > 0) {
       const valid = b.order.filter((s): s is FulfillmentState => SHELF_ORDER.includes(s));
       if (valid.length > 0) setOrder(valid);
-    }
-    if (b.range?.from) {
-      setRange({ from: new Date(b.range.from), to: b.range.to ? new Date(b.range.to) : undefined });
     }
     if (b.lanes) {
       setLaneMap((cur) => {
@@ -356,6 +488,9 @@ export function UnshippedShelfBoard({
               sort: saved.sort ?? cur[s].sort,
               expanded: saved.expanded ?? cur[s].expanded,
               height: saved.height === undefined ? cur[s].height : saved.height,
+              range: saved.range?.from
+                ? { from: new Date(saved.range.from), to: saved.range.to ? new Date(saved.range.to) : undefined }
+                : undefined,
             };
           }
         }
@@ -364,25 +499,15 @@ export function UnshippedShelfBoard({
     }
   }, [prefs]);
 
-  const changeColumns = (next: 1 | 2) => {
+  const changeColumns = (next: ColumnCount) => {
     setColumns(next);
     persistBoard({ ...boardPrefs, columns: next });
-  };
-
-  const changeRange = (next: DateRange | undefined) => {
-    setRange(next);
-    persistBoard({
-      ...boardPrefs,
-      range: next?.from
-        ? { from: next.from.toISOString(), to: (next.to ?? next.from).toISOString() }
-        : null,
-    });
   };
 
   const mutateLane = (state: FulfillmentState, patch: Partial<LaneState>) => {
     const nextLane = { ...laneMap[state], ...patch };
     setLaneMap((cur) => ({ ...cur, [state]: nextLane }));
-    persistBoard({ ...boardPrefs, lanes: { ...(boardPrefs.lanes ?? {}), [state]: nextLane } });
+    persistBoard({ ...boardPrefs, lanes: { ...(boardPrefs.lanes ?? {}), [state]: serializeLane(nextLane) } });
   };
 
   // Resolve the render order: saved order first (validated), any lane missing
@@ -414,15 +539,24 @@ export function UnshippedShelfBoard({
 
   const lanes = useMemo(() => {
     const buckets: Record<FulfillmentState, ShippedOrder[]> = { PENDING: [], TESTED: [], BLOCKED: [] };
-    for (const r of records as FulfillmentRow[]) {
-      if (!inDateRange(r, range)) continue;
-      buckets[rowState(r)].push(r);
+    for (const r of records as FulfillmentRow[]) buckets[rowState(r)].push(r);
+    // Each lane filters its own bucket by its own header date picker.
+    const out = {} as Record<FulfillmentState, ShippedOrder[]>;
+    for (const s of SHELF_ORDER) {
+      const rng = laneMap[s].range;
+      out[s] = rng?.from ? buckets[s].filter((r) => inDateRange(r, rng)) : buckets[s];
     }
-    return buckets;
-  }, [records, range]);
+    return out;
+  }, [records, laneMap]);
 
   const visibleTotal = lanes.PENDING.length + lanes.TESTED.length + lanes.BLOCKED.length;
-  const twoUp = columns === 2;
+  const isGrid = columns >= 2;
+  const gridClass =
+    columns === 3
+      ? 'grid grid-cols-3 items-start gap-4'
+      : columns === 2
+        ? 'grid grid-cols-2 items-start gap-4'
+        : 'space-y-4';
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-gray-50">
@@ -435,17 +569,13 @@ export function UnshippedShelfBoard({
           {visibleTotal} orders
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <DateRangePickerField
-            value={range}
-            onChange={changeRange}
-            placeholder="All dates"
-            className="w-auto min-w-[150px]"
-          />
+          <BoardStaffFilter />
           <HorizontalButtonSlider
             items={COLUMN_ITEMS}
             value={String(columns)}
-            onChange={(id) => changeColumns(Number(id) as 1 | 2)}
+            onChange={(id) => changeColumns(Number(id) as ColumnCount)}
             variant="nav"
+            navIconOnly
             dense
             aria-label="Board columns"
           />
@@ -454,8 +584,8 @@ export function UnshippedShelfBoard({
 
       <div className="flex-1 overflow-y-auto p-4">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderLanes}>
-          <SortableContext items={effectiveOrder} strategy={twoUp ? rectSortingStrategy : verticalListSortingStrategy}>
-            <div className={twoUp ? 'grid grid-cols-2 items-start gap-4' : 'space-y-4'}>
+          <SortableContext items={effectiveOrder} strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}>
+            <div className={gridClass}>
               {effectiveOrder.map((state) => (
                 <ShelfBubble
                   key={state}
@@ -463,11 +593,13 @@ export function UnshippedShelfBoard({
                   rows={lanes[state]}
                   loading={loading}
                   searchValue={searchValue}
-                  twoUp={twoUp}
+                  colCount={columns}
                   sort={laneMap[state].sort}
                   expanded={laneMap[state].expanded}
                   height={laneMap[state].height}
-                  onSortCycle={() => mutateLane(state, { sort: cycle(SORT_CYCLE, laneMap[state].sort) })}
+                  range={laneMap[state].range}
+                  onSortChange={(s) => mutateLane(state, { sort: s })}
+                  onRangeChange={(r) => mutateLane(state, { range: r })}
                   // Snapping to a preset clears any drag-resized height.
                   onToggleExpanded={() => mutateLane(state, { expanded: !laneMap[state].expanded, height: null })}
                   onResize={(px) => mutateLane(state, { height: px })}

@@ -3,7 +3,11 @@
 import { useMemo } from 'react';
 import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
+import {
+  getReceivingStatusDot,
+  getReceivingStatusDotLabel,
+  renderReceivingRailQuantity,
+} from './ReceivingRecentRail';
 
 interface Props {
   selectedLineId: number | null;
@@ -64,17 +68,7 @@ export function ReceivingViewedRail({
       getActivityAt={getViewedAt}
       getStatusDot={getReceivingStatusDot}
       getStatusDotLabel={getReceivingStatusDotLabel}
-      renderQuantity={(row) => (
-        <span
-          className={
-            row.quantity_expected != null && row.quantity_received >= row.quantity_expected
-              ? 'text-emerald-600'
-              : 'text-gray-600'
-          }
-        >
-          {row.quantity_received}/{row.quantity_expected ?? '?'}
-        </span>
-      )}
+      renderQuantity={renderReceivingRailQuantity}
       previewQtyLabel="Received"
       getPreviewQty={(row) => ({
         current: row.quantity_received,

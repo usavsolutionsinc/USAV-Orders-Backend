@@ -1060,6 +1060,9 @@ export const receiving = pgTable('receiving', {
   quantity: text('quantity'),
   /** Carton-level support / ops notes (not per receiving_lines row). */
   supportNotes: text('support_notes'),
+  /** Zoho PO header notes (overall, carton-level) — the "Zoho Notes" tab's primary
+   *  content; distinct from receiving_lines.zoho_notes (per-line item desc). 2026-06-25. */
+  zohoNotes: text('zoho_notes'),
   /** Filed Zendesk ticket # for a package-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
   /**
@@ -1235,6 +1238,9 @@ export const receivingLines = pgTable('receiving_lines', {
   zohoSyncedAt: timestamp('zoho_synced_at', { withTimezone: true }),
 
   notes: text('notes'),
+  /** Zoho PO line description (read-only import); split from `notes` so a Zoho
+   *  re-sync can't clobber operator notes. 2026-06-24 notes-collision fix. */
+  zohoNotes: text('zoho_notes'),
   /** Filed Zendesk ticket # for a line-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
   // ── Drift reconciliation (2026-06-19): DB columns added via raw-SQL

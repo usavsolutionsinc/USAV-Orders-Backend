@@ -161,8 +161,9 @@ export function useUnboxLineController(
   }, [extraSerials, submitSerial]);
 
   const {
-    lastReceiveResponse,
-    setLastReceiveResponse,
+    receiving,
+    receiveResult,
+    setReceiveResult,
     responseExpanded,
     setResponseExpanded,
     handleReceive,
@@ -363,29 +364,43 @@ export function useUnboxLineController(
     ],
   );
 
+  // Unfound cartons have no Zoho PO to receive against — never fire a Zoho
+  // purchase-receive for them. The primary CTA becomes "Receive locally"
+  // (print + scan_only) and the Zoho-receive menu option is disabled.
+  const isUnfound = row.receiving_source === 'unmatched';
+
   const handlePrintAndReceive = useCallback(() => {
     runPrintLabel();
-    handleReceive('zoho_receive');
-  }, [runPrintLabel, handleReceive]);
+    handleReceive(isUnfound ? 'scan_only' : 'zoho_receive');
+  }, [runPrintLabel, handleReceive, isUnfound]);
 
   const canPrintReview = Boolean(scanValue.trim() || (row.sku || '').trim());
   const canReceiveReview = row.receiving_id != null;
+  // Zoho receive is only valid for matched cartons; unfound stays local-only.
+  const canZohoReceive = canReceiveReview && !isUnfound;
   const combinedReviewDisabled = !canReceiveReview || !canPrintReview;
   const isSinglePoItem = itemTotal === 1;
   const receiveMenuLabel = isSinglePoItem ? 'Receive' : 'Receive all';
-  const printReceivePrimaryLabel = 'Print · receive';
+  const printReceivePrimaryLabel = isUnfound ? 'Receive locally' : 'Print · receive';
   const splitMenuAriaLabel = isSinglePoItem
     ? 'Print only, mark as scanned, or receive (no print)'
     : 'Print only, mark as scanned, or receive all (no print)';
   const splitMenuHoverTitle = isSinglePoItem
     ? 'Hover for print-only, mark as scanned, or receive without print'
     : 'Hover for print-only, mark as scanned, or receive all without print';
+  const receiveMenuTitle = isUnfound
+    ? 'Unfound carton — no Zoho PO to receive against; use Receive locally'
+    : row.receiving_id == null
+      ? 'Line must be linked to a shipment'
+      : undefined;
   const printThenReceiveTitle =
     row.receiving_id == null && !scanValue.trim() && !(row.sku || '').trim()
       ? 'Need a shipment link or SKU to continue'
-      : isSinglePoItem
-        ? 'Print label (if available), then receive this line'
-        : 'Print label (if available), then receive every open line on this PO';
+      : isUnfound
+        ? 'Print label (if available), then receive locally — unfound carton, Zoho is not touched'
+        : isSinglePoItem
+          ? 'Print label (if available), then receive this line'
+          : 'Print label (if available), then receive every open line on this PO';
 
   // RETURN flow: pair the carton with the shipped order a scanned serial matched.
   useEffect(() => {
@@ -440,12 +455,12 @@ export function useUnboxLineController(
     serialSubmitting, submitSerial, enqueueSerial, deleteSerialUnit, replaceSerialUnit, setUnitGrade,
     extraSerials, setExtraSerials, submitExtraSerial,
     // receive / print
-    lastReceiveResponse, setLastReceiveResponse, responseExpanded, setResponseExpanded, handleReceive,
+    receiving, receiveResult, setReceiveResult, responseExpanded, setResponseExpanded, handleReceive,
     scanValue, labelPayload, runPrintLabel, handlePrintAndReceive,
     // custom label print (Edit on the label preview)
     labelDraftDefaults, buildLabelPayload, applyAndPrintLabel,
-    canPrintReview, canReceiveReview, combinedReviewDisabled,
-    receiveMenuLabel, printReceivePrimaryLabel, splitMenuAriaLabel, splitMenuHoverTitle, printThenReceiveTitle,
+    canPrintReview, canReceiveReview, canZohoReceive, isUnfound, combinedReviewDisabled,
+    receiveMenuLabel, receiveMenuTitle, printReceivePrimaryLabel, splitMenuAriaLabel, splitMenuHoverTitle, printThenReceiveTitle,
     // claim / RETURN flow
     claimModalOpen, setClaimModalOpen, returnClaimPrefill, setReturnClaimPrefill,
     handleFileReturnClaim,

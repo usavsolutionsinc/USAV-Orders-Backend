@@ -21,7 +21,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const q = params.get('q')?.trim() || null;
     const damageRaw = params.get('damageDetected');
 
-    if (q || damageRaw) {
+    // Only free-text `q` needs the dedicated text-search path; the damage
+    // quick-filter now composes with every structured/business-ID filter on the
+    // main list path (and gains pagination + the full photo shape there).
+    if (q) {
       const rows = await searchPhotos({
         organizationId: ctx.organizationId,
         poRef: params.get('poRef'),
@@ -60,14 +63,23 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       linkRole: params.get('linkRole'),
       poRef: params.get('poRef'),
       receivingId,
+      // Business-ID filters — resolve through photo_entity_links to domain tables.
+      tracking: params.get('tracking'),
+      serial: params.get('serial'),
+      sku: params.get('sku'),
+      ticketId: params.get('ticketId') ? Number(params.get('ticketId')) : null,
+      pickupId: params.get('pickupId') ? Number(params.get('pickupId')) : null,
+      rma: params.get('rma'),
       // Split RECEIVING-linked photos by receiving.source: local pickups vs the
       // rest (unboxing). See library-filter-state.receivingSourceForScope.
       receivingSource: params.get('receivingSource'),
       receivingSourceExclude: params.get('receivingSourceExclude'),
       staffId,
-      folderId: params.get('folderId') ? Number(params.get('folderId')) : null,
+      photoType: params.get('photoType'),
       hasAnalysis:
         hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,
+      damageDetected:
+        damageRaw === 'true' ? true : damageRaw === 'false' ? false : null,
     });
 
     const photos = items.map((p) => ({

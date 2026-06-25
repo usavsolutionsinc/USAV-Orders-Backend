@@ -169,6 +169,24 @@ export async function updateOrgSettings(orgId: OrgId, patch: Partial<OrgSettings
   invalidateOrgCache(orgId);
 }
 
+/**
+ * Settings-Registry raw merge — write arbitrary top-level namespaced keys (e.g.
+ * 'receiving.photoPolicy') into the org settings bag. Same shallow `||` merge +
+ * cache invalidation as updateOrgSettings, but typed for the framework's flat
+ * key space rather than the curated OrgSettings shape. OrgSettingsSchema is
+ * `.passthrough()`, so these keys round-trip safely. See docs/settings-registry.md.
+ */
+export async function mergeOrgSettingsRaw(orgId: OrgId, patch: Record<string, unknown>): Promise<void> {
+  await pool.query(
+    `UPDATE organizations
+        SET settings = settings || $1::jsonb,
+            updated_at = now()
+      WHERE id = $2`,
+    [JSON.stringify(patch), orgId],
+  );
+  invalidateOrgCache(orgId);
+}
+
 export async function setOrgStripeIds(
   orgId: OrgId,
   stripeCustomerId: string | null,

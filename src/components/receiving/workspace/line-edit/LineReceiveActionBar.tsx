@@ -20,6 +20,7 @@ export function LineReceiveActionBar({
   splitMenuHoverTitle,
   canPrint,
   canReceive,
+  canZohoReceive,
   receiveMenuLabel,
   receiveMenuTitle,
   onPrintAndReceive,
@@ -34,7 +35,10 @@ export function LineReceiveActionBar({
   splitMenuAriaLabel: string;
   splitMenuHoverTitle: string;
   canPrint: boolean;
+  /** Gates "Mark as scanned" (local). */
   canReceive: boolean;
+  /** Gates the Zoho "Receive"/"Receive all" option — false for unfound cartons. */
+  canZohoReceive: boolean;
   receiveMenuLabel: string;
   receiveMenuTitle?: string;
   onPrintAndReceive: () => void;
@@ -68,17 +72,17 @@ export function LineReceiveActionBar({
           disabled: !canPrint,
         },
         {
-          label: 'Mark as scanned',
+          label: 'Save all to Zoho',
           icon: <Clipboard className="h-3.5 w-3.5 shrink-0" />,
-          onClick: onMarkScanned,
-          disabled: !canReceive,
-          title: 'Save quantities as Scanned only; skip Zoho purchase receive (no print)',
+          onClick: onReceive,
+          disabled: !canZohoReceive,
+          title: 'Save all received quantities + edits to the Zoho purchase receive (no print)',
         },
         {
           label: receiveMenuLabel,
           icon: <PackageCheck className="h-3.5 w-3.5 shrink-0" />,
           onClick: onReceive,
-          disabled: !canReceive,
+          disabled: !canZohoReceive,
           title: receiveMenuTitle,
         },
       ]}
