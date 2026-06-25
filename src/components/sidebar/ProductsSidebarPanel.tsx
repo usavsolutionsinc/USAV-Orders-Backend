@@ -8,7 +8,7 @@ import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useLabelRecents } from '@/hooks/useLabelRecents';
 import { useSkuCatalogSearch, type SkuCatalogItem } from '@/hooks/useSkuCatalogSearch';
-import { Printer, FileText, Link2, Check, Clock, History, Package, ShoppingCart, Star, Sparkles, List } from '@/components/Icons';
+import { Printer, FileText, Link2, Check, Clock, History, Package, PackageOpen, ShoppingCart, Star, Sparkles, List } from '@/components/Icons';
 import { PairingQueueList } from '@/components/products/pairing/PairingQueueList';
 import { PairingUnmatchedSection } from '@/components/products/pairing/PairingUnmatchedSection';
 import { AddOrPairSkuModal } from '@/components/products/pairing/AddOrPairSkuModal';
@@ -30,11 +30,12 @@ function parsePairingSort(raw: string | null): PairingSort {
   return 'volume';
 }
 
-type View = 'manuals' | 'labels' | 'pairing' | 'qc';
+type View = 'manuals' | 'labels' | 'pairing' | 'qc' | 'kit';
 function parseView(raw: string | null): View {
   if (raw === 'labels') return 'labels';
   if (raw === 'pairing') return 'pairing';
   if (raw === 'qc') return 'qc';
+  if (raw === 'kit') return 'kit';
   // Manuals is the default landing view (folds in the retired /manuals route).
   return 'manuals';
 }
@@ -105,6 +106,7 @@ export function ProductsSidebarPanel() {
       { id: 'labels',  label: 'Labels', icon: Printer },
       { id: 'pairing', label: 'Pairing',       icon: Link2 },
       { id: 'qc',      label: 'QC Checklist',  icon: Check },
+      { id: 'kit',     label: 'Kit Parts',     icon: PackageOpen },
     ],
     [],
   );
@@ -174,6 +176,7 @@ export function ProductsSidebarPanel() {
   const isLabels = view === 'labels';
   const isPairing = view === 'pairing';
   const isQc = view === 'qc';
+  const isKit = view === 'kit';
   // Labels → History sub-view: the top search bar doubles as the unit-history
   // scan/paste input (Enter dispatches a lookup the History list resolves).
   const isHistory = isLabels && labelsView === 'history';
@@ -273,6 +276,8 @@ export function ProductsSidebarPanel() {
         <PairingSidebarQueue query={searchInput} sort={pairingSort} />
       ) : isQc ? (
         <QcSidebarPicker query={searchInput} />
+      ) : isKit ? (
+        <KitPartsPicker query={searchInput} />
       ) : isManuals ? (
         <LibraryBrowser query={searchInput} basePath="/products" />
       ) : null}
@@ -386,6 +391,102 @@ function QcSidebarPicker({ query }: { query: string }) {
       ) : items.length === 0 ? (
         <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
           {trimmedQuery ? 'No matches with a QC checklist.' : 'No products have a QC checklist yet.'}
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {items.map((item) => {
+            const isSelected = selectedSkuId === String(item.id);
+            return (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  aria-current={isSelected}
+                  className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors ${
+                    isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
+                  }`}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
+                    {item.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <Package className="h-4 w-4 text-gray-300" />
+                    )}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span
+                      className={`text-label font-semibold leading-snug break-words ${
+                        isSelected ? 'text-blue-700' : 'text-gray-900'
+                      }`}
+                    >
+                      {item.product_title || item.sku}
+                    </span>
+                    <span className="truncate font-mono text-micro text-gray-500">{item.sku}</span>
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Kit-parts sidebar product picker ─────────────────────────────────────
+
+/**
+ * Product list for the Kit Parts view. Mirrors QcSidebarPicker, but searches the
+ * FULL catalog (no hasQc-style filter) — authoring "what's in the box" is most
+ * often done on a SKU that has NO parts yet, so we must surface every product,
+ * not only ones already populated. On select, writes `?view=kit&skuId=<catalogId>`
+ * so the main pane (KitPartsWorkspace) loads that SKU's BOM editor.
+ */
+function KitPartsPicker({ query }: { query: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedSkuId = searchParams.get('skuId');
+
+  const { data, isLoading, isError } = useSkuCatalogSearch(query, {
+    limit: 50,
+    allowEmpty: true,
+  });
+
+  const items = data ?? [];
+  const trimmedQuery = query.trim();
+
+  const handleSelect = useCallback(
+    (item: SkuCatalogItem) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', 'kit');
+      params.set('skuId', String(item.id));
+      router.replace(`/products?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  return (
+    <div className="flex-1 overflow-y-auto">
+      {isLoading && items.length === 0 ? (
+        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+          Loading products…
+        </div>
+      ) : isError ? (
+        <div className="px-4 py-6 text-center text-caption font-semibold text-red-500">
+          Couldn&apos;t load products.
+        </div>
+      ) : items.length === 0 ? (
+        <div className="px-4 py-6 text-center text-caption font-semibold text-gray-400">
+          {trimmedQuery ? 'No matches.' : 'No products available.'}
         </div>
       ) : (
         <ul className="divide-y divide-gray-100">

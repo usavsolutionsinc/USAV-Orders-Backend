@@ -26,6 +26,11 @@ The full rule list (always loaded via import) is the single source of truth:
 
 House style is **simple, linear, icon-based, contextual** (Notion-like). Detail: see `.claude/rules/ui-design-system.md`.
 
+- **Pick the display archetype first** — four archetypes, chosen by the region's job + input model: **station**
+  (`scan → crossfade → display`), **workbench** (`list → select → detail → update`), **monitor** (observe / read-only
+  dashboard), **canvas** (node-graph / semantic-zoom). They have different layout/motion/state rules; never blend two in
+  one region. Run the per-region decision algorithm in `.claude/rules/contextual-display.md` — the master index for the
+  `.claude/rules/display/*` archetype docs.
 - **Compose rails, don't rebuild them:** wrap `SidebarRailShell` / `RecentActivityRailBase`; supply only renderers.
 - **Linear scaffold, no grids:** `space-y-*` / `divide-y` sections, `flex-1 overflow-y-auto` body, `border-t` dividers.
 - **One row anatomy:** left-aligned title → meta eyebrow → chips; selection is `bg-blue-50 ring-1 ring-inset ring-blue-400` only (never a size shift).

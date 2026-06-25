@@ -26,6 +26,8 @@ import { hashPin, isObviousPin } from '@/lib/auth/pin';
 import { createOrganization, getOrganizationBySlug } from '@/lib/tenancy/organizations';
 import { sendEmailBestEffort } from '@/lib/email/send';
 import { createStripeCustomer } from '@/lib/billing/stripe';
+import { seedOrgCatalog } from '@/lib/neon/catalog-queries';
+import { seedDefaultWorkflowForOrg } from '@/lib/studio/seed-org-workflow';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])?$/;
 const SignupSchema = z.object({
@@ -93,10 +95,10 @@ export const POST = withAuth(async (req: NextRequest) => {
 
     // 1. Org
     const orgRes = await client.query<{ id: string }>(
-      `INSERT INTO organizations (slug, name, plan, status, trial_ends_at, settings)
-       VALUES ($1, $2, 'trial', 'active', now() + interval '14 days', '{}'::jsonb)
+      `INSERT INTO organizations (slug, name, plan, status, trial_ends_at, settings, billing_email)
+       VALUES ($1, $2, 'trial', 'active', now() + interval '14 days', '{}'::jsonb, $3)
        RETURNING id`,
-      [slug, parsed.companyName],
+      [slug, parsed.companyName, parsed.email],
     );
     orgId = orgRes.rows[0]!.id;
 
@@ -104,10 +106,10 @@ export const POST = withAuth(async (req: NextRequest) => {
     const pinHash = await hashPin(parsed.pin);
     const staffRes = await client.query<{ id: number }>(
       `INSERT INTO staff
-         (name, role, active, organization_id, pin_hash, pin_set_at, status, default_home_path)
-       VALUES ($1, 'admin', true, $2, $3, now(), 'active', '/dashboard')
+         (name, role, active, organization_id, pin_hash, pin_set_at, status, default_home_path, email)
+       VALUES ($1, 'admin', true, $2, $3, now(), 'active', '/dashboard', $4)
        RETURNING id`,
-      [parsed.fullName, orgId, pinHash],
+      [parsed.fullName, orgId, pinHash, parsed.email],
     );
     staffId = staffRes.rows[0]!.id;
 
@@ -141,6 +143,18 @@ export const POST = withAuth(async (req: NextRequest) => {
   });
 
   // 5. Side-effects (best-effort, must not break the signup)
+  // Seed the org's editable platform/account/type catalog so a fresh tenant isn't
+  // blank — `createOrganization` does this, but signup uses a direct INSERT above,
+  // so it was being skipped. Best-effort: a seed failure must not block signup.
+  void seedOrgCatalog(orgId).catch((err) =>
+    console.error('[signup] seedOrgCatalog failed for new org', orgId, err),
+  );
+  // Clone + activate the default system workflow so the engine can route intake
+  // for the new tenant out-of-the-box (F4-lite). Best-effort.
+  void seedDefaultWorkflowForOrg(orgId, staffId).catch((err) =>
+    console.error('[signup] seedDefaultWorkflowForOrg failed for new org', orgId, err),
+  );
+
   void sendEmailBestEffort({
     to: parsed.email,
     subject: `Welcome to ${parsed.companyName}`,

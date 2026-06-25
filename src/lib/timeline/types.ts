@@ -27,6 +27,28 @@ export interface TimelineRef {
 }
 
 /**
+ * Describes the band a row belongs to in the serial-grouped view. By default
+ * {@link EventTimeline} derives this from each row's own {@link TimelineRef},
+ * but a caller can supply a `groupKeyOf` selector to bucket by a chosen
+ * dimension (order / serial / tracking) — `key` is the band identity, `label`
+ * the fallback text, and `ref` the optional chip rendered in the band header.
+ */
+export interface TimelineGroupKey {
+  key: string;
+  label: string;
+  ref?: TimelineRef;
+}
+
+/**
+ * Band key for ref-less / un-grouped rows in the serial-grouped view. The
+ * {@link EventTimeline} sorts this band LAST so identified bands lead. A
+ * `groupKeyOf` selector can return this key (with its own label) to force rows
+ * lacking the chosen grouping dimension into the trailing band instead of
+ * fragmenting them into incidental ref bands.
+ */
+export const TIMELINE_OTHER_BAND_KEY = '__order__';
+
+/**
  * One generic, domain-agnostic event row. Per-domain feed adapters
  * (`src/lib/timeline/*`) map their source — carrier events, audit logs, repair
  * history, … — into `TimelineItem[]`; the {@link EventTimeline} component knows

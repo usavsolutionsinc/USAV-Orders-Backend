@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-23T19:31:25Z",
-  "totalRoutes": 657,
+  "generatedAt": "2026-06-25T04:45:30Z",
+  "totalRoutes": 670,
   "summary": {
-    "permissionGated": 562,
-    "authenticatedNoPermission": 28,
+    "permissionGated": 573,
+    "authenticatedNoPermission": 30,
     "anonymousIntentional": 57,
     "serviceToService": 2,
     "ungatedRead": 8,
@@ -850,6 +850,24 @@
         "POST"
       ],
       "gate": "NONE",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/email-login/request/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/email-login/verify/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
       "permission": null,
       "exemptReason": "auth-flow (sign-in / passkey / pin)"
     },
@@ -2455,12 +2473,41 @@
       "exemptReason": null
     },
     {
+      "path": "/api/operations/journey/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/operations/kpi-table/route.ts",
       "methods": [
         "GET"
       ],
       "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/operations/saved-views/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/operations/saved-views/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
       "exemptReason": null
     },
     {
@@ -2741,6 +2788,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/packerlogs/for-order/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/packerlogs/route.ts",
       "methods": [
         "DELETE",
@@ -2787,6 +2843,25 @@
       ],
       "gate": "withAuth",
       "permission": "packing.complete_order",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing-photos/route.ts",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/packing/policy/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3510,6 +3585,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/lines/[id]/advance/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.mark_received",
       "exemptReason": null
     },
     {
@@ -4498,6 +4582,18 @@
       ],
       "gate": "withAuth",
       "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/sku-catalog/[id]/kit-parts/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -5913,6 +6009,25 @@
       "exemptReason": null
     },
     {
+      "path": "/api/zendesk/photo-ticket/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/tickets/[id]/assign/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
       "path": "/api/zendesk/tickets/[id]/comments/route.ts",
       "methods": [
         "GET",
@@ -5947,6 +6062,15 @@
       "methods": [
         "GET",
         "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.zendesk",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/zendesk/users/route.ts",
+      "methods": [
+        "GET"
       ],
       "gate": "withAuth",
       "permission": "integrations.zendesk",

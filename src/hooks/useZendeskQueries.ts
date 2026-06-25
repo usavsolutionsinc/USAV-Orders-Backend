@@ -15,6 +15,7 @@ import type {
   ZendeskTicket,
   ZendeskComment,
   ZendeskAgent,
+  ZendeskUser,
 } from '@/lib/zendesk';
 
 export type StatusFilter =
@@ -31,6 +32,9 @@ export interface TicketListParams {
   status: StatusFilter;
   page: number;
   perPage?: number;
+  /** Applied in list mode (no free-text search); ignored by Zendesk search. */
+  sortBy?: 'created_at' | 'updated_at' | 'priority' | 'status' | 'id';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface TicketListResult {
@@ -56,7 +60,9 @@ export const zendeskKeys = {
   ticket: (id: number) => ['zendesk', 'ticket', id] as const,
   comments: (id: number) => ['zendesk', 'ticket', id, 'comments'] as const,
   photos: (id: number) => ['zendesk', 'ticket', id, 'photos'] as const,
+  assignment: (id: number) => ['zendesk', 'ticket', id, 'assignment'] as const,
   agents: () => ['zendesk', 'agents'] as const,
+  users: (ids: number[]) => ['zendesk', 'users', [...ids].sort((a, b) => a - b)] as const,
 };
 
 class HttpError extends Error {
@@ -109,6 +115,8 @@ export function useZendeskTickets(params: TicketListParams) {
       if (q) sp.set('query', q);
       sp.set('page', String(Math.max(1, params.page)));
       sp.set('perPage', String(perPage));
+      if (params.sortBy) sp.set('sortBy', params.sortBy);
+      if (params.sortOrder) sp.set('sortOrder', params.sortOrder);
       return getJson<TicketListResult>(`/api/zendesk/tickets?${sp.toString()}`);
     },
     // Keep the previous page/search visible while the next loads (no blanking).
@@ -170,6 +178,101 @@ export function useZendeskAgents() {
     },
     staleTime: 5 * 60_000,
     retry: (count, err) => err.status !== 503 && count < 1,
+  });
+}
+
+/**
+ * Resolve a set of Zendesk user ids to name/email — used to label comment authors
+ * that aren't agents (the requester / end users) so the thread never shows a bare
+ * "User #<id>". Keyed on the sorted id set so distinct comment threads dedupe.
+ */
+export function useZendeskUsers(ids: number[]) {
+  const cleaned = Array.from(new Set(ids.filter((n) => Number.isInteger(n) && n > 0)));
+  return useQuery<ZendeskUser[], HttpError>({
+    queryKey: zendeskKeys.users(cleaned),
+    queryFn: async () => {
+      const data = await getJson<{ users: ZendeskUser[] }>(
+        `/api/zendesk/users?ids=${cleaned.join(',')}`,
+      );
+      return data.users;
+    },
+    enabled: cleaned.length > 0,
+    staleTime: 5 * 60_000,
+    retry: (count, err) => err.status !== 503 && count < 1,
+  });
+}
+
+export interface TicketAssignment {
+  ticketId: number;
+  assignedStaffId: number;
+  assignedStaffName: string;
+  assignedBy: number | null;
+  updatedAtMs: number;
+}
+
+/** The in-website staff owner of a ticket (separate from the Zendesk assignee). */
+export function useTicketAssignment(id: number | null) {
+  return useQuery<TicketAssignment | null, HttpError>({
+    queryKey: zendeskKeys.assignment(id ?? 0),
+    queryFn: async () => {
+      const data = await getJson<{ assignment: TicketAssignment | null }>(
+        `/api/zendesk/tickets/${id}/assign`,
+      );
+      return data.assignment;
+    },
+    enabled: !!id,
+    retry: (count, err) => err.status !== 503 && count < 2,
+  });
+}
+
+interface AssignVars {
+  id: number;
+  /** null clears the assignment. */
+  staffId: number | null;
+  /** Optional name for an optimistic label while the server confirms. */
+  staffName?: string;
+}
+
+/** Assign a ticket to one of our staff (drops an inbox notification server-side). */
+export function useAssignTicket() {
+  const qc = useQueryClient();
+  return useMutation<TicketAssignment | null, HttpError, AssignVars, { prev?: TicketAssignment | null }>({
+    mutationFn: async ({ id, staffId }) => {
+      const res = await fetch(`/api/zendesk/tickets/${id}/assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new HttpError(res.status, data?.error || 'Assign failed');
+      return (data.assignment ?? null) as TicketAssignment | null;
+    },
+    onMutate: async ({ id, staffId, staffName }) => {
+      await qc.cancelQueries({ queryKey: zendeskKeys.assignment(id) });
+      const prev = qc.getQueryData<TicketAssignment | null>(zendeskKeys.assignment(id));
+      const next: TicketAssignment | null =
+        staffId == null
+          ? null
+          : {
+              ticketId: id,
+              assignedStaffId: staffId,
+              assignedStaffName: staffName ?? '…',
+              assignedBy: null,
+              updatedAtMs: 0,
+            };
+      qc.setQueryData<TicketAssignment | null>(zendeskKeys.assignment(id), () => next);
+      return { prev };
+    },
+    onError: (_err, { id }, ctx) => {
+      if (ctx) qc.setQueryData(zendeskKeys.assignment(id), ctx.prev);
+      toast.error('Could not update the staff assignment');
+    },
+    onSuccess: (_a, { staffId }) => {
+      toast.success(staffId == null ? 'Assignment cleared' : 'Assigned to staff');
+    },
+    onSettled: (_a, _e, { id }) => {
+      void qc.invalidateQueries({ queryKey: zendeskKeys.assignment(id) });
+    },
   });
 }
 

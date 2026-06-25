@@ -127,17 +127,8 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
     return () => clearInterval(t);
   }, [status]);
 
-  // ⌘K / Ctrl+K focuses the composer from anywhere in the surface.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        focusComposer();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [focusComposer]);
+  // ⌘K is owned globally by the CommandBar (src/components/CommandBar.tsx); the
+  // composer auto-focuses on status changes below, so no local ⌘K hijack here.
 
   const startEditing = useCallback((msg: ChatMessage) => {
     if (status === 'streaming') return;

@@ -25,6 +25,7 @@ export default function AccountSignInPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [choices, setChoices] = useState<Workspace[] | null>(null);
+  const [linkSent, setLinkSent] = useState(false);
 
   const finish = useCallback(() => window.location.assign('/dashboard'), []);
 
@@ -81,6 +82,26 @@ export default function AccountSignInPage() {
     }
   }, [busy, finish]);
 
+  // Passwordless magic-link: emails a one-time sign-in link. Always reports
+  // success (the endpoint never reveals whether the email is registered).
+  const magicLink = useCallback(async () => {
+    if (busy || !email) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await fetch('/api/auth/email-login/request', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      setLinkSent(true);
+    } catch {
+      setErr('Could not send the sign-in link.');
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, email]);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -91,7 +112,17 @@ export default function AccountSignInPage() {
 
         {err && <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
 
-        {choices ? (
+        {linkSent ? (
+          <div className="space-y-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center">
+            <p className="text-sm font-semibold text-gray-900">Check your email</p>
+            <p className="text-xs text-gray-500">
+              If {email || 'that address'} has an account, a one-time sign-in link is on its way (valid 15 minutes).
+            </p>
+            <button type="button" onClick={() => setLinkSent(false)} className="text-xs text-gray-500 hover:underline">
+              ← Back to sign in
+            </button>
+          </div>
+        ) : choices ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500">Choose a workspace</p>
             <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
@@ -136,6 +167,11 @@ export default function AccountSignInPage() {
             <button type="button" disabled={busy} onClick={() => void passkeySignin()}
               className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
               Sign in with a passkey
+            </button>
+
+            <button type="button" disabled={busy || !email} onClick={() => void magicLink()}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
+              Email me a sign-in link
             </button>
           </form>
         )}

@@ -14,7 +14,6 @@
  */
 
 import { useState } from 'react';
-import { useReducedMotion } from 'framer-motion';
 import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
 import { TESTING_SELECTION_SCOPE } from '@/components/tech/TestingHistoryList';
@@ -31,7 +30,6 @@ interface TechDashboardProps {
 }
 
 export default function TechDashboard({ techId }: TechDashboardProps) {
-  const prefersReducedMotion = useReducedMotion();
   const { rightViewMode, isTestingHistory } = useTechRightView();
 
   const {
@@ -77,7 +75,6 @@ export default function TechDashboard({ techId }: TechDashboardProps) {
               onCloseActiveOrder={() => setActiveOrderPane(null)}
               previewOrder={previewOrder}
               onClosePreview={() => setPreviewOrder(null)}
-              prefersReducedMotion={prefersReducedMotion}
               onSelectLog={setSelectedLog}
             />
             {isTestingHistory ? (

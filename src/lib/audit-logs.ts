@@ -99,6 +99,7 @@ export const AUDIT_ENTITY = {
   RMA: 'rma',
   REPAIR_SERVICE: 'repair_service',
   QC_CHECK_TEMPLATE: 'qc_check_template',
+  KIT_PART_TEMPLATE: 'kit_part_template',
   FAILURE_MODE: 'failure_mode',
   UNIT_FAILURE_TAG: 'unit_failure_tag',
   UNIT_REPAIR: 'unit_repair',
@@ -114,6 +115,8 @@ export const AUDIT_ENTITY = {
   STATION_DEFINITION: 'station_definition',
   // Workflow graphs (Operations Studio layer 1)
   WORKFLOW_DEFINITION: 'workflow_definition',
+  // Operations ▸ History — server-backed Master Journey saved views
+  OPERATIONS_SAVED_VIEW: 'operations_saved_view',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -124,6 +127,8 @@ export const AUDIT_ACTION = {
   RECEIVING_DISPOSITION_SET: 'receiving.disposition.set',
   RECEIVING_LINE_QTY_UPDATE: 'receiving_line.qty.update',
   RECEIVING_HEADER_UPDATE:   'receiving.header.update',
+  /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
+  RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   // Bin / location
   BIN_CREATE: 'bin.create',
   BIN_UPDATE: 'bin.update',
@@ -151,6 +156,10 @@ export const AUDIT_ACTION = {
   QC_CHECK_DELETE:  'qc_check.delete',
   QC_CHECK_PUBLISH: 'qc_check.publish',
   QC_RESULT_RECORD: 'qc_result.record',
+  // Kit-parts / BOM templates ("what's in the box" authoring CRUD)
+  KIT_PART_CREATE: 'kit_part.create',
+  KIT_PART_UPDATE: 'kit_part.update',
+  KIT_PART_DELETE: 'kit_part.delete',
   // Failure-mode taxonomy (CRUD) + per-unit failure tags
   FAILURE_MODE_CREATE: 'failure_mode.create',
   FAILURE_MODE_UPDATE: 'failure_mode.update',
@@ -257,6 +266,10 @@ export const AUDIT_ACTION = {
   WORKFLOW_PUBLISH:      'workflow.publish',
   // Cloning a system template into the org's definitions as a draft (Phase E4).
   WORKFLOW_TEMPLATE_IMPORT: 'workflow.template.import',
+  // Operations ▸ History — Master Journey saved views (personal/shared presets)
+  OPERATIONS_SAVED_VIEW_CREATE: 'operations.saved_view.create',
+  OPERATIONS_SAVED_VIEW_UPDATE: 'operations.saved_view.update',
+  OPERATIONS_SAVED_VIEW_DELETE: 'operations.saved_view.delete',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];

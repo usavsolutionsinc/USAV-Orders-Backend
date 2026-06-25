@@ -10,6 +10,7 @@ import { SidebarContextPanel } from '@/components/sidebar/SidebarContextPanel';
 // doubled. Keep this set in sync with those gated panels.
 const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'dashboard',
+  'operations',
   'receiving',
   'fba',
   'inventory',

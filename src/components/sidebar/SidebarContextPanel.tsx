@@ -18,6 +18,7 @@ import { SupportSidebarPanel } from '@/components/sidebar/SupportSidebarPanel';
 import { AiChatSidebarPanel } from '@/components/sidebar/AiChatSidebarPanel';
 import { SettingsSidebar } from '@/components/sidebar/SettingsSidebarPanel';
 import { AuditLogSidebarPanel } from '@/components/sidebar/AuditLogSidebarPanel';
+import { OperationsSidebarPanel } from '@/components/sidebar/OperationsSidebarPanel';
 import { PhotoLibrarySidebarPanel } from '@/components/photos/PhotoLibrarySidebarPanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
@@ -38,6 +39,7 @@ export function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () =>
   if (routeKey === 'dashboard') return <DashboardOrdersContextPanel />;
   if (routeKey === 'admin') return <AdminContextPanel />;
 
+  if (routeKey === 'operations') return <OperationsSidebarPanel />;
   if (routeKey === 'studio') return <StudioSidebarPanel />;
   if (routeKey === 'support') return <SupportSidebarPanel />;
   if (routeKey === 'ai-chat') return <AiChatSidebarPanel />;

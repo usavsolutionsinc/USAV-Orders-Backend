@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
 import {
@@ -151,11 +152,10 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             href={photosHref}
             prefetch={false}
             onClick={onClose}
+            aria-label="Take photos"
             className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
-            <span className="text-sm font-black uppercase tracking-[0.18em]">
-              Take Photos
-            </span>
+            <Camera className="h-6 w-6" />
           </Link>
         ) : null}
       </div>

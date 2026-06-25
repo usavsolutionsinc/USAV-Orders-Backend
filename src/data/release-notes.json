@@ -1,7 +1,127 @@
 {
-  "generatedAt": "2026-06-22T23:48:43.632Z",
-  "count": 199,
+  "generatedAt": "2026-06-25T04:04:57.735Z",
+  "count": 198,
   "commits": [
+    {
+      "sha": "e291d44e53c348f7267cfafd5330558c17a84ffe",
+      "shortSha": "e291d44e",
+      "date": "2026-06-23T17:32:18-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "chore: sync in-flight work — receiving claim workspace, repair/shipped panels, tracking GS1, NAS archive",
+      "body": "Bundles current working-tree changes across:\n- receiving zendesk-claim workspace (claim wizard steps, ticket reply, seller\n  assist, archive-only route, claim photos/templates)\n- repair + shipped details panels (notes/overview tabs, stacks, composer)\n- tracking-format GS1 canonicalization + tests, FedEx GS1 backfill dry-run\n- NAS media agent / nas-agent-client, record-scan + resolve-shipment-for-scan\n- state-machine / applyTransition, rma authorizations, misc UI providers\n\nExcludes transient backfill/heal run-artifact dotfiles under scripts/.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01FM42gewBpyfngfWZLTkudh",
+      "type": "chore",
+      "title": "sync in-flight work — receiving claim workspace, repair/shipped panels, tracking GS1, NAS archive"
+    },
+    {
+      "sha": "4b0c04b8315a22a36d8d2141f3c7153be5636f3b",
+      "shortSha": "4b0c04b8",
+      "date": "2026-06-23T17:09:15-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "fix(packing-logs): write pack audit on the tenant txn client via recordAudit",
+      "body": "The matched-order and not-found paths wrote the PACK_COMPLETED audit row\nwith the shared `pool` connection while the station_activity_logs row was\ncreated on the open withTenantTransaction `client`. The uncommitted SAL row\nwasn't visible to the separate connection, so the\naudit_logs.station_activity_log_id FK violated (23503) and rolled back the\nwhole pack — surfacing as a 500 on POST /api/packing-logs.\n\nSwitch both calls to recordAudit(client, ctx, req, …): runs in the same\ntransaction (FK resolves) and never throws (audit failures are logged and\ndropped), so a future audit hiccup can't roll back a completed pack. Keeps\nthe historical uppercase entityType literals to preserve audit-dashboard\ncontinuity; action uses AUDIT_ACTION.PACK_COMPLETED (identical value).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01FM42gewBpyfngfWZLTkudh",
+      "type": "fix",
+      "title": "write pack audit on the tenant txn client via recordAudit"
+    },
+    {
+      "sha": "d335edbe76869be893baec3315e6ea22af315199",
+      "shortSha": "d335edbe",
+      "date": "2026-06-23T11:32:35-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(photos): drag-to-reorder for master folders",
+      "body": "Follow-up to the Phase 2 folders: sibling folders can now be reordered by drag.\n\n- POST /api/photos/folders/reorder (photos.manage) → batch reorderFolders.\n- usePhotoFolders.reorderFolders mutation with optimistic sort_index reflow\n  (rollback on error, reconcile on settle) so the drag feels instant.\n- PhotoFolderTree rows are draggable with an insert-before line indicator;\n  reorder is scoped to same-parent siblings (cross-parent reparent-by-drag is\n  left for later — PATCH parentId already supports it server-side).\n\nVerified with a real Playwright drag (AAA,BBB,CCC -> drag CCC onto AAA ->\nCCC,AAA,BBB, persisted). tsc 0, eslint clean, auth tests 50/50, photo e2e 8/8,\nroute-permission manifest regenerated + checked.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01UkKW2TUYqtKVyoDmpv7BUh",
+      "type": "feature",
+      "title": "drag-to-reorder for master folders"
+    },
+    {
+      "sha": "1fcfe3b28f04dc806f76d9b1aec8e27977006453",
+      "shortSha": "1fcfe3b2",
+      "date": "2026-06-23T10:49:51-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(photos): persistent master folders with full CRUD (Phase 2)",
+      "body": "Operator-created, org-scoped, nestable photo folders layered over the derived\npo_ref/ticket grouping — create / rename / move / delete, assign & remove\nphotos, and filter the library to a folder.\n\nData + domain:\n- Migration 2026-06-23_photo_folders.sql: photo_folders (parent_id self-FK,\n  sort_index) + photo_folder_items join, both tenant-from-birth\n  (organization_id NOT NULL + per-org keys + enforce_tenant_isolation()).\n- src/lib/photos/folders.ts: list/create/rename/move/reorder/delete + add/remove\n  photos, via tenantQuery/withTenantTransaction, with a recursive cycle guard on\n  move and idempotent (ON CONFLICT) assignment that only files org-owned photos.\n\nAPI (house route skeleton + recordAudit):\n- /api/photos/folders        GET (photos.view) · POST (photos.manage)\n- /api/photos/folders/[id]    PATCH/DELETE (photos.manage)\n- /api/photos/folders/[id]/items  POST/DELETE assign+remove (photos.manage)\n- New permission photos.manage; AUDIT_ACTION.PHOTO_FOLDER_* + entity photo_folder.\n- Library query gains a folderId filter (query + filter-state + hook + route).\n\nUI:\n- usePhotoFolders hook (folder list + tree builder + mutations).\n- PhotoFolderTree sidebar: nested tree with create/rename/delete/sub-folder and\n  click-to-filter; AddToFolderMenu in the selection toolbar (leading slot);\n  \"Remove from folder\" bulk action when a folder is the active filter.\n\nVerified end-to-end (create/nest/rename/assign-idempotent/filter/count/remove/\ncascade-delete) against the dev DB; tenant coverage shows both tables FORCE-RLS\nisolated. tsc 0 errors, auth tests 50/50 (incl. new photos.manage regression),\nphoto e2e 8/8, route-permission manifest regenerated + checked.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01UkKW2TUYqtKVyoDmpv7BUh",
+      "type": "feature",
+      "title": "persistent master folders with full CRUD (Phase 2)"
+    },
+    {
+      "sha": "044d4d76d8957f8189c20063ee571650bc7ea323",
+      "shortSha": "044d4d76",
+      "date": "2026-06-23T10:29:28-07:00",
+      "author": "DENSENSE8",
+      "subject": "chore(ui): photo viewer control layout + sidebar icon swaps",
+      "body": "- PhotoViewerModal: move the zoom/rotate/reset pill to the right control\n  group with a divider, separating image controls from global actions.\n- Photo library sidebar: Local pickups icon Truck -> ShoppingCart.\n- App nav: Warehouse icon MapPin -> Warehouse.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01UkKW2TUYqtKVyoDmpv7BUh",
+      "type": "chore",
+      "title": "photo viewer control layout + sidebar icon swaps"
+    },
+    {
+      "sha": "bda09ee1ac2d02da84c044c35921c093fa619d54",
+      "shortSha": "bda09ee1",
+      "date": "2026-06-23T10:18:53-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(photos): simplify photo library — Finder-style folders + inline share toolbar",
+      "body": "Phase 1 cleanup of /ops/photos for a simpler, Finder-like flow:\n- Remove the link-expiry band (delete ShareExpiryControl); share links use a\n  fixed 24h TTL.\n- Remove drag-to-share from tiles/folders; the single share affordance is the\n  \"Copy shareable links\" bulk action.\n- Drop the DateGroupHeader day bands in grid views (flat contact sheet).\n- Move the bulk-action bar off the floating ContextualSelectionBar into an\n  inline PhotoLibraryToolbar docked under the header (this page only).\n- Folders now drill in-page with a breadcrumb (FolderPathBar) instead of\n  popping a lightbox; click a photo to open the viewer.\n- Ticket-aware labels: unboxing shows PO#, claims shows the Zendesk ticket#.\n\nMobbin-informed folder UX (Runway / Squarespace / Frame.io):\n- Surface loose/ungrouped photos at root as their own section instead of\n  burying them in an \"Unlinked\" folder.\n- Add \"Folders\" / \"Ungrouped photos\" eyebrow section headers with count chips.\n- Compact folder tiles with a Frame.io-style latest-capture meta line.\n\nTests updated for the new folder drill-in + flat-grid behavior.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01UkKW2TUYqtKVyoDmpv7BUh",
+      "type": "feature",
+      "title": "simplify photo library — Finder-style folders + inline share toolbar"
+    },
+    {
+      "sha": "df090ac170397f1f59ddaf0bdecda17a0595a6a9",
+      "shortSha": "df090ac1",
+      "date": "2026-06-23T08:44:28-07:00",
+      "author": "DENSENSE8",
+      "subject": "making updates to the current photo library page and better design display functions",
+      "body": "",
+      "type": "other",
+      "title": "making updates to the current photo library page and better design display functions"
+    },
+    {
+      "sha": "9d9ab24fc0ed954fe5fa9724ad3716a926b65883",
+      "shortSha": "9d9ab24f",
+      "date": "2026-06-22T21:58:25-07:00",
+      "author": "DENSENSE8",
+      "subject": "docs(tenancy): regenerate route + coverage audit after GUC-wrap waves",
+      "body": "Direct-query raw-pool routes on FORCEd tenant tables: 0 remaining.\ntenantWrapped routes 286 -> 308. Remaining audit hits are helper-delegating\nroutes whose pool import is idempotency/audit only (domain layer tenant-safe).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "docs",
+      "title": "regenerate route + coverage audit after GUC-wrap waves"
+    },
+    {
+      "sha": "3e0ec9ece99b3411aad26815d58b1518fc157299",
+      "shortSha": "3e0ec9ec",
+      "date": "2026-06-22T21:57:16-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): route helper-delegating routes through tenant pool + GUC",
+      "body": "Thread orgId / wrap domain helpers so the remaining genuine candidates run\nunder app.current_org (RLS backstop), keeping explicit predicates as\ndefense-in-depth. Behavior-preserving.\n\n- orders/[id]: thread gate.ctx.organizationId into getOrderById/updateOrder/deleteOrder\n- sourcing/saved-searches/[id]/run: thread orgId into getSourcingSearchById/markSourcingSearchRun\n- repair-service CRUD: createCrudHandler now passes org ctx to list/search/update\n  callbacks (additive/optional); route threads orgId into all 6 repair helpers\n- order-tracking: applyOrderTrackingOps wraps its multi-statement write in\n  withTenantTransaction (shipping_tracking_numbers/order_shipment_links/orders)\n- warranty cluster: createClaim/logRepairAttempt/softDeleteClaims (mutations),\n  handoff/rma linkage, zendesk-link writes moved to withTenantTransaction/\n  tenantQuery with org-scoped getClaim; callers threaded\n\nClassification found 36 of ~47 helper-delegating routes already helper-safe\n(audit under-counted). Deferred: serial-units/[id]/test recordTestVerdict\n(flag-gated unified-engine reference impl; applyTransition path already\ntenant-safe, OFF-path has correct inline predicates — left to avoid state-machine risk).\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "route helper-delegating routes through tenant pool + GUC"
+    },
+    {
+      "sha": "93da99d6c5e943e65f28d685332ef539b55007a4",
+      "shortSha": "93da99d6",
+      "date": "2026-06-22T21:41:06-07:00",
+      "author": "DENSENSE8",
+      "subject": "feat(tenancy): wrap 22 direct-query routes in tenant pool + GUC",
+      "body": "Convert routes that ran tenant-table queries on the owner pool (BYPASSRLS)\nto the canonical tenantQuery / withTenantTransaction wrappers so RLS enforces\nas a backstop. Explicit organization_id predicates retained as defense-in-depth.\nBehavior-preserving: same SQL, params, control flow, side-effects.\n\nRoutes: orders/add, orders/assign, import-orders, post-multi-sn, scan-tracking,\nreceiving-entry, receiving-lines/view, receiving-logs, receiving/po/attach-box,\nreceiving/zendesk-claim/link, repair/{actions,actions/[id],submit},\nrepair-service/{pickup,repaired}, shipped/scan-out, sync-sheets,\necwid/sync-exception-tracking, zoho/orders/ingest, zoho/purchase-orders/receive,\nadmin/po-gmail/{create-zoho-draft,triage/extract}.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>",
+      "type": "feature",
+      "title": "wrap 22 direct-query routes in tenant pool + GUC"
+    },
+    {
+      "sha": "6d8a9095f8689e769d5cf560022ce443c9b28c93",
+      "shortSha": "6d8a9095",
+      "date": "2026-06-22T17:08:40-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "docs: add MLX/M5 alternative-hardware appendix to local-LLM plan",
+      "body": "Completes the originally-scoped MLX/M5 research as a comparison appendix:\ncorrects '48GB = M5 Pro (not base M5)', confirms from-scratch is impractical\non one Mac, documents mlx_lm.lora LoRA/QLoRA + the train->fuse->export path,\nand lands on a dev-on-Mac / serve-on-CUDA-5070-Ti hybrid (fused safetensors\nas the interchange unit; final production fine-tune on the GPU). Verified\nvia a third adversarial research sweep.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TgL8KsQwmxpUz17jN2aGds",
+      "type": "docs",
+      "title": "add MLX/M5 alternative-hardware appendix to local-LLM plan"
+    },
+    {
+      "sha": "e62c95206d0c28b44308536c6000556e51a61958",
+      "shortSha": "e62c9520",
+      "date": "2026-06-22T17:01:42-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "docs: add local-LLM (5070 Ti) + capability-advisor plan",
+      "body": "Comprehensive plan for the contextual capability model (four-layer:\nentitlement/inventory/assignment/device), adaptive-chrome mobile nav,\nthe next-best-investment advisor (tabular decision + grounded LLM prose,\nvetted product catalog), and a specialized local LLM served on the\nRTX 5070 Ti (Blackwell/CUDA) to negate per-tenant cloud LLM calls.\nGrounded in two verified deep-research sweeps + a repo code-seam map.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TgL8KsQwmxpUz17jN2aGds",
+      "type": "docs",
+      "title": "add local-LLM (5070 Ti) + capability-advisor plan"
+    },
     {
       "sha": "9b9877fe9d0a2278b80f3c5bc8e1d4046438acfd",
       "shortSha": "9b9877fe",
@@ -1861,136 +1981,6 @@
       "body": "",
       "type": "other",
       "title": "updated picker and receiving mobile display"
-    },
-    {
-      "sha": "5884266918d534731142c2c64246a217e7f2bcfd",
-      "shortSha": "58842669",
-      "date": "2026-05-21T12:13:19-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated the receiving display for the mobile view",
-      "body": "",
-      "type": "other",
-      "title": "updated the receiving display for the mobile view"
-    },
-    {
-      "sha": "914779ede2725eaafe0a70db213ab31839cd57f0",
-      "shortSha": "914779ed",
-      "date": "2026-05-21T11:14:43-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "bug fix for tech and packer org id",
-      "body": "",
-      "type": "other",
-      "title": "bug fix for tech and packer org id"
-    },
-    {
-      "sha": "a03598e71c21e430a958e79700a826c8dbf86e1e",
-      "shortSha": "a03598e7",
-      "date": "2026-05-21T15:12:40+07:00",
-      "author": "IT-USAV",
-      "subject": "chore: remove .env from github",
-      "body": "",
-      "type": "chore",
-      "title": "remove .env from github"
-    },
-    {
-      "sha": "21b9ab08abec6d513c3beb1f3057fc62f5d15d9e",
-      "shortSha": "21b9ab08",
-      "date": "2026-05-20T16:11:47-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated silent printing for macos intel support",
-      "body": "",
-      "type": "other",
-      "title": "updated silent printing for macos intel support"
-    },
-    {
-      "sha": "cfe69d23ea5e3a36863c8e66b4640e062a52cbef",
-      "shortSha": "cfe69d23",
-      "date": "2026-05-20T13:27:30-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "updated ZD updates from receiving and zoho submit via async functions, permissions update,",
-      "body": "",
-      "type": "other",
-      "title": "updated ZD updates from receiving and zoho submit via async functions, permissions update,"
-    },
-    {
-      "sha": "0349c92339216fdafdc59bedfc31302738a38654",
-      "shortSha": "0349c923",
-      "date": "2026-05-20T12:58:31-07:00",
-      "author": "DENSENSE8",
-      "subject": "updated global staff and org and move resolver qr code",
-      "body": "",
-      "type": "other",
-      "title": "updated global staff and org and move resolver qr code"
-    },
-    {
-      "sha": "908fc1ae39780f4767d197236d654f7251048a68",
-      "shortSha": "908fc1ae",
-      "date": "2026-05-19T16:54:50-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed some bugs causing errors in the system like role picker for staff and packing website problems",
-      "body": "",
-      "type": "fix",
-      "title": "fixed some bugs causing errors in the system like role picker for staff and packing website problems"
-    },
-    {
-      "sha": "9ec76f3843e4d55ae869019755b0c854d03e5885",
-      "shortSha": "9ec76f38",
-      "date": "2026-05-19T15:13:55-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "products: restore SKU label printer workspace on /products",
-      "body": "Wires the orphaned MultiSkuSnBarcode component (last rendered on the\ndeleted /sku-stock route — see commit b158976) back into /products as\na URL-toggled view.\n\nSidebar (ProductsSidebarPanel):\n- SearchBar — drives ?q= (consumed by ProductsShell table)\n- Catalog / Label Printer view toggle — drives ?view=labels\n- Mode pills (Print / Reprint / SN-to-SKU / Move Location) — vertical\n  orientation in the sidebar, drives ?mode= via useBarcodeMode\n- Recents strip surfaces last-printed SKUs and dispatches sku:fill so\n  the workspace re-loads them with one click\n\nMain pane (ProductsWorkspace):\n- ?view=labels → MultiSkuSnBarcode layout=\"horizontal\" (lazy-loaded\n  via next/dynamic; ssr:false because the QR library is browser-only)\n- default     → ProductsShell (existing catalog table)\n\nQR-only end-to-end: the workspace renders via renderQr() and prints\nvia printProductLabels which builds an HTML template with <QRCode>\nfrom react-qr-code. No 1D barcode rendering on this surface.\n\nMounted via DashboardSidebar's routeKey === 'products' branch.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "products: restore SKU label printer workspace on /products"
-    },
-    {
-      "sha": "216e036fe1e3874449d7a486477ed221c7702863",
-      "shortSha": "216e036f",
-      "date": "2026-05-19T14:40:42-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes",
-      "body": "",
-      "type": "other",
-      "title": "New manuals blob and printing page, new photos backup button to gemini for hunting down for evidence and updated warehouse and inventory changes"
-    },
-    {
-      "sha": "48506e38eadf55193dae69483467bdcafcf8243e",
-      "shortSha": "48506e38",
-      "date": "2026-05-19T14:31:29-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library",
-      "body": "Pipeline:\n- scripts/convert-and-upload-manuals.mjs runs LibreOffice headless (with\n  per-worker UserInstallation profiles to avoid the singleton-lock race)\n  on every .docx under public/Manuals/, drops PDFs into converted-manuals/,\n  and uploads them to Blob at stable paths\n  manuals/<original-relative-path>.pdf\n- scripts/backfill-manual-blob-urls.mjs upserts a product_manuals row per\n  Blob object via the partial unique index on (relative_path)\n  WHERE is_active=true, with display_name derived from folder context.\n\nUI:\n- /manuals/library route + ManualsLibrarySidebar with drill-down folder\n  cards (rounded-2xl, indigo-tinted icons, breadcrumb navigation) and a\n  client-side fuzzy matcher that highlights matched characters across the\n  full 392-row dataset\n- ManualLibrary main pane renders the PDF inline via <iframe src=blobUrl>\n- New Library pill on SkuCatalogSidebar; mirrored mode pills on the new\n  sidebar so navigation is symmetric in both directions\n- sku-catalog manuals query and ManualsSection now return + render\n  source_url (prefers Blob PDF, falls back to legacy Google Doc id)\n\nRun with:\n  npm run manuals:convert-upload   # one-time per docx → blob\n  npm run manuals:backfill-db      # one-time per blob → product_manuals\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "manuals: convert .docx → PDF, host in Vercel Blob, add /manuals/library"
-    },
-    {
-      "sha": "2abe07fcdbfa69d3b24856b61f0de0de99cafd1e",
-      "shortSha": "2abe07fc",
-      "date": "2026-05-19T02:06:59-07:00",
-      "author": "DENSENSE8",
-      "subject": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,",
-      "body": "",
-      "type": "other",
-      "title": "ware house printer, repair page, tech page, fully updated the receiving pipeline, improve mobile app for pills display not dropdowns,"
-    },
-    {
-      "sha": "2ad4f44515f6251a083365e53f6c0c203496a085",
-      "shortSha": "2ad4f445",
-      "date": "2026-05-18T16:52:07-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "inventory: ByFilter view + State/Condition chips",
-      "body": "New view for /inventory: ?state=A,B&condition=USED_A surfaces every\nserial_unit matching the filter combo. Filter chips are sticky in the\nheader alongside the search bar, so an operator can compose\n\"STOCKED USED_A iPhones\" without leaving the page.\n\n- API: GET /api/inventory/units accepts repeatable or comma-separated\n  state[] + condition[], plus sku/location/q/limit/offset. Joins\n  sku_catalog for product_title in one query; returns paginated list +\n  total. Skip-friendly DB types via ::text casts on the enums.\n- InventoryFilterChips: dropdown per dimension, color-coded badges\n  matching plan §8 (19 statuses + 5 conditions). Selected count badge\n  on the trigger; Clear pill appears once any filter is set. Click\n  outside closes the open dropdown.\n- ByFilterResultList: server-paginated unit feed (100 rows / page,\n  Load more), stale-request guard, per-row cross-links to ?unit /\n  ?sku / ?bin (single-click drill from any dimension).\n- InventoryV2Shell: 5th view ('by-filter') gated by state[] or\n  condition[] in the URL. Search and filters compose — single-target\n  inputs (?sku/?bin/?unit) take precedence so a SKU drilldown narrows\n  by chip selection.\n- types: 'by-filter' view + states/conditions in InventoryV2ViewState,\n  UnitListRow / UnitListResponse, exported SERIAL_STATUS_VALUES and\n  CONDITION_GRADE_VALUES constants.\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory: ByFilter view + State/Condition chips"
-    },
-    {
-      "sha": "b158976f49247c610acfa5dcc06724c3e4c7b895",
-      "shortSha": "b158976f",
-      "date": "2026-05-18T16:47:02-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "inventory rename Phase D + ByUnit view + empty-bin toggle",
-      "body": "Phase D cleanup (the legacy /sku-stock surface is now fully gone):\n- Delete /sku-stock route tree (3 pages); next.config.ts redirects keep\n  printed labels + operator bookmarks working\n- Delete dead components: SkuBrowser, SkuStockSidebarList,\n  SkuStockWorkspace, SkuStockSidebarPanel (the post-rename strip left\n  these unreachable)\n- Drop SkuStockSidebarPanel routeKey branch + 'sku-stock' title-map\n  entry from DashboardSidebar\n- Drop 'sku-stock' from SidebarRouteKey union, getSidebarRouteKey\n  classifier, and ROUTE_PERMISSIONS\n- Phase A copies /inventory/sku/[sku] and /inventory/location/[barcode]\n  now redirect to the canonical shell view (?sku= and ?bin=) instead of\n  rendering the legacy SkuDetailView / LocationDetailView via RouteShell\n\nClient URL sweep — everything that pointed at /sku-stock now targets\n/inventory directly (no 308 hop):\n- bin/[barcode]/page.tsx, m/b/[barcode]/page.tsx\n- GlobalDesktopSkuScanner, MobileScanFab (ROUTE_SPECIFIC_PREFIXES)\n- ShippingInformationSection PrepackedSkuRow drilldown\n- LocationDetailView SKU click + view-all-locations\n- SkuDetailView panel-close fallback\n- warehouse/BinDetailFlyout, warehouse/SkuLocationFinder hrefs\n- lib/barcode-routing — scan-route redirect + printed-QR builder; the\n  /sku-stock/location regex stays so older printed labels still parse\n- admin/StaffManagementTab default_home_path: drop /sku-stock, add\n  /warehouse and /products\n\nP3 — ByUnit view (/inventory?unit=ref):\n- New components/inventory-v2/ByUnitView.tsx: fetches /api/serial-units\n  by id or serial number; renders header, 4-field grid, event timeline\n- types.ts: 'by-unit' added to InventoryV2View; SerialUnitDetailPayload\n- InventoryV2Shell: handles ?unit=, mutual-exclusion across sku/bin/unit\n- InventoryV2SearchBar: GS1 /21/serial scans + serial_full/partial\n  classifier hits + bare numeric (<=7 digits) all resolve to unit\n\nP3 — empty-bin opacity toggle on /warehouse Map (plan §15 #5):\n- WarehouseMap: new showEmpty prop (default false); empty cells render\n  at opacity-30 with hover-restore\n- WarehouseShell MapTabBody: Show/Hide empty bins pill, persisted to\n  ?showEmpty=1\n\nMisc:\n- Fix unrelated type error in api/auth/signout: detail: null ->\n  detail: undefined to match audit() signature\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "other",
-      "title": "inventory rename Phase D + ByUnit view + empty-bin toggle"
     }
   ]
 }

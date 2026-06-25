@@ -1,8 +1,10 @@
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   Archive,
   Barcode,
+  BarChart3,
   Boxes,
   Camera,
   DoorOpen,
@@ -30,6 +32,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   Star,
   Tags,
   TrendingUp,
@@ -325,6 +328,7 @@ export interface SidebarPageNav extends SidebarNavItem {
 // Page hrefs are repeated from APP_SIDEBAR_NAV so each mode's `to()` is a pure,
 // self-contained literal (no closure over the array).
 const DASHBOARD = '/dashboard';
+const OPERATIONS = '/operations';
 const RECEIVING = '/receiving';
 const FBA = '/fba';
 const INVENTORY = '/inventory';
@@ -356,6 +360,27 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       if (params.has('warranty')) return 'warranty';
       // `?unshipped`, legacy `?pending`, or nothing → the merged Unshipped mode.
       return 'unshipped';
+    },
+  },
+  // ── Operations ────────────────────────────────────────────────────────────
+  // `?mode=analytics|insights|history`; bare /operations = the Live floor
+  // dashboard (default). The L2 rail mirrors the four right-pane modes
+  // (OperationsWorkspace). Every switch clears the mode-scoped params (search,
+  // selection, range, section…) so each mode opens clean — matches Inventory.
+  {
+    id: 'operations', label: 'Operations', href: OPERATIONS, icon: Monitor, kind: 'main', requires: 'operations.view',
+    modes: [
+      { id: 'live',      label: 'Live',      icon: Activity,  to: () => ({ pathname: OPERATIONS, params: { mode: null,         q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'analytics', label: 'Analytics', icon: BarChart3, to: () => ({ pathname: OPERATIONS, params: { mode: 'analytics', q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'insights',  label: 'Insights',  icon: Sparkles,  to: () => ({ pathname: OPERATIONS, params: { mode: 'insights',  q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+      { id: 'history',   label: 'History',   icon: History,   to: () => ({ pathname: OPERATIONS, params: { mode: 'history',   q: null, open: null, section: null, range: null, segment: null, staffId: null, station: null } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const m = params.get('mode');
+      if (m === 'analytics') return 'analytics';
+      if (m === 'insights') return 'insights';
+      if (m === 'history') return 'history';
+      return 'live';
     },
   },
   // ── Receiving ─────────────────────────────────────────────────────────────
@@ -492,10 +517,11 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       { id: 'labels',  label: 'Labels',  icon: Barcode,  to: () => ({ pathname: PRODUCTS, params: { view: 'labels' } }) },
       { id: 'pairing', label: 'Pairing', icon: Link2,    to: () => ({ pathname: PRODUCTS, params: { view: 'pairing' } }) },
       { id: 'qc',      label: 'QC',      icon: Check,     to: () => ({ pathname: PRODUCTS, params: { view: 'qc' } }) },
+      { id: 'kit',     label: 'Kit Parts', icon: PackageOpen, to: () => ({ pathname: PRODUCTS, params: { view: 'kit' } }) },
     ],
     resolveMode: ({ params }) => {
       const v = params.get('view');
-      return v === 'labels' || v === 'pairing' || v === 'qc' ? v : 'manuals';
+      return v === 'labels' || v === 'pairing' || v === 'qc' || v === 'kit' ? v : 'manuals';
     },
   },
   // ── Testing ───────────────────────────────────────────────────────────────

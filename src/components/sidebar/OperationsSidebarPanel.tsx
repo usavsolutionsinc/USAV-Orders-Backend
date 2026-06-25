@@ -1,0 +1,566 @@
+'use client';
+
+/**
+ * Operations master-page sidebar — the single contextual panel for `/operations`.
+ *
+ * It owns the four-mode switcher (Live · Analytics · Insights · History) and,
+ * per mode, the contextual search / filters / quick-nav. The right pane
+ * (OperationsWorkspace) is purely visual and reacts to the same `?mode=` /
+ * `?range=` / `?section=` / `?q=` URL params. Follows the house sidebar-mode
+ * contract (see `.claude/skills/sidebar-mode`): mode lives in the URL, search is
+ * rendered by SidebarShell, never a parallel switcher.
+ */
+
+import { useCallback, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { cn } from '@/utils/_cn';
+import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { SidebarShell } from '@/components/layout/SidebarShell';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { useMasterNavEnabled } from '@/components/sidebar/master-nav/MasterNavContext';
+import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import {
+  Activity,
+  Database,
+  Warehouse,
+  Layers,
+  MessageSquare,
+  PackageCheck,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Star,
+  Trash2,
+  TrendingUp,
+  Wrench,
+  X,
+} from '@/components/Icons';
+import { emitAiChatNew, emitAiChatPrompt } from '@/components/ai/ai-chat-events';
+import { useQuery } from '@tanstack/react-query';
+import { OPERATIONS_QUERY_KEY } from '@/features/operations/components/operations-dashboard-logic';
+import type { DashboardData } from '@/features/operations/types';
+import {
+  ANALYTICS_RANGE_LABELS,
+  OPERATIONS_MODE_ITEMS,
+  JOURNEY_DIMENSION_ITEMS,
+  JOURNEY_STATION_ITEMS,
+  JOURNEY_TYPE_ITEMS,
+  parseAnalyticsRange,
+  type AnalyticsRange,
+  type OperationsMode,
+} from '@/components/sidebar/operations/operations-sidebar-shared';
+import { useOperationsMode } from '@/components/sidebar/operations/useOperationsMode';
+import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
+import { useOperationsSavedViews } from '@/hooks/useOperationsSavedViews';
+import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
+import type { DateRange } from 'react-day-picker';
+import { startOfDay, endOfDay } from 'date-fns';
+import type { JourneyDimension } from '@/lib/timeline/journey';
+
+const ANALYTICS_RANGES: AnalyticsRange[] = ['24h', '7d', '30d'];
+
+const ANALYTICS_SECTIONS: { id: string; label: string; icon: (p: { className?: string }) => JSX.Element }[] = [
+  { id: 'throughput', label: 'Throughput trend', icon: TrendingUp },
+  { id: 'stations', label: 'By station', icon: Warehouse },
+  { id: 'sources', label: 'By event type', icon: Database },
+  { id: 'velocity', label: 'Inventory velocity', icon: Layers },
+  { id: 'activity', label: 'Activity map', icon: Activity },
+];
+
+const INSIGHTS_CAPABILITIES = [
+  { icon: PackageCheck, title: 'Throughput & pace', detail: 'Velocity, tested, FBA intake vs. yesterday' },
+  { icon: Database, title: 'Inventory health', detail: 'Stockouts, dead stock, A/B/C velocity tiers' },
+  { icon: Wrench, title: 'Exceptions', detail: 'Repair backlog, overdue tests, stuck shipments' },
+  { icon: MessageSquare, title: 'Benchmarks', detail: 'Compare today vs. industry-standard ops targets' },
+];
+
+const INSIGHTS_PROMPTS = [
+  'How does today’s throughput compare to yesterday?',
+  'Which SKUs are dead stock and should be liquidated?',
+  'Where is the biggest bottleneck in the floor right now?',
+  'Suggest a streamlined workflow to cut repair backlog.',
+];
+
+export function OperationsSidebarPanel() {
+  const { mode, updateMode } = useOperationsMode();
+  const masterNavEnabled = useMasterNavEnabled();
+
+  // The mode rail is suppressed when the master-nav drives mode switching
+  // (operations isn't in MASTER_NAV_RAIL_PAGES today, so it renders its own).
+  const modeRail = masterNavEnabled ? null : (
+    <div className={cn(sidebarHeaderPillRowClass, 'gap-0')}>
+      <HorizontalButtonSlider
+        items={OPERATIONS_MODE_ITEMS}
+        value={mode}
+        onChange={(id) => updateMode(id as OperationsMode)}
+        variant="nav"
+        dense
+        className="w-full"
+        aria-label="Operations mode"
+      />
+    </div>
+  );
+
+  if (mode === 'analytics') return <AnalyticsSidebar modeRail={modeRail} />;
+  if (mode === 'insights') return <InsightsSidebar modeRail={modeRail} />;
+  if (mode === 'history') return <HistorySidebar modeRail={modeRail} />;
+  return <LiveSidebar modeRail={modeRail} />;
+}
+
+// ── Live ────────────────────────────────────────────────────────────────────
+
+function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+  const [q, setQ] = useState('');
+  // Read-only view of the shared dashboard cache. The right-pane
+  // OperationsDashboard owns the fetch + Ably subscription (Live mode mounts
+  // both); a second `useOperationsDashboardData` here would double-poll and
+  // double-prepend realtime activity (prependActivityEvent does not dedup).
+  const { data } = useQuery<DashboardData>({
+    queryKey: OPERATIONS_QUERY_KEY,
+    queryFn: () => Promise.reject(new Error('operations dashboard cache is produced by the right pane')),
+    enabled: false,
+    staleTime: Infinity,
+  });
+  const isLoading = !data;
+
+  const kpis = useMemo(
+    () =>
+      [
+        { key: 'all', label: 'Velocity', tone: 'text-blue-600' },
+        { key: 'tested', label: 'Tested', tone: 'text-emerald-600' },
+        { key: 'fba', label: 'FBA intake', tone: 'text-violet-600' },
+        { key: 'repair', label: 'Repair queue', tone: 'text-orange-600' },
+      ] as const,
+    [],
+  );
+
+  const feed = useMemo(() => {
+    const rows = data?.activityFeed ?? [];
+    const needle = q.trim().toLowerCase();
+    if (!needle) return rows;
+    return rows.filter(
+      (r) =>
+        r.summary?.toLowerCase().includes(needle) ||
+        r.type?.toLowerCase().includes(needle) ||
+        r.actor_name?.toLowerCase().includes(needle),
+    );
+  }, [data?.activityFeed, q]);
+
+  return (
+    <SidebarShell
+      headerAbove={modeRail}
+      search={{ value: q, onChange: setQ, placeholder: 'Search live activity…', variant: 'blue' }}
+    >
+      <div className={cn('space-y-4', SIDEBAR_GUTTER, 'pb-6')}>
+        <div className="grid grid-cols-2 gap-2">
+          {kpis.map((k) => {
+            const cell = data?.summary?.[k.key];
+            return (
+              <div key={k.key} className="rounded-xl border border-gray-200 bg-white p-2.5">
+                <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{k.label}</p>
+                <p className={cn('mt-0.5 text-xl font-black tabular-nums leading-none', k.tone)}>
+                  {cell ? cell.value.toLocaleString() : isLoading ? '·' : '0'}
+                </p>
+                <DeltaPill delta={cell?.delta ?? 0} invert={k.key === 'repair'} />
+              </div>
+            );
+          })}
+        </div>
+
+        <div>
+          <p className={cn(sectionLabel, 'mb-2')}>Live feed</p>
+          <ul className="divide-y divide-gray-100">
+            {feed.slice(0, 24).map((r) => (
+              <li key={r.id} className="flex items-start gap-2 py-1.5">
+                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-400" aria-hidden />
+                <div className="min-w-0">
+                  <p className="truncate text-caption font-semibold text-gray-900">{r.summary || r.type}</p>
+                  <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
+                    {r.source} · {r.actor_name ?? 'system'}
+                  </p>
+                </div>
+              </li>
+            ))}
+            {feed.length === 0 && (
+              <li className="py-6 text-center text-caption text-gray-400">
+                {isLoading ? 'Loading live activity…' : 'No matching activity.'}
+              </li>
+            )}
+          </ul>
+        </div>
+      </div>
+    </SidebarShell>
+  );
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const range = parseAnalyticsRange(searchParams.get('range'));
+  const activeSection = searchParams.get('section') ?? '';
+
+  const setParam = useCallback(
+    (key: 'range' | 'section', value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('mode', 'analytics');
+      params.set(key, value);
+      router.replace(`/operations?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
+
+  return (
+    <SidebarShell headerAbove={modeRail}>
+      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+        <header>
+          <h2 className="text-xl font-black uppercase leading-none tracking-tighter text-gray-900">Analytics</h2>
+          <p className="mt-1 text-eyebrow font-bold uppercase tracking-widest text-blue-600">
+            Trends · breakdowns · inventory health
+          </p>
+        </header>
+
+        <div>
+          <p className={cn(sectionLabel, 'mb-2')}>Time range</p>
+          <div className="flex flex-col gap-1">
+            {ANALYTICS_RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setParam('range', r)}
+                className={cn(
+                  'flex items-center justify-between rounded-lg border px-3 py-1.5 text-left text-caption font-semibold transition-colors',
+                  range === r
+                    ? 'border-blue-400 bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
+                    : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                )}
+              >
+                {ANALYTICS_RANGE_LABELS[r]}
+                {range === r && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className={cn(sectionLabel, 'mb-2')}>Jump to</p>
+          <ul className="flex flex-col gap-0.5">
+            {ANALYTICS_SECTIONS.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => setParam('section', s.id)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-caption font-semibold transition-colors',
+                    activeSection === s.id
+                      ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
+                      : 'text-gray-700 hover:bg-gray-50',
+                  )}
+                >
+                  <s.icon className="h-3.5 w-3.5 text-gray-400" />
+                  {s.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </SidebarShell>
+  );
+}
+
+// ── Insights (AI) ─────────────────────────────────────────────────────────────
+
+function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+  return (
+    <SidebarShell headerAbove={modeRail}>
+      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <p className="text-base font-semibold tracking-tight text-gray-900">Ops Assistant</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => emitAiChatNew()}
+            aria-label="New chat"
+            title="New chat"
+            className="-my-1 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="text-caption leading-5 text-gray-600">
+          Ask about the floor in plain English. The assistant streams its reply in the panel on the
+          right with live operations + inventory context.
+        </p>
+
+        <div className="flex flex-col gap-2.5">
+          {INSIGHTS_CAPABILITIES.map((c) => (
+            <div key={c.title} className="rounded-xl border border-gray-200 bg-white p-3">
+              <div className="flex items-center gap-2 text-gray-900">
+                <c.icon className="h-4 w-4 text-blue-500" />
+                <p className="text-caption font-semibold tracking-tight">{c.title}</p>
+              </div>
+              <p className="mt-1 text-micro leading-5 text-gray-600">{c.detail}</p>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <p className="text-micro font-black uppercase tracking-[0.2em] text-gray-500">Try asking</p>
+          <div className="mt-3 flex flex-col gap-2">
+            {INSIGHTS_PROMPTS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => emitAiChatPrompt(p)}
+                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </SidebarShell>
+  );
+}
+
+// ── History ───────────────────────────────────────────────────────────────────
+
+function ToggleChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'rounded-md px-2 py-1 text-eyebrow font-bold uppercase tracking-wide ring-1 ring-inset transition-colors',
+        active ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50',
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
+  const url = useOperationsTimelineUrlState();
+  const savedViews = useOperationsSavedViews();
+  const [naming, setNaming] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  const placeholder =
+    url.dim === 'order'
+      ? 'Search an order number…'
+      : url.dim === 'serial'
+        ? 'Search a serial number…'
+        : 'Search a tracking number…';
+
+  const dateValue: DateRange | undefined =
+    url.from || url.until
+      ? { from: url.from ? new Date(url.from) : undefined, to: url.until ? new Date(url.until) : undefined }
+      : undefined;
+
+  const onDateChange = (r: DateRange | undefined) => {
+    url.setRange(
+      r?.from ? startOfDay(r.from).toISOString() : null,
+      r?.to ? endOfDay(r.to).toISOString() : null,
+    );
+  };
+
+  const handleSaveView = () => {
+    const name = draftName.trim();
+    if (!name) return;
+    savedViews.create({ name, filters: url.filters });
+    setDraftName('');
+    setNaming(false);
+  };
+
+  return (
+    <SidebarShell
+      headerAbove={modeRail}
+      search={{
+        value: url.entityValue,
+        onChange: (v) => url.setEntity(v),
+        placeholder,
+        variant: 'blue',
+        debounceMs: 250,
+      }}
+      headerRows={[
+        <HorizontalButtonSlider
+          key="dimension"
+          items={JOURNEY_DIMENSION_ITEMS}
+          value={url.dim}
+          onChange={(id) => url.setDim(id as JourneyDimension)}
+          variant="nav"
+          dense
+          className="w-full"
+          aria-label="Journey dimension"
+        />,
+      ]}
+    >
+      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pb-6 pt-1')}>
+        {/* Date range */}
+        <div className="space-y-1.5">
+          <p className={sectionLabel}>Date range</p>
+          <DateRangePickerField value={dateValue} onChange={onDateChange} placeholder="Any time" className="w-full" />
+        </div>
+
+        {/* Stations */}
+        <div className="space-y-1.5">
+          <p className={sectionLabel}>Stations</p>
+          <div className="flex flex-wrap gap-1.5">
+            {JOURNEY_STATION_ITEMS.map((s) => (
+              <ToggleChip
+                key={s.id}
+                label={s.label}
+                active={url.stations.includes(s.id)}
+                onClick={() => url.toggleStation(s.id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Event types */}
+        <div className="space-y-1.5">
+          <p className={sectionLabel}>Event types</p>
+          <div className="flex flex-wrap gap-1.5">
+            {JOURNEY_TYPE_ITEMS.map((t) => (
+              <ToggleChip
+                key={t.id}
+                label={t.label}
+                active={url.types.includes(t.id)}
+                onClick={() => url.toggleType(t.id)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {url.activeFilterCount > 0 ? (
+          <button
+            type="button"
+            onClick={url.clearFilters}
+            className="inline-flex items-center gap-1.5 text-caption font-semibold text-gray-500 hover:text-gray-700"
+          >
+            <X className="h-3.5 w-3.5" /> Clear {url.activeFilterCount} filter
+            {url.activeFilterCount === 1 ? '' : 's'}
+          </button>
+        ) : null}
+
+        {/* Saved views */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <p className={sectionLabel}>Saved views</p>
+            <button
+              type="button"
+              onClick={() => setNaming((v) => !v)}
+              className="-my-0.5 inline-flex items-center gap-0.5 text-eyebrow font-bold uppercase tracking-wide text-blue-600 hover:text-blue-700"
+            >
+              <Plus className="h-3.5 w-3.5" /> Save
+            </button>
+          </div>
+
+          {naming ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveView();
+                  if (e.key === 'Escape') {
+                    setNaming(false);
+                    setDraftName('');
+                  }
+                }}
+                placeholder="Name this view…"
+                className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-caption text-gray-900 focus:border-blue-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSaveView}
+                disabled={!draftName.trim() || savedViews.creating}
+                className="rounded-md bg-blue-600 px-2 py-1 text-eyebrow font-bold uppercase tracking-wide text-white disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          ) : null}
+          {savedViews.createError ? (
+            <p className="text-micro font-semibold text-rose-600">{savedViews.createError}</p>
+          ) : null}
+
+          {savedViews.views.length > 0 ? (
+            <ul className="divide-y divide-gray-100">
+              {savedViews.views.map((v) => (
+                <li key={v.id} className="flex items-center gap-2 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() => url.applyView(v.filters)}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                  >
+                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span className="truncate text-caption font-semibold text-gray-700">{v.name}</span>
+                    {v.is_shared ? (
+                      <span className="shrink-0 rounded bg-gray-100 px-1 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-gray-500">
+                        Shared
+                      </span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(`Delete the saved view “${v.name}”?`)) savedViews.remove(v.id);
+                    }}
+                    aria-label={`Delete view ${v.name}`}
+                    className="-my-0.5 shrink-0 text-gray-300 hover:text-rose-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : !naming ? (
+            <p className="text-micro leading-5 text-gray-400">
+              Save the current filters as a named view to reuse later.
+            </p>
+          ) : null}
+        </div>
+
+        {/* Teaching card */}
+        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
+          <p className="text-caption font-semibold text-gray-700">Operations journey</p>
+          <p className="mt-1 text-micro leading-5 text-gray-500">
+            Search a serial, order, or tracking number to see its complete journey across every
+            station — or browse recent journeys here. Pick the dimension above.
+          </p>
+        </div>
+      </div>
+    </SidebarShell>
+  );
+}
+
+// ── Shared bits ───────────────────────────────────────────────────────────────
+
+function DeltaPill({ delta, invert = false }: { delta: number; invert?: boolean }) {
+  if (!delta) return <p className="mt-1 text-eyebrow font-semibold text-gray-400">No change</p>;
+  const positive = invert ? delta < 0 : delta > 0;
+  return (
+    <p
+      className={cn(
+        'mt-1 inline-flex items-center gap-0.5 text-eyebrow font-black tabular-nums',
+        positive ? 'text-emerald-600' : 'text-rose-600',
+      )}
+    >
+      <TrendingUp className={cn('h-3 w-3', delta < 0 && 'rotate-180')} />
+      {delta > 0 ? '+' : ''}
+      {delta}%
+    </p>
+  );
+}

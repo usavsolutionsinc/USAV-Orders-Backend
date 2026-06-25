@@ -10,6 +10,7 @@ import { AboutSection } from '@/components/settings/sections/AboutSection';
 import { SecuritySection } from '@/components/settings/sections/SecuritySection';
 import { SessionsSection } from '@/components/settings/sections/SessionsSection';
 import { CatalogSection } from '@/components/settings/sections/CatalogSection';
+import { LegalSection } from '@/components/settings/sections/LegalSection';
 import { getActiveSettingsSection } from '@/components/settings/settings-sections';
 
 const LEGACY_REDIRECTS: Record<string, string> = {
@@ -52,6 +53,7 @@ export default function SettingsPage() {
           {active === 'sessions' && <SessionsSection />}
           {active === 'catalog' && <CatalogSection />}
           {active === 'about' && <AboutSection />}
+          {active === 'legal' && <LegalSection />}
         </div>
       </main>
     </div>

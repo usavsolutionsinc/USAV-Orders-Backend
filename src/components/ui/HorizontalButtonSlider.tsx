@@ -114,6 +114,12 @@ export type HorizontalButtonSliderProps = {
    * ring so the gray fill meets the panel edges.
    */
   segmentedFlush?: boolean;
+  /**
+   * Sticky overlay inside a scrolling rail — skips the horizontal scroller so
+   * `overflow-x-auto` does not clip the active pill's drop shadow. Use with
+   * {@link sidebarNavOverlayBandClass} on the wrapper.
+   */
+  overlay?: boolean;
   'aria-label'?: string;
 };
 
@@ -128,6 +134,7 @@ export function HorizontalButtonSlider({
   legend,
   navIconOnly = false,
   segmentedFlush = false,
+  overlay = false,
   'aria-label': ariaLabel,
 }: HorizontalButtonSliderProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -149,11 +156,11 @@ export function HorizontalButtonSlider({
   const scrollerPadY =
     variant === 'nav' ? (dense ? 'py-1' : 'pt-2 pb-3') : 'pb-0.5';
 
-  // `floating` and `segmented` always fit (segmented splits the width evenly),
-  // so they skip the scroller — floating to avoid clipping pill shadows,
-  // segmented so flex-1 children can stretch instead of sitting min-w-max.
+  // `floating`, `overlay` nav, and `segmented` skip the scroller — floating and
+  // overlay to avoid clipping pill shadows; segmented so flex-1 children stretch.
   const isSegmented = variant === 'segmented';
-  const useScroller = variant !== 'floating' && !isSegmented;
+  const isOverlayNav = overlay && variant === 'nav';
+  const useScroller = variant !== 'floating' && !isSegmented && !isOverlayNav;
   const containerClass = isSegmented
     ? segmentedFlush
       ? // Full-bleed sidebar band: square white fill + bottom hairline (matches header bands).
@@ -163,7 +170,9 @@ export function HorizontalButtonSlider({
         'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
     : useScroller
       ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
-      : 'overflow-visible py-2';
+      : isOverlayNav
+        ? 'overflow-visible'
+        : 'overflow-visible py-2';
 
   return (
     <div className={className}>

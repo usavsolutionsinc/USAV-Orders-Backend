@@ -3,8 +3,8 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { EmptyState } from '@/design-system/primitives';
-import { ZendeskTicketDetail } from './ZendeskTicketDetail';
-import { ZendeskTicketListContainer } from './ZendeskTicketListContainer';
+import { SupportTicketDetail } from './chat/SupportTicketDetail';
+import { SupportTicketQueue } from './queue/SupportTicketQueue';
 
 /**
  * /support page body. The ticket queue lives in the contextual sidebar
@@ -43,14 +43,14 @@ export function SupportWorkspace() {
       {/* Mobile/tablet (<md): no contextual sidebar, so the queue lives here. */}
       {!selectedId ? (
         <div className="flex h-full w-full flex-col border-r border-gray-200 bg-white md:hidden">
-          <ZendeskTicketListContainer />
+          <SupportTicketQueue />
         </div>
       ) : null}
 
       {/* Detail: full page on md+, full screen on mobile once a ticket is picked. */}
       <div className={`${selectedId ? 'flex' : 'hidden md:flex'} h-full min-h-0 w-full flex-col`}>
         {selectedId != null ? (
-          <ZendeskTicketDetail ticketId={selectedId} onBack={clearSelection} />
+          <SupportTicketDetail ticketId={selectedId} onBack={clearSelection} />
         ) : (
           <div className="flex h-full items-center justify-center">
             <EmptyState

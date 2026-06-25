@@ -52,6 +52,21 @@ function asPositiveInt(...values: unknown[]): number {
   return 0;
 }
 
+/**
+ * First finite, non-negative numeric value → a Number (unit cost / rate); else
+ * null. Zoho PO line `rate` arrives as a number or numeric string. NULL (not 0)
+ * for missing so we never fabricate a $0 cost. Receiving redesign Phase 1:
+ * mirror of the Zoho line.rate into receiving_lines.unit_price (Zoho = SoR).
+ */
+function asMoney(...values: unknown[]): number | null {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const n = Number(value);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return null;
+}
+
 function getZohoLastModifiedTime(row: AnyRow): string | null {
   return asString(
     row.last_modified_time,
@@ -349,6 +364,8 @@ async function syncPurchaseOrderLines(
       zoho_purchaseorder_number: poNumber,
       item_name: asString(line.name, line.item_name),
       sku: asString(line.sku),
+      // Read-only mirror of the Zoho PO line unit cost (Zoho = SoR). Phase 1.
+      unit_price: asMoney(line.rate),
       quantity_received: 0,
       quantity_expected: quantityExpected,
       qa_status: 'PENDING',
@@ -370,6 +387,7 @@ async function syncPurchaseOrderLines(
         'zoho_purchaseorder_number',
         'item_name',
         'sku',
+        'unit_price',
         'quantity_expected',
         'notes',
         'zoho_sync_source',
@@ -698,6 +716,8 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
         zoho_purchaseorder_number: asString(receive.purchaseorder_number),
         item_name: asString(line.name, line.item_name),
         sku: asString(line.sku),
+        // Read-only mirror of the Zoho receive line unit cost (Zoho = SoR). Phase 1.
+        unit_price: asMoney(line.rate),
         quantity_received: qty,
         quantity_expected: asPositiveInt(line.quantity),
         qa_status: 'PENDING',
@@ -717,6 +737,7 @@ export async function importZohoPurchaseReceiveToReceiving(options: {
           'zoho_purchaseorder_number',
           'item_name',
           'sku',
+          'unit_price',
           'quantity_received',
           'quantity_expected',
           'notes',

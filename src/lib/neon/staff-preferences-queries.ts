@@ -17,6 +17,31 @@ export interface StaffPreferences {
   focusScanHotkey?: string | null;
   /** Color theme. Absent = light (the default). Drives `data-theme` on <html>. */
   theme?: 'light' | 'dark' | null;
+  /**
+   * Unshipped shelf-board layout prefs (cross-device). `columns` is the 1-up /
+   * 2-up bubble layout; `range` is the picked date filter (ISO day strings);
+   * `order` is the staffer's drag-reordered lane order (top → bottom); `lanes`
+   * holds per-state sort + expand. Callers send the full object since the JSONB
+   * merge is shallow at this key.
+   */
+  unshippedBoard?: {
+    columns?: 1 | 2;
+    range?: { from?: string | null; to?: string | null } | null;
+    /** Drag-reordered lane order. Any state missing here falls back to the
+     *  canonical SHELF_ORDER (appended in order), so a partial list is safe. */
+    order?: Array<'PENDING' | 'TESTED' | 'BLOCKED'>;
+    lanes?: Partial<
+      Record<
+        'PENDING' | 'TESTED' | 'BLOCKED',
+        {
+          sort?: 'priority' | 'newest' | 'deadline' | 'price' | 'staff';
+          expanded?: boolean;
+          /** Drag-resized body height (px); `null`/absent → expanded/collapsed preset. */
+          height?: number | null;
+        }
+      >
+    >;
+  } | null;
 }
 
 /** Read one staffer's prefs bag (empty object when no row yet). */

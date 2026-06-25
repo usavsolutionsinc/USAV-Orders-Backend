@@ -62,6 +62,25 @@ export interface OrdersQueueTableProps {
   selectionScope?: string;
   /** Surface-specific row chrome (fulfillment / labels / staged). */
   queueMode?: OrdersQueueMode;
+  /** Suppress the built-in WeekHeader/banner so an embedder (e.g. the shelf-board
+   *  bubble cards) can supply its own header. Body + scroll behavior unchanged. */
+  hideHeader?: boolean;
+  /** Day-header style — `band` (default) or the slim `chip` used by the board. */
+  dateHeaderVariant?: 'band' | 'chip';
+  /** Clip horizontal overflow instead of scrolling it (no bottom scrollbar).
+   *  Used by the shelf-board bubbles, which are vertical-only. */
+  noHorizontalScroll?: boolean;
+  /** Size the body to its CONTENT up to a max (instead of filling a fixed-height
+   *  parent). The scroll body becomes `max-h` + `overflow-y-auto`, so a short
+   *  table leaves no empty space and a long one scrolls. Used by the shelf-board
+   *  bubbles. Pair with `maxBodyHeightClass` (default) or `maxBodyHeightPx`. */
+  autoHeight?: boolean;
+  /** Tailwind max-height utility for the `autoHeight` body (e.g. `max-h-[70vh]`).
+   *  Ignored when `maxBodyHeightPx` is set. */
+  maxBodyHeightClass?: string;
+  /** Explicit px cap for the `autoHeight` body — wins over `maxBodyHeightClass`.
+   *  Drives the drag-to-resize handle on the shelf-board bubbles. */
+  maxBodyHeightPx?: number;
 }
 
 export function OrdersQueueTable({
@@ -90,10 +109,32 @@ export function OrdersQueueTable({
   selectMode = false,
   selectionScope = 'orders-queue',
   queueMode = 'fulfillment',
+  hideHeader = false,
+  dateHeaderVariant = 'band',
+  noHorizontalScroll = false,
+  autoHeight = false,
+  maxBodyHeightClass,
+  maxBodyHeightPx,
 }: OrdersQueueTableProps) {
   const { isMobile } = useUIModeOptional();
   const { getStaffName } = useStaffNameMap();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // `autoHeight`: the body sizes to content, capped by a max-height (px wins over
+  // class), so short tables leave no trailing whitespace and tall ones scroll.
+  const rootClass = autoHeight
+    ? 'flex min-w-0 w-full bg-white relative'
+    : 'flex h-full min-w-0 flex-1 bg-white relative';
+  const columnClass = autoHeight
+    ? 'flex flex-col w-full min-w-0'
+    : 'flex-1 flex flex-col overflow-hidden';
+  const xScroll = noHorizontalScroll ? 'overflow-x-hidden' : 'overflow-x-auto';
+  const bodyScrollClass = autoHeight
+    ? `${xScroll} overflow-y-auto no-scrollbar w-full ${maxBodyHeightPx == null ? maxBodyHeightClass ?? '' : ''}`
+    : `flex-1 ${xScroll} overflow-y-auto no-scrollbar w-full`;
+  const bodyScrollStyle =
+    autoHeight && maxBodyHeightPx != null ? { maxHeight: maxBodyHeightPx } : undefined;
+  const emptyPadClass = autoHeight ? 'py-10' : 'py-40';
 
   const { visibleRecords, orderGroupsByDate, displayedRecords, totalCount } = useOrdersQueueRows({
     records,
@@ -178,8 +219,8 @@ export function OrdersQueueTable({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col bg-gray-50 overflow-hidden">
-        {bannerTitle ? (
+      <div className={autoHeight ? 'flex flex-col bg-gray-50' : 'flex-1 flex flex-col bg-gray-50 overflow-hidden'}>
+        {hideHeader ? null : bannerTitle ? (
           <QueueTableBanner
             title={bannerTitle}
             subtitle={bannerSubtitle}
@@ -190,17 +231,20 @@ export function OrdersQueueTable({
             <div className="h-4 w-32 bg-gray-100 rounded animate-pulse" />
           </div>
         )}
-        <div className="flex-1 overflow-y-auto no-scrollbar">
-          <SkeletonList count={12} />
+        <div
+          className={autoHeight ? `overflow-y-auto no-scrollbar ${maxBodyHeightPx == null ? maxBodyHeightClass ?? '' : ''}` : 'flex-1 overflow-y-auto no-scrollbar'}
+          style={bodyScrollStyle}
+        >
+          <SkeletonList count={autoHeight ? 6 : 12} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1 bg-white relative">
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {bannerTitle ? (
+    <div className={rootClass}>
+      <div className={columnClass}>
+        {hideHeader ? null : bannerTitle ? (
           <QueueTableBanner
             title={bannerTitle}
             subtitle={bannerSubtitle}
@@ -222,9 +266,9 @@ export function OrdersQueueTable({
           />
         )}
 
-        <div ref={scrollRef} className="flex-1 overflow-x-auto overflow-y-auto no-scrollbar w-full">
+        <div ref={scrollRef} className={bodyScrollClass} style={bodyScrollStyle}>
           {orderGroupsByDate.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-40 text-center">
+            <div className={`flex flex-col items-center justify-center ${emptyPadClass} text-center`}>
               {searchValue ? (
                 <OrderSearchEmptyState
                   query={searchValue}
@@ -257,6 +301,7 @@ export function OrdersQueueTable({
                   groups={groups}
                   isMobile={isMobile}
                   renderRow={renderRow}
+                  dateHeaderVariant={dateHeaderVariant}
                 />
               ))}
             </div>

@@ -44,6 +44,15 @@ const QcChecklistWorkspace = dynamic(
   },
 );
 
+// Lazy-load the kit-parts ("what's in the box") workspace — only mounts when view=kit.
+const KitPartsWorkspace = dynamic(
+  () => import('./KitPartsWorkspace').then((m) => m.KitPartsWorkspace),
+  {
+    ssr: false,
+    loading: () => <div className="p-6 text-sm text-gray-400">Loading kit parts…</div>,
+  },
+);
+
 export function ProductsWorkspace() {
   const searchParams = useSearchParams();
   const view = searchParams.get('view');
@@ -61,6 +70,9 @@ export function ProductsWorkspace() {
   // QC view: right pane shows the selected SKU's QC checklist (selection comes
   // from the sidebar's QcProductPicker via `?skuId=`).
   if (view === 'qc') return <QcChecklistWorkspace />;
+  // Kit Parts view: right pane shows the selected SKU's "what's in the box" BOM
+  // editor (selection comes from the sidebar's KitPartsPicker via `?skuId=`).
+  if (view === 'kit') return <KitPartsWorkspace />;
   // Manuals (default) renders the PDF viewer in the main pane — selection
   // comes from the sidebar's LibraryBrowser (`?id=`).
   return <ManualLibrary />;

@@ -22,7 +22,11 @@ loadEnv({ path: resolve(process.cwd(), ".env"), quiet: true });
 
 const DEV_PORT = Number(process.env.PORT || process.env.DEV_PORT || 3000);
 const DEFAULT_TUNNEL = "usav-dev";
-const DEFAULT_HOST = "usav-dev.michaelgarisek.com";
+// Display-only public hostname. With a connector token the real hostname comes
+// from the Cloudflare dashboard route; override here when the token points at a
+// different tunnel than the default `usav-dev` one.
+const DEFAULT_HOST =
+  process.env.CLOUDFLARE_DEV_TUNNEL_HOST?.trim() || "usav-dev.michaelgarisek.com";
 
 const BLUE = "\x1b[34m";
 const CYAN = "\x1b[36m";

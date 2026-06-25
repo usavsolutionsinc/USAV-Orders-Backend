@@ -13,10 +13,50 @@ export type QueueRowRecord = ShippedOrder & Record<string, unknown>;
 /** Which surface owns this table — drives status dots and tracking affordances. */
 export type OrdersQueueMode = 'fulfillment' | 'labels' | 'staged';
 
-/** Sort order for the date-banded queue. `priority` (default) keeps the current
- *  behavior (soonest deadline, Awaiting-before-Pending within a day); `newest`
- *  bands by created date, most-recently-added first. */
-export type OrdersQueueSort = 'priority' | 'newest';
+/** Sort order for the date-banded queue.
+ *  - `priority` (default): soonest deadline, Awaiting-before-Pending within a day.
+ *  - `newest`: bands by created date, most-recently-added first.
+ *  - `deadline`: bands by deadline date; most-overdue first within a day.
+ *  - `price`: keeps deadline date bands; highest sale price first within a day.
+ *  - `staff`: keeps deadline date bands; clusters by assigned tester/packer name. */
+export type OrdersQueueSort = 'priority' | 'newest' | 'deadline' | 'price' | 'staff';
+
+/** The full set of selectable sort values, in cycle/menu order. */
+export const ORDERS_QUEUE_SORTS: OrdersQueueSort[] = ['priority', 'newest', 'deadline', 'price', 'staff'];
+
+/** Human label per sort, shared by the board cycle button and any sort menu. */
+export const ORDERS_QUEUE_SORT_LABEL: Record<OrdersQueueSort, string> = {
+  priority: 'Priority',
+  newest: 'Newest',
+  deadline: 'Deadline',
+  price: 'Price',
+  staff: 'Staff',
+};
+
+/** Coerce a raw `?sort` value to a known sort, falling back to `priority`. */
+export function parseOrdersQueueSort(raw: string | null | undefined): OrdersQueueSort {
+  const v = String(raw || '').toLowerCase();
+  return (ORDERS_QUEUE_SORTS as string[]).includes(v) ? (v as OrdersQueueSort) : 'priority';
+}
+
+/** Best-effort numeric sale amount for sorting (NaN-safe → treated as lowest). */
+export function saleAmountValue(record: QueueRowRecord): number {
+  const n = Number(record.sale_amount);
+  return Number.isFinite(n) ? n : -Infinity;
+}
+
+/** Assigned-staff sort key — tester then packer name, lowercased; empty sorts last. */
+export function staffSortKey(record: QueueRowRecord): string {
+  const tester = normalizePersonName(
+    (record.tested_by_name as string | undefined) || (record.tester_name as string | undefined),
+  );
+  const packer = normalizePersonName(
+    (record.packed_by_name as string | undefined) || (record.packer_name as string | undefined),
+  );
+  const name = (tester !== '---' ? tester : packer !== '---' ? packer : '').toLowerCase();
+  // Unassigned rows sort to the end of each day band.
+  return name || '￿';
+}
 
 export interface RowStatusMeta {
   dot: string;

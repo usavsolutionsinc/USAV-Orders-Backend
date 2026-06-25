@@ -29,6 +29,15 @@ export const sidebarHeaderBandClass = `shrink-0 bg-white ${receivingHeaderHairli
 // The workspace keeps receivingIdentityBandClass directly (12px), so this only
 // moves sidebar chrome — the two panes stay decoupled.
 export const sidebarHeaderPillRowClass = cn(receivingIdentityBandClass, SIDEBAR_GUTTER);
+/**
+ * Sticky `nav` pill band inside a scrolling sidebar body — transparent (no bg
+ * fill) so the active pill's drop shadow renders over rail rows beneath.
+ * Pair with `HorizontalButtonSlider variant="nav" dense overlay`.
+ */
+export const sidebarNavOverlayBandClass = cn(
+  'sticky top-0 z-10 flex shrink-0 items-center overflow-visible pt-1 pb-2.5',
+  SIDEBAR_GUTTER,
+);
 export const sidebarHeaderRowClass = `flex min-h-[44px] items-center ${SIDEBAR_GUTTER} py-1`;
 // 40px search-bar band — locks the sidebar search row to the SAME 40px grid as
 // sidebarHeaderPillRowClass so a search row stacked above a pill/tab row reads as

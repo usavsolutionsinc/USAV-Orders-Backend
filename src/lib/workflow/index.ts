@@ -22,6 +22,7 @@ import './nodes/inspection.node';
 import './nodes/repair.node';
 import './nodes/list-ebay.node';
 import './nodes/pack.node';
+import './nodes/kit-verify.node';
 import './nodes/ship.node';
 import './nodes/decision.node';
 

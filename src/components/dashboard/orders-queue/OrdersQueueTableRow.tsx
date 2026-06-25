@@ -50,6 +50,8 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   hasOutOfStock,
   outOfStockValue,
   daysLate,
+  testerDisplay,
+  packerDisplay,
   isMobile,
   onRowClick,
 }: OrdersQueueTableRowProps) {
@@ -74,6 +76,12 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     String(record.item_number || '').trim() || skuScanPrefixBeforeColon(trackingRaw),
   );
   const salePrice = formatSalePrice(record.sale_amount, record.currency);
+  // Assigned staff, surfaced contextually so the `staff` sort is legible in-row.
+  const hasTester = testerDisplay && testerDisplay !== '---';
+  const hasPacker = packerDisplay && packerDisplay !== '---';
+  const staffLabel = [hasTester ? testerDisplay : null, hasPacker ? packerDisplay : null]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <motion.div
@@ -135,6 +143,9 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
               ) : null}
               {daysLate !== null ? (
                 <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
+              ) : null}
+              {staffLabel ? (
+                <span className="normal-case tracking-normal text-gray-500">{staffLabel}</span>
               ) : null}
               {hasOutOfStock ? (
                 <span className="text-red-600">{outOfStockValue}</span>

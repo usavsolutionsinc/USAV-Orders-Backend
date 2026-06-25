@@ -127,7 +127,7 @@ test('getSidebarHref resolves every sidebar page to its real route', () => {
   for (const item of APP_SIDEBAR_NAV) {
     assert.equal(getSidebarHref(item.id), item.href, `${item.id} href mismatch`);
   }
-  // Modeless pages (not in SIDEBAR_PAGE_NAV) still resolve.
+  // Pages resolve to their canonical href (modeful or modeless).
   assert.equal(getSidebarHref('operations'), '/operations');
   assert.equal(getSidebarHref('admin'), '/admin');
   assert.equal(getSidebarHref('settings'), '/settings');
@@ -139,7 +139,17 @@ test('getSidebarHref resolves every sidebar page to its real route', () => {
 test('resolveSidebarMode returns null for pages without modes', () => {
   assert.equal(getSidebarPageNav('support'), undefined);
   assert.equal(resolveSidebarMode('support', { pathname: '/support', params: new URLSearchParams() }), null);
-  assert.equal(resolveSidebarMode('operations', { pathname: '/operations', params: new URLSearchParams() }), null);
+  assert.equal(resolveSidebarMode('settings', { pathname: '/settings', params: new URLSearchParams() }), null);
+});
+
+// Operations is modeful: bare /operations is Live; ?mode= drives the rest.
+test('resolveSidebarMode reads the operations mode', () => {
+  const at = (search = '') => ({ pathname: '/operations', params: new URLSearchParams(search) });
+  assert.equal(resolveSidebarMode('operations', at()), 'live');
+  assert.equal(resolveSidebarMode('operations', at('mode=analytics')), 'analytics');
+  assert.equal(resolveSidebarMode('operations', at('mode=insights')), 'insights');
+  assert.equal(resolveSidebarMode('operations', at('mode=history')), 'history');
+  assert.equal(resolveSidebarMode('operations', at('mode=bogus')), 'live');
 });
 
 // Packing is modeful: bare /packer is Standard; ?packMode= drives Fragile/Multi.

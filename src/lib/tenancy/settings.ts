@@ -86,6 +86,21 @@ export const OrgSettingsSchema = z.object({
       claims: NasStorageTargetSchema.default(DEFAULT_NAS_STORAGE_TARGETS.claims),
     })
     .default(DEFAULT_NAS_STORAGE_TARGETS),
+  // Per-org packing-checklist enforcement (the "box until matched" toggle).
+  // 'advisory' (default) — the kit-parts pack checklist is informational; a
+  //   discrepancy is surfaced but never blocks. Matches the repo's "QC never
+  //   blocks" philosophy.
+  // 'block_until_matched' — the packer is shown a hard blocker until every
+  //   *critical* expected kit part is confirmed. GRACEFUL DEGRADATION is
+  //   load-bearing: enforcement only bites when expected items are KNOWN (the
+  //   SKU has critical sku_kit_parts rows). A SKU with no BOM ⇒ nothing to
+  //   match ⇒ the pack proceeds regardless of the mode, so a tenant who hasn't
+  //   populated its catalog can never brick its own packing by flipping this on.
+  packing: z
+    .object({
+      enforcement: z.enum(['advisory', 'block_until_matched']).default('advisory'),
+    })
+    .default({ enforcement: 'advisory' }),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -120,6 +135,13 @@ export function getAllNasBaseUrls(settings: OrgSettings): string[] {
   return [servers.test, servers.prod]
     .map((u) => (u || '').trim().replace(/\/+$/, ''))
     .filter(Boolean);
+}
+
+/** Packing-checklist enforcement mode for this org. See OrgSettingsSchema.packing. */
+export type PackingEnforcement = OrgSettings['packing']['enforcement'];
+
+export function getPackingEnforcement(settings: OrgSettings): PackingEnforcement {
+  return settings.packing?.enforcement ?? 'advisory';
 }
 
 export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;

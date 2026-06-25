@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { ChevronLeft } from '@/components/Icons';
+import { ChevronLeft, Menu } from '@/components/Icons';
 import { GlobalHeaderActions } from '@/components/layout/GlobalHeaderActions';
 import { HeaderGoalChip } from '@/components/layout/HeaderGoalChip';
 
@@ -20,15 +20,27 @@ import { HeaderGoalChip } from '@/components/layout/HeaderGoalChip';
  */
 export const MobileTopBar = ({
   onBack,
+  onMenu,
   actions,
 }: {
   /** When provided, renders a back button on the far left. */
   onBack?: () => void;
+  /** When provided, renders the sidebar-drawer toggle on the far left. */
+  onMenu?: () => void;
   /** Page-specific controls, placed left of the global actions. */
   actions?: ReactNode;
 }) => (
   <header className="sticky top-0 z-header flex w-full shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80">
     <div className="flex min-w-0 items-center gap-2">
+      {onMenu && (
+        <button
+          onClick={onMenu}
+          aria-label="Open menu"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all active:scale-90"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      )}
       {onBack && (
         <button
           onClick={onBack}

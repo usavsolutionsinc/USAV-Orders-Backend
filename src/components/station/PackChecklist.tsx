@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, AlertCircle } from '../Icons';
+import { Check, AlertCircle, Info } from '../Icons';
+import { evaluateKitReadiness, type PackingEnforcement } from '@/lib/packing/kit-readiness';
 
 /** A kit/accessory part the box must contain (from sku_kit_parts BOM). */
 export interface PackKitPart {
@@ -30,6 +31,15 @@ interface PackChecklistProps {
    * per-product surface, so a new scan starts fresh.
    */
   resetKey?: string | null;
+  /**
+   * Org enforcement mode (from usePackingPolicy). 'block_until_matched' shows a
+   * hard blocker until every critical kit part is confirmed; 'advisory'
+   * (default) only warns. Graceful degradation: a SKU with no critical parts is
+   * never blocked, whatever the mode.
+   */
+  enforcement?: PackingEnforcement;
+  /** Notified when the blocked state flips, so a host can gate its complete CTA. */
+  onBlockedChange?: (blocked: boolean) => void;
   className?: string;
 }
 
@@ -52,7 +62,14 @@ const PART_TYPE_TAG: Record<string, string> = {
  * no BOM and no checks, which is the graceful-degradation path for tenants who
  * haven't populated their catalog.
  */
-export function PackChecklist({ kitParts, checks, resetKey, className }: PackChecklistProps) {
+export function PackChecklist({
+  kitParts,
+  checks,
+  resetKey,
+  enforcement = 'advisory',
+  onBlockedChange,
+  className,
+}: PackChecklistProps) {
   const [ticked, setTicked] = useState<Set<string>>(new Set());
 
   // Fresh product → fresh checklist.
@@ -68,14 +85,29 @@ export function PackChecklist({ kitParts, checks, resetKey, className }: PackChe
       return next;
     });
 
-  const criticalKeys = useMemo(
-    () => kitParts.filter((p) => p.critical).map((p) => `part-${p.id}`),
-    [kitParts],
-  );
   const totalItems = kitParts.length + checks.length;
   const doneCount = ticked.size;
-  const criticalRemaining = criticalKeys.filter((k) => !ticked.has(k)).length;
-  const allCriticalIn = criticalKeys.length > 0 && criticalRemaining === 0;
+
+  // Matched/blocked verdict comes from the shared SoT (kit-readiness) so the
+  // packer banner and the kit_verify engine node can never disagree.
+  const confirmedPartIds = useMemo(
+    () => kitParts.filter((p) => ticked.has(`part-${p.id}`)).map((p) => p.id),
+    [kitParts, ticked],
+  );
+  const readiness = useMemo(
+    () =>
+      evaluateKitReadiness(
+        kitParts.map((p) => ({ id: p.id, critical: p.critical })),
+        confirmedPartIds,
+        enforcement,
+      ),
+    [kitParts, confirmedPartIds, enforcement],
+  );
+
+  // Let a host (StationPacking) gate its complete CTA on the blocked state.
+  useEffect(() => {
+    onBlockedChange?.(readiness.blocked);
+  }, [readiness.blocked, onBlockedChange]);
 
   if (totalItems === 0) return null;
 
@@ -130,24 +162,36 @@ export function PackChecklist({ kitParts, checks, resetKey, className }: PackChe
         </ChecklistGroup>
       )}
 
-      {/* Footer signal — advisory only (never blocks in Phase 1) */}
-      {criticalKeys.length > 0 && (
+      {/* Footer signal — informative, never restrictive. block_until_matched
+          raises the emphasis (indigo + info) on what still needs including;
+          advisory keeps it a quiet amber note. Graceful degradation: no critical
+          parts ⇒ requiredTotal 0 ⇒ no footer. */}
+      {readiness.requiredTotal > 0 && (
         <div
           className={`flex items-center gap-1.5 px-3 py-2 text-eyebrow font-bold border-t ${
-            allCriticalIn
+            readiness.allRequiredIn
               ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
-              : 'text-amber-700 bg-amber-50 border-amber-100'
+              : readiness.blocked
+                ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                : 'text-amber-700 bg-amber-50 border-amber-100'
           }`}
         >
-          {allCriticalIn ? (
+          {readiness.allRequiredIn ? (
             <>
               <Check className="w-3.5 h-3.5 shrink-0" />
               All required items in the box
             </>
+          ) : readiness.blocked ? (
+            <>
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              {readiness.missingRequiredIds.length} required{' '}
+              {readiness.missingRequiredIds.length === 1 ? 'item' : 'items'} to include in this box
+            </>
           ) : (
             <>
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              {criticalRemaining} required {criticalRemaining === 1 ? 'item' : 'items'} not yet confirmed
+              {readiness.missingRequiredIds.length} required{' '}
+              {readiness.missingRequiredIds.length === 1 ? 'item' : 'items'} not yet confirmed
             </>
           )}
         </div>

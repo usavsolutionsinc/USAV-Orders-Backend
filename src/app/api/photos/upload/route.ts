@@ -5,9 +5,13 @@ import { uploadPhoto } from '@/lib/photos/service';
 import { uploadPermissionFor } from '@/lib/photos/entity-permissions';
 import type { PhotoEntityType, PhotoLinkRole } from '@/lib/photos/types';
 import { PHOTO_ENTITY_TYPES, PHOTO_LINK_ROLES } from '@/lib/photos/types';
-import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
+import {
+  publishReceivingPhotoChanged,
+  publishPackerPhotoChanged,
+} from '@/lib/realtime/publish';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
+import { countPackerPhotos } from '@/lib/photos/queries/packer-list';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
@@ -88,6 +92,16 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           source: 'photos.upload',
         });
       }
+    } else if (entityType === 'PACKER_LOG') {
+      await publishPackerPhotoChanged({
+        organizationId: ctx.organizationId as OrgId,
+        action: 'insert',
+        packerLogId: entityId,
+        orderId: poRef,
+        photoId: result.id,
+        totalPhotoCount: await countPackerPhotos(ctx.organizationId, entityId),
+        source: 'photos.upload',
+      });
     }
 
     return NextResponse.json({

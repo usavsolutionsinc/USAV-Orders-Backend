@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { EventTimeline, type TimelineGroupMode } from './EventTimeline';
-import type { TimelineItem } from '@/lib/timeline/types';
+import type { TimelineItem, TimelineGroupKey } from '@/lib/timeline/types';
 
 /**
  * The drop-in activity-timeline block for any detail panel: a quiet section
@@ -24,6 +24,8 @@ export interface TimelineSectionProps {
   density?: 'comfortable' | 'compact';
   /** Identifier grouping (serial↔order toggle), forwarded to {@link EventTimeline}. */
   groupMode?: TimelineGroupMode;
+  /** Override band bucketing in serial mode, forwarded to {@link EventTimeline}. */
+  groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -54,6 +56,7 @@ export function TimelineSection({
   emptyMessage = 'No activity recorded yet.',
   density = 'comfortable',
   groupMode = 'time',
+  groupKeyOf,
   className = 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
@@ -67,7 +70,13 @@ export function TimelineSection({
       {loading ? (
         <TimelineSkeleton />
       ) : (
-        <EventTimeline items={items} emptyMessage={emptyMessage} density={density} groupMode={groupMode} />
+        <EventTimeline
+          items={items}
+          emptyMessage={emptyMessage}
+          density={density}
+          groupMode={groupMode}
+          groupKeyOf={groupKeyOf}
+        />
       )}
     </section>
   );

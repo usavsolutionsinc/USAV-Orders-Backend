@@ -45,7 +45,10 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
   const serialValue = (row.serial_number || '').trim();
   const photos = Array.isArray(row.packer_photos_url) ? row.packer_photos_url : [];
 
-  const photosHref = packerLogId ? `/m/p/${packerLogId}/photos` : null;
+  // Carry the real order number so packer photos file under it in the library.
+  const photosHref = packerLogId
+    ? `/m/p/${packerLogId}/photos${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ''}`
+    : null;
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">
@@ -89,12 +92,10 @@ export function MobilePackingSheet({ row, open, onClose }: MobilePackingSheetPro
             href={photosHref}
             prefetch={false}
             onClick={onClose}
-            className="flex h-14 w-full items-center justify-center gap-3 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
+            aria-label="Take photos"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />
-            <span className="text-sm font-black uppercase tracking-[0.18em]">
-              Take Photos
-            </span>
           </Link>
         ) : (
           <p className="rounded-2xl bg-rose-50 px-4 py-3 text-center text-caption font-semibold text-rose-700">

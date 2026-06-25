@@ -13,13 +13,13 @@ import {
 import { PhotoFolderTree } from './PhotoFolderTree';
 import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
-import { PhotoLibrarySidebarNav } from './PhotoLibrarySidebarNav';
+import { PhotoStationFolders } from './PhotoStationFolders';
 import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
 export function PhotoLibrarySidebarPanel() {
-  const { filters, patch, setDatePreset, setSourceScope, clearStructured, clearAll } =
+  const { filters, patch, setDatePreset, clearStructured, clearAll } =
     usePhotoLibraryUrlState();
-  const { query } = usePhotoLibrary(filters);
+  const { query, photos } = usePhotoLibrary(filters);
   const { data: staffRows = [] } = useQuery<StaffRecipient[]>({
     queryKey: ['staff-picker'],
     queryFn: async () => {
@@ -99,14 +99,17 @@ export function PhotoLibrarySidebarPanel() {
           </button>
         </div>
       ) : null}
-      <PhotoLibrarySidebarNav
-        sourceScope={filters.sourceScope ?? 'all'}
-        sort={filters.sort ?? 'recent'}
-        onSelectScope={setSourceScope}
-        onSelectSort={(sort) => patch({ sort })}
+      <PhotoStationFolders
+        activeScope={filters.sourceScope ?? 'all'}
+        photos={photos}
+        filters={filters}
+        onSelectScope={(scope) =>
+          patch({ sourceScope: scope, dateFrom: undefined, dateTo: undefined, poRef: undefined })
+        }
+        onSelectDate={(sel) => patch({ dateFrom: sel.dateFrom, dateTo: sel.dateTo, poRef: sel.poRef })}
       />
 
-      <div className="mt-4 border-t border-gray-100 pt-4">
+      <div className="mt-3 border-t border-gray-100 pt-3">
         <PhotoFolderTree
           selectedFolderId={filters.folderId ? Number(filters.folderId) : null}
           onSelectFolder={(id) => patch({ folderId: id ? String(id) : undefined })}

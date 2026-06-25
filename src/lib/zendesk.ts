@@ -484,10 +484,24 @@ export async function createTicket(
     return data.ticket;
 }
 
+/**
+ * A CC collaborator on a ticket. Zendesk's CCs/followers framework takes an
+ * `email_ccs` array on the ticket update; `action: 'put'` adds, `'delete'` removes.
+ */
+export interface ZendeskEmailCc {
+    user_email: string;
+    user_name?: string;
+    action?: 'put' | 'delete';
+}
+
 export interface UpdateTicketInput {
     subject?: string;
-    /** Adding a comment is how Zendesk records ticket replies / internal notes. */
-    comment?: { body: string; html_body?: string; public?: boolean };
+    /**
+     * Adding a comment is how Zendesk records ticket replies / internal notes.
+     * `uploads` carries upload tokens from uploadFileToZendesk() so a reply can
+     * ride file attachments — same contract as CreateTicketInput.comment.
+     */
+    comment?: { body: string; html_body?: string; public?: boolean; uploads?: string[] };
     priority?: ZendeskTicketPriority;
     status?: ZendeskTicketStatus;
     type?: ZendeskTicketType;
@@ -495,6 +509,8 @@ export interface UpdateTicketInput {
     assignee_id?: number | null;
     group_id?: number | null;
     external_id?: string | null;
+    /** CC collaborators added/removed alongside a comment (top-level ticket field). */
+    email_ccs?: ZendeskEmailCc[];
 }
 
 /** Update a ticket. Returns null on 404. */
@@ -551,9 +567,14 @@ export async function listTicketComments(
  */
 export async function addTicketComment(
     id: number,
-    comment: { body: string; html_body?: string; public?: boolean },
+    comment: { body: string; html_body?: string; public?: boolean; uploads?: string[] },
+    opts: { emailCcs?: ZendeskEmailCc[] } = {},
 ): Promise<ZendeskTicket | null> {
-    return updateTicket(id, { comment });
+    const emailCcs = opts.emailCcs?.filter((cc) => cc.user_email?.trim());
+    return updateTicket(id, {
+        comment,
+        ...(emailCcs?.length ? { email_ccs: emailCcs } : {}),
+    });
 }
 
 export interface ZendeskAgent {
@@ -592,4 +613,43 @@ export async function listAgents(force = false): Promise<ZendeskAgent[]> {
     );
     agentCache = { at: now, agents };
     return agents;
+}
+
+/** A Zendesk user (any role) — used to resolve a comment author to a real name/email. */
+export interface ZendeskUser {
+    id: number;
+    name: string;
+    email: string | null;
+    role: string;
+    photo: string | null;
+}
+
+/**
+ * Resolve a set of Zendesk user ids to their name/email via the show_many API.
+ * Powers the chat thread's author labels — non-agent authors (the requester /
+ * end users) otherwise have no identity beyond their numeric id. Chunked to
+ * Zendesk's 100-ids-per-call limit; returns whatever resolves (best-effort).
+ */
+export async function getUsers(ids: number[]): Promise<ZendeskUser[]> {
+    requireZendeskConfig();
+    const unique = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+    if (!unique.length) return [];
+
+    const out: ZendeskUser[] = [];
+    for (let i = 0; i < unique.length; i += 100) {
+        const chunk = unique.slice(i, i + 100);
+        const data = await zendeskApiRequest<any>(
+            `/api/v2/users/show_many.json?ids=${chunk.join(',')}`,
+        );
+        for (const u of Array.isArray(data?.users) ? data.users : []) {
+            out.push({
+                id: Number(u?.id),
+                name: String(u?.name || 'User'),
+                email: u?.email ?? null,
+                role: String(u?.role || 'end-user'),
+                photo: u?.photo?.content_url ?? null,
+            });
+        }
+    }
+    return out;
 }

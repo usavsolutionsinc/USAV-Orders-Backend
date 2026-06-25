@@ -1,12 +1,10 @@
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 import { ClaimTicketPicker } from './ClaimTicketPicker';
-import { ClaimFiledBanner } from './ClaimFiledBanner';
-import { ClaimSellerMessagePanel } from './ClaimSellerMessagePanel';
-import { ClaimTicketReply } from './ClaimTicketReply';
+import { ClaimSellerStep } from './ClaimSellerStep';
 
 /**
- * The seller step (and the link-mode picker that precedes it): pick/confirm a
- * ticket, then draft the seller-facing message.
+ * Link mode: pick an existing ticket, then draft the seller message against it.
+ * Reuses the shared {@link ClaimSellerStep} for the banner + message + reply.
  */
 export function ClaimLinkSellerStep({ c }: { c: ReceivingClaimController }) {
   return (
@@ -15,23 +13,7 @@ export function ClaimLinkSellerStep({ c }: { c: ReceivingClaimController }) {
         <ClaimTicketPicker search={c.search} onSelect={c.selectLinkTicket} />
       ) : null}
 
-      {c.filedTicket ? (
-        <ClaimFiledBanner
-          filedTicket={c.filedTicket}
-          mode={c.mode}
-          linkCommitted={c.linkCommitted}
-          unlinking={c.unlinking}
-          onUnlink={c.handleBannerUnlink}
-        />
-      ) : null}
-
-      <ClaimSellerMessagePanel seller={c.seller} filedTicket={c.filedTicket} />
-
-      <ClaimTicketReply
-        reply={c.reply}
-        filedTicket={c.filedTicket}
-        prefill={c.seller.sellerMessage}
-      />
+      <ClaimSellerStep c={c} />
     </>
   );
 }

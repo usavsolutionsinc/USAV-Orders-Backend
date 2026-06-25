@@ -8,6 +8,7 @@ import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlide
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   claimWizardStepStates,
+  CREATE_STEP_ORDER,
   type ArchiveState,
   type ClaimModalMode,
   type CreateClaimStep,
@@ -68,7 +69,7 @@ export function useReceivingClaimController({
   // ── Wizard / mode state ──────────────────────────────────────────────────
   const [claimType, setClaimType] = useState<ClaimType>(initialClaimType);
   const [mode, setMode] = useState<ClaimModalMode>('create');
-  const [createStep, setCreateStep] = useState<CreateClaimStep>('internal');
+  const [createStep, setCreateStep] = useState<CreateClaimStep>('photos');
   const [filedTicket, setFiledTicket] = useState<FiledTicket | null>(null);
   const [reason, setReason] = useState('');
 
@@ -78,6 +79,9 @@ export function useReceivingClaimController({
   const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 
   // ── Dry-run test state (no Zendesk ticket / NAS / DB side-effects) ────────
+  // True once the operator filed via the dry-run path: the confirm/seller steps
+  // render against the '#TEST' sentinel and suppress any real side-effect.
+  const [isDryRun, setIsDryRun] = useState(false);
   const [testCreating, setTestCreating] = useState(false);
   const [testResult, setTestResult] = useState<{
     subject: string;
@@ -105,7 +109,10 @@ export function useReceivingClaimController({
   const photos = useClaimPhotos(open, receivingId);
   const template = useClaimTemplate({
     open,
-    active: mode === 'create' && createStep === 'internal',
+    // Keep the preview warm across every pre-file step so Review can render it.
+    active:
+      mode === 'create' &&
+      (createStep === 'photos' || createStep === 'compose' || createStep === 'review'),
     receivingId,
     lineId,
     claimType,
@@ -140,12 +147,13 @@ export function useReceivingClaimController({
     setClaimType(initialClaimType);
     idempotencyKey.current = crypto.randomUUID();
     setMode('create');
-    setCreateStep('internal');
+    setCreateStep('photos');
     setFiledTicket(null);
     setLinkCommitted(false);
     setTestResult(null);
     setTestSellerPreview(null);
     setArchiveState(null);
+    setIsDryRun(false);
   }, [open, receivingId, lineId, initialClaimType, prefillReason]);
 
   // ── Derived view-model ───────────────────────────────────────────────────
@@ -164,6 +172,38 @@ export function useReceivingClaimController({
     [createStep, filedTicket, mode],
   );
   const sellerStepReady = !!filedTicket || mode === 'link';
+  // The compose draft must be complete before Review/Submit are reachable.
+  const composeComplete = !!template.subject.trim() && !!template.description.trim();
+
+  // ── Linear wizard navigation (create mode) ───────────────────────────────
+  // A step is reachable when every step before it is satisfied: confirm/seller
+  // require a filed ticket; review requires a complete compose draft.
+  const isCreateStepDisabled = (key: string): boolean => {
+    const target = key as CreateClaimStep;
+    if (target === 'confirm' || target === 'seller') return !filedTicket;
+    if (target === 'review') return !composeComplete && !filedTicket;
+    return false;
+  };
+
+  const goToStep = (next: CreateClaimStep) => {
+    if (isCreateStepDisabled(next)) return;
+    setCreateStep(next);
+  };
+
+  /** Footer "Back" — one step left in the create order (no-op on the first). */
+  const goBack = () => {
+    const idx = CREATE_STEP_ORDER.indexOf(createStep);
+    if (idx > 0) setCreateStep(CREATE_STEP_ORDER[idx - 1]);
+  };
+
+  /** Footer "Next" — photos → compose → review (Submit lives on review). */
+  const goNext = () => {
+    if (createStep === 'photos') {
+      setCreateStep('compose');
+    } else if (createStep === 'compose') {
+      if (composeComplete) setCreateStep('review');
+    }
+  };
 
   // ── Wizard navigation ────────────────────────────────────────────────────
   const handleModeChange = (next: ClaimModalMode) => {
@@ -172,20 +212,29 @@ export function useReceivingClaimController({
       setCreateStep('seller');
       seller.resetBootstrap();
     } else {
-      setCreateStep('internal');
+      setCreateStep(filedTicket ? 'confirm' : 'photos');
       setLinkCommitted(false);
     }
   };
 
   const handleClaimStepClick = (key: string) => {
-    if (key === 'internal') {
-      if (mode === 'link' && !filedTicket) setMode('create');
-      setCreateStep('internal');
+    if (mode === 'link') {
+      // Link mode has no linear create stepper; clicking the picker returns to
+      // create from a deselected link.
+      if (key === 'photos' && !filedTicket) setMode('create');
       return;
     }
-    if (key === 'seller' && sellerStepReady) {
-      setCreateStep('seller');
-    }
+    goToStep(key as CreateClaimStep);
+  };
+
+  /**
+   * Confirmation → seller. In a real flow the seller hook auto-bootstraps on
+   * `createStep`; for a dry run ('#TEST') the hook deliberately skips its fetch,
+   * so we draft a throwaway preview here instead.
+   */
+  const continueToSeller = () => {
+    setCreateStep('seller');
+    if (filedTicket?.number === '#TEST') void draftTestSellerMessage();
   };
 
   const advanceToSellerStep = (ticket: FiledTicket) => {
@@ -301,11 +350,14 @@ export function useReceivingClaimController({
         });
       }
 
-      advanceToSellerStep({
+      // Land on the confirmation step — the operator reviews the ticket result
+      // AND the NAS backup result there before continuing to the seller message.
+      setFiledTicket({
         number: ticketNumber || 'pending',
         url: ticketUrl,
         id: ticketId,
       });
+      setCreateStep('confirm');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -447,13 +499,61 @@ export function useReceivingClaimController({
     setTestSellerPreview(null);
   };
 
-  // "Test next step": jump to the seller-message step against a sentinel #TEST
-  // ticket — NO real ticket is filed and nothing is persisted (the seller hook
-  // recognises #TEST) — and draft the seller message via Hermes dry-run so the
-  // step shows a real preview. Lets the operator rehearse the whole flow.
-  const continueTest = async () => {
-    setFiledTicket({ number: '#TEST', url: null, id: null });
-    setCreateStep('seller');
+  // Dry-run "File ticket": exercise the REAL Review → Confirm → Seller arc with
+  // zero side-effects. The endpoint short-circuits on `dryRun` (returns the
+  // assembled subject/body + a '#TEST' ticket; no Zendesk/NAS/DB writes), so we
+  // land on the confirm step with a synthetic ticket + NAS result to inspect.
+  const submitDryRun = async () => {
+    if (testCreating || submitting || !receivingId) return;
+    const subject = template.readSubject().trim();
+    const description = template.readDescription().trim();
+    if (!subject || !description) return;
+    setTestCreating(true);
+    try {
+      const res = await fetch('/api/receiving/zendesk-claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun: true,
+          receivingId,
+          lineId,
+          claimType,
+          reason: reason.trim(),
+          subject,
+          description,
+          attachPhotoIds: [...photos.selectedPhotoIds],
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Dry run failed');
+        return;
+      }
+      const attachCount = Number(data.attachCount ?? photos.selectedPhotoIds.size);
+      setIsDryRun(true);
+      setFiledTicket({ number: '#TEST', url: null, id: null });
+      // Synthesise the NAS result the real archive would have produced, so the
+      // confirmation's backup card renders exactly as it would in production.
+      setArchiveState({
+        ok: true,
+        copied: photos.photos.length,
+        total: photos.photos.length,
+        folder: 'TEST',
+        warning: null,
+      });
+      setCreateStep('confirm');
+      toast.success(`Dry run OK — no ticket filed (${attachCount} would attach)`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setTestCreating(false);
+    }
+  };
+
+  // Draft a seller-message PREVIEW for the '#TEST' sentinel via Hermes dry-run.
+  // Nothing is persisted (the seller hook also recognises '#TEST'); this just
+  // fills the seller step so the operator can rehearse it end-to-end.
+  const draftTestSellerMessage = async () => {
     if (!receivingId) return;
     const subject = template.readSubject().trim();
     const description = template.readDescription().trim();
@@ -565,8 +665,14 @@ export function useReceivingClaimController({
     claimTypeItems,
     claimStepStates,
     sellerStepReady,
+    composeComplete,
     handleModeChange,
     handleClaimStepClick,
+    isCreateStepDisabled,
+    goToStep,
+    goBack,
+    goNext,
+    continueToSeller,
     selectLinkTicket,
     handleBannerUnlink,
     // create flow
@@ -575,6 +681,7 @@ export function useReceivingClaimController({
     submitInternal,
     archiveToNas,
     // dry-run tests
+    isDryRun,
     testCreating,
     testResult,
     testSellerLoading,
@@ -582,7 +689,7 @@ export function useReceivingClaimController({
     submitTestCreate,
     submitTestSeller,
     clearTestOutputs,
-    continueTest,
+    submitDryRun,
     archiveState,
     // link flow
     linking,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useReducer, useRef, useState } from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package,
@@ -9,6 +10,7 @@ import {
   Loader2,
   ChevronLeft,
   MapPin,
+  Camera,
 } from '@/components/Icons';
 import { TOKENS, SectionHeader } from '@/components/mobile/redesign/DesignSystem';
 import { ScanInput } from '@/components/mobile/redesign/ScanInput';
@@ -85,10 +87,16 @@ export function MobilePackerFlow() {
   const [packState, setPackState] = useState<AsyncState>('idle');
   const [lastNotFound, setLastNotFound] = useState<string | null>(null);
 
+  // The already-completed packer_log for the scanned order (created by the
+  // tracking-scan pack completion). In-flow photos attach to it — read-only
+  // resolve, never mints a pack record.
+  const [packerLogId, setPackerLogId] = useState<number | null>(null);
+
   // ── scan 1: resolve an order identity → order details ──────────────────────
   const loadOrder = useCallback(async (ref: string) => {
     setOrderState('loading');
     setOrder(null);
+    setPackerLogId(null);
     try {
       const res = await fetch(`/api/orders/lookup/${encodeURIComponent(ref)}`, {
         credentials: 'include',
@@ -115,6 +123,23 @@ export function MobilePackerFlow() {
         trackingNumbers: Array.isArray(o.tracking_numbers) ? o.tracking_numbers : [],
       });
       setOrderState('ready');
+
+      // Resolve the existing completed pack so in-flow "Take Photos" can attach
+      // to it. Best-effort — a miss just leaves the CTA in its "not packed yet"
+      // hint state.
+      try {
+        const plRes = await fetch(`/api/packerlogs/for-order?orderRowId=${o.id}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (plRes.ok) {
+          const pl = await plRes.json();
+          const id = Number(pl?.packerLogId);
+          setPackerLogId(Number.isFinite(id) && id > 0 ? id : null);
+        }
+      } catch {
+        /* leave packerLogId null */
+      }
     } catch {
       setOrderState('error');
     }
@@ -226,6 +251,10 @@ export function MobilePackerFlow() {
               className="flex flex-col gap-4 pt-1"
             >
               <OrderDetailsCard state={orderState} order={order} orderRef={machine.context.orderRef} />
+
+              {orderState === 'ready' && order && (
+                <PackPhotosCta packerLogId={packerLogId} orderId={order.orderId} />
+              )}
 
               {machine.name === 'what_to_pack' && (
                 <div className="flex flex-col gap-2">
@@ -350,6 +379,38 @@ function OrderDetailsCard({
         )}
       </dl>
     </div>
+  );
+}
+
+/**
+ * In-flow capture CTA. Photos are additions to the pack the tracking scan
+ * already completed, so this only links to the existing packer_log — it never
+ * creates one. Until that pack log resolves, it shows a muted hint instead.
+ */
+function PackPhotosCta({
+  packerLogId,
+  orderId,
+}: {
+  packerLogId: number | null;
+  orderId: string;
+}) {
+  if (packerLogId == null) {
+    return (
+      <p className="rounded-2xl bg-blue-50/70 px-4 py-3 text-center text-caption font-semibold text-blue-400">
+        Complete the pack (scan tracking) to add photos.
+      </p>
+    );
+  }
+  const href = `/m/p/${packerLogId}/photos?orderId=${encodeURIComponent(orderId)}`;
+  return (
+    <Link
+      href={href}
+      prefetch={false}
+      aria-label="Take pack photos"
+      className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-[0_8px_24px_-12px_rgba(37,99,235,0.6)] transition-transform active:scale-[0.98] active:bg-blue-700"
+    >
+      <Camera className="h-6 w-6" />
+    </Link>
   );
 }
 

@@ -168,6 +168,8 @@ export const staff = pgTable('staff', {
   ssoSubject: text('sso_subject'),
   ssoProvider: text('sso_provider'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  // Phase F1: persisted at signup; the key for future owner email login + reset.
+  email: text('email'),
   pinHash: text('pin_hash'),
   pinSetAt: timestamp('pin_set_at', { withTimezone: true }),
   pinFailedCount: integer('pin_failed_count').notNull().default(0),
@@ -1122,6 +1124,40 @@ export const receivingShipments = pgTable('receiving_shipments', {
   primaryUx: uniqueIndex('ux_receiving_shipments_primary').on(table.receivingId).where(sql`is_primary`),
 }));
 
+/**
+ * shipment_links — UNIFIED polymorphic owner↔tracking linkage (inbound + outbound).
+ *
+ * One row per (owner, shipment), supporting many-trackings-per-owner for BOTH
+ * flows. Subsumes receiving_shipments (owner_type='RECEIVING', INBOUND) +
+ * order_shipment_links (owner_type='ORDER', OUTBOUND) against the single STN
+ * master. The is_primary row mirrors the denormalized receiving.shipment_id /
+ * orders.shipment_id caches (which stay). owner_id has NO FK (polymorphic, like
+ * photos/work_assignments); shipment_id FKs STN ON DELETE CASCADE. Migration
+ * 2026-06-24_shipment_links.sql (RLS armed, not forced until Phase 4 writers).
+ */
+export const shipmentLinks = pgTable('shipment_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  ownerType: text('owner_type').notNull(), // 'RECEIVING' | 'ORDER'
+  ownerId: integer('owner_id').notNull(),
+  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
+  boxSeq: integer('box_seq').notNull().default(1),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  direction: text('direction').notNull(), // 'INBOUND' | 'OUTBOUND'
+  role: text('role'), // PO_ANCHOR | EXTRA_BOX | ORDER_PRIMARY | ORDER_SPLIT
+  source: text('source'),
+  linkedBy: integer('linked_by'),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  ownerShipmentUx: uniqueIndex('ux_shipment_links_owner_shipment').on(table.organizationId, table.ownerType, table.ownerId, table.shipmentId),
+  ownerPrimaryUx: uniqueIndex('ux_shipment_links_owner_primary').on(table.organizationId, table.ownerType, table.ownerId).where(sql`is_primary`),
+  orgShipmentIdx: index('idx_shipment_links_org_shipment').on(table.organizationId, table.shipmentId),
+  shipmentIdx: index('idx_shipment_links_shipment').on(table.shipmentId),
+}));
+
 export const localPickupItems = pgTable('local_pickup_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }).unique(),
@@ -1226,6 +1262,23 @@ export const receivingLines = pgTable('receiving_lines', {
   sourceSystem: text('source_system'),
   sourceOrderId: text('source_order_id'),
   isRepairService: boolean('is_repair_service').notNull().default(false),
+  // ── Receiving redesign Phase 0 (2026-06-24): line-level lifecycle facts ────
+  /** Read-only mirror of Zoho PO line.rate (unit cost); Zoho stays SoR. */
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }),
+  /** Line-level receiver (carton-level is receiving.received_by). 2026-06-24. */
+  receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
+  /** Line-level dock-scan timestamp. 2026-06-24. */
+  scannedAt: timestamp('scanned_at', { withTimezone: true }),
+  /** Line-level unboxed timestamp (carton-level is receiving.unboxed_at). 2026-06-24. */
+  unboxedAt: timestamp('unboxed_at', { withTimezone: true }),
+  /** Line-level received timestamp. 2026-06-24. */
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+  /** Per-line exception (carton-level is receiving.exception_code). 2026-06-24. */
+  exceptionCode: text('exception_code'),
+  /** Coarse operator lifecycle INCOMING|SCANNED|UNBOXED|RECEIVED (derive-SoT from
+   *  workflow_status); PROBLEM is the orthogonal exception dimension. NULLABLE
+   *  text, no enum/CHECK yet (cutover is a later migration). 2026-06-24. */
+  receivingLineStatus: text('receiving_line_status'),
   // NOTE: DB also has GENERATED column `zoho_purchaseorder_number_norm` (2026-05-21,
   // GENERATED ALWAYS from zoho_purchaseorder_number). Intentionally omitted from the
   // model — it is read via raw SQL in the reconciler; adding it as a managed column
@@ -1233,6 +1286,33 @@ export const receivingLines = pgTable('receiving_lines', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * receiving_exceptions — line-level exception/claim domain (decomposed from the
+ * receiving god-table: return_reason/support_notes/zendesk_ticket/exception_code
+ * move to the LINE so multi-line cartons attribute per line). Written by the
+ * guarded transitionReceivingLine() chokepoint + manual-advance (Phase 2/3).
+ * Migration 2026-06-24_receiving_exceptions.sql (RLS armed, not forced yet).
+ */
+export const receivingExceptions = pgTable('receiving_exceptions', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingLineId: integer('receiving_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'cascade' }),
+  exceptionCode: text('exception_code').notNull(),
+  reason: text('reason'),
+  supportNotes: text('support_notes'),
+  zendeskTicket: text('zendesk_ticket'),
+  status: text('status').notNull().default('OPEN'), // OPEN | RESOLVED
+  createdBy: integer('created_by'),
+  resolvedBy: integer('resolved_by'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgLineIdx: index('idx_receiving_exceptions_org_line').on(table.organizationId, table.receivingLineId),
+  orgReceivingIdx: index('idx_receiving_exceptions_org_receiving').on(table.organizationId, table.receivingId),
+}));
 
 /**
  * work_assignments — unified assignment queue for orders, receiving, repairs, FBA.
@@ -2571,6 +2651,9 @@ export const organizations = pgTable('organizations', {
   status: text('status').notNull().default('active'),
   stripeCustomerId: text('stripe_customer_id'),
   stripeSubscriptionId: text('stripe_subscription_id'),
+  // Phase F1: the org's billing/notification address (persisted at signup) —
+  // used by Stripe checkout instead of the billing+slug@ placeholder fallback.
+  billingEmail: text('billing_email'),
   // Tenant-wide config bag (branding, timezone, currency, label format, etc.)
   // Schema policed at the zod layer in src/lib/tenancy/settings.ts.
   settings: jsonb('settings').notNull().default(sql`'{}'::jsonb`),

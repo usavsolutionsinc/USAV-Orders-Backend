@@ -16,6 +16,23 @@ Last updated: 2026-06-14.
 
 ---
 
+## ⭐ STATUS UPDATE — 2026-06-23 (this supersedes the "0 FORCEd / E1 pending" snapshots below)
+
+The two keystones landed and the enforcement rollout is **done**. Verified against the live DB:
+
+- **E1 DONE.** `app_tenant` (NOBYPASSRLS) is live; `TENANT_APP_DATABASE_URL` set; two-pool split active; cross-org canary green. The runtime tenant pool is RLS-subject.
+- **E2 DONE — 117 tenant tables FORCEd & verified isolating** (started at 0/9), via 13 guarded per-table migrations (`2026-06-16` leaf cohorts + reason_codes, `2026-06-22*` ready_cohort/core_lowfanin/nullable_business/sku_platform_ids/core_usav_fallback/loudfail_verified/remaining_business, `2026-06-23*` engine/kpi_photos). Includes the whole high-traffic core (orders, items, sku, sku_catalog, sku_stock, inventory_events, work_assignments, locations, fba_*, the workflow ENGINE tables) — direct probes show 0 cross-org rows. The 10 unforced are platform/system/global BY DESIGN (external `hermes_*`, platform `pipeline_*`/`training_*`, global STN); `workflow_nodes`/`edges` are child-scoped via the FORCEd `workflow_definitions`.
+- **C (route GUC-scoping) DONE** (agent waves + owner Wave-1/2 commits). Remaining file-level audit hits are false-positives (owner-pool idempotency/audit, or helper-delegated the static scan can't see through). **D1 (Ably) DONE** (channels require orgId, token endpoint org-scoped + fail-closed). Crons fan out per-org. C5 repos on `withTenantDrizzle`; `recordTestVerdict` OFF-path org-scoped.
+- **The safe FORCE recipe:** tenant-owned + armed policy + (usav-fallback default OR every INSERT stamps org) + NOT NULL (SET NOT NULL after verifying 0 nulls) + non-platform/system; guarded per-table FOREACH migration. FORCE is dual-pool-safe (owner bypass / tenant-pool GUC; no direct `tenantPool` usage).
+
+**What's LEFT (all human-owned, deploy-coupled, or deferred-product — an agent cannot safely do these on live prod):**
+1. **[you] Stripe go-live** (Keystone #1 below) — env + `setup-webhook-and-portal.mjs`; still the highest revenue-blocking gap.
+2. **[you, deploy-coupled] Composite-key uniqueness** — `sku_catalog`/`fba_fnskus` are FORCEd but still carry global `UNIQUE(sku)`/`PRIMARY KEY(fnsku)` → a tenant #2 can't insert a sku/fnsku org A already has. Apply `2026-06-14_sku_catalog_composite_unique.sql.gated` + `_fba_fnskus_composite_pk.sql.gated` **WITH** the `ON CONFLICT (organization_id, …)` code flip in the same deploy (or first rewrite the upserts to org-scoped SELECT-then-upsert to decouple — the bose_models pattern). Latent (no dogfood break).
+3. **Phase F (deferred-product, P2):** full owner email auth + verification (signup already captures `email`); F4-lite onboarding for a fresh org; F3 per-org roles (kept global today by design); legal baseline (ToS/privacy/DPA).
+4. **Optional hardening:** move the workflow engine store off `neon-http` onto `withTenantDrizzle` (engine already FORCEd + explicit-predicate-scoped + owner-bypass, so this is defense-in-depth on a hot path — not required).
+
+---
+
 ## 0. The one-paragraph orientation
 
 This is a single-codebase, single-database, multi-tenant SaaS. Tenancy is keyed on `organization_id` (the dogfood "USAV" org is `00000000-0000-0000-0000-000000000001`). The multi-tenant *skeleton* is built (orgs table, GUC plumbing, signup, Stripe code, RLS infra functions). The work is **hardening and wiring**, not a rewrite. Two things gate everything: (1) **Stripe live config** so we can charge, and (2) the **`app_tenant` DB role** so RLS can actually apply (today the app connects as a BYPASSRLS owner, making every RLS policy inert). Both are *owner* (human) steps — an agent cannot run them. Everything an agent can do is request-path leak-closure, write-correctness fixes, per-org cron conversion, and Phase B schema columns — all of which is *prepared-but-unenforceable* until the two keystones land.

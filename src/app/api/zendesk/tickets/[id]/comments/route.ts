@@ -77,6 +77,8 @@ const CommentBody = z.object({
   body: z.string().trim().min(1, 'body is required'),
   html_body: z.string().optional(),
   public: z.boolean().optional(),
+  /** CC collaborator emails — added to the ticket alongside a public reply. */
+  email_ccs: z.array(z.string().trim().email()).max(50).optional(),
 });
 
 export const POST = withAuth(
@@ -89,7 +91,11 @@ export const POST = withAuth(
       if (!json) throw ApiError.badRequest('Missing JSON body');
       const input = CommentBody.parse(json);
 
-      const ticket = await addTicketComment(id, input);
+      const ticket = await addTicketComment(
+        id,
+        { body: input.body, html_body: input.html_body, public: input.public },
+        { emailCcs: input.email_ccs?.map((user_email) => ({ user_email, action: 'put' as const })) },
+      );
       if (!ticket) throw ApiError.notFound('Zendesk ticket', id);
       return NextResponse.json({ success: true, ticket }, { status: 201 });
     } catch (err) {

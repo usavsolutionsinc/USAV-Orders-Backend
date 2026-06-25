@@ -9,7 +9,8 @@ import {
 } from '@/lib/scan-resolver';
 import { routeScan } from '@/lib/barcode-routing';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
-import { query, queryOne } from '@/lib/neon-client';
+import { query } from '@/lib/neon-client';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { publishScanLog } from '@/lib/realtime/publish';
 
@@ -81,58 +82,72 @@ interface ResolveResponse {
 
 // ─── Order lookups ───────────────────────────────────────────────────────────
 
-async function lookupOrdersByTracking(tracking: string): Promise<OrderMatch[]> {
+async function lookupOrdersByTracking(tracking: string, organizationId: string): Promise<OrderMatch[]> {
   const key18 = normalizeTrackingKey18(tracking);
   if (!key18) return [];
   try {
-    return await query<OrderMatch>`
-      SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-      FROM orders o
-      JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-      WHERE stn.tracking_number_key18 = ${key18}
-      ORDER BY o.id DESC
-      LIMIT 20
-    `;
+    const { rows } = await tenantQuery<OrderMatch>(
+      organizationId,
+      `SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+       FROM orders o
+       JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
+       WHERE stn.tracking_number_key18 = $1
+         AND o.organization_id = $2
+       ORDER BY o.id DESC
+       LIMIT 20`,
+      [key18, organizationId],
+    );
+    return rows;
   } catch {
     return [];
   }
 }
 
-async function lookupOrdersBySerial(serial: string): Promise<OrderMatch[]> {
+async function lookupOrdersBySerial(serial: string, organizationId: string): Promise<OrderMatch[]> {
   const norm = serial.trim().toUpperCase();
   if (!norm) return [];
   try {
-    const exact = await query<OrderMatch>`
-      SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-      FROM orders o
-      JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
-      WHERE UPPER(tsn.serial_number) = ${norm}
-      ORDER BY o.id DESC
-      LIMIT 20
-    `;
+    const { rows: exact } = await tenantQuery<OrderMatch>(
+      organizationId,
+      `SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+       FROM orders o
+       JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+       WHERE UPPER(tsn.serial_number) = $1
+         AND o.organization_id = $2
+       ORDER BY o.id DESC
+       LIMIT 20`,
+      [norm, organizationId],
+    );
     if (exact.length) return exact;
 
     if (norm.length >= 4) {
-      const suffix = await query<OrderMatch>`
-        SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-        FROM orders o
-        JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
-        WHERE UPPER(tsn.serial_number) LIKE ${'%' + norm}
-        ORDER BY o.id DESC
-        LIMIT 20
-      `;
+      const { rows: suffix } = await tenantQuery<OrderMatch>(
+        organizationId,
+        `SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+         FROM orders o
+         JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+         WHERE UPPER(tsn.serial_number) LIKE $1
+           AND o.organization_id = $2
+         ORDER BY o.id DESC
+         LIMIT 20`,
+        ['%' + norm, organizationId],
+      );
       if (suffix.length) return suffix;
     }
 
     if (norm.length >= 3 && norm.length <= 10) {
-      return await query<OrderMatch>`
-        SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-        FROM orders o
-        JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
-        WHERE UPPER(tsn.serial_number) LIKE ${'%' + norm + '%'}
-        ORDER BY o.id DESC
-        LIMIT 20
-      `;
+      const { rows } = await tenantQuery<OrderMatch>(
+        organizationId,
+        `SELECT DISTINCT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+         FROM orders o
+         JOIN tech_serial_numbers tsn ON tsn.shipment_id = o.shipment_id
+         WHERE UPPER(tsn.serial_number) LIKE $1
+           AND o.organization_id = $2
+         ORDER BY o.id DESC
+         LIMIT 20`,
+        ['%' + norm + '%', organizationId],
+      );
+      return rows;
     }
     return [];
   } catch {
@@ -140,16 +155,20 @@ async function lookupOrdersBySerial(serial: string): Promise<OrderMatch[]> {
   }
 }
 
-async function lookupOrderById(orderId: string): Promise<OrderMatch[]> {
+async function lookupOrderById(orderId: string, organizationId: string): Promise<OrderMatch[]> {
   const trimmed = orderId.trim();
   if (!trimmed) return [];
   try {
-    return await query<OrderMatch>`
-      SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-      FROM orders o
-      WHERE o.order_id = ${trimmed}
-      LIMIT 5
-    `;
+    const { rows } = await tenantQuery<OrderMatch>(
+      organizationId,
+      `SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+       FROM orders o
+       WHERE o.order_id = $1
+         AND o.organization_id = $2
+       LIMIT 5`,
+      [trimmed, organizationId],
+    );
+    return rows;
   } catch {
     return [];
   }
@@ -162,35 +181,43 @@ async function lookupOrderById(orderId: string): Promise<OrderMatch[]> {
 // land on the carton detail page `/m/r/{receiving_id}` so tech can mark the
 // tested-pass / tested-fail outcome.
 
-async function lookupReceivingByPoNumber(po: string): Promise<{ id: number; zoho_purchaseorder_number: string | null } | null> {
+async function lookupReceivingByPoNumber(po: string, organizationId: string): Promise<{ id: number; zoho_purchaseorder_number: string | null } | null> {
   const trimmed = po.trim();
   if (!trimmed) return null;
   try {
-    return await queryOne<{ id: number; zoho_purchaseorder_number: string | null }>`
-      SELECT id, zoho_purchaseorder_number
-      FROM receiving
-      WHERE zoho_purchaseorder_number = ${trimmed}
-         OR zoho_purchaseorder_id = ${trimmed}
-      ORDER BY id DESC
-      LIMIT 1
-    `;
+    const { rows } = await tenantQuery<{ id: number; zoho_purchaseorder_number: string | null }>(
+      organizationId,
+      `SELECT id, zoho_purchaseorder_number
+       FROM receiving
+       WHERE (zoho_purchaseorder_number = $1
+          OR zoho_purchaseorder_id = $1)
+         AND organization_id = $2
+       ORDER BY id DESC
+       LIMIT 1`,
+      [trimmed, organizationId],
+    );
+    return rows[0] ?? null;
   } catch {
     return null;
   }
 }
 
-async function lookupOrdersBySku(sku: string): Promise<OrderMatch[]> {
+async function lookupOrdersBySku(sku: string, organizationId: string): Promise<OrderMatch[]> {
   const trimmed = sku.trim();
   if (!trimmed) return [];
   try {
-    return await query<OrderMatch>`
-      SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
-      FROM orders o
-      WHERE o.sku = ${trimmed}
-        AND (o.status IS NULL OR o.status NOT IN ('shipped', 'cancelled', 'closed'))
-      ORDER BY o.id DESC
-      LIMIT 20
-    `;
+    const { rows } = await tenantQuery<OrderMatch>(
+      organizationId,
+      `SELECT o.id, o.order_id, o.sku, o.product_title, o.status, o.quantity, o.account_source
+       FROM orders o
+       WHERE o.sku = $1
+         AND (o.status IS NULL OR o.status NOT IN ('shipped', 'cancelled', 'closed'))
+         AND o.organization_id = $2
+       ORDER BY o.id DESC
+       LIMIT 20`,
+      [trimmed, organizationId],
+    );
+    return rows;
   } catch {
     return [];
   }
@@ -198,26 +225,35 @@ async function lookupOrdersBySku(sku: string): Promise<OrderMatch[]> {
 
 // ─── URL helper enrichment ───────────────────────────────────────────────────
 
-async function resolveUnit(unitSerial: string): Promise<{ id: number; sku: string | null } | null> {
+async function resolveUnit(unitSerial: string, organizationId: string): Promise<{ id: number; sku: string | null } | null> {
   try {
-    return await queryOne<{ id: number; sku: string | null }>`
-      SELECT id, sku FROM serial_units
-      WHERE normalized_serial = UPPER(TRIM(${unitSerial}))
-      LIMIT 1
-    `;
+    const { rows } = await tenantQuery<{ id: number; sku: string | null }>(
+      organizationId,
+      `SELECT id, sku FROM serial_units
+       WHERE normalized_serial = UPPER(TRIM($1))
+         AND organization_id = $2
+       LIMIT 1`,
+      [unitSerial, organizationId],
+    );
+    return rows[0] ?? null;
   } catch {
     return null;
   }
 }
 
-async function resolveSkuByGtin(gtin: string): Promise<string | null> {
+async function resolveSkuByGtin(gtin: string, organizationId: string): Promise<string | null> {
   try {
     const cleaned = gtin.replace(/\D/g, '');
     if (!cleaned) return null;
-    const row = await queryOne<{ sku: string | null }>`
-      SELECT sku FROM sku_catalog WHERE gtin = ${cleaned} LIMIT 1
-    `;
-    return row?.sku ?? null;
+    const { rows } = await tenantQuery<{ sku: string | null }>(
+      organizationId,
+      `SELECT sku FROM sku_catalog
+       WHERE gtin = $1
+         AND organization_id = $2
+       LIMIT 1`,
+      [cleaned, organizationId],
+    );
+    return rows[0]?.sku ?? null;
   } catch {
     return null;
   }
@@ -284,36 +320,36 @@ function pickMobileRoute(matches: OrderMatch[]): string | null {
   return null;
 }
 
-async function matchesForUrlEntity(entity: ScannedUrlEntity): Promise<OrderMatch[]> {
+async function matchesForUrlEntity(entity: ScannedUrlEntity, organizationId: string): Promise<OrderMatch[]> {
   switch (entity.type) {
     case 'order':
-      return lookupOrderById(entity.orderId);
+      return lookupOrderById(entity.orderId, organizationId);
     case 'package':
-      return lookupOrdersByTracking(entity.trackingNumber);
+      return lookupOrdersByTracking(entity.trackingNumber, organizationId);
     case 'unit':
-      return lookupOrdersBySerial(entity.unitSerial);
+      return lookupOrdersBySerial(entity.unitSerial, organizationId);
     case 'stock':
-      return lookupOrdersBySku(entity.sku);
+      return lookupOrdersBySku(entity.sku, organizationId);
     case 'gs1_product': {
-      const sku = await resolveSkuByGtin(entity.gtin);
-      return sku ? lookupOrdersBySku(sku) : [];
+      const sku = await resolveSkuByGtin(entity.gtin, organizationId);
+      return sku ? lookupOrdersBySku(sku, organizationId) : [];
     }
     default:
       return [];
   }
 }
 
-async function matchesForAiTree(tree: Gs1AiTree): Promise<OrderMatch[]> {
+async function matchesForAiTree(tree: Gs1AiTree, organizationId: string): Promise<OrderMatch[]> {
   const pick = pickAiRoutingValue(tree);
   if (!pick) return [];
   switch (pick.kind) {
     case 'serial':
-      return lookupOrdersBySerial(pick.value);
+      return lookupOrdersBySerial(pick.value, organizationId);
     case 'tracking':
-      return lookupOrdersByTracking(pick.value);
+      return lookupOrdersByTracking(pick.value, organizationId);
     case 'gtin': {
-      const sku = await resolveSkuByGtin(pick.value);
-      return sku ? lookupOrdersBySku(sku) : [];
+      const sku = await resolveSkuByGtin(pick.value, organizationId);
+      return sku ? lookupOrdersBySku(sku, organizationId) : [];
     }
     default:
       return [];
@@ -377,7 +413,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
   // 0b. Plain PO number (no `R-` prefix) — look it up in `receiving` and
   //     route to the same /m/r page.
   if (/^[A-Z0-9][A-Z0-9_\-]{2,}$/i.test(trimmed)) {
-    const po = await lookupReceivingByPoNumber(trimmed);
+    const po = await lookupReceivingByPoNumber(trimmed, organizationId);
     if (po) {
       const route = `/m/r/${po.id}`;
       const result: ResolveResponse = {
@@ -402,7 +438,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
   // 1. Multi-AI GS1 Data Matrix.
   const aiTree = parseGs1AiPayload(trimmed);
   if (aiTree) {
-    const matches = await matchesForAiTree(aiTree);
+    const matches = await matchesForAiTree(aiTree, organizationId);
     const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';
     const mobileRoute = pickMobileRoute(matches);
     const result: ResolveResponse = {
@@ -419,7 +455,7 @@ async function resolve(input: string, organizationId: string, staffId: number, d
   // 2. URL branch.
   const urlEntity = parseScannedUrl(trimmed);
   if (urlEntity) {
-    const matches = await matchesForUrlEntity(urlEntity);
+    const matches = await matchesForUrlEntity(urlEntity, organizationId);
     const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';
     const mobileRoute = pickMobileRoute(matches);
     const kind: ResolveKind = (() => {
@@ -450,12 +486,12 @@ async function resolve(input: string, organizationId: string, staffId: number, d
   const classified = classifyInput(trimmed);
   let matches: OrderMatch[] = [];
   if (classified.type === 'tracking') {
-    matches = await lookupOrdersByTracking(classified.normalized);
+    matches = await lookupOrdersByTracking(classified.normalized, organizationId);
   } else if (classified.type === 'serial_full' || classified.type === 'serial_partial') {
-    matches = await lookupOrdersBySerial(classified.normalized);
+    matches = await lookupOrdersBySerial(classified.normalized, organizationId);
   } else {
-    matches = await lookupOrderById(trimmed);
-    if (!matches.length) matches = await lookupOrdersBySku(trimmed);
+    matches = await lookupOrderById(trimmed, organizationId);
+    if (!matches.length) matches = await lookupOrdersBySku(trimmed, organizationId);
   }
 
   const outcome: MatchOutcome = matches.length === 0 ? 'none' : matches.length === 1 ? 'single' : 'multi';

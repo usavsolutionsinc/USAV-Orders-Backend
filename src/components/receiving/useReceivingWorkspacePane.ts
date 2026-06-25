@@ -135,6 +135,39 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
     return () => window.removeEventListener('receiving-workspace-nav-state', handler);
   }, []);
 
+  // Deep-link: cmd+k emits /receiving?mode=receive&openReceivingId=<receiving.id>.
+  // Resolve that carton's first line (receiving.id → /api/receiving-lines
+  // ?receiving_id=) and select it once via dispatchSelectLine, so the right pane
+  // opens AND the sidebar/rail highlight stay in sync. Best-effort: a missing or
+  // empty carton just no-ops, and the "never blank" effect (which is deferred
+  // while the param is present) resumes once it clears from the URL.
+  const deepLinkedReceivingRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = searchParams.get('openReceivingId');
+    if (!target || !/^\d+$/.test(target)) return;
+    if (deepLinkedReceivingRef.current === target) return;
+    deepLinkedReceivingRef.current = target;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/receiving-lines?receiving_id=${target}&include=serials`,
+          { cache: 'no-store' },
+        );
+        const data = res.ok ? await res.json().catch(() => null) : null;
+        const rows = Array.isArray(data?.receiving_lines)
+          ? (data.receiving_lines as ReceivingLineRow[])
+          : [];
+        if (!cancelled && rows[0]) dispatchSelectLine(rows[0]);
+      } catch {
+        /* deep-link is best-effort; a network blip just no-ops */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
+
   // Keep the right pane from ever sitting BLANK in Unbox/Receive mode: open the
   // MOST RECENT unboxing line — the same row the Recent rail auto-selects from
   // its `view=activity` query — whenever nothing is open. Re-runs on `workspace`
@@ -153,6 +186,9 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
   useEffect(() => {
     const liveMode = searchParams.get('mode') ?? 'receive';
     if (liveMode !== 'receive') return;
+    // Defer to the cmd+k deep-link (openReceivingId) for the initial open so the
+    // two don't race to fill the pane; resume auto-open once the param clears.
+    if (searchParams.get('openReceivingId')) return;
     if (workspace || recoveringRef.current) return;
 
     let cancelled = false;

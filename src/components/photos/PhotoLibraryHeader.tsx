@@ -7,14 +7,17 @@ import {
   receivingHeaderHairlineClass,
 } from '@/components/layout/header-shell';
 import { microBadge } from '@/design-system/tokens/typography/presets';
-import type { PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
+import type { PhotoLibrarySortMode, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
 import { cn } from '@/utils/_cn';
+import { PhotoSortMenu } from './PhotoSortMenu';
 
 interface PhotoLibraryHeaderProps {
   title: string;
   metaLine: string;
   view: PhotoLibraryViewMode;
   onViewChange: (view: PhotoLibraryViewMode) => void;
+  sort: PhotoLibrarySortMode;
+  onSortChange: (sort: PhotoLibrarySortMode) => void;
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -38,6 +41,8 @@ export function PhotoLibraryHeader({
   metaLine,
   view,
   onViewChange,
+  sort,
+  onSortChange,
   page,
   totalPages,
   onPageChange,
@@ -55,6 +60,7 @@ export function PhotoLibraryHeader({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          <PhotoSortMenu sort={sort} onSortChange={onSortChange} />
           <div
             className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5"
             role="group"

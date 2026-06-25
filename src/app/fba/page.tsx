@@ -12,7 +12,7 @@
  * panel.
  */
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
 import { FbaQuickAddFnskuModal } from '@/components/fba/FbaQuickAddFnskuModal';
@@ -52,6 +52,22 @@ function FbaPageContent() {
   const detailIdx = detailItem
     ? weekFilter.filteredPendingItems.findIndex((i) => i.fnsku === detailItem.fnsku)
     : -1;
+
+  // Deep-link: cmd+k emits /fba?openShipmentId=<fba_shipments.id>. Open that
+  // shipment's detail panel once the board has loaded. Only board (non-shipped)
+  // shipments are openable — anything else no-ops (the board excludes SHIPPED).
+  const openedShipmentRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = searchParams.get('openShipmentId');
+    if (!target || !/^\d+$/.test(target)) return;
+    if (openedShipmentRef.current === target) return;
+    const shipmentId = Number(target);
+    const match = board.pending.find((it) => it.shipment_id === shipmentId);
+    if (match) {
+      openedShipmentRef.current = target;
+      setDetailItem(match);
+    }
+  }, [searchParams, board.pending, setDetailItem]);
 
   return (
     <div className="flex h-full w-full min-w-0 flex-1 flex-col bg-stone-50">

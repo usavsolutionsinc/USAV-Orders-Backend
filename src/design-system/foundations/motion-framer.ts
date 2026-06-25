@@ -29,6 +29,8 @@ export const framerDuration = {
   overlayScrim: 0.15,
   /** Table row enter/exit */
   tableRowMount: 0.22,
+  /** Workbench right-pane / detail crossfade */
+  workbenchPaneMount: 0.18,
   /** Sidebar section expand/collapse */
   sidebarExpand: 0.26,
   /** Dropdown menu open/close */
@@ -48,6 +50,12 @@ export const framerDurationTabPager = {
 export const framerTransition = {
   stationCardMount: {
     duration: framerDuration.stationCardMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /** Workbench right-pane / detail crossfade — pair with `framerPresence.workbenchPane` */
+  workbenchPaneMount: {
+    duration: framerDuration.workbenchPaneMount,
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
@@ -307,6 +315,19 @@ export const framerPresence = {
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -6 },
   },
+  /**
+   * Workbench right-pane / detail crossfade — the canonical transition when a
+   * selected record's detail pane swaps (the LIST stays put; only the pane
+   * crossfades). Opacity + small y. Consume via `useMotionPresence(...)` so
+   * `prefers-reduced-motion` collapses it to opacity-only automatically — never
+   * hand-branch on reduced motion at the call site. See
+   * `.claude/rules/display/motion-crossfade.md`.
+   */
+  workbenchPane: {
+    initial: { opacity: 0, y: 6 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -6 },
+  },
 } as const;
 
 /** Tech / packer grid chips — shared `whileTap` target */
@@ -387,6 +408,18 @@ export const framerTransitionMobile = {
     damping: 30,
     stiffness: 350,
     mass: 0.5,
+  } satisfies Transition,
+
+  /**
+   * Fullscreen photo viewer paging / dismiss settle — crisp spring with no
+   * overshoot (bounce reads as tacky on a photo). Slightly stiffer than
+   * sheetSlide so a swipe-to-next snaps confidently.
+   */
+  viewerPaging: {
+    type: 'spring' as const,
+    damping: 38,
+    stiffness: 420,
+    mass: 0.6,
   } satisfies Transition,
 
   /** Camera fullscreen enter — opacity + scale */

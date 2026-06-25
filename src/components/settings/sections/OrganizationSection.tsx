@@ -132,6 +132,9 @@ interface OrgProfileResponse {
   requirePasskeyForNewStaff: boolean;
   maxConcurrentSessions: number;
   warrantyDays: number;
+  packing: {
+    enforcement: 'advisory' | 'block_until_matched';
+  };
   brand: {
     name?: string;
     logoUrl?: string;
@@ -505,6 +508,33 @@ export function OrganizationSection() {
             onChange={(e) => setDraft({ ...draft, warrantyDays: Number(e.target.value) || 30 })}
             className={FIELD_CLS}
           />
+        </label>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-900">Packing</h3>
+        <label className="block max-w-sm">
+          <span className="mb-1 block text-xs font-medium text-gray-700">Kit-checklist enforcement</span>
+          <select
+            value={draft.packing?.enforcement ?? 'advisory'}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                packing: {
+                  enforcement: e.target.value === 'block_until_matched' ? 'block_until_matched' : 'advisory',
+                },
+              })
+            }
+            className={FIELD_CLS}
+          >
+            <option value="advisory">Advisory — show the checklist, never block</option>
+            <option value="block_until_matched">Box until matched — flag the pack until every required item is confirmed</option>
+          </select>
+          <span className="mt-1 block text-xs text-gray-500">
+            Applies only to SKUs that have required kit parts defined (Products → Kit Parts). A SKU with no
+            required parts is never blocked, so turning this on can&rsquo;t stall packing for products you haven&rsquo;t
+            set up yet.
+          </span>
         </label>
       </div>
 

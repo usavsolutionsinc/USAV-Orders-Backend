@@ -16,6 +16,7 @@ function profilePayload(settings: OrgSettings) {
     requirePasskeyForNewStaff: settings.requirePasskeyForNewStaff,
     maxConcurrentSessions: settings.maxConcurrentSessions,
     warrantyDays: settings.warrantyDays,
+    packing: settings.packing ?? { enforcement: 'advisory' as const },
     brand: settings.brand ?? {},
   };
 }
@@ -59,6 +60,12 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   }
   if (typeof b.warrantyDays === 'number' && Number.isInteger(b.warrantyDays) && b.warrantyDays >= 1 && b.warrantyDays <= 3650) {
     patch.warrantyDays = b.warrantyDays;
+  }
+  if (b.packing != null && typeof b.packing === 'object' && !Array.isArray(b.packing)) {
+    const mode = (b.packing as Record<string, unknown>).enforcement;
+    patch.packing = {
+      enforcement: mode === 'block_until_matched' ? 'block_until_matched' : 'advisory',
+    };
   }
   if (b.brand != null && typeof b.brand === 'object' && !Array.isArray(b.brand)) {
     const brand = b.brand as Record<string, unknown>;

@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2, Package } from '@/components/Icons';
+import { Check, Loader2, Package, PackageOpen, ChevronRight } from '@/components/Icons';
 import { useSkuQcChecks } from '@/hooks/useSkuQcChecks';
+import { useSkuKitParts } from '@/hooks/useSkuKitParts';
 import { QcChecklistSection } from '@/components/manuals/sections/QcChecklistSection';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 
@@ -19,8 +20,12 @@ export function QcChecklistWorkspace() {
   const rawSkuId = searchParams.get('skuId');
   const skuId = rawSkuId ? Number(rawSkuId) : null;
 
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useSkuQcChecks(skuId);
+  // Sibling per-SKU surface — same sku_catalog.id anchor; surface the kit-parts
+  // count and let the user jump straight to "what's in the box".
+  const { data: kit } = useSkuKitParts(skuId);
 
   const handleRefresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['sku-qc-checks', skuId] });
@@ -94,6 +99,16 @@ export function QcChecklistWorkspace() {
           </div>
         </div>
         <SourceThisButton skuId={catalog.id} label="Source" variant="secondary" />
+        <button
+          type="button"
+          onClick={() => router.replace(`/products?view=kit&skuId=${catalog.id}`)}
+          className="shrink-0 flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-micro font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          title="View what's in this product's box"
+        >
+          <PackageOpen className="h-3 w-3" />
+          {kit?.parts.length ?? 0} kit
+          <ChevronRight className="h-3 w-3" />
+        </button>
         <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-blue-600">
           {checks.length} {checks.length === 1 ? 'step' : 'steps'}
         </span>

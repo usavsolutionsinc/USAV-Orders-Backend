@@ -19,7 +19,6 @@
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useReducedMotion } from 'framer-motion';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,7 +50,6 @@ export default function ReceivingDashboard() {
   useRealtimeToasts('receiving');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const prefersReducedMotion = useReducedMotion();
   const { user } = useAuth();
   const staffId = String(user?.staffId ?? '');
 
@@ -120,7 +118,6 @@ export default function ReceivingDashboard() {
         nav={nav}
         scanInFlight={scanInFlight}
         staffId={staffId}
-        prefersReducedMotion={prefersReducedMotion}
         incomingDetails={incomingDetails}
         onCloseIncoming={() => {
           setIncomingDetails(null);

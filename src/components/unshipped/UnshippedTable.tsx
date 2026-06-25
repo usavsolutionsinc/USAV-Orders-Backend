@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName, safeChannelName } from '@/lib/realtime/channels';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { parseOrdersQueueSort } from '@/components/dashboard/orders-queue/helpers';
+import { UnshippedShelfBoard } from '@/components/unshipped/UnshippedShelfBoard';
 import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
 import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
@@ -88,9 +90,13 @@ export function UnshippedTable({
     stageParam === 'pending' ? 'pending'
       : stageParam === 'tested' ? 'tested'
         : 'all';
+  // Layout switch (`?layout=board`) — the shelf-board pipeline view. Default is
+  // the dense queue table; the board is the axis-flipped overview that coexists
+  // with the right details slider.
+  const layout = String(searchParams.get('layout') || '').toLowerCase() === 'board' ? 'board' : 'table';
   // Sort order from the sidebar Sort control (`?sort`); default keeps priority.
-  const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
-  const sortOrder: 'priority' | 'newest' = sortParam === 'newest' ? 'newest' : 'priority';
+  // Supports priority | newest | deadline | price | staff.
+  const sortOrder = parseOrdersQueueSort(searchParams.get('sort'));
   // Click-to-filter from the status legend (`?ustatus`) — exact derived pre-dock
   // state. Composes on top of the coarse `?stage` facet.
   const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase() as FulfillmentState | '';
@@ -255,6 +261,23 @@ export function UnshippedTable({
         }) === statusFilter;
       })
     : stageRecords;
+
+  if (layout === 'board') {
+    return (
+      <UnshippedShelfBoard
+        records={records}
+        loading={query.isLoading}
+        searchValue={searchQuery}
+        onOpenRecord={(record) => {
+          dispatchOpenShippedDetails(record, 'queue');
+        }}
+        onClearSearch={clearSearch}
+        searchEmptyTitle={searchEmptyTitle}
+        searchResultLabel={searchResultLabel}
+        clearSearchLabel={clearSearchLabel}
+      />
+    );
+  }
 
   return (
     <OrdersQueueTable

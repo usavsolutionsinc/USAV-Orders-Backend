@@ -14,7 +14,7 @@ import {
   saveApiIdempotencyResponse,
 } from '@/lib/api-idempotency';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 const ROUTE_SKU_RELATIONSHIP_POST = 'sku-relationship.post';
 
@@ -38,7 +38,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // ─── Idempotency replay ─────────────────────────────────────────────────
     const idemKey = readIdempotencyKey(req, parsed.idempotencyKey ?? null);
     if (idemKey) {
-      const hit = await getApiIdempotencyResponse(pool, ctx.organizationId, idemKey, ROUTE_SKU_RELATIONSHIP_POST);
+      const hit = await withTenantTransaction(ctx.organizationId, (client) =>
+        getApiIdempotencyResponse(client, ctx.organizationId, idemKey, ROUTE_SKU_RELATIONSHIP_POST),
+      );
       if (hit) {
         return NextResponse.json(hit.response_body, { status: hit.status_code });
       }
@@ -83,26 +85,29 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       notes: parsed.notes ?? null,
     }, ctx.organizationId);
 
-    await recordAudit(pool, ctx, req, {
-      source: 'sku-graph-api',
-      action: AUDIT_ACTION.SKU_RELATIONSHIP_CREATE,
-      entityType: AUDIT_ENTITY.SKU_RELATIONSHIP,
-      entityId: relationship.id,
-      before: null,
-      after: { ...relationship },
-    });
-
     const responseBody = { success: true, relationship };
-    if (idemKey) {
-      await saveApiIdempotencyResponse(pool, {
-        orgId: ctx.organizationId,
-        idempotencyKey: idemKey,
-        route: ROUTE_SKU_RELATIONSHIP_POST,
-        staffId: ctx.staffId,
-        statusCode: 201,
-        responseBody,
+
+    await withTenantTransaction(ctx.organizationId, async (client) => {
+      await recordAudit(client, ctx, req, {
+        source: 'sku-graph-api',
+        action: AUDIT_ACTION.SKU_RELATIONSHIP_CREATE,
+        entityType: AUDIT_ENTITY.SKU_RELATIONSHIP,
+        entityId: relationship.id,
+        before: null,
+        after: { ...relationship },
       });
-    }
+
+      if (idemKey) {
+        await saveApiIdempotencyResponse(client, {
+          orgId: ctx.organizationId,
+          idempotencyKey: idemKey,
+          route: ROUTE_SKU_RELATIONSHIP_POST,
+          staffId: ctx.staffId,
+          statusCode: 201,
+          responseBody,
+        });
+      }
+    });
 
     return NextResponse.json(responseBody, { status: 201 });
   } catch (error: any) {

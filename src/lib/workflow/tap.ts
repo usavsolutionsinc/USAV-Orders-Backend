@@ -45,6 +45,11 @@ export type WorkflowTapEvent =
   | 'repair_completed'
   | 'listed'
   | 'packed'
+  // Fired when the packer confirms the box contents against the SKU's kit-parts
+  // BOM (the kit_verify node). Like 'packed'/'shipped', the node exists ahead of
+  // its tap — no domain site fires this yet; wiring is one tapWorkflow call at
+  // the pack-confirm gate once the packer adopts a scan→confirm step.
+  | 'pack_verified'
   | 'shipped';
 
 export interface WorkflowTapArgs {

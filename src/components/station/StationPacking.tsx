@@ -13,6 +13,7 @@ import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { InlineNotice } from '@/design-system/components';
 import { PackChecklist, type PackKitPart } from './PackChecklist';
+import { usePackingPolicy } from '@/hooks/usePackingPolicy';
 
 interface SkuQcFlag {
   id: number;
@@ -77,6 +78,7 @@ export default function StationPacking({
   const [skuPackNotes, setSkuPackNotes] = useState<string | null>(null);
   const [skuQcFlags, setSkuQcFlags] = useState<SkuQcFlag[]>([]);
   const [skuKitParts, setSkuKitParts] = useState<PackKitPart[]>([]);
+  const { data: packingPolicy } = usePackingPolicy();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch per-SKU pack notes + QA flags + kit-parts BOM whenever the active
@@ -428,6 +430,7 @@ export default function StationPacking({
                   kitParts={skuKitParts}
                   checks={skuQcFlags}
                   resetKey={activeOrder.sku}
+                  enforcement={packingPolicy?.enforcement ?? 'advisory'}
                 />
               </motion.div>
             )}

@@ -13,6 +13,8 @@
 
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { framerPresence } from '@/design-system/foundations/motion-framer';
+import { useMotionPresence } from '@/design-system/foundations/motion-framer-hooks';
 import { TechTable } from '@/components/TechTable';
 import { TestingHistoryList } from '@/components/tech/TestingHistoryList';
 import { ReceivingInboundFeed } from '@/components/station/ReceivingInboundFeed';
@@ -35,7 +37,6 @@ interface TechRightPaneProps {
   onCloseActiveOrder: () => void;
   previewOrder: Order | null;
   onClosePreview: () => void;
-  prefersReducedMotion: boolean | null;
   onSelectLog: (log: ReceivingDetailsLog) => void;
 }
 
@@ -50,9 +51,10 @@ export function TechRightPane({
   onCloseActiveOrder,
   previewOrder,
   onClosePreview,
-  prefersReducedMotion,
   onSelectLog,
 }: TechRightPaneProps) {
+  // Canonical right-pane fade; centralizes prefers-reduced-motion via the hook.
+  const tabFade = useMotionPresence(framerPresence.tableRow);
   if (rightViewMode === 'receiving') {
     return <ReceivingInboundFeed onSelectLog={onSelectLog} />;
   }
@@ -100,9 +102,9 @@ export function TechRightPane({
       ) : (
         <motion.div
           key={`tech-tab-${rightViewMode}`}
-          initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          initial={tabFade.initial}
+          animate={tabFade.animate}
+          exit={tabFade.exit}
           transition={{ duration: 0.16 }}
           className="h-full w-full"
         >

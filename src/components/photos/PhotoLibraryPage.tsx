@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, Link2, Share2, Trash2, X } from '@/components/Icons';
+import { Archive, Download, ExternalLink, Link2, MessageSquare, Share2, Trash2, X } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
@@ -14,7 +14,12 @@ import { PHOTO_LIBRARY_PAGE_SIZE, sourceScopeFromFilters } from '@/lib/photos/li
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
+import { usePackerPhotosRealtimeRefresh } from '@/hooks/usePackerPhotosRealtimeRefresh';
+import { useAuth } from '@/contexts/AuthContext';
+import { ZendeskClaimModal } from '@/components/support/zendesk/claim/ZendeskClaimModal';
+import type { ClaimPhotoInput } from '@/components/support/zendesk/claim/claim-types';
 import { AddToFolderMenu } from './AddToFolderMenu';
+import { PhotoContextMenu, type PhotoContextMenuItem } from './PhotoContextMenu';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
 import { PhotoLibraryToolbar } from './PhotoLibraryToolbar';
@@ -36,9 +41,23 @@ import type { LibraryPhoto } from './photo-library-types';
 
 /** Right pane: 40px header + inline bulk toolbar + photo grid. Filters in sidebar. */
 export function PhotoLibraryPage() {
-  const { filters, display, setView, setPage } = usePhotoLibraryUrlState();
+  const { filters, display, setView, setPage, patch } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
   const queryClient = useQueryClient();
+  const { has } = useAuth();
+  const canZendesk = has('integrations.zendesk');
+
+  // Photos staged for the "Create Zendesk ticket" modal (null = closed).
+  const [claimPhotos, setClaimPhotos] = useState<ClaimPhotoInput[] | null>(null);
+  // Right-click context menu target (null = closed).
+  const [ctxMenu, setCtxMenu] = useState<{ photo: LibraryPhoto; x: number; y: number } | null>(null);
+
+  // Live-refresh when a packer's phone commits a GCS upload (station channel),
+  // mirroring how receiving photos already propagate into the library.
+  const refreshLibraryOnPackerPhoto = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+  }, [queryClient]);
+  usePackerPhotosRealtimeRefresh(null, refreshLibraryOnPackerPhoto);
 
   // `selectMode` is the explicit pencil toggle; selection can also start via a
   // modifier-click / hover checkmark even when it's off (Google-Photos model).
@@ -112,6 +131,76 @@ export function PhotoLibraryPage() {
     window.URL.revokeObjectURL(objectUrl);
   }, []);
 
+  const deletePhotoFromMenu = useCallback(
+    async (id: number) => {
+      if (!window.confirm('Delete this photo? This cannot be undone.')) return;
+      try {
+        const res = await fetch(`/api/photos/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error || 'Delete failed');
+        }
+        dispatchReceivingPhotoChanged({ action: 'delete', photoIds: [id] });
+        await queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+        toast.success('Photo deleted');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Delete failed');
+      }
+    },
+    [queryClient],
+  );
+
+  // Per-photo right-click actions — the "drilling" menu (view, copy link, attach
+  // to a Zendesk ticket, download, delete). Mirrors the bulk toolbar for one photo.
+  const photoMenuItems = useCallback(
+    (photo: LibraryPhoto): PhotoContextMenuItem[] => [
+      {
+        key: 'open',
+        label: 'Open in new tab',
+        icon: <ExternalLink className="h-3.5 w-3.5" />,
+        onClick: () => window.open(`/api/photos/${photo.id}/content`, '_blank', 'noopener'),
+      },
+      {
+        key: 'copy',
+        label: 'Copy shareable link',
+        icon: <Link2 className="h-3.5 w-3.5" />,
+        onClick: () =>
+          void shareLinks.generateAndCopy([photo.id], { ttlSeconds: DEFAULT_SHARE_TTL_SECONDS }),
+      },
+      ...(canZendesk
+        ? [
+            {
+              key: 'zendesk',
+              label: 'Attach to Zendesk ticket',
+              icon: <MessageSquare className="h-3.5 w-3.5" />,
+              onClick: () =>
+                setClaimPhotos([
+                  { id: photo.id, src: photo.thumbUrl, poRef: photo.poRef, caption: photo.caption ?? null },
+                ]),
+            } satisfies PhotoContextMenuItem,
+          ]
+        : []),
+      {
+        key: 'download',
+        label: 'Download',
+        icon: <Download className="h-3.5 w-3.5" />,
+        onClick: () =>
+          void downloadPhotoFile(`/api/photos/${photo.id}/content?download=1`, `photo-${photo.id}.jpg`).catch(
+            () => toast.error('Download failed'),
+          ),
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        danger: true,
+        separatorBefore: true,
+        icon: <Trash2 className="h-3.5 w-3.5" />,
+        onClick: () => void deletePhotoFromMenu(photo.id),
+      },
+    ],
+    [canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
+  );
+
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
     () => [
       {
@@ -177,6 +266,30 @@ export function PhotoLibraryPage() {
           }
         },
       },
+      ...(canZendesk
+        ? [
+            {
+              // Turn the selected library photos into a Zendesk ticket (or a
+              // reply on an existing one) with the photos attached. See the
+              // ZendeskClaimModal — the genuinely-new photo→ticket bridge.
+              key: 'zendesk',
+              label: 'Create Zendesk ticket',
+              icon: <MessageSquare className="h-4 w-4" />,
+              tone: 'blue' as const,
+              primary: false,
+              run: (rows: LibraryPhoto[]) => {
+                setClaimPhotos(
+                  rows.map((row) => ({
+                    id: row.id,
+                    src: row.thumbUrl,
+                    poRef: row.poRef,
+                    caption: row.caption ?? null,
+                  })),
+                );
+              },
+            } satisfies SelectionAction<LibraryPhoto>,
+          ]
+        : []),
       ...(selectedFolderId
         ? [
             {
@@ -234,7 +347,7 @@ export function PhotoLibraryPage() {
         },
       },
     ],
-    [downloadPhotoFile, exitSelectMode, queryClient, removePhotos, selectedFolderId, shareLinks],
+    [canZendesk, downloadPhotoFile, exitSelectMode, queryClient, removePhotos, selectedFolderId, shareLinks],
   );
 
   return (
@@ -244,6 +357,8 @@ export function PhotoLibraryPage() {
         metaLine={metaLine}
         view={view}
         onViewChange={setView}
+        sort={filters.sort ?? 'recent'}
+        onSortChange={(sort) => patch({ sort })}
         page={page}
         totalPages={totalPages}
         onPageChange={setPage}
@@ -270,6 +385,10 @@ export function PhotoLibraryPage() {
           selectionActive={selectionActive}
           selected={selected}
           onSelectTile={selectTile}
+          onPhotoContextMenu={(photo, e) => {
+            e.preventDefault();
+            setCtxMenu({ photo, x: e.clientX, y: e.clientY });
+          }}
           isLoading={query.isLoading}
           error={query.error instanceof Error ? query.error.message : null}
         />
@@ -279,6 +398,25 @@ export function PhotoLibraryPage() {
           </p>
         ) : null}
       </div>
+
+      <ZendeskClaimModal
+        open={claimPhotos !== null}
+        photos={claimPhotos ?? []}
+        onClose={() => setClaimPhotos(null)}
+        onDone={() => {
+          exitSelectMode();
+          void queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+        }}
+      />
+
+      {ctxMenu ? (
+        <PhotoContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          items={photoMenuItems(ctxMenu.photo)}
+          onClose={() => setCtxMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }

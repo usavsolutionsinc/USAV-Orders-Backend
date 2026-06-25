@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 export type SettingsSection =
   | 'hardware' | 'workstation' | 'quick-access' | 'appearance' | 'about'
   | 'security' | 'organization' | 'billing' | 'integrations' | 'team'
-  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog';
+  | 'roles' | 'access' | 'sessions' | 'audit' | 'catalog' | 'legal';
 
 export type SettingsGroup = 'Personal' | 'Organization';
 
@@ -24,6 +24,7 @@ export const SETTINGS_SECTION_OPTIONS: SettingsSectionOption[] = [
   { id: 'appearance',    label: 'Appearance',    description: 'Density, text size',                               group: 'Personal' },
   { id: 'security',      label: 'Security',      description: 'PIN and passkeys',                                 group: 'Personal' },
   { id: 'about',         label: 'About',         description: 'Version & diagnostics',                            group: 'Personal' },
+  { id: 'legal',         label: 'Legal & Policies', description: 'Terms, Privacy & DPA',                          group: 'Personal' },
 
   { id: 'organization',  label: 'Organization',  description: 'Timezone, locale, auth policies, warranty',        group: 'Organization', requires: 'admin.view', href: '/settings/organization' },
   { id: 'billing',       label: 'Billing',       description: 'Plan, entitlements & Stripe portal',               group: 'Organization', requires: 'admin.view', href: '/settings/billing' },

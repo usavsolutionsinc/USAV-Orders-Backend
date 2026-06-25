@@ -86,6 +86,17 @@ type ReceivingPhotoChangedPayload = {
   source: string;
 };
 
+type PackerPhotoChangedPayload = {
+  organizationId: string;
+  action: 'insert' | 'delete';
+  packerLogId: number;
+  /** Human order number (poRef) the photo is filed under in the library. */
+  orderId?: string | null;
+  photoId?: number | null;
+  totalPhotoCount?: number | null;
+  source: string;
+};
+
 type DashboardUpdatePayload = {
   organizationId: string;
   type: 'kpi_update' | 'activity_event' | 'distribution_update' | 'staff_progress_update';
@@ -672,6 +683,34 @@ export async function publishReceivingPhotoChanged(payload: ReceivingPhotoChange
     receiving_id: receivingId,
     receiving_line_id:
       receivingLineId != null && Number.isFinite(receivingLineId) ? receivingLineId : null,
+    photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
+    total_photo_count:
+      totalPhotoCount != null && Number.isFinite(totalPhotoCount) ? totalPhotoCount : null,
+    source: payload.source,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
+/**
+ * Packer photo insert/delete — the packing mirror of
+ * {@link publishReceivingPhotoChanged}. Published on the shared station channel
+ * so the desktop photo library and the mobile packing feed live-refresh the
+ * moment a packer's phone commits a GCS upload. Keyed by `packer_log_id`; the
+ * `order_id` lets subscribers scope to one order without a re-fetch.
+ */
+export async function publishPackerPhotoChanged(payload: PackerPhotoChangedPayload) {
+  const packerLogId = Number(payload.packerLogId);
+  if (!Number.isFinite(packerLogId) || packerLogId <= 0) return;
+
+  const photoId = payload.photoId == null ? null : Number(payload.photoId);
+  const totalPhotoCount =
+    payload.totalPhotoCount == null ? null : Number(payload.totalPhotoCount);
+
+  await publishEvent(getStationChannelName(payload.organizationId), 'packer-photo.changed', {
+    type: 'packer-photo.changed',
+    action: payload.action,
+    packer_log_id: packerLogId,
+    order_id: payload.orderId ?? null,
     photo_id: photoId != null && Number.isFinite(photoId) ? photoId : null,
     total_photo_count:
       totalPhotoCount != null && Number.isFinite(totalPhotoCount) ? totalPhotoCount : null,

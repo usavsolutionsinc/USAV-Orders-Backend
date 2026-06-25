@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/upstash-cache';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { logRouteMetric } from '@/lib/route-metrics';
@@ -690,7 +691,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     sql += ` ORDER BY wa_deadline.deadline_at ASC NULLS LAST, o.id ASC`;
 
-    const result = await pool.query(sql, params);
+    const result = await tenantQuery(ctx.organizationId, sql, params);
 
     const payload = {
       orders:    result.rows,

@@ -11,7 +11,8 @@
  */
 
 import { AnimatePresence, motion } from 'framer-motion';
-import { motionBezier } from '@/design-system/foundations/motion-framer';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionPresence, useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import ReceivingLinesTable from '@/components/station/ReceivingLinesTable';
 import { RECEIVING_SELECTION_SCOPE } from '@/components/station/ReceivingLinesTable';
 import { ContextualSelectionBar } from '@/design-system/components/ContextualSelectionBar';
@@ -59,7 +60,6 @@ interface ReceivingRightPaneProps {
   nav: NavState | null;
   scanInFlight: { tracking: string; startedAt: number } | null;
   staffId: string;
-  prefersReducedMotion: boolean | null;
   incomingDetails: IncomingDetailsTarget | null;
   onCloseIncoming: () => void;
   onCloseWorkspace: () => void;
@@ -77,7 +77,6 @@ export function ReceivingRightPane({
   nav,
   scanInFlight,
   staffId,
-  prefersReducedMotion,
   incomingDetails,
   onCloseIncoming,
   onCloseWorkspace,
@@ -88,6 +87,10 @@ export function ReceivingRightPane({
   // above the workspace (z-20) so it overlays the previously-open line.
   const showScanLoader = !!scanInFlight && !isTableOnlyMode;
   const emptyState = RECEIVING_EMPTY_STATE[mode];
+  // Canonical workbench right-pane crossfade; the hook collapses it to
+  // opacity-only under prefers-reduced-motion (no local branching).
+  const workspacePane = useMotionPresence(framerPresence.workbenchPane);
+  const workspaceTransition = useMotionTransition(framerTransition.workbenchPaneMount);
 
   return (
     <RightPaneOverlayHost className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -139,10 +142,10 @@ export function ReceivingRightPane({
         {showWorkspace ? (
           <motion.div
             key={`workspace-${workspace!.row.id}`}
-            initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
-            transition={{ duration: 0.18, ease: motionBezier.easeOut }}
+            initial={workspacePane.initial}
+            animate={workspacePane.animate}
+            exit={workspacePane.exit}
+            transition={workspaceTransition}
             className="absolute inset-0 z-10"
           >
             <ReceivingLineWorkspace

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight, Folder, Loader2, Pencil, Plus, Trash2 } from '@/components/Icons';
+import { ChevronRight, Folder, Loader2, Pencil, Trash2 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { usePhotoFolders, type PhotoFolderNode } from '@/hooks/usePhotoFolders';
 
@@ -19,7 +19,7 @@ interface PhotoFolderTreeProps {
  * bespoke modal — consistent with the library's other destructive confirms.
  */
 export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolderTreeProps) {
-  const { tree, folders, isLoading, createFolder, renameFolder, deleteFolder, reorderFolders } =
+  const { tree, folders, isLoading, renameFolder, deleteFolder, reorderFolders } =
     usePhotoFolders();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   // Drag-to-reorder among siblings. `dragId` is the folder being dragged;
@@ -52,12 +52,6 @@ export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolde
       return next;
     });
 
-  const promptCreate = (parentId: number | null) => {
-    const name = window.prompt(parentId ? 'New subfolder name' : 'New folder name')?.trim();
-    if (name) createFolder.mutate({ name, parentId });
-    if (name && parentId != null) setExpanded((prev) => new Set(prev).add(parentId));
-  };
-
   const promptRename = (id: number, current: string) => {
     const name = window.prompt('Rename folder', current)?.trim();
     if (name && name !== current) renameFolder.mutate({ id, name });
@@ -72,33 +66,21 @@ export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolde
     }
   };
 
+  // Custom folders are an optional overlay below the station folders. Folder
+  // *creation* was removed from the sidebar (stations are the primary structure);
+  // the section hides entirely when there are none, keeping the rail contextual.
+  if (!isLoading && tree.length === 0) return null;
+
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-micro font-black uppercase tracking-wider text-gray-400">Folders</span>
-        <button
-          type="button"
-          onClick={() => promptCreate(null)}
-          title="New folder"
-          aria-label="New folder"
-          className="-my-0.5 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      <span className="block px-1 text-micro font-black uppercase tracking-wider text-gray-400">
+        Saved folders
+      </span>
 
       {isLoading ? (
         <div className="flex items-center gap-2 px-2 py-2 text-micro text-gray-400">
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
         </div>
-      ) : tree.length === 0 ? (
-        <button
-          type="button"
-          onClick={() => promptCreate(null)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-3 text-micro font-bold uppercase tracking-wider text-gray-400 transition-colors hover:border-gray-300 hover:text-gray-600"
-        >
-          <Plus className="h-3.5 w-3.5" /> New folder
-        </button>
       ) : (
         <ul className="space-y-0.5">
           {tree.map((node) => (
@@ -110,7 +92,6 @@ export function PhotoFolderTree({ selectedFolderId, onSelectFolder }: PhotoFolde
               onToggle={toggle}
               selectedFolderId={selectedFolderId}
               onSelectFolder={onSelectFolder}
-              onCreateSub={promptCreate}
               onRename={promptRename}
               onDelete={confirmDelete}
               dragId={dragId}
@@ -137,7 +118,6 @@ function FolderRow({
   onToggle,
   selectedFolderId,
   onSelectFolder,
-  onCreateSub,
   onRename,
   onDelete,
   dragId,
@@ -153,7 +133,6 @@ function FolderRow({
   onToggle: (id: number) => void;
   selectedFolderId: number | null;
   onSelectFolder: (id: number | null) => void;
-  onCreateSub: (parentId: number | null) => void;
   onRename: (id: number, current: string) => void;
   onDelete: (node: PhotoFolderNode) => void;
   dragId: number | null;
@@ -230,7 +209,6 @@ function FolderRow({
         </button>
 
         <span className="ml-auto hidden shrink-0 items-center gap-0.5 group-hover:flex">
-          <IconBtn label="New subfolder" onClick={() => onCreateSub(node.id)}><Plus className="h-3.5 w-3.5" /></IconBtn>
           <IconBtn label="Rename" onClick={() => onRename(node.id, node.name)}><Pencil className="h-3.5 w-3.5" /></IconBtn>
           <IconBtn label="Delete" tone="rose" onClick={() => onDelete(node)}><Trash2 className="h-3.5 w-3.5" /></IconBtn>
         </span>
@@ -247,7 +225,6 @@ function FolderRow({
               onToggle={onToggle}
               selectedFolderId={selectedFolderId}
               onSelectFolder={onSelectFolder}
-              onCreateSub={onCreateSub}
               onRename={onRename}
               onDelete={onDelete}
               dragId={dragId}

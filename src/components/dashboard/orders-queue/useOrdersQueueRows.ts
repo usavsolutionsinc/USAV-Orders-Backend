@@ -6,6 +6,8 @@ import { groupRowsBy, type RowGroup } from '@/lib/group-rows';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import {
   isShippedByLatestStatus,
+  saleAmountValue,
+  staffSortKey,
   type OrdersQueueMode,
   type OrdersQueueSort,
   type QueueRowRecord,
@@ -66,6 +68,7 @@ export function useOrdersQueueRows({
     // One canonical per-day ordering, shared by the rendered rows AND the flat
     // `displayedRecords` (keyboard nav, awaiting worklist, shift-range select) so
     // the range a shift-click spans matches exactly what's on screen.
+    const deadlineTime = (r: ShippedOrder) => new Date(r.deadline_at || r.created_at || 0).getTime();
     const sortDayRecords = (dayRecords: ShippedOrder[]): ShippedOrder[] =>
       [...dayRecords].sort((a, b) => {
         if (sort === 'newest') {
@@ -73,14 +76,26 @@ export function useOrdersQueueRows({
           const tb = new Date(b.created_at || b.deadline_at || 0).getTime();
           return tb - ta;
         }
-        if (queueMode === 'fulfillment') {
+        // Highest realized sale price first; ties fall through to deadline.
+        if (sort === 'price') {
+          const diff = saleAmountValue(b as QueueRowRecord) - saleAmountValue(a as QueueRowRecord);
+          if (diff !== 0) return diff;
+          return deadlineTime(a) - deadlineTime(b);
+        }
+        // Cluster a day's rows by assigned tester/packer; ties by deadline.
+        if (sort === 'staff') {
+          const cmp = staffSortKey(a as QueueRowRecord).localeCompare(staffSortKey(b as QueueRowRecord));
+          if (cmp !== 0) return cmp;
+          return deadlineTime(a) - deadlineTime(b);
+        }
+        // `deadline` is pure soonest-deadline (most overdue) first — no
+        // tested-before-pending grouping. `priority` keeps that grouping.
+        if (sort === 'priority' && queueMode === 'fulfillment') {
           const testedA = Boolean((a as QueueRowRecord).has_tech_scan) ? 0 : 1;
           const testedB = Boolean((b as QueueRowRecord).has_tech_scan) ? 0 : 1;
           if (testedA !== testedB) return testedA - testedB;
         }
-        const timeA = new Date(a.deadline_at || a.created_at || 0).getTime();
-        const timeB = new Date(b.deadline_at || b.created_at || 0).getTime();
-        return timeA - timeB;
+        return deadlineTime(a) - deadlineTime(b);
       });
 
     const sortedGroupedEntries = Object.entries(groupedRecords)

@@ -567,6 +567,130 @@ export async function getKitParts(
   return result.rows;
 }
 
+/**
+ * Create one kit part (BOM row) under a SKU. Mirrors createQcCheck: when orgId
+ * is provided the INSERT stamps organization_id and runs inside one
+ * withTenantTransaction (GUC set), and attaching a part reactivates a retired
+ * SKU so it resurfaces in the catalog. When omitted, behavior is byte-identical.
+ */
+export async function createKitPart(
+  params: {
+    skuCatalogId: number;
+    componentName: string;
+    componentType?: string;
+    qtyRequired?: number;
+    requiredFor?: string[] | null;
+    isCritical?: boolean;
+    sortOrder?: number;
+  },
+  orgId?: OrgId,
+): Promise<SkuKitPartRow> {
+  const requiredForArr =
+    params.requiredFor != null && params.requiredFor.length > 0 ? params.requiredFor : null;
+
+  const insertValues: unknown[] = [
+    params.skuCatalogId,
+    params.componentName.trim(),
+    params.componentType?.trim() || 'PART',
+    params.qtyRequired ?? 1,
+    requiredForArr,
+    params.isCritical ?? true,
+    params.sortOrder ?? 0,
+  ];
+  if (orgId) insertValues.push(orgId);
+  const insertSql = `INSERT INTO sku_kit_parts
+       (sku_catalog_id, component_name, component_type, qty_required, required_for, is_critical, sort_order${orgId ? ', organization_id' : ''})
+     VALUES ($1, $2, $3, $4, $5::text[], $6, $7${orgId ? ', $8' : ''})
+     RETURNING *`;
+
+  const reactivateSql = `UPDATE sku_catalog SET is_active = true, updated_at = NOW()
+     WHERE id = $1 AND is_active = false${orgId ? ' AND organization_id = $2' : ''}`;
+
+  if (orgId) {
+    return await withTenantTransaction(orgId, async (client) => {
+      const result = await client.query<SkuKitPartRow>(insertSql, insertValues);
+      await client.query(reactivateSql, [params.skuCatalogId, orgId]);
+      return result.rows[0];
+    });
+  }
+
+  const result = await pool.query<SkuKitPartRow>(insertSql, insertValues);
+  await pool.query(reactivateSql, [params.skuCatalogId]);
+  return result.rows[0];
+}
+
+export async function updateKitPart(
+  id: number,
+  updates: {
+    componentName?: string;
+    componentType?: string;
+    qtyRequired?: number;
+    requiredFor?: string[] | null;
+    isCritical?: boolean;
+    sortOrder?: number;
+  },
+  orgId?: OrgId,
+): Promise<SkuKitPartRow | null> {
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  let idx = 1;
+
+  if (updates.componentName !== undefined) {
+    sets.push(`component_name = $${idx++}`);
+    values.push(updates.componentName.trim());
+  }
+  if (updates.componentType !== undefined) {
+    sets.push(`component_type = $${idx++}`);
+    values.push(updates.componentType?.trim() || 'PART');
+  }
+  if (updates.qtyRequired !== undefined) {
+    sets.push(`qty_required = $${idx++}`);
+    values.push(updates.qtyRequired);
+  }
+  if (updates.requiredFor !== undefined) {
+    sets.push(`required_for = $${idx++}::text[]`);
+    values.push(updates.requiredFor != null && updates.requiredFor.length > 0 ? updates.requiredFor : null);
+  }
+  if (updates.isCritical !== undefined) {
+    sets.push(`is_critical = $${idx++}`);
+    values.push(updates.isCritical);
+  }
+  if (updates.sortOrder !== undefined) {
+    sets.push(`sort_order = $${idx++}`);
+    values.push(updates.sortOrder);
+  }
+
+  if (sets.length === 0) return null;
+  const idPlaceholder = idx++;
+  values.push(id);
+
+  // sku_kit_parts is tenant-owned. When orgId is provided we add an explicit
+  // organization_id predicate (a foreign-org id updates 0 rows → the 404 path)
+  // and run via withTenantTransaction. When omitted, behavior is byte-identical.
+  let where = `id = $${idPlaceholder}`;
+  if (orgId) {
+    where += ` AND organization_id = $${idx++}`;
+    values.push(orgId);
+  }
+
+  const sql = `UPDATE sku_kit_parts SET ${sets.join(', ')} WHERE ${where} RETURNING *`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query<SkuKitPartRow>(sql, values))
+    : await pool.query<SkuKitPartRow>(sql, values);
+  return result.rows[0] ?? null;
+}
+
+export async function deleteKitPart(id: number, orgId?: OrgId): Promise<boolean> {
+  // sku_kit_parts is tenant-owned. When orgId is provided we add an explicit
+  // organization_id predicate and run via withTenantTransaction; when omitted,
+  // behavior is byte-identical to before.
+  const sql = `DELETE FROM sku_kit_parts WHERE id = $1${orgId ? ' AND organization_id = $2' : ''}`;
+  const result = orgId
+    ? await withTenantTransaction(orgId, (client) => client.query(sql, [id, orgId]))
+    : await pool.query(sql, [id]);
+  return (result.rowCount || 0) > 0;
+}
+
 // ─── QC Check Templates ─────────────────────────────────────────────────────
 
 export async function getQcChecks(

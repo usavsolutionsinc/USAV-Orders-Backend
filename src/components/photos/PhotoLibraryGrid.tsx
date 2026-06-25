@@ -10,6 +10,7 @@ import type { PhotoLibrarySourceScope, PhotoLibraryViewMode } from '@/lib/photos
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
+import { type MouseEvent as ReactMouseEvent } from 'react';
 import { PhotoThumb } from './PhotoThumb';
 import { useZendeskTicketSubject } from '@/hooks/useZendeskTicketSubject';
 import { cn } from '@/utils/_cn';
@@ -73,6 +74,8 @@ interface PhotoLibraryGridProps {
   selected: Set<number>;
   /** Select/toggle a tile (the page owns range/anchor logic). */
   onSelectTile: (id: number, mods: TileSelectMods) => void;
+  /** Right-click a photo tile — the page opens the contextual action menu. */
+  onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   /** Called after a photo is deleted from the folder viewer so the list refreshes. */
   onPhotoDeleted?: (photoId: number) => void;
   isLoading: boolean;
@@ -211,6 +214,7 @@ export function PhotoLibraryGrid({
   selectionActive,
   selected,
   onSelectTile,
+  onPhotoContextMenu,
   onPhotoDeleted,
   isLoading,
   error,
@@ -274,6 +278,7 @@ export function PhotoLibraryGrid({
                       openAt(photo.id);
                     }
                   }}
+                  onContextMenu={(e) => onPhotoContextMenu?.(photo, e)}
                   className={cn(
                     'flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-50',
                     isSelected && 'bg-blue-50/50',
@@ -318,6 +323,7 @@ export function PhotoLibraryGrid({
         selectionActive={selectionActive}
         selected={selected}
         onSelectTile={onSelectTile}
+        onPhotoContextMenu={onPhotoContextMenu}
         onPhotoDeleted={onPhotoDeleted}
       />
     );
@@ -356,6 +362,7 @@ export function PhotoLibraryGrid({
                     selected={selected.has(photo.id)}
                     onSelect={(mods) => onSelectTile(photo.id, mods)}
                     onOpen={() => openAt(photo.id)}
+                    onContextMenu={onPhotoContextMenu}
                   />
                 ))}
               </div>
@@ -391,6 +398,7 @@ export function PhotoLibraryGrid({
             selected={selected.has(photo.id)}
             onSelect={(mods) => onSelectTile(photo.id, mods)}
             onOpen={() => openAt(photo.id)}
+            onContextMenu={onPhotoContextMenu}
           />
         ))}
       </div>
@@ -411,6 +419,7 @@ function PhotoCard({
   selected,
   onSelect,
   onOpen,
+  onContextMenu,
 }: {
   photo: LibraryPhoto;
   imageUrl: string;
@@ -425,9 +434,12 @@ function PhotoCard({
   onSelect: (mods: TileSelectMods) => void;
   /** Open the shared fullscreen viewer at this photo (flat views only). */
   onOpen?: () => void;
+  /** Right-click handler — surfaces the per-photo action menu. */
+  onContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
 }) {
   return (
     <div
+      onContextMenu={onContextMenu ? (e) => onContextMenu(photo, e) : undefined}
       className={cn(
         'group relative overflow-hidden rounded-lg border bg-white text-left transition-colors',
         masonry && 'mb-3 block w-full break-inside-avoid',
@@ -559,6 +571,7 @@ function FoldersView({
   selectionActive,
   selected,
   onSelectTile,
+  onPhotoContextMenu,
   onPhotoDeleted,
 }: {
   photos: LibraryPhoto[];
@@ -566,6 +579,7 @@ function FoldersView({
   selectionActive: boolean;
   selected: Set<number>;
   onSelectTile: (id: number, mods: TileSelectMods) => void;
+  onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
   const folders = useMemo(() => groupPhotosIntoFolders(photos, scope), [photos, scope]);
@@ -614,6 +628,7 @@ function FoldersView({
               selected={selected.has(photo.id)}
               onSelect={(mods) => onSelectTile(photo.id, mods)}
               onOpen={() => setOpenIndex(i)}
+              onContextMenu={onPhotoContextMenu}
             />
           ))}
         </div>
@@ -662,6 +677,7 @@ function FoldersView({
                 selected={selected.has(photo.id)}
                 onSelect={(mods) => onSelectTile(photo.id, mods)}
                 onOpen={() => setLooseIndex(i)}
+                onContextMenu={onPhotoContextMenu}
               />
             ))}
           </div>

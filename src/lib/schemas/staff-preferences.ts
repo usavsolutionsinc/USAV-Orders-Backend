@@ -16,6 +16,23 @@ export const STAFF_THEMES = ['light', 'dark'] as const;
 export type StaffTheme = (typeof STAFF_THEMES)[number];
 export const DEFAULT_THEME: StaffTheme = 'light';
 
+/** Selectable sort orders for the unshipped queue (board lanes + dense table). */
+const UNSHIPPED_SORTS = ['priority', 'newest', 'deadline', 'price', 'staff'] as const;
+
+/** The three fulfillment lanes, used for the drag-reordered lane order. */
+const UNSHIPPED_LANE_STATES = ['PENDING', 'TESTED', 'BLOCKED'] as const;
+
+/** Per-lane prefs for the unshipped shelf board (sort order + expand state). */
+const UNSHIPPED_LANE_PREF = z
+  .object({
+    sort: z.enum(UNSHIPPED_SORTS).optional(),
+    expanded: z.boolean().optional(),
+    /** Drag-resized body height (px). `null` clears it; absent leaves it unchanged
+     *  — both snap back to the expanded/collapsed preset. */
+    height: z.number().int().positive().max(4000).nullable().optional(),
+  })
+  .strict();
+
 /**
  * PUT body for /api/staff-preferences — a partial patch. Only the keys present
  * are changed (server merges into the JSONB bag). `focusScanHotkey: null`
@@ -29,6 +46,30 @@ export const StaffPreferencesPutBody = z
       .nullable()
       .optional(),
     theme: z.enum(STAFF_THEMES).nullable().optional(),
+    unshippedBoard: z
+      .object({
+        columns: z.union([z.literal(1), z.literal(2)]).optional(),
+        order: z.array(z.enum(UNSHIPPED_LANE_STATES)).optional(),
+        range: z
+          .object({
+            from: z.string().nullable().optional(),
+            to: z.string().nullable().optional(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+        lanes: z
+          .object({
+            PENDING: UNSHIPPED_LANE_PREF.optional(),
+            TESTED: UNSHIPPED_LANE_PREF.optional(),
+            BLOCKED: UNSHIPPED_LANE_PREF.optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
   })
   .strict();
 

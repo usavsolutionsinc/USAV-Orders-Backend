@@ -140,3 +140,62 @@ export function isLaterStage(
 ): boolean {
   return workflowStage(a).order > workflowStage(b).order;
 }
+
+// ── Coarse operator lifecycle (receiving redesign) ──────────────────────────
+//
+// The redesign's operator-facing receiving lifecycle is a COARSE 4-state view
+// (receiving_lines.receiving_line_status), projected from the fine-grained
+// inbound_workflow_status_enum above. The fine states stay authoritative for the
+// testing pipeline; this projection is what the Receiving/Unbox/History modes
+// show and filter on.
+//
+// PROBLEM is NOT a value here — it is an ORTHOGONAL exception dimension
+// (receiving_lines.exception_code / receiving_exceptions) layered on ANY state,
+// so a line can be SCANNED + PROBLEM. This is the SINGLE derive-SoT for
+// receiving_line_status; never inline this mapping (source-of-truth.md).
+
+export type ReceivingLineStatus = 'INCOMING' | 'SCANNED' | 'UNBOXED' | 'RECEIVED';
+
+/** workflow_status → coarse receiving_line_status. */
+const WORKFLOW_TO_LINE_STATUS: Record<string, ReceivingLineStatus> = {
+  EXPECTED: 'INCOMING',
+  ARRIVED: 'SCANNED',
+  MATCHED: 'SCANNED',
+  UNBOXED: 'UNBOXED',
+  // Past unboxing the item is physically received into the building; the
+  // testing/disposition states are the downstream tech pipeline → RECEIVED.
+  AWAITING_TEST: 'RECEIVED',
+  IN_TEST: 'RECEIVED',
+  PASSED: 'RECEIVED',
+  FAILED: 'RECEIVED',
+  RTV: 'RECEIVED',
+  SCRAP: 'RECEIVED',
+  DONE: 'RECEIVED',
+};
+
+/**
+ * Project the fine-grained workflow_status onto the coarse operator lifecycle.
+ * Used to write receiving_lines.receiving_line_status (through the guarded
+ * chokepoint) AND to derive-on-read for legacy rows whose column is still NULL.
+ */
+export function deriveReceivingLineStatus(
+  workflowStatus: string | null | undefined,
+): ReceivingLineStatus {
+  const key = String(workflowStatus ?? '').trim().toUpperCase();
+  return WORKFLOW_TO_LINE_STATUS[key] ?? 'INCOMING';
+}
+
+/**
+ * The coarse status for a row: the stored value when present, else derived from
+ * workflow_status. One reader so legacy NULLs and forward-written rows agree.
+ */
+export function resolveReceivingLineStatus(
+  stored: string | null | undefined,
+  workflowStatus: string | null | undefined,
+): ReceivingLineStatus {
+  const s = String(stored ?? '').trim().toUpperCase();
+  if (s === 'INCOMING' || s === 'SCANNED' || s === 'UNBOXED' || s === 'RECEIVED') {
+    return s as ReceivingLineStatus;
+  }
+  return deriveReceivingLineStatus(workflowStatus);
+}

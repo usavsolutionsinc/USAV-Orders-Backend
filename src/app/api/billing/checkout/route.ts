@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { getOrganization, setOrgStripeIds } from '@/lib/tenancy';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { PLAN_PRICE_IDS } from '@/lib/billing/plans';
 import { createCheckoutSession, createStripeCustomer } from '@/lib/billing/stripe';
 import type { PlatformPlan } from '@/lib/tenancy/constants';
@@ -50,8 +51,18 @@ export const POST = withAuth(async (req, ctx) => {
   // First upgrade for this org — provision a Stripe customer lazily.
   let customerId = org.stripeCustomerId;
   if (!customerId) {
+    // Prefer the real billing email persisted at signup (Phase F1); fall back to
+    // the billing+slug@ placeholder only for orgs created before it was captured.
+    const billed = await tenantQuery<{ billing_email: string | null }>(
+      ctx.organizationId,
+      `SELECT billing_email FROM organizations WHERE id = $1`,
+      [ctx.organizationId],
+    );
+    const customerEmail =
+      billed.rows[0]?.billing_email
+      || `billing+${org.slug}@${process.env.BILLING_NOTIFICATION_DOMAIN || 'example.com'}`;
     const customer = await createStripeCustomer({
-      email: `billing+${org.slug}@${process.env.BILLING_NOTIFICATION_DOMAIN || 'example.com'}`,
+      email: customerEmail,
       name: org.name,
       metadata: { organization_id: org.id, slug: org.slug },
     });

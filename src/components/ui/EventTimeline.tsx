@@ -3,7 +3,8 @@
 import { format, parseISO } from 'date-fns';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
-import type { TimelineItem, TimelineTone, TimelineRef } from '@/lib/timeline/types';
+import type { TimelineItem, TimelineTone, TimelineRef, TimelineGroupKey } from '@/lib/timeline/types';
+import { TIMELINE_OTHER_BAND_KEY } from '@/lib/timeline/types';
 import {
   TrackingChip,
   SerialChip,
@@ -125,6 +126,14 @@ export interface EventTimelineProps {
   density?: Density;
   /** Identifier grouping (the serial↔order toggle). Default `time`. */
   groupMode?: TimelineGroupMode;
+  /**
+   * Override how rows bucket into bands when `groupMode === 'serial'`. Defaults
+   * to the row's own `ref` (`kind:value`). Lets a caller group by a chosen
+   * dimension (order / serial / tracking) without mutating each row's ref/chip —
+   * e.g. the operations journey buckets a unit-lifecycle row under its *order*
+   * band while the row still shows its *serial* chip. Omit ⇒ today's behavior.
+   */
+  groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
 }
 
 /** A serial-view band: an identifier header + that identifier's rows. */
@@ -141,17 +150,26 @@ interface SerialGroup {
  * so the serial view stays newest-first like the time view. Ref-less rows fall
  * into one trailing "Order events" band rather than vanishing.
  */
-function groupBySerial(items: TimelineItem[]): SerialGroup[] {
+function groupBySerial(
+  items: TimelineItem[],
+  groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null,
+): SerialGroup[] {
   const map = new Map<string, SerialGroup>();
-  const NO_REF = '__order__';
+  const NO_REF = TIMELINE_OTHER_BAND_KEY;
   for (const it of items) {
-    const key = it.ref ? `${it.ref.kind}:${it.ref.value}` : NO_REF;
+    // The band a row belongs to is, by default, its own ref identifier. A caller
+    // can override this with `groupKeyOf` to group by a chosen dimension
+    // (order / serial / tracking) without mutating each row's own ref/chip.
+    const gk =
+      groupKeyOf?.(it) ??
+      (it.ref ? { key: `${it.ref.kind}:${it.ref.value}`, label: it.ref.value, ref: it.ref } : null);
+    const key = gk?.key ?? NO_REF;
     let group = map.get(key);
     if (!group) {
       group = {
         key,
-        ref: it.ref ?? null,
-        label: it.ref ? it.ref.value : 'Order events',
+        ref: gk?.ref ?? null,
+        label: gk?.label ?? 'Order events',
         items: [],
       };
       map.set(key, group);
@@ -171,6 +189,7 @@ export function EventTimeline({
   highlightLatest = true,
   density = 'comfortable',
   groupMode = 'time',
+  groupKeyOf,
 }: EventTimelineProps) {
   const reduce = useReducedMotion();
   const d = DENSITY[density];
@@ -187,7 +206,7 @@ export function EventTimeline({
   // exact same row rendering (time grouping off inside a band). This keeps a
   // single timeline primitive — the serial view is the time view, re-bucketed.
   if (groupMode === 'serial') {
-    const groups = groupBySerial(items);
+    const groups = groupBySerial(items, groupKeyOf);
     return (
       <div className="space-y-5">
         {groups.map((g) => (

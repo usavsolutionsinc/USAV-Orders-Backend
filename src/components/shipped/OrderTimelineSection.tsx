@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { TimelineSection } from '@/components/ui/TimelineSection';
+import { IdentifierToggle } from '@/components/ui/IdentifierToggle';
 import type { TimelineGroupMode } from '@/components/ui/EventTimeline';
 import {
   orderAuditToTimeline,
@@ -26,45 +27,11 @@ interface OrderTimelinePayload {
  * TEST_*), merges them newest-first, and renders through the shared
  * {@link EventTimeline}. Self-contained so the panel adds it with one line.
  */
-/**
- * Segmented serial↔order toggle for the order timeline header. `time` = the
- * merged chronological trail (order-based view); `serial` re-buckets the same
- * items under each unit identifier (serial-based view). Pure presentation — both
- * read the identical fetched payload.
- */
-function IdentifierToggle({
-  mode,
-  onChange,
-}: {
-  mode: TimelineGroupMode;
-  onChange: (m: TimelineGroupMode) => void;
-}) {
-  const opts: { value: TimelineGroupMode; label: string }[] = [
-    { value: 'time', label: 'Order' },
-    { value: 'serial', label: 'Serial' },
-  ];
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-md bg-gray-100 p-0.5" role="tablist" aria-label="Timeline grouping">
-      {opts.map((o) => {
-        const active = mode === o.value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(o.value)}
-            className={`rounded px-2 py-0.5 text-eyebrow font-bold uppercase tracking-[0.1em] transition-colors ${
-              active ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+/** Serial↔order toggle options for the order timeline header. */
+const ORDER_TIMELINE_TOGGLE_OPTIONS: ReadonlyArray<{ value: TimelineGroupMode; label: string }> = [
+  { value: 'time', label: 'Order' },
+  { value: 'serial', label: 'Serial' },
+];
 
 export function OrderTimelineSection({ orderId }: { orderId: number }) {
   const [groupMode, setGroupMode] = useState<TimelineGroupMode>('time');
@@ -116,7 +83,14 @@ export function OrderTimelineSection({ orderId }: { orderId: number }) {
       headerRight={
         !isLoading && items.length > 0 ? (
           <div className="flex items-center gap-3">
-            {hasSerials ? <IdentifierToggle mode={groupMode} onChange={setGroupMode} /> : null}
+            {hasSerials ? (
+              <IdentifierToggle
+                value={groupMode}
+                onChange={setGroupMode}
+                options={ORDER_TIMELINE_TOGGLE_OPTIONS}
+                ariaLabel="Timeline grouping"
+              />
+            ) : null}
             <span>{items.length} events</span>
           </div>
         ) : undefined

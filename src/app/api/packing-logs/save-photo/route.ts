@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { uploadPhoto } from '@/lib/photos/service';
 import { photoContentUrl } from '@/lib/photos/display-url';
+import { publishPackerPhotoChanged } from '@/lib/realtime/publish';
+import { countPackerPhotos } from '@/lib/photos/queries/packer-list';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 export const POST = withAuth(async (req: NextRequest, ctx) => {
     try {
@@ -30,6 +33,17 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             fileBuffer: buffer,
             contentType: 'image/jpeg',
             poRef: String(orderId),
+        });
+
+        // Live-refresh the desktop library + mobile packing feed (station channel).
+        await publishPackerPhotoChanged({
+            organizationId: ctx.organizationId as OrgId,
+            action: 'insert',
+            packerLogId: Number(packerLogId),
+            orderId: String(orderId),
+            photoId: result.id,
+            totalPhotoCount: await countPackerPhotos(ctx.organizationId, Number(packerLogId)),
+            source: 'packing-logs.save-photo',
         });
 
         return NextResponse.json({

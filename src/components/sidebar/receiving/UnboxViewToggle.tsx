@@ -8,7 +8,7 @@
 
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { PackageOpen, History, Layers } from '@/components/Icons';
-import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { sidebarNavOverlayBandClass } from '@/components/layout/header-shell';
 import { cn } from '@/utils/_cn';
 import type { UnboxView } from '@/components/sidebar/receiving/useReceivingMode';
 
@@ -19,12 +19,7 @@ interface UnboxViewToggleProps {
 
 export function UnboxViewToggle({ value, onChange }: UnboxViewToggleProps) {
   return (
-    <div
-      className={cn(
-        'sticky top-0 z-10 flex h-[40px] shrink-0 items-center overflow-visible bg-white/90 backdrop-blur',
-        SIDEBAR_GUTTER,
-      )}
-    >
+    <div className={cn(sidebarNavOverlayBandClass)}>
       <HorizontalButtonSlider
         className="w-full"
         items={[
@@ -36,6 +31,7 @@ export function UnboxViewToggle({ value, onChange }: UnboxViewToggleProps) {
         onChange={(id) => onChange(id as UnboxView)}
         variant="nav"
         dense
+        overlay
         aria-label="Unbox queue view"
       />
     </div>

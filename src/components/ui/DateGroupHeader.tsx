@@ -31,6 +31,13 @@ export const dayGroupDateClass = paneHeaderHighContrastTitleClass;
 export const dayGroupCountClass =
   'font-dm-sans text-caption font-semibold tabular-nums text-gray-900';
 
+/** Slim "chip" variant — a small left-aligned pill wrapping the date + total,
+ *  for dense embedded contexts (e.g. the shelf-board bubble cards) where the
+ *  full-bleed band is too heavy. */
+export const dayGroupChipRowClass = 'flex items-center px-3 py-1.5';
+export const dayGroupChipClass =
+  'inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-2.5 py-0.5 shadow-sm';
+
 interface DateGroupHeaderProps {
   date: string;
   total: number;
@@ -48,6 +55,12 @@ interface DateGroupHeaderProps {
    */
   stickyTopClass?: string;
   className?: string;
+  /**
+   * `band` (default) — the full-bleed bordered day band used by every week table.
+   * `chip` — a slim left-aligned pill wrapping the date + total, for dense
+   * embedded contexts (e.g. the shelf-board bubble cards).
+   */
+  variant?: 'band' | 'chip';
 }
 
 export function DateGroupHeader({
@@ -57,7 +70,24 @@ export function DateGroupHeader({
   sticky = true,
   stickyTopClass = 'top-0',
   className,
+  variant = 'band',
 }: DateGroupHeaderProps) {
+  if (variant === 'chip') {
+    return (
+      <div
+        data-date={date}
+        className={cn(sticky && ['sticky z-raised', stickyTopClass], dayGroupChipRowClass, className)}
+      >
+        <span className={dayGroupChipClass}>
+          <span className="text-caption font-bold text-gray-900">{formatDateWithOrdinal(date)}</span>
+          <span className="h-1 w-1 rounded-full bg-gray-300" />
+          <span className="text-caption font-semibold tabular-nums text-gray-500">{total}</span>
+          {actions}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       data-date={date}

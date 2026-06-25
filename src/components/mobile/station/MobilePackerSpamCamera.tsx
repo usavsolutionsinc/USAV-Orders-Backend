@@ -36,9 +36,13 @@ type GallerySlide =
   | { kind: 'capture'; id: string; previewUrl: string; blob: Blob };
 
 export interface MobilePackerSpamCameraProps {
-  /** Called when the user finishes capturing and confirms. Parent owns the blobs after this. */
+  /**
+   * Called when the operator leaves the camera with photos — via the checkmark
+   * OR the X close. Parent owns the blobs after this and is responsible for
+   * uploading them, so no shot is ever lost by exiting "the wrong way".
+   */
   onDone: (shots: CapturedShot[]) => void;
-  /** Called when the user backs out without keeping any photos. */
+  /** Called only when the operator closes an EMPTY camera (no captured photos). */
   onCancel: () => void;
   /** Max photos allowed in one batch. */
   maxPhotos?: number;
@@ -264,11 +268,18 @@ export function MobilePackerSpamCamera({
     onDone(shots);
   }, [onDone, shots]);
 
-  // ── Cancel / back ────────────────────────────────────────────────────────
+  // ── Close / back ───────────────────────────────────────────────────────────
+  // Closing with the X must NOT discard work: any captured shots are committed
+  // (handed off + uploaded) exactly as if the operator had tapped the checkmark.
+  // Only a genuinely empty camera is a plain cancel.
   const handleCancel = useCallback(() => {
-    // shots will be revoked by unmount effect (handedOffRef stays false)
+    if (shots.length > 0) {
+      handedOffRef.current = true;
+      onDone(shots);
+      return;
+    }
     onCancel();
-  }, [onCancel]);
+  }, [shots, onDone, onCancel]);
 
   // Dev-only escape hatch: localhost Safari blocks getUserMedia, so there's
   // no way to exercise the post-capture upload flow. Synthesizes a 1280x720

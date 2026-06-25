@@ -38,10 +38,14 @@ export function MobilePackingList({ packerId, limit = 8 }: { packerId: string; l
   const [sheetRow, setSheetRow] = useState<PackerLogRow | null>(null);
   const openSheet = useCallback((row: PackerLogRow) => setSheetRow(row), []);
   const closeSheet = useCallback(() => setSheetRow(null), []);
-  const buildPhotosHref = useCallback(
-    (row: PackerLogRow) => (row.packer_log_id ? `/m/p/${row.packer_log_id}/photos` : '#'),
-    [],
-  );
+  const buildPhotosHref = useCallback((row: PackerLogRow) => {
+    if (!row.packer_log_id) return '#';
+    // Carry the real order number so packer photos file under it in the library
+    // (poRef) instead of the fallback PL-{id}.
+    const oid = (row.order_id || '').trim();
+    const q = oid ? `?orderId=${encodeURIComponent(oid)}` : '';
+    return `/m/p/${row.packer_log_id}/photos${q}`;
+  }, []);
 
   return (
     <div className="flex h-full w-full flex-col bg-white">

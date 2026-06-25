@@ -68,11 +68,22 @@ export const GET = withAuth(
       const subdomain = process.env.ZENDESK_SUBDOMAIN || 'usav';
 
       if (parsed.query) {
-        const result = await searchTickets(parsed.query, {
+        const { results, count, next_page } = await searchTickets(parsed.query, {
           page: parsed.page,
           perPage: parsed.perPage,
         });
-        return NextResponse.json({ success: true, mode: 'search', subdomain, ...result });
+        // Normalize the Search API shape (`results`) to the list shape (`tickets`)
+        // the client reads. Without this, every status filter (which runs in
+        // search mode) renders empty while only "All" (list mode) works.
+        return NextResponse.json({
+          success: true,
+          mode: 'search',
+          subdomain,
+          tickets: results,
+          count,
+          next_page,
+          previous_page: null,
+        });
       }
 
       const result = await listTickets({
