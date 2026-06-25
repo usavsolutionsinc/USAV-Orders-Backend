@@ -135,7 +135,7 @@ function libraryPhotoMeta(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): 
 
 /** Gallery inputs for a list of library photos, carrying full panel context. */
 function toGalleryInputs(photos: LibraryPhoto[], scope: PhotoLibrarySourceScope): PhotoGalleryInput[] {
-  return photos.map((p) => ({ id: p.id, url: p.displayUrl, meta: libraryPhotoMeta(p, scope) }));
+  return photos.map((p) => ({ id: p.id, url: p.displayUrl, thumbUrl: p.thumbUrl, meta: libraryPhotoMeta(p, scope) }));
 }
 
 /**

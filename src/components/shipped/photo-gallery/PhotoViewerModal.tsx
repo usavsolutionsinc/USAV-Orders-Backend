@@ -53,14 +53,20 @@ function ViewerGridTile({ item, onOpen }: { item: PhotoItem; onOpen: () => void 
       onClick={(e) => { e.stopPropagation(); onOpen(); }}
       className="group relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-white/5 transition hover:border-white/40 focus:border-white/60 focus:outline-none"
     >
-      {item.status === 'loaded' ? (
-        <img src={item.url} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.03]" draggable={false} />
-      ) : item.status === 'error' ? (
+      {item.status === 'error' ? (
         <div className="flex h-full w-full items-center justify-center bg-red-900/30">
           <AlertCircle className="h-6 w-6 text-red-400" />
         </div>
       ) : (
-        <div className="h-full w-full animate-pulse bg-white/10" />
+        // Thumb loads fast and independently of the full-res preload, so tiles
+        // paint immediately instead of sitting black on mobile.
+        <img
+          src={item.thumbUrl ?? item.url}
+          alt=""
+          loading="lazy"
+          className="h-full w-full bg-white/5 object-cover transition group-hover:scale-[1.03]"
+          draggable={false}
+        />
       )}
     </button>
   );
@@ -288,7 +294,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={framerTransition.dropdownOpen}
-        className="relative w-full h-full flex items-center justify-center pl-16 pr-16 py-16"
+        className="relative w-full h-full flex items-center justify-center p-4 sm:pl-16 sm:pr-16 sm:py-16"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={g.onMouseDown}
         onMouseMove={g.onMouseMove}
@@ -300,8 +306,8 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <motion.img
             src={photoItems[currentIndex].url}
             alt={`Photo ${currentIndex + 1}`}
-            className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl select-none"
-            style={{ scale: zoomLevel, rotate: g.rotation, x: g.imagePosition.x, y: g.imagePosition.y, maxHeight: '65vh', maxWidth: '48vw' }}
+            className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none sm:max-h-[65vh] sm:max-w-[48vw]"
+            style={{ scale: zoomLevel, rotate: g.rotation, x: g.imagePosition.x, y: g.imagePosition.y }}
             draggable={false}
           />
         ) : photoItems[currentIndex]?.status === 'error' ? (
@@ -309,6 +315,15 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             <AlertCircle className="h-16 w-16 text-red-400 mb-4" />
             <p className="text-red-300 text-lg font-bold">Failed to load image</p>
           </div>
+        ) : photoItems[currentIndex]?.thumbUrl ? (
+          // Instant low-res placeholder while the full image preloads — never a
+          // black/spinner-only stage on a slow (mobile) connection.
+          <img
+            src={photoItems[currentIndex].thumbUrl}
+            alt={`Photo ${currentIndex + 1}`}
+            className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none blur-[1px] sm:max-h-[65vh] sm:max-w-[48vw]"
+            draggable={false}
+          />
         ) : (
           <div className="w-full max-w-2xl h-96 flex items-center justify-center bg-gray-800/50 rounded-2xl">
             <div className="h-12 w-12 border-4 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
@@ -353,14 +368,12 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                     index === currentIndex ? 'ring-3 ring-white shadow-xl scale-105' : 'opacity-60 hover:opacity-100 hover:scale-105'
                   }`}
                 >
-                  {photo.status === 'loaded' ? (
-                    <img src={photo.url} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
-                  ) : photo.status === 'error' ? (
+                  {photo.status === 'error' ? (
                     <div className="w-full h-full bg-red-900/50 flex items-center justify-center">
                       <AlertCircle className="h-6 w-6 text-red-400" />
                     </div>
                   ) : (
-                    <div className="w-full h-full bg-gray-700 animate-pulse" />
+                    <img src={photo.thumbUrl ?? photo.url} alt={`Thumbnail ${index + 1}`} loading="lazy" className="w-full h-full bg-gray-700 object-cover" />
                   )}
                 </button>
               ))}

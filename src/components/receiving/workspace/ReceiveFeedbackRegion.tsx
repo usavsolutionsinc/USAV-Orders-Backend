@@ -19,7 +19,7 @@
  * the card flips to a retryable amber state rather than leaving false checks.
  * ────────────────────────────────────────────────────────────────────────── */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Variants } from 'framer-motion';
 import { AlertTriangle, Check, ChevronDown, Loader2, X } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
@@ -177,9 +177,7 @@ function ReceiveSuccessChecklist({
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const channel = safeChannelName(() => getStationChannelName(orgId!));
-  const [status, setStatus] = useState<'pending' | 'confirmed' | 'failed'>(
-    result.demoStatus ?? 'pending',
-  );
+  const [status, setStatus] = useState<'pending' | 'confirmed' | 'failed'>('pending');
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   useAblyChannel(
@@ -193,7 +191,7 @@ function ReceiveSuccessChecklist({
       if (!Number.isFinite(rowId) || !result.lineIds.includes(rowId)) return;
       setStatus(verdict === 'ok' ? 'confirmed' : 'failed');
     },
-    result.reconcile && !result.demoStatus && Boolean(orgId) && Boolean(channel),
+    result.reconcile && Boolean(orgId) && Boolean(channel),
   );
 
   const view = buildView(result.summary, status === 'failed');
@@ -400,129 +398,6 @@ export function ReceiveFeedbackRegion({
   );
 }
 
-/* ── Dev/preview test button ─────────────────────────────────────────────── */
-
-function makeSummary(over: Partial<ReceiveSummary>): ReceiveSummary {
-  return {
-    markedReceived: true,
-    descriptionsUpdated: 1,
-    notesUpdated: false,
-    localOnly: false,
-    intent: 'zoho_receive',
-    isUnfound: false,
-    alreadyReceived: false,
-    ...over,
-  };
-}
-
-function demoResult(
-  summary: ReceiveSummary,
-  opts: { reconcile?: boolean; demoStatus?: 'pending' | 'confirmed' | 'failed' } = {},
-): ReceiveResult {
-  const at = Date.now();
-  return {
-    kind: 'success',
-    at,
-    summary,
-    receivingId: 9999,
-    lineIds: [4567, 4568],
-    reconcile: opts.reconcile ?? true,
-    demoStatus: opts.demoStatus,
-    response: {
-      at,
-      durationMs: 1240,
-      httpStatus: 200,
-      ok: true,
-      body: { success: true, demo: true, summary, zoho: { attempted: 1, ok: true, pending: true } },
-    },
-  };
-}
-
-const DEMO_SCENARIOS: Array<{ label: string; build: () => ReceiveResult }> = [
-  {
-    label: 'Receive · SN · notes (syncing)',
-    build: () => demoResult(makeSummary({ descriptionsUpdated: 2, notesUpdated: true }), { demoStatus: 'pending' }),
-  },
-  {
-    label: 'Receive · SN · notes (confirmed)',
-    build: () => demoResult(makeSummary({ descriptionsUpdated: 2, notesUpdated: true }), { demoStatus: 'confirmed' }),
-  },
-  {
-    label: 'Receive · 1 SN',
-    build: () => demoResult(makeSummary({ descriptionsUpdated: 1 }), { demoStatus: 'confirmed' }),
-  },
-  {
-    label: 'Scan only (local)',
-    build: () =>
-      demoResult(
-        makeSummary({ intent: 'scan_only', localOnly: true, markedReceived: false, descriptionsUpdated: 0 }),
-        { reconcile: false },
-      ),
-  },
-  {
-    label: 'Unfound · local',
-    build: () =>
-      demoResult(
-        makeSummary({
-          intent: 'scan_only',
-          localOnly: true,
-          isUnfound: true,
-          markedReceived: false,
-          descriptionsUpdated: 0,
-        }),
-        { reconcile: false },
-      ),
-  },
-  {
-    label: 'Already received',
-    build: () => demoResult(makeSummary({ alreadyReceived: true, descriptionsUpdated: 0 }), { reconcile: false }),
-  },
-  {
-    label: 'Zoho failed',
-    build: () => demoResult(makeSummary({ descriptionsUpdated: 2, notesUpdated: true }), { demoStatus: 'failed' }),
-  },
-];
-
-/**
- * Dev/preview-only trigger that injects a synthetic receive result so the whole
- * ReceiveFeedbackRegion (stagger, details dropdown, reconcile states) can be
- * previewed without a real Zoho roundtrip. Each press advances to the next
- * scenario and re-keys the region (fresh `at`) so the stagger replays. Gated by
- * the caller — never rendered for normal operators.
- */
-export function ReceiveUiTestButton({ onEmit }: { onEmit: (result: ReceiveResult) => void }) {
-  // Self-gate: visible in dev, or on any env via ?receiveUiTest (so it can be
-  // exercised on a preview deploy too). NODE_ENV is the SSR-stable seed; the
-  // query-param escape is applied client-side post-mount to avoid a hydration
-  // mismatch. Never shown to normal operators in production.
-  const [enabled, setEnabled] = useState(process.env.NODE_ENV !== 'production');
-  useEffect(() => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('receiveUiTest')) {
-      setEnabled(true);
-    }
-  }, []);
-
-  const idxRef = useRef(0);
-  const [lastLabel, setLastLabel] = useState<string | null>(null);
-
-  if (!enabled) return null;
-
-  const fire = () => {
-    const scenario = DEMO_SCENARIOS[idxRef.current];
-    onEmit(scenario.build());
-    setLastLabel(scenario.label);
-    idxRef.current = (idxRef.current + 1) % DEMO_SCENARIOS.length;
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={fire}
-      title="Preview the receive feedback UI — each press cycles a scenario (dev/preview only)"
-      className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-violet-300 bg-violet-50 px-2 py-1.5 text-eyebrow font-black uppercase tracking-widest text-violet-700 transition-colors hover:bg-violet-100"
-    >
-      <Check className="h-3 w-3 shrink-0" />
-      {lastLabel ? `Test UI · ${lastLabel}` : 'Test receive UI'}
-    </button>
-  );
-}
+/* The dev/preview ReceiveUiTestButton was removed by request. To preview the
+ * checklist states again, drive a real receive or temporarily inject a
+ * `ReceiveResult` into `setReceiveResult`. */

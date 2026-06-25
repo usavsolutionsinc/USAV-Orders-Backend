@@ -69,12 +69,6 @@ export type ReceiveResult =
       reconcile: boolean;
       /** Raw API response — surfaced in the success card's details dropdown. */
       response: ReceiveResponseRecord;
-      /**
-       * Test-only override for the reconcile status. When set, the checklist
-       * skips the realtime subscription and shows this status outright — used
-       * by the dev ReceiveUiTestButton to preview confirmed / failed states.
-       */
-      demoStatus?: 'pending' | 'confirmed' | 'failed';
     }
   | { kind: 'diagnostic'; response: ReceiveResponseRecord };
 
