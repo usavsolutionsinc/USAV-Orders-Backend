@@ -12,6 +12,7 @@ export const StaffMessageKind = z.enum([
   'note',
   'seller_claim_message',
   'support_assignment',
+  'voicemail_followup',
 ]);
 export type StaffMessageKind = z.infer<typeof StaffMessageKind>;
 

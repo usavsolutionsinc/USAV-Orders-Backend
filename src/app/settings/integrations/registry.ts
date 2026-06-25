@@ -112,6 +112,15 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     connect: 'vault',
     badge: 'bg-emerald-100 text-emerald-700',
   },
+  {
+    key: 'nextiva',
+    label: 'Nextiva',
+    description: 'Business phone — call log, voicemail follow-ups, click-to-call.',
+    category: 'Support',
+    connect: 'vault',
+    healthPath: '/api/integrations/nextiva/health',
+    badge: 'bg-violet-100 text-violet-700',
+  },
 
   // ── Shipping carriers ──
   { key: 'ups',  label: 'UPS',   description: 'Tracking + webhook callbacks.', category: 'Shipping carriers', connect: 'vault', badge: 'bg-amber-100 text-amber-800' },

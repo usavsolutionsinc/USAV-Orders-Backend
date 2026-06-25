@@ -7,7 +7,6 @@ import { MobileTopBar } from './MobileTopBar';
 import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 import { TOKENS } from './DesignSystem';
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
-import { PhotoUploadToaster } from '@/components/mobile/receiving/PhotoUploadToaster';
 import { ErrorBoundary } from '@/components/error/ErrorBoundary';
 
 /**
@@ -39,34 +38,24 @@ function MobilePageError(error: Error, reset: () => void) {
 }
 
 /**
- * Global Mobile Shell for 2026 Redesign
+ * Global Mobile Shell for 2026 Redesign.
+ * Fullscreen photo flows live under `app/m/(immersive)` and do not mount this shell.
  */
 
-// The primary tab pages share ONE identical header (goal chip + global actions).
-// It's rendered once here — outside the route-keyed transition — so it persists
-// across tab navigation instead of re-mounting (and re-fetching the goal) per
-// page. Detail pages (/m/r/*, /m/orders/*, photos…) ship their own headers, so
-// the shared bar is gated to these exact routes.
 const HEADER_ROUTES = new Set(['/m/home', '/m/receiving', '/m/scan', '/m/receive', '/m/pick', '/m/pack']);
 
 export const RedesignedMobileShell = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Navigation now lives in the left slide-over drawer, opened from the menu
-  // button in the shared MobileTopBar. The bar (and thus the menu button) only
-  // renders on the primary header routes below, so capture flows (`…/photos`
-  // full-screen camera surfaces) and the sign-in screen never get the toggle.
   const showHeader = !!pathname && HEADER_ROUTES.has(pathname);
 
   return (
-    <div className={`flex h-[100dvh] min-h-0 flex-col ${TOKENS.colors.background} font-sans antialiased overflow-hidden`}>
-      {/* Shared header — rendered once, persists across tab navigation. The
-          menu button opens the left navigation drawer. */}
+    <div
+      className={`flex h-full min-h-0 flex-col overflow-hidden font-sans antialiased safe-area-padding ${TOKENS.colors.background}`}
+    >
       {showHeader && <MobileTopBar onMenu={() => setSidebarOpen(true)} />}
 
-      {/* Page Content with Transitions */}
-      <main className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain pb-safe">
+      <main className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <AnimatePresence mode="wait">
           <motion.div
             key={pathname}
@@ -75,7 +64,7 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
             exit={{ opacity: 0 }}
             transition={{
               duration: 0.15,
-              ease: [0.23, 1, 0.32, 1] // Custom ease-out
+              ease: [0.23, 1, 0.32, 1],
             }}
             className="h-full"
           >
@@ -86,18 +75,11 @@ export const RedesignedMobileShell = ({ children }: { children: React.ReactNode 
         </AnimatePresence>
       </main>
 
-      {/* Left navigation drawer (replaces the old fixed bottom nav). Wrapped in
-          Suspense because it reads `?mode=` via useSearchParams to highlight the
-          active receiving sub-mode. */}
       <Suspense fallback={null}>
         <MobileSidebarDrawer open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       </Suspense>
 
-      {/* Phone↔desktop receiving bridge (scan → camera, share → sheet). */}
       <ReceivingPhoneBridgeMount />
-
-      {/* Surfaces background photo-upload success (animated check) / failure. */}
-      <PhotoUploadToaster />
     </div>
   );
 };

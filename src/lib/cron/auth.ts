@@ -7,17 +7,14 @@
  * scheduled invocation.
  */
 
+import { resolvePublicAppUrl } from '@/lib/env-utils';
+
 /**
  * Resolve the app's public base URL (no trailing slash). Used by jobs that
  * need to build absolute URLs (callbacks, self-referential fetches).
  */
 export function getAppBaseUrl(): string {
-  const explicit =
-    process.env.APP_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
-
-  const normalized = String(explicit || '').trim().replace(/\/$/, '');
+  const normalized = resolvePublicAppUrl();
   if (!normalized) {
     throw new Error('APP_URL, NEXT_PUBLIC_APP_URL, or VERCEL_URL is required');
   }

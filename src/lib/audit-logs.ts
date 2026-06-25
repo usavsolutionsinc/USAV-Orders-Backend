@@ -121,6 +121,9 @@ export const AUDIT_ENTITY = {
   WORKFLOW_DEFINITION: 'workflow_definition',
   // Operations ▸ History — server-backed Master Journey saved views
   OPERATIONS_SAVED_VIEW: 'operations_saved_view',
+  // Voice (Nextiva) — Support ▸ Voicemail / Calls
+  VOICEMAIL: 'voicemail',
+  CALL_EVENT: 'call_event',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -281,6 +284,10 @@ export const AUDIT_ACTION = {
   OPERATIONS_SAVED_VIEW_CREATE: 'operations.saved_view.create',
   OPERATIONS_SAVED_VIEW_UPDATE: 'operations.saved_view.update',
   OPERATIONS_SAVED_VIEW_DELETE: 'operations.saved_view.delete',
+  // Voice (Nextiva) — Support ▸ Voicemail / Calls
+  VOICEMAIL_FOLLOWUP_RESOLVED: 'voicemail.followup.resolved',
+  VOICEMAIL_LINKED:            'voicemail.linked',
+  VOICE_CALL_ORIGINATED:       'voice.call.originated',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];

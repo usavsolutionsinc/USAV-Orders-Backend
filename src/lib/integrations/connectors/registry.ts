@@ -71,6 +71,17 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
   zendesk: { provider: 'zendesk', authKind: 'vault', capabilities: [] },
   ably: { provider: 'ably', authKind: 'vault', capabilities: [] },
   ollama: { provider: 'ollama', authKind: 'vault', capabilities: [] },
+  // Voice — business phone (call log + voicemail follow-ups + click-to-call).
+  // authKind is confirmed in the Phase 0 spike; vault is the default. sync() is
+  // the catch-up poll (webhooks are the realtime path) — lazy-imported so the
+  // connection reader never pulls the Nextiva client.
+  nextiva: {
+    provider: 'nextiva',
+    authKind: 'vault',
+    capabilities: ['voice'],
+    healthPath: '/api/integrations/nextiva/health',
+    sync: (orgId) => import('./nextiva').then((m) => m.nextivaSync(orgId)),
+  },
 };
 
 /** Connector for a provider, or undefined for an unknown/legacy provider

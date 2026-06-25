@@ -15,7 +15,6 @@ import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
 import { usePhoneScanBridge } from '@/hooks/usePhoneScanBridge';
 import { useGlobalWedgeScanner } from '@/hooks/useGlobalWedgeScanner';
-import { OfflineBanner } from '@/components/layout/OfflineBanner';
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
 
 /**
@@ -187,7 +186,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // deterministically (see `onMobileRoute`), so there's nothing to wait for and
   // the blank would just be an extra refresh flash.
   if (!mounted && !onMobileRoute) {
-    return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
+    return <div className="flex min-h-0 flex-1 bg-white" aria-hidden="true" />;
   }
 
   // Drawer overlay is rendered regardless of which branch is active so pages
@@ -248,10 +247,9 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // resolves, so a refresh never flashes the desktop frame.
   if (!isMobile && !onMobileRoute) {
     return (
-      <div className="flex h-full w-full overflow-hidden">
+      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
         <GlobalWedgeScannerMount />
         <PhoneScanBridgeMount />
-        <OfflineBanner />
         {!sidebarCollapsed && (
           <ErrorBoundary
             label="sidebar"
@@ -318,7 +316,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   }
 
   if (mobileRouteRestricted) {
-    return <div className="flex h-full w-full bg-white" aria-hidden="true" />;
+    return <div className="flex min-h-0 flex-1 bg-white" aria-hidden="true" />;
   }
 
   // ── Mobile layout: content only ──
@@ -327,7 +325,7 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
   // overlay FABs — scan is the centre tab; quick access lives in page headers
   // where a route ships its own mobile chrome.
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Mirror of desktop: subscribe to phone:{staffId} so any device the
           user is signed in on can service the lookup. */}
       <PhoneScanBridgeMount />
@@ -336,7 +334,6 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
       {/* Same wedge scanner listener as desktop — works for HID-over-USB on
           tablets and Bluetooth ring scanners paired to a phone. */}
       <GlobalWedgeScannerMount />
-      <OfflineBanner />
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {children}

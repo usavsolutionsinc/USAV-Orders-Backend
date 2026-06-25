@@ -39,7 +39,8 @@ export type IntegrationProvider =
   | 'google_sheets'
   | 'ably'
   | 'ollama'
-  | 'stripe';
+  | 'stripe'
+  | 'nextiva';
 
 export interface EbayCredentials {
   appId: string;
@@ -91,6 +92,31 @@ export interface GoogleSheetsCredentials { clientEmail: string; privateKey: stri
 export interface AblyCredentials { apiKey: string }
 export interface OllamaCredentials { baseUrl: string; tunnelUrl?: string; model: string }
 export interface StripeCredentials { secretKey: string; publishableKey: string; webhookSecret: string }
+
+/**
+ * Nextiva (business phone) credentials. Auth model is confirmed in the Phase 0
+ * spike (docs/nextiva-voice-support-mode-plan.md §9) — vault API key vs OAuth
+ * refresh token — so both shapes are optional here until that lands.
+ *   - accountId / locationId — Nextiva account ref, used to resolve org on the
+ *     (tokenless) legacy webhook path.
+ *   - webhookToken  — our per-tenant, unguessable id in the webhook URL
+ *     (/api/integrations/nextiva/webhook/{webhookToken}); also mirrored to the
+ *     indexed organization_integrations.webhook_token column for O(1) token→org.
+ *   - webhookSigningSecret — this org's OWN HMAC secret; deliveries are verified
+ *     against it so a forged body cannot cross tenants. (Mirrors the Zoho model.)
+ */
+export interface NextivaCredentials {
+  apiKey?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  expiresAt?: number;
+  accountId?: string;
+  locationId?: string;
+  /** Nextiva extension to originate click-to-call from, per agent (optional). */
+  defaultExtension?: string;
+  webhookToken?: string;
+  webhookSigningSecret?: string;
+}
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
 
@@ -209,6 +235,20 @@ function envFallback(provider: IntegrationProvider): unknown | null {
             webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
       if (!secretKey || !publishableKey || !webhookSecret) return null;
       const cred: StripeCredentials = { secretKey, publishableKey, webhookSecret };
+      return cred;
+    }
+    case 'nextiva': {
+      // Vault-only by default; an env bootstrap is supported for USAV's single
+      // tenant so the connector can light up before the settings Connect flow.
+      const apiKey = process.env.NEXTIVA_API_KEY;
+      const webhookSigningSecret = process.env.NEXTIVA_WEBHOOK_SECRET;
+      if (!apiKey) return null;
+      const cred: NextivaCredentials = {
+        apiKey,
+        accountId: process.env.NEXTIVA_ACCOUNT_ID || undefined,
+        webhookToken: process.env.NEXTIVA_WEBHOOK_TOKEN || undefined,
+        webhookSigningSecret: webhookSigningSecret || undefined,
+      };
       return cred;
     }
     case 'ecwid': case 'square':

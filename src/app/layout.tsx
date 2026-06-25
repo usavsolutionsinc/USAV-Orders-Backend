@@ -14,7 +14,7 @@ import { ThemeSync } from "../components/theme/ThemeSync";
 import { AuthenticatedAblyProvider } from "../components/providers/AuthenticatedAblyProvider";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
 import { designTokenStyleText } from '@/styles/tokens';
-import { OfflineBanner } from "../components/station/OfflineBanner";
+import { OfflineBanner } from "../components/layout/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
 import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
@@ -29,7 +29,7 @@ export default async function RootLayout({
     const initialUser = await getInitialAuthUser();
 
     return (
-        <html lang="en">
+        <html lang="en" className="h-full overflow-hidden">
             <head>
                 <title>USAV Solutions</title>
                 <meta name="description" content="USAV Solutions — Station Operations" />
@@ -48,33 +48,41 @@ export default async function RootLayout({
                 {/* Applies the cached theme before paint (no light→dark flash). */}
                 <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
             </head>
-            <body className="antialiased" style={{ margin: 0, padding: 0, overflow: 'hidden', height: '100dvh', minHeight: '100vh', paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <body className="antialiased m-0 overflow-hidden bg-white">
                 <ElectronDragStrip />
-                <OfflineBanner />
-                <Providers>
-                    <AuthProvider initial={initialUser}>
-                        <AuthenticatedAblyProvider>
-                            <ActivityInboxProvider>
-                            <StaffColorsProvider>
-                            <StaffSwitcherProvider>
-                                <HeaderProvider>
-                                    <FbaWorkspaceProvider>
-                                        <StudioWorkspaceProvider>
-                                            <ResponsiveLayout>
-                                                {children}
-                                            </ResponsiveLayout>
-                                        </StudioWorkspaceProvider>
-                                    </FbaWorkspaceProvider>
-                                </HeaderProvider>
-                                <SwitchStaffSheet />
-                                <ScanHotkeySync />
-                                <ThemeSync />
-                            </StaffSwitcherProvider>
-                            </StaffColorsProvider>
-                            </ActivityInboxProvider>
-                        </AuthenticatedAblyProvider>
-                    </AuthProvider>
-                </Providers>
+                {/*
+                  Pin the app to the visual viewport. Body must NOT carry safe-area
+                  padding or min-height:100vh — both caused first-load gaps (URL bar
+                  vs dvh) and clipped the mobile header when nested shells also used
+                  100dvh / h-full. Safe areas live on mobile chrome instead.
+                */}
+                <div id="app-root" className="fixed inset-0 flex min-h-0 flex-col overflow-hidden">
+                    <OfflineBanner />
+                    <Providers>
+                        <AuthProvider initial={initialUser}>
+                            <AuthenticatedAblyProvider>
+                                <ActivityInboxProvider>
+                                <StaffColorsProvider>
+                                <StaffSwitcherProvider>
+                                    <HeaderProvider>
+                                        <FbaWorkspaceProvider>
+                                            <StudioWorkspaceProvider>
+                                                <ResponsiveLayout>
+                                                    {children}
+                                                </ResponsiveLayout>
+                                            </StudioWorkspaceProvider>
+                                        </FbaWorkspaceProvider>
+                                    </HeaderProvider>
+                                    <SwitchStaffSheet />
+                                    <ScanHotkeySync />
+                                    <ThemeSync />
+                                </StaffSwitcherProvider>
+                                </StaffColorsProvider>
+                                </ActivityInboxProvider>
+                            </AuthenticatedAblyProvider>
+                        </AuthProvider>
+                    </Providers>
+                </div>
                 <InstallPrompt />
                 <AppearanceApplier />
                 <Analytics />

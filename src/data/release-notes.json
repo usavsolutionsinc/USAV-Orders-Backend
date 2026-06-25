@@ -1,7 +1,37 @@
 {
-  "generatedAt": "2026-06-25T06:55:00.330Z",
+  "generatedAt": "2026-06-25T17:57:48.243Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "15be28c1b08351dcb080536a6309411bcd74d00b",
+      "shortSha": "15be28c1",
+      "date": "2026-06-25T10:57:29-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "Sync receiving Zoho notes and item descriptions bidirectionally with inline feedback.",
+      "body": "Push per-line item descriptions and carton PO header notes to Zoho on save/receive, append SN+condition on receive for serialized lines, and add carton zoho-sync plus shared inline action feedback in the workspace.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Sync receiving Zoho notes and item descriptions bidirectionally with inline feedback."
+    },
+    {
+      "sha": "201cfaa2e23fb88fb64e9a026a85a2e32c078d45",
+      "shortSha": "201cfaa2",
+      "date": "2026-06-25T09:08:00-07:00",
+      "author": "DENSENSE8",
+      "subject": "receiving notes 3-tab + photo lightbox fixes; drop receive UI test button",
+      "body": "- LineNotesTabbedCard: surface overall Zoho PO note as its own \"PO note\" tab\n  instead of a bottom-right expander (Notes / PO note / Checklist)\n- ReceiveFeedbackRegion: remove dev/preview ReceiveUiTestButton + demo scenarios\n- shipped photo gallery: lightbox/viewer fixes and util updates\n- update photo-mobile-lightbox e2e spec\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01KhxJ4swL1EYJCgw99ZMG6z",
+      "type": "other",
+      "title": "receiving notes 3-tab + photo lightbox fixes; drop receive UI test button"
+    },
+    {
+      "sha": "ae0ee2c69268addc5b6912492f152531ab08a045",
+      "shortSha": "ae0ee2c6",
+      "date": "2026-06-25T08:54:40-07:00",
+      "author": "DENSENSE8",
+      "subject": "zoho receiving and photo library and mobile updates",
+      "body": "",
+      "type": "other",
+      "title": "zoho receiving and photo library and mobile updates"
+    },
     {
       "sha": "7a1f2ed8a086075c9bb4d6d5aade8ad2f3b82444",
       "shortSha": "7a1f2ed8",
@@ -1951,36 +1981,6 @@
       "body": "Two long-missing shell affordances:\n\n1. Edit menu (cut/copy/paste/select-all). The menu was just View + Window,\n   so Cmd+V was never routed through Electron's role-based clipboard\n   handler — meaning paste into embedded <webview> content (the Zoho login\n   form via the new ZohoSplitPane) silently failed. Adding the Edit\n   submenu — plus the standard macOS app submenu — wires Cmd+C / Cmd+V /\n   Cmd+X / Cmd+A into the focused guest page.\n\n2. ElectronDragStrip. titleBarStyle:'hiddenInset' removes the native title\n   bar but the renderer's content covered y=0 with no app-region:drag,\n   leaving the window un-draggable. The new component is a fixed 28px\n   strip at the top: WebkitAppRegion:'drag' with pointer-events:none, so\n   mousedown drags the window while regular clicks pass through to the\n   UI below. On macOS we leave a 78px gap for the traffic-light buttons.\n   Mounted in app/layout.tsx; only renders when desktopApp.isElectron.",
       "type": "feature",
       "title": "Edit menu + draggable top strip"
-    },
-    {
-      "sha": "c4452a12e09dbb383d45288af7357ef76201b55d",
-      "shortSha": "c4452a12",
-      "date": "2026-05-22T11:26:23-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "feat(receiving): optimistic receive, idempotent rescans, Zoho slide-in pane",
-      "body": "OVER_RECEIVE → graceful: receiveLineUnits short-circuits when the same serial\nis already on this line, returning already_received instead of throwing. UI\nswaps the over-receive confirm dialog for a success toast in that case.\n\nIdempotency wrapper: scan-serial + mark-received-po now cache responses in\napi_idempotency_responses by (Idempotency-Key | client_event_id, route), so\nnetwork retries replay the same answer instead of re-running.\n\nOptimistic Receive: mark-received-po returns success as soon as local DB\nwrites commit. Lines eager-promote to DONE locally (SoT is here, not Zoho).\ncreatePurchaseReceive + description PUT + DONE-gate moved into after();\nZoho \"already created a receive for all the items\" is treated as success.\nOperator sees 1/1 + green dot immediately; Zoho catches up in the\nbackground.\n\nConnection-pool fix: threaded the receiveLineUnits transaction client into\nthe ledger / tech_serial_numbers / inventory_events writes that previously\nused pool.query — they were grabbing a second connection out of poolMax=3\nin prod and tripping the 30s query_timeout under concurrent receivers.\n\nDot color sync: every receiving status dot (mobile rows + carton sheet +\nstation table + recent rail) now turns emerald when received >= expected,\nmatching the green qty text instead of staying blue on MATCHED.\n\nZoho slide-in: per-line flow header gets an \"Open in Zoho\" action that\nreveals an in-app right-side pane (ZohoSplitPane). Electron mounts the\nembedded webview; browser tabs see an \"Open in Zoho\" link. Draggable\nleft edge resizes; width is persisted to localStorage. No popup windows.\n\nHydration fix: PoLinesAccordion was nesting a <div> chip inside a <p>.",
-      "type": "feature",
-      "title": "optimistic receive, idempotent rescans, Zoho slide-in pane"
-    },
-    {
-      "sha": "5e19cd9197b8ace5573b5c262dd56988fdced00e",
-      "shortSha": "5e19cd91",
-      "date": "2026-05-22T10:18:21-07:00",
-      "author": "usavsolutionsinc",
-      "subject": "fixed ts error",
-      "body": "",
-      "type": "fix",
-      "title": "fixed ts error"
-    },
-    {
-      "sha": "5e9208c97d7143c48c2b3fcd53bbc503842f2569",
-      "shortSha": "5e9208c9",
-      "date": "2026-05-22T08:49:21-07:00",
-      "author": "DENSENSE8",
-      "subject": "feat: receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements",
-      "body": "- Receiving: refactored line workspace, serial scanning, condition pills, photo capture, audit timeline, and mobile receiving flow\n- SKU catalog: new pairing hub with batch pairing, pairing queue, suggestion seeding, and pairing-queries lib\n- PO mailbox: added triage routes/components and LLM-based extraction helper\n- Barcode/labels: new GS1 DataMatrix, location/rack label printers, label room sidebar, and printer store hook\n- Warehouse: rack detail/label workspace, room finder context, room sidebar list\n- Shipped details panel: removed legacy panel and shipping edit card, updated stacks and action bar\n- Mobile: new bottom nav, mobile home/history routes, scan FAB improvements\n- Inventory v2: controls panel, URL state hook, removed moved-banner\n- Misc: barcode routing updates, receiving label helpers, manifest/icon updates, cleanup of unused hooks/components\n\nCo-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>",
-      "type": "feature",
-      "title": "receiving workflow overhaul, SKU pairing hub, PO mailbox triage, and warehouse/label improvements"
     }
   ]
 }

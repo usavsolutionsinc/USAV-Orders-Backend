@@ -55,6 +55,11 @@ export interface MobilePackerSpamCameraProps {
   priorPhotos?: PriorPhoto[];
   /** Remove a previously saved photo (by DB id) from the swipe gallery. */
   onDeletePrior?: (photoId: number) => void | Promise<void>;
+  /**
+   * When true, render in the route tree (immersive layout) instead of portaling
+   * to document.body. The swipe viewer still portals for z-index stacking.
+   */
+  embedded?: boolean;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -84,6 +89,7 @@ export function MobilePackerSpamCamera({
   header,
   priorPhotos = [],
   onDeletePrior,
+  embedded = false,
 }: MobilePackerSpamCameraProps) {
   const { videoRef, startCamera, stopCamera, cameraError } = useCamera();
   const viewfinderRef = useRef<HTMLDivElement>(null);
@@ -326,7 +332,7 @@ export function MobilePackerSpamCamera({
       animate={framerPresenceMobile.camera.animate}
       exit={framerPresenceMobile.camera.exit}
       transition={framerTransitionMobile.cameraEnter}
-      className="fixed inset-0 z-modal overflow-hidden bg-black select-none"
+      className={`${embedded ? 'absolute' : 'fixed'} inset-0 z-modal overflow-hidden bg-black select-none`}
     >
       {/* ── Full-bleed viewfinder ── */}
       <div ref={viewfinderRef} className="absolute inset-0">
@@ -481,5 +487,12 @@ export function MobilePackerSpamCamera({
     </motion.div>
   );
 
+  if (embedded) {
+    return (
+      <div className="relative h-full min-h-[100dvh] w-full overflow-hidden">
+        {cameraUi}
+      </div>
+    );
+  }
   return mounted ? createPortal(cameraUi, document.body) : null;
 }

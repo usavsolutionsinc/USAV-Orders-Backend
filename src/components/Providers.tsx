@@ -26,7 +26,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             <UIModeProvider>
                 <SiteTooltipProvider>
                     <StepUpProvider>
-                        {children}
+                        <div className="flex min-h-0 flex-1 flex-col">
+                            {children}
+                        </div>
                     </StepUpProvider>
                 </SiteTooltipProvider>
             </UIModeProvider>

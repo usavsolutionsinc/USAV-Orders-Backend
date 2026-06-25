@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeEnvValue } from '@/lib/env-utils';
+import { normalizeEnvValue, resolvePublicAppUrl } from '@/lib/env-utils';
 import { getCurrentUser } from '@/lib/auth/current-user';
 import {
   getIntegrationCredentials,
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
   const clientId = normalizeEnvValue(process.env.ZOHO_CLIENT_ID);
   const clientSecret = normalizeEnvValue(process.env.ZOHO_CLIENT_SECRET);
-  const appUrl = normalizeEnvValue(process.env.NEXT_PUBLIC_APP_URL).replace(/\/$/, '');
+  const appUrl = resolvePublicAppUrl();
 
   if (!clientId || !clientSecret) {
     return NextResponse.json(

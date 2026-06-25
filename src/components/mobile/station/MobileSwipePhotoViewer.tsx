@@ -307,7 +307,7 @@ export function MobileSwipePhotoViewer({
             {/* Pager — side-by-side track that follows the horizontal drag. */}
             <motion.div
               className="flex h-full"
-              style={{ x: trackX, width: `${Math.max(slides.length, 1) * 100}%`, touchAction: 'none', willChange: 'transform' }}
+              style={{ x: trackX, touchAction: 'none', willChange: 'transform' }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -316,7 +316,7 @@ export function MobileSwipePhotoViewer({
               {slides.map((slide, i) => (
                 <div
                   key={slide.id}
-                  className="flex h-full w-full shrink-0 items-center justify-center"
+                  className="flex h-[100dvh] w-[100vw] shrink-0 items-center justify-center"
                 >
                   {/* Only mount the current photo and its immediate neighbours so
                       a swipe reveals an already-decoded image, never a flash. */}

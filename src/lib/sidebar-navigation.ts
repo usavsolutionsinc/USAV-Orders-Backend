@@ -42,6 +42,8 @@ import {
   Warehouse,
   ShelvingUnit,
   Box,
+  Phone,
+  Voicemail,
 } from '@/components/Icons';
 import { ADMIN_SECTION_OPTIONS } from '@/components/admin/admin-sections';
 
@@ -339,6 +341,7 @@ const TECH = '/tech';
 const WALK_IN = '/walk-in';
 const ADMIN = '/admin';
 const OUTBOUND = '/outbound';
+const SUPPORT = '/support';
 const PACKER = '/packer';
 
 export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
@@ -559,6 +562,26 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
       if (params.get('mode') === 'sales') return 'sales';
       const t = params.get('tab');
       return t === 'done' ? t : 'active';
+    },
+  },
+  // ── Support ───────────────────────────────────────────────────────────────
+  // `?mode=voicemail|calls`; bare /support = the Zendesk Tickets console
+  // (default, param cleared) for deep-link back-compat. Voicemail is a Workbench
+  // (pick a follow-up → detail), Calls is a Monitor (observe the call stream).
+  // Every switch clears the mode-scoped params (selection, search, filters) so
+  // each mode opens clean.
+  {
+    id: 'support', label: 'Support', href: SUPPORT, icon: AlertCircle, kind: 'bottom', requires: 'integrations.zendesk',
+    modes: [
+      { id: 'tickets',   label: 'Tickets',   icon: Inbox,     to: () => ({ pathname: SUPPORT, params: { mode: null,        ticket: null, vm: null, q: null, status: null, assignee: null, direction: null, range: null } }) },
+      { id: 'voicemail', label: 'Voicemail', icon: Voicemail, to: () => ({ pathname: SUPPORT, params: { mode: 'voicemail', ticket: null, vm: null, q: null, status: null, assignee: null, direction: null, range: null } }) },
+      { id: 'calls',     label: 'Calls',     icon: Phone,     to: () => ({ pathname: SUPPORT, params: { mode: 'calls',     ticket: null, vm: null, q: null, status: null, assignee: null, direction: null, range: null } }) },
+    ],
+    resolveMode: ({ params }) => {
+      const m = params.get('mode');
+      if (m === 'voicemail') return 'voicemail';
+      if (m === 'calls') return 'calls';
+      return 'tickets';
     },
   },
   // ── Admin (grouped section rows — dropdown only, NO L2 rail) ───────────────

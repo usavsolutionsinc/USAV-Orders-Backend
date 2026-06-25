@@ -157,6 +157,34 @@ export async function publishDashboardUpdate(payload: DashboardUpdatePayload) {
   });
 }
 
+export type VoiceEventPayload = {
+  organizationId: string;
+  /** What changed, so the client knows which query keys to invalidate. */
+  kind: 'call' | 'voicemail';
+  /** 'created' | 'updated' — voicemail follow-up resolution also rides 'updated'. */
+  change: 'created' | 'updated';
+  callEventId?: number | null;
+  voicemailId?: number | null;
+};
+
+/**
+ * Nudge the Support page that a call/voicemail landed or changed, so the
+ * Voicemail Workbench and Call Log Monitor refetch (they invalidate
+ * `['voicemails']` / `['call-events']` on receipt). Broadcast on the org
+ * dashboard channel — there is no per-user targeting here (the bell
+ * notification for an assigned follow-up rides publishStaffMessage instead).
+ */
+export async function publishVoiceEvent(payload: VoiceEventPayload) {
+  await publishEvent(getDashboardChannelName(payload.organizationId), 'voice_event', {
+    type: 'voice_event',
+    kind: payload.kind,
+    change: payload.change,
+    callEventId: payload.callEventId ?? null,
+    voicemailId: payload.voicemailId ?? null,
+    timestamp: formatPSTTimestamp(),
+  });
+}
+
 function parseFiniteNumber(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;

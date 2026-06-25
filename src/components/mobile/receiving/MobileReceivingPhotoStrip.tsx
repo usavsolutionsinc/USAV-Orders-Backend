@@ -1,23 +1,15 @@
 'use client';
 
 import { memo, useCallback, useMemo, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
+import { useScopedReceivingPhotos } from '@/hooks/useScopedReceivingPhotos';
 import { useAuth } from '@/contexts/AuthContext';
-import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
-import { deleteNasPhoto, isNasPhotoUrl } from '@/lib/nas-photos';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
 import { MobilePhotoCountBadge } from '@/components/mobile/receiving/MobilePhotoCountBadge';
 import {
   MobileSwipePhotoViewer,
   type SwipePhotoSlide,
 } from '@/components/mobile/station/MobileSwipePhotoViewer';
-
-interface PhotoRow {
-  id: number;
-  photoUrl: string;
-}
 
 interface MobileReceivingPhotoStripProps {
   receivingId: number;
@@ -38,44 +30,22 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
   staffId,
   countHint = 0,
 }: MobileReceivingPhotoStripProps) {
-  const queryClient = useQueryClient();
   const { user } = useAuth();
   const orgId = user?.organizationId;
-  const queryKey = ['receiving-photos', receivingId];
+  const scope = useMemo(
+    () => ({ receivingId, receivingLineId: null as number | null }),
+    [receivingId],
+  );
+
+  const { photos, deletePhoto, query } = useScopedReceivingPhotos(scope);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
 
-  const { data, isLoading, error } = useQuery<{ photos: PhotoRow[] }>({
-    queryKey,
-    queryFn: async () => {
-      const res = await fetch(`/api/receiving-photos?receivingId=${receivingId}`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    },
-    enabled: Number.isFinite(receivingId) && receivingId > 0,
-    staleTime: 10_000,
-  });
-
   const refreshPhotos = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-  }, [queryClient, queryKey]);
+    void query.refetch();
+  }, [query]);
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refreshPhotos, staffId > 0 && !!orgId);
-
-  const photos = useMemo(
-    () =>
-      (data?.photos ?? [])
-        .filter((p) => !!p.photoUrl?.trim())
-        .map((p) => ({
-          id: p.id,
-          url: normalizePhotoDisplayUrl(p.photoUrl),
-          rawUrl: p.photoUrl,
-        })),
-    [data],
-  );
 
   const photoCount = photos.length > 0 ? photos.length : Math.max(0, countHint);
 
@@ -83,41 +53,33 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
     () =>
       photos.map((p) => ({
         id: String(p.id),
-        previewUrl: p.url,
+        previewUrl: p.displayUrl,
         deletable: true,
       })),
     [photos],
   );
 
-  const openViewer = useCallback((index: number) => {
-    if (photos.length === 0) return;
-    setViewerIndex(index);
-    setViewerOpen(true);
-  }, [photos.length]);
+  const openViewer = useCallback(
+    (index: number) => {
+      if (photos.length === 0) return;
+      setViewerIndex(index);
+      setViewerOpen(true);
+    },
+    [photos.length],
+  );
 
   const handleDelete = useCallback(
     async (slide: SwipePhotoSlide) => {
       const photoId = Number(slide.id);
       if (!Number.isFinite(photoId)) return;
-      const row = photos.find((p) => p.id === photoId);
-      const displayUrl = row?.url ?? '';
-      if (displayUrl && isNasPhotoUrl(displayUrl)) {
-        const nasDel = await deleteNasPhoto(displayUrl);
-        if (!nasDel.ok) console.warn('NAS file delete failed:', nasDel.error);
-      }
-      const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
-      if (!res.ok) return;
-      queryClient.setQueryData<{ photos: PhotoRow[] }>(queryKey, (old) => {
-        if (!old) return old;
-        return { ...old, photos: old.photos.filter((p) => p.id !== photoId) };
-      });
-      void queryClient.invalidateQueries({ queryKey });
-      invalidateReceivingFeeds(queryClient);
+      await deletePhoto(photoId);
     },
-    [photos, queryClient, queryKey],
+    [deletePhoto],
   );
 
-  if (isLoading && data == null) {
+  const { isLoading, error, data } = query;
+
+  if (isLoading && data === undefined) {
     return (
       <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-2" aria-hidden>
         <div className="flex min-w-0 flex-1 gap-2">
@@ -155,7 +117,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
                 className="relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-200 shadow-sm active:opacity-90"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt="" className="h-full w-full object-cover" />
+                <img src={p.displayUrl} alt="" className="h-full w-full object-cover" />
               </button>
             ))
           )}

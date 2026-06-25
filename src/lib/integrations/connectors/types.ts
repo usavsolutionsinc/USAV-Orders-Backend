@@ -17,7 +17,7 @@ export type AuthKind = 'oauth' | 'nango' | 'vault';
 
 /** What a connection can do — drives capability badges + which providers the
  *  sync orchestrator runs. */
-export type Capability = 'orders' | 'inventory' | 'tracking' | 'payments';
+export type Capability = 'orders' | 'inventory' | 'tracking' | 'payments' | 'voice';
 
 /** Normalized token/credential envelope stored (encrypted) inside the vault
  *  payload. Standardizing this lets the refresh sweep treat every OAuth

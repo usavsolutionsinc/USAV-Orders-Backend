@@ -80,7 +80,7 @@ export function MobileShell({
   return (
     <div
       className={cn(
-        'relative flex min-h-0 flex-col overflow-hidden bg-white h-[100dvh]',
+        'relative flex min-h-0 flex-col overflow-hidden bg-white h-full',
         className,
       )}
     >

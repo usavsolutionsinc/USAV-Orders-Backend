@@ -21,6 +21,7 @@ const MASTER_NAV_RAIL_PAGES: ReadonlySet<string> = new Set([
   'sourcing',
   'outbound',
   'packer',
+  'support',
 ]);
 
 export interface SidebarShellProps {
