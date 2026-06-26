@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Copy, History, Info, Link2, RefreshCw, Share2 } from '@/components/Icons';
+import { Copy, History, Info, Link2, RefreshCw, ZendeskMark } from '@/components/Icons';
 import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
@@ -83,11 +83,11 @@ export function LineEditToolbar({
       ariaLabel: 'Copy all receiving details',
     },
     photoNote: {
-      label: 'Photo note',
-      icon: <Share2 className="h-3.5 w-3.5" />,
+      label: 'Zendesk',
+      icon: <ZendeskMark className="h-4 w-4" />,
       disabled,
-      title: "Send this PO's photos to a Zendesk ticket as an internal note",
-      ariaLabel: 'Send photos to a ticket as an internal note',
+      title: "Send this PO's photos to a Zendesk ticket — link a new ticket or update an existing one",
+      ariaLabel: 'Send photos to a Zendesk ticket',
     },
     pair: {
       label: 'Pair',

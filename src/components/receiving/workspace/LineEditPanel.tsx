@@ -26,6 +26,7 @@ import { LineReceiveActionBar } from './line-edit/LineReceiveActionBar';
 import { LineEditToolbar } from './line-edit/LineEditToolbar';
 import { ReceivingPhotoPeek } from './line-edit/ReceivingPhotoPeek';
 import { LineCartonContextSection } from './line-edit/LineCartonContextSection';
+import { LineMatchingSection } from './line-edit/LineMatchingSection';
 import { LinePoItemsSection } from './line-edit/LinePoItemsSection';
 import { LineEditModals } from './line-edit/LineEditModals';
 import { useUnboxLineController } from './line-edit/hooks/useUnboxLineController';
@@ -111,14 +112,24 @@ export function LineEditPanel({
           <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
             <LineCartonContextSection row={row} staffId={staffId} caps={caps} c={c} />
 
-            <LinePoItemsSection
-              row={row}
-              staffId={staffId}
-              caps={caps}
-              c={c}
-              onItemDescFeedback={handleItemDescFeedback}
-              onItemDescSaved={handleItemDescSaved}
-            />
+            {/* Smart Matching — triage-only (caps.matching). The matching hub:
+                pairs the inbound return package to a real Zendesk claim ticket,
+                hosts the relocated carton actions (Open in unbox · add · link
+                repair service) and reuses the panel's claim modal. */}
+            {caps.matching ? <LineMatchingSection row={row} staffId={staffId} c={c} /> : null}
+
+            {/* PO items — hidden in triage (the matching hub above subsumes its
+                actions); shown in unbox where you actually edit lines. */}
+            {!caps.matching ? (
+              <LinePoItemsSection
+                row={row}
+                staffId={staffId}
+                caps={caps}
+                c={c}
+                onItemDescFeedback={handleItemDescFeedback}
+                onItemDescSaved={handleItemDescSaved}
+              />
+            ) : null}
 
             {/* Notes — tabbed: operator Notes · read-only Zoho Notes · Checklist
                 (future). The Zoho-import and operator notes are separate columns

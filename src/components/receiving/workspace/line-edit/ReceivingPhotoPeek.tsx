@@ -18,7 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoPeekFan, type PeekCard } from './PhotoPeekFan';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
 
 interface PhotoRow {
   id: number;
@@ -52,7 +52,7 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => ['receiving-photos', receivingId] as const, [receivingId]);
+  const queryKey = useMemo(() => receivingPhotosQueryKey(receivingId), [receivingId]);
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
@@ -65,10 +65,12 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
     staleTime: 10_000,
   });
 
-  const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-  }, [queryClient, queryKey]);
+  const refresh = useCallback(
+    (deletedPhotoId?: number) => {
+      refreshReceivingPhotos(queryClient, receivingId, deletedPhotoId);
+    },
+    [queryClient, receivingId],
+  );
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
@@ -96,7 +98,7 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
 
   const cards = demo ? DEMO_CARDS.slice(0, demoShown) : realCards;
 
-  return <PhotoPeekFan cards={cards} onPhotoDeleted={refresh} />;
+  return <PhotoPeekFan cards={cards} receivingId={receivingId} onPhotoDeleted={(photoId) => refresh(photoId)} />;
 });
 
 export default ReceivingPhotoPeek;

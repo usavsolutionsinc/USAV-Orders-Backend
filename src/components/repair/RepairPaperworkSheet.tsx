@@ -11,7 +11,7 @@ import { FileText } from '@/components/Icons';
  * entry — not only at the review step.
  *
  * It is a *toggle*, not a popover: pressing it swaps the intake body for the exact
- * printed document (RepairServiceForm `variant="print"`, rendered by the parent),
+ * printed document (RepairServiceForm on RepairPaperworkCanvas, rendered by the parent),
  * and pressing again returns to the current step. No dialog / sheet / portal.
  */
 

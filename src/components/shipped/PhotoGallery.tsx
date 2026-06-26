@@ -1,7 +1,10 @@
 'use client';
 
+import { useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { MobileSwipePhotoViewer, type SwipePhotoSlide } from '@/components/mobile/station/MobileSwipePhotoViewer';
 import { Image as ImageIcon } from '../Icons';
 import { usePhotoGallery, type PhotoGalleryProps } from './photo-gallery/usePhotoGallery';
 import { PhotoLauncher } from './photo-gallery/PhotoLauncher';
@@ -17,6 +20,25 @@ export type { PhotoGalleryInput } from './photo-gallery/photo-gallery-utils';
  */
 export function PhotoGallery(props: PhotoGalleryProps) {
   const g = usePhotoGallery(props);
+  const { isMobile } = useUIModeOptional();
+
+  const swipeSlides = useMemo<SwipePhotoSlide[]>(
+    () =>
+      g.photoItems.map((p, idx) => ({
+        id: String(p.id ?? idx),
+        previewUrl: p.url,
+        deletable: typeof p.id === 'number' && Number.isFinite(p.id),
+      })),
+    [g.photoItems],
+  );
+
+  const handleDelete = useCallback(
+    async (slide: SwipePhotoSlide, index: number) => {
+      g.setCurrentIndex(index);
+      await g.deletePhotoDirect();
+    },
+    [g],
+  );
 
   if (g.photoItems.length === 0) {
     return (
@@ -33,11 +55,21 @@ export function PhotoGallery(props: PhotoGalleryProps) {
     <>
       <PhotoLauncher g={g} />
 
-      {g.mounted && typeof document !== 'undefined' && createPortal(
-        <AnimatePresence mode="wait">
-          {g.viewerOpen && <PhotoViewerModal g={g} />}
-        </AnimatePresence>,
-        document.body,
+      {isMobile ? (
+        <MobileSwipePhotoViewer
+          open={g.viewerOpen}
+          initialIndex={g.currentIndex}
+          slides={swipeSlides}
+          onClose={g.closeViewer}
+          onDelete={handleDelete}
+        />
+      ) : (
+        g.mounted && typeof document !== 'undefined' && createPortal(
+          <AnimatePresence mode="wait">
+            {g.viewerOpen && <PhotoViewerModal g={g} />}
+          </AnimatePresence>,
+          document.body,
+        )
       )}
     </>
   );

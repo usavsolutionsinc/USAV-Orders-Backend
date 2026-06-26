@@ -31,8 +31,13 @@ export function mapAmazonStatus(amazonStatus: string | undefined, fba: boolean):
     case 'Pending':
     case 'PendingAvailability':
     case 'Unshipped':
+    // PartiallyShipped: some items shipped, the rest still need fulfilment, so
+    // it stays actionable on the unshipped/pack surface. Made explicit (was an
+    // unlabeled fall-through) so the intent is clear and a future status added
+    // to Amazon's vocabulary can't silently inherit this mapping.
     case 'PartiallyShipped':
     case 'InvoiceUnconfirmed':
+      return 'unassigned';
     default:
       return 'unassigned';
   }

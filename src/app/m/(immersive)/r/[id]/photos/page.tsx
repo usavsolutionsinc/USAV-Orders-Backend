@@ -59,7 +59,7 @@ function PhotoPageInner() {
     );
   }
 
-  const scope = { receivingId, receivingLineId: null as number | null, poRef };
+  const scope = { receivingId, receivingLineId: null as number | null, poRef, photosListScope: 'all' as const };
 
   return (
     <MobileReceivingPhotoStudio

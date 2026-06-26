@@ -158,6 +158,7 @@ export function useRealtimeInvalidation({
     () => {
       queryClient.invalidateQueries({ queryKey: ['receiving-photos'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-lines-table'] });
+      queryClient.invalidateQueries({ queryKey: ['receiving-lines'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-po-list'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-po-detail'] });
       queryClient.invalidateQueries({ queryKey: ['receiving-item-photos'] });

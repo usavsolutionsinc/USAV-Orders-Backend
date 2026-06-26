@@ -90,7 +90,10 @@ export const GET = withAuth(async (req: NextRequest) => {
         return NextResponse.json({ success: true, ...(result as unknown as Record<string, unknown>) });
     } catch (error: any) {
         if (error instanceof GoogleSheetsTransferOrdersJobError) {
-            return NextResponse.json(error.body as Record<string, unknown>, { status: 200 });
+            // Honor the error's own status (404/400/…). Previously hardcoded to
+            // 200, which made every job failure (missing tab, no data) look like
+            // a success to crons/monitors keying on the HTTP status.
+            return NextResponse.json(error.body as Record<string, unknown>, { status: error.status });
         }
         logRouteMetric({
             route: '/api/google-sheets/transfer-orders',

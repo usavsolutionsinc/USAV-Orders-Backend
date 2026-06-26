@@ -5,8 +5,9 @@ import { getCurrentUserBySid } from '@/lib/auth/current-user';
 import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import type { PermissionString } from '@/lib/auth/permissions-shared';
 import { deletePhoto } from '@/lib/photos/service';
-import { getReceivingPhotoDeleteMeta } from '@/lib/photos/queries/receiving-list';
+import { getReceivingPhotoDeleteMeta, countReceivingPhotos } from '@/lib/photos/queries/receiving-list';
 import { publishReceivingPhotoChanged } from '@/lib/realtime/publish';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * DELETE /api/photos/[id] — unified photo delete across every entity_type
@@ -70,12 +71,14 @@ export async function DELETE(
   const receivingMeta = await getReceivingPhotoDeleteMeta(id, orgId);
   await deletePhoto(id, orgId);
   if (receivingMeta?.receivingId != null) {
+    const receivingId = receivingMeta.receivingId;
     await publishReceivingPhotoChanged({
       organizationId: orgId,
       action: 'delete',
-      receivingId: receivingMeta.receivingId,
+      receivingId,
       receivingLineId: receivingMeta.receivingLineId,
       photoId: id,
+      totalPhotoCount: await countReceivingPhotos(orgId, receivingId),
       source: 'api.photos.delete',
     });
   }

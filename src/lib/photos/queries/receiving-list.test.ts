@@ -5,6 +5,7 @@ import {
   sqlLinePhotoCount,
   sqlPoLevelPhotoCount,
   sqlReceivingPhotoCount,
+  SQL_SELECT_RECEIVING_PHOTO_COUNT,
 } from '@/lib/photos/queries/receiving-list';
 
 test('sqlReceivingPhotoCount counts via photo_entity_links only', () => {
@@ -13,6 +14,10 @@ test('sqlReceivingPhotoCount counts via photo_entity_links only', () => {
   assert.match(sql, /RECEIVING_LINE/);
   assert.match(sql, /rl\.receiving_id/);
   assert.doesNotMatch(sql, /p\.entity_type/);
+});
+
+test('SQL_SELECT_RECEIVING_PHOTO_COUNT casts receivingId param as int', () => {
+  assert.match(SQL_SELECT_RECEIVING_PHOTO_COUNT, /\$2::int/);
 });
 
 test('sqlPoLevelPhotoCount counts RECEIVING entity only', () => {

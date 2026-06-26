@@ -46,7 +46,10 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         const weekStart = searchParams.get('weekStart') || '';
         const weekEnd = searchParams.get('weekEnd') || '';
         const needsTestParam = searchParams.get('needs_test');
-        const cacheLookup = createCacheLookupKey({ limit, offset, weekStart, weekEnd, needsTestParam, scanMeta: true });
+        // orgId MUST be part of the cache key — the SQL is org-scoped via
+        // tenantQuery(orgId, …), but without org in the key org B could be
+        // served org A's cached logs.
+        const cacheLookup = createCacheLookupKey({ org: orgId, limit, offset, weekStart, weekEnd, needsTestParam, scanMeta: true });
 
         const today = getCurrentPSTDateKey();
         const cacheTTL = weekEnd && weekEnd < today ? 86400 : 60;

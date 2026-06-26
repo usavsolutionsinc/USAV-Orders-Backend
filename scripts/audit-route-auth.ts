@@ -82,10 +82,20 @@ function classifyExemption(path: string): string | null {
   if (path.includes('/api/ready')) return 'readiness probe';
   if (path.includes('/api/cron/')) return 'cron endpoint';
   // Dev/LAN NAS file passthrough: returns 404 in production unless NAS_DEV_ROOT
-  // is explicitly set, is session-gated by middleware, and is hardened with a
-  // path-traversal guard + image-only write restriction. Not permission-gated
-  // by design (it serves a single mounted folder to the local picker).
+  // is explicitly set, and is hardened with a path-traversal guard + image-only
+  // write restriction. Now ALSO gated by requireRoutePerm (receiving.view /
+  // receiving.upload_photo) in-handler, so this exemption is belt-and-suspenders.
   if (path.includes('/api/nas-dev/')) return 'dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)';
+  // OAuth provider redirects: the browser arrives WITHOUT a session cookie, so
+  // tenant scope is recovered from the encrypted/signed `state` param (validated
+  // server-side), never a session. Permission-gating is impossible here.
+  if (path.includes('/oauth/callback')) return 'oauth callback (provider redirect; encrypted state, no session cookie)';
+  // Public capability links: the unguessable token IN THE URL *is* the
+  // authorization (signed/random share token), like a pre-signed URL.
+  if (path.includes('/api/photos/share-packs/')) return 'public share link (capability token in URL)';
+  // The desktop auto-updater polls this for the latest installer BEFORE a user
+  // signs in, so it is public release metadata by design.
+  if (path.includes('/api/desktop-app/release')) return 'public desktop release feed (polled pre-auth by the updater)';
   return null;
 }
 
@@ -291,13 +301,60 @@ function diffRoutes(
   }
 }
 
+/**
+ * Hard gate (ratchet). Fails the build for ANY route that exports a verb but
+ * has no detectable auth gate (`gate === 'NONE'`) and no intentional-exempt
+ * reason (webhook / cron / auth-flow / health / oauth-callback / public-token).
+ *
+ * Unlike `--check` (which only detects manifest *drift* and goes green again
+ * once the manifest is re-emitted), this can never be silenced by regenerating
+ * a file — the only way to pass is to actually add a gate (withAuth /
+ * requireRoutePerm) or a documented exemption in `classifyExemption`. This is
+ * the check that stops the "forgot the guard → unauthenticated + cross-tenant"
+ * class (e.g. the bin-utilization regression) from coming back.
+ *
+ * The current floor is ZERO ungated writes; reads must be gated or exempt too.
+ */
+function enforceNoUngatedRoutes(routes: RouteInfo[]): number {
+  const offenders = routes.filter((r) => r.gate === 'NONE' && !r.exemptReason);
+  if (offenders.length === 0) {
+    console.log(`✓ route-auth enforce: all ${routes.length} routes are gated or intentionally exempt`);
+    return 0;
+  }
+
+  const writes = offenders.filter((r) => r.methods.some((m) => m !== 'GET'));
+  const reads = offenders.filter((r) => r.methods.every((m) => m === 'GET'));
+
+  console.error('✗ route-auth enforce: found routes with NO auth gate and NO exemption');
+  console.error('');
+  console.error('  The edge proxy only checks cookie PRESENCE, so an ungated handler is');
+  console.error('  effectively unauthenticated (and usually cross-tenant). Fix each by:');
+  console.error('    • wrapping the handler in withAuth(..., { permission }) or requireRoutePerm, OR');
+  console.error('    • adding a documented exemption in classifyExemption() (webhook/cron/oauth/etc).');
+  console.error('');
+  if (writes.length > 0) {
+    console.error('  WRITE methods (highest risk):');
+    for (const r of writes) console.error(`    ✗ ${r.methods.join(',').padEnd(20)} ${r.path}`);
+    console.error('');
+  }
+  if (reads.length > 0) {
+    console.error('  READ-only:');
+    for (const r of reads) console.error(`    ✗ ${r.methods.join(',').padEnd(20)} ${r.path}`);
+    console.error('');
+  }
+  console.error(`  Total: ${offenders.length} ungated route(s).`);
+  return 1;
+}
+
 function main(): number {
   const argv = process.argv.slice(2);
   const mode = argv.includes('--check')
     ? 'check'
-    : argv.includes('--emit')
-      ? 'emit'
-      : 'report';
+    : argv.includes('--enforce')
+      ? 'enforce'
+      : argv.includes('--emit')
+        ? 'emit'
+        : 'report';
 
   const routes = collectRoutes();
 
@@ -307,6 +364,9 @@ function main(): number {
   }
   if (mode === 'check') {
     return checkAgainstCommittedManifest(routes);
+  }
+  if (mode === 'enforce') {
+    return enforceNoUngatedRoutes(routes);
   }
   printReport(routes);
   return 0;

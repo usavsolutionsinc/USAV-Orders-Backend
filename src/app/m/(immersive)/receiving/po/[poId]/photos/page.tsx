@@ -64,7 +64,7 @@ function PoPhotoPageInner(props: { params: Promise<{ poId: string }> }) {
       galleryTitle="PO photos"
       gallerySubtitle={headerLabel}
       backHref={poDetailHref}
-      returnHref={`${photosBase}?mode=gallery`}
+      returnHref={poDetailHref}
     />
   );
 }

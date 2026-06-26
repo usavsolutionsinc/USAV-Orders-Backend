@@ -69,7 +69,7 @@ function ItemPhotoPageInner(
       galleryTitle="Item photos"
       gallerySubtitle={headerLabel}
       backHref={itemDetailHref}
-      returnHref={`${photosBase}?mode=gallery`}
+      returnHref={itemDetailHref}
     />
   );
 }

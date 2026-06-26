@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
+import { formatRepairPaperTicketNumber } from '@/lib/repair/repair-paper-ticket';
+import {
+  repairPaperLetterheadHtml,
+  repairPaperTicketHeadingHtml,
+  repairSignatureRowHtml,
+} from '@/lib/repair/repair-paper-html';
 import { formatPhoneNumber } from '@/utils/phone';
 import pool from '@/lib/db';
 
@@ -75,9 +81,7 @@ export async function GET(
     const repairServiceCode = `RS-${repairServiceId}`;
     const canonicalRsCode = `RS-${String(repair.id).padStart(4, '0')}`;
     const unpaddedRsCode = `RS-${repair.id}`;
-    const ticketNumber = repair.ticket_number || '';
-    const isSameRsTicket = ticketNumber === repairServiceCode || ticketNumber === canonicalRsCode;
-    const externalTicketNumber = ticketNumber && !isSameRsTicket ? ticketNumber : '';
+    const displayTicket = formatRepairPaperTicketNumber(repair.ticket_number);
     const productTitle = repair.product_title || '';
     const issue = repair.issue || '';
     const serialNumber = repair.serial_number || '';
@@ -241,21 +245,11 @@ export async function GET(
 
     // Generate HTML matching Repair Service Paper exactly
     const formHtml = `
-      <div class="bg-white text-gray-900 font-sans p-8">
+      <div class="bg-white text-gray-900 font-sans p-6">
 
-        <!-- Header Section -->
-        <div class="text-right mb-8">
-          <h2 class="font-bold text-lg">USAV Solutions</h2>
-          <p class="text-sm">16161 Gothard St. Suite A</p>
-          <p class="text-sm">Huntington Beach, CA 92647, United States</p>
-          <p class="text-sm">Tel: (714) 596-6888</p>
-        </div>
+        ${repairPaperLetterheadHtml()}
 
-        <!-- Title and Ticket Number -->
-        <div class="mb-6">
-          <h1 class="text-3xl font-bold mb-2">Repair Service</h1>
-          ${externalTicketNumber ? `<p class="text-sm font-medium text-gray-600">Ticket #: ${externalTicketNumber}</p>` : ''}
-        </div>
+        ${repairPaperTicketHeadingHtml(displayTicket, escapeHtml)}
 
         <!-- Information Table -->
         <div class="border-t border-l border-black mb-6">
@@ -276,7 +270,7 @@ export async function GET(
         <!-- Price Section -->
         <div class="mb-6">
           <p class="text-lg font-medium mb-2">
-            <span class="font-bold">$${price}</span> - Price Paid at Pick-up
+            <span class="font-bold text-emerald-600">$${price}</span> - Price Paid at Pick-up
           </p>
           <p class="text-base font-medium">
             Card / Cash - Payment Method
@@ -284,8 +278,8 @@ export async function GET(
         </div>
 
         <!-- Terms & Warranty -->
-        <div class="mb-10 text-sm leading-relaxed">
-          <p class="mb-4">
+        <div class="mb-2 text-sm leading-relaxed">
+          <p class="mb-2">
             Your Bose product has been received into our repair center. Under normal circumstances it will 
             be repaired within the next 3-10 working days and returned to you at the address above.
           </p>
@@ -295,21 +289,23 @@ export async function GET(
         </div>
 
         <!-- Drop Off Section -->
-        <div class="mb-10 mt-12">
-          <div class="flex items-end gap-4 mb-2">
-            <span class="font-bold whitespace-nowrap">Drop Off X</span>
-            <div class="flex-1 border-b-2 border-black relative overflow-hidden" style="height: 96px;">
-              ${dropoffSignatureUrl ? `<img src="${dropoffSignatureUrl}" alt="Drop off signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />` : ''}
-            </div>
-            <span class="font-bold whitespace-nowrap">Date: ${startDateTime}</span>
-          </div>
+        <div class="mb-3 mt-2">
+          ${repairSignatureRowHtml({
+            label: 'Drop Off X',
+            dateText: `Date: ${startDateTime}`,
+            lineHeightPx: 96,
+            borderClass: 'border-b-2 border-black',
+            innerHtml: dropoffSignatureUrl
+              ? `<img src="${dropoffSignatureUrl}" alt="Drop off signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />`
+              : '',
+          })}
           <p class="text-xs italic">
             By signing above you agree to the listed price and any unexpected delays in the repair process.
           </p>
         </div>
 
         <!-- Internal Use Table -->
-        <div class="border-t border-l border-black mb-10">
+        <div class="border-t border-l border-black mb-3">
           <div class="flex border-b border-r border-black bg-gray-50">
             <div class="flex-1 border-r border-black p-2 font-bold">Part Repaired</div>
             <div class="flex-1 border-r border-black p-2 font-bold">Detail</div>
@@ -320,15 +316,17 @@ export async function GET(
         </div>
 
         <!-- Pick Up Section -->
-        <div class="mt-32">
-          <div class="flex items-end gap-4 mb-4">
-            <span class="font-bold whitespace-nowrap">Pick Up X</span>
-            <div class="flex-1 border-b-2 border-black relative overflow-hidden" style="height: 96px;">
-              ${pickupSignatureUrl ? `<img src="${pickupSignatureUrl}" alt="Pickup signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />` : ''}
-            </div>
-            <span class="font-bold whitespace-nowrap">Date: ${pickupDateTime}</span>
-          </div>
-          <p class="text-center font-bold text-xl mt-8">Enjoy your repaired unit!</p>
+        <div class="mt-4">
+          ${repairSignatureRowHtml({
+            label: 'Pick Up X',
+            dateText: `Date: ${pickupDateTime}`,
+            lineHeightPx: 96,
+            borderClass: 'border-b-2 border-black',
+            innerHtml: pickupSignatureUrl
+              ? `<img src="${pickupSignatureUrl}" alt="Pickup signature for ${canonicalRsCode}" style="position:absolute;bottom:2px;left:0;height:90px;max-width:100%;width:auto;object-fit:contain;filter:contrast(2.2) brightness(0.55) saturate(0);" />`
+              : '',
+          })}
+          <p class="text-center font-bold text-xl mt-4">Enjoy your repaired unit!</p>
         </div>
 
       </div>

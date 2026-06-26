@@ -213,8 +213,12 @@ export function ProductSelector({
       isInitialMount.current = false;
       return;
     }
+    // Manual "Other" entry is not driven by catalog chips — don't clear it.
+    if (selectedItems.length === 0 && selectedProduct?.type === 'Other') {
+      return;
+    }
     notifyParent(selectedItems);
-  }, [selectedItems]);
+  }, [selectedItems, selectedProduct?.type]);
 
   const filteredCategories = categories.filter((c) => {
     if (!search.trim()) return true;
@@ -251,8 +255,8 @@ export function ProductSelector({
   const handleOtherSubmit = () => {
     const value = otherModelText.trim();
     if (!value) return;
-    setSelectedItems([]);
     onSelect({ type: 'Other', model: value, sourceSku: null });
+    setSelectedItems([]);
     setOtherModelText('');
     setShowOther(false);
   };

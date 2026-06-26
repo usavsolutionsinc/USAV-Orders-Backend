@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/design-system/hooks';
+import { dispatchReceivingPhotoChanged } from '@/utils/events';
 import { downloadPhotoBlob, deletePhoto } from './photo-gallery-api';
 import { usePhotoItems } from './usePhotoItems';
 import { useImageZoom } from './useImageZoom';
@@ -26,6 +27,8 @@ export interface PhotoGalleryProps {
   toolbarShowLabel?: boolean;
   /** Called after a successful DELETE /api/photos/[id] (parents invalidate cache). */
   onPhotoDeleted?: (photoId: number) => void;
+  /** When set, delete broadcasts include this id so only that carton's listeners refresh. */
+  receivingId?: number;
   /** When provided, an "Add photos" button appears (parent owns the picker UI). */
   onAddPhotos?: () => void;
   /** Opens the ops photo library filtered to this entity/receiving scope. */
@@ -55,6 +58,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     showCopyLinks = true,
     toolbarShowLabel = true,
     onPhotoDeleted,
+    receivingId,
     onAddPhotos,
     libraryHref,
     overview = 'single',
@@ -212,6 +216,11 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
       resetFingerprint();
       setPhotoItems(remaining);
       setDeleteArmed(false);
+      dispatchReceivingPhotoChanged({
+        action: 'delete',
+        photoIds: [photoId],
+        receivingId: receivingId ?? null,
+      });
       onPhotoDeleted?.(photoId);
       if (remaining.length === 0) {
         closeViewer();
@@ -266,6 +275,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     // actions
     downloadingAll, handleDownloadAll, linksCopied, copyAllPhotoUrls,
     canDeleteCurrent, deleteArmed, deletingPhoto, deleteError, handleDeleteClick, addPhotosFromViewer,
+    deletePhotoDirect: performDelete,
   };
 }
 

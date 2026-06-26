@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, Wrench, X, Check, Printer } from '../Icons';
+import { ChevronLeft, Wrench, X, Check, Printer, Loader2 } from '../Icons';
 import { ProductSelector, type SelectedItem } from './ProductSelector';
 import { ReasonSelector } from './ReasonSelector';
 import { CustomerInfoForm, CONTACT_FIELDS } from './CustomerInfoForm';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import RepairServiceForm from './RepairServiceForm';
+import { RepairPaperworkCanvas } from './RepairPaperworkCanvas';
 import {
     RepairIntakeStepper,
     type RepairIntakeStepKey,
@@ -15,9 +16,12 @@ import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspa
 import { RepairPaperworkSheet } from './RepairPaperworkSheet';
 import { TextField, FloatingButton } from '@/design-system/primitives';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
-import { REPAIR_STEP_COPY, buildInitialFormData, formatPhone, isContactFieldValid } from './repair-intake-logic';
+import { REPAIR_STEP_COPY, buildInitialFormData, isContactFieldValid, canSubmitRepairIntake, getRepairSubmitBlockReason, hasRepairIssue, isContactComplete, isProductSelected } from './repair-intake-logic';
 import { useRepairIntakeData } from './useRepairIntakeData';
 import { useRepairCustomerSearch, type ExistingCustomer } from './useRepairCustomerSearch';
+import { buildDraftFromFavorite, favoriteToSelectedItems, fetchFavoriteIntakeContext } from './repair-favorite-intake';
+import { buildRepairIntakeReceiptProps } from '@/lib/repair/repair-intake-receipt';
+import { formatRepairSubmittedChromeLabel } from '@/lib/repair/repair-paper-ticket';
 
 /** What the submit handler resolves with on a successful post, so the form can
  *  show the printable paper instead of dropping back to the walk-in dashboard. */
@@ -65,6 +69,8 @@ const SECTION_LABEL = 'text-[10px] font-black uppercase tracking-[0.16em] text-g
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [isFetchingFavorite, setIsFetchingFavorite] = useState(false);
     const [showPaperwork, setShowPaperwork] = useState(false);
     const [submitted, setSubmitted] = useState<RepairSubmitResult | null>(null);
 
@@ -106,20 +112,19 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         return () => cancelAnimationFrame(raf);
     }, [currentStep, contactFieldIndex]);
 
-    const productSelected = !!(formData.product.type && formData.product.model);
+    const productSelected = isProductSelected(formData);
 
     const canProceedFromProduct = productSelected;
 
-    const canProceedFromIssue =
-        formData.repairReasons.length > 0 || formData.repairNotes.trim().length > 0;
+    const canProceedFromIssue = hasRepairIssue(formData);
 
     const activeContactField = CONTACT_FIELDS[contactFieldIndex] ?? CONTACT_FIELDS[0];
     const isExistingSearch = currentStep === 'contact' && customerMode === 'existing';
     const canProceedFromContactField = isContactFieldValid(activeContactField, formData);
-    const canProceedFromContact = CONTACT_FIELDS.every((field) => isContactFieldValid(field, formData));
+    const canProceedFromContact = isContactComplete(formData);
     const isLastContactField = contactFieldIndex >= CONTACT_FIELDS.length - 1;
 
-    const canSubmit = canProceedFromContact && !!signatureData;
+    const canSubmit = canSubmitRepairIntake(formData, !!signatureData);
 
     const issueText =
         [...formData.repairReasons, formData.repairNotes ? formData.repairNotes : null]
@@ -134,30 +139,44 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
 
     const handleSelectedItemsChange = (items: SelectedItem[]) => {
         setSelectedItems(items);
+        if (items.length === 0) {
+            setFormData((prev) => {
+                if (prev.product.type === 'Other' && prev.product.model.trim()) return prev;
+                return {
+                    ...prev,
+                    product: { type: '', model: '', sourceSku: null },
+                };
+            });
+            return;
+        }
         const model = items.map((i) => i.name).join(', ');
         const sku = items.map((i) => String(i.sku || '').trim()).find(Boolean) || null;
         const price = items.reduce((sum, i) => sum + (i.price ?? 0), 0);
         setFormData(prev => ({
             ...prev,
-            product: { type: items.length > 0 ? 'Bose Repair Service' : '', model, sourceSku: sku },
+            product: { type: 'Bose Repair Service', model, sourceSku: sku },
             price: price > 0 ? price.toFixed(2) : prev.price,
         }));
     };
 
-    const handleUseFavorite = (favorite: FavoriteSkuRecord) => {
-        const syntheticItem: SelectedItem = {
-            id: `fav-${favorite.id}`,
-            name: favorite.productTitle || favorite.label || favorite.sku,
-            price: favorite.defaultPrice ? parseFloat(favorite.defaultPrice) : null,
-            sku: favorite.sku,
-        };
-        handleSelectedItemsChange([syntheticItem]);
-        const notes = favorite.issueTemplate || favorite.label || 'Repair';
-        setFormData(prev => ({
-            ...prev,
-            repairNotes: notes,
-        }));
-        setCurrentStep('issue');
+    const handleUseFavorite = async (favorite: FavoriteSkuRecord) => {
+        setIsFetchingFavorite(true);
+        try {
+            const { ecwidProduct, skuReasons } = await fetchFavoriteIntakeContext(favorite);
+            const items = favoriteToSelectedItems(favorite, ecwidProduct);
+            const draft = buildDraftFromFavorite(favorite, ecwidProduct, skuReasons);
+            setSelectedItems(items);
+            setFormData((prev) => ({
+                ...prev,
+                ...draft,
+                product: draft.product ?? prev.product,
+                customer: prev.customer,
+                serialNumber: prev.serialNumber,
+            }));
+            setCurrentStep('issue');
+        } finally {
+            setIsFetchingFavorite(false);
+        }
     };
 
     const handleNext = () => {
@@ -203,7 +222,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             setCurrentStep('contact');
             return;
         }
-        if (key === 'review' && canProceedFromContact) {
+        if (key === 'review' && canProceedFromProduct && canProceedFromIssue && canProceedFromContact) {
             setCurrentStep('review');
         }
     };
@@ -211,6 +230,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     const handleSubmit = async () => {
         if (!canSubmit || !signatureData) return;
         setIsSubmitting(true);
+        setSubmitError(null);
         try {
             const result = await onSubmit({
                 ...formData,
@@ -226,6 +246,9 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             }
         } catch (error) {
             console.error('Error submitting form:', error);
+            setSubmitError(
+                error instanceof Error ? error.message : 'Error submitting repair form. Please try again.',
+            );
             setIsSubmitting(false);
         }
     };
@@ -248,20 +271,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
         }));
     };
 
-    const receiptProps = {
-        repairServiceId: '—',
-        ticketNumber: '',
-        productTitle: formData.product.model || formData.product.type || '—',
-        issue: issueText || '—',
-        serialNumber: formData.serialNumber || '—',
-        name: formData.customer.name || '—',
-        contact: [
-            formData.customer.phone ? formatPhone(formData.customer.phone) : '',
-            formData.customer.email,
-        ].filter(Boolean).join(', ') || '—',
-        price: formData.price || '—',
-        startDateTime: today,
-    };
+    const receiptProps = buildRepairIntakeReceiptProps(formData, issueText, today);
 
     const stepTitle = REPAIR_STEP_COPY[currentStep].title;
 
@@ -283,8 +293,8 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
             : 'Submit repair'
         : 'Continue';
 
-    const primaryTitle = isReviewStep && !signatureData
-        ? 'Signature required to submit'
+    const primaryTitle = isReviewStep
+        ? getRepairSubmitBlockReason(formData, !!signatureData)
         : primaryDisabled
             ? 'Complete the required fields to continue'
             : undefined;
@@ -293,10 +303,14 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
     // Stay full-screen and present the exact paper to print — the customer never
     // sees the walk-in dashboard, and staff print straight from here.
     if (submitted) {
-        const rsLabel = submitted.rsNumber
-            ? String(submitted.rsNumber)
-            : `RS-${submitted.id}`;
+        const chromeLabel = formatRepairSubmittedChromeLabel(submitted.zendeskTicketNumber);
         const printHref = `/api/repair-service/print/${submitted.id}`;
+        const submittedReceiptProps = buildRepairIntakeReceiptProps(
+            formData,
+            issueText,
+            today,
+            submitted.zendeskTicketNumber ?? '',
+        );
 
         return (
             <div className="relative flex h-full w-full flex-col bg-white text-gray-900">
@@ -311,7 +325,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                     Repair submitted
                                 </p>
                                 <h1 className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]">
-                                    {rsLabel}
+                                    {chromeLabel}
                                 </h1>
                             </div>
                         </div>
@@ -327,15 +341,10 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                 </header>
 
                 <main className="min-h-0 flex-1 overflow-y-auto bg-gray-100">
-                    <div className="min-h-full overflow-x-auto p-4 sm:p-6">
-                        <div className="mx-auto w-fit shadow-lg ring-1 ring-gray-300">
-                            <RepairServiceForm
-                                {...receiptProps}
-                                repairServiceId={submitted.id}
-                                ticketNumber={submitted.zendeskTicketNumber ?? ''}
-                                variant="print"
-                            />
-                        </div>
+                    <div className="px-4 py-4 sm:px-6 sm:py-5">
+                        <RepairPaperworkCanvas>
+                            <RepairServiceForm {...submittedReceiptProps} surface="screen" />
+                        </RepairPaperworkCanvas>
                     </div>
                 </main>
 
@@ -437,7 +446,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 if (key === 'product') return true;
                                 if (key === 'issue') return canProceedFromProduct;
                                 if (key === 'contact') return canProceedFromProduct && canProceedFromIssue;
-                                return canProceedFromContact;
+                                return canProceedFromProduct && canProceedFromIssue && canProceedFromContact;
                             }}
                         />
                     </div>
@@ -450,21 +459,29 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                 className={`min-h-0 flex-1 overflow-y-auto ${showPaperwork ? 'bg-gray-100' : 'pb-28'}`}
             >
                 {showPaperwork ? (
-                    /* Exact printed document — same `variant="print"` sheet that prints,
-                       on a paper-on-desk canvas. Toggled from the header, not a popover. */
-                    <div className="min-h-full overflow-x-auto bg-gray-100 p-4 sm:p-6">
-                        <div className="mx-auto w-fit shadow-lg ring-1 ring-gray-300">
-                            <RepairServiceForm {...receiptProps} variant="print" />
-                        </div>
+                    <div className="bg-gray-100 px-4 py-4 sm:px-6 sm:py-5">
+                        <RepairPaperworkCanvas>
+                            <RepairServiceForm {...receiptProps} surface="screen" />
+                        </RepairPaperworkCanvas>
                     </div>
                 ) : (
                 <div
-                    className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 py-8 transition-all duration-300 ease-out motion-reduce:translate-y-0 motion-reduce:transition-none ${
+                    className={`${REPAIR_INTAKE_COLUMN_CLASS} px-6 transition-all duration-300 ease-out motion-reduce:translate-y-0 motion-reduce:transition-none ${
+                        currentStep === 'review' ? 'py-4' : 'py-8'
+                    } ${
                         stepRevealed ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'
                     }`}
                 >
                     {currentStep === 'product' && (
-                        <div className="space-y-8">
+                        <div className="relative space-y-8">
+                            {isFetchingFavorite && (
+                                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/80 backdrop-blur-sm">
+                                    <div className="flex items-center gap-2 text-gray-700">
+                                        <Loader2 className="h-5 w-5 animate-spin" />
+                                        <span className={SECTION_LABEL}>Loading product…</span>
+                                    </div>
+                                </div>
+                            )}
                             <FavoritesWorkspaceSection
                                 variant="quick-pick"
                                 workspaceKey="repair"
@@ -640,29 +657,46 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     )}
 
                     {currentStep === 'review' && (
-                        <div className="space-y-8">
-                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-                                <RepairServiceForm {...receiptProps} variant="preview" />
-                            </div>
+                        <div className="w-full">
+                            <div className="w-full border border-black bg-white">
+                                <RepairServiceForm {...receiptProps} density="compact" />
 
-                            <p className="max-w-[60ch] text-xs leading-relaxed text-gray-500">
-                                By signing below, the customer consents to conduct this transaction electronically
-                                and agrees to the listed repair price, terms, and any unexpected delays.
-                            </p>
+                                <div className="border-t border-black px-4 py-3">
+                                    <p className="text-xs leading-relaxed text-gray-500">
+                                        By signing below, the customer consents to conduct this transaction electronically
+                                        and agrees to the listed repair price, terms, and any unexpected delays.
+                                    </p>
 
-                            <div className="w-full space-y-3">
-                                <div className="h-[220px] overflow-hidden rounded-2xl border border-gray-300 bg-white">
-                                    <SignaturePad onSignatureChange={setSignatureData} fillHeight />
+                                    {submitError && (
+                                        <p
+                                            role="alert"
+                                            className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700"
+                                        >
+                                            {submitError}
+                                        </p>
+                                    )}
                                 </div>
-                                {signatureData && (
-                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
-                                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
-                                            <Check className="h-2.5 w-2.5 text-white" />
-                                        </span>
-                                        Signature captured
-                                    </div>
-                                )}
+
+                                <div className="h-[200px] overflow-hidden border-t border-black bg-white">
+                                    <SignaturePad
+                                        onSignatureChange={(data) => {
+                                            setSignatureData(data);
+                                            if (data) setSubmitError(null);
+                                        }}
+                                        fillHeight
+                                        variant="dropoff"
+                                    />
+                                </div>
                             </div>
+
+                            {signatureData && (
+                                <div className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
+                                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
+                                        <Check className="h-2.5 w-2.5 text-white" />
+                                    </span>
+                                    Signature captured
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

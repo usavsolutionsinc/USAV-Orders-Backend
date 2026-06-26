@@ -59,6 +59,15 @@ jobs:
       - name: Route-permission manifest drift
         run: npm run audit-route-auth:check
 
+      # Hard ratchet (no DB): fail the build for ANY route that exports a verb
+      # with no auth gate and no documented exemption. Unlike the drift check
+      # above, this can't be silenced by re-emitting the manifest — the only fix
+      # is a real gate (withAuth/requireRoutePerm) or a classifyExemption entry.
+      # Stops the "forgot the guard → unauthenticated + cross-tenant" class
+      # (e.g. the bin-utilization regression) from coming back.
+      - name: Route auth enforce (no ungated routes)
+        run: npm run audit-route-auth:enforce
+
       # Tenancy isolation static gate (no DB): fails if a route touching an
       # ENFORCED table isn't GUC-wrapped. Passes today (0 tables enforced) and
       # tightens automatically as Phase E rolls out. The live BYPASSRLS role

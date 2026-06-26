@@ -96,7 +96,12 @@ export function daysUntilExpiry(
   const exp = toDate(expiresAt);
   if (!exp) return null;
   const ms = exp.getTime() - now.getTime();
-  return Math.ceil(ms / (24 * 60 * 60 * 1000));
+  const days = ms / (24 * 60 * 60 * 1000);
+  // Future window: ceil (whole days still remaining). Past window: floor, so a
+  // claim that expired within the last 24h reads −1 (clearly expired) instead
+  // of 0 — preserving the docstring's "negative once expired" contract that a
+  // bare Math.ceil broke at the sub-day boundary.
+  return ms >= 0 ? Math.ceil(days) : Math.floor(days);
 }
 
 /** True when the window is known and already past. */

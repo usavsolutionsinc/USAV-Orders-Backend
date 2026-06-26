@@ -13,8 +13,10 @@ import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useNasConfig } from '@/hooks/useNasConfig';
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
+import { MobileReceivingFeedGallery } from '@/components/mobile/receiving/MobileReceivingFeedGallery';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow, useMobileFeedQuery } from '@/components/mobile/feed/useMobileFeed';
+import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface ApiResponse {
@@ -102,6 +104,7 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });
 
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
+  const [feedGalleryReceivingId, setFeedGalleryReceivingId] = useState<number | null>(null);
   // Re-derive the open sheet's row from the live feed so its CTA photo count
   // updates after an upload — the stored `sheetRow` snapshot would stay stale.
   const liveSheetRow = useMemo(
@@ -110,18 +113,26 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   );
   const openSheet = useCallback((row: ReceivingLineRow) => setSheetRow(row), []);
   const closeSheet = useCallback(() => setSheetRow(null), []);
-  const buildPhotosHref = useCallback((row: ReceivingLineRow) => {
-    if (!row.receiving_id) return '#';
+  const openFeedGallery = useCallback((row: ReceivingLineRow) => {
+    if (!row.receiving_id) return;
+    setFeedGalleryReceivingId(row.receiving_id);
+  }, []);
+  const closeFeedGallery = useCallback(() => setFeedGalleryReceivingId(null), []);
+  const buildPhotoHrefs = useCallback((row: ReceivingLineRow) => {
     const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
-    const cameraTitle =
-      row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
-    const params = new URLSearchParams({ title: cameraTitle });
-    if (poValue) params.set('poRef', poValue);
-    return `/m/r/${row.receiving_id}/photos?${params.toString()}`;
+    return receivingLinePhotoHrefs({
+      receivingId: row.receiving_id,
+      lineId: row.id,
+      itemName: row.item_name,
+      sku: row.sku,
+      zohoItemId: row.zoho_item_id,
+      poRef: poValue || undefined,
+      back: '/m/receiving',
+    });
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col bg-white">
+    <div className="flex h-full w-full max-w-full flex-col overflow-x-hidden bg-white">
       <MobileFeed<ReceivingLineRow>
         rows={rows}
         isLoading={isLoading}
@@ -135,18 +146,35 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
             </p>
           </div>
         }
-        renderRow={(row, { variant, fresh }) => (
-          <MobileReceivingRow
-            row={row}
-            variant={variant}
-            fresh={fresh}
-            onTap={() => openSheet(row)}
-            photosHref={buildPhotosHref(row)}
-          />
-        )}
+        renderRow={(row, { variant, fresh }) => {
+          const { captureHref, galleryHref } = buildPhotoHrefs(row);
+          return (
+            <MobileReceivingRow
+              row={row}
+              variant={variant}
+              fresh={fresh}
+              onTap={() => openSheet(row)}
+              captureHref={captureHref}
+              galleryHref={galleryHref}
+              onOpenGallery={() => openFeedGallery(row)}
+            />
+          );
+        }}
       />
 
-      <MobileCartonSheet row={liveSheetRow} staffId={staffId} open={sheetRow != null} onClose={closeSheet} />
+      <MobileCartonSheet
+        row={liveSheetRow}
+        staffId={staffId}
+        open={sheetRow != null}
+        onClose={closeSheet}
+      />
+
+      <MobileReceivingFeedGallery
+        receivingId={feedGalleryReceivingId}
+        staffId={staffId}
+        open={feedGalleryReceivingId != null}
+        onClose={closeFeedGallery}
+      />
     </div>
   );
 }

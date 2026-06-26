@@ -609,6 +609,30 @@ export const Folder = ({ className = "w-6 h-6" }: { className?: string }) => (
 // All match the house convention: 24-grid, fill none, currentColor stroke. Keep
 // these here — Icons.tsx is the nav-icon SoT (see icon-system-and-duplicate-glyphs).
 
+/** Zendesk brand mark — fixed fills; exception to the currentColor stroke convention. */
+export const ZendeskMark = ({ className = "w-6 h-6" }: { className?: string }) => (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden>
+        <g transform="translate(-1, 2.35) scale(1.1)">
+            <rect
+                fill="#78A300"
+                x="3.75"
+                y="2.25"
+                width="4.1"
+                height="12.75"
+                transform="rotate(13 5.8 8.625)"
+            />
+            <rect
+                fill="#03363D"
+                x="12.1"
+                y="10.15"
+                width="5.1"
+                height="5.1"
+                transform="rotate(-13 14.65 12.7)"
+            />
+        </g>
+    </svg>
+);
+
 export const FolderOpen = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <path d="M6 14l1.45-2.9A2 2 0 0 1 9.24 10H21a2 2 0 0 1 1.94 2.5l-1.55 6A2 2 0 0 1 19.46 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2" />

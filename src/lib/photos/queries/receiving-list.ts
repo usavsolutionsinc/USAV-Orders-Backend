@@ -119,6 +119,23 @@ export function sqlReceivingPhotoCount(receivingIdExpr: string, orgIdExpr: strin
       ))`;
 }
 
+/**
+ * Parameterized photo count for one receiving carton. Bind `[orgId, receivingId]`.
+ * `$2::int` is required — Postgres cannot infer the type inside the subquery.
+ */
+export const SQL_SELECT_RECEIVING_PHOTO_COUNT = `SELECT ${sqlReceivingPhotoCount('$2::int', '$1')}::int AS photo_count`;
+
+export async function countReceivingPhotos(
+  organizationId: string,
+  receivingId: number,
+): Promise<number> {
+  const res = await pool.query<{ photo_count: string }>(SQL_SELECT_RECEIVING_PHOTO_COUNT, [
+    organizationId,
+    receivingId,
+  ]);
+  return Number(res.rows[0]?.photo_count ?? 0);
+}
+
 export function sqlPoLevelPhotoCount(receivingIdExpr: string, orgIdExpr: string): string {
   return `(SELECT COUNT(DISTINCT p.id)
      FROM photos p

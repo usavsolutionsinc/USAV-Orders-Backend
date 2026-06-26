@@ -10,10 +10,11 @@ export function dispatchDashboardAndStationRefresh(): void {
 }
 
 export interface ReceivingPhotoChangedPayload {
-  action: 'delete' | 'upload' | 'update';
+  action: 'delete' | 'upload' | 'insert' | 'update';
   photoIds?: number[];
   receivingId?: number | null;
   receivingLineIds?: number[];
+  totalPhotoCount?: number | null;
 }
 
 /**

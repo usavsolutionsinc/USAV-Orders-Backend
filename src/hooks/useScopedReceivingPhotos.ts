@@ -25,16 +25,22 @@ export interface ScopedReceivingPhoto {
   displayUrl: string;
 }
 
-/** Canonical React Query key for a receiving photo scope (PO vs line). */
+/** Canonical React Query key for a receiving photo scope (PO vs line vs all). */
 export function receivingPhotosQueryKey(scope: PhotoScope) {
-  return ['receiving-photos', scope.receivingId, scope.receivingLineId ?? 'po'] as const;
+  const lineKey =
+    scope.receivingLineId != null
+      ? String(scope.receivingLineId)
+      : scope.photosListScope === 'po'
+        ? 'po'
+        : 'all';
+  return ['receiving-photos', scope.receivingId, lineKey] as const;
 }
 
 async function fetchReceivingPhotos(scope: PhotoScope): Promise<{ photos: ReceivingPhotoRow[] }> {
   const params = new URLSearchParams({ receivingId: String(scope.receivingId) });
   if (scope.receivingLineId != null) {
     params.set('receivingLineId', String(scope.receivingLineId));
-  } else {
+  } else if (scope.photosListScope === 'po') {
     params.set('scope', 'po');
   }
   const res = await fetch(`/api/receiving-photos?${params.toString()}`, { cache: 'no-store' });

@@ -177,7 +177,21 @@ export async function releaseUnit(input: ReleaseUnitInput): Promise<ReleaseUnitR
         [unit.id],
       );
       const candidate = heldQ.rows[0]?.restore_status?.toUpperCase() ?? null;
-      if (candidate && isRestorableStatus(candidate)) restoreStatus = candidate;
+      if (candidate && isRestorableStatus(candidate)) {
+        restoreStatus = candidate;
+      } else if (candidate && !isRestorableStatus(candidate)) {
+        // The unit was held from a state we can't auto-restore (e.g. RECEIVED,
+        // TESTED). Silently defaulting to STOCKED would push an untested unit
+        // into sellable stock, bypassing triage/test/grade. Refuse and make the
+        // caller choose an explicit force_status instead of losing the state.
+        return {
+          ok: false,
+          status: 409,
+          error: `cannot auto-restore from ${candidate}; specify force_status`,
+          currentStatus: unit.current_status,
+        };
+      }
+      // candidate == null → no recorded prior status; the STOCKED fallback is safe.
     }
 
     // Guarded status write + RELEASED_HOLD event. restoreStatus is always a

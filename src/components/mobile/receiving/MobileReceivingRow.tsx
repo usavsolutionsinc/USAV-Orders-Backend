@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Camera } from '@/components/Icons';
+import { Camera, Image as ImageIcon } from '@/components/Icons';
 import {
   conditionGradeTableLabel,
   workflowStatusTableLabel,
@@ -12,7 +12,7 @@ import {
 } from '@/components/station/receiving-constants';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
-import { MobilePhotoCountBadge } from '@/components/mobile/receiving/MobilePhotoCountBadge';
+import { MobileRowPhotoActions } from '@/components/mobile/receiving/MobileRowPhotoActions';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
 
@@ -22,8 +22,12 @@ interface MobileReceivingRowProps {
   /** True for the first ~2s after the row first appears — drives a one-time ring/glow pulse. */
   fresh?: boolean;
   onTap: () => void;
-  /** Path the camera FAB navigates to. Pre-built by parent so we can carry staffId, etc. */
-  photosHref: string;
+  /** Capture route — dedicated camera surface. */
+  captureHref: string;
+  /** Gallery route — opens swipe viewer (`?mode=gallery`). */
+  galleryHref: string;
+  /** Opens the carton sheet + swipe viewer in place (preferred on `/m/receiving`). */
+  onOpenGallery?: () => void;
   /**
    * Shared desktop⇄mobile display flags. The mobile receiving feed is the
    * recent/history surface, so it defaults to `{ isHistory: true }` — which
@@ -38,10 +42,19 @@ interface MobileReceivingRowProps {
  * + product title), {@link RowMetaColumns} (qty · condition · workflow icon),
  * and {@link ReceivingIdentityChips} (PO / SKU / tracking / serial, always
  * rendered as fixed columns — empties read as '----'). The bottom-pinned
- * expanded card adds a big "Take Photos" CTA; collapsed rows show a compact
- * camera + xN chip to the right of the serial column (gray x0, blue when photos exist).
+ * expanded card adds capture CTA; collapsed rows show gallery + camera buttons on
+ * the right (gallery left, capture right).
  */
-export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosHref, display = { isHistory: true } }: MobileReceivingRowProps) {
+export function MobileReceivingRow({
+  row,
+  variant,
+  fresh = false,
+  onTap,
+  captureHref,
+  galleryHref,
+  onOpenGallery,
+  display = { isHistory: true },
+}: MobileReceivingRowProps) {
   const productTitle = row.item_name || row.zoho_item_id || 'Unnamed inbound line';
   const quantityText = `${row.quantity_received}/${row.quantity_expected ?? '?'}`;
   const qtyExpected = row.quantity_expected ?? 0;
@@ -72,9 +85,8 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
         title={productTitle}
       />
 
-      {/* Second row: qty · condition · workflow icon (left) + identity chips
-          (right, dense so all four columns stay on this one line). */}
-      <div className="pointer-events-auto mt-0.5 flex items-center gap-2">
+      {/* Second row: qty · condition (left) + chips + photo actions (right). */}
+      <div className="pointer-events-auto mt-0.5 flex min-w-0 max-w-full items-center gap-1 overflow-hidden">
         <RowMetaColumns
           className="!mt-0 shrink-0"
           indent={META_COL.indentWide}
@@ -101,23 +113,71 @@ export function MobileReceivingRow({ row, variant, fresh = false, onTap, photosH
             ) : undefined
           }
         />
-        <div className="ml-auto flex min-w-0 items-center gap-1">
-          <ReceivingIdentityChips po={poValue} sku={skuValue} tracking={trackingValue} serialsCsv={serialsCsv} asColumns dense />
-          {!isExpanded ? <MobilePhotoCountBadge count={photoCount} /> : null}
+        <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-1 overflow-hidden">
+          <div className="min-w-0 overflow-hidden">
+            <ReceivingIdentityChips po={poValue} sku={skuValue} tracking={trackingValue} serialsCsv={serialsCsv} asColumns dense />
+          </div>
+          {!isExpanded ? (
+            <MobileRowPhotoActions
+              photoCount={photoCount}
+              galleryHref={galleryHref}
+              captureHref={captureHref}
+              onOpenGallery={onOpenGallery}
+              className="shrink-0"
+            />
+          ) : null}
         </div>
       </div>
 
-      {/* Bottom-pinned card: big Take Photos CTA. */}
+      {/* Bottom bar: fixed-width gallery + wide camera, same height. */}
       {isExpanded && (
-        <Link
-          href={photosHref}
-          prefetch={false}
-          aria-label={`Take photos (${photoCount} so far)`}
-          className="pointer-events-auto mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 text-white text-label font-black uppercase tracking-[0.18em] shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] transition-transform active:scale-[0.98] active:bg-blue-700"
-        >
-          <Camera className="h-5 w-5" />
-          <span className="tabular-nums lowercase">x{photoCount}</span>
-        </Link>
+        <div className="pointer-events-auto mt-3 flex h-14 gap-2">
+          {onOpenGallery ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onOpenGallery();
+              }}
+              aria-label={photoCount > 0 ? `View ${photoCount} photos` : 'Open photo gallery'}
+              className={
+                photoCount > 0
+                  ? 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
+                  : 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
+              }
+            >
+              <ImageIcon className="h-5 w-5" />
+              {photoCount > 0 ? (
+                <span className="text-[10px] font-black leading-none tabular-nums">x{photoCount}</span>
+              ) : null}
+            </button>
+          ) : (
+            <Link
+              href={galleryHref}
+              prefetch={false}
+              aria-label={photoCount > 0 ? `View ${photoCount} photos` : 'Open photo gallery'}
+              className={
+                photoCount > 0
+                  ? 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
+                  : 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
+              }
+            >
+              <ImageIcon className="h-5 w-5" />
+              {photoCount > 0 ? (
+                <span className="text-[10px] font-black leading-none tabular-nums">x{photoCount}</span>
+              ) : null}
+            </Link>
+          )}
+          <Link
+            href={captureHref}
+            prefetch={false}
+            aria-label={`Take photos${photoCount > 0 ? ` (${photoCount} so far)` : ''}`}
+            className="inline-flex h-full min-w-0 flex-1 items-center justify-center rounded-xl bg-blue-600 text-white shadow-[0_6px_14px_-6px_rgba(37,99,235,0.55)] transition-transform active:scale-[0.98] active:bg-blue-700"
+          >
+            <Camera className="h-6 w-6" />
+          </Link>
+        </div>
       )}
     </MobileRowCard>
   );

@@ -13,6 +13,8 @@ interface SignaturePadProps {
   label?: string;
   /** When true, the pad fills its parent height instead of using a fixed height */
   fillHeight?: boolean;
+  /** `dropoff` — square corners, matches printed drop-off signature line. */
+  variant?: 'default' | 'dropoff';
 }
 
 const PAD_HEIGHT = 200;
@@ -32,7 +34,7 @@ function scaleCanvas(canvas: HTMLCanvasElement) {
   if (ctx) ctx.scale(ratio, ratio);
 }
 
-export function SignaturePad({ onSignatureChange, label = 'Customer Signature', fillHeight }: SignaturePadProps) {
+export function SignaturePad({ onSignatureChange, label = 'Customer Signature', fillHeight, variant = 'default' }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const padRef = useRef<SignaturePadLib | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -113,15 +115,17 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
     onSignatureChange(null);
   }, [onSignatureChange]);
 
+  const isDropoff = variant === 'dropoff';
+
   return (
-    <div className={fillHeight ? 'flex h-full flex-col gap-2' : 'space-y-2'}>
+    <div className={fillHeight ? 'flex h-full flex-col gap-2 px-3 pt-3' : 'space-y-2'}>
       {/* Label row */}
       <div className="flex items-center justify-between">
-        <label className="block text-eyebrow font-black uppercase tracking-[0.15em] text-gray-500">
+        <label className={`block font-black uppercase tracking-[0.15em] text-gray-500 ${isDropoff ? 'text-[10px]' : 'text-eyebrow'}`}>
           {label}
         </label>
         <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 text-eyebrow font-black uppercase tracking-wide px-2 py-1 border transition-opacity ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
+            <span className={`flex items-center gap-1.5 font-black uppercase tracking-wide border transition-opacity ${isDropoff ? 'rounded-none px-2 py-1 text-[10px]' : 'text-eyebrow px-2 py-1'} ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -130,7 +134,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
           <button
             type="button"
             onClick={handleClear}
-            className="text-eyebrow font-black text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors px-2 py-1 hover:bg-red-50"
+            className={`font-black text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors px-2 py-1 hover:bg-red-50 ${isDropoff ? 'text-[10px]' : 'text-eyebrow'}`}
           >
             Clear
           </button>
@@ -140,7 +144,7 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
       {/* Canvas area */}
       <div
         ref={containerRef}
-        className={`relative bg-white overflow-hidden ${fillHeight ? 'flex-1 min-h-0' : 'border border-gray-300'}`}
+        className={`relative overflow-hidden bg-white ${fillHeight ? 'min-h-0 flex-1' : 'border border-gray-300'}`}
         style={fillHeight ? undefined : { height: PAD_HEIGHT }}
       >
         <canvas

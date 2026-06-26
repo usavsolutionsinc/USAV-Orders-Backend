@@ -3,6 +3,15 @@ import { getIssuesForFavorite, createIssueTemplate } from '@/lib/neon/repair-iss
 import { withAuth, type AuthContext } from '@/lib/auth/withAuth';
 import type { OrgId } from '@/lib/tenancy/constants';
 
+function isMissingRelationError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: string }).code === '42P01'
+  );
+}
+
 export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
   try {
     const { searchParams } = new URL(req.url);
@@ -15,10 +24,15 @@ export const GET = withAuth(async (req: NextRequest, ctx: AuthContext) => {
 
     const issues = await getIssuesForFavorite(favoriteSkuId, ctx.organizationId as OrgId);
     return NextResponse.json({ issues, count: issues.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (isMissingRelationError(error)) {
+      // DB not migrated yet — ReasonSelector falls back to built-in defaults.
+      return NextResponse.json({ issues: [], count: 0 });
+    }
     console.error('GET /api/repair/issues error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch issues', details: error?.message || 'Unknown error' },
+      { error: 'Failed to fetch issues', details: message },
       { status: 500 },
     );
   }

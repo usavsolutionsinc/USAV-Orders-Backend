@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/CopyChip';
 import { conditionGradeTableLabel, workflowStatusTableLabel } from '@/components/station/receiving-constants';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { receivingPhotosGalleryUrl, receivingPhotosUrl } from '@/lib/photos/mobile-gallery-url';
+import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 
 interface MobileCartonSheetProps {
   row: ReceivingLineRow | null;
@@ -77,23 +77,15 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
     .filter(Boolean)
     .join(', ');
 
-  // Title shown in the camera header — same precedence as the receiving rail
-  // (RecentActivityRailBase), so unmatched cartons read "Unfound PO" and matched
-  // lines read their item title. poValue names the saved NAS file by PO#.
-  const cameraTitle = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
-  const photosBase = `/m/r/${receivingId}/photos`;
-  const photoParams = {
-    title: cameraTitle,
+  const { captureHref: photosHref, galleryHref } = receivingLinePhotoHrefs({
+    receivingId,
+    lineId: row.id,
+    itemName: row.item_name,
+    sku: row.sku,
+    zohoItemId: row.zoho_item_id,
     poRef: poValue || undefined,
-  };
-  const photosHref = receivingId
-    ? receivingPhotosUrl(photosBase, photoParams)
-    : null;
-  const galleryHref = receivingId
-    ? receivingPhotosGalleryUrl(
-        receivingPhotosUrl(photosBase, { ...photoParams, back: '/m/receiving' }),
-      )
-    : null;
+    back: '/m/receiving',
+  });
 
   return (
     <BottomSheet open={open} onClose={onClose} maxWidth="32rem">
@@ -136,7 +128,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         </div>
 
         {/* Existing photos */}
-        {receivingId && galleryHref ? (
+        {receivingId && galleryHref !== '#' ? (
           <MobileReceivingPhotoStrip
             receivingId={receivingId}
             staffId={staffId}
@@ -151,7 +143,7 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         )}
 
         {/* Primary CTA — hands off to dedicated capture surface */}
-        {photosHref ? (
+        {photosHref !== '#' ? (
           <Link
             href={photosHref}
             prefetch={false}

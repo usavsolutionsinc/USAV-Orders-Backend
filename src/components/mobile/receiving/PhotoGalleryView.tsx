@@ -1,4 +1,4 @@
 /**
- * @deprecated Use {@link MobileReceivingPhotoStudio} with `mode="gallery"`.
+ * @deprecated Use {@link MobileReceivingSwipeGallery} or `?mode=gallery` on the photos route.
  */
-export { MobileReceivingPhotoStudio as PhotoGalleryView } from '@/components/mobile/photos/MobileReceivingPhotoStudio';
+export { MobileReceivingSwipeGallery as PhotoGalleryView } from '@/components/mobile/photos/MobileReceivingSwipeGallery';

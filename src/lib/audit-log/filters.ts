@@ -95,6 +95,13 @@ export function assertReportRange(range: DateRange): void {
   if (!range.start || !range.end) return;
   const span = new Date(range.end).getTime() - new Date(range.start).getTime();
   const days = span / (24 * 60 * 60 * 1000);
+  // Reject inverted (end < start) and malformed (unparseable date → NaN) ranges
+  // too. A bare `days > MAX` check passed both: negative spans and NaN are not
+  // `> MAX`, so they slipped through and produced an empty/garbage report
+  // instead of a clean 400.
+  if (!Number.isFinite(days) || days < 0) {
+    throw new RangeError('Invalid report range: end must be on or after start.');
+  }
   if (days > MAX_REPORT_DAYS) {
     throw new RangeError(
       `Report range too wide (${days.toFixed(1)} days). Max ${MAX_REPORT_DAYS} days — narrow the date filter.`,

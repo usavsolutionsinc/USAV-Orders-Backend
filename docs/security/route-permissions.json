@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-25T20:53:39Z",
-  "totalRoutes": 680,
+  "generatedAt": "2026-06-26T19:34:58Z",
+  "totalRoutes": 681,
   "summary": {
-    "permissionGated": 581,
-    "authenticatedNoPermission": 32,
-    "anonymousIntentional": 57,
+    "permissionGated": 584,
+    "authenticatedNoPermission": 34,
+    "anonymousIntentional": 61,
     "serviceToService": 2,
-    "ungatedRead": 8,
+    "ungatedRead": 0,
     "ungatedWrite": 0
   },
   "routes": [
@@ -649,7 +649,7 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "oauth callback (provider redirect; encrypted state, no session cookie)"
     },
     {
       "path": "/api/amazon/oauth/start/route.ts",
@@ -1507,7 +1507,7 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "public desktop release feed (polled pre-auth by the updater)"
     },
     {
       "path": "/api/ebay/accounts/route.ts",
@@ -1592,6 +1592,15 @@
       ],
       "gate": "withAuth",
       "permission": "integrations.ecwid",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/ecwid/order-search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "repair.view",
       "exemptReason": null
     },
     {
@@ -2457,8 +2466,8 @@
         "GET",
         "PUT"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "requireRoutePerm",
+      "permission": "receiving.view",
       "exemptReason": "dev/LAN NAS passthrough (disabled in prod; path-traversal + image-only guarded)"
     },
     {
@@ -3023,7 +3032,7 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "public share link (capability token in URL)"
     },
     {
       "path": "/api/photos/share-packs/[token]/zip/route.ts",
@@ -3032,7 +3041,7 @@
       ],
       "gate": "NONE",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "public share link (capability token in URL)"
     },
     {
       "path": "/api/photos/share-packs/route.ts",
@@ -3041,7 +3050,7 @@
       ],
       "gate": "withAuth",
       "permission": "photos.share",
-      "exemptReason": null
+      "exemptReason": "public share link (capability token in URL)"
     },
     {
       "path": "/api/photos/share/route.ts",
@@ -3210,7 +3219,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "withAuth (no permission)",
       "permission": null,
       "exemptReason": null
     },
@@ -4197,8 +4206,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "withAuth",
+      "permission": "reports.view",
       "exemptReason": null
     },
     {
@@ -4599,8 +4608,8 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
-      "permission": null,
+      "gate": "requireRoutePerm",
+      "permission": "shipping.view",
       "exemptReason": null
     },
     {
@@ -5400,7 +5409,7 @@
       "methods": [
         "GET"
       ],
-      "gate": "NONE",
+      "gate": "withAuth (no permission)",
       "permission": null,
       "exemptReason": null
     },
@@ -6257,7 +6266,7 @@
       ],
       "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
-      "exemptReason": null
+      "exemptReason": "oauth callback (provider redirect; encrypted state, no session cookie)"
     },
     {
       "path": "/api/zoho/orders/ingest/route.ts",

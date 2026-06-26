@@ -40,6 +40,11 @@ export interface PhotoScope {
   poRef?: string | null;
   /** One-based clean filename suffix for captured photos, e.g. PO123_3.jpg. */
   fileIndex?: number | null;
+  /**
+   * When `receivingLineId` is unset: `all` loads PO + every line (matches
+   * `photo_count` badges); `po` loads PO-level entity photos only.
+   */
+  photosListScope?: 'po' | 'all';
 }
 
 export interface UploadEntry {

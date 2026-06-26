@@ -1,15 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getZendeskSupportOverview } from '@/lib/zendesk';
 import { formatPSTTimestamp } from '@/utils/date';
+import { withAuth } from '@/lib/auth/withAuth';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * Support overview — Zendesk only. (eBay messages/returns were removed when the
  * support surface became a native Zendesk console.) Powers the Operations
- * dashboard's Zendesk tile.
+ * dashboard's Zendesk tile. Requires a valid session (was previously
+ * unauthenticated — the proxy only checks cookie presence).
  */
-export async function GET() {
+export const GET = withAuth(async () => {
   try {
     const zendesk = await getZendeskSupportOverview(10);
 
@@ -34,4 +36,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});

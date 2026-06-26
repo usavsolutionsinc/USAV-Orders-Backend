@@ -33,7 +33,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const scope = useMemo(
-    () => ({ receivingId, receivingLineId: null as number | null }),
+    () => ({ receivingId, receivingLineId: null as number | null, photosListScope: 'all' as const }),
     [receivingId],
   );
 
@@ -132,6 +132,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
       </div>
 
       <MobileSwipePhotoViewer
+        presentation="sheet"
         open={viewerOpen}
         initialIndex={viewerIndex}
         slides={swipeSlides}

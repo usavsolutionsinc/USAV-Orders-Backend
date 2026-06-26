@@ -35,10 +35,10 @@ export function MobileRowCard({
   return (
     <div
       {...dataProps}
-      className={`relative transition-all ${
+      className={`relative max-w-full overflow-x-hidden transition-all ${
         isExpanded
           ? `${MOBILE_GUTTER_X} mb-3 mt-2 rounded-2xl border border-blue-100 bg-white p-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]`
-          : `flex w-full flex-col border-b border-gray-100 bg-white ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
+          : `flex w-full max-w-full flex-col border-b border-gray-100 bg-white ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
       }`}
     >
       {/* Tap target for the row sheet / action. */}
@@ -64,7 +64,7 @@ export function MobileRowCard({
 
       {/* Content layer — clicks fall through to the tap target unless a child
           opts back in with pointer-events-auto (chips, links). */}
-      <div className="relative z-10 pointer-events-none flex flex-col">{children}</div>
+      <div className="relative z-10 pointer-events-none flex min-w-0 max-w-full flex-col overflow-x-hidden">{children}</div>
     </div>
   );
 }

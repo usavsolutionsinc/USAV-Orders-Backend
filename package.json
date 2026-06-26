@@ -33,6 +33,7 @@
     "audit-route-auth": "tsx scripts/audit-route-auth.ts",
     "audit-route-auth:emit": "tsx scripts/audit-route-auth.ts --emit",
     "audit-route-auth:check": "tsx scripts/audit-route-auth.ts --check",
+    "audit-route-auth:enforce": "tsx scripts/audit-route-auth.ts --enforce",
     "check:cycles": "npx --yes madge@^8 --circular --ts-config tsconfig.json --extensions ts,tsx src",
     "tenancy:coverage": "node scripts/tenancy-coverage.mjs",
     "tenancy:routes": "node scripts/tenancy-route-audit.mjs",

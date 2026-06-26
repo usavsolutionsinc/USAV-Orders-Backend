@@ -58,8 +58,8 @@ export default function RedesignedMobileReceivingLive({ mode }: { mode?: string 
   }
 
   return (
-    <div className={`flex h-full flex-col ${TOKENS.colors.background}`}>
-      <div className="min-h-0 flex-1">{body}</div>
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden ${TOKENS.colors.background}`}>
+      <div className="min-h-0 flex-1 overflow-hidden">{body}</div>
     </div>
   );
 }

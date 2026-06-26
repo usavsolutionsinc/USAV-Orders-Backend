@@ -1,5 +1,6 @@
 'use client';
 
+import { RepairOrderLinkSearch } from './RepairOrderLinkSearch';
 import type { RepairDetailsController } from './useRepairDetailsPanel';
 
 /** Manual pairing editor — order / inbound tracking / serial / catalog SKU. */
@@ -20,8 +21,17 @@ export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
         )}
       </div>
       <div className="space-y-3">
+        {/* Order # — live Ecwid order lookup (shipped + unshipped), not a raw
+            text field. Resolves the real order number before save. */}
+        <div>
+          <span className="text-xs text-gray-500 font-semibold block mb-1">Order #</span>
+          <RepairOrderLinkSearch
+            value={c.linkOrderId}
+            onChange={c.setLinkOrderId}
+            disabled={c.savingLink}
+          />
+        </div>
         {[
-          { label: 'Order #', value: c.linkOrderId, set: c.setLinkOrderId, placeholder: 'Source order id' },
           { label: 'Inbound Tracking', value: c.linkTracking, set: c.setLinkTracking, placeholder: 'Tracking number' },
           { label: 'Serial', value: c.linkSerial, set: c.setLinkSerial, placeholder: 'Unit serial number' },
           { label: 'Catalog SKU', value: c.linkSku, set: c.setLinkSku, placeholder: 'Source SKU' },

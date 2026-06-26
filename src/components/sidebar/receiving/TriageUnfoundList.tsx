@@ -26,6 +26,7 @@ interface UnfoundQueueRow {
   serial_numbers: string | null;
   context: string | null;
   created_at: string;
+  photo_count?: number | string | null;
 }
 
 /** Map an unfound-queue row to the stub ReceivingLineRow the rail renders. */
@@ -75,6 +76,7 @@ function toStubRow(r: UnfoundQueueRow): ReceivingLineRow {
           .filter(Boolean)
           .map((serial_number, i) => ({ id: -(receivingId * 100 + i), serial_number }))
       : [],
+    photo_count: Number(r.photo_count ?? 0),
   };
 }
 

@@ -26,6 +26,7 @@
  */
 
 import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEvents';
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { tapWorkflow } from '@/lib/workflow/tap';
@@ -139,6 +140,12 @@ export async function recordTestVerdict(
   const useChokepoint = isUnifiedEngineApplyTransition();
   let unit = prev;
   let eventId!: number;
+  // True when THIS call produced a brand-new inventory_event; false when the
+  // event already existed (a retry with the same clientEventId — inventory_events
+  // is UNIQUE on client_event_id, so the helper returns the existing row). Used
+  // to skip the testing_results feed insert on a replay so retries don't stack
+  // duplicate feed rows (the event itself is already deduped).
+  let eventCreated = true;
 
   if (useChokepoint) {
     const applied = await applyTransition({
@@ -169,6 +176,7 @@ export async function recordTestVerdict(
     // current_status is the only field that changed; everything else mirrors prev.
     unit = { ...prev, current_status: mapping.nextStatus };
     eventId = applied.eventId;
+    eventCreated = !applied.idempotent;
   } else if (prev.current_status !== mapping.nextStatus) {
     const updated = await pool.query<TestedUnit>(
       orgId
@@ -216,7 +224,7 @@ export async function recordTestVerdict(
   //    event id is surfaced in the result so callers can cross-reference the
   //    verdict transition back to the timeline entry (mirrors /grade).
   if (!useChokepoint) {
-    const { event } = await appendInventoryEvent({
+    const { event, created } = await appendInventoryEvent({
       eventType: mapping.eventType,
       organizationId: args.organizationId ?? null,
       clientEventId: args.clientEventId ?? null,
@@ -231,61 +239,79 @@ export async function recordTestVerdict(
       payload: { verdict },
     });
     eventId = event.id;
+    eventCreated = created;
   }
 
   // 4b. Recently-Tested feed row. References the unit by id only — serial
   //     number / SKU / condition are JOINed from serial_units at read time
   //     (single source of truth), never copied here. Authoritative state
   //     stays on serial_units, so a write failure here is logged, not fatal.
-  try {
-    await pool.query(
-      `INSERT INTO testing_results
-         (serial_unit_id, receiving_line_id, verdict, unit_status,
-          tested_by, notes, inventory_event_id, organization_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      // org from the unit we already fetched — not a re-SELECT subquery (which
-      // would race a concurrent delete to NULL → wrong fallback org).
-      [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId, unit.organization_id],
-    );
-  } catch (err) {
-    console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
+  //     Skipped on a replay (eventCreated === false): the first call already
+  //     wrote this feed row, so re-inserting would stack a duplicate. The
+  //     event is deduped by client_event_id, but testing_results has no such
+  //     unique key, so the guard lives here. (Favors no-duplicates over the
+  //     rare partial-crash-then-retry case; the feed is non-authoritative.)
+  if (eventCreated) {
+    try {
+      await pool.query(
+        `INSERT INTO testing_results
+           (serial_unit_id, receiving_line_id, verdict, unit_status,
+            tested_by, notes, inventory_event_id, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        // org from the unit we already fetched — not a re-SELECT subquery (which
+        // would race a concurrent delete to NULL → wrong fallback org).
+        [unit.id, lineId, verdict, mapping.nextStatus, actorStaffId, notes, eventId, unit.organization_id],
+      );
+    } catch (err) {
+      console.warn('[recordTestVerdict] testing_results insert failed (non-fatal):', err);
+    }
   }
 
   // 5. Line rollup. Only runs when the unit has a parent line.
   let lineRollup: TestLineRollup | null = null;
 
   if (lineId != null) {
-    const tally = await pool.query<{
-      quantity_expected: number | null;
-      total_units: string;
-      tested_units: string;
-      failed_units: string;
-      in_test_units: string;
-    }>(
-      orgId
-        ? `SELECT rl.quantity_expected,
-                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
-             FROM receiving_lines rl
-        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
-            WHERE rl.id = $1 AND rl.organization_id = $2
-            GROUP BY rl.id, rl.quantity_expected`
-        : `SELECT rl.quantity_expected,
-                  COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
-                  COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
-             FROM receiving_lines rl
-        LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
-            WHERE rl.id = $1
-            GROUP BY rl.id, rl.quantity_expected`,
-      orgId ? [lineId, orgId] : [lineId],
-    );
+    // Run the count-then-write rollup inside ONE transaction that locks the
+    // receiving_line FOR UPDATE *before* counting. Without the lock, two
+    // concurrent verdicts on the same line each read a stale tally and the
+    // last writer clobbers the other — leaving e.g. a fully-passed line stuck
+    // IN_TEST (never advances to the claim flow). Steps 1–4 already committed
+    // the unit status atomically, so once the lock is held the sibling units'
+    // committed statuses are visible to the re-read. Scoped by the unit's own
+    // org (always present; the line shares it).
+    const rollupOrg = unit.organization_id;
+    lineRollup = await withTenantTransaction(rollupOrg, async (client) => {
+      // Serialize concurrent rollups on this line. A non-existent / wrong-org
+      // line locks nothing and the tally below returns no row → no rollup.
+      await client.query(
+        `SELECT id FROM receiving_lines
+          WHERE id = $1 AND organization_id = $2
+          FOR UPDATE`,
+        [lineId, rollupOrg],
+      );
 
-    const t = tally.rows[0];
-    if (t) {
+      const tally = await client.query<{
+        quantity_expected: number | null;
+        total_units: string;
+        tested_units: string;
+        failed_units: string;
+        in_test_units: string;
+      }>(
+        `SELECT rl.quantity_expected,
+                COUNT(su.id) FILTER (WHERE su.id IS NOT NULL)            AS total_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'TESTED')  AS tested_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'ON_HOLD') AS failed_units,
+                COUNT(su.id) FILTER (WHERE su.current_status = 'IN_TEST') AS in_test_units
+           FROM receiving_lines rl
+      LEFT JOIN serial_units su ON su.origin_receiving_line_id = rl.id
+          WHERE rl.id = $1 AND rl.organization_id = $2
+          GROUP BY rl.id, rl.quantity_expected`,
+        [lineId, rollupOrg],
+      );
+
+      const t = tally.rows[0];
+      if (!t) return null;
+
       const expected = Number(t.quantity_expected || 0);
       const tested = Number(t.tested_units || 0);
       const failed = Number(t.failed_units || 0);
@@ -316,7 +342,9 @@ export async function recordTestVerdict(
         nextQa = 'PENDING';
       }
 
-      const params: unknown[] = [lineId, nextWorkflow, nextQa];
+      // $4 is always the org (fixed before the optional disposition at $5),
+      // so the WHERE predicate index is stable.
+      const params: unknown[] = [lineId, nextWorkflow, nextQa, rollupOrg];
       const sets = [
         `workflow_status = $2::inbound_workflow_status_enum`,
         `qa_status = $3::qa_status_enum`,
@@ -325,26 +353,19 @@ export async function recordTestVerdict(
         params.push(nextDisposition);
         sets.push(`disposition_code = $${params.length}::disposition_enum`);
       }
-      // Tenant-scope the rollup write (defense-in-depth; the line is the
-      // org-verified unit's parent).
-      let whereClause = 'id = $1';
-      if (orgId) {
-        params.push(orgId);
-        whereClause += ` AND organization_id = $${params.length}`;
-      }
 
-      const rolled = await pool.query<TestLineRollup>(
+      const rolled = await client.query<TestLineRollup>(
         `UPDATE receiving_lines
             SET ${sets.join(', ')},
                 updated_at = NOW()
-          WHERE ${whereClause}
+          WHERE id = $1 AND organization_id = $4
           RETURNING id, workflow_status::text AS workflow_status,
                     qa_status::text AS qa_status,
                     disposition_code::text AS disposition_code`,
         params,
       );
-      lineRollup = rolled.rows[0] ?? null;
-    }
+      return rolled.rows[0] ?? null;
+    });
   }
 
   // 6. Workflow-engine tap (LEGACY path only — fire-and-forget, never throws).

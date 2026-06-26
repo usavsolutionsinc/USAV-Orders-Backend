@@ -288,9 +288,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // the line (or carton for package-level claims). Best-effort.
         try {
           if (lineId != null) {
-            await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, lineId]);
+            await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, lineId, ctx.organizationId]);
           } else {
-            await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2`, [ticketNumber, receivingId]);
+            await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, receivingId, ctx.organizationId]);
           }
         } catch (colErr) {
           console.warn('[POST /api/receiving/zendesk-claim] zendesk_ticket column update failed', colErr);

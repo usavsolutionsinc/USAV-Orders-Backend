@@ -15,7 +15,7 @@ import { useAblyClient } from '@/contexts/AblyContext';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
 import { toast } from '@/lib/toast';
@@ -48,7 +48,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   const { user } = useAuth();
   const orgId = user?.organizationId;
   const queryClient = useQueryClient();
-  const queryKey = ['receiving-photos', receivingId];
+  const queryKey = receivingPhotosQueryKey(receivingId);
 
   const { data } = useQuery<PhotosPayload>({
     queryKey,
@@ -63,10 +63,12 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     staleTime: 10_000,
   });
 
-  const refresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey });
-    invalidateReceivingFeeds(queryClient);
-  }, [queryClient, queryKey]);
+  const refresh = useCallback(
+    (deletedPhotoId?: number) => {
+      refreshReceivingPhotos(queryClient, receivingId, deletedPhotoId);
+    },
+    [queryClient, receivingId],
+  );
 
   useReceivingPhotosRealtimeRefresh(receivingId, staffId, refresh, staffId > 0 && !!orgId);
 
@@ -151,12 +153,13 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
             <PhotoGallery
               photos={photos}
               orderId={`RCV-${receivingId}`}
+              receivingId={receivingId}
               launcherLayout="toolbar"
               showCopyLinks={false}
               toolbarShowLabel={false}
               compact
               libraryHref={`/ops/photos?receivingId=${receivingId}`}
-              onPhotoDeleted={refresh}
+              onPhotoDeleted={(photoId) => refresh(photoId)}
             />
           </div>
         </div>

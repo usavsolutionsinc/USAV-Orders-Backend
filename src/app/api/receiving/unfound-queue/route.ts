@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { withAuth } from '@/lib/auth/withAuth';
+import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 
 const ALLOWED_KINDS = new Set([
   'all',
@@ -39,6 +40,7 @@ interface QueueRow {
   follow_up_at: string | null;
   checked: boolean;
   checked_at: string | null;
+  photo_count: string;
 }
 
 export const GET = withAuth(async (request: NextRequest, ctx) => {
@@ -92,7 +94,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       zendesk_ticket_id, zendesk_synced_at::text AS zendesk_synced_at,
       usa_team_note, vietnam_team_note,
       follow_up_at::text AS follow_up_at,
-      checked, checked_at::text AS checked_at
+      checked, checked_at::text AS checked_at,
+      CASE
+        WHEN kind = 'unmatched_receiving' AND source_id ~ '^[0-9]+$'
+        THEN ${sqlReceivingPhotoCount('source_id::int', '$1')}
+        ELSE 0
+      END AS photo_count
     FROM v_unfound_queue
     WHERE ${conditions.join(' AND ')}
     ORDER BY checked ASC, created_at DESC

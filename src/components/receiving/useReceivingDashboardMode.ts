@@ -8,6 +8,7 @@
  */
 
 import { useSearchParams } from 'next/navigation';
+import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
 
 export interface ReceivingDashboardMode {
   mode: string;
@@ -16,6 +17,8 @@ export interface ReceivingDashboardMode {
   isHistoryMode: boolean;
   isIncomingMode: boolean;
   isTableOnlyMode: boolean;
+  /** Incoming right-pane sub-view from `?incview=` (`pos` default | `email`). */
+  incomingView: IncomingView;
 }
 
 export function useReceivingDashboardMode(): ReceivingDashboardMode {
@@ -23,6 +26,7 @@ export function useReceivingDashboardMode(): ReceivingDashboardMode {
   const mode = searchParams.get('mode') ?? 'receive';
   const isHistoryMode = mode === 'history';
   const isIncomingMode = mode === 'incoming';
+  const incomingView: IncomingView = searchParams.get('incview') === 'email' ? 'email' : 'pos';
   return {
     mode,
     isPickupMode: mode === 'pickup',
@@ -30,5 +34,6 @@ export function useReceivingDashboardMode(): ReceivingDashboardMode {
     isHistoryMode,
     isIncomingMode,
     isTableOnlyMode: isHistoryMode || isIncomingMode,
+    incomingView,
   };
 }

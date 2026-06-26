@@ -6,10 +6,11 @@
  * checks through the JSX.
  *
  * `triage` (the "Receiving" identify-before-unbox step) is a fast priority
- * pass: just the carton top bar (classify pills, PO#/tracking/listing chips,
- * photos + claim) and a read-only PO-items view. Unbox-only actions — label
- * preview, print·receive, serial scan (serials are captured only at unbox) —
- * and the notes card are hidden.
+ * pass: the carton top bar (classify pills, PO#/tracking/listing chips, photos
+ * + claim), a read-only PO-items view, the Smart-Matching section (pair the
+ * inbound/return package to a Zendesk claim ticket) and the operator notes card.
+ * Unbox-only actions — label preview, print·receive, serial scan (serials are
+ * captured only at unbox) — stay hidden.
  *
  * Adding a new mode/use-case = one row here; the editor never changes.
  */
@@ -43,18 +44,24 @@ export interface WorkspaceCapabilities {
    * keeps the cards free of any `variant === 'triage'` knowledge.
    */
   openInUnbox: boolean;
+  /**
+   * Smart-Matching section — pair the inbound (return) package to a real
+   * Zendesk claim ticket / marketplace delivery signal. Triage-only; unbox is
+   * past the identify step.
+   */
+  matching: boolean;
 }
 
 export const WORKSPACE_CAPABILITIES: Record<ReceivingWorkspaceVariant, WorkspaceCapabilities> = {
   unbox: {
     photos: true, claim: true, labelPreview: true, receiveBar: true,
     serialScan: true, editLines: true, saveBar: false, notes: true,
-    openInUnbox: false,
+    openInUnbox: false, matching: false,
   },
   triage: {
     photos: true, claim: true, labelPreview: false, receiveBar: false,
-    serialScan: false, editLines: false, saveBar: true, notes: false,
-    openInUnbox: true,
+    serialScan: false, editLines: false, saveBar: true, notes: true,
+    openInUnbox: true, matching: true,
   },
 };
 

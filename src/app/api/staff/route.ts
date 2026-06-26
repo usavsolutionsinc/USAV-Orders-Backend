@@ -14,7 +14,7 @@ function isDatabaseUnavailable(error: unknown) {
     return isTransientDbError(error);
 }
 
-async function handleGet(request: NextRequest) {
+async function handleGet(request: NextRequest, ctx: AuthContext) {
     try {
         const { searchParams } = new URL(request.url);
 
@@ -40,8 +40,8 @@ async function handleGet(request: NextRequest) {
                 default_home_path: string | null;
             }>(
                 `SELECT id, name, role, employee_id, active, color_hex, default_home_path
-                 FROM staff WHERE id = $1 LIMIT 1`,
-                [numId],
+                 FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+                [numId, ctx.organizationId],
             );
             if (r.rows.length === 0) {
                 return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -59,6 +59,7 @@ async function handleGet(request: NextRequest) {
             return NextResponse.json([], { headers: { 'x-staff-present': 'off-day' } });
         }
         const cacheLookup = createCacheLookupKey({
+            org: ctx.organizationId,
             role: role || '',
             activeOnly,
             presentToday,
@@ -76,6 +77,11 @@ async function handleGet(request: NextRequest) {
         const params: any[] = [];
         let scheduleJoin = '';
         let scheduledTodaySelect = '';
+
+        // Tenant scope FIRST. All later param indices are computed from
+        // params.length, so prepending the org filter is index-safe.
+        params.push(ctx.organizationId);
+        conditions.push(`s.organization_id = $${params.length}`);
 
         if (presentToday) {
             params.push(todayDayOfWeek);
@@ -186,6 +192,8 @@ async function handleGet(request: NextRequest) {
 
             const fallbackConditions: string[] = [];
             const fallbackParams: any[] = [];
+            fallbackParams.push(ctx.organizationId);
+            fallbackConditions.push(`s.organization_id = $${fallbackParams.length}`);
             if (role) {
                 fallbackParams.push(role);
                 const p = fallbackParams.length;

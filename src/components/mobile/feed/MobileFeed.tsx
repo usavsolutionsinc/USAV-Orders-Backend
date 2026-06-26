@@ -76,7 +76,7 @@ export function MobileFeed<T>({
     // list overflows, so the spacer covers the short-list case.
     <div
       ref={scrollRef}
-      className={`min-h-0 flex-1 overflow-y-auto ${expandLast ? 'flex flex-col' : ''} ${className}`}
+      className={`min-h-0 w-full max-w-full flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-x-none ${expandLast ? 'flex flex-col' : ''} ${className}`}
     >
       {expandLast && <div className="mt-auto shrink-0" aria-hidden />}
       <LayoutGroup>

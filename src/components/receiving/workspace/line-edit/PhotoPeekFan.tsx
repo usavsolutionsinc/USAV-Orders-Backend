@@ -20,7 +20,7 @@
  * at /design-demo/photo-peek.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
@@ -31,6 +31,8 @@ import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGall
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import type { PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
 import SocialCards, { type CardItem } from '@/components/ui/card-fan-carousel';
+import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
+import { MobileSwipePhotoViewer, type SwipePhotoSlide } from '@/components/mobile/station/MobileSwipePhotoViewer';
 
 export type PeekCard = { id: string; imgUrl: string; alt: string };
 
@@ -71,10 +73,13 @@ const CTRL_BTN =
 export function PhotoPeekFan({
   cards,
   holdMs = 480,
+  receivingId,
   onPhotoDeleted,
 }: {
   cards: PeekCard[];
   holdMs?: number;
+  /** Scopes delete broadcasts to this carton (desktop camera ×N + mobile feed). */
+  receivingId?: number;
   /** Wired so the viewer's delete affordance can refresh the source list. */
   onPhotoDeleted?: (photoId: number) => void;
 }) {
@@ -102,7 +107,12 @@ export function PhotoPeekFan({
 
   // Reuse the shared gallery's fullscreen viewer (zoom/pan/nav/filmstrip + delete)
   // instead of a bespoke lightbox.
-  const gallery = usePhotoGallery({ photos: chronoPhotos, showCopyLinks: false, onPhotoDeleted });
+  const gallery = usePhotoGallery({
+    photos: chronoPhotos,
+    showCopyLinks: false,
+    receivingId,
+    onPhotoDeleted,
+  });
   const { viewerOpen, openViewer } = gallery;
 
   const [peekState, setPeekState] = useState<'rest' | 'fan'>('rest');
@@ -163,6 +173,26 @@ export function PhotoPeekFan({
   };
 
   useEffect(() => () => clearHold(), []);
+
+  const { isMobile } = useUIModeOptional();
+
+  const swipeSlides = useMemo<SwipePhotoSlide[]>(
+    () =>
+      gallery.photoItems.map((p, idx) => ({
+        id: String(p.id ?? idx),
+        previewUrl: p.url,
+        deletable: typeof p.id === 'number' && Number.isFinite(p.id),
+      })),
+    [gallery.photoItems],
+  );
+
+  const handleDelete = useCallback(
+    async (slide: SwipePhotoSlide, index: number) => {
+      gallery.setCurrentIndex(index);
+      await gallery.deletePhotoDirect();
+    },
+    [gallery],
+  );
 
   if (count === 0) return null;
 
@@ -267,14 +297,24 @@ export function PhotoPeekFan({
       {/* Shared fullscreen viewer — portaled to <body>, opened from a fan card
           or Space. X / Esc / backdrop close it (usePhotoGallery), returning to
           the fan underneath. */}
-      {gallery.mounted && typeof document !== 'undefined'
-        ? createPortal(
-            <AnimatePresence mode="wait">
-              {viewerOpen ? <PhotoViewerModal g={gallery} /> : null}
-            </AnimatePresence>,
-            document.body,
-          )
-        : null}
+      {isMobile ? (
+        <MobileSwipePhotoViewer
+          open={viewerOpen}
+          initialIndex={gallery.currentIndex}
+          slides={swipeSlides}
+          onClose={gallery.closeViewer}
+          onDelete={handleDelete}
+        />
+      ) : (
+        gallery.mounted && typeof document !== 'undefined'
+          ? createPortal(
+              <AnimatePresence mode="wait">
+                {viewerOpen ? <PhotoViewerModal g={gallery} /> : null}
+              </AnimatePresence>,
+              document.body,
+            )
+          : null
+      )}
     </>
   );
 }

@@ -19,8 +19,10 @@ import { MobileReceivingViewPills } from '@/components/mobile/receiving/MobileRe
 import { MobilePoQrScanSheet } from '@/components/mobile/receiving/MobilePoQrScanSheet';
 import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
+import { MobileReceivingFeedGallery } from '@/components/mobile/receiving/MobileReceivingFeedGallery';
 import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
 
 interface ApiResponse {
@@ -54,6 +56,14 @@ export default function MobileReceivingPipelinePage() {
   const [search, setSearch] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
+  const [feedGalleryReceivingId, setFeedGalleryReceivingId] = useState<number | null>(null);
+
+  const closeSheet = useCallback(() => setSheetRow(null), []);
+  const openFeedGallery = useCallback((row: ReceivingLineRow) => {
+    if (!row.receiving_id) return;
+    setFeedGalleryReceivingId(row.receiving_id);
+  }, []);
+  const closeFeedGallery = useCallback(() => setFeedGalleryReceivingId(null), []);
 
   const { user } = useAuth();
   const staffId = user?.staffId ?? 0;
@@ -102,11 +112,18 @@ export default function MobileReceivingPipelinePage() {
     setSearch(value.trim());
   }, []);
 
-  const buildPhotosHref = useCallback(
-    (row: ReceivingLineRow) =>
-      row.receiving_id ? `/m/r/${row.receiving_id}/photos` : '#',
-    [],
-  );
+  const buildPhotoHrefs = useCallback((row: ReceivingLineRow) => {
+    const poValue = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
+    return receivingLinePhotoHrefs({
+      receivingId: row.receiving_id,
+      lineId: row.id,
+      itemName: row.item_name,
+      sku: row.sku,
+      zohoItemId: row.zoho_item_id,
+      poRef: poValue || undefined,
+      back: '/m/receiving/history',
+    });
+  }, []);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
@@ -215,15 +232,20 @@ export default function MobileReceivingPipelinePage() {
           </div>
         ) : (
           <div className="flex w-full flex-col pb-12">
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const { captureHref, galleryHref } = buildPhotoHrefs(row);
+              return (
               <MobileReceivingRow
                 key={row.id}
                 row={row}
                 variant="collapsed"
                 onTap={() => setSheetRow(row)}
-                photosHref={buildPhotosHref(row)}
+                captureHref={captureHref}
+                galleryHref={galleryHref}
+                onOpenGallery={() => openFeedGallery(row)}
               />
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
@@ -232,7 +254,14 @@ export default function MobileReceivingPipelinePage() {
         row={sheetRow}
         staffId={staffId}
         open={sheetRow != null}
-        onClose={() => setSheetRow(null)}
+        onClose={closeSheet}
+      />
+
+      <MobileReceivingFeedGallery
+        receivingId={feedGalleryReceivingId}
+        staffId={staffId}
+        open={feedGalleryReceivingId != null}
+        onClose={closeFeedGallery}
       />
 
       <MobilePoQrScanSheet

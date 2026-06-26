@@ -9,7 +9,7 @@ import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
 import {
   getReceivingPhotoDeleteMeta,
   listReceivingPhotos,
-  sqlReceivingPhotoCount,
+  countReceivingPhotos,
 } from '@/lib/photos/queries/receiving-list';
 import { resolvePoRef } from '@/lib/photos/resolve-po-ref';
 import { resolvePhotoAccessUrl } from '@/lib/photos/resolve-access-url';
@@ -72,15 +72,6 @@ function mapRow(row: {
     uploadedBy: row.uploadedBy,
     createdAt: row.createdAt,
   };
-}
-
-async function countReceivingPhotos(organizationId: string, receivingId: number): Promise<number> {
-  const result = await tenantQuery<{ photo_count: number }>(
-    organizationId as OrgId,
-    `SELECT ${sqlReceivingPhotoCount('$2', '$1')}::int AS photo_count`,
-    [organizationId, receivingId],
-  );
-  return Number(result.rows[0]?.photo_count ?? 0);
 }
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {

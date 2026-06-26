@@ -1,6 +1,10 @@
 'use client';
 
 import type { QueryClient } from '@tanstack/react-query';
+import {
+  dispatchReceivingPhotoChanged,
+  type ReceivingPhotoChangedPayload,
+} from '@/utils/events';
 
 /**
  * Query-key roots for every receiving feed (Phase 1 of the receiving-triage
@@ -41,4 +45,54 @@ export function invalidateReceivingFeeds(queryClient: QueryClient): void {
   for (const queryKey of RECEIVING_FEED_ROOTS) {
     void queryClient.invalidateQueries({ queryKey });
   }
+}
+
+/** TanStack key for `/api/receiving-photos?receivingId=…`. */
+export function receivingPhotosQueryKey(receivingId: number) {
+  return ['receiving-photos', receivingId] as const;
+}
+
+interface ReceivingPhotosCacheRow {
+  id: number;
+  photoUrl?: string;
+}
+
+/**
+ * Optimistically drop a deleted photo from the per-carton cache, then invalidate
+ * so rails/mobile `photo_count` badges (camera ×N) and the gallery reconcile.
+ */
+export function refreshReceivingPhotos(
+  queryClient: QueryClient,
+  receivingId: number,
+  deletedPhotoId?: number,
+): void {
+  const queryKey = receivingPhotosQueryKey(receivingId);
+  if (deletedPhotoId != null) {
+    queryClient.setQueryData<{ photos?: ReceivingPhotosCacheRow[] }>(queryKey, (old) => {
+      if (!old?.photos) return old;
+      const photos = old.photos.filter((p) => p.id !== deletedPhotoId);
+      return photos.length === old.photos.length ? old : { ...old, photos };
+    });
+  }
+  void queryClient.invalidateQueries({ queryKey });
+  invalidateReceivingFeeds(queryClient);
+}
+
+/**
+ * Single client-side entry point for photo CRUD side-effects: broadcast the
+ * window/feed refresh signal (same-tab + mobile list) and patch/invalidate the
+ * per-carton photo cache when `receivingId` is known.
+ */
+export function notifyReceivingPhotoChanged(
+  queryClient: QueryClient,
+  payload: ReceivingPhotoChangedPayload,
+): void {
+  dispatchReceivingPhotoChanged(payload);
+  const receivingId = payload.receivingId;
+  if (receivingId == null || !Number.isFinite(receivingId) || receivingId <= 0) return;
+  const deletedId =
+    payload.action === 'delete' && payload.photoIds?.length === 1
+      ? payload.photoIds[0]
+      : undefined;
+  refreshReceivingPhotos(queryClient, receivingId, deletedId);
 }
