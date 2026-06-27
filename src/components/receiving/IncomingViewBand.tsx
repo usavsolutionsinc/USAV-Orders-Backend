@@ -1,28 +1,42 @@
 'use client';
 
 /**
- * The Incoming right-pane sub-view toggle band: "Incoming POS (n) | Email Triage (n)".
+ * The Incoming sub-view toggle: "Incoming POS (n) | Email Triage (n)" pills.
  *
- * Split into its own component so the count hooks (`useIncomingSummary`,
- * `useIncomingEmailCount`) mount ONLY in Incoming mode — they poll, and we don't
- * want that polling running on the History / Unbox / Receiving panes. Both hooks
- * share the sidebar's existing react-query cache keys, so the band adds no extra
- * network traffic.
+ * Lives in the Incoming sidebar's `headerRows` slot (one row right beneath the
+ * search bar), following the same sub-tab pattern as every other page
+ * (`HorizontalButtonSlider variant="nav" dense` — cf. Products/Repair). It owns
+ * the `?incview=` URL read+write itself, so the sidebar can drop it in with no
+ * prop plumbing, and the right pane reads the same param to pick which sub-view
+ * to render. Selection in the URL = deep-linkable + reload-safe.
  *
- * Selection of the view is URL state (`?incview=`), owned by the parent
- * (`ReceivingDashboard`) — this band is dumb display + an `onChange` callback.
+ * The count hooks (`useIncomingSummary`, `useIncomingEmailCount`) share the
+ * sidebar's existing react-query cache keys, so the pills add no extra network
+ * traffic; mounting them only in Incoming mode keeps that polling scoped.
  */
 
+import { useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { IncomingViewSwitcher, useIncomingEmailCount } from '@/components/receiving/EmailTriagePanel';
 import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
 import { useIncomingSummary } from '@/components/sidebar/receiving/incoming/useIncomingSummary';
 
-interface IncomingViewBandProps {
-  value: IncomingView;
-  onChange: (next: IncomingView) => void;
-}
+export function IncomingViewBand() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const value: IncomingView = searchParams.get('incview') === 'email' ? 'email' : 'pos';
 
-export function IncomingViewBand({ value, onChange }: IncomingViewBandProps) {
+  const onChange = useCallback(
+    (next: IncomingView) => {
+      const params = new URLSearchParams(searchParams.toString());
+      // `pos` is the default — drop it from the URL to keep deep links clean.
+      if (next === 'pos') params.delete('incview');
+      else params.set('incview', next);
+      router.replace(`/receiving?${params.toString()}`);
+    },
+    [router, searchParams],
+  );
+
   // `issued` = open incoming POs Zoho says are expected but not yet received —
   // the "Incoming POS" backlog the table shows.
   const posCount = useIncomingSummary()?.issued;

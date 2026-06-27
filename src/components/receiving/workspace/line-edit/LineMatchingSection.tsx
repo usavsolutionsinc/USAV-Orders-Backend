@@ -11,10 +11,10 @@
  *
  * The body is a switchable tab list (same `HorizontalButtonSlider` the
  * Notes/Checklist card uses):
- *   • Zendesk tickets      — search + link a real customer claim ticket
- *   • Link repair service  — an INLINE list of recent Ecwid orders (reusing the
- *                            Ecwid search hook + list), relaxed to include normal
- *                            orders too, not just -RS SKUs.
+ *   • Zendesk tickets          — search + link a real customer claim ticket
+ *   • Repair Service / Trade in — an INLINE list of recent Ecwid orders (reusing
+ *                            the Ecwid search hook + list), relaxed to include
+ *                            normal orders (returns/trade-ins) too, not just -RS.
  *
  * Pairing uses REAL signals only (no fabricated score); the "Paired" row shows
  * the linked ticket + Ecwid/PO order # (last-4 copy chips). "New return ticket"
@@ -42,9 +42,7 @@ import {
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
 import { CartonAddPopover } from '@/components/receiving/workspace/CartonAddPopover';
-import { useEcwidProductSearch } from '@/components/receiving/unfound/ecwid-search/useEcwidProductSearch';
-import { EcwidSearchInputs } from '@/components/receiving/unfound/ecwid-search/EcwidSearchInputs';
-import { EcwidResultsList } from '@/components/receiving/unfound/ecwid-search/EcwidResultsList';
+import { EcwidProductSearchInline } from '@/components/receiving/unfound/EcwidProductSearchInline';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
 import { relativeTime, toTriagePackage } from '@/components/receiving/triage/triage-types';
@@ -131,17 +129,6 @@ function TriageMatchingCard({
 
   const showCartonActions = pkg.isUnmatched;
 
-  // Reused Ecwid search — drives the INLINE "Link repair service" list. Only
-  // loads when the repair tab is active (popoverMode gates the fetch); relaxed
-  // to include normal orders, not just -RS SKUs.
-  const ec = useEcwidProductSearch({
-    receivingId,
-    popoverMode: showCartonActions && tab === 'repair' ? 'repair_service' : 'search',
-    relaxRepairToAllOrders: true,
-    onSelect: u.handleAddLine,
-    onClose: () => setTab('zendesk'),
-  });
-
   const openNewReturnTicket = () => {
     c.setReturnClaimPrefill(
       pkg.tracking ? `Return received · tracking ${pkg.tracking}` : null,
@@ -160,7 +147,8 @@ function TriageMatchingCard({
 
   const tabs: HorizontalSliderItem[] = [
     { id: 'zendesk', label: 'Zendesk tickets', icon: ZendeskMark },
-    { id: 'repair', label: 'Link repair service', icon: Wrench },
+    // Relaxed Ecwid list covers repairs AND normal orders (returns/trade-ins).
+    { id: 'repair', label: 'Repair Service / Trade in', icon: Wrench },
   ];
 
   return (
@@ -221,12 +209,15 @@ function TriageMatchingCard({
 
       {/* ── Tab content ─────────────────────────────────────────────────────── */}
       {showCartonActions && tab === 'repair' ? (
-        // Inline repair-service order list — reuses the Ecwid search inputs +
-        // results list (relaxed to include normal orders, not just -RS).
-        <div className="overflow-hidden rounded-lg border border-gray-200">
-          <EcwidSearchInputs c={ec} />
-          <EcwidResultsList c={ec} />
-        </div>
+        // Inline repair / trade-in order list — reuses the shared inline Ecwid
+        // search (relaxed to include normal orders, not just -RS).
+        <EcwidProductSearchInline
+          receivingId={receivingId}
+          popoverMode="repair_service"
+          relaxRepairToAllOrders
+          onSelect={u.handleAddLine}
+          onClose={() => setTab('zendesk')}
+        />
       ) : (
         <ZendeskMatchTab t={t} />
       )}

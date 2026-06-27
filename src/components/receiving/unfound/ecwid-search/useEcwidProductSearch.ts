@@ -23,7 +23,6 @@ export function useEcwidProductSearch({
   searchFieldOverride,
   relaxRepairToAllOrders = false,
   onSelect,
-  onClose,
 }: EcwidProductSearchPopoverProps) {
   const [query, setQuery] = useState(initialQuery);
   const [searchField, setSearchField] = useState<CatalogSearchField>('title');
@@ -148,14 +147,10 @@ export function useEcwidProductSearch({
   // Cleanup on unmount
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // ─── Escape closes ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // NOTE: Escape-to-close is intentionally NOT handled here — it's a modal
+  // concern. The popover wires `useEscapeKey(onClose)` itself; the inline
+  // (non-modal) triage list reuses this controller WITHOUT a global Escape
+  // handler. See src/hooks/useEscapeKey.ts.
 
   // ─── Select handler ────────────────────────────────────────────────────────
   const handleSelect = useCallback(

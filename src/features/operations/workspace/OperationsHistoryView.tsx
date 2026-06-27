@@ -13,12 +13,14 @@
  */
 
 import { useState } from 'react';
-import { History, Loader2, X } from '@/components/Icons';
+import { Download, FileText, History, Loader2, X } from '@/components/Icons';
 import { OrderIdChip, SerialChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
 import { IdentifierToggle } from '@/components/ui/IdentifierToggle';
 import type { TimelineGroupMode } from '@/components/ui/EventTimeline';
 import { journeyKeyOf, type JourneyDimension } from '@/lib/timeline/journey';
+import { downloadJourneyCsv, printJourney } from '@/lib/serial/serial-journey';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
 import { useOperationsJourney } from '@/hooks/useOperationsJourney';
 
@@ -119,11 +121,12 @@ export function OperationsHistoryView() {
               items={items}
               groupMode={focusedMode}
               groupKeyOf={focusedMode === 'serial' ? journeyKeyOf('serial', groupOf) : undefined}
+              richTime
               emptyMessage="No events recorded for this record yet."
               className=""
               headerRight={
                 !journey.isLoading && items.length > 0 ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     {showUnitToggle ? (
                       <IdentifierToggle
                         value={focusedMode}
@@ -132,7 +135,27 @@ export function OperationsHistoryView() {
                         ariaLabel="Record grouping"
                       />
                     ) : null}
-                    <span>
+                    <HoverTooltip label="Export CSV">
+                      <button
+                        type="button"
+                        onClick={() => downloadJourneyCsv(url.entityValue, items)}
+                        aria-label="Export CSV"
+                        className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    </HoverTooltip>
+                    <HoverTooltip label="Print / Save as PDF">
+                      <button
+                        type="button"
+                        onClick={() => printJourney(url.entityValue, items)}
+                        aria-label="Print or save as PDF"
+                        className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </button>
+                    </HoverTooltip>
+                    <span className="ml-1 tabular-nums">
                       {eventCount.toLocaleString()} event{eventCount === 1 ? '' : 's'}
                     </span>
                   </div>

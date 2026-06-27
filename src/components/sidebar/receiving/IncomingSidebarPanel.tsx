@@ -4,7 +4,7 @@ import { SidebarShell } from '@/components/layout/SidebarShell';
 import { CarrierSyncDialog } from '@/components/sidebar/receiving/CarrierSyncDialog';
 import { IncomingSyncDialog } from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
-import { IncomingTodoList } from '@/components/sidebar/receiving/IncomingTodoList';
+import { IncomingViewBand } from '@/components/receiving/IncomingViewBand';
 import { useIncomingFilters } from './incoming/useIncomingFilters';
 import { useIncomingSummary } from './incoming/useIncomingSummary';
 import { useIncomingSyncActions } from './incoming/useIncomingSyncActions';
@@ -34,7 +34,6 @@ export function IncomingSidebarPanel() {
     <>
       <SidebarShell
         className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-white"
-        bodyClassName="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-0"
         search={{ value: filters.search, onChange: filters.setSearch, placeholder: 'Search PO #, tracking, SKU…' }}
         filter={{
           label: 'Filters',
@@ -43,6 +42,14 @@ export function IncomingSidebarPanel() {
           onClearAll: filters.activeFilterCount > 0 ? filters.clearFilters : undefined,
           renderDropdown: () => <IncomingFilterDropdown filters={filters} summary={summary} />,
         }}
+        headerRows={[
+          // View toggle pills, one row beneath the search bar — same nav-slider
+          // pattern as every other page's sub-tabs (cf. Products / Repair). They
+          // switch the RIGHT pane between the Incoming POS table and the Email
+          // Triage worklist via `?incview=`; the email list itself lives only in
+          // the right pane now (no longer pinned in this sidebar).
+          <IncomingViewBand key="incview" />,
+        ]}
         headerBelow={
           <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2">
             <IncomingSyncButtons sync={sync} />
@@ -51,9 +58,7 @@ export function IncomingSidebarPanel() {
             </div>
           </div>
         }
-      >
-        <IncomingTodoList />
-      </SidebarShell>
+      />
       <CarrierSyncDialog
         open={sync.syncDialogOpen}
         onClose={() => sync.setSyncDialogOpen(false)}

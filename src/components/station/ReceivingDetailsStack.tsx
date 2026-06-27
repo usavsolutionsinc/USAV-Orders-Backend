@@ -15,6 +15,7 @@ import { type ReceivingDetailsLog } from './receiving-details-log';
 import { dispatchReceivingWorkspaceOpen } from '@/utils/events';
 import { PoLinesSection } from './receiving/PoLinesSection';
 import { ReceivingOverviewCard } from './receiving/ReceivingOverviewCard';
+import { ReceivingSerialJourneys } from './receiving/ReceivingSerialJourneys';
 import { useReceivingDetailForm } from '@/hooks/useReceivingDetailForm';
 import {
   PaneHeader,
@@ -26,7 +27,7 @@ import {
 } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 
-type ReceivingTab = 'overview' | 'lines' | 'details';
+type ReceivingTab = 'overview' | 'lines' | 'timeline' | 'details';
 
 // `ReceivingDetailsLog` lives in a leaf module (`./receiving-details-log`) so it
 // can be referenced without importing this component (which imports utils/events,
@@ -228,6 +229,7 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
               tabs={[
                 { value: 'overview', label: 'Overview' },
                 { value: 'lines', label: 'Items', count: typeof log.count === 'number' ? log.count : undefined },
+                { value: 'timeline', label: 'Timeline' },
                 { value: 'details', label: 'Details' },
               ]}
               value={activeTab}
@@ -246,6 +248,10 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
 
           {activeTab === 'lines' && (
             <PoLinesSection receivingId={log.id} trackingNumber={log.tracking} />
+          )}
+
+          {activeTab === 'timeline' && (
+            <ReceivingSerialJourneys receivingId={log.id} />
           )}
 
           {activeTab === 'details' && (

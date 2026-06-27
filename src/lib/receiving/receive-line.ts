@@ -13,6 +13,7 @@ import {
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { workflowStageLabel } from '@/lib/receiving/workflow-stages';
 import { publishStockLedgerEvent } from '@/lib/realtime/publish';
+import { escapeLike } from '@/lib/sql-like';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -214,6 +215,49 @@ export async function receiveLineUnits(
     const priorReceivedForGuard = Number(line.quantity_received ?? 0);
     const expectedForGuard =
       line.quantity_expected != null ? Number(line.quantity_expected) : null;
+
+    // Batch-level idempotency. If this client_event_id's batch already committed
+    // (any per-unit event from it exists on this line), this whole call is a
+    // retry — return the current state WITHOUT mutating. The entire op runs in
+    // one transaction holding the line's FOR UPDATE lock, so per-unit events
+    // exist iff the prior call committed; a rolled-back call left none, letting
+    // the retry proceed. Without this, the per-unit ordinal suffix
+    // (`${client_event_id}:unit-N`, N derived from the moving quantity_received)
+    // shifted on retry, so ON CONFLICT(client_event_id) missed and the counter +
+    // non-serial ledger double-applied. This makes receiveLineUnits idempotent
+    // independent of the caller (previously only mark-received-po's qty clamp
+    // masked it). A concurrent duplicate blocks on the FOR UPDATE lock above,
+    // then short-circuits here once the first call commits.
+    if (input.client_event_id) {
+      const replay = await client.query<{ id: number }>(
+        `SELECT id FROM inventory_events
+          WHERE receiving_line_id = $1
+            AND organization_id = $2
+            AND client_event_id LIKE $3
+          LIMIT 1`,
+        [line.id, input.organizationId, `${escapeLike(input.client_event_id)}:%`],
+      );
+      if (replay.rows[0]) {
+        return {
+          line_id: line.id,
+          units_added: 0,
+          serials_recorded: [],
+          ledger_event_ids: [],
+          inventory_event_ids: [],
+          already_received: true,
+          line_state: {
+            id: line.id,
+            sku: line.sku,
+            item_name: line.item_name,
+            quantity_received: priorReceivedForGuard,
+            quantity_expected: expectedForGuard,
+            workflow_status: line.workflow_status,
+            is_complete:
+              expectedForGuard != null && priorReceivedForGuard >= expectedForGuard,
+          },
+        };
+      }
+    }
 
     // Idempotent re-scan: if the caller sends exactly one serial and that SN is
     // already on this line, return success without mutating qty. Same-barcode or

@@ -33,9 +33,9 @@ import {
 import { receivingIdentityBandClass } from '@/components/layout/header-shell';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import {
-  EcwidProductSearchPopover,
+  EcwidProductSearchInline,
   type EcwidProductSelection,
-} from '@/components/receiving/unfound/EcwidProductSearchPopover';
+} from '@/components/receiving/unfound/EcwidProductSearchInline';
 import {
   addLine,
   closeReview,
@@ -154,7 +154,20 @@ export function LocalPickupEditPanel() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {selected ? (
+        {addOpen ? (
+          // Add item — inline picker (the modal popover was retired). Reuses the
+          // Zoho-catalog search; selecting maps onto a cart line and closes it.
+          <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6">
+            <EcwidProductSearchInline
+              showHeader
+              receivingId={0}
+              popoverMode="search"
+              searchFieldOverride="zoho_catalog"
+              onSelect={handleAddSelection}
+              onClose={() => setAddOpen(false)}
+            />
+          </div>
+        ) : selected ? (
           <div className="mx-auto w-full max-w-3xl px-4 py-5 pb-24 sm:px-6">
             <LocalPickupLineEditor key={selected.key} line={selected} />
           </div>
@@ -162,16 +175,6 @@ export function LocalPickupEditPanel() {
           <PickupEmptyState onAdd={() => setAddOpen(true)} />
         )}
       </div>
-
-      {addOpen ? (
-        <EcwidProductSearchPopover
-          receivingId={0}
-          popoverMode="search"
-          searchFieldOverride="zoho_catalog"
-          onSelect={handleAddSelection}
-          onClose={() => setAddOpen(false)}
-        />
-      ) : null}
 
       {reviewOpen ? (
         <LocalPickupReviewPanel mode="finalize" onClose={closeReview} />
@@ -227,7 +230,6 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
         style={{ height: 280 }}
       >
         {line.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={line.image_url} alt="" className="h-full w-full object-contain" />
         ) : (
           <Package className="h-14 w-14 text-gray-200" />

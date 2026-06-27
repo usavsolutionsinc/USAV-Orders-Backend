@@ -5,14 +5,15 @@
  *
  * House-archetype note (see `.claude/rules/contextual-display.md`): this is a
  * **Monitor-leaning** surface — the operator *observes* the unmatched-shipping-email
- * worklist and acts-and-clears each row (archive / link-to-PO / reply). It rides in
- * the Incoming right pane *beside* the "Incoming POS" table, toggled by a URL
- * sub-view (`?incview=pos|email`) via {@link IncomingViewSwitcher}, and the right
- * pane crossfades between the two through the canonical `framerPresence.workbenchPane`
- * preset (wired in `ReceivingRightPane`). It is **not** a local-state toggle and it
- * does **not** fork a new list primitive — it reuses the same
- * `/api/receiving-lines/incoming/todo` spine the sidebar's `IncomingTodoList` reads,
- * so the count and rows stay in lockstep with the rest of the inbound funnel.
+ * worklist and acts-and-clears each row (archive / link-to-PO / reply). It is the
+ * single home for the email worklist (it replaced the old sidebar to-do list). It
+ * rides in the Incoming right pane *beside* the "Incoming POS" table, toggled from
+ * the sidebar by a URL sub-view (`?incview=pos|email`) via {@link IncomingViewSwitcher},
+ * and the right pane crossfades between the two through the canonical
+ * `framerPresence.workbenchPane` preset (wired in `ReceivingRightPane`). It is **not**
+ * a local-state toggle and it does **not** fork a new list primitive — it reads the
+ * `/api/receiving-lines/incoming/todo` spine, so the count and rows stay in lockstep
+ * with the rest of the inbound funnel.
  *
  * Data: live by default (shared react-query cache, key `['receiving-lines-incoming-todo', q]`).
  * Pass the optional `emails` prop to render a fixed/mock list instead (tests, Storybook,
@@ -77,7 +78,7 @@ export interface Email {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// API row → Email adapter (mirrors IncomingTodoList's TodoItem/TodoResponse).
+// API row → Email adapter (the `/incoming/todo` TodoItem/TodoResponse shape).
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface TodoItem {
@@ -127,7 +128,7 @@ export function todoItemToEmail(item: TodoItem): Email {
   };
 }
 
-/** Compact "3d" / "5h" / "12m" age from an ISO timestamp (matches IncomingTodoList). */
+/** Compact "3d" / "5h" / "12m" age from an ISO timestamp. */
 function ageLabel(iso: string | null): string {
   if (!iso) return '';
   const t = Date.parse(iso);
@@ -167,9 +168,9 @@ interface IncomingEmailTodo {
 }
 
 /**
- * Live email worklist. Keyed identically to `IncomingTodoList` so the two share
- * one cache entry (no double-fetch when search is empty). `enabled` lets the
- * panel skip the network entirely when a caller supplies `emails` directly.
+ * Live email worklist. Shares one react-query cache entry across the panel and
+ * the count pill (same key, no double-fetch when search is empty). `enabled` lets
+ * the panel skip the network entirely when a caller supplies `emails` directly.
  */
 function useIncomingEmailTodo(search: string, enabled: boolean): IncomingEmailTodo {
   const queryClient = useQueryClient();
@@ -267,9 +268,12 @@ interface IncomingViewSwitcherProps {
 }
 
 /**
- * The right-pane view toggle. Uses the shared `HorizontalButtonSlider` `nav`
- * variant (label + count + status dot) — never a hand-rolled segmented control.
- * Writing the chosen view to the URL is the parent's job (`?incview=`), keeping
+ * The Incoming view toggle pills (label + count + status dot), rendered through
+ * the shared `HorizontalButtonSlider` `nav` variant — the same primitive every
+ * other page's sub-view tabs use, never a hand-rolled segmented control. It is
+ * bare on purpose: it lives in the sidebar's `headerRows` slot (one row right
+ * beneath the search bar), and `SidebarShell` supplies the 40px band/gutter.
+ * Writing the chosen view to the URL (`?incview=`) is the caller's job, keeping
  * this dumb and the selection deep-linkable.
  */
 export function IncomingViewSwitcher({
@@ -289,16 +293,15 @@ export function IncomingViewSwitcher({
     },
   ];
   return (
-    <div className={cn('flex shrink-0 items-center border-b border-gray-200 bg-white px-2 py-1.5', className)}>
-      <HorizontalButtonSlider
-        items={items}
-        value={value}
-        onChange={(next) => onChange(next as IncomingView)}
-        variant="nav"
-        dense
-        aria-label="Incoming view"
-      />
-    </div>
+    <HorizontalButtonSlider
+      items={items}
+      value={value}
+      onChange={(next) => onChange(next as IncomingView)}
+      variant="nav"
+      dense
+      className={cn('w-full', className)}
+      aria-label="Incoming view"
+    />
   );
 }
 

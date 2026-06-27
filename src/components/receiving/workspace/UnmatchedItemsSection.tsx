@@ -7,9 +7,10 @@
  * sit for a Zoho-matched carton. Owns:
  *   - fetching the carton's existing receiving_lines
  *   - the [+] CTA → CartonAddPopover (Item = zoho_catalog search · Web · Box)
- *   - [Link repair service] → EcwidProductSearchPopover (repair_service / -RS
- *     order picker ONLY; the Ecwid search is not used to add Zoho items here)
  *   - per-line condition pill updates
+ *
+ * Repair-service linking was retired from here — it now lives in the triage
+ * Smart-Matching "Repair Service / Trade in" tab (inline Ecwid order list).
  *
  * Kept deliberately small so LineEditPanel can drop it in without
  * branching on receiving_source for every prop.
@@ -18,9 +19,8 @@
  * the per-line row is {@link UnmatchedLineRow} under `./unmatched-items/`.
  */
 
-import { Loader2, PackageOpen, Plus, Wrench } from '@/components/Icons';
+import { Loader2, PackageOpen, Plus } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
-import { EcwidProductSearchPopover } from '@/components/receiving/unfound/EcwidProductSearchPopover';
 import { CartonAddPopover } from '@/components/receiving/workspace/CartonAddPopover';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
 import { LabelIdentifyButton } from '@/components/receiving/label-identify/LabelIdentifyButton';
@@ -73,15 +73,8 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
               Open in unbox
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => c.setPopoverMode('repair_service')}
-            title="Pick a recent Ecwid repair-service order (-RS) to link to this carton"
-            className="flex h-6 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2.5 text-caption font-bold uppercase tracking-wider text-sky-700 hover:bg-sky-100"
-          >
-            <Wrench className="h-3 w-3" />
-            Link repair service
-          </button>
+          {/* Repair-service linking is retired here — it now lives in the triage
+              Smart-Matching "Repair Service / Trade in" tab. */}
           <button
             type="button"
             onClick={() => c.setAddOpen(true)}
@@ -171,18 +164,6 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
         />
       ) : null}
 
-      {/* Ecwid search is ONLY for Link-repair-service now (the -RS order
-          picker). Adding a Zoho item to the PO goes through CartonAddPopover's
-          Item tab (zoho_catalog search), NOT this popover. repair_service mode
-          loads recent -RS orders and ignores searchFieldOverride entirely. */}
-      {c.popoverMode === 'repair_service' ? (
-        <EcwidProductSearchPopover
-          receivingId={receivingId}
-          popoverMode={c.popoverMode}
-          onSelect={c.handleAddLine}
-          onClose={() => c.setPopoverMode(null)}
-        />
-      ) : null}
     </WorkspaceCard>
   );
 }

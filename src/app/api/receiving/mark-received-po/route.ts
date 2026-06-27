@@ -22,9 +22,10 @@ import { receiveLineUnits } from '@/lib/receiving/receive-line';
 import { attachSerialToLine } from '@/lib/receiving/serial-attach';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import {
-  getApiIdempotencyResponse,
+  claimOrReplay,
+  finalizeIdempotencyClaim,
   readIdempotencyKey,
-  saveApiIdempotencyResponse,
+  releaseIdempotencyClaim,
 } from '@/lib/api-idempotency';
 
 const IDEMPOTENCY_ROUTE = 'receiving.mark-received-po';
@@ -141,6 +142,11 @@ interface CandidateRow {
  * inventory_events tables stay in sync for serialized AND non-serialized lines.
  */
 export const POST = withAuth(async (request, ctx) => {
+  // Tracks a pending idempotency claim we own so the catch can release it on a
+  // throw (the `const idempotencyKey` below is try-block-scoped, invisible to
+  // catch). releaseIdempotencyClaim only deletes a still-pending row, so a
+  // release after a successful finalize is a safe no-op.
+  let ownedClaim: { idempotencyKey: string; route: string } | null = null;
   try {
     const body = await request.json();
     const receivingIdRaw = Number(body?.receiving_id);
@@ -206,18 +212,33 @@ export const POST = withAuth(async (request, ctx) => {
     // receive flow again (which could no-op on lines we just committed and
     // double-call Zoho).
     const idempotencyKey = readIdempotencyKey(request, clientEventId);
+    // Reserve-up-front idempotency. A concurrent duplicate (same Idempotency-Key
+    // still mid-flight) must NOT also run the receive flow + Zoho purchase-
+    // receive. claimOrReplay returns: 'replay' (a finished response exists —
+    // return it), 'in_progress' (a concurrent dup holds the claim — 409), or
+    // 'proceed' (we own the claim — finalize in respond(), release in catch).
     if (idempotencyKey) {
-      const cached = await getApiIdempotencyResponse(
-        pool,
-        ctx.organizationId,
+      const claim = await claimOrReplay<Record<string, unknown>>(pool, {
+        orgId: ctx.organizationId,
         idempotencyKey,
-        IDEMPOTENCY_ROUTE,
-      );
-      if (cached) {
-        return NextResponse.json(cached.response_body, {
-          status: cached.status_code,
-        });
+        route: IDEMPOTENCY_ROUTE,
+        staffId,
+      });
+      if (claim.outcome === 'replay') {
+        return NextResponse.json(claim.body, { status: claim.status });
       }
+      if (claim.outcome === 'in_progress') {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'This receive is already being processed. Please wait a moment and refresh.',
+            idempotent_in_progress: true,
+          },
+          { status: 409 },
+        );
+      }
+      // 'proceed' — we own the claim; remember it so the catch can release it.
+      ownedClaim = { idempotencyKey, route: IDEMPOTENCY_ROUTE };
     }
 
     const respond = async (
@@ -225,15 +246,18 @@ export const POST = withAuth(async (request, ctx) => {
       init?: { status?: number },
     ) => {
       const status = init?.status ?? 200;
-      if (idempotencyKey && status < 500) {
-        await saveApiIdempotencyResponse(pool, {
-          orgId: ctx.organizationId,
-          idempotencyKey,
-          route: IDEMPOTENCY_ROUTE,
-          staffId,
-          statusCode: status,
-          responseBody: body,
-        });
+      if (idempotencyKey) {
+        if (status < 500) {
+          // Finalize the claim with the real response (future retries replay it).
+          await finalizeIdempotencyClaim(
+            pool,
+            { orgId: ctx.organizationId, idempotencyKey, route: IDEMPOTENCY_ROUTE, staffId },
+            { status, body },
+          );
+        } else {
+          // Transient 5xx — drop the claim so the next retry can run.
+          await releaseIdempotencyClaim(pool, { idempotencyKey, route: IDEMPOTENCY_ROUTE });
+        }
       }
       return NextResponse.json(body, init);
     };
@@ -1140,6 +1164,11 @@ export const POST = withAuth(async (request, ctx) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to mark PO as received';
     console.error('receiving/mark-received-po POST failed:', error);
+    // Release the pending idempotency claim so the client's retry can run rather
+    // than being stuck behind an abandoned claim until it goes stale.
+    if (ownedClaim) {
+      await releaseIdempotencyClaim(pool, ownedClaim).catch(() => {});
+    }
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }, { permission: 'receiving.mark_received' });

@@ -23,7 +23,6 @@ import { ReceivingLineWorkspace } from '@/components/receiving/workspace/Receivi
 import { ReceivingScanLoader } from '@/components/receiving/workspace/ReceivingScanLoader';
 import { IncomingDetailsPanel } from '@/components/sidebar/receiving/IncomingDetailsPanel';
 import { EmailTriagePanel } from '@/components/receiving/EmailTriagePanel';
-import { IncomingViewBand } from '@/components/receiving/IncomingViewBand';
 import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
@@ -56,10 +55,10 @@ interface ReceivingRightPaneProps {
   isTableOnlyMode: boolean;
   isTriageMode: boolean;
   isIncomingMode: boolean;
-  /** Incoming right-pane sub-view (`?incview=`): the POS table or Email Triage. */
+  /** Incoming right-pane sub-view (`?incview=`): the POS table or Email Triage.
+   *  The toggle control lives in the sidebar (IncomingSidebarPanel headerRows);
+   *  here we only read it to pick which sub-view to render. */
   incomingView: IncomingView;
-  /** Write the chosen Incoming sub-view to the URL. */
-  onIncomingViewChange: (next: IncomingView) => void;
   selectMode: boolean;
   selectedRows: ReceivingLineRow[];
   bulkActions: SelectionAction<ReceivingLineRow>[];
@@ -78,7 +77,6 @@ export function ReceivingRightPane({
   isTriageMode,
   isIncomingMode,
   incomingView,
-  onIncomingViewChange,
   selectMode,
   selectedRows,
   bulkActions,
@@ -110,21 +108,14 @@ export function ReceivingRightPane({
 
   return (
     <RightPaneOverlayHost className="flex min-w-0 flex-1 flex-col overflow-hidden">
-      {/* Incoming sub-view toggle: Incoming POS (n) | Email Triage (n). Pinned
-          above both sub-views; its count hooks poll only while mounted here. */}
-      {isIncomingMode ? (
-        <div className="absolute inset-x-0 top-0 z-30">
-          <IncomingViewBand value={incomingView} onChange={onIncomingViewChange} />
-        </div>
-      ) : null}
-
       {/* History/Incoming-POS table — always mounted to keep its react-query
           cache, in-progress search results, and scroll position alive across tab
           flips. Hidden (not unmounted) in Receiving so the auto-select /
-          first-mount effects don't re-fire on every close. In Incoming it sits
-          below the toggle band. */}
+          first-mount effects don't re-fire on every close. The Incoming view
+          toggle now lives in the sidebar; this pane renders the chosen sub-view
+          full-bleed. */}
       <div
-        className={`overflow-hidden ${isIncomingMode ? 'absolute inset-x-0 bottom-0 top-[45px]' : 'absolute inset-0'}`}
+        className="absolute inset-0 overflow-hidden"
         style={{ display: showTable ? 'block' : 'none' }}
         aria-hidden={!showTable}
       >
@@ -141,7 +132,7 @@ export function ReceivingRightPane({
             animate={workspacePane.animate}
             exit={workspacePane.exit}
             transition={workspaceTransition}
-            className="absolute inset-x-0 bottom-0 top-[45px] z-10 overflow-hidden"
+            className="absolute inset-0 z-10 overflow-hidden"
           >
             <EmailTriagePanel />
           </motion.div>

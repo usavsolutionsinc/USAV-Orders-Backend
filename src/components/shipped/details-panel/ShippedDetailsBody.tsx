@@ -9,6 +9,7 @@ import { PackerDetailsStack } from '@/components/shipped/stacks/PackerDetailsSta
 import type { DetailsStackDurationData, ShippedActiveInput } from '@/components/shipped/stacks/types';
 import { ShippedDetailsPanelContent, type ShippedActiveSection } from '@/components/shipped/ShippedDetailsPanelContent';
 import { OrderTimelineSection } from '@/components/shipped/OrderTimelineSection';
+import { SerialJourneySection } from '@/components/serial/SerialJourneySection';
 import { OrderLabelsSection } from '@/components/shipped/OrderLabelsSection';
 import { ShippedNotesComposer } from './ShippedNotesComposer';
 import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderControl';
@@ -96,6 +97,19 @@ export function ShippedDetailsBody({
   const hasSavedNotes = String(shipped.notes || '').trim().length > 0;
   const showDashboardDelete = context === 'dashboard' || isFulfillmentPanel || isLabelsPanel;
 
+  // The order's serial(s) — `serial_number` is an aggregated, comma-separated
+  // string. Each becomes a focused, exportable per-serial journey appended to
+  // the order trail in the Timeline tab (the order trail is order-anchored; the
+  // serial journey follows a unit across orders/returns and exports/deep-links).
+  const orderSerials = [
+    ...new Set(
+      String(shipped.serial_number || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
       {activeSection === 'timeline' && shipped?.id ? (
@@ -105,6 +119,13 @@ export function ShippedDetailsBody({
         <div className="flex min-h-full flex-col pb-8 pt-2">
           <div className="flex-1 pt-2">
             <OrderTimelineSection orderId={Number(shipped.id)} />
+            {orderSerials.map((sn) => (
+              <SerialJourneySection
+                key={sn}
+                serialNumber={sn}
+                title={orderSerials.length > 1 ? `Serial journey · ${sn}` : 'Serial journey'}
+              />
+            ))}
           </div>
           {(activeInput === 'notes' || hasSavedNotes) && (
             activeInput === 'notes' ? (
