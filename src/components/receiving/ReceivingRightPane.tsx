@@ -183,7 +183,14 @@ export function ReceivingRightPane({
       <AnimatePresence initial={false}>
         {showWorkspace ? (
           <motion.div
-            key={`workspace-${workspace!.row.id}`}
+            // Key on the CARTON, not the line. Switching between sibling lines of
+            // the same carton (receiving_id) must NOT remount/crossfade the whole
+            // workspace — only a carton→carton change should. The controller
+            // re-seeds per-line state on row.id change in place, so an in-place
+            // line switch is both faster and more correct (carton-level PO#,
+            // tracking, photos stay put). Fall back to the line id for rows with
+            // no carton yet (pre-carton stub).
+            key={`workspace-${workspace!.row.receiving_id ?? `line-${workspace!.row.id}`}`}
             initial={workspacePane.initial}
             animate={workspacePane.animate}
             exit={workspacePane.exit}

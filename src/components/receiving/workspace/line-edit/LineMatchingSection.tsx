@@ -1,11 +1,13 @@
 'use client';
 
 /**
- * LineMatchingSection — the triage "Smart Matching" hub.
+ * LineMatchingSection — the "Package Pairing" hub.
  *
- * Rendered inside the SHARED `LineEditPanel` (triage variant, gated by
- * `caps.matching`). In triage the separate PO-items card is removed and its
- * carton actions move here: Open-in-unbox + the add "+" sit top-right.
+ * Rendered inside the SHARED `LineEditPanel`: in triage (gated by
+ * `caps.matching`), and in unbox for UNFOUND cartons. In triage the separate
+ * PO-items card is removed and its carton actions move here: Open-in-unbox + the
+ * add "+" sit top-right. In unbox the Open-in-unbox jump is hidden (already
+ * there) via `showOpenInUnbox`.
  *
  * The body is a switchable tab list (same `HorizontalButtonSlider` the
  * Notes/Checklist card uses):
@@ -61,10 +63,13 @@ export function LineMatchingSection({
   row,
   staffId,
   c,
+  showOpenInUnbox = true,
 }: {
   row: ReceivingLineRow;
   staffId: string;
   c: MatchingControllerSlice;
+  /** Hide the "Open in unbox" jump when already in unbox (self-referential). */
+  showOpenInUnbox?: boolean;
 }) {
   const pkg = toTriagePackage(row);
 
@@ -72,15 +77,23 @@ export function LineMatchingSection({
   // a real receivingId, so we don't mount it here).
   if (!pkg.receivingId) {
     return (
-      <WorkspaceCard label="Smart matching" overflow="visible">
+      <WorkspaceCard label="Package Pairing" overflow="visible">
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
-          This package has no carton record yet — scan its tracking to enable matching.
+          This package has no carton record yet — scan its tracking to enable pairing.
         </p>
       </WorkspaceCard>
     );
   }
 
-  return <TriageMatchingCard row={row} staffId={staffId} receivingId={pkg.receivingId} c={c} />;
+  return (
+    <TriageMatchingCard
+      row={row}
+      staffId={staffId}
+      receivingId={pkg.receivingId}
+      c={c}
+      showOpenInUnbox={showOpenInUnbox}
+    />
+  );
 }
 
 /**
@@ -93,11 +106,13 @@ function TriageMatchingCard({
   staffId,
   receivingId,
   c,
+  showOpenInUnbox,
 }: {
   row: ReceivingLineRow;
   staffId: string;
   receivingId: number;
   c: MatchingControllerSlice;
+  showOpenInUnbox: boolean;
 }) {
   const router = useRouter();
   const t = useTriagePanel({ row });
@@ -150,20 +165,22 @@ function TriageMatchingCard({
 
   return (
     <WorkspaceCard
-      label="Smart matching"
+      label="Package Pairing"
       overflow="visible"
       actions={
         <div className="flex items-center gap-1.5">
-          <HoverTooltip label="Open this carton in unbox (serials, photos, receive)" focusable={false}>
-            <button
-              type="button"
-              onClick={openInUnbox}
-              className="flex h-6 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-caption font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100"
-            >
-              <PackageOpen className="h-3 w-3" />
-              Open in unbox
-            </button>
-          </HoverTooltip>
+          {showOpenInUnbox ? (
+            <HoverTooltip label="Open this carton in unbox (serials, photos, receive)" focusable={false}>
+              <button
+                type="button"
+                onClick={openInUnbox}
+                className="flex h-6 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-caption font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100"
+              >
+                <PackageOpen className="h-3 w-3" />
+                Open in unbox
+              </button>
+            </HoverTooltip>
+          ) : null}
           {showCartonActions ? (
             <HoverTooltip label="Add to carton — catalog item, web search, or a box" focusable={false}>
               <button
