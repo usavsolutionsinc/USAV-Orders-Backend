@@ -56,19 +56,6 @@ export default function ReceivingDashboard() {
   const { mode, isPickupMode, isTriageMode, isIncomingMode, isTableOnlyMode, incomingView } =
     useReceivingDashboardMode();
 
-  // Incoming right-pane sub-view toggle (POS table ⇄ Email Triage) → URL state,
-  // so the choice is deep-linkable and survives a reload. `pos` is the default,
-  // so it drops out of the URL.
-  const setIncomingView = useCallback(
-    (next: 'pos' | 'email') => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === 'pos') params.delete('incview');
-      else params.set('incview', next);
-      router.replace(`/receiving?${params.toString()}`);
-    },
-    [router, searchParams],
-  );
-
   const { workspace, setWorkspace, nav, setNav, scanInFlight } = useReceivingWorkspacePane();
 
   const {
@@ -125,7 +112,6 @@ export default function ReceivingDashboard() {
         isTriageMode={isTriageMode}
         isIncomingMode={isIncomingMode}
         incomingView={incomingView}
-        onIncomingViewChange={setIncomingView}
         selectMode={selectMode}
         selectedRows={selectedRows}
         bulkActions={bulkActions}

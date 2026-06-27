@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from '@/lib/toast';
-import type { EcwidProductPopoverMode } from '@/components/receiving/unfound/EcwidProductSearchPopover';
 import type { AssignedBox } from '@/components/receiving/workspace/CartonAddPopover';
 import type {
   SerialMatchedOrder,
@@ -32,8 +31,6 @@ export function useUnmatchedItems({
   onActiveConditionChange,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
-  /** null = closed; 'repair_service' = the Link-repair-service Ecwid popover. */
-  const [popoverMode, setPopoverMode] = useState<EcwidProductPopoverMode | null>(null);
   /** Unified add popover (Item · Web · Box). */
   const [addOpen, setAddOpen] = useState(false);
   /** Box this carton's units last landed in — shows as a chip in the header. */
@@ -262,7 +259,6 @@ export function useUnmatchedItems({
         ...prev,
         { ...body.line, image_url: selection.image_url },
       ]);
-      setPopoverMode(null);
       setAddOpen(false);
 
       // The server (add-unmatched-line → recomputeCartonSourceLink) now OWNS the
@@ -358,7 +354,6 @@ export function useUnmatchedItems({
 
   return {
     lines,
-    popoverMode, setPopoverMode,
     addOpen, setAddOpen,
     assignedBox, setAssignedBox,
     returnScanBusy,

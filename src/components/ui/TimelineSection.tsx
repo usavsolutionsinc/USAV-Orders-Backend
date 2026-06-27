@@ -26,6 +26,8 @@ export interface TimelineSectionProps {
   groupMode?: TimelineGroupMode;
   /** Override band bucketing in serial mode, forwarded to {@link EventTimeline}. */
   groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
+  /** Rich (relative + hover-absolute) timestamps, forwarded to {@link EventTimeline}. */
+  richTime?: boolean;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -57,6 +59,7 @@ export function TimelineSection({
   density = 'comfortable',
   groupMode = 'time',
   groupKeyOf,
+  richTime = false,
   className = 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
@@ -76,6 +79,7 @@ export function TimelineSection({
           density={density}
           groupMode={groupMode}
           groupKeyOf={groupKeyOf}
+          richTime={richTime}
         />
       )}
     </section>

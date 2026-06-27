@@ -1,10 +1,11 @@
 'use client';
 
-import { format, parseISO } from 'date-fns';
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import type { TimelineItem, TimelineTone, TimelineRef, TimelineGroupKey } from '@/lib/timeline/types';
 import { TIMELINE_OTHER_BAND_KEY } from '@/lib/timeline/types';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   TrackingChip,
   SerialChip,
@@ -66,6 +67,42 @@ function fmt(value: string | null | undefined, pattern: string): string {
   if (!value) return '—';
   try {
     return format(typeof value === 'string' ? parseISO(value) : value, pattern);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Relative "2 days ago" label (the 2026-standard glanceable form) used when
+ * `richTime` is on. Falls back to the clock time if the value can't be parsed.
+ */
+function relTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  try {
+    return formatDistanceToNow(parseISO(value), { addSuffix: true });
+  } catch {
+    return fmt(value, 'h:mma').toLowerCase();
+  }
+}
+
+/**
+ * Full, timezone-aware absolute timestamp for the rich-time hover tooltip. Uses
+ * `Intl` (not date-fns `z` tokens, which throw) so the operator's local zone
+ * abbreviation is included — e.g. "Fri, Jun 27, 2026, 2:14:09 PM EDT".
+ */
+function absTimestamp(value: string | null | undefined): string {
+  if (!value) return 'Unknown time';
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      timeZoneName: 'short',
+    }).format(parseISO(value));
   } catch {
     return value;
   }
@@ -134,6 +171,13 @@ export interface EventTimelineProps {
    * band while the row still shows its *serial* chip. Omit ⇒ today's behavior.
    */
   groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
+  /**
+   * Rich timestamps (the 2026-standard form): show **relative** time inline
+   * ("2 days ago") with the full, timezone-aware absolute timestamp on hover.
+   * Default `false` keeps the terse `h:mma` clock so existing callers (order,
+   * tech, warranty timelines) are unaffected; the serial journey opts in.
+   */
+  richTime?: boolean;
 }
 
 /** A serial-view band: an identifier header + that identifier's rows. */
@@ -190,6 +234,7 @@ export function EventTimeline({
   density = 'comfortable',
   groupMode = 'time',
   groupKeyOf,
+  richTime = false,
 }: EventTimelineProps) {
   const reduce = useReducedMotion();
   const d = DENSITY[density];
@@ -232,6 +277,7 @@ export function EventTimeline({
               highlightLatest={false}
               density={density}
               groupMode="time"
+              richTime={richTime}
             />
           </div>
         ))}
@@ -271,7 +317,7 @@ export function EventTimeline({
       />
 
       {items.map((item, i) => {
-        const time = fmt(item.at, 'h:mma').toLowerCase();
+        const time = richTime ? relTime(item.at) : fmt(item.at, 'h:mma').toLowerCase();
         const dayKey = fmt(item.at, 'EEE, MMM d');
         const showDay = groupByDay && (i === 0 || dayKey !== fmt(items[i - 1]?.at, 'EEE, MMM d'));
         const isLatest = highlightLatest && i === 0;
@@ -311,7 +357,17 @@ export function EventTimeline({
                     {item.title}
                   </span>
                   <span className="shrink-0 whitespace-nowrap text-micro font-medium tabular-nums text-gray-400">
-                    {time}
+                    {richTime ? (
+                      <HoverTooltip
+                        label={absTimestamp(item.at)}
+                        focusable={false}
+                        className="cursor-default border-b border-dotted border-gray-300"
+                      >
+                        {time}
+                      </HoverTooltip>
+                    ) : (
+                      time
+                    )}
                     {item.actor ? <span className="text-gray-300"> · </span> : null}
                     {item.actor ? <span className="text-gray-500">{item.actor}</span> : null}
                   </span>
