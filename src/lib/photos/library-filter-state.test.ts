@@ -6,7 +6,14 @@ import {
   formatPhotoLibraryDateRange,
   parsePhotoLibraryFilters,
   photoLibraryFiltersToParams,
+  todayFoldersDateFilter,
 } from '@/lib/photos/library-filter-state';
+
+test('todayFoldersDateFilter pins both ends to the same PST day', () => {
+  const { dateFrom, dateTo } = todayFoldersDateFilter();
+  assert.equal(dateFrom, dateTo);
+  assert.match(dateFrom ?? '', /^\d{4}-\d{2}-\d{2}$/);
+});
 
 test('parsePhotoLibraryFilters validates source scope and ignores legacy entity params', () => {
   const filters = parsePhotoLibraryFilters(
@@ -77,5 +84,22 @@ test('business-ID filters count as structured and clear together', () => {
   assert.equal(cleared.ticketId, undefined);
   assert.equal(cleared.pickupId, undefined);
   assert.equal(cleared.rma, undefined);
+  assert.equal(countActivePhotoLibraryFilters(cleared), 0);
+});
+
+test('label round-trips through parse + serialize and counts/clears as structured', () => {
+  const filters = parsePhotoLibraryFilters(new URLSearchParams('label=defect&imageType=listing'));
+  assert.equal(filters.label, 'defect');
+  // imageType is a navigator scope (not counted); label is a structured refinement.
+  assert.equal(countActivePhotoLibraryFilters(filters), 1);
+
+  const params = photoLibraryFiltersToParams(filters);
+  assert.equal(params.get('label'), 'defect');
+  assert.equal(params.get('imageType'), 'listing');
+
+  const cleared = clearStructuredPhotoFilters(filters);
+  assert.equal(cleared.label, undefined);
+  // The image-type navigator survives a structured clear.
+  assert.equal(cleared.imageType, 'listing');
   assert.equal(countActivePhotoLibraryFilters(cleared), 0);
 });

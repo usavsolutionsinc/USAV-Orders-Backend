@@ -93,6 +93,10 @@ export const AUDIT_ENTITY = {
   PHOTO: 'photo',
   PHOTO_FOLDER: 'photo_folder',
   PHOTO_IMAGE_TYPE: 'photo_image_type',
+  PHOTO_LABEL: 'photo_label',
+  LISTING_PHOTO: 'listing_photo',
+  // External platform connection (organization_integrations vault row).
+  INTEGRATION: 'integration',
   STAFF_TODO: 'staff_todo',
   STAFF_MESSAGE: 'staff_message',
   STAFF_PREFERENCE: 'staff_preference',
@@ -194,6 +198,22 @@ export const AUDIT_ACTION = {
   PHOTO_FOLDER_ASSIGN:     'photo_folder.assign',
   PHOTO_FOLDER_UNASSIGN:   'photo_folder.unassign',
   PHOTO_IMAGE_TYPE_CREATE: 'photo_image_type.create',
+  // Photo labels — org vocabulary CRUD + per-photo / bulk assignment
+  PHOTO_LABEL_CREATE:      'photo_label.create',
+  PHOTO_LABEL_UPDATE:      'photo_label.update',
+  PHOTO_LABEL_DELETE:      'photo_label.delete',
+  PHOTO_LABELS_SET:        'photo_label.set',
+  PHOTO_LABELS_BULK_APPLY: 'photo_label.bulk_apply',
+  // Listing gallery composition (marketplace photo set)
+  LISTING_PHOTO_ADD:       'listing_photo.add',
+  LISTING_PHOTO_REORDER:   'listing_photo.reorder',
+  LISTING_PHOTO_SET_COVER: 'listing_photo.set_cover',
+  LISTING_PHOTO_REMOVE:    'listing_photo.remove',
+  // Photo backup — copied photo originals into a tenant's connected Google Drive
+  PHOTO_DRIVE_EXPORT:      'photo.drive_export',
+  // External integration connection lifecycle (OAuth connect / disconnect)
+  INTEGRATION_CONNECT:     'integration.connect',
+  INTEGRATION_DISCONNECT:  'integration.disconnect',
   // Personal UI preferences (e.g. configurable focus-scan hotkey)
   STAFF_PREFERENCE_UPDATE: 'staff_preference.update',
   // Settings Registry — org/staff per-page setting change (docs/settings-registry.md)

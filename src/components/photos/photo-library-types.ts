@@ -4,10 +4,22 @@
  * it without importing `PhotoLibraryPage` (which imports them back, forming a
  * cycle). `PhotoLibraryPage` re-exports it for backwards compatibility.
  */
+/** A label chip carried on a library photo (subset of PhotoLabel for rendering). */
+export interface LibraryPhotoLabel {
+  id: number;
+  key: string;
+  label: string;
+  /** Semantic token name ('blue','rose',…) — resolved to chip classes client-side. */
+  color: string | null;
+  icon?: string | null;
+}
+
 export interface LibraryPhoto {
   id: number;
   photoType: string | null;
   poRef: string | null;
+  /** Labels assigned to this photo (many-to-many; one type, many labels). */
+  labels?: LibraryPhotoLabel[];
   /** Linked Zendesk ticket id (claims scope), surfaced for folder grouping/labels. */
   ticketId?: number | null;
   takenByStaffId?: number | null;

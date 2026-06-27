@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-26T19:34:58Z",
-  "totalRoutes": 681,
+  "generatedAt": "2026-06-26T23:03:58Z",
+  "totalRoutes": 691,
   "summary": {
-    "permissionGated": 584,
+    "permissionGated": 592,
     "authenticatedNoPermission": 34,
-    "anonymousIntentional": 61,
+    "anonymousIntentional": 63,
     "serviceToService": 2,
     "ungatedRead": 0,
     "ungatedWrite": 0
@@ -1283,6 +1283,15 @@
       "exemptReason": "cron endpoint"
     },
     {
+      "path": "/api/cron/photos/drive-mirror/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
       "path": "/api/cron/photos/nas-mirror/route.ts",
       "methods": [
         "GET"
@@ -2115,6 +2124,33 @@
       ],
       "gate": "withAuth (no permission)",
       "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/integrations/google-drive/callback/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "oauth callback (provider redirect; encrypted state, no session cookie)"
+    },
+    {
+      "path": "/api/integrations/google-drive/connect/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.google_drive",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/integrations/google-drive/health/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.google_drive",
       "exemptReason": null
     },
     {
@@ -2961,6 +2997,16 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/[id]/labels/route.ts",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/[id]/route.ts",
       "methods": [
         "DELETE"
@@ -2988,7 +3034,46 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/drive-backup/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/image-types/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/labels/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/labels/bulk-apply/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/labels/route.ts",
       "methods": [
         "GET",
         "POST"
@@ -3013,6 +3098,18 @@
       ],
       "gate": "withAuth (no permission)",
       "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/listing-gallery/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
       "exemptReason": null
     },
     {

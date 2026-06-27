@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import type { LibraryPhoto } from './photo-library-types';
-import { Check, ChevronLeft, ChevronRight, Folder, Image as ImageIcon, Layers } from '@/components/Icons';
+import { Check, Folder, Image as ImageIcon, Layers } from '@/components/Icons';
 import { formatDateTimePST } from '@/utils/date';
 import type { PhotoLibrarySourceScope, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
@@ -12,6 +12,7 @@ import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewer
 import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import { PhotoThumb } from './PhotoThumb';
+import { PhotoLabelChips } from './PhotoLabelChips';
 import { describePhotoDatePath, isoWeekNumber, weekRange } from '@/lib/photos/date-hierarchy';
 import { cn } from '@/utils/_cn';
 
@@ -497,13 +498,16 @@ function PhotoCard({
           damage={Boolean(photo.damageDetected)}
         />
         {showLabel ? (
-          <div className="flex items-start justify-between gap-2 px-2.5 py-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[11px] font-semibold text-gray-900">
-                {photoPrimaryLabel(photo, scope)}
+          <div className="space-y-1 px-2.5 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold text-gray-900">
+                  {photoPrimaryLabel(photo, scope)}
+                </div>
+                <div className="truncate text-[10px] text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
               </div>
-              <div className="truncate text-[10px] text-gray-500">{formatDateTimePST(photo.createdAt)}</div>
             </div>
+            <PhotoLabelChips labels={photo.labels} max={3} />
           </div>
         ) : null}
       </button>
@@ -713,61 +717,23 @@ function FoldersView({
   const leafInputs = useMemo(() => toGalleryInputs(photos, scope), [photos, scope]);
   useEffect(() => setOpenIndex(null), [dateFrom, dateTo, poRef]);
 
-  // Empty-day fallback: if a single day is selected (e.g. the "Today" chip) but
-  // it has no photos, widen up to that day's week so the operator lands on the
-  // week's day folders instead of a dead-empty day. Fires once — after widening
-  // the level is 'week', so the guard no longer holds (no loop).
+  // Empty-day fallback: if a single day is selected (e.g. today on open) but it
+  // has no photos, widen to that day's week so the operator lands on day folders
+  // instead of a dead-empty day. Empty-week widens to the month the same way.
   useEffect(() => {
-    if (level === 'day' && !poRef && anchor && photos.length === 0) {
+    if (poRef || !anchor || photos.length > 0) return;
+    if (level === 'day') {
       onNavigate(weekRangeOf(anchor));
+    } else if (level === 'week') {
+      onNavigate(monthRangeOf(anchor.slice(0, 7)));
     }
   }, [level, poRef, anchor, photos.length, onNavigate]);
-
-  // ── Breadcrumb path bar — climbs by widening the filter (shared model) ─────
-  const crumbs: { label: string; nav: PhotoDateNav; current: boolean }[] = datePath.map((c) => ({
-    label: c.label,
-    nav: { dateFrom: c.range.dateFrom, dateTo: c.range.dateTo },
-    current: c.current && !poRef,
-  }));
-  if (poRef && dateFrom) {
-    crumbs.push({ label: poLabel(poRef, scope), nav: { dateFrom, dateTo, poRef }, current: true });
-  }
-
-  const pathBar =
-    crumbs.length > 0 ? (
-      <nav className="flex flex-wrap items-center gap-1 text-sm" aria-label="Folder path">
-        <button
-          type="button"
-          onClick={() => onNavigate({ dateFrom: undefined, dateTo: undefined, poRef: undefined })}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 font-semibold text-blue-600 transition-colors hover:bg-blue-50"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" /> All folders
-        </button>
-        {crumbs.map((c, i) => (
-          <span key={`${c.label}-${i}`} className="flex items-center gap-1">
-            <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" aria-hidden="true" />
-            <button
-              type="button"
-              disabled={c.current}
-              onClick={() => onNavigate(c.nav)}
-              className={cn(
-                'shrink-0 truncate rounded-md px-2 py-1 font-semibold transition-colors',
-                c.current ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
-              )}
-            >
-              {c.label}
-            </button>
-          </span>
-        ))}
-      </nav>
-    ) : null;
 
   // ── Leaf: a contact sheet of photos (PO# folder, single-PO day, custom) ────
   if (isLeaf) {
     if (photos.length === 0) return <PhotoEmptyState />;
     return (
       <div className="space-y-3">
-        {pathBar}
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
           {photos.map((photo, i) => (
             <PhotoCard
@@ -863,7 +829,6 @@ function FoldersView({
 
   return (
     <div className="space-y-3">
-      {pathBar}
       <SectionEyebrow icon={Folder} label={eyebrow} count={tiles.length} />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
         {tiles.map((t) => (
@@ -958,9 +923,7 @@ function LightboxPortal({
   onPhotoDeleted?: (photoId: number) => void;
 }) {
   // {id,url,meta} (not bare urls) so the viewer's delete + info panel show.
-  // `overview: 'grid'` opens the viewer to the PO#-grouped contact sheet (the
-  // folder-style display) regardless of which library view launched it.
-  const gallery = usePhotoGallery({ photos, showCopyLinks: false, onPhotoDeleted, overview: 'grid' });
+  const gallery = usePhotoGallery({ photos, showCopyLinks: false, onPhotoDeleted });
   const { openViewer, viewerOpen } = gallery;
   const openedRef = useRef(false);
 

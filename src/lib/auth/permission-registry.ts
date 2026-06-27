@@ -166,6 +166,7 @@ export const PERMISSIONS = [
   { id: 'integrations.amazon',      category: 'integrations', label: 'Manage Amazon integration' },
   { id: 'integrations.ecwid',       category: 'integrations', label: 'Manage Ecwid integration' },
   { id: 'integrations.sheets',      category: 'integrations', label: 'Trigger Google Sheets sync' },
+  { id: 'integrations.google_drive', category: 'integrations', label: 'Manage Google Drive photo backup' },
   { id: 'integrations.zendesk',     category: 'integrations', label: 'Manage Zendesk tickets' },
 
   // ─ Product manuals (cross-cutting, lives under "data sources" admin tab) ─

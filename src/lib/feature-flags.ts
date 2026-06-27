@@ -127,6 +127,16 @@ export function isWarrantyLogger(): boolean {
 }
 
 /**
+ * Google Drive photo backup. Global kill-switch for the drive-mirror cron + the
+ * manual backup batch. Default ON so any tenant who connects their Drive gets
+ * backed up; the per-org gate is the presence of an active google_drive vault
+ * connection, so this only exists to halt the feature platform-wide.
+ */
+export function isPhotosDriveBackupEnabled(): boolean {
+  return readBoolEnv('PHOTOS_DRIVE_BACKUP_ENABLED', true);
+}
+
+/**
  * Physical-state-first receiving queues (receiving-triage streamline Phase 2).
  * When ON, the triage SCANNED/Prioritize queue no longer hard-excludes POs Zoho
  * marks received/closed — a box physically on the dock stays visible (with a

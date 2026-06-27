@@ -90,6 +90,9 @@ function classifyExemption(path: string): string | null {
   // tenant scope is recovered from the encrypted/signed `state` param (validated
   // server-side), never a session. Permission-gating is impossible here.
   if (path.includes('/oauth/callback')) return 'oauth callback (provider redirect; encrypted state, no session cookie)';
+  // Google Drive backup uses the same encrypted-state public-redirect model as
+  // the marketplace OAuth callbacks, but lives under /integrations/google-drive/.
+  if (path.includes('/google-drive/callback')) return 'oauth callback (provider redirect; encrypted state, no session cookie)';
   // Public capability links: the unguessable token IN THE URL *is* the
   // authorization (signed/random share token), like a pre-signed URL.
   if (path.includes('/api/photos/share-packs/')) return 'public share link (capability token in URL)';

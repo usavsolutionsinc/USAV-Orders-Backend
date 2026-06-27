@@ -49,7 +49,7 @@ function getStatusDotBg(
  * editor fields, no form. Header mirrors {@link MobileReceivingRow}: title +
  * qty • condition on the left (workflow icon suppressed on history/unbox feed),
  * copy chips stacked on the right. {@link MobileReceivingPhotoStrip} shows all
- * captured thumbs plus a camera xN badge; tapping opens the shared swipe viewer.
+ * captured thumbs; tapping opens the shared swipe viewer.
  * The CTA hands off to the dedicated camera route at /m/r/{id}/photos.
  */
 export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonSheetProps) {
@@ -149,10 +149,9 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
             prefetch={false}
             onClick={onClose}
             aria-label={`Take photos (${photoCount} so far)`}
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
+            className="flex h-14 w-full items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm transition-colors active:bg-blue-700"
           >
             <Camera className="h-6 w-6" />
-            <span className="text-base font-black tabular-nums">x{photoCount}</span>
           </Link>
         ) : null}
       </div>

@@ -5,6 +5,8 @@
  * Phase 2: optional AI search mode via `searchMode=ask` (future).
  */
 
+import { getCurrentPSTDateKey } from '@/utils/date';
+
 export interface PhotoLibraryFilterState {
   dateFrom?: string;
   dateTo?: string;
@@ -18,6 +20,8 @@ export interface PhotoLibraryFilterState {
   hasAnalysis?: string;
   /** Selected custom image type (photo_image_types.key → photos.photo_type). */
   imageType?: string;
+  /** Selected photo label (photo_labels.key → photo_label_assignments). */
+  label?: string;
   /**
    * Business-ID filters — each resolves through `photo_entity_links` to a domain
    * table (see `src/lib/photos/queries/library.ts`). Stored as strings in the URL;
@@ -154,6 +158,12 @@ export function datePresetFromFilters(filters: PhotoLibraryFilterState): PhotoLi
   return 'custom';
 }
 
+/** Folders view always opens on today's capture date (PST). */
+export function todayFoldersDateFilter(): Pick<PhotoLibraryFilterState, 'dateFrom' | 'dateTo'> {
+  const today = getCurrentPSTDateKey();
+  return { dateFrom: today, dateTo: today };
+}
+
 export function applyDatePreset(preset: PhotoLibraryDatePreset): Pick<PhotoLibraryFilterState, 'dateFrom' | 'dateTo'> {
   if (preset === 'all') return { dateFrom: undefined, dateTo: undefined };
   const today = ymd(new Date());
@@ -202,7 +212,7 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
   const set = (
     key:
       | 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q'
-      | 'damageDetected' | 'hasAnalysis' | 'imageType'
+      | 'damageDetected' | 'hasAnalysis' | 'imageType' | 'label'
       | 'tracking' | 'serial' | 'sku' | 'ticketId' | 'pickupId' | 'rma',
     param: string,
   ) => {
@@ -212,6 +222,7 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
   set('dateFrom', 'dateFrom');
   set('dateTo', 'dateTo');
   set('imageType', 'imageType');
+  set('label', 'label');
   const sourceScope = parseSourceScope(params.get('sourceScope'));
   if (sourceScope) next.sourceScope = sourceScope;
   const sort = params.get('sort');
@@ -263,6 +274,7 @@ export function photoLibraryFiltersToParams(
     'damageDetected',
     'hasAnalysis',
     'imageType',
+    'label',
   ];
   if (filters.sourceScope && filters.sourceScope !== 'all') {
     params.set('sourceScope', filters.sourceScope);
@@ -303,6 +315,7 @@ export function countActivePhotoLibraryFilters(filters: PhotoLibraryFilterState)
   if (filters.ticketId) n++;
   if (filters.pickupId) n++;
   if (filters.rma) n++;
+  if (filters.label) n++;
   if (filters.damageDetected) n++;
   if (filters.hasAnalysis) n++;
   if (filters.dateFrom || filters.dateTo) n++;
@@ -325,6 +338,7 @@ export function clearStructuredPhotoFilters(
     ticketId: undefined,
     pickupId: undefined,
     rma: undefined,
+    label: undefined,
     damageDetected: undefined,
     hasAnalysis: undefined,
   };

@@ -114,6 +114,14 @@ export function buildPhotoLibraryRefinements(
     });
   }
 
+  if (filters.label) {
+    out.push({
+      id: 'label',
+      label: `Label: ${filters.label}`,
+      onRemove: () => actions.patch({ label: undefined }),
+    });
+  }
+
   if (filters.damageDetected === 'true') {
     out.push({
       id: 'damage',

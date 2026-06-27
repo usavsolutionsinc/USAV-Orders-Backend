@@ -5,17 +5,21 @@
  *
  * Rendered inside the SHARED `LineEditPanel` (triage variant, gated by
  * `caps.matching`). In triage the separate PO-items card is removed and its
- * carton actions move here: Open-in-unbox + the add "+" sit top-right, and
- * "Link repair service" is a left tab — all reusing the existing
- * `useUnmatchedItems` controller + `CartonAddPopover` / `EcwidProductSearchPopover`
- * (no new add/link logic).
+ * carton actions move here: Open-in-unbox + the add "+" sit top-right.
  *
- * The card pairs the inbound (return) package to REAL signals only — Zendesk
- * claim tickets (search + link) — and shows the current pairing (linked ticket
- * + Ecwid/PO order #, last-4 copy chips) in one "Paired" row. No fabricated
- * confidence score. "New return ticket" reuses the panel's own claim modal.
+ * The body is a switchable tab list (same `HorizontalButtonSlider` the
+ * Notes/Checklist card uses):
+ *   • Zendesk tickets      — search + link a real customer claim ticket
+ *   • Link repair service  — an INLINE list of recent Ecwid orders (reusing the
+ *                            Ecwid search hook + list), relaxed to include normal
+ *                            orders too, not just -RS SKUs.
+ *
+ * Pairing uses REAL signals only (no fabricated score); the "Paired" row shows
+ * the linked ticket + Ecwid/PO order # (last-4 copy chips). "New return ticket"
+ * reuses the panel's own claim modal.
  */
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -25,13 +29,20 @@ import {
   Plus,
   Search,
   Wrench,
+  ZendeskMark,
 } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
 import { Button } from '@/design-system/primitives/Button';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
+import {
+  HorizontalButtonSlider,
+  type HorizontalSliderItem,
+} from '@/components/ui/HorizontalButtonSlider';
 import { CartonAddPopover } from '@/components/receiving/workspace/CartonAddPopover';
-import { EcwidProductSearchPopover } from '@/components/receiving/unfound/EcwidProductSearchPopover';
+import { useEcwidProductSearch } from '@/components/receiving/unfound/ecwid-search/useEcwidProductSearch';
+import { EcwidSearchInputs } from '@/components/receiving/unfound/ecwid-search/EcwidSearchInputs';
+import { EcwidResultsList } from '@/components/receiving/unfound/ecwid-search/EcwidResultsList';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
 import { relativeTime, toTriagePackage } from '@/components/receiving/triage/triage-types';
@@ -43,6 +54,8 @@ interface MatchingControllerSlice {
   setClaimModalOpen: (open: boolean) => void;
   setReturnClaimPrefill: (value: string | null) => void;
 }
+
+type MatchTab = 'zendesk' | 'repair';
 
 export function LineMatchingSection({
   row,
@@ -71,9 +84,9 @@ export function LineMatchingSection({
 }
 
 /**
- * Inner card — mounts only with a valid receivingId, so both hooks
- * (`useTriagePanel` for Zendesk matching, `useUnmatchedItems` for the carton
- * add/link actions) run unconditionally and safely.
+ * Inner card — mounts only with a valid receivingId, so all three hooks
+ * (`useTriagePanel`, `useUnmatchedItems`, `useEcwidProductSearch`) run
+ * unconditionally and safely.
  */
 function TriageMatchingCard({
   row,
@@ -89,8 +102,10 @@ function TriageMatchingCard({
   const router = useRouter();
   const t = useTriagePanel({ row });
   const { pkg } = t;
+  const [tab, setTab] = useState<MatchTab>('zendesk');
 
-  // Reused carton controller — owns the add "+" + repair-service link popovers.
+  // Reused carton controller — owns the add "+" popover + the add-line path the
+  // inline repair list selects into.
   const u = useUnmatchedItems({
     receivingId,
     staffId,
@@ -100,6 +115,17 @@ function TriageMatchingCard({
   });
 
   const showCartonActions = pkg.isUnmatched;
+
+  // Reused Ecwid search — drives the INLINE "Link repair service" list. Only
+  // loads when the repair tab is active (popoverMode gates the fetch); relaxed
+  // to include normal orders, not just -RS SKUs.
+  const ec = useEcwidProductSearch({
+    receivingId,
+    popoverMode: showCartonActions && tab === 'repair' ? 'repair_service' : 'search',
+    relaxRepairToAllOrders: true,
+    onSelect: u.handleAddLine,
+    onClose: () => setTab('zendesk'),
+  });
 
   const openNewReturnTicket = () => {
     c.setReturnClaimPrefill(
@@ -116,6 +142,11 @@ function TriageMatchingCard({
 
   const pairedTicket = pkg.zendeskTicket?.trim() || null;
   const pairedOrder = pkg.poNumber?.trim() || null;
+
+  const tabs: HorizontalSliderItem[] = [
+    { id: 'zendesk', label: 'Zendesk tickets', icon: ZendeskMark },
+    { id: 'repair', label: 'Link repair service', icon: Wrench },
+  ];
 
   return (
     <WorkspaceCard
@@ -148,32 +179,107 @@ function TriageMatchingCard({
         </div>
       }
     >
-      {/* Tabs (left): Zendesk tickets is the active content; Link repair service
-          launches the Ecwid -RS picker popover. */}
-      <div className="mb-3 flex items-center gap-1">
-        <span className="rounded-md bg-blue-50 px-2.5 py-1 text-caption font-bold uppercase tracking-wider text-blue-700 ring-1 ring-inset ring-blue-200">
-          Zendesk tickets
-        </span>
-        {showCartonActions ? (
-          <button
-            type="button"
-            onClick={() => u.setPopoverMode('repair_service')}
-            title="Pick a recent Ecwid repair-service order (-RS) to link to this carton"
-            className="flex items-center gap-1 rounded-md px-2.5 py-1 text-caption font-bold uppercase tracking-wider text-sky-700 hover:bg-sky-50"
-          >
-            <Wrench className="h-3 w-3" />
-            Link repair service
-          </button>
-        ) : null}
-        {t.hiddenLinked > 0 ? (
-          <HoverTooltip label={`${t.hiddenLinked} ticket(s) already linked elsewhere are hidden`}>
-            <span className="ml-auto text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
-              {t.hiddenLinked} hidden
+      {/* Switchable tabs (same control as the Notes/Checklist card). Only when
+          there's a carton to link repair-service orders against. */}
+      {showCartonActions ? (
+        <div className="mb-3 flex items-center gap-2">
+          <HorizontalButtonSlider
+            variant="nav"
+            dense
+            overlay
+            items={tabs}
+            value={tab}
+            onChange={(id) => setTab(id as MatchTab)}
+            aria-label="Matching tabs"
+          />
+          {tab === 'zendesk' && t.hiddenLinked > 0 ? (
+            <HoverTooltip label={`${t.hiddenLinked} ticket(s) already linked elsewhere are hidden`}>
+              <span className="ml-auto shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                {t.hiddenLinked} hidden
+              </span>
+            </HoverTooltip>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* ── Tab content ─────────────────────────────────────────────────────── */}
+      {showCartonActions && tab === 'repair' ? (
+        // Inline repair-service order list — reuses the Ecwid search inputs +
+        // results list (relaxed to include normal orders, not just -RS).
+        <div className="overflow-hidden rounded-lg border border-gray-200">
+          <EcwidSearchInputs c={ec} />
+          <EcwidResultsList c={ec} />
+        </div>
+      ) : (
+        <ZendeskMatchTab t={t} />
+      )}
+
+      {/* Paired summary — what this carton is currently paired to (last-4 chips). */}
+      {pairedTicket || pairedOrder ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
+          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Paired</span>
+          {pairedTicket ? (
+            <TicketChip value={pairedTicket.replace(/^#/, '')} display={pairedTicket} />
+          ) : null}
+          {pairedTicket && pairedOrder ? <span className="text-gray-300">·</span> : null}
+          {pairedOrder ? (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              Order
+              <OrderIdChip value={pairedOrder} display={getLast4(pairedOrder)} dense />
             </span>
-          </HoverTooltip>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Actions — file a new return ticket (reuses the panel claim modal) +
+          flag for manual review (unmatched cartons only). */}
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Plus className="h-4 w-4" />}
+          onClick={openNewReturnTicket}
+        >
+          New return ticket
+        </Button>
+        {t.canMarkReview ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={
+              t.markingReview ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <AlertTriangle className="h-4 w-4" />
+              )
+            }
+            onClick={() => t.markManualReview()}
+            disabled={t.markingReview}
+          >
+            Manual review
+          </Button>
         ) : null}
       </div>
 
+      {/* Add-to-carton popover ("+"). The repair-service picker is now inline
+          (the tab above), so only this modal remains. */}
+      {u.addOpen ? (
+        <CartonAddPopover
+          tabs={['item', 'web', 'box']}
+          unitIds={u.cartonUnitIds}
+          onAddLine={u.handleAddLine}
+          onAssignedBox={u.setAssignedBox}
+          onClose={() => u.setAddOpen(false)}
+        />
+      ) : null}
+    </WorkspaceCard>
+  );
+}
+
+/** The Zendesk-tickets tab body — search + candidate match cards + delivery hints. */
+function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
+  return (
+    <>
       {/* Search */}
       <div className="relative mb-3">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -189,7 +295,6 @@ function TriageMatchingCard({
         ) : null}
       </div>
 
-      {/* Candidate list / typed states */}
       {t.candidatesLoading ? (
         <p className="flex items-center justify-center gap-2 py-5 text-xs text-gray-500">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading matches…
@@ -244,72 +349,6 @@ function TriageMatchingCard({
           </div>
         </div>
       ) : null}
-
-      {/* Paired summary — what this carton is currently paired to (last-4 chips). */}
-      {pairedTicket || pairedOrder ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Paired</span>
-          {pairedTicket ? (
-            <TicketChip value={pairedTicket.replace(/^#/, '')} display={pairedTicket} />
-          ) : null}
-          {pairedTicket && pairedOrder ? <span className="text-gray-300">·</span> : null}
-          {pairedOrder ? (
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              Order
-              <OrderIdChip value={pairedOrder} display={getLast4(pairedOrder)} dense />
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Actions — file a new return ticket (reuses the panel claim modal) +
-          flag for manual review (unmatched cartons only). */}
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Plus className="h-4 w-4" />}
-          onClick={openNewReturnTicket}
-        >
-          New return ticket
-        </Button>
-        {t.canMarkReview ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={
-              t.markingReview ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="h-4 w-4" />
-              )
-            }
-            onClick={() => t.markManualReview()}
-            disabled={t.markingReview}
-          >
-            Manual review
-          </Button>
-        ) : null}
-      </div>
-
-      {/* Reused popovers (centered overlays — JSX position is irrelevant). */}
-      {u.addOpen ? (
-        <CartonAddPopover
-          tabs={['item', 'web', 'box']}
-          unitIds={u.cartonUnitIds}
-          onAddLine={u.handleAddLine}
-          onAssignedBox={u.setAssignedBox}
-          onClose={() => u.setAddOpen(false)}
-        />
-      ) : null}
-      {u.popoverMode === 'repair_service' ? (
-        <EcwidProductSearchPopover
-          receivingId={receivingId}
-          popoverMode={u.popoverMode}
-          onSelect={u.handleAddLine}
-          onClose={() => u.setPopoverMode(null)}
-        />
-      ) : null}
-    </WorkspaceCard>
+    </>
   );
 }

@@ -76,6 +76,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       receivingSourceExclude: params.get('receivingSourceExclude'),
       staffId,
       photoType: params.get('photoType'),
+      labelKey: params.get('label'),
       hasAnalysis:
         hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,
       damageDetected:

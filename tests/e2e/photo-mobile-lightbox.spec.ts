@@ -3,10 +3,9 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * Mobile lightbox regression: opening a photo on a phone must NOT show a black
  * screen. The bug was that the viewer fed full-resolution `/api/photos/:id/content`
- * URLs to the grid-overview tiles, the thumbnail strip, AND the main stage, so on
- * a slow (mobile) connection everything sat black/spinner until the full images
- * loaded. The fix uses `thumbUrl` for tiles + strip and as an instant placeholder
- * under the main image. Emulated under chromium with a phone viewport (webkit
+ * URLs to the thumbnail strip AND the main stage, so on a slow (mobile) connection
+ * everything sat black/spinner until the full images loaded. The fix uses `thumbUrl`
+ * for the strip and as an instant placeholder under the main image. Emulated under chromium with a phone viewport (webkit
  * isn't installed in this environment).
  */
 test.use({ viewport: { width: 390, height: 844 } });
@@ -59,14 +58,8 @@ test('mobile: opening a photo shows imagery, not a black screen', async ({ page 
   const lightbox = page.getByTestId('photo-lightbox');
   await expect(lightbox).toBeVisible({ timeout: 10_000 });
 
-  // Grid overview: thumbnails must paint (at least one real image), not black tiles.
+  // Thumbnails must paint (at least one real image), not a black stage.
   await expect.poll(() => lightbox.locator('img').count(), { timeout: 10_000 }).toBeGreaterThan(0);
-
-  // Drill into a single image if we opened to the grouped-grid overview.
-  const overviewTile = lightbox.locator('button.aspect-square');
-  if (await overviewTile.count()) {
-    await overviewTile.first().click();
-  }
 
   // The main stage must render a real (large) image — not just the 56px strip,
   // and not a perpetual spinner on a black box.

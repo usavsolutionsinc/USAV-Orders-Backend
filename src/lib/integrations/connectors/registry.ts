@@ -44,6 +44,19 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     authKind: 'vault',
     capabilities: ['orders'],
   },
+  // Storage backup — tenant connects their own Google Drive (Sign in with
+  // Google, scope drive.file) so photo originals back up to / offload onto
+  // storage they own. No ingestion capability; validate()/refresh() are
+  // lazy-imported so the connection reader never pulls the Drive client.
+  google_drive: {
+    provider: 'google_drive',
+    authKind: 'oauth',
+    capabilities: [],
+    authorizeStartPath: '/api/integrations/google-drive/connect',
+    healthPath: '/api/integrations/google-drive/health',
+    validate: (orgId) => import('@/lib/photos/drive/client').then((m) => m.validateDriveConnection(orgId)),
+    refresh: (orgId) => import('@/lib/photos/drive/client').then((m) => m.refreshDriveToken(orgId)),
+  },
   // Storefronts & POS
   square: {
     provider: 'square',

@@ -48,8 +48,8 @@ test.describe('A · Photo library group-by-ticket', () => {
     const firstFolder = page.getByTestId('photo-folder').first();
     if (await firstFolder.count()) {
       await firstFolder.click();
-      // Breadcrumb path back to all folders appears, and photos render inline.
-      await expect(page.getByRole('button', { name: /all folders/i })).toBeVisible();
+      // Bottom date breadcrumb reflects the drill, and photos render inline.
+      await expect(page.getByRole('navigation', { name: 'Date path' })).toBeVisible();
       const firstTile = page.getByTestId('photo-tile').first();
       await expect(firstTile).toBeVisible();
       await firstTile.click();

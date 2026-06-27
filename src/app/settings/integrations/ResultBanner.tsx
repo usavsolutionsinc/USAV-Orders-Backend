@@ -13,6 +13,7 @@ const SUCCESS: Record<string, string> = {
   amazon_connected: 'Amazon connected.',
   ebay_connected: 'eBay connected.',
   zoho_connected: 'Zoho connected.',
+  google_drive_connected: 'Google Drive connected — photo backups will start automatically.',
 };
 
 const ERRORS: Record<string, string> = {
@@ -33,6 +34,15 @@ const ERRORS: Record<string, string> = {
   ebay_callback_failed: 'eBay connection failed — please retry.',
   missing_oauth_params: 'Sign-in returned no authorization code — please retry.',
   token_exchange_failed: 'Token exchange with the provider failed — please retry.',
+  // Google Drive
+  google_drive_missing_oauth_params: 'Google sign-in returned no authorization code — please retry.',
+  google_drive_invalid_oauth_state: 'The Google Drive connection link was invalid — please retry.',
+  google_drive_incomplete_oauth_state: 'The Google Drive connection link was incomplete — please retry.',
+  google_drive_oauth_state_expired: 'The Google Drive connection link expired — please retry.',
+  google_drive_server_configuration: 'Google Drive backup is not fully configured on the server.',
+  google_drive_no_refresh_token: 'Google did not return offline access — remove this app at myaccount.google.com/permissions, then reconnect.',
+  google_drive_callback_failed: 'Google Drive connection failed — please retry.',
+  google_drive_access_denied: 'Google sign-in was cancelled.',
 };
 
 export function ResultBanner({ success, error }: { success?: string; error?: string }) {

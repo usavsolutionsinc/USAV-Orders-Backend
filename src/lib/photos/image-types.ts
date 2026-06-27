@@ -38,6 +38,8 @@ export interface CustomImageType {
   gcsPrefix: string;
   icon: string | null;
   sortIndex: number;
+  /** Seeded system type (e.g. 'listing') — non-deletable / non-renamable, pinned first. */
+  isSystem: boolean;
 }
 
 export type ImageType = BuiltInImageType | CustomImageType;
@@ -52,6 +54,14 @@ export const BUILTIN_IMAGE_TYPES: BuiltInImageType[] = [
 ];
 
 const BUILTIN_KEYS = new Set<string>(BUILTIN_IMAGE_TYPES.map((t) => t.key));
+
+/**
+ * Keys reserved for seeded SYSTEM image types (photo_image_types.is_system). They
+ * exist as rows (so they carry a gcs_prefix + photoType tag) but must not be
+ * re-created or collided with by an operator. 'listing' is the marketplace
+ * listing-photo type (see 2026-06-26b_photo_listing_type.sql).
+ */
+export const SYSTEM_IMAGE_TYPE_KEYS = new Set<string>(['listing']);
 
 export interface ImageTypeDeps {
   tenantQuery: typeof tenantQuery;
@@ -70,6 +80,7 @@ interface RawImageTypeRow {
   gcs_prefix: string;
   icon: string | null;
   sort_index: number | string;
+  is_system: boolean;
 }
 
 function mapRow(row: RawImageTypeRow): CustomImageType {
@@ -81,6 +92,7 @@ function mapRow(row: RawImageTypeRow): CustomImageType {
     gcsPrefix: row.gcs_prefix,
     icon: row.icon ?? null,
     sortIndex: Number(row.sort_index),
+    isSystem: Boolean(row.is_system),
   };
 }
 
@@ -103,7 +115,7 @@ export async function listCustomImageTypes(
 ): Promise<CustomImageType[]> {
   const res = await deps.tenantQuery<RawImageTypeRow>(
     orgId,
-    `SELECT id, key, label, gcs_prefix, icon, sort_index
+    `SELECT id, key, label, gcs_prefix, icon, sort_index, is_system
        FROM photo_image_types
       WHERE organization_id = $1
       ORDER BY sort_index, id`,
@@ -130,7 +142,7 @@ export async function createImageType(
   if (!label) throw new ImageTypeValidationError('A name is required');
   if (label.length > 60) throw new ImageTypeValidationError('Name is too long');
   const key = slugifyImageType(label);
-  if (BUILTIN_KEYS.has(key)) {
+  if (BUILTIN_KEYS.has(key) || SYSTEM_IMAGE_TYPE_KEYS.has(key)) {
     throw new ImageTypeConflictError(`"${label}" collides with a built-in image type`);
   }
 
@@ -143,10 +155,11 @@ export async function createImageType(
       throw new ImageTypeConflictError(`An image type "${label}" already exists`);
     }
     const next = await client.query<RawImageTypeRow>(
-      `INSERT INTO photo_image_types (organization_id, key, label, gcs_prefix, icon, sort_index)
+      `INSERT INTO photo_image_types (organization_id, key, label, gcs_prefix, icon, sort_index, is_system)
        VALUES ($1, $2, $3, $4, $5,
-               COALESCE((SELECT MAX(sort_index) + 1 FROM photo_image_types WHERE organization_id = $1), 0))
-       RETURNING id, key, label, gcs_prefix, icon, sort_index`,
+               COALESCE((SELECT MAX(sort_index) + 1 FROM photo_image_types WHERE organization_id = $1), 0),
+               FALSE)
+       RETURNING id, key, label, gcs_prefix, icon, sort_index, is_system`,
       [orgId, key, label, key, input.icon ?? null],
     );
     return mapRow(next.rows[0]);

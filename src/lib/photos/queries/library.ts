@@ -23,6 +23,8 @@ export interface LibraryFilters {
   damageDetected?: boolean | null;
   /** Custom image type — keep only photos tagged with this photo_type. */
   photoType?: string | null;
+  /** Photo label key — keep only photos assigned this label (photo_labels.key). */
+  labelKey?: string | null;
   // ── Business-ID filters (each resolves through photo_entity_links; verified
   //    join paths in 2026-* migrations). All tenant-scoped via p.organization_id.
   /** Shipping tracking number (receiving.shipment_id / packer_logs.shipment_id → shipping_tracking_numbers). */
@@ -127,6 +129,17 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
   if (filters.photoType) {
     params.push(filters.photoType);
     clauses.push(`lower(p.photo_type) = lower($${params.length})`);
+  }
+  if (filters.labelKey) {
+    params.push(filters.labelKey);
+    clauses.push(`
+      EXISTS (
+        SELECT 1 FROM photo_label_assignments la
+         JOIN photo_labels lb ON lb.id = la.label_id
+        WHERE la.photo_id = p.id
+          AND la.organization_id = p.organization_id
+          AND lower(lb.key) = lower($${params.length})
+      )`);
   }
   if (filters.entityType && filters.entityId) {
     params.push(filters.entityType, filters.entityId);
@@ -297,7 +310,15 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
               WHERE lz.photo_id = p.id
                 AND lz.organization_id = p.organization_id
                 AND lz.entity_type = 'ZENDESK_TICKET'
-              LIMIT 1) AS ticket_id
+              LIMIT 1) AS ticket_id,
+            (SELECT COALESCE(json_agg(json_build_object(
+                      'id', lb.id, 'key', lb.key, 'label', lb.label,
+                      'color', lb.color, 'icon', lb.icon
+                    ) ORDER BY lb.sort_index, lb.id), '[]'::json)
+               FROM photo_label_assignments la
+               JOIN photo_labels lb ON lb.id = la.label_id
+              WHERE la.photo_id = p.id
+                AND la.organization_id = p.organization_id) AS labels
        FROM photos p
       WHERE ${clauses.join(' AND ')}
       ORDER BY p.created_at ${sortDir}, p.id ${sortDir}
@@ -309,12 +330,17 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
     const ticketRaw = (row as { ticket_id?: number | string | null }).ticket_id;
     const ticketId = ticketRaw != null ? Number(ticketRaw) : null;
     const staffName = (row as { taken_by_staff_name?: string | null }).taken_by_staff_name;
+    const labelsRaw = (row as { labels?: unknown }).labels;
+    const labels = Array.isArray(labelsRaw)
+      ? (labelsRaw as Array<{ id: number; key: string; label: string; color: string | null; icon: string | null }>)
+      : [];
     return {
       ...mapPhotoRow(row as Parameters<typeof mapPhotoRow>[0]),
       takenByStaffName: staffName ?? null,
       hasAnalysis: Boolean((row as { has_analysis?: boolean }).has_analysis),
       damageDetected: (row as { damage_detected?: boolean | null }).damage_detected ?? null,
       ticketId: ticketId != null && Number.isFinite(ticketId) ? ticketId : null,
+      labels,
     };
   });
   const hasMore = rows.length > limit;

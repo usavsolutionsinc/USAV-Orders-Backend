@@ -33,12 +33,6 @@ export interface PhotoGalleryProps {
   onAddPhotos?: () => void;
   /** Opens the ops photo library filtered to this entity/receiving scope. */
   libraryHref?: string;
-  /**
-   * Initial viewer surface. `'grid'` opens to a PO#-grouped contact sheet (the
-   * folder-style display) and a tile click zooms; `'single'` (default) opens
-   * straight onto the zoomed image. The photo library passes `'grid'`.
-   */
-  overview?: 'single' | 'grid';
 }
 
 /**
@@ -61,7 +55,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     receivingId,
     onAddPhotos,
     libraryHref,
-    overview = 'single',
   } = props;
 
   const { photoItems, setPhotoItems, resetFingerprint, loadedCount, errorCount } = usePhotoItems(photos);
@@ -69,9 +62,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
 
   const [viewerOpen, setViewerOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Grid overview (PO#-grouped contact sheet) vs the single zoomed image. Opens
-  // in grid when `overview === 'grid'`; a tile click drills to the single image.
-  const [gridMode, setGridMode] = useState(overview === 'grid');
   const [mounted, setMounted] = useState(false);
   // Info panel starts collapsed — the "i" toggle reveals it on demand rather
   // than overlaying photo details by default.
@@ -113,24 +103,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   const openViewer = useCallback((index: number) => {
     setCurrentIndex(index);
     setViewerOpen(true);
-    setGridMode(overview === 'grid');
-    zoom.resetZoom();
-    setDeleteArmed(false);
-    setDeleteError(null);
-  }, [zoom, overview]);
-
-  /** Drill from the grid overview onto a single photo (by flat index). */
-  const openSingleAt = useCallback((index: number) => {
-    setCurrentIndex(index);
-    setGridMode(false);
-    zoom.resetZoom();
-    setDeleteArmed(false);
-    setDeleteError(null);
-  }, [zoom]);
-
-  /** Back to the PO#-grouped grid overview from the single image. */
-  const backToGrid = useCallback(() => {
-    setGridMode(true);
     zoom.resetZoom();
     setDeleteArmed(false);
     setDeleteError(null);
@@ -140,15 +112,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   useEffect(() => {
     if (!viewerOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      // In the grid overview only Escape is meaningful (no zoom/paging target).
-      if (gridMode) {
-        if (e.key === 'Escape') closeViewer();
-        return;
-      }
       switch (e.key) {
-        // From a single image, Escape steps back to the grid when we opened
-        // there; otherwise it closes the viewer.
-        case 'Escape': if (overview === 'grid') backToGrid(); else closeViewer(); break;
+        case 'Escape': closeViewer(); break;
         case 'ArrowLeft': handlePrevious(); break;
         case 'ArrowRight': handleNext(); break;
         case '+':
@@ -163,7 +128,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewerOpen, gridMode, overview, closeViewer, backToGrid, handlePrevious, handleNext, zoom]);
+  }, [viewerOpen, closeViewer, handlePrevious, handleNext, zoom]);
 
   const downloadPhotoAtIndex = async (index: number) => {
     const photo = photoItems[index];
@@ -266,8 +231,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     photoItems, loadedCount, errorCount,
     // viewer
     viewerOpen, currentIndex, mounted, openViewer, closeViewer, handleNext, handlePrevious, setCurrentIndex,
-    // grid overview
-    overview, gridMode, openSingleAt, backToGrid,
     // context panel
     hasContext, panelOpen, togglePanel: () => setPanelOpen((prev) => !prev),
     // zoom

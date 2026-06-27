@@ -10,6 +10,7 @@ import {
   PackageOpen,
   Plus,
   ShoppingCart,
+  Tag,
   Wrench,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
@@ -34,6 +35,7 @@ const ICONS: Record<string, IconCmp> = {
   Package,
   Wrench,
   MessageSquare,
+  Tag,
   Folder,
   Image: ImageIcon,
 };

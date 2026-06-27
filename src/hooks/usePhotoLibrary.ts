@@ -35,6 +35,8 @@ function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | nu
   if (filters.hasAnalysis) params.set('hasAnalysis', filters.hasAnalysis);
   // Custom image type → filter by the photos.photo_type tag.
   if (filters.imageType) params.set('photoType', filters.imageType);
+  // Photo label → filter by photo_label_assignments (photo_labels.key).
+  if (filters.label) params.set('label', filters.label);
   return params.toString();
 }
 

@@ -172,6 +172,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     1,
     Math.min(100, Number(url.searchParams.get('limit')) || DEFAULT_LIMIT),
   );
+  // When set, RELAX the -RS-only filter to also include normal orders, so a
+  // carton can be linked to any recent Ecwid order — not just repair-service
+  // (-RS) SKUs. Used by the triage Smart-Matching "Link repair service" list.
+  // Default (false) keeps the existing unbox popover scoped to -RS only.
+  const includeNormal = ['1', 'true', 'yes'].includes(
+    (url.searchParams.get('include_normal') ?? '').toLowerCase(),
+  );
 
   let storeId: string;
   let token: string;
@@ -237,7 +244,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const items = Array.isArray(order.items) ? order.items : [];
     for (const item of items) {
       const sku = String(item.sku || '').trim();
-      if (!sku || !isRepairServiceSku(sku)) continue;
+      if (!sku) continue;
+      // -RS-only by default; relaxed to all SKUs when include_normal is set.
+      if (!includeNormal && !isRepairServiceSku(sku)) continue;
       const upper = sku.toUpperCase();
       if (bySku.has(upper)) continue;
       bySku.set(upper, {

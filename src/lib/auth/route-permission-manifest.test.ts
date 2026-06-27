@@ -85,6 +85,19 @@ test('regression: photos.share gates share pack creation', () => {
   assert.ok(paths.includes('/api/photos/share-packs/route.ts'), 'photos.share should gate share pack POST');
 });
 
+test('regression: photo-label routes are gated (read on view, writes on manage)', () => {
+  // Vocabulary list + per-photo label read land on the per-file minimum
+  // (photos.view, the GET); the POST/PUT/PATCH/DELETE writes assert photos.manage
+  // in-handler. The manage-gated single-label + bulk routes are recorded directly.
+  const view = routesGatedBy('photos.view').map((r) => r.path);
+  assert.ok(view.includes('/api/photos/labels/route.ts'), 'photos.view should gate the labels vocabulary route');
+  assert.ok(view.includes('/api/photos/[id]/labels/route.ts'), 'photos.view should gate the per-photo labels route');
+
+  const manage = routesGatedBy('photos.manage').map((r) => r.path);
+  assert.ok(manage.includes('/api/photos/labels/[id]/route.ts'), 'photos.manage should gate single-label edit/delete');
+  assert.ok(manage.includes('/api/photos/labels/bulk-apply/route.ts'), 'photos.manage should gate bulk label apply');
+});
+
 test('regression: inventory.list_unit gates the per-unit listing route (engine Phase 1.4)', () => {
   // The 'listed' fulfillment-tail seam — marks a serial unit live on a sales
   // channel (src/lib/inventory/markUnitListed.ts), then fires tapWorkflow('listed').
@@ -216,6 +229,21 @@ test('regression: handling_unit.manage gates the assign/unassign mutations', () 
   assert.ok(
     paths.includes('/api/handling-units/[id]/unassign/route.ts'),
     'handling_unit.manage should gate unit removal',
+  );
+});
+
+test('regression: integrations.google_drive gates the Drive connect + health routes', () => {
+  // Google Drive photo backup. The OAuth callback is intentionally ungated
+  // (encrypted-state public redirect, like the Amazon/eBay callbacks) and is
+  // not asserted here.
+  const paths = routesGatedBy('integrations.google_drive').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/integrations/google-drive/connect/route.ts'),
+    'integrations.google_drive should gate the Drive connect route',
+  );
+  assert.ok(
+    paths.includes('/api/integrations/google-drive/health/route.ts'),
+    'integrations.google_drive should gate the Drive health route',
   );
 });
 

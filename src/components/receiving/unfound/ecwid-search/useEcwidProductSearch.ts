@@ -21,6 +21,7 @@ export function useEcwidProductSearch({
   popoverMode,
   initialQuery = '',
   searchFieldOverride,
+  relaxRepairToAllOrders = false,
   onSelect,
   onClose,
 }: EcwidProductSearchPopoverProps) {
@@ -68,7 +69,11 @@ export function useEcwidProductSearch({
     setIsLoading(true);
     abortRef.current?.abort();
 
-    fetch('/api/ecwid/recent-repair-orders?limit=30')
+    fetch(
+      `/api/ecwid/recent-repair-orders?limit=30${
+        relaxRepairToAllOrders ? '&include_normal=1' : ''
+      }`,
+    )
       .then(async (res) => {
         const body = (await res.json()) as SearchResponse;
         if (!res.ok || !body.success) {
@@ -88,7 +93,7 @@ export function useEcwidProductSearch({
     return () => {
       cancelled = true;
     };
-  }, [popoverMode]);
+  }, [popoverMode, relaxRepairToAllOrders]);
 
   // ─── Catalog search with debounce + abort ───────────────────────────────────
   useEffect(() => {

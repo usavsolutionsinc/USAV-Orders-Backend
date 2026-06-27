@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, ExternalLink, Link2, Loader2, MessageSquare, Share2, Trash2 } from '@/components/Icons';
+import { Archive, Download, ExternalLink, Link2, Loader2, MessageSquare, Share2, Tag, Trash2 } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
@@ -10,7 +10,8 @@ import { usePhotoSelection } from '@/hooks/usePhotoSelection';
 import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
 import { buildPhotoDateTree } from '@/lib/photos/date-tree';
-import { sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
+import { sourceScopeFromFilters, todayFoldersDateFilter } from '@/lib/photos/library-filter-state';
+import { getCurrentPSTDateKey } from '@/utils/date';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { toast } from '@/lib/toast';
 import { dispatchReceivingPhotoChanged } from '@/utils/events';
@@ -23,6 +24,7 @@ import { PhotoDateBreadcrumb } from './PhotoDateBreadcrumb';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
 import { PhotoLibraryToolbar } from './PhotoLibraryToolbar';
+import { PhotoLabelEditor } from './PhotoLabelEditor';
 
 /** Fixed share-link lifetime (24h) for copied links + share pages. */
 const DEFAULT_SHARE_TTL_SECONDS = 24 * 60 * 60;
@@ -46,9 +48,12 @@ export function PhotoLibraryPage() {
   const queryClient = useQueryClient();
   const { has } = useAuth();
   const canZendesk = has('integrations.zendesk');
+  const canManagePhotos = has('photos.manage');
 
   // Photos staged for the "Create Zendesk ticket" modal (null = closed).
   const [claimPhotos, setClaimPhotos] = useState<ClaimPhotoInput[] | null>(null);
+  // Photos staged for the label editor (null = closed; 1 = single PUT, N = bulk).
+  const [labelEditorPhotos, setLabelEditorPhotos] = useState<LibraryPhoto[] | null>(null);
   // Right-click context menu target (null = closed).
   const [ctxMenu, setCtxMenu] = useState<{ photo: LibraryPhoto; x: number; y: number } | null>(null);
 
@@ -76,15 +81,26 @@ export function PhotoLibraryPage() {
   // Date breadcrumb defaults (right-panel footer): today + the most recent
   // capture day across the loaded photos — both keyed off `created_at` (PST),
   // never the most-recent PO or photo type.
-  const today = useMemo(
-    () =>
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'America/Los_Angeles',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date()),
-    [],
+  const today = useMemo(() => getCurrentPSTDateKey(), []);
+  const foldersDateInitialized = useRef(false);
+
+  // Folders view opens on today when the URL has no date drill (first load).
+  useEffect(() => {
+    if (foldersDateInitialized.current) return;
+    if (view !== 'folders') return;
+    if (filters.dateFrom || filters.dateTo || filters.poRef) return;
+    foldersDateInitialized.current = true;
+    patch(todayFoldersDateFilter());
+  }, [view, filters.dateFrom, filters.dateTo, filters.poRef, patch]);
+
+  const handleViewChange = useCallback(
+    (next: typeof view) => {
+      if (next === 'folders') {
+        patch({ ...todayFoldersDateFilter(), poRef: undefined });
+      }
+      setView(next);
+    },
+    [patch, setView],
   );
   const mostRecentDay = useMemo(
     () => buildPhotoDateTree(photos)[0]?.months[0]?.days[0]?.ymd,
@@ -190,6 +206,16 @@ export function PhotoLibraryPage() {
             } satisfies PhotoContextMenuItem,
           ]
         : []),
+      ...(canManagePhotos
+        ? [
+            {
+              key: 'labels',
+              label: 'Edit labels',
+              icon: <Tag className="h-3.5 w-3.5" />,
+              onClick: () => setLabelEditorPhotos([photo]),
+            } satisfies PhotoContextMenuItem,
+          ]
+        : []),
       {
         key: 'download',
         label: 'Download',
@@ -208,7 +234,7 @@ export function PhotoLibraryPage() {
         onClick: () => void deletePhotoFromMenu(photo.id),
       },
     ],
-    [canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
+    [canManagePhotos, canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
   );
 
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
@@ -276,6 +302,19 @@ export function PhotoLibraryPage() {
           }
         },
       },
+      ...(canManagePhotos
+        ? [
+            {
+              // Open the label editor for the selection (bulk add/remove diff).
+              key: 'labels',
+              label: 'Edit labels',
+              icon: <Tag className="h-4 w-4" />,
+              tone: 'violet' as const,
+              primary: false,
+              run: (rows: LibraryPhoto[]) => setLabelEditorPhotos(rows),
+            } satisfies SelectionAction<LibraryPhoto>,
+          ]
+        : []),
       ...(canZendesk
         ? [
             {
@@ -337,7 +376,7 @@ export function PhotoLibraryPage() {
         },
       },
     ],
-    [canZendesk, downloadPhotoFile, exitSelectMode, queryClient, shareLinks],
+    [canManagePhotos, canZendesk, downloadPhotoFile, exitSelectMode, queryClient, shareLinks],
   );
 
   return (
@@ -346,7 +385,7 @@ export function PhotoLibraryPage() {
         title={title}
         metaLine={metaLine}
         view={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
         sort={filters.sort ?? 'recent'}
         onSortChange={(sort) => patch({ sort })}
       />
@@ -424,6 +463,14 @@ export function PhotoLibraryPage() {
           y={ctxMenu.y}
           items={photoMenuItems(ctxMenu.photo)}
           onClose={() => setCtxMenu(null)}
+        />
+      ) : null}
+
+      {labelEditorPhotos ? (
+        <PhotoLabelEditor
+          photos={labelEditorPhotos}
+          scopeImageType={filters.imageType}
+          onClose={() => setLabelEditorPhotos(null)}
         />
       ) : null}
     </div>

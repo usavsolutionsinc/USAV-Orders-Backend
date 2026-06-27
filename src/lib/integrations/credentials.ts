@@ -37,6 +37,7 @@ export type IntegrationProvider =
   | 'usps'
   | 'zendesk'
   | 'google_sheets'
+  | 'google_drive'
   | 'ably'
   | 'ollama'
   | 'stripe'
@@ -89,6 +90,31 @@ export interface FedexCredentials { clientId: string; clientSecret: string; env:
 export interface UspsCredentials { consumerKey: string; consumerSecret: string }
 export interface ZendeskCredentials { subdomain: string; email: string; apiToken: string }
 export interface GoogleSheetsCredentials { clientEmail: string; privateKey: string; defaultSpreadsheetId?: string }
+
+/**
+ * Google Drive photo-backup credentials. Connected per-tenant via "Sign in with
+ * Google" (OAuth, scope drive.file). The clientId/clientSecret are the SHARED
+ * app credentials (one Google Cloud OAuth client for the whole platform) copied
+ * into the row so the refresh path is self-contained at runtime — mirrors the
+ * Amazon LWA model. The refreshToken + rootFolderId are the per-tenant secrets.
+ *
+ *   - rootFolderId   — the Drive folder this app created in the user's Drive;
+ *     all backups land under it (and its yyyy/MM subfolders).
+ *   - accountEmail   — the connected Google account (display only).
+ *   - accessToken/expiresAt — last minted short-lived token (cache hint; the
+ *     authoritative cache is in-process, see photos/drive/client.ts).
+ */
+export interface GoogleDriveCredentials {
+  clientId: string;
+  clientSecret: string;
+  refreshToken: string;
+  accessToken?: string;
+  /** Access-token expiry, epoch ms. */
+  expiresAt?: number;
+  accountEmail?: string;
+  rootFolderId: string;
+  scope?: string;
+}
 export interface AblyCredentials { apiKey: string }
 export interface OllamaCredentials { baseUrl: string; tunnelUrl?: string; model: string }
 export interface StripeCredentials { secretKey: string; publishableKey: string; webhookSecret: string }
@@ -251,6 +277,10 @@ function envFallback(provider: IntegrationProvider): unknown | null {
       };
       return cred;
     }
+    case 'google_drive':
+      // OAuth-only, connected per-tenant via Sign in with Google. No env bridge —
+      // there is no single-tenant Drive backup to mirror from env.
+      return null;
     case 'ecwid': case 'square':
       return null; // Add when needed.
   }

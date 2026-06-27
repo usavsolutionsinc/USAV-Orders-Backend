@@ -6,7 +6,7 @@ import { SidebarShell } from '@/components/layout/SidebarShell';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
-import { sourceScopeFromFilters } from '@/lib/photos/library-filter-state';
+import { sourceScopeFromFilters, todayFoldersDateFilter } from '@/lib/photos/library-filter-state';
 import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
@@ -14,6 +14,7 @@ import {
 import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoStationFolders } from './PhotoStationFolders';
+import { PhotoLabelsSection } from './PhotoLabelsSection';
 import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
 export function PhotoLibrarySidebarPanel() {
@@ -107,11 +108,17 @@ export function PhotoLibrarySidebarPanel() {
           patch({
             sourceScope: scope,
             imageType,
-            dateFrom: undefined,
-            dateTo: undefined,
+            ...todayFoldersDateFilter(),
             poRef: undefined,
+            // Selecting a different type clears a stale label refinement.
+            label: undefined,
           })
         }
+      />
+      <PhotoLabelsSection
+        activeLabel={filters.label ?? null}
+        scopeImageType={filters.imageType}
+        onSelect={(label) => patch({ label })}
       />
     </SidebarShell>
   );

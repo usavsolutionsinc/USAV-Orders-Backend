@@ -33,6 +33,12 @@ export interface EcwidProductSearchPopoverProps {
    * unfound-carton behaviour (Ecwid title / SKU toggle).
    */
   searchFieldOverride?: 'zoho_catalog';
+  /**
+   * Relax the repair-service list to include NORMAL orders too (not just -RS
+   * SKUs) — appends include_normal=1 to /api/ecwid/recent-repair-orders. Used by
+   * the triage Smart-Matching inline "Link repair service" list.
+   */
+  relaxRepairToAllOrders?: boolean;
   onSelect: (selection: EcwidProductSelection) => void | Promise<void>;
   onClose: () => void;
 }

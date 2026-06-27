@@ -8,14 +8,9 @@ import {
 } from '@/lib/selection/selection-actions';
 import { cn } from '@/utils/_cn';
 
-/** Tone → tinted ghost-button classes for the secondary bulk actions. */
-const GHOST_TONE: Record<string, string> = {
-  emerald: 'text-emerald-700 hover:bg-emerald-50',
-  violet: 'text-violet-700 hover:bg-violet-50',
-  blue: 'text-blue-700 hover:bg-blue-50',
-  red: 'text-red-700 hover:bg-red-50',
-  gray: 'text-gray-700 hover:bg-gray-100',
-};
+/** Expandable label — slower enter, delayed collapse so right→left hovers read cleanly. */
+const ACTION_LABEL_CLASS =
+  'overflow-hidden whitespace-nowrap transition-[max-width,margin-left,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] delay-150 motion-reduce:transition-none motion-reduce:delay-0 group-hover/action:delay-0 group-focus-visible/action:delay-0';
 
 interface PhotoLibraryToolbarProps<T> {
   /** Currently-selected rows (the full cross-page selection). */
@@ -35,8 +30,9 @@ interface PhotoLibraryToolbarProps<T> {
  * page header instead of floating at the bottom of the viewport. Replaces
  * {@link ContextualSelectionBar} *on this page only* so the share button sits
  * "up" near the folder path, Finder-style — the shared bottom capsule stays in
- * use everywhere else. The primary action (copy share links) renders solid; the
- * rest are tone-tinted ghost buttons, count-gated via {@link resolveSelectionAction}.
+ * use everywhere else. Icons are neutral gray; labels expand on hover with a
+ * delayed collapse so scanning right→left stays readable. Count-gated via
+ * {@link resolveSelectionAction}.
  */
 export function PhotoLibraryToolbar<T>({
   rows,
@@ -73,21 +69,19 @@ export function PhotoLibraryToolbar<T>({
             aria-label={a.label}
             onClick={() => void a.run(rows)}
             className={cn(
-              // Expandable icon button: icon always shows; the label expands on
-              // hover/focus (width + opacity, GPU-cheap). The primary action
-              // keeps its label always visible.
-              'group/action inline-flex items-center rounded-lg px-2 py-1.5 text-xs font-semibold transition-colors',
-              a.primary
-                ? 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-700'
-                : (GHOST_TONE[a.tone ?? 'gray'] ?? GHOST_TONE.gray),
+              // Expandable icon button: gray icon always shows; label expands on
+              // hover/focus with a delayed collapse so scanning right→left reads cleanly.
+              'group/action inline-flex items-center rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900',
             )}
           >
-            {a.icon}
+            <span className="inline-flex shrink-0 text-gray-400 transition-colors duration-200 group-hover/action:text-gray-600 group-focus-visible/action:text-gray-600">
+              {a.icon}
+            </span>
             <span
               className={cn(
-                'overflow-hidden whitespace-nowrap transition-all duration-200',
+                ACTION_LABEL_CLASS,
                 a.primary
-                  ? 'ml-1.5 max-w-[10rem]'
+                  ? 'ml-1.5 max-w-[10rem] opacity-100 delay-0'
                   : 'ml-0 max-w-0 opacity-0 group-hover/action:ml-1.5 group-hover/action:max-w-[10rem] group-hover/action:opacity-100 group-focus-visible/action:ml-1.5 group-focus-visible/action:max-w-[10rem] group-focus-visible/action:opacity-100',
               )}
             >

@@ -33,6 +33,7 @@ export const INTEGRATION_CATEGORIES = [
   'Marketplaces',
   'Storefronts & POS',
   'Operations',
+  'Storage & Backup',
   'Support',
   'Shipping carriers',
   'Realtime & AI',
@@ -103,6 +104,19 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
     badge: 'bg-green-100 text-green-700',
   },
 
+  // ── Storage & Backup ──
+  {
+    key: 'google_drive',
+    label: 'Google Drive',
+    description: 'Back up photo originals to your own Google Drive — sign in with Google, no storage to pay us for.',
+    category: 'Storage & Backup',
+    connect: 'oauth',
+    oauthStartPath: '/api/integrations/google-drive/connect',
+    healthPath: '/api/integrations/google-drive/health',
+    docsUrl: 'https://developers.google.com/drive/api/guides/about-sdk',
+    badge: 'bg-yellow-100 text-yellow-700',
+  },
+
   // ── Support ──
   {
     key: 'zendesk',
@@ -164,5 +178,6 @@ export function managePermission(def: ProviderDef): string {
   if (def.connect === 'amazon') return 'integrations.amazon';
   if (def.connect === 'ebay') return 'integrations.ebay';
   if (def.connect === 'oauth' && def.key === 'zoho') return 'integrations.zoho';
+  if (def.connect === 'oauth' && def.key === 'google_drive') return 'integrations.google_drive';
   return 'admin.manage_features';
 }
