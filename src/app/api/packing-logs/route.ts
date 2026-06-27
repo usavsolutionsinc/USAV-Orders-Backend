@@ -54,9 +54,10 @@ function getCurrentPSTWeekRange(): { startStr: string; endStr: string } {
  * Prepend a single new PackerRecord to the current week's Redis cache for this
  * packer (keyed by staffId + week) without invalidating the whole list.
  */
-async function prependToPackerLogsCache(staffId: number, newRecord: Record<string, unknown>) {
+async function prependToPackerLogsCache(staffId: number, newRecord: Record<string, unknown>, orgId: string) {
     const { startStr, endStr } = getCurrentPSTWeekRange();
     const cacheKey = createCacheLookupKey({
+        org: orgId,
         packerId: String(staffId),
         limit: 1000,
         offset: 0,
@@ -88,7 +89,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     if (!staffId) {
         return NextResponse.json({ error: 'Invalid packer ID' }, { status: 400 });
     }
-    const cacheLookup = createCacheLookupKey({ packerId: String(staffId), limit, offset });
+    const cacheLookup = createCacheLookupKey({ org: ctx.organizationId, packerId: String(staffId), limit, offset });
 
     try {
         const cached = await getCachedJson<any[]>('api:packing-logs', cacheLookup);
@@ -325,7 +326,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     };
 
                     await invalidateCacheTags(['packing-logs', 'fba-board']);
-                    if (fbaRecord.id) await prependToPackerLogsCache(staffId, fbaRecord);
+                    if (fbaRecord.id) await prependToPackerLogsCache(staffId, fbaRecord, ctx.organizationId);
 
                     // Hand off to a paired phone (if any) for the photo flow.
                     publishPackerScanReady({
@@ -487,7 +488,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
                 await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
                 if (nfSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: nfSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: nfScanRef ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
-                if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord);
+                if (notFoundRecord.id) await prependToPackerLogsCache(staffId, notFoundRecord, ctx.organizationId);
 
                 publishPackerScanReady({
                     organizationId: ctx.organizationId,
@@ -654,7 +655,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
 
             await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
             if (foundSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: foundSalId, station: 'PACK', activityType: 'PACK_COMPLETED', staffId, scanRef: order.tracking_number ?? scanInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
-            if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord);
+            if (foundRecord.id) await prependToPackerLogsCache(staffId, foundRecord, ctx.organizationId);
 
             // Broadcast to all devices so UpNext + PendingOrdersTable update instantly
             await Promise.allSettled([
@@ -853,7 +854,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         if (nonOrderSalId) publishActivityLogged({ organizationId: ctx.organizationId, id: nonOrderSalId, station: 'PACK', activityType: 'PACK_SCAN', staffId, scanRef: classification.normalizedInput, fnsku: null, source: 'packing-logs' }).catch(() => {});
 
         await invalidateCacheTags(['packing-logs', 'orders', 'orders-next', 'shipped']);
-        if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord);
+        if (nonOrderRecord.id) await prependToPackerLogsCache(staffId, nonOrderRecord, ctx.organizationId);
 
         return NextResponse.json({
             success: true,
