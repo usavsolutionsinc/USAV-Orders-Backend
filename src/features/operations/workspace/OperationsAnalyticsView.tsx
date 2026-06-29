@@ -18,7 +18,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/utils/_cn';
 import { Button } from '@/design-system/primitives';
-import { Activity, BarChart3, Boxes, Database, Download, Layers, TrendingUp, Warehouse, Zap } from '@/components/Icons';
+import { Activity, BarChart3, Boxes, Database, Download, Layers, Loader2, TrendingUp, Warehouse, Zap } from '@/components/Icons';
 import {
   ANALYTICS_RANGE_LABELS,
   parseAnalyticsRange,
@@ -27,6 +27,7 @@ import {
 import { useOperationsDashboardData } from '@/features/operations/components/useOperationsDashboardData';
 import type { DashboardCategory } from '@/features/operations/types';
 import { useOperationsAnalytics } from './useOperationsAnalytics';
+import { useOperationsRoi } from './useOperationsRoi';
 import { MultiSeriesLineChart, type LineSeries } from './charts/MultiSeriesLineChart';
 import { GaugeDonut } from './charts/GaugeDonut';
 import { DistributionTable, type DistributionRow } from './charts/DistributionTable';
@@ -244,6 +245,9 @@ export function OperationsAnalyticsView() {
           })}
         </motion.section>
 
+        {/* Throughput & ROI — the first-week proof (lead with the big numbers) */}
+        <RoiSection />
+
         {/* hero — throughput */}
         <SectionCard
           id="throughput"
@@ -364,7 +368,7 @@ function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.id)}
           className={cn(
-            'rounded-md px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest transition-colors',
+            'ds-raw-button rounded-md px-2.5 py-1 text-eyebrow font-black uppercase tracking-widest transition-colors',
             value === o.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800',
           )}
         >
@@ -466,6 +470,182 @@ function Locked({ label }: { label: string }) {
     <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-caption font-semibold text-gray-400">
       {label}
     </div>
+  );
+}
+
+// ── Throughput & ROI section (first-week proof) ─────────────────────────────────
+
+/** Compact hours readout: <1h → minutes, else 1-dp hours. */
+function formatHours(h: number): string {
+  if (!Number.isFinite(h) || h <= 0) return '—';
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  return `${h % 1 === 0 ? h : h.toFixed(1)}h`;
+}
+
+function RoiDelta({ pct }: { pct: number }) {
+  if (!pct) {
+    return <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">No change vs. last week</span>;
+  }
+  const positive = pct > 0;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 text-caption font-black tabular-nums',
+        positive ? 'text-emerald-600' : 'text-rose-600',
+      )}
+    >
+      <TrendingUp className={cn('h-3.5 w-3.5', pct < 0 && 'rotate-180')} />
+      {pct > 0 ? '+' : ''}
+      {pct}% vs. last week
+    </span>
+  );
+}
+
+function RoiTile({
+  icon: Icon,
+  label,
+  value,
+  tone,
+  footer,
+}: {
+  icon: (p: { className?: string }) => JSX.Element;
+  label: string;
+  value: string;
+  tone: string;
+  footer: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-center gap-1.5 text-gray-400">
+        <Icon className="h-3.5 w-3.5" />
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{label}</p>
+      </div>
+      <p className={cn('mt-1.5 text-3xl font-black tabular-nums leading-none', tone)}>{value}</p>
+      <div className="mt-1.5">{footer}</div>
+    </div>
+  );
+}
+
+function RoiSection() {
+  const { data: roi, isLoading } = useOperationsRoi();
+
+  const staffRows = useMemo<DistributionRow[]>(() => {
+    if (!roi) return [];
+    const total = roi.perStaff.reduce((s, p) => s + p.unitsProcessed, 0) || 1;
+    return roi.perStaff.slice(0, 8).map((p, i) => ({
+      key: String(p.staffId),
+      label: p.staffName,
+      sublabel: `${p.unitsPerLaborHour}/hr · ${p.laborHours.toLocaleString()}h`,
+      count: p.unitsProcessed,
+      percent: (p.unitsProcessed / total) * 100,
+      color: paletteTone(i),
+    }));
+  }, [roi]);
+
+  return (
+    <motion.section
+      variants={item}
+      id="ops-analytics-roi"
+      className="scroll-mt-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6"
+    >
+      <div className="mb-4 flex items-center gap-2">
+        <Zap className="h-4 w-4 text-gray-400" />
+        <div>
+          <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">First-week proof</p>
+          <h2 className="text-base font-black tracking-tight text-gray-900 leading-tight">Throughput &amp; ROI</h2>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-1 py-8 text-caption font-semibold text-gray-400">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading ROI…
+        </div>
+      ) : !roi || !roi.hasData ? (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center">
+          <p className="text-caption font-bold text-gray-600">No throughput captured yet</p>
+          <p className="mx-auto mt-1 max-w-md text-micro leading-5 text-gray-500">
+            As units move through your stations and staff clock in, this fills with units per labor-hour and
+            week-over-week lift — the proof your floor is getting faster.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <RoiTile
+              icon={TrendingUp}
+              label="Units this week"
+              value={roi.unitsThisWeek.toLocaleString()}
+              tone="text-blue-600"
+              footer={<RoiDelta pct={roi.pctChange} />}
+            />
+            <RoiTile
+              icon={Zap}
+              label="Units / labor-hour"
+              value={roi.unitsPerLaborHour.toLocaleString()}
+              tone="text-emerald-600"
+              footer={
+                <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                  {roi.unitsProcessed.toLocaleString()} units · {roi.laborHours.toLocaleString()}h clocked
+                </span>
+              }
+            />
+            <RoiTile
+              icon={Layers}
+              label="Units stuck"
+              value={roi.unitsStuck.toLocaleString()}
+              tone={roi.unitsStuck > 0 ? 'text-orange-600' : 'text-gray-900'}
+              footer={
+                <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                  Blocked + error now
+                </span>
+              }
+            />
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+                Avg cycle time by stage
+              </p>
+              {roi.avgCycleHoursByStage.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-caption text-gray-400">
+                  No completed stage runs in the last 7 days.
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {roi.avgCycleHoursByStage.map((s) => (
+                    <li key={s.stage} className="flex items-center justify-between py-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-caption font-semibold text-gray-900">
+                          {prettyEventType(s.stage)}
+                        </span>
+                        <span className="block text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+                          {s.samples.toLocaleString()} runs
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-caption font-bold tabular-nums text-gray-900">
+                        {formatHours(s.avgCycleHours)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-eyebrow font-black uppercase tracking-widest text-gray-500">
+                Units / hour by staff
+              </p>
+              <DistributionTable
+                columns={['Staff', 'Units', '%']}
+                rows={staffRows}
+                emptyMessage="No staff throughput yet."
+                showBar
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </motion.section>
   );
 }
 

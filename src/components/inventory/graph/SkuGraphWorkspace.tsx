@@ -128,7 +128,7 @@ export function SkuGraphWorkspace() {
                 onNodeRecenter={onNodeRecenter}
               />
               {isLoading && (
-                <div className="pointer-events-none absolute right-3 top-3 rounded-md bg-white/90 px-2 py-1 text-[11px] text-gray-400 shadow-sm">
+                <div className="pointer-events-none absolute right-3 top-3 rounded-md bg-white/90 px-2 py-1 text-caption text-gray-400 shadow-sm">
                   Loading…
                 </div>
               )}

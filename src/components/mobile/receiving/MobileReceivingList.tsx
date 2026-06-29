@@ -11,7 +11,15 @@ import {
 } from '@/lib/realtime/channels';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 import { useNasConfig } from '@/hooks/useNasConfig';
-import { MobileReceivingRow } from '@/components/mobile/receiving/MobileReceivingRow';
+import {
+  MobilePackageGroup,
+  MobileReceivingUnitCard,
+  type ReceivingCardCallbacks,
+} from '@/components/mobile/receiving/MobileReceivingCards';
+import {
+  groupReceivingEntries,
+  type ReceivingFeedEntry,
+} from '@/components/mobile/receiving/receiving-feed-entries';
 import { MobileCartonSheet } from '@/components/mobile/receiving/MobileCartonSheet';
 import { MobileReceivingFeedGallery } from '@/components/mobile/receiving/MobileReceivingFeedGallery';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
@@ -24,8 +32,13 @@ interface ApiResponse {
   receiving_lines: ReceivingLineRow[];
 }
 
-// Same query key + fetch as the desktop ReceivingRecentRail (the "Unboxing"
-// rail) so the mobile feed shares its cache and shows the exact same lines.
+// Mirror the desktop UNBOX-mode rail exactly — the "Unboxed" sub-view of
+// /receiving?mode=receive is ReceivingRecentRail (view=activity, sort=
+// unboxed_newest, all-staff). Same view+sort here ⇒ the mobile feed renders the
+// identical list. Distinct `rail` key (vs ReceivingRecentRail's 6-segment
+// staff-keyed key) because this query returns a plain array while the rail
+// caches the full ApiResponse object — same key would collide on shape. Still
+// under the 'receiving-lines-table' prefix so broad invalidations refresh it.
 const QUERY_KEY = ['receiving-lines-table', 'rail', 'activity', 'receive', 'unboxed_newest'] as const;
 
 /**
@@ -54,15 +67,14 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      // Mirror ReceivingRecentRail: the UNBOXING pipeline (view=activity), with
-      // serials, so both surfaces render the same rows.
+      // Mirror ReceivingRecentRail (the unbox-mode "Unboxed" rail): the UNBOXING
+      // pipeline (view=activity) with serials, sorted by unboxed_at DESC, so this
+      // feed shows the exact same lines in the same order as the desktop rail.
       const params = new URLSearchParams({
         limit: '500',
         offset: '0',
         view: 'activity',
         include: 'serials',
-        // MUST match ReceivingRecentRail — same react-query key; without this
-        // the default server sort is scanned_newest and refetches scramble order.
         sort: 'unboxed_newest',
       });
       const res = await fetch(`/api/receiving-lines?${params.toString()}`);
@@ -103,6 +115,11 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
 
   const { rows, scrollRef, freshIds } = useFeedWindow(data, { limit, anchor: 'bottom' });
 
+  // Collapse carton-mates into package entries for rendering — windowing, scroll,
+  // and fresh-pulse stay line-level (above) so the existing feed mechanics are
+  // untouched; grouping is purely presentational.
+  const entries = useMemo<ReceivingFeedEntry[]>(() => groupReceivingEntries(rows), [rows]);
+
   const [sheetRow, setSheetRow] = useState<ReceivingLineRow | null>(null);
   const [feedGalleryReceivingId, setFeedGalleryReceivingId] = useState<number | null>(null);
   // Re-derive the open sheet's row from the live feed so its CTA photo count
@@ -131,13 +148,28 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
     });
   }, []);
 
+  // Bottom-anchored feed: rows are oldest→newest, so the last one is the
+  // bottom-most (newest) line — the only row that renders the big photo display.
+  const expandedLineId = rows.length ? rows[rows.length - 1].id : null;
+
+  const cardCallbacks = useMemo<ReceivingCardCallbacks>(
+    () => ({
+      buildHrefs: buildPhotoHrefs,
+      onOpenGallery: openFeedGallery,
+      onOpenSheet: openSheet,
+      isFresh: (row) => freshIds.has(row.id),
+      isExpanded: (row) => row.id === expandedLineId,
+    }),
+    [buildPhotoHrefs, openFeedGallery, openSheet, freshIds, expandedLineId],
+  );
+
   return (
     <div className="flex h-full w-full max-w-full flex-col overflow-x-hidden bg-white">
-      <MobileFeed<ReceivingLineRow>
-        rows={rows}
+      <MobileFeed<ReceivingFeedEntry>
+        rows={entries}
         isLoading={isLoading}
         scrollRef={scrollRef}
-        freshIds={freshIds}
+        getId={(entry) => entry.key}
         empty={
           <div className="flex h-full flex-col items-center justify-center gap-2 bg-white px-6 text-center">
             <p className="text-sm font-black uppercase tracking-[0.18em] text-gray-700">No packages yet</p>
@@ -146,20 +178,13 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
             </p>
           </div>
         }
-        renderRow={(row, { variant, fresh }) => {
-          const { captureHref, galleryHref } = buildPhotoHrefs(row);
-          return (
-            <MobileReceivingRow
-              row={row}
-              variant={variant}
-              fresh={fresh}
-              onTap={() => openSheet(row)}
-              captureHref={captureHref}
-              galleryHref={galleryHref}
-              onOpenGallery={() => openFeedGallery(row)}
-            />
-          );
-        }}
+        renderRow={(entry) =>
+          entry.kind === 'package' ? (
+            <MobilePackageGroup entry={entry} cb={cardCallbacks} />
+          ) : (
+            <MobileReceivingUnitCard row={entry.unit} cb={cardCallbacks} />
+          )
+        }
       />
 
       <MobileCartonSheet

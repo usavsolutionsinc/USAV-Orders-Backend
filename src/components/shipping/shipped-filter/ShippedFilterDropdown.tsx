@@ -2,6 +2,7 @@ import type { DateRange } from 'react-day-picker';
 import { ChevronDown } from '@/components/Icons';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
+import { Button } from '@/design-system/primitives';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 import { SHIPPED_SEARCH_FIELDS, type ShippedSearchField } from '@/lib/shipped-search';
 import { CARRIERS, STATUS_CATEGORIES, TYPE_ITEMS, type ShippedTypeFilter } from './shipped-filter-constants';
@@ -100,9 +101,9 @@ export function ShippedFilterDropdown({
         options={staffOptions}
       />
 
-      <button onClick={onClose} className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-bold text-white transition-colors hover:bg-black">
+      <Button variant="brand" size="md" onClick={onClose} className="w-full">
         Done
-      </button>
+      </Button>
     </div>
   );
 }

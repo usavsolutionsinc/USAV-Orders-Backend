@@ -6,6 +6,7 @@ import {
   type SerialUnitRow,
 } from '@/lib/neon/serial-units-queries';
 import { resolveSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { queuePendingSku } from '@/lib/inventory/pending-skus';
 import {
   recordInventoryEvent,
   type InventoryEventStation,
@@ -198,7 +199,14 @@ export async function receiveLineUnits(
   // serialize correctly. It also sets the org GUC, so every inventory_events /
   // sku_stock_ledger insert inside auto-stamps organization_id (the column
   // default reads current_setting('app.current_org')).
-  return withTenantTransaction(input.organizationId, async (client) => {
+  // Captured inside the txn, enqueued AFTER it commits (see below): an
+  // unresolved Zoho SKU is a "create in Zoho" to-do. Queuing post-commit keeps
+  // the side-effect off the transaction's connection, so a queue failure can
+  // never poison the receive write.
+  let pendingQueueRaw: string | null = null;
+  let pendingQueueTitle: string | null = null;
+
+  const result = await withTenantTransaction(input.organizationId, async (client) => {
     const line = await loadLineForUpdate(client, input.receiving_line_id);
     if (!line) {
       throw new Error(`receiving_line ${input.receiving_line_id} not found`);
@@ -330,6 +338,15 @@ export async function receiveLineUnits(
     const catalogId = line.sku
       ? await resolveSkuCatalogId(line.sku, line.zoho_item_id, guardTitle)
       : null;
+
+    // Additive (§6 / queue-on-miss): the SKU didn't resolve to sku_catalog —
+    // capture it so it lands in the pending_skus to-do after commit. This does
+    // NOT change catalogId or any downstream write; the row's sku_catalog_id
+    // stays NULL exactly as before (that NULL is the unmatched state).
+    if (line.sku && catalogId == null) {
+      pendingQueueRaw = line.sku;
+      pendingQueueTitle = guardTitle ?? line.item_name ?? null;
+    }
 
   const serialsRecorded: ReceivedSerialResult[] = [];
   const ledgerEventIds: number[] = [];
@@ -690,4 +707,22 @@ export async function receiveLineUnits(
       },
     };
   });
+
+  // Post-commit, best-effort: enqueue any unresolved SKU as a "create in Zoho"
+  // to-do. Runs on a fresh connection AFTER the receive transaction committed,
+  // so it can neither poison that transaction nor block the receive on a queue
+  // failure. The receive result is returned unchanged regardless of outcome.
+  if (pendingQueueRaw) {
+    try {
+      await queuePendingSku({
+        rawSku: pendingQueueRaw,
+        source: 'receiving',
+        suggestedTitle: pendingQueueTitle,
+      });
+    } catch (err) {
+      console.warn('receiveLineUnits: queuePendingSku failed (non-fatal)', err);
+    }
+  }
+
+  return result;
 }

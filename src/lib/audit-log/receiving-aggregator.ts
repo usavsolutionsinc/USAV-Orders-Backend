@@ -413,11 +413,17 @@ export async function getReceivingAuditPO(
         ? orgId
           ? tenantQuery(
               orgId,
-              `SELECT * FROM receiving WHERE id = ANY($1::int[]) AND organization_id = $2 ORDER BY id`,
+              `SELECT r.*, stn.tracking_number_raw AS receiving_tracking_number
+                 FROM receiving r
+                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+                WHERE r.id = ANY($1::int[]) AND r.organization_id = $2 ORDER BY r.id`,
               [cartonIds, orgId],
             )
           : pool.query(
-              `SELECT * FROM receiving WHERE id = ANY($1::int[]) ORDER BY id`,
+              `SELECT r.*, stn.tracking_number_raw AS receiving_tracking_number
+                 FROM receiving r
+                 LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+                WHERE r.id = ANY($1::int[]) ORDER BY r.id`,
               [cartonIds],
             )
         : Promise.resolve({ rows: [] }),

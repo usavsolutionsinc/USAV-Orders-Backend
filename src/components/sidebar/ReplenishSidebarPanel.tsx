@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
-import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
-import { AlertTriangle, Loader2, RefreshCw } from '@/components/Icons';
+import { fieldLabel } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { AlertTriangle, RefreshCw } from '@/components/Icons';
 
 type ReplenishTab = 'need' | 'fifo';
 
@@ -177,23 +178,17 @@ export function ReplenishSidebarPanel() {
       bodyClassName="py-3"
     >
         {/* Refresh */}
-        <button
+        <Button
           type="button"
+          variant="brand"
+          size="lg"
           onClick={triggerSync}
-          disabled={syncing}
-          className={`h-10 w-full rounded-xl ${sectionLabel} transition-colors flex items-center justify-center gap-2 ${
-            syncing
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              : 'bg-gray-900 text-white hover:bg-black'
-          }`}
+          loading={syncing}
+          icon={<RefreshCw className="h-4 w-4" />}
+          className="w-full"
         >
-          {syncing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
           {syncing ? 'Syncing Zoho…' : 'Refresh Zoho Stock'}
-        </button>
+        </Button>
 
         {/* Urgent banner */}
         {urgentCount > 0 && (

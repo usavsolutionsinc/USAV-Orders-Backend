@@ -1,4 +1,6 @@
 import { Check, Pencil } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 /**
  * Eyebrow pencil — flips the rail into checkbox multi-select (see
@@ -11,19 +13,22 @@ import { Check, Pencil } from '@/components/Icons';
  */
 export function RailEditPencil({ active, onToggle }: { active: boolean; onToggle: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={active}
-      aria-label={active ? 'Done — exit select mode' : 'Select rows for bulk actions'}
-      title={active ? 'Done' : 'Select rows (bulk delete)'}
-      className={`-my-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded transition-colors ${
-        active
-          ? 'bg-blue-600 text-white shadow-sm hover:bg-blue-700'
-          : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-      }`}
-    >
-      {active ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
-    </button>
+    <HoverTooltip label={active ? 'Done' : 'Select rows (bulk delete)'} asChild>
+      <IconButton
+        onClick={onToggle}
+        aria-pressed={active}
+        ariaLabel={active ? 'Done — exit select mode' : 'Select rows for bulk actions'}
+        className={`group -my-1.5 flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+          active ? 'bg-blue-600 shadow-sm hover:bg-blue-700' : 'hover:bg-gray-100'
+        }`}
+        icon={
+          active ? (
+            <Check className="h-3 w-3 text-white" />
+          ) : (
+            <Pencil className="h-3 w-3 text-gray-400 group-hover:text-gray-600" />
+          )
+        }
+      />
+    </HoverTooltip>
   );
 }

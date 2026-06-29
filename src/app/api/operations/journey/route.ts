@@ -4,6 +4,7 @@ import { withTenantTransaction } from '@/lib/tenancy/db';
 import {
   resolveEntity,
   readJourneyEntity,
+  readSerialProvenance,
   clampLimit,
   JOURNEY_SOURCES,
   type JourneyDimension,
@@ -92,8 +93,11 @@ export const GET = withAuth(
       const result = await withTenantTransaction(orgId, async (client) => {
         const anchors = await resolveEntity(client, orgId, dim, entityValue);
         if (!anchors) return { notFound: true as const };
-        const events = await readJourneyEntity(client, orgId, anchors, filters);
-        return { notFound: false as const, anchors, events };
+        const [events, serialProvenance] = await Promise.all([
+          readJourneyEntity(client, orgId, anchors, filters),
+          readSerialProvenance(client, orgId, anchors.serialUnitIds),
+        ]);
+        return { notFound: false as const, anchors: { ...anchors, serialProvenance }, events };
       });
 
       if (result.notFound) {

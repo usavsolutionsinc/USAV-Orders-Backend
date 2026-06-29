@@ -1,5 +1,6 @@
 import { FileText, Pencil, Check } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { statusBadgeClass, typeBadgeClass, type ManualRow } from './manuals-tree';
 import { HighlightedText } from './LibraryPrimitives';
 
@@ -43,19 +44,22 @@ export function FileButton({
       {/* Checkbox on the left — only rendered when the row is in the selection
           set. Entering selection is the pencil's job (right side). */}
       {isChecked && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
-          }}
-          className="relative z-10 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-indigo-500 bg-indigo-500 text-white transition-all"
-          title="Deselect"
-          aria-label={`Deselect ${title}`}
-        >
-          <Check className="h-3 w-3" />
-        </button>
+        <HoverTooltip label="Deselect" asChild>
+          {/* ds-raw-button — selection checkbox tile */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
+            }}
+            className="relative z-10 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border border-indigo-500 bg-indigo-500 text-white transition-all"
+            aria-label={`Deselect ${title}`}
+          >
+            <Check className="h-3 w-3" />
+          </button>
+        </HoverTooltip>
       )}
+      {/* ds-raw-button — full-card overlay click target */}
       <button type="button" onClick={onClick} className="absolute inset-0 rounded-2xl" aria-label={`Open ${title}`} />
       {/* Thumbnail (first PDF page) when available; fallback to the file glyph. */}
       {manual.thumbnail_url ? (
@@ -95,18 +99,20 @@ export function FileButton({
       </div>
       {/* Selection pencil — the only way into bulk-select. Held modifiers act
           additively to mirror normal multi-select semantics. */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
-        }}
-        className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
-        title="Select for bulk action"
-        aria-label={`Select ${title} for bulk action`}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
+      <HoverTooltip label="Select for bulk action" asChild>
+        {/* ds-raw-button — group-hover reveal pencil on card tile */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCheck(e.metaKey || e.ctrlKey || e.shiftKey);
+          }}
+          className="relative inline-flex h-7 w-7 shrink-0 items-center justify-center self-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
+          aria-label={`Select ${title} for bulk action`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </HoverTooltip>
     </div>
   );
 }

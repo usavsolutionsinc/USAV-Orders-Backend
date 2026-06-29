@@ -15,6 +15,7 @@ import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentity
 import { MobileRowPhotoActions } from '@/components/mobile/receiving/MobileRowPhotoActions';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MobileRowCard } from '@/components/mobile/feed/MobileRowCard';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface MobileReceivingRowProps {
   row: ReceivingLineRow;
@@ -107,9 +108,11 @@ export function MobileReceivingRow({
           condition={<span className={conditionColor}>{conditionLabel}</span>}
           rest={
             showWorkflowIcon ? (
-              <span title={workflowLabel} className="inline-flex items-center">
-                <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
-              </span>
+              <HoverTooltip label={workflowLabel} asChild>
+                <span className="inline-flex items-center">
+                  <WorkflowIcon className={`h-3.5 w-3.5 ${workflowIconTone}`} />
+                </span>
+              </HoverTooltip>
             ) : undefined
           }
         />
@@ -143,13 +146,13 @@ export function MobileReceivingRow({
               aria-label={photoCount > 0 ? `View ${photoCount} photos` : 'Open photo gallery'}
               className={
                 photoCount > 0
-                  ? 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
-                  : 'inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
+                  ? 'ds-raw-button inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 active:bg-blue-100'
+                  : 'ds-raw-button inline-flex h-full w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-400 active:bg-gray-100'
               }
             >
               <ImageIcon className="h-5 w-5" />
               {photoCount > 0 ? (
-                <span className="text-[10px] font-black leading-none tabular-nums">x{photoCount}</span>
+                <span className="text-micro font-black leading-none tabular-nums">x{photoCount}</span>
               ) : null}
             </button>
           ) : (
@@ -165,7 +168,7 @@ export function MobileReceivingRow({
             >
               <ImageIcon className="h-5 w-5" />
               {photoCount > 0 ? (
-                <span className="text-[10px] font-black leading-none tabular-nums">x{photoCount}</span>
+                <span className="text-micro font-black leading-none tabular-nums">x{photoCount}</span>
               ) : null}
             </Link>
           )}

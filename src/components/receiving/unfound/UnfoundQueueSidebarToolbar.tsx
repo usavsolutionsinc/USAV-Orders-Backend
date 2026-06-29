@@ -17,6 +17,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Mail, RefreshCw, Search } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 import {
   ENABLED_KINDS,
@@ -153,48 +155,65 @@ export function UnfoundQueueSidebarToolbar() {
         <h2 className="text-sm font-bold tracking-tight text-gray-900">
           Unfound queue
         </h2>
-        <button
-          type="button"
-          onClick={onRefresh}
-          title="Refresh the queue from the local DB (no Gmail call)"
-          className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50"
+        <HoverTooltip
+          label="Refresh the queue from the local DB (no Gmail call)"
+          asChild
         >
-          <RefreshCw className="h-3 w-3" />
-          Refresh
-        </button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RefreshCw />}
+            onClick={onRefresh}
+            ariaLabel="Refresh the queue from the local DB (no Gmail call)"
+            className="gap-1 rounded-md border border-gray-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50"
+          >
+            Refresh
+          </Button>
+        </HoverTooltip>
       </div>
 
       {/* Scan-emails row: depth selector + button. Last-N picker lives next
           to the action so the operator sees exactly how far back they're
           about to look. localStorage-persisted (key: unfoundQueue.scanLimit). */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void onScanEmails()}
-          disabled={scanning}
-          title={`Pull the last ${scanLimit} Gmail messages and reconcile against Zoho`}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+        <HoverTooltip
+          label={`Pull the last ${scanLimit} Gmail messages and reconcile against Zoho`}
+          asChild
         >
-          <Mail className={`h-3 w-3 ${scanning ? 'animate-pulse' : ''}`} />
-          {scanning ? 'Scanning…' : `Scan last ${scanLimit}`}
-        </button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Mail className={scanning ? 'animate-pulse' : undefined} />}
+            onClick={() => void onScanEmails()}
+            disabled={scanning}
+            ariaLabel={`Pull the last ${scanLimit} Gmail messages and reconcile against Zoho`}
+            className="flex-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100"
+          >
+            {scanning ? 'Scanning…' : `Scan last ${scanLimit}`}
+          </Button>
+        </HoverTooltip>
         <label className="sr-only" htmlFor="unfound-scan-limit">
           Scan depth
         </label>
-        <select
-          id="unfound-scan-limit"
-          value={scanLimit}
-          onChange={(e) => onScanLimitChange(Number(e.target.value))}
-          disabled={scanning}
-          title="How many recent Gmail messages to fetch on each scan"
-          className="h-7 rounded-md border border-gray-200 bg-white px-1.5 text-micro font-bold tracking-wider text-gray-700 outline-none focus:border-blue-500 disabled:opacity-60"
+        <HoverTooltip
+          label="How many recent Gmail messages to fetch on each scan"
+          asChild
         >
-          {[10, 25, 50, 100, 200].map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
+          <select
+            id="unfound-scan-limit"
+            value={scanLimit}
+            onChange={(e) => onScanLimitChange(Number(e.target.value))}
+            disabled={scanning}
+            aria-label="How many recent Gmail messages to fetch on each scan"
+            className="h-7 rounded-md border border-gray-200 bg-white px-1.5 text-micro font-bold tracking-wider text-gray-700 outline-none focus:border-blue-500 disabled:opacity-60"
+          >
+            {[10, 25, 50, 100, 200].map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </HoverTooltip>
       </div>
 
       {/* Search */}
@@ -218,18 +237,19 @@ export function UnfoundQueueSidebarToolbar() {
           Source
         </p>
         {ENABLED_KINDS.map((k) => (
-          <button
+          <Button
             key={k}
-            type="button"
+            variant={kind === k ? 'primary' : 'ghost'}
+            size="sm"
             onClick={() => onKind(k)}
-            className={`rounded-md px-2.5 py-1.5 text-left text-label font-semibold transition-colors ${
+            className={`justify-start rounded-md px-2.5 py-1.5 text-left text-label font-semibold ${
               kind === k
                 ? 'bg-blue-600 text-white'
                 : 'border border-gray-200 bg-white text-gray-600 hover:border-gray-300'
             }`}
           >
             {KIND_LABELS[k]}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

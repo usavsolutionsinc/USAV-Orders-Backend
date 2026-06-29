@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react';
 import type { BinsOverviewRow } from '@/hooks/useBinsOverview';
 import { FillBar } from './FillBar';
 import { StatusChips } from './StatusChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type SortKey = 'barcode' | 'room' | 'sku_count' | 'total_qty' | 'fill' | 'last_counted';
 type SortDir = 'asc' | 'desc';
@@ -159,9 +160,11 @@ export function BinsTable({ rows, loading, selected, onSelectChange, onRowClick 
                   <td className="w-32 px-3 py-2">
                     <FillBar pct={row.fill_pct} current={row.total_qty} max={row.capacity} />
                   </td>
-                  <td className="px-3 py-2 text-xs text-gray-500" title={row.last_counted ?? 'never'}>
-                    {fmtAge(row.last_counted)}
-                  </td>
+                  <HoverTooltip label={row.last_counted ?? 'never'} asChild>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {fmtAge(row.last_counted)}
+                    </td>
+                  </HoverTooltip>
                   <td className="px-3 py-2">
                     <StatusChips
                       is_empty={row.is_empty}
@@ -194,7 +197,7 @@ function Th({
       <button
         type="button"
         onClick={onClick}
-        className={`inline-flex items-center gap-1 transition-colors ${
+        className={`ds-raw-button inline-flex items-center gap-1 transition-colors ${
           active ? 'text-gray-900' : 'hover:text-gray-700'
         }`}
       >

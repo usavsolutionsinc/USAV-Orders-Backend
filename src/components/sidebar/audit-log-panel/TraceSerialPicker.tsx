@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { Search } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SidebarListPicker } from './SidebarListPicker';
 import { TRACE_RECENTS_KEY, type ListRow } from './audit-log-panel-shared';
 
@@ -57,15 +58,16 @@ export function TraceSerialPicker({ query }: { query: string }) {
   return (
     <div className="flex h-full flex-col">
       <div className={`${SIDEBAR_GUTTER} py-3`}>
-        <button
+        <Button
           type="button"
+          size="sm"
+          icon={<Search />}
           onClick={() => submit(trimmed)}
           disabled={!trimmed}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-caption font-bold text-white transition enabled:hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
+          className="w-full bg-emerald-600 text-white enabled:hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400"
         >
-          <Search className="h-3.5 w-3.5" />
           {trimmed ? `Trace "${trimmed}"` : 'Type a serial above to trace'}
-        </button>
+        </Button>
       </div>
       {recents.length > 0 ? (
         <>
@@ -83,7 +85,7 @@ export function TraceSerialPicker({ query }: { query: string }) {
           </div>
         </>
       ) : (
-        <div className="px-4 py-6 text-center text-[11px] text-gray-400">
+        <div className="px-4 py-6 text-center text-caption text-gray-400">
           Scan or type a serial above, then press Trace.
         </div>
       )}

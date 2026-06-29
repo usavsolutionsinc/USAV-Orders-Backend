@@ -82,7 +82,7 @@ export function BlockPaletteOverlay({ open, slot, onClose, onPick }: BlockPalett
                       key={b.type}
                       type="button"
                       onClick={() => onPick(b.type)}
-                      className="flex w-full items-start gap-2.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/40"
+                      className="ds-raw-button flex w-full items-start gap-2.5 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/40"
                     >
                       <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-600">
                         <StationIcon name={b.icon} className="h-4 w-4" />

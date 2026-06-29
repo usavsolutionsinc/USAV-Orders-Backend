@@ -17,6 +17,7 @@
 import { requirePermission } from '@/lib/auth/page-guard';
 import pool from '@/lib/db';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 interface AuditRow {
   id: number;
@@ -107,7 +108,7 @@ export default async function AuditPage({ searchParams }: PageProps) {
               className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-label focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-200"
             />
           </label>
-          <button type="submit" className="rounded-lg bg-slate-900 px-3 py-1 font-medium text-white hover:bg-slate-800">Apply</button>
+          <Button variant="brand" size="sm" type="submit">Apply</Button>
           {(source || action) && (
             <a href="/settings/audit" className="font-medium text-gray-500 hover:text-gray-900">Clear</a>
           )}

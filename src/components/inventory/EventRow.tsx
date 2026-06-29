@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { getLast4, OrderIdChip, SerialChip, SkuScanRefChip } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { PulseEventRow } from './types';
 import { inventoryStatusBadgeClass } from './status-classes';
 
@@ -52,9 +53,11 @@ export function EventRow({ event }: EventRowProps) {
 
     return (
         <li className="flex items-start gap-3 border-b border-gray-100 px-4 py-2.5 hover:bg-blue-50/40 sm:px-6">
-            <div className="w-16 shrink-0 text-right text-caption text-gray-400" title={absoluteTime}>
-                {relativeTime(event.occurred_at)}
-            </div>
+            <HoverTooltip label={absoluteTime} asChild>
+                <div className="w-16 shrink-0 text-right text-caption text-gray-400">
+                    {relativeTime(event.occurred_at)}
+                </div>
+            </HoverTooltip>
 
             <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-xs">

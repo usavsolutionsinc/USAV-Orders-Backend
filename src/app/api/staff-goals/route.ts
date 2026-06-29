@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { upsertStaffGoalWithHistory } from '@/lib/neon/staff-goals-queries';
 import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
+import { VELOCITY_ACTIVITY_TYPES, sqlInList } from '@/lib/station-activity';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
@@ -59,7 +60,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           COUNT(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int AS today_count
         FROM station_activity_logs
         WHERE staff_id IS NOT NULL
-          AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+          AND activity_type IN (${sqlInList(VELOCITY_ACTIVITY_TYPES)})
           AND (timezone('America/Los_Angeles', created_at))::date
             = (timezone('America/Los_Angeles', now()))::date
         GROUP BY staff_id, station
@@ -69,7 +70,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           COUNT(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int AS week_count
         FROM station_activity_logs
         WHERE staff_id IS NOT NULL
-          AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+          AND activity_type IN (${sqlInList(VELOCITY_ACTIVITY_TYPES)})
           AND (timezone('America/Los_Angeles', created_at))::date
             >= (timezone('America/Los_Angeles', now()))::date - INTERVAL '6 days'
         GROUP BY staff_id, station

@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useCallback, useEffect, useRef, useState,
+  useRef,
   type MouseEvent as ReactMouseEvent, type ReactNode,
 } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +11,7 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { staggerRevealItem } from '@/design-system/primitives/StaggerReveal';
 import { railRelativeTime, type SidebarRailRowContext } from './sidebar-rail-shared';
 import { RailPopover } from './RailPopover';
+import { useRailHoverPreview } from './useRailHoverPreview';
 
 export function RailRow<TRow>({
   row, index, isSelected, isFocused, editActive, isChecked, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
@@ -43,51 +44,31 @@ export function RailRow<TRow>({
   const railIsLast = isCollapsed ? isLeader : isGroupLast;
 
   const rowRef = useRef<HTMLLIElement | null>(null);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const openTimer = useRef<number | null>(null);
-  const closeTimer = useRef<number | null>(null);
-
-  const scheduleOpen = useCallback(() => {
-    // Edit mode: no hover previews — the surface is for picking rows, and the
-    // popover's "Open →" CTA contradicts the click-to-check behavior.
-    if (!renderPopover || editActive) return;
-    if (closeTimer.current) { window.clearTimeout(closeTimer.current); closeTimer.current = null; }
-    if (previewOpen || openTimer.current) return;
-    openTimer.current = window.setTimeout(() => { openTimer.current = null; setPreviewOpen(true); }, 200);
-  }, [previewOpen, renderPopover, editActive]);
-
-  // Entering edit mode mid-hover: dismiss any preview already showing.
-  useEffect(() => { if (editActive) setPreviewOpen(false); }, [editActive]);
-
-  const scheduleClose = useCallback(() => {
-    if (openTimer.current) { window.clearTimeout(openTimer.current); openTimer.current = null; }
-    if (closeTimer.current) return;
-    closeTimer.current = window.setTimeout(() => { closeTimer.current = null; setPreviewOpen(false); }, 150);
-  }, []);
-
-  useEffect(() => () => {
-    if (openTimer.current) window.clearTimeout(openTimer.current);
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-  }, []);
+  // Shared hover-preview engine. Disabled in edit mode — that surface is for
+  // picking rows, and the popover's "Open →" CTA contradicts click-to-check.
+  const { isOpen: previewOpen, scheduleOpen, scheduleClose, dismiss } = useRailHoverPreview({
+    enabled: Boolean(renderPopover) && !editActive,
+  });
 
   const pkgChip = showInlinePkgChip ? (
-    <span
-      role="button"
-      tabIndex={0}
-      onClick={(e) => { e.stopPropagation(); onToggleGroup?.(); }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleGroup?.(); } }}
-      title={`Expand — show ${groupSize - 1} more in this package`}
-      aria-expanded={false}
-      aria-label="Expand package"
-      className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-indigo-100 px-1 py-px text-[8.5px] font-black uppercase tracking-widest text-indigo-700 transition-colors hover:bg-indigo-200"
-    >
-      <motion.span animate={{ rotate: -90 }} transition={{ duration: 0.18, ease: motionBezier.easeOut }} className="inline-flex">
-        <ChevronDown className="h-2.5 w-2.5" />
-      </motion.span>
-      PKG · {groupSize}
-      <span className="ml-0.5 text-indigo-500/80">·</span>
-      <span className="text-indigo-500/80">+{groupSize - 1}</span>
-    </span>
+    <HoverTooltip label={`Expand — show ${groupSize - 1} more in this package`} asChild focusable={false}>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => { e.stopPropagation(); onToggleGroup?.(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); onToggleGroup?.(); } }}
+        aria-expanded={false}
+        aria-label="Expand package"
+        className="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-indigo-100 px-1 py-px text-[8.5px] font-black uppercase tracking-widest text-indigo-700 transition-colors hover:bg-indigo-200"
+      >
+        <motion.span animate={{ rotate: -90 }} transition={{ duration: 0.18, ease: motionBezier.easeOut }} className="inline-flex">
+          <ChevronDown className="h-2.5 w-2.5" />
+        </motion.span>
+        PKG · {groupSize}
+        <span className="ml-0.5 text-indigo-500/80">·</span>
+        <span className="text-indigo-500/80">+{groupSize - 1}</span>
+      </span>
+    </HoverTooltip>
   ) : null;
 
   const activityAt = getActivityAt?.(row);
@@ -128,7 +109,7 @@ export function RailRow<TRow>({
         // Shift-click range select: stop the browser's native shift-click text
         // selection from highlighting row labels across the range.
         onMouseDown={(e) => { if (editActive && e.shiftKey) e.preventDefault(); }}
-        className={`relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
+        className={`ds-raw-button relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
           (editActive ? isChecked : isSelected)
             ? 'items-center rounded-md bg-blue-50 ring-1 ring-inset ring-blue-400 py-1.5'
             : `items-center rounded-md py-1.5 ${isFocused ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : 'hover:bg-gray-50'}`
@@ -165,8 +146,8 @@ export function RailRow<TRow>({
       </button>
       <AnimatePresence>
         {previewOpen && renderPopover ? (
-          <RailPopover anchorEl={rowRef.current} onMouseEnter={scheduleOpen} onMouseLeave={scheduleClose} onDismiss={() => setPreviewOpen(false)}>
-            {renderPopover(row, { groupSize, openWorkspace: onClick, dismiss: () => setPreviewOpen(false) })}
+          <RailPopover anchorEl={rowRef.current} onMouseEnter={scheduleOpen} onMouseLeave={scheduleClose} onDismiss={dismiss}>
+            {renderPopover(row, { groupSize, openWorkspace: onClick, dismiss })}
           </RailPopover>
         ) : null}
       </AnimatePresence>

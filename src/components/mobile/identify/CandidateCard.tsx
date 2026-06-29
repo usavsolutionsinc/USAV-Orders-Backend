@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Camera, Check, Loader2, AlertTriangle } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import type { LabelCandidate } from '@/lib/vision-identify';
 
 export function CandidateCard({
@@ -38,13 +39,14 @@ export function CandidateCard({
           <div className="truncate text-sm font-semibold">{title}</div>
           <div className="mt-0.5 flex items-center gap-2 text-xs text-white/50">
             {c.sku ? <span className="tabular-nums">SKU {c.sku}</span> : <span>no SKU</span>}
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-micro font-semibold text-emerald-300">
               <Check className="h-3 w-3" /> label match
             </span>
             {unresolved && <span className="text-amber-300/80">· not in system</span>}
           </div>
         </div>
         {!unresolved && (
+          // ds-raw-button: solid-emerald CTA when primary (emerald-500/text-black) — no green Button variant; conditional fill override unreliable vs variant bg
           <button
             disabled={!canAdd || adding}
             onClick={() => onAdd(c)}
@@ -62,6 +64,7 @@ export function CandidateCard({
         <div className="mt-3 space-y-2">
           {!expand ? (
             <div className="flex gap-2">
+              {/* ds-raw-button: solid-emerald CTA (emerald-500/text-black) — no green Button variant */}
               <button
                 disabled={adding}
                 onClick={() => setExpand(true)}
@@ -69,13 +72,15 @@ export function CandidateCard({
               >
                 {adding ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Create SKU'}
               </button>
-              <button
+              <Button
+                variant="ghost"
                 disabled={adding}
                 onClick={() => onFlagMissing(c)}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white/80 disabled:opacity-40"
+                icon={<AlertTriangle />}
+                className="bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
               >
-                <AlertTriangle className="h-4 w-4" /> Flag missing
-              </button>
+                Flag missing
+              </Button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -88,6 +93,7 @@ export function CandidateCard({
                 className="w-full rounded-xl bg-white/[0.06] px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               />
               <div className="flex gap-2">
+                {/* ds-raw-button: solid-emerald CTA (emerald-500/text-black) — no green Button variant */}
                 <button
                   disabled={adding || !skuInput.trim()}
                   onClick={() => onCreateSku(c, skuInput)}
@@ -95,13 +101,14 @@ export function CandidateCard({
                 >
                   {adding ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : canAdd ? 'Create + Add' : 'Create SKU'}
                 </button>
-                <button
+                <Button
+                  variant="ghost"
                   disabled={adding}
                   onClick={() => setExpand(false)}
-                  className="rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white/70 disabled:opacity-40"
+                  className="bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}

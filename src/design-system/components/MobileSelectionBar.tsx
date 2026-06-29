@@ -51,7 +51,7 @@ function AnimatedCounter({ value }: { value: number }) {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -20, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-          className="flex h-4 items-center justify-center text-[10px] font-black tabular-nums"
+          className="flex h-4 items-center justify-center text-micro font-black tabular-nums"
         >
           {value}
         </motion.span>

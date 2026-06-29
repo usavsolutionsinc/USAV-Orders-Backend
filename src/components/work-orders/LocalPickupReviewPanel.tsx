@@ -22,6 +22,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, Package, Printer, ShoppingCart, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { ReceivingPoLabelPreview } from '@/components/receiving/workspace/ReceivingPoLabelPreview';
 import { printReceivingLabel } from '@/lib/print/printReceivingLabel';
 import { buildLocalPickupPoNumber } from '@/lib/local-pickup/po-number';
@@ -174,47 +175,44 @@ function FinalizeReview({ onClose }: { onClose: () => void }) {
       {/* Footer actions */}
       {done ? (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={handlePrint}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700"
+            icon={<Printer className="h-4 w-4" />}
+            className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
           >
-            <Printer className="h-4 w-4" /> Print label
-          </button>
-          <button
-            type="button"
+            Print label
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
           >
             Done
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => closeReview()}
             disabled={isSubmitting}
-            className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => void handleFinalize()}
             disabled={isSubmitting || !name.trim() || items.length === 0}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            loading={isSubmitting}
+            icon={<ShoppingCart className="h-4 w-4" />}
+            className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Pushing to Zoho…
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="h-4 w-4" /> Finalize &amp; push to Zoho
-              </>
-            )}
-          </button>
+            {isSubmitting ? 'Pushing to Zoho…' : 'Finalize & push to Zoho'}
+          </Button>
         </div>
       )}
     </ReviewShell>
@@ -352,21 +350,23 @@ function ReprintReview({ orderId, onClose }: { orderId?: number; onClose: () => 
           />
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={handlePrint}
               disabled={!order.receiving_id}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              icon={<Printer className="h-4 w-4" />}
+              className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              <Printer className="h-4 w-4" /> Reprint label
-            </button>
-            <button
-              type="button"
+              Reprint label
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
               onClick={onClose}
-              className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-caption font-black uppercase tracking-wider text-gray-700 transition-colors hover:bg-gray-50"
             >
               Close
-            </button>
+            </Button>
           </div>
         </>
       ) : null}
@@ -419,14 +419,12 @@ function ReviewShell({
                 {title}
               </span>
             </div>
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              ariaLabel="Close"
+              className="rounded-lg p-1.5 transition-colors hover:bg-gray-100"
+              icon={<X className="h-4 w-4" />}
+            />
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">{children}</div>
         </div>

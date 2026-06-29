@@ -104,7 +104,7 @@ export default function ReleaseNotesPage() {
                         <li key={c.sha} className="px-4 py-4 sm:px-5">
                           <div className="flex items-start gap-3">
                             <span
-                              className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${style.chip}`}
+                              className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${style.chip}`}
                             >
                               {style.label}
                             </span>
@@ -117,12 +117,12 @@ export default function ReleaseNotesPage() {
                                   {c.body}
                                 </p>
                               ) : null}
-                              <p className="mt-1.5 text-[11px] text-gray-500">
+                              <p className="mt-1.5 text-caption text-gray-500">
                                 <time dateTime={c.date}>{dayLabel(c.date)}</time>
                                 <span className="mx-1.5 text-gray-300">·</span>
                                 <span>{c.author}</span>
                                 <span className="mx-1.5 text-gray-300">·</span>
-                                <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px] text-gray-600">
+                                <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-micro text-gray-600">
                                   {c.shortSha}
                                 </code>
                               </p>

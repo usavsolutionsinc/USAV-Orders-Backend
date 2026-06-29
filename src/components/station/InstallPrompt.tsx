@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, Share, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/design-system/primitives/Button';
+import { IconButton } from '@/design-system/primitives/IconButton';
 
 type Platform = 'ios' | 'android' | null;
 
@@ -89,12 +91,12 @@ export function InstallPrompt() {
                   Add to Home Screen
                 </p>
               </div>
-              <button
+              <IconButton
                 onClick={dismiss}
-                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 text-white/60 hover:bg-white/20 transition-colors touch-manipulation"
-              >
-                <X size={14} />
-              </button>
+                ariaLabel="Dismiss"
+                icon={<X size={14} className="text-white/60" />}
+                className="flex items-center justify-center w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 transition-colors touch-manipulation"
+              />
             </div>
 
             {platform === 'ios' ? (
@@ -112,18 +114,22 @@ export function InstallPrompt() {
               </div>
             ) : (
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="ghost"
+                  size="md"
                   onClick={dismiss}
-                  className="flex-1 py-2.5 rounded-station border border-white/20 text-caption font-bold tracking-wide uppercase text-white/70 hover:bg-white/10 transition-colors touch-manipulation font-sans"
+                  className="flex-1 rounded-station border border-white/20 text-caption font-bold tracking-wide uppercase text-white/70 hover:bg-white/10 hover:text-white/70 touch-manipulation font-sans"
                 >
                   Not now
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={install}
-                  className="flex-1 py-2.5 rounded-station bg-white text-navy-800 text-caption font-bold tracking-wide uppercase hover:bg-navy-50 transition-colors touch-manipulation font-sans"
+                  className="flex-1 rounded-station ring-0 bg-white text-navy-800 text-caption font-bold tracking-wide uppercase hover:bg-navy-50 touch-manipulation font-sans"
                 >
                   Install
-                </button>
+                </Button>
               </div>
             )}
           </div>

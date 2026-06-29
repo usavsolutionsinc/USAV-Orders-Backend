@@ -15,10 +15,11 @@ export function FolderButton({
   const subFileCount = node.totalCount;
   const subFolderCount = node.children.size;
   return (
+    // ds-raw-button: text-left master-detail folder picker row, not a DS Button
     <button
       type="button"
       onClick={onEnter}
-      className="group flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-indigo-200 hover:bg-indigo-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm"
+      className="ds-raw-button group flex w-full items-center gap-3 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-indigo-200 hover:bg-indigo-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm"
     >
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-500 ring-1 ring-inset ring-indigo-100 group-hover:from-indigo-100 group-hover:to-violet-100 group-hover:text-indigo-600">
         <FolderIcon className="h-4 w-4" />
@@ -55,10 +56,11 @@ export function FileButton({
 }) {
   const title = manual.display_name || manual.file_name || `Manual #${manual.id}`;
   return (
+    // ds-raw-button: text-left master-detail file picker row, not a DS Button
     <button
       type="button"
       onClick={onClick}
-      className={`group flex w-full items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
+      className={`ds-raw-button group flex w-full items-start gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
         isSelected
           ? 'border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50/50 shadow-sm ring-1 ring-inset ring-blue-200'
           : 'border-gray-200 bg-white shadow-sm hover:-translate-y-px hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-md active:translate-y-0 active:shadow-sm'

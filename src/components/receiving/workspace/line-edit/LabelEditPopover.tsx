@@ -29,6 +29,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Calendar } from '@/design-system/components/Calendar';
 import { type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { CornerField } from '@/components/labels/CornerField';
@@ -36,6 +37,7 @@ import { useLabelDraft } from '@/components/labels/useLabelDraft';
 import { formatLabelDate, parseLabelDate } from '@/components/labels/labelDate';
 import { usePlatformCatalog, useReceivingTypeCatalog } from '@/hooks/useCatalog';
 import { Calendar as CalendarIcon, ChevronDown, Pencil, Printer, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { ConditionPills } from '../ConditionPills';
 import { ReceivingPoLabelPreview } from '../ReceivingPoLabelPreview';
@@ -111,15 +113,15 @@ function ManagedFieldLabel({ children, onManage }: { children: ReactNode; onMana
   return (
     <div className="mb-1.5 flex items-center justify-between gap-2">
       <span className={`${microBadge} text-gray-500 tracking-wider`}>{children}</span>
-      <button
-        type="button"
-        onClick={onManage}
-        aria-label={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
-        title="Add / edit / delete"
-        className="text-gray-400 transition-colors hover:text-blue-600"
-      >
-        <Pencil className="h-3 w-3" />
-      </button>
+      <HoverTooltip label="Add / edit / delete" asChild>
+        <IconButton
+          icon={<Pencil className="h-3 w-3" />}
+          ariaLabel={`Manage ${typeof children === 'string' ? children.toLowerCase() : 'list'}`}
+          onClick={onManage}
+          tone="accent"
+          className="text-gray-400 hover:text-blue-600"
+        />
+      </HoverTooltip>
     </div>
   );
 }
@@ -199,14 +201,12 @@ export function LabelEditPopover({
           <Pencil className="h-3.5 w-3.5 text-gray-500" />
           Edit label
         </span>
-        <button
-          type="button"
+        <IconButton
+          icon={<X className="h-4 w-4" />}
+          ariaLabel="Close"
           onClick={onClose}
-          aria-label="Close"
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        />
       </div>
 
       {/* Body */}
@@ -247,6 +247,7 @@ export function LabelEditPopover({
               <label className={FIELD_LABEL}>Date</label>
               <Popover.Root open={calOpen} onOpenChange={setCalOpen}>
                 <Popover.Trigger asChild>
+                  {/* ds-raw-button: Radix Popover.Trigger asChild (select-like date trigger), not a DS Button */}
                   <button
                     type="button"
                     className={`${TEXT_INPUT} flex items-center justify-between gap-2 text-left`}
@@ -313,24 +314,20 @@ export function LabelEditPopover({
 
       {/* Footer */}
       <div className="flex shrink-0 items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-5 py-3">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg px-3 py-1.5 text-mini font-bold uppercase tracking-wider text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<Printer className="h-3.5 w-3.5" />}
           onClick={() => {
             onApplyAndPrint(draft);
             onClose();
           }}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-mini font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
         >
-          <Printer className="h-3.5 w-3.5" />
           Save &amp; print
-        </button>
+        </Button>
       </div>
     </RightPaneOverlay>
 

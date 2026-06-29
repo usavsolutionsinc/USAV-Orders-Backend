@@ -17,7 +17,7 @@ export function PairedReviewCollapsedStrip({
       <button
         type="button"
         onClick={onToggleExpanded}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/90 px-2.5 py-2 text-left transition-colors hover:bg-gray-100"
+        className="ds-raw-button flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50/90 px-2.5 py-2 text-left transition-colors hover:bg-gray-100"
         aria-expanded={false}
       >
         <span className="text-micro font-black uppercase tracking-widest text-gray-600">

@@ -1,6 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { fmtRelative, type AuditEntry } from '../staff-access-shared';
 
 interface AuditCardProps {
@@ -54,6 +55,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
 
   return (
     <li className="text-caption">
+      {/* ds-raw-button: full-width text-left multi-column expandable audit row, not a standard action button */}
       <button
         type="button"
         onClick={() => hasDetail && setOpen((v) => !v)}
@@ -65,7 +67,9 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
           : entry.result === 'denied' ? 'bg-amber-100 text-amber-800 ring-amber-200'
           : 'bg-red-100 text-red-800 ring-red-200'
         }`}>{entry.result}</span>
-        <span className="text-gray-500" title={absolute}>{fmtRelative(entry.created_at)}</span>
+        <HoverTooltip label={absolute} asChild focusable={false}>
+          <span className="text-gray-500">{fmtRelative(entry.created_at)}</span>
+        </HoverTooltip>
         {entry.ip && <span className="text-gray-400">{entry.ip}</span>}
         {headline && <span className="ml-auto truncate text-gray-600">{headline}</span>}
         {hasDetail && (

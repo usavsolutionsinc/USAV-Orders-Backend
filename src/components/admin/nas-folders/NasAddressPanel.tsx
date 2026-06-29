@@ -1,4 +1,5 @@
 import { nasConfigured } from '@/lib/nas-photos';
+import { Button } from '@/design-system/primitives';
 import type { StationNasFoldersController } from './useStationNasFolders';
 
 /** NAS server address panel — test/prod URLs + active toggle. */
@@ -17,6 +18,7 @@ export function NasAddressPanel({ c }: { c: StationNasFoldersController }) {
           </div>
           <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-200">
             {(['test', 'prod'] as const).map((slot) => (
+              // ds-raw-button: segmented test/prod active-slot toggle (conditional fill), not a single DS variant
               <button
                 key={slot}
                 type="button"
@@ -52,14 +54,15 @@ export function NasAddressPanel({ c }: { c: StationNasFoldersController }) {
 
         <div className="flex items-center justify-end gap-3">
           {serversDirty ? <span className="text-micro font-bold uppercase tracking-widest text-amber-600">Unsaved changes</span> : null}
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             disabled={!serversDirty || saveServers.isPending || isLoading}
             onClick={() => saveServers.mutate(servers)}
-            className="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {saveServers.isPending ? 'Saving…' : 'Save address'}
-          </button>
+          </Button>
         </div>
       </div>
 

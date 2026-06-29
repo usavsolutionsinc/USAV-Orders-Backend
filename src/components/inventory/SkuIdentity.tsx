@@ -25,6 +25,8 @@
  *             For dense lists (pick queue rows, table cells, etc.).
  */
 
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+
 export interface SkuPlatformMapping {
   platform: string;             // 'amazon' | 'ecwid' | 'ebay' | 'fba' | …
   platformSku: string | null;   // marketplace SKU/MSKU (or null when only an item id exists)
@@ -124,12 +126,16 @@ function PlatformSkuChip({ mapping, dense = false }: { mapping: SkuPlatformMappi
   const value = (mapping.platformSku && mapping.platformSku.trim()) || mapping.platformItemId || '';
   const sizing = dense ? 'px-1.5 py-0.5 text-micro' : 'px-2 py-0.5 text-xs';
   return (
-    <span
-      title={`${platformLabel(mapping.platform)} · ${value}${mapping.platformItemId ? ` · ${mapping.platformItemId}` : ''}`}
-      className={`inline-flex items-center gap-1 rounded-md border font-medium ${sizing} ${platformChipClass(mapping.platform)}`}
+    <HoverTooltip
+      label={`${platformLabel(mapping.platform)} · ${value}${mapping.platformItemId ? ` · ${mapping.platformItemId}` : ''}`}
+      asChild
     >
-      <span className="font-semibold uppercase tracking-wider">{platformLabel(mapping.platform)}</span>
-      <span className="font-mono tabular-nums">{value}</span>
-    </span>
+      <span
+        className={`inline-flex items-center gap-1 rounded-md border font-medium ${sizing} ${platformChipClass(mapping.platform)}`}
+      >
+        <span className="font-semibold uppercase tracking-wider">{platformLabel(mapping.platform)}</span>
+        <span className="font-mono tabular-nums">{value}</span>
+      </span>
+    </HoverTooltip>
   );
 }

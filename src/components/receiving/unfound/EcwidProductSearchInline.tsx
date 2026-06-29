@@ -14,6 +14,7 @@
  */
 
 import { useEcwidProductSearch } from './ecwid-search/useEcwidProductSearch';
+import { EcwidOrderScopeFilters } from './ecwid-search/EcwidOrderScopeFilters';
 import { EcwidSearchHeader } from './ecwid-search/EcwidSearchHeader';
 import { EcwidSearchInputs } from './ecwid-search/EcwidSearchInputs';
 import { EcwidResultsList } from './ecwid-search/EcwidResultsList';
@@ -22,6 +23,7 @@ import type { EcwidProductSearchPopoverProps } from './ecwid-search/ecwid-search
 export type {
   EcwidProductSelection,
   EcwidProductPopoverMode,
+  EcwidOrderScope,
 } from './ecwid-search/ecwid-search-shared';
 
 interface EcwidProductSearchInlineProps extends EcwidProductSearchPopoverProps {
@@ -45,6 +47,7 @@ export function EcwidProductSearchInline({
     >
       {showHeader ? <EcwidSearchHeader c={c} onClose={props.onClose} /> : null}
       <EcwidSearchInputs c={c} />
+      <EcwidOrderScopeFilters c={c} />
       <EcwidResultsList c={c} />
     </div>
   );

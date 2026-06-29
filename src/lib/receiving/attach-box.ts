@@ -3,7 +3,6 @@ import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { linkShipment } from '@/lib/shipping/shipment-links';
-import { isShipmentLinksDualWrite } from '@/lib/feature-flags';
 
 /**
  * Shared core for the multi-tracking → PO feature (docs/multi-tracking-po-plan.md).
@@ -48,14 +47,14 @@ export async function listBoxesForReceiving(
 ): Promise<AttachedBox[]> {
   const boxesRes = await db.query<AttachedBox>(
     `SELECT rs.id, rs.shipment_id, rs.box_seq, rs.is_primary,
-            to_char(rs.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at,
+            to_char(rs.linked_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at,
             stn.tracking_number_raw                 AS tracking_number,
             NULLIF(stn.carrier, 'UNKNOWN')          AS carrier,
             stn.latest_status_category              AS status_category,
             stn.is_delivered                        AS is_delivered
-       FROM receiving_shipments rs
+       FROM shipment_links rs
        JOIN shipping_tracking_numbers stn ON stn.id = rs.shipment_id
-      WHERE rs.receiving_id = $1
+      WHERE rs.owner_type = 'RECEIVING' AND rs.owner_id = $1
       ORDER BY rs.box_seq ASC, rs.id ASC`,
     [receivingId],
   );
@@ -96,83 +95,75 @@ export async function attachBoxToReceiving(params: {
     const shipment = await registerShipmentPermissive({
       trackingNumber: tracking,
       sourceSystem: 'receiving.attach-box',
-    });
+    }, organizationId);
     if (!shipment?.id) {
       return { ok: false, error: 'Could not register that tracking number', status: 422 };
     }
     const shipmentId = Number(shipment.id);
 
-    // Self-heal: ensure the carton's primary box (reference# anchor) exists in the
-    // junction before we add an extra (covers cartons the backfill hasn't reached).
+    // Self-heal: ensure the carton's primary box (reference# anchor) exists in
+    // shipment_links before we add an extra (covers cartons the backfill hasn't
+    // reached). linkShipment upserts idempotently on (org, owner, shipment).
     if (carton.shipment_id) {
-      await client.query(
-        `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
-         VALUES ($1, $2, 1, true, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1))
-         ON CONFLICT (receiving_id, shipment_id) DO NOTHING`,
-        [receivingId, carton.shipment_id, carton.received_by ?? null],
+      await linkShipment(
+        organizationId,
+        {
+          ownerType: 'RECEIVING', ownerId: receivingId, shipmentId: carton.shipment_id,
+          direction: 'INBOUND', boxSeq: 1, isPrimary: true, role: 'PO_ANCHOR',
+          linkedBy: carton.received_by ?? null, source: 'receiving.attach-box',
+        },
+        client,
       );
     }
+
+    // Already attached? (an idempotent re-attach must not double-count.)
+    const existingBox = await client.query(
+      `SELECT 1 FROM shipment_links WHERE owner_type = 'RECEIVING' AND owner_id = $1 AND shipment_id = $2 LIMIT 1`,
+      [receivingId, shipmentId],
+    );
+    const alreadyAttached = existingBox.rows.length > 0;
 
     // No primary yet (carton scanned/created with no reference# anchor) → the first
     // attached box becomes the primary so "exactly one primary per carton" holds.
     const primaryRes = await client.query(
-      `SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND is_primary LIMIT 1`,
+      `SELECT 1 FROM shipment_links WHERE owner_type = 'RECEIVING' AND owner_id = $1 AND is_primary LIMIT 1`,
       [receivingId],
     );
     const makePrimary = primaryRes.rows.length === 0;
 
-    const inserted = await client.query<{ box_seq: number; is_primary: boolean }>(
-      `INSERT INTO receiving_shipments (receiving_id, shipment_id, box_seq, is_primary, received_at, received_by, organization_id)
-       SELECT $1, $2,
-              COALESCE((SELECT MAX(box_seq) FROM receiving_shipments WHERE receiving_id = $1), 0) + 1,
-              $4, NOW(), $3, (SELECT organization_id FROM receiving WHERE id = $1)
-       WHERE NOT EXISTS (
-         SELECT 1 FROM receiving_shipments WHERE receiving_id = $1 AND shipment_id = $2
-       )
-       RETURNING box_seq, is_primary`,
-      [receivingId, shipmentId, staffId, makePrimary],
-    );
-    const alreadyAttached = inserted.rows.length === 0;
+    let boxSeq: number | null = null;
+    let boxIsPrimary: boolean | null = null;
+    if (!alreadyAttached) {
+      const box = await linkShipment(
+        organizationId,
+        {
+          ownerType: 'RECEIVING', ownerId: receivingId, shipmentId,
+          direction: 'INBOUND', isPrimary: makePrimary,
+          role: makePrimary ? 'PO_ANCHOR' : 'EXTRA_BOX',
+          linkedBy: staffId, source: 'receiving.attach-box',
+        },
+        client,
+      );
+      boxSeq = box.box_seq;
+      boxIsPrimary = box.is_primary;
 
-    // When this box became the carton's primary anchor, stamp receiving.shipment_id
-    // (only if empty — never overwrite the reference# anchor).
-    if (makePrimary && !carton.shipment_id && !alreadyAttached) {
-      await client.query(
-        `UPDATE receiving SET shipment_id = $2, updated_at = NOW()
-         WHERE id = $1 AND shipment_id IS NULL`,
+      // When this box became the carton's primary anchor, stamp receiving.shipment_id
+      // (only if empty — never overwrite the reference# anchor).
+      if (makePrimary && !carton.shipment_id) {
+        await client.query(
+          `UPDATE receiving SET shipment_id = $2, updated_at = NOW()
+           WHERE id = $1 AND shipment_id IS NULL`,
+          [receivingId, shipmentId],
+        );
+      }
+    } else {
+      const cur = await client.query<{ box_seq: number; is_primary: boolean }>(
+        `SELECT box_seq, is_primary FROM shipment_links
+          WHERE owner_type = 'RECEIVING' AND owner_id = $1 AND shipment_id = $2 LIMIT 1`,
         [receivingId, shipmentId],
       );
-    }
-
-    // Dual-write the unified shipment_links table (flag-gated). Runs on the SAME
-    // tx client so shipment_links can never drift from the receiving_shipments
-    // junction (which stays the read path during the bake). Mirrors exactly the
-    // junction rows written above. See src/lib/shipping/shipment-links.ts.
-    if (isShipmentLinksDualWrite()) {
-      if (carton.shipment_id) {
-        await linkShipment(
-          organizationId,
-          {
-            ownerType: 'RECEIVING', ownerId: receivingId, shipmentId: carton.shipment_id,
-            direction: 'INBOUND', boxSeq: 1, isPrimary: true, role: 'PO_ANCHOR',
-            linkedBy: carton.received_by ?? null, source: 'receiving.attach-box',
-          },
-          client,
-        );
-      }
-      if (!alreadyAttached && inserted.rows[0]) {
-        const box = inserted.rows[0];
-        await linkShipment(
-          organizationId,
-          {
-            ownerType: 'RECEIVING', ownerId: receivingId, shipmentId,
-            direction: 'INBOUND', boxSeq: box.box_seq, isPrimary: box.is_primary,
-            role: box.is_primary ? 'PO_ANCHOR' : 'EXTRA_BOX',
-            linkedBy: staffId, source: 'receiving.attach-box',
-          },
-          client,
-        );
-      }
+      boxSeq = cur.rows[0]?.box_seq ?? null;
+      boxIsPrimary = cur.rows[0]?.is_primary ?? null;
     }
 
     // Read on the SAME tx client so it sees the just-inserted (uncommitted) box.
@@ -182,8 +173,8 @@ export async function attachBoxToReceiving(params: {
       ok: true,
       shipmentId,
       alreadyAttached,
-      boxSeq: inserted.rows[0]?.box_seq ?? null,
-      isPrimary: inserted.rows[0]?.is_primary ?? null,
+      boxSeq,
+      isPrimary: boxIsPrimary,
       boxCount: boxes.length,
       boxes,
     };

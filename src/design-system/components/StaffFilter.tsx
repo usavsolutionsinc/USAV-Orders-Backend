@@ -60,7 +60,7 @@ export function StaffFilter({
           {triggerLabel}
         </span>
         {active ? (
-          <span className="shrink-0 rounded-full bg-blue-600 px-1.5 text-[9px] font-black leading-4 text-white">
+          <span className="shrink-0 rounded-full bg-blue-600 px-1.5 text-eyebrow font-black leading-4 text-white">
             1
           </span>
         ) : null}

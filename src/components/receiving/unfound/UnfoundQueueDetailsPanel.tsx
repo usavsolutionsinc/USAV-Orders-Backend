@@ -25,7 +25,8 @@
  */
 
 import { motion } from 'framer-motion';
-import { ExternalLink, Loader2, Trash2, X } from '@/components/Icons';
+import { ExternalLink, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { formatDateTimePST } from '@/utils/date';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import {
@@ -81,13 +82,12 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
             </>
           }
           rightSlot={
-            <button
+            <IconButton
+              icon={<X className="h-5 w-5" />}
+              ariaLabel="Close"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+            />
           }
           belowSlot={
             isEmailPo ? (
@@ -158,36 +158,34 @@ export function UnfoundQueueDetailsPanel(props: UnfoundQueueDetailsPanelProps) {
                 {c.externalLabel}
               </a>
             )}
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => void c.handleCopyAll()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-200 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
             >
               Copy details
-            </button>
+            </Button>
           </div>
           {c.canHardDelete ? (
-            <button
-              type="button"
+            <Button
+              variant="danger"
+              size="lg"
+              icon={<Trash2 />}
+              loading={c.deleting}
               onClick={() => void c.handleDelete()}
-              disabled={c.deleting}
-              className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-micro font-black uppercase tracking-wider text-white transition-colors disabled:opacity-50 ${
+              className={`w-full rounded-xl text-micro font-black uppercase tracking-wider text-white ${
                 c.confirmingDelete
                   ? 'bg-red-700 hover:bg-red-800'
                   : 'bg-red-600 hover:bg-red-700'
               }`}
             >
-              {c.deleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
               {c.deleting
                 ? 'Deleting…'
                 : c.confirmingDelete
                   ? 'Click again to confirm delete'
                   : 'Delete Row'}
-            </button>
+            </Button>
           ) : (
             <p className="rounded-xl bg-gray-50 px-3 py-3 text-center text-micro text-gray-500">
               Unmatched receiving rows can have attached lines. Use the{' '}

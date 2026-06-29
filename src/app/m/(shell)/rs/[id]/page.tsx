@@ -8,6 +8,7 @@ import { AddRepairActionSheet } from '@/components/repair/mobile/AddRepairAction
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { useActivityInboxOptional } from '@/contexts/ActivityInboxContext';
 import { repairStatusBadgeClass } from '@/lib/repair-status';
+import { IconButton } from '@/design-system/primitives';
 
 const STATUS_OPTIONS = [
   'Awaiting Parts',
@@ -142,6 +143,7 @@ function RepairMobilePageInner() {
               ? repairStatusBadgeClass(status)
               : 'bg-white text-slate-700 border-slate-300';
             return (
+              // ds-raw-button: segmented status toggle with per-status active tone + Saving… text-swap
               <button
                 key={status}
                 type="button"
@@ -222,14 +224,12 @@ function RepairMobilePageInner() {
       </main>
 
       {repair && (
-        <button
-          type="button"
+        <IconButton
+          icon={<span className="text-2xl font-black leading-none text-white">+</span>}
           onClick={() => setShowAddSheet(true)}
-          className="fixed bottom-5 right-5 z-30 h-14 w-14 rounded-full bg-orange-500 text-white text-2xl font-black shadow-lg shadow-orange-500/40 active:scale-95 transition-transform"
-          aria-label="Add repair action"
-        >
-          +
-        </button>
+          ariaLabel="Add repair action"
+          className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-orange-500 shadow-lg shadow-orange-500/40"
+        />
       )}
 
       {showAddSheet && repair && (

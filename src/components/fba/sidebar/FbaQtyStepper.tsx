@@ -1,7 +1,7 @@
 'use client';
 
 import { Minus, Plus } from '@/components/Icons';
-import { DeferredQtyInput } from '@/design-system/primitives';
+import { DeferredQtyInput, IconButton } from '@/design-system/primitives';
 
 export interface FbaQtyStepperProps {
   value: number;
@@ -38,14 +38,12 @@ export function FbaQtyStepper({
 
   return (
     <div className="flex flex-col items-center">
-      <button
-        type="button"
+      <IconButton
+        icon={<Plus className="h-3 w-3" />}
         onClick={(e) => { e.stopPropagation(); onChange(value + 1); }}
-        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50"
-        aria-label={fnsku ? `Increase ${fnsku} quantity` : 'Increase quantity'}
-      >
-        <Plus className="h-3 w-3" />
-      </button>
+        ariaLabel={fnsku ? `Increase ${fnsku} quantity` : 'Increase quantity'}
+        className="flex h-6 w-10 items-center justify-center rounded-t-md border border-gray-200 hover:bg-gray-50"
+      />
       <DeferredQtyInput
         value={value}
         min={0}
@@ -53,19 +51,17 @@ export function FbaQtyStepper({
         onClick={(e) => e.stopPropagation()}
         className={`h-7 w-10 border-x bg-white text-center text-label font-black tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${inputBorder}`}
       />
-      <button
-        type="button"
+      <IconButton
+        icon={<Minus className={`h-3 w-3 ${value <= 1 ? 'text-red-500' : 'text-gray-500'}`} />}
         onClick={(e) => { e.stopPropagation(); onChange(value - 1); }}
         disabled={value <= 0}
-        className={`flex h-6 w-10 items-center justify-center rounded-b-md border transition-colors ${
+        ariaLabel={fnsku ? `Decrease ${fnsku} quantity` : 'Decrease quantity'}
+        className={`flex h-6 w-10 items-center justify-center rounded-b-md border disabled:opacity-40 ${
           value <= 1
-            ? 'border-red-300 text-red-500 hover:bg-red-50'
-            : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-        } disabled:opacity-40`}
-        aria-label={fnsku ? `Decrease ${fnsku} quantity` : 'Decrease quantity'}
-      >
-        <Minus className="h-3 w-3" />
-      </button>
+            ? 'border-red-300 hover:bg-red-50'
+            : 'border-gray-200 hover:bg-gray-50'
+        }`}
+      />
     </div>
   );
 }

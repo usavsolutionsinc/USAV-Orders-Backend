@@ -1,4 +1,5 @@
 import { ChevronDown } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
 import { INCOMING_SORT_LABELS, type IncomingSort } from '@/components/sidebar/receiving/IncomingPaneHeader';
 import { TILES, TONE } from './incoming-tiles';
@@ -55,22 +56,22 @@ export function IncomingFilterDropdown({
             const count = summary ? (summary[t.key] as number) : null;
             const Icon = t.icon;
             return (
-              <button
-                key={t.label}
-                type="button"
-                onClick={() => setState(active ? null : t.state)}
-                title={t.title}
-                aria-pressed={active}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
-                  active ? tone.active : tone.inactive
-                } ${tone.ring}`}
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
-                <span className="flex-1 truncate">{t.label}</span>
-                <span className="ml-1 tabular-nums text-caption font-black">
-                  {count == null ? '—' : count.toLocaleString()}
-                </span>
-              </button>
+              <HoverTooltip key={t.label} label={t.title} asChild>
+                <button
+                  type="button"
+                  onClick={() => setState(active ? null : t.state)}
+                  aria-pressed={active}
+                  className={`ds-raw-button flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
+                    active ? tone.active : tone.inactive
+                  } ${tone.ring}`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? tone.iconActive : tone.iconInactive}`} />
+                  <span className="flex-1 truncate">{t.label}</span>
+                  <span className="ml-1 tabular-nums text-caption font-black">
+                    {count == null ? '—' : count.toLocaleString()}
+                  </span>
+                </button>
+              </HoverTooltip>
             );
           })}
         </div>
@@ -84,10 +85,18 @@ export function IncomingFilterDropdown({
           <div className="overflow-hidden rounded-lg ring-1 ring-inset ring-gray-200">
             <div className="grid grid-cols-[minmax(0,1fr)_2.25rem_2.75rem_2.25rem_2.25rem] items-center gap-x-1 bg-gray-50 px-2 py-1 text-mini font-black uppercase tracking-wide text-gray-400">
               <span>Carrier</span>
-              <span className="text-right tabular-nums" title="In transit">Trans</span>
-              <span className="text-right tabular-nums" title="Tracking unavailable">Unav</span>
-              <span className="text-right tabular-nums" title="Delivered · not scanned">Deliv</span>
-              <span className="text-right tabular-nums" title="Carrier mismatch — carrier/number don’t match">Miss</span>
+              <HoverTooltip label="In transit" asChild>
+                <span className="text-right tabular-nums">Trans</span>
+              </HoverTooltip>
+              <HoverTooltip label="Tracking unavailable" asChild>
+                <span className="text-right tabular-nums">Unav</span>
+              </HoverTooltip>
+              <HoverTooltip label="Delivered · not scanned" asChild>
+                <span className="text-right tabular-nums">Deliv</span>
+              </HoverTooltip>
+              <HoverTooltip label="Carrier mismatch — carrier/number don’t match" asChild>
+                <span className="text-right tabular-nums">Miss</span>
+              </HoverTooltip>
             </div>
             {summary.by_carrier!.map((c) => (
               <div

@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
+import { Button } from '@/design-system/primitives';
 import { rmaStatusBadgeClass } from '@/lib/rma-status';
 
 type RmaDirection = 'INBOUND_FROM_CUSTOMER' | 'OUTBOUND_TO_VENDOR';
@@ -114,20 +115,12 @@ export default function RmaPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <NetworkChip />
-          <button
-            type="button"
-            onClick={() => void fetchRmas()}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
+          <Button variant="secondary" size="sm" onClick={() => void fetchRmas()}>
             Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setCreateOpen((v) => !v)}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-          >
+          </Button>
+          <Button variant="brand" size="sm" onClick={() => setCreateOpen((v) => !v)}>
             {createOpen ? 'Cancel' : 'Issue RMA'}
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -141,6 +134,7 @@ export default function RmaPage() {
 
       <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold">
         {(['all', 'INBOUND_FROM_CUSTOMER', 'OUTBOUND_TO_VENDOR'] as const).map((opt) => (
+          // ds-raw-button: segmented direction-filter toggle (conditional active fill), not a single DS variant
           <button
             key={opt}
             type="button"
@@ -201,24 +195,23 @@ export default function RmaPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {rma.status === 'AUTHORIZED' && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="primary"
                       disabled={working === rma.id}
                       onClick={() => void markReceived(rma.id)}
-                      className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white active:bg-blue-700 disabled:opacity-50"
                     >
                       {working === rma.id ? 'Working…' : 'Mark received'}
-                    </button>
+                    </Button>
                   )}
                   {(rma.status === 'RECEIVED' || rma.status === 'DISPOSITIONED') && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="primary"
                       disabled={working === rma.id}
                       onClick={() => void closeRma(rma.id)}
-                      className="rounded-2xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white active:bg-emerald-800 disabled:opacity-50"
+                      className="bg-emerald-700 shadow-emerald-600/25 hover:bg-emerald-600 active:bg-emerald-800"
                     >
                       {working === rma.id ? 'Working…' : 'Close'}
-                    </button>
+                    </Button>
                   )}
                 </div>
               </li>
@@ -324,13 +317,9 @@ function CreateRmaForm({ onCreated, onError }: CreateFormProps) {
       </div>
 
       <div className="mt-4 flex justify-end gap-2">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-2xl bg-slate-900 px-5 py-2 text-sm font-semibold text-white active:bg-slate-800 disabled:opacity-50"
-        >
+        <Button type="submit" variant="brand" disabled={submitting}>
           {submitting ? 'Issuing…' : 'Issue RMA'}
-        </button>
+        </Button>
       </div>
     </form>
   );

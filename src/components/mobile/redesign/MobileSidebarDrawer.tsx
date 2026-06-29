@@ -17,6 +17,7 @@ import {
   X,
 } from '@/components/Icons';
 import { TOKENS } from './DesignSystem';
+import { IconButton } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -170,6 +171,7 @@ export const MobileSidebarDrawer = ({
       {open && user && (
         <>
           {/* Scrim */}
+          {/* ds-raw-button: full-bleed animated dismiss scrim (motion.button), not a DS action control */}
           <motion.button
             type="button"
             aria-label="Close menu"
@@ -200,16 +202,15 @@ export const MobileSidebarDrawer = ({
           >
             {/* Header */}
             <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-400">
+              <span className="text-caption font-black uppercase tracking-[0.2em] text-blue-400">
                 Menu
               </span>
-              <button
+              <IconButton
+                icon={<X className="h-5 w-5" />}
                 onClick={onClose}
-                aria-label="Close menu"
+                ariaLabel="Close menu"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all active:scale-90"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              />
             </div>
 
             {/* Nav list */}
@@ -221,6 +222,7 @@ export const MobileSidebarDrawer = ({
                     const Icon = item.icon;
                     return (
                       <li key={item.id}>
+                        {/* ds-raw-button: text-left nav row (icon + label + active ring/fill), not a standard action button */}
                         <button
                           onClick={() => navigate(item.href)}
                           className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors active:scale-[0.98] ${
@@ -242,6 +244,7 @@ export const MobileSidebarDrawer = ({
                   const groupActive = isGroupActive(pathname, item.matchPrefixes);
                   return (
                     <li key={item.id}>
+                      {/* ds-raw-button: text-left drill-down group row (icon + label + chevron + active ring/fill), not a standard action button */}
                       <button
                         onClick={() => setExpanded((cur) => (cur === item.id ? null : item.id))}
                         aria-expanded={isOpen}
@@ -273,6 +276,7 @@ export const MobileSidebarDrawer = ({
                                 const childActive = isChildActive(pathname, currentMode, child.href);
                                 return (
                                   <li key={child.id}>
+                                    {/* ds-raw-button: text-left sub-mode nav row (icon + label + active fill), not a standard action button */}
                                     <button
                                       onClick={() => navigate(child.href)}
                                       className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors active:scale-[0.98] ${
@@ -300,6 +304,7 @@ export const MobileSidebarDrawer = ({
             {/* Footer — low-frequency actions pinned to the very bottom, away from
                 the primary nav so they can't be accidentally pressed. */}
             <div className="shrink-0 border-t border-slate-100 px-2 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+              {/* ds-raw-button: text-left full-width sign-out row (icon + label), not a standard action button */}
               <button
                 onClick={handleSignOut}
                 className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-slate-500 transition-colors hover:bg-rose-50 active:scale-[0.98]"

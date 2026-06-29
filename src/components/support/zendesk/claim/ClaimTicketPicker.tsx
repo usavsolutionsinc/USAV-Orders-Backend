@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, Search } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { useZendeskTickets } from '@/hooks/useZendeskQueries';
 import { cn } from '@/utils/_cn';
 import { priorityBadge, statusBadge } from '../badges';
@@ -36,8 +37,8 @@ export function ClaimTicketPicker({
       <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/60 px-3.5 py-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-black text-blue-700">#{ticket.id}</span>
-            <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', sb.className)}>
+            <span className="text-caption font-black text-blue-700">#{ticket.id}</span>
+            <span className={cn('rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest', sb.className)}>
               {sb.label}
             </span>
           </div>
@@ -45,13 +46,14 @@ export function ClaimTicketPicker({
             {ticket.subject || 'Untitled ticket'}
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => onPick(null)}
-          className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-500 transition hover:bg-white hover:text-gray-800"
+          className="h-auto shrink-0 rounded-lg px-2 py-1 text-caption font-bold text-gray-500 hover:bg-white hover:text-gray-800"
         >
           Change
-        </button>
+        </Button>
       </div>
     );
   }
@@ -72,7 +74,7 @@ export function ClaimTicketPicker({
       </div>
       <div className="max-h-56 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-200">
         {tickets.length === 0 && !isLoading ? (
-          <p className="px-3.5 py-6 text-center text-[12px] text-gray-400">
+          <p className="px-3.5 py-6 text-center text-label text-gray-400">
             {debounced ? 'No matching tickets' : 'No open tickets'}
           </p>
         ) : (
@@ -91,18 +93,18 @@ export function ClaimTicketPicker({
                     priority: (t.priority as string) ?? null,
                   })
                 }
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition hover:bg-gray-50"
+                className="ds-raw-button flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left transition hover:bg-gray-50"
               >
-                <span className="text-[11px] font-black text-gray-400">#{t.id}</span>
+                <span className="text-caption font-black text-gray-400">#{t.id}</span>
                 <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-gray-800">
                   {t.subject || 'Untitled ticket'}
                 </span>
                 {pb ? (
-                  <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', pb.className)}>
+                  <span className={cn('rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest', pb.className)}>
                     {pb.label}
                   </span>
                 ) : null}
-                <span className={cn('rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', sb.className)}>
+                <span className={cn('rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest', sb.className)}>
                   {sb.label}
                 </span>
               </button>

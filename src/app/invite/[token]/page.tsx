@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 type Preview =
   | { state: 'loading' }
@@ -138,13 +139,14 @@ export default function InviteAcceptPage() {
               </span>
             </label>
 
-            <button
+            <Button
               type="submit"
+              variant="brand"
               disabled={submitting || !name || password.length < 8}
-              className="w-full rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
+              className="w-full"
             >
               {submitting ? 'Joining…' : `Join ${preview.organizationName}`}
-            </button>
+            </Button>
           </form>
         )}
       </div>

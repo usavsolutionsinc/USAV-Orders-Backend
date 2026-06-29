@@ -1,5 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { RotateCcw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { FbaDraggableLineRow } from '@/components/fba/sidebar/FbaDraggableLineRow';
 import { FbaQtyStepper } from '@/components/fba/sidebar/FbaQtyStepper';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
@@ -90,16 +92,18 @@ export function UnallocatedDropZone({
                 rightSlot={
                   <div className="flex items-center gap-1">
                     {pendingUndo && (
-                      <button
-                        type="button"
-                        onClick={() => onRestoreToBundle(item.item_id)}
-                        className="flex h-5 items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-mini font-black uppercase tracking-wider text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100"
-                        aria-label="Undo move — return to previous box"
-                        title="Return to previous box"
-                      >
-                        <RotateCcw className="h-2.5 w-2.5" />
-                        Undo
-                      </button>
+                      <HoverTooltip label="Return to previous box" asChild>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<RotateCcw className="h-2.5 w-2.5" />}
+                          onClick={() => onRestoreToBundle(item.item_id)}
+                          className="h-5 gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 text-mini font-black uppercase tracking-wider text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+                          ariaLabel="Undo move — return to previous box"
+                        >
+                          Undo
+                        </Button>
+                      </HoverTooltip>
                     )}
                     <FbaQtyStepper
                       value={item.expected_qty}

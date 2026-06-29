@@ -1,6 +1,7 @@
 import { Minus, Plus } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
-import { REASON_OPTIONS, type SkuDetailData } from './sku-detail-types';
+import type { SkuDetailData } from './sku-detail-types';
 import type { SkuDetailController } from './useSkuDetailView';
 
 /** Stock quantity card — quick +/- adjust, bulk delta, or set-exact mode. */
@@ -9,12 +10,14 @@ export function SkuStockCard({ c, data }: { c: SkuDetailController; data: SkuDet
     <div className="rounded-xl bg-white border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className={sectionLabel}>Stock Quantity</h2>
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => c.setShowSetMode(!c.showSetMode)}
           className="text-micro font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
         >
           {c.showSetMode ? 'Quick Adjust' : 'Set Exact'}
-        </button>
+        </Button>
       </div>
 
       {c.error && <p className="mb-2 text-xs font-bold text-red-500">{c.error}</p>}
@@ -29,36 +32,35 @@ export function SkuStockCard({ c, data }: { c: SkuDetailController; data: SkuDet
             placeholder={String(data.stock.qty)}
             className="h-10 w-24 rounded-lg border border-gray-300 px-3 text-center text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={c.handleSetAbsolute}
             disabled={c.saving || !c.absoluteQty}
-            className="h-10 px-4 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider disabled:opacity-40"
           >
             {c.saving ? 'Saving...' : 'Set'}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1 rounded-xl bg-gray-100 p-1">
-            <button
+            <IconButton
+              icon={<Minus className="h-4 w-4" />}
+              ariaLabel="Decrease stock"
               onClick={() => c.handleAdjust(-1)}
               disabled={c.saving}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-red-600 shadow-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
-              aria-label="Decrease stock"
-            >
-              <Minus className="h-4 w-4" />
-            </button>
+              className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-red-600 shadow-sm hover:bg-red-50 transition-colors"
+            />
             <div className="w-16 text-center">
               <span className="text-2xl font-black text-gray-900">{data.stock.qty}</span>
             </div>
-            <button
+            <IconButton
+              icon={<Plus className="h-4 w-4" />}
+              ariaLabel="Increase stock"
               onClick={() => c.handleAdjust(1)}
               disabled={c.saving}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm hover:bg-emerald-50 disabled:opacity-40 transition-colors"
-              aria-label="Increase stock"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+              className="flex h-10 w-10 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-sm hover:bg-emerald-50 transition-colors"
+            />
           </div>
 
           <div className="flex items-center gap-1">
@@ -69,13 +71,14 @@ export function SkuStockCard({ c, data }: { c: SkuDetailController; data: SkuDet
               placeholder="±"
               className="h-10 w-16 rounded-lg border border-gray-300 px-2 text-center text-sm font-bold focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
-            <button
+            <Button
+              variant="brand"
+              size="lg"
               onClick={() => c.adjustDelta !== 0 && c.handleAdjust(c.adjustDelta)}
               disabled={c.saving || c.adjustDelta === 0}
-              className="h-10 px-3 rounded-lg bg-gray-900 text-white text-micro font-black uppercase tracking-wider disabled:opacity-40"
             >
               Apply
-            </button>
+            </Button>
           </div>
 
           <select
@@ -83,8 +86,8 @@ export function SkuStockCard({ c, data }: { c: SkuDetailController; data: SkuDet
             onChange={(e) => c.setAdjustReason(e.target.value)}
             className="h-10 rounded-lg border border-gray-300 px-2 text-xs font-bold text-gray-700 focus:border-blue-500"
           >
-            {REASON_OPTIONS.map((r) => (
-              <option key={r} value={r}>{r}</option>
+            {c.reasonOptions.map((r) => (
+              <option key={r.code} value={r.code}>{r.label}</option>
             ))}
           </select>
         </div>

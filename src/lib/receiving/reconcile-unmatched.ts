@@ -65,9 +65,12 @@ export async function reconcileUnmatchedReceiving(
 ): Promise<ReconcileResult> {
   // ─── Load the receiving row ─────────────────────────────────────────────
   const recRes = await pool.query<ReceivingSnapshot>(
-    `SELECT id, source, receiving_tracking_number, organization_id
-       FROM receiving
-      WHERE id = $1
+    `SELECT r.id, r.source,
+            stn.tracking_number_raw AS receiving_tracking_number,
+            r.organization_id
+       FROM receiving r
+       LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+      WHERE r.id = $1
       LIMIT 1`,
     [receivingId],
   );
@@ -261,7 +264,7 @@ export async function sweepUnmatchedReceivings(
     `SELECT id
        FROM receiving
       WHERE source = 'unmatched'
-        AND receiving_tracking_number IS NOT NULL
+        AND shipment_id IS NOT NULL
         AND receiving_date_time > NOW() - ($1 || ' days')::interval
       ORDER BY receiving_date_time DESC
       LIMIT $2`,

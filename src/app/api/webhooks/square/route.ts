@@ -19,7 +19,14 @@ function verifySquareSignature(
 ): boolean {
   const key = WEBHOOK_SIGNATURE_KEY();
   if (!key) {
-    console.warn('SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping verification');
+    // Fail closed in production when no signing key is configured (mirror the UPS
+    // receiver). Permissive only in development/preview so local replay scripts
+    // keep working without forcing every dev to set the env var.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('SQUARE_WEBHOOK_SIGNATURE_KEY not set — rejecting webhook in production');
+      return false;
+    }
+    console.warn('SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping verification (non-production)');
     return true; // Allow in dev
   }
 

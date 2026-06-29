@@ -101,6 +101,44 @@ export const OrgSettingsSchema = z.object({
       enforcement: z.enum(['advisory', 'block_until_matched']).default('advisory'),
     })
     .default({ enforcement: 'advisory' }),
+  // Per-org fulfillment substitution policy — the ordered-vs-fulfilled deviation
+  // flow (release the original allocation + allocate a substitute unit, recorded
+  // in order_unit_amendments). Mirrors `packing` above.
+  // substitutionEnforcement:
+  //   'advisory' (default) — the substitution re-allocates immediately and the
+  //     order can ship; the amendment is recorded APPLIED. Matches the repo's
+  //     "never block the floor" philosophy.
+  //   'block_until_approved' — the substitution is recorded PENDING and the
+  //     order cannot pack/ship until a supervisor approves it (gate read by
+  //     /api/pack/ship).
+  // substitutionAllowedNodes: which station may RAISE a substitution. Default
+  //   ['pick'] mirrors industry WMS (pick-exception); a tenant opens 'test' /
+  //   'pack' from /studio. The route refuses a raise from a node not listed here.
+  fulfillment: z
+    .object({
+      substitutionEnforcement: z.enum(['advisory', 'block_until_approved']).default('advisory'),
+      substitutionAllowedNodes: z.array(z.enum(['pick', 'test', 'pack'])).default(['pick']),
+    })
+    .default({ substitutionEnforcement: 'advisory', substitutionAllowedNodes: ['pick'] }),
+  // Per-org workflow-engine overrides (flag-gated, default empty). `verdictStatus`
+  // maps a test verdict to the unit status + inventory-event it produces,
+  // overriding the hardcoded VERDICT_TO_STATUS (src/lib/tech/recordTestVerdict.ts).
+  // Read ONLY when UNIFIED_ENGINE_VERDICT_CONFIG is on; an unset verdict falls back
+  // to the built-in. Values are constrained to the existing serial states / event
+  // types so an override can never write an out-of-range status.
+  workflow: z
+    .object({
+      verdictStatus: z
+        .record(
+          z.enum(['PASS', 'TEST_AGAIN', 'TESTING_FAILED']),
+          z.object({
+            nextStatus: z.enum(['TESTED', 'IN_TEST', 'ON_HOLD']),
+            eventType: z.enum(['TEST_PASS', 'TEST_FAIL', 'TEST_START']),
+          }),
+        )
+        .optional(),
+    })
+    .default({}),
 }).passthrough();
 
 export type OrgSettings = z.infer<typeof OrgSettingsSchema>;
@@ -142,6 +180,18 @@ export type PackingEnforcement = OrgSettings['packing']['enforcement'];
 
 export function getPackingEnforcement(settings: OrgSettings): PackingEnforcement {
   return settings.packing?.enforcement ?? 'advisory';
+}
+
+/** Fulfillment-substitution policy for this org. See OrgSettingsSchema.fulfillment. */
+export type SubstitutionEnforcement = OrgSettings['fulfillment']['substitutionEnforcement'];
+export type SubstitutionNode = OrgSettings['fulfillment']['substitutionAllowedNodes'][number];
+
+export function getSubstitutionEnforcement(settings: OrgSettings): SubstitutionEnforcement {
+  return settings.fulfillment?.substitutionEnforcement ?? 'advisory';
+}
+
+export function getSubstitutionAllowedNodes(settings: OrgSettings): SubstitutionNode[] {
+  return settings.fulfillment?.substitutionAllowedNodes ?? ['pick'];
 }
 
 export type NasStorageTargetKey = keyof typeof DEFAULT_NAS_STORAGE_TARGETS;

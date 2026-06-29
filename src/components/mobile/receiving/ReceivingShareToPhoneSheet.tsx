@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Camera, Monitor } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAblyClient } from '@/contexts/AblyContext';
@@ -19,7 +20,7 @@ interface SharePayload {
 /**
  * Phone-side receiver for the desktop "share to phone" action. The receiving
  * workspace's phone button publishes `receiving_share_to_phone` on
- * `station:{staffId}` (implicit pairing — the channel name is the gate, no
+ * `staffstation:{staffId}` (implicit pairing — the channel name is the gate, no
  * claim flow). Here we pop a bottom sheet ("Shared from computer") with a Take
  * photos CTA that jumps to the existing `/m/r/{id}/photos` capture page.
  *
@@ -96,14 +97,14 @@ export function ReceivingShareToPhoneSheet() {
             Sent from the receiving workstation. Take photos for this package on your phone.
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={takePhotos}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold tracking-wide text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
+          icon={<Camera className="h-5 w-5" />}
+          className="h-12 w-full rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-md shadow-blue-600/30"
         >
-          <Camera className="h-5 w-5" />
           Take photos
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );

@@ -37,7 +37,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.view' });
+}, { permission: 'sourcing.view', feature: 'sourcing' });
 
 /**
  * POST /api/sourcing/saved-searches — create a standing search.
@@ -98,4 +98,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.manage' });
+}, { permission: 'sourcing.manage', feature: 'sourcing' });

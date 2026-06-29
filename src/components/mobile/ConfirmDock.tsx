@@ -16,6 +16,7 @@
  * actions. Tone presets keep the brand palette consistent across screens.
  */
 
+import { Button } from '@/design-system/primitives';
 
 export type ConfirmDockTone = 'primary' | 'success' | 'warning' | 'neutral';
 
@@ -71,36 +72,29 @@ export function ConfirmDock({
       className="border-t border-gray-100 bg-white px-4 pt-3"
       style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
     >
-      <button
+      <Button
         type="button"
+        variant="primary"
         onClick={handlePrimary}
         disabled={blocked}
-        aria-busy={loading || undefined}
-        className={`flex h-14 w-full items-center justify-center rounded-2xl text-sm font-semibold tracking-wide text-white shadow-md transition-transform active:scale-[0.985] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 ${TONE_CLASSES[tone]}`}
+        loading={loading}
+        className={`h-14 w-full rounded-2xl text-sm tracking-wide shadow-md ${TONE_CLASSES[tone]}`}
       >
-        {loading ? (
-          <span className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
-            />
-            <span>Working…</span>
-          </span>
-        ) : (
-          label
-        )}
-      </button>
+        {label}
+      </Button>
       {secondary && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={handleSecondary}
           disabled={loading}
-          className={`mt-2 flex h-8 w-full items-center justify-center text-xs font-semibold transition-colors disabled:opacity-50 ${
+          className={`mt-2 h-8 w-full text-xs ${
             secondary.destructive ? 'text-red-600 active:text-red-700' : 'text-gray-500 active:text-gray-700'
           }`}
         >
           {secondary.label}
-        </button>
+        </Button>
       )}
     </div>
   );

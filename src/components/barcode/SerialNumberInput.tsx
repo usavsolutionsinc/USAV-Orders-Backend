@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 import { LocationSelector } from './LocationSelector';
 import type { BarcodeDensity } from './BarcodePreview';
 
@@ -95,12 +96,17 @@ export function SerialNumberInput({
                     Details & Serial Numbers
                 </span>
                 {showChangeSku && onChangeSku && (
-                    <button
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={onChangeSku}
-                        className={`ml-auto font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors ${comfy ? 'text-micro' : 'text-eyebrow'}`}
+                        className={cn(
+                            'ml-auto h-auto px-0 font-black uppercase tracking-widest text-blue-600 hover:bg-transparent hover:text-blue-800',
+                            comfy ? 'text-micro' : 'text-eyebrow',
+                        )}
                     >
                         ← Change SKU
-                    </button>
+                    </Button>
                 )}
             </div>
 
@@ -199,14 +205,15 @@ export function SerialNumberInput({
             </div>
 
             {/* CTA */}
-            <button
+            <Button
+                variant="primary"
                 onClick={() => {
                     const pending = scanValue.trim() || undefined;
                     if (pending) setScanValue('');
                     onNext(pending);
                 }}
                 disabled={isPosting}
-                className={`w-full ${comfy ? 'py-5' : 'py-4'} bg-blue-600 hover:bg-blue-700 text-white ${sectionLabel} transition-colors disabled:opacity-40`}
+                className={cn('w-full justify-center rounded-none h-auto', comfy ? 'py-5' : 'py-4')}
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -221,7 +228,7 @@ export function SerialNumberInput({
                         )}
                     </span>
                 )}
-            </button>
+            </Button>
         </div>
     );
 }

@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink, Link2, Loader2, MessageSquare, Search, Send, Unlink, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 import { toast } from '@/lib/toast';
+import { Button, IconButton } from '@/design-system/primitives';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
 import { useWarrantyClaim } from '@/hooks/useWarrantyClaims';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
@@ -43,27 +45,27 @@ export function WarrantyTicketButton({
 
   return (
     <>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={linked ? 'Open support ticket thread' : 'Create Zendesk ticket'}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        title={linked ? 'Support ticket thread' : 'Create Zendesk ticket'}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((o) => !o);
-        }}
-        className={cn(
-          'rounded-md p-1.5 transition',
-          linked
-            ? 'text-blue-600 hover:bg-blue-50'
-            : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500',
-          className,
-        )}
-      >
-        <MessageSquare className="h-4 w-4" />
-      </button>
+      <HoverTooltip label={linked ? 'Support ticket thread' : 'Create Zendesk ticket'} asChild>
+        <IconButton
+          ref={buttonRef}
+          type="button"
+          ariaLabel={linked ? 'Open support ticket thread' : 'Create Zendesk ticket'}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen((o) => !o);
+          }}
+          icon={<MessageSquare className="h-4 w-4" />}
+          className={cn(
+            'rounded-md p-1.5 transition',
+            linked
+              ? 'text-blue-600 hover:bg-blue-50'
+              : 'text-gray-300 hover:bg-gray-100 hover:text-gray-500',
+            className,
+          )}
+        />
+      </HoverTooltip>
       <AnchoredLayer
         open={open}
         onClose={() => setOpen(false)}
@@ -81,7 +83,7 @@ export function WarrantyTicketButton({
 function TimelineRow({ entry }: { entry: WarrantyTimelineEntry }) {
   if (entry.kind === 'event') {
     return (
-      <li className="flex items-start gap-2 px-1 text-[11px] text-gray-400">
+      <li className="flex items-start gap-2 px-1 text-caption text-gray-400">
         <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
         <span>
           <span className="font-medium text-gray-500">{warrantyEventLabel(entry.event)}</span>
@@ -98,7 +100,7 @@ function TimelineRow({ entry }: { entry: WarrantyTimelineEntry }) {
         comment.public ? 'border-blue-100 bg-blue-50/60' : 'border-amber-100 bg-amber-50/60',
       )}
     >
-      <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide">
+      <div className="mb-1 flex items-center justify-between gap-2 text-micro uppercase tracking-wide">
         <span className={comment.public ? 'font-semibold text-blue-600' : 'font-semibold text-amber-600'}>
           {comment.public ? 'Public reply' : 'Internal note'}
         </span>
@@ -171,33 +173,34 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
             <div className="truncate text-[13px] font-semibold text-gray-800">
               {linked ? `Ticket #${claim?.zendeskTicketId}` : 'Support thread'}
             </div>
-            <div className="truncate font-mono text-[10px] text-gray-400">{claim?.claimNumber}</div>
+            <div className="truncate font-mono text-micro text-gray-400">{claim?.claimNumber}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {ticketQuery.data?.ticket && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-500">
               {ticketQuery.data.ticket.status}
             </span>
           )}
           {ticketQuery.data?.ticketUrl && (
-            <a
-              href={ticketQuery.data.ticketUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open in Zendesk"
-              title="Open in Zendesk"
-              className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <HoverTooltip label="Open in Zendesk" asChild>
+              <a
+                href={ticketQuery.data.ticketUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open in Zendesk"
+                className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </HoverTooltip>
           )}
           {linked && (
-            <button
+            <HoverTooltip label="Unlink ticket (it stays in Zendesk)" asChild>
+            <IconButton
               type="button"
               disabled={unlink.isPending}
-              aria-label="Unlink ticket"
-              title="Unlink ticket (it stays in Zendesk)"
+              ariaLabel="Unlink ticket"
               onClick={() => {
                 const ticketId = claim?.zendeskTicketId;
                 if (ticketId == null) return;
@@ -214,24 +217,28 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                     toast.error(e instanceof Error ? e.message : 'Unlink failed'),
                 });
               }}
+              icon={
+                unlink.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Unlink className="h-3.5 w-3.5" />
+                )
+              }
               className="rounded-md p-1 text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-            >
-              {unlink.isPending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Unlink className="h-3.5 w-3.5" />
-              )}
-            </button>
+            />
+            </HoverTooltip>
           )}
           {canResolve && (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               disabled={lifecycle.isPending}
               onClick={() => lifecycle.mutate({ id: claimId, action: 'close' })}
-              className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50"
+              className="h-auto rounded-md bg-emerald-600 px-2 py-1 text-caption font-medium text-white hover:bg-emerald-700"
             >
               {lifecycle.isPending ? 'Resolving…' : 'Resolve'}
-            </button>
+            </Button>
           )}
         </div>
       </header>
@@ -259,7 +266,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
               </ul>
             )}
             {commentsQuery.isError && (
-              <p className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-600">
+              <p className="rounded-md bg-rose-50 px-2 py-1.5 text-caption text-rose-600">
                 Zendesk history unavailable:{' '}
                 {commentsQuery.error instanceof Error ? commentsQuery.error.message : 'request failed'}
               </p>
@@ -269,61 +276,65 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
           <footer className="border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
             {!linked ? (
               <div className="space-y-2">
-                <p className="text-[12px] text-gray-500">
+                <p className="text-label text-gray-500">
                   No Zendesk ticket yet — create one from this claim to start the support thread.
                 </p>
                 {createDraft && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-2">
-                    <p className="mb-1 text-[11px] font-medium text-amber-700">
+                    <p className="mb-1 text-caption font-medium text-amber-700">
                       {createDraft.message} — copy the draft and file it manually:
                     </p>
-                    <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap text-[11px] text-gray-700">
+                    <pre className="max-h-28 overflow-y-auto whitespace-pre-wrap text-caption text-gray-700">
                       {[createDraft.draftSubject, createDraft.draftBody].filter(Boolean).join('\n\n')}
                     </pre>
                   </div>
                 )}
                 {createTicket.isError && !createDraft && (
-                  <p className="text-[11px] text-rose-600">
+                  <p className="text-caption text-rose-600">
                     {createTicket.error instanceof Error ? createTicket.error.message : 'Create failed.'}
                   </p>
                 )}
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  size="md"
                   disabled={createTicket.isPending}
+                  loading={createTicket.isPending}
                   onClick={() => createTicket.mutate()}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                  icon={<Send className="h-4 w-4" />}
+                  className="w-full text-sm font-medium"
                 >
-                  {createTicket.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   Create Zendesk ticket
-                </button>
+                </Button>
 
                 {/* Link an EXISTING ticket — for claims whose ticket was filed
                     by email (the common case). Search, or type a ticket # by
                     hand; the manual id resolves identically to a list pick. */}
                 {!linkOpen ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setLinkOpen(true)}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50"
+                    icon={<Link2 className="h-3.5 w-3.5" />}
+                    className="h-auto w-full justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-label font-medium text-gray-600 hover:bg-gray-50"
                   >
-                    <Link2 className="h-3.5 w-3.5" />
                     Link an existing ticket
-                  </button>
+                  </Button>
                 ) : (
                   <div className="space-y-2 rounded-lg border border-gray-200 p-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-gray-600">Link existing ticket</span>
-                      <button
+                      <span className="text-caption font-semibold text-gray-600">Link existing ticket</span>
+                      <IconButton
                         type="button"
                         onClick={() => {
                           setLinkOpen(false);
                           setLinkQuery('');
                         }}
-                        aria-label="Cancel linking"
+                        ariaLabel="Cancel linking"
+                        icon={<X className="h-3.5 w-3.5" />}
                         className="rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      />
                     </div>
                     <div className="relative">
                       <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -332,11 +343,11 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                         onChange={(e) => setLinkQuery(e.target.value)}
                         placeholder="Search subject or type ticket # (e.g. 12345)"
                         autoFocus
-                        className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-[12px] focus:border-blue-300 focus:outline-none"
+                        className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-label focus:border-blue-300 focus:outline-none"
                       />
                     </div>
                     {linkExisting.isError && (
-                      <p className="text-[11px] text-rose-600">
+                      <p className="text-caption text-rose-600">
                         {linkExisting.error instanceof Error ? linkExisting.error.message : 'Link failed.'}
                       </p>
                     )}
@@ -346,18 +357,20 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                           <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                         </div>
                       ) : candidatesQuery.isError ? (
-                        <p className="px-1 py-2 text-[11px] text-rose-600">
+                        <p className="px-1 py-2 text-caption text-rose-600">
                           {candidatesQuery.error instanceof Error ? candidatesQuery.error.message : 'Search failed.'}
                         </p>
                       ) : (candidatesQuery.data?.tickets.length ?? 0) === 0 ? (
-                        <p className="px-1 py-2 text-center text-[11px] text-gray-400">
+                        <p className="px-1 py-2 text-center text-caption text-gray-400">
                           {debouncedQuery.trim() ? 'No matching tickets.' : 'No recent tickets.'}
                         </p>
                       ) : (
                         candidatesQuery.data!.tickets.map((t) => (
-                          <button
+                          <Button
                             key={t.id}
                             type="button"
+                            variant="ghost"
+                            size="sm"
                             disabled={linkExisting.isPending}
                             onClick={() =>
                               linkExisting.mutate(t.id, {
@@ -368,26 +381,26 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                                 },
                               })
                             }
-                            className="flex w-full items-start gap-2 rounded-md border border-gray-100 px-2 py-1.5 text-left transition hover:border-blue-200 hover:bg-blue-50/40 disabled:opacity-50"
+                            className="h-auto w-full items-start justify-start gap-2 rounded-md border border-gray-100 px-2 py-1.5 text-left hover:border-blue-200 hover:bg-blue-50/40"
                           >
-                            <span className="mt-0.5 shrink-0 font-mono text-[10px] font-semibold text-gray-400">
+                            <span className="mt-0.5 shrink-0 font-mono text-micro font-semibold text-gray-400">
                               #{t.id}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[12px] font-medium text-gray-700">
+                              <span className="block truncate text-label font-medium text-gray-700">
                                 {t.subject || '(no subject)'}
                               </span>
-                              <span className="block text-[10px] uppercase tracking-wide text-gray-400">
+                              <span className="block text-micro uppercase tracking-wide text-gray-400">
                                 {t.status}
                               </span>
                             </span>
                             <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
-                          </button>
+                          </Button>
                         ))
                       )}
                     </div>
                     {(candidatesQuery.data?.hiddenLinked ?? 0) > 0 && (
-                      <p className="px-1 text-[10px] text-gray-400">
+                      <p className="px-1 text-micro text-gray-400">
                         {candidatesQuery.data!.hiddenLinked} hidden — already linked elsewhere.
                       </p>
                     )}
@@ -397,7 +410,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
             ) : (
               <div className="space-y-2">
                 {reply.isError && (
-                  <p className="text-[11px] text-rose-600">
+                  <p className="text-caption text-rose-600">
                     {reply.error instanceof Error ? reply.error.message : 'Reply failed.'}
                   </p>
                 )}
@@ -416,7 +429,7 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                   className="w-full resize-none rounded-md border border-gray-200 px-2 py-1.5 text-sm focus:border-blue-300 focus:outline-none"
                 />
                 <div className="flex items-center justify-between gap-2">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-caption text-gray-500">
                     <input
                       type="checkbox"
                       checked={isPublic}
@@ -425,15 +438,18 @@ function WarrantyTicketPanel({ claimId }: { claimId: number }) {
                     />
                     Customer-visible reply
                   </label>
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
+                    size="sm"
                     disabled={reply.isPending || draft.trim().length === 0}
+                    loading={reply.isPending}
                     onClick={sendReply}
-                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[12px] font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+                    icon={<Send className="h-3.5 w-3.5" />}
+                    className="text-label font-medium"
                   >
-                    {reply.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     Send
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

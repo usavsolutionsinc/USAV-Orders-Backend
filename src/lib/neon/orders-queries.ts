@@ -188,9 +188,9 @@ const ORDER_SERIALS_CTE = `
             stn_link.tracking_number_raw,
             COALESCE(osl_link.is_primary, false) AS is_primary,
             CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-          FROM order_shipment_links osl_link
+          FROM shipment_links osl_link
           LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-          WHERE osl_link.order_row_id = o.id
+          WHERE osl_link.owner_type = 'ORDER' AND osl_link.owner_id = o.id
 
           UNION ALL
 
@@ -601,9 +601,9 @@ export async function getShippedOrderById(id: number, orgId?: OrgId): Promise<Sh
                 stn_link.tracking_number_raw,
                 COALESCE(osl_link.is_primary, false) AS is_primary,
                 CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-              FROM order_shipment_links osl_link
+              FROM shipment_links osl_link
               LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-              WHERE osl_link.order_row_id = o.id
+              WHERE osl_link.owner_type = 'ORDER' AND osl_link.owner_id = o.id
 
               UNION ALL
 
@@ -1358,7 +1358,7 @@ export async function createOrder(params: CreateOrderParams, orgId?: OrgId): Pro
       productTitle: params.productTitle,
       accountSource: params.accountSource,
       orderId: params.orderId,
-    });
+    }, params.organizationId);
 
     const result = await client.query(
       `INSERT INTO orders

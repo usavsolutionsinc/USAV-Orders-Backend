@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'react-qr-code';
 import { QrCode, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Compact QR trigger + centered scan overlay. Encodes the mobile sign-in URL
@@ -32,22 +34,22 @@ export function PhoneSignInQrButton({ className }: { className?: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
-        }}
-        aria-label="Show sign-in QR code"
-        title="Scan to open on your phone"
-        className={
-          className ??
-          'inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-eyebrow font-black uppercase tracking-wider text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50 active:bg-gray-100'
-        }
-      >
-        <QrCode className="h-3.5 w-3.5" />
-        QR
-      </button>
+      <HoverTooltip label="Scan to open on your phone" asChild>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          icon={<QrCode className="h-3.5 w-3.5" />}
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          ariaLabel="Show sign-in QR code"
+          className={className}
+        >
+          QR
+        </Button>
+      </HoverTooltip>
 
       {open && typeof document !== 'undefined' &&
         createPortal(
@@ -62,14 +64,13 @@ export function PhoneSignInQrButton({ className }: { className?: string }) {
               className="relative flex w-[min(20rem,calc(100vw-2rem))] flex-col items-center rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
+              <IconButton
                 type="button"
                 onClick={() => setOpen(false)}
-                aria-label="Close"
+                ariaLabel="Close"
+                icon={<X className="h-4 w-4" />}
                 className="absolute right-3 top-3 text-gray-400 hover:text-gray-700"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              />
               <p className="text-micro font-black uppercase tracking-widest text-gray-500">
                 Scan to open on your phone
               </p>

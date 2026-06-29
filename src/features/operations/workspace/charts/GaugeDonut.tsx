@@ -98,7 +98,7 @@ export function GaugeDonut({
           </text>
         </g>
         <g className="text-gray-400">
-          <text x={cx} y={cy + 4} textAnchor="middle" fill="currentColor" className="text-[10px] font-bold uppercase tracking-[0.18em]">
+          <text x={cx} y={cy + 4} textAnchor="middle" fill="currentColor" className="text-micro font-bold uppercase tracking-[0.18em]">
             {centerLabel}
           </text>
         </g>

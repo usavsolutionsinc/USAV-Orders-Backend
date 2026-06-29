@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import { getStaffTheme, getStaffColorHex, type StationTheme } from '@/utils/staff-colors';
 
 interface StaffPinPadProps {
@@ -84,14 +85,15 @@ export function StaffPinPad({ staff, onSubmit, onPasskey, submitLabel, onBack, i
   return (
     <div className="flex flex-col items-center">
       {onBack && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onBack}
-          className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-gray-600 backdrop-blur transition-all hover:border-gray-300 hover:bg-white hover:text-gray-900"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>}
+          className="absolute left-4 top-4"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
           Not you?
-        </button>
+        </Button>
       )}
 
       <div className="relative">
@@ -166,6 +168,7 @@ export function StaffPinPad({ staff, onSubmit, onPasskey, submitLabel, onBack, i
         />
       </div>
 
+      {/* ds-raw-button: themed full-width submit CTA (per-staff solid accent, e.g. emerald) */}
       <button
         type="button"
         disabled={busy || pin.length < 4}
@@ -190,6 +193,7 @@ interface KeyProps {
 function Key({ value, onClick, disabled, theme, ariaLabel, icon }: KeyProps) {
   const t = THEME_NUMPAD[theme];
   return (
+    // ds-raw-button: PIN numpad key (keypad grid cell)
     <button
       type="button"
       disabled={disabled}

@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Loader2 } from '@/components/Icons';
 import { InlineNotice } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 
 export type SerialMatchState = 'idle' | 'searching' | 'found' | 'not-found';
 
@@ -143,7 +144,7 @@ export function SerialMatchResult({
         <span className="flex items-center gap-2">
           Match found
           {isReturn ? (
-            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-700 ring-1 ring-inset ring-emerald-500/25">
+            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-micro font-black uppercase tracking-[0.1em] text-emerald-700 ring-1 ring-inset ring-emerald-500/25">
               Returned item
             </span>
           ) : null}
@@ -158,6 +159,8 @@ export function SerialMatchResult({
           {isReturn && matchedOrder && (matchedOrder.product_title || matchedOrder.order_id) ? (
             <div className="rounded-lg bg-white/70 px-2.5 py-2 ring-1 ring-inset ring-emerald-200">
               {matchedOrder.product_title ? (
+                // ds-allow-title: truncation reveal of the full product title on
+                // a non-interactive clipped (truncate) <p>.
                 <p className="truncate text-label font-bold text-emerald-900" title={matchedOrder.product_title}>
                   {matchedOrder.product_title}
                 </p>
@@ -188,14 +191,14 @@ export function SerialMatchResult({
           {/* Return CTA — pairs the order with the carton + opens a prefilled
               claim for the operator to review. Only for genuine returns. */}
           {isReturn && onFileClaim ? (
-            <button
-              type="button"
+            <Button
+              size="sm"
               onClick={() => onFileClaim(matchedOrder ?? null)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700"
+              iconRight={<span aria-hidden>→</span>}
+              className="bg-emerald-600 text-micro font-black uppercase tracking-wider text-white hover:bg-emerald-700 active:bg-emerald-700"
             >
               File return claim
-              <span aria-hidden>→</span>
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : (

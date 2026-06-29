@@ -17,6 +17,9 @@
 
 import { useEffect, useState } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { Button } from '@/design-system/primitives';
+import { useReasonVocabulary } from '@/hooks/useReasonVocabulary';
+import { SHORT_PICK_REASONS, mergeShortPickReasons } from '@/lib/picking/short-pick-reasons';
 
 export type ShortPickReason =
   | 'NOT_FOUND_IN_BIN'
@@ -25,19 +28,6 @@ export type ShortPickReason =
   | 'MISLABELED'
   | 'INSUFFICIENT_STOCK'
   | 'OTHER';
-
-const REASON_OPTIONS: ReadonlyArray<{
-  value: ShortPickReason;
-  label: string;
-  hint: string;
-}> = [
-  { value: 'NOT_FOUND_IN_BIN',   label: 'Not in bin',         hint: 'Expected here, not present' },
-  { value: 'DAMAGED',            label: 'Damaged',            hint: 'Visible damage — needs hold' },
-  { value: 'WRONG_CONDITION',    label: 'Wrong condition',    hint: "Grade doesn't match order" },
-  { value: 'MISLABELED',         label: 'Mislabeled',         hint: 'SKU on unit ≠ bin label' },
-  { value: 'INSUFFICIENT_STOCK', label: 'Insufficient stock', hint: 'Fewer units exist than planned' },
-  { value: 'OTHER',              label: 'Other',              hint: 'Add a note below' },
-];
 
 export interface ShortPickResult {
   pickedQty: number;
@@ -70,6 +60,11 @@ export function ShortPickSheet({
   const [reason, setReason] = useState<ShortPickReason | null>(null);
   const [note, setNote] = useState('');
   const missing = Math.max(0, plannedQty - pickedQty);
+
+  // Tenant short-pick reasons (reason_codes, flow_context='short_pick'); falls
+  // back to the built-in registry when the DB is unseeded / unreachable.
+  const dbRows = useReasonVocabulary('short_pick');
+  const options = dbRows && dbRows.length > 0 ? mergeShortPickReasons(dbRows) : SHORT_PICK_REASONS;
 
   // Reset selection each time the sheet opens fresh.
   useEffect(() => {
@@ -106,15 +101,15 @@ export function ShortPickSheet({
         <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Why are you short?
         </legend>
-        {REASON_OPTIONS.map((opt) => {
-          const selected = reason === opt.value;
+        {options.map((opt) => {
+          const selected = reason === opt.code;
           return (
             <button
-              key={opt.value}
+              key={opt.code}
               type="button"
-              onClick={() => setReason(opt.value)}
+              onClick={() => setReason(opt.code as ShortPickReason)}
               aria-pressed={selected}
-              className={`flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors min-h-[56px] ${
+              className={`ds-raw-button flex w-full items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-colors min-h-[56px] ${
                 selected
                   ? 'border-blue-500 bg-blue-50/80 ring-2 ring-blue-200'
                   : 'border-gray-200 bg-white active:bg-gray-50'
@@ -165,21 +160,21 @@ export function ShortPickSheet({
 
       {/* Actions */}
       <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={handleConfirm}
           disabled={!canSubmit}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-sm font-semibold tracking-wide text-white shadow-md shadow-amber-500/30 transition-transform active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 sm:flex-1"
+          className="h-12 w-full rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-white shadow-md shadow-amber-500/30 sm:flex-1"
         >
           Confirm short pick
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={onClose}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
+          className="h-12 w-full rounded-2xl text-gray-600 hover:bg-gray-100 sm:flex-1"
         >
           Cancel
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );

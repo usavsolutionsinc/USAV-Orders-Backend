@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Link2, Clipboard, Check, Loader2, ChevronLeft, ChevronRight, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { AddValueChipFace } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useOrderAssignment } from '@/hooks/useOrderAssignment';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import { useAddTrackingNav } from '@/components/outbound/labels/add-tracking-context';
 
@@ -22,6 +24,7 @@ interface SkuResolution {
  */
 export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
   const orderId = Number(record.id);
+  const orderChannelLabel = useOrderChannelLabel();
   const nav = useAddTrackingNav();
   const mutation = useOrderAssignment();
   const [localOpen, setLocalOpen] = useState(false);
@@ -90,7 +93,7 @@ export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sku, open]);
 
-  const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+  const platformLabel = orderChannelLabel(record.order_id || '', record.account_source);
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const pos = nav?.positionOf(orderId);
 
@@ -137,11 +140,13 @@ export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
+        {/* ds-raw-button: single child of Radix <Popover.Trigger asChild> — the Slot clones onto it; a DS Button would disturb the single-child clone + title */}
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => e.stopPropagation()}
+          // ds-allow-title: single child of Radix <Popover.Trigger asChild> — wrapping it would break the trigger.
           title="Add tracking number + complete this order"
           // `px-1.5` mirrors CopyChip's `outerPad='chip'` gutter so this empty
           // state lines up flush with the filled TrackingChip in the ChipColumns
@@ -191,14 +196,14 @@ export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
               placeholder="Paste or scan tracking…"
               className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 font-mono text-caption text-gray-900 outline-none transition-all focus:border-violet-500"
             />
-            <button
-              type="button"
-              onClick={handlePaste}
-              title="Paste from clipboard"
-              className="shrink-0 rounded-xl border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-violet-600"
-            >
-              <Clipboard className="h-4 w-4" />
-            </button>
+            <HoverTooltip label="Paste from clipboard" asChild>
+              <IconButton
+                icon={<Clipboard className="h-4 w-4" />}
+                onClick={handlePaste}
+                ariaLabel="Paste from clipboard"
+                className="shrink-0 rounded-xl border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 hover:text-violet-600"
+              />
+            </HoverTooltip>
           </div>
 
           <label className="mb-1 block text-eyebrow font-black uppercase tracking-wider text-gray-500">SKU</label>
@@ -235,33 +240,33 @@ export function AddTrackingPopover({ record }: { record: ShippedOrder }) {
           ) : null}
 
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => nav?.prev(orderId)}
-              disabled={!nav?.hasPrev(orderId)}
-              className="rounded-xl border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-30"
-              title="Previous order"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
+            <HoverTooltip label="Previous order" asChild>
+              <IconButton
+                icon={<ChevronLeft className="h-4 w-4" />}
+                onClick={() => nav?.prev(orderId)}
+                disabled={!nav?.hasPrev(orderId)}
+                ariaLabel="Previous order"
+                className="rounded-xl border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+              />
+            </HoverTooltip>
+            <Button
+              variant="primary"
               onClick={handleSave}
               disabled={!canSave}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 py-2.5 text-white transition-all hover:bg-violet-700 active:scale-95 disabled:opacity-40 ${sectionLabel} !text-white`}
+              icon={status === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              className="flex-1 bg-violet-600 text-white shadow-violet-600/25 hover:bg-violet-700 active:scale-95"
             >
-              {status === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               {nav?.hasNext(orderId) ? 'Save & Next' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={() => nav?.next(orderId)}
-              disabled={!nav?.hasNext(orderId)}
-              className="rounded-xl border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-30"
-              title="Next order"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+            </Button>
+            <HoverTooltip label="Next order" asChild>
+              <IconButton
+                icon={<ChevronRight className="h-4 w-4" />}
+                onClick={() => nav?.next(orderId)}
+                disabled={!nav?.hasNext(orderId)}
+                ariaLabel="Next order"
+                className="rounded-xl border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-30"
+              />
+            </HoverTooltip>
           </div>
 
           {nav && nav.recentlyAdded.length > 0 ? (

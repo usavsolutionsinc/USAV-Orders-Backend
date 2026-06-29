@@ -22,7 +22,7 @@ export async function ebaySync(orgId: OrgId): Promise<SyncOutcome> {
   const errors: string[] = [];
   for (const { account_name } of rows) {
     try {
-      const r = await syncAccountOrders(account_name);
+      const r = await syncAccountOrders(account_name, orgId);
       imported += r.createdOrders ?? 0;
     } catch (e) {
       errors.push(`${account_name}: ${e instanceof Error ? e.message : String(e)}`);

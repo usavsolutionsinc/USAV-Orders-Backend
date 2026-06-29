@@ -53,9 +53,9 @@ export function WatchlistPane() {
               <p className="truncate text-caption text-gray-500">{c.seller_name ?? 'eBay'}{c.condition ? ` · ${c.condition.replace('_', ' ')}` : ''}</p>
             </div>
             <span className="w-16 text-right text-caption font-semibold text-gray-700">{formatCents(c.price_cents, c.currency)}</span>
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">{c.status}</span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-semibold text-gray-600">{c.status}</span>
             <Button variant="primary" size="sm" loading={importCandidate.isPending} disabled={c.status === 'imported'} onClick={() => doImport(c)}>Import</Button>
-            <button type="button" onClick={() => patch.mutate({ id: c.id, status: 'rejected' })} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Reject</button>
+            <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: c.id, status: 'rejected' })}>Reject</Button>
           </li>
         ))}
       </ul>

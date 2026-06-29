@@ -154,9 +154,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const receivingCols = new Set<string>(columnsRes.rows.map((r) => r.column_name));
 
     const valuesByColumn: Record<string, unknown> = {
-      // PO id is the stable identifier while Zoho is pending — the
-      // purchase_receive_id arrives later (after()) and lands in its own column.
-      receiving_tracking_number: purchaseOrderId,
+      // PO identity lives in zoho_purchaseorder_id / source='zoho_po' (below);
+      // the legacy receiving_tracking_number text column has been dropped.
       carrier: 'ZOHO_PO',
       received_at: normalizedDate,
       received_by: receivedBy,

@@ -12,6 +12,8 @@
  */
 
 import { icons } from 'lucide-react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { StudioGraphNode, StudioStationView } from './studio-types';
 
 const SLOT_LABELS: Record<string, string> = {
@@ -44,24 +46,27 @@ export function StudioStationPreview({
     <div className="flex h-full min-h-0 flex-col bg-slate-50">
       {/* Sub-header: back + context */}
       <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onBack}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100"
+          icon={<icons.ArrowLeft />}
+          className="text-slate-600 hover:bg-slate-100 hover:text-slate-900"
         >
-          <icons.ArrowLeft className="h-4 w-4" /> Flow
-        </button>
+          Flow
+        </Button>
         <span className="text-slate-300">/</span>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-slate-900">
             {station?.label ?? `${nodeLabel} · station`}
           </p>
-          <p className="truncate text-[11px] text-slate-400">
+          <p className="truncate text-caption text-slate-400">
             {station
               ? `${station.pageKey} · ${station.modeKey} · v${station.version}`
               : `bound to “${nodeLabel}”`}
           </p>
         </div>
-        <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+        <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-micro font-bold uppercase tracking-wide text-slate-500">
           Read-only
         </span>
       </div>
@@ -97,7 +102,7 @@ export function StudioStationPreview({
           <div className="mx-auto max-w-2xl space-y-4">
             {station.slots.map((slot) => (
               <section key={slot.slot}>
-                <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <h3 className="mb-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">
                   {SLOT_LABELS[slot.slot] ?? slot.slot}
                 </h3>
                 <div className="space-y-2">
@@ -106,37 +111,35 @@ export function StudioStationPreview({
                       <div className="flex items-center gap-2">
                         <Icon name={b.blockIcon} className="h-4 w-4 shrink-0 text-slate-500" />
                         <span className="text-sm font-bold text-slate-900">{b.blockLabel}</span>
-                        <span className="font-mono text-[10px] text-slate-400">{b.block}</span>
+                        <span className="font-mono text-micro text-slate-400">{b.block}</span>
                         {b.doneWhen && (
-                          <span
-                            className="ml-auto rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700"
-                            title={`A row checks off when “${b.doneWhen}” succeeds`}
-                          >
-                            done: {b.doneWhen}
-                          </span>
+                          <HoverTooltip label={`A row checks off when “${b.doneWhen}” succeeds`} asChild>
+                            <span className="ml-auto rounded bg-emerald-50 px-1.5 py-0.5 text-micro font-semibold text-emerald-700">
+                              done: {b.doneWhen}
+                            </span>
+                          </HoverTooltip>
                         )}
                       </div>
 
                       {/* Data source — where this block's rows flow IN from */}
                       {b.source ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 text-[11px]">
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 text-caption">
                           <span className="font-semibold text-slate-400">source</span>
                           <span className="font-semibold text-slate-700">{b.source.label}</span>
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-micro font-medium text-slate-500">
                             {b.source.integration}
                           </span>
-                          <span className="font-mono text-[10px] text-slate-400">{b.source.endpoint}</span>
+                          <span className="font-mono text-micro text-slate-400">{b.source.endpoint}</span>
                           {b.source.realtimeChannel && (
-                            <span
-                              className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700"
-                              title={`Live updates over ${b.source.realtimeChannel}`}
-                            >
-                              <icons.Radio className="h-3 w-3" /> {b.source.realtimeChannel}
-                            </span>
+                            <HoverTooltip label={`Live updates over ${b.source.realtimeChannel}`} asChild>
+                              <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-micro font-semibold text-blue-700">
+                                <icons.Radio className="h-3 w-3" /> {b.source.realtimeChannel}
+                              </span>
+                            </HoverTooltip>
                           )}
                         </div>
                       ) : (
-                        <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+                        <p className="mt-2 border-t border-slate-100 pt-2 text-caption text-slate-400">
                           no data source bound
                         </p>
                       )}
@@ -147,7 +150,7 @@ export function StudioStationPreview({
                           {Object.entries(b.fields).map(([role, field]) => (
                             <span
                               key={role}
-                              className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500"
+                              className="rounded bg-slate-50 px-1.5 py-0.5 text-micro text-slate-500"
                             >
                               {role} → <span className="font-mono text-slate-600">{field}</span>
                             </span>
@@ -158,11 +161,11 @@ export function StudioStationPreview({
                       {/* Actions — what this block can fire OUT */}
                       {b.actions.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          <span className="text-[11px] font-semibold text-slate-400">actions</span>
+                          <span className="text-caption font-semibold text-slate-400">actions</span>
                           {b.actions.map((a) => (
                             <span
                               key={a.id}
-                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 text-micro font-semibold text-slate-600"
                             >
                               <Icon name={a.icon} className="h-3 w-3" /> {a.label}
                             </span>

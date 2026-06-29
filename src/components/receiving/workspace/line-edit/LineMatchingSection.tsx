@@ -17,68 +17,107 @@
  *                            normal orders (returns/trade-ins) too, not just -RS.
  *
  * Pairing uses REAL signals only (no fabricated score); the "Paired" row shows
- * the linked ticket + Ecwid/PO order # (last-4 copy chips). "New return ticket"
- * reuses the panel's own claim modal.
+ * the linked ticket + Ecwid/PO order # (last-4 copy chips).
  */
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from '@/lib/toast';
 import {
-  AlertTriangle,
+  Link2,
   Loader2,
   Mail,
   PackageOpen,
-  Plus,
+  Pencil,
   Search,
-  Wrench,
+  ShoppingCart,
+  Unlink,
   ZendeskMark,
 } from '@/components/Icons';
+import {
+  dispatchLineUpdated,
+  dispatchSelectLine,
+} from '@/components/station/receiving-lines-table-helpers';
+import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { WorkspaceCard } from '@/design-system/components';
-import { Button } from '@/design-system/primitives/Button';
+import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import {
+  useMotionPresence,
+  useMotionTransition,
+} from '@/design-system/foundations/motion-framer-hooks';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { OrderIdChip, TicketChip, getLast4 } from '@/components/ui/CopyChip';
+import { Button, IconButton } from '@/design-system/primitives';
+import { OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import {
   HorizontalButtonSlider,
   type HorizontalSliderItem,
 } from '@/components/ui/HorizontalButtonSlider';
-import { CartonAddPopover } from '@/components/receiving/workspace/CartonAddPopover';
 import { EcwidProductSearchInline } from '@/components/receiving/unfound/EcwidProductSearchInline';
+import { PoLinkTab } from '@/components/receiving/workspace/line-edit/PoLinkTab';
+import { EmailPoLinkTab } from '@/components/receiving/workspace/line-edit/EmailPoLinkTab';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
 import { relativeTime, toTriagePackage } from '@/components/receiving/triage/triage-types';
 import { useTriagePanel } from '@/components/receiving/triage/useTriagePanel';
 import { useUnmatchedItems } from '@/components/receiving/workspace/unmatched-items/useUnmatchedItems';
 
-/** Minimal controller slice this section needs to open the shared claim modal. */
-interface MatchingControllerSlice {
-  setClaimModalOpen: (open: boolean) => void;
-  setReturnClaimPrefill: (value: string | null) => void;
-}
-
-type MatchTab = 'zendesk' | 'repair';
+type MatchTab = 'ecwid' | 'po' | 'email' | 'zendesk';
 
 export function LineMatchingSection({
   row,
   staffId,
-  c,
   showOpenInUnbox = true,
+  embedded = false,
+  collapsed = false,
+  showTopRule = false,
 }: {
   row: ReceivingLineRow;
   staffId: string;
-  c: MatchingControllerSlice;
   /** Hide the "Open in unbox" jump when already in unbox (self-referential). */
   showOpenInUnbox?: boolean;
+  /**
+   * Render bare (no own WorkspaceCard chrome, no own pencil) — used when this
+   * section is composed *inside* the unified {@link POUnboxingSection} wrapper,
+   * which supplies the single shared card + edit pencil. Defaults to the
+   * standalone card so existing callers are unaffected.
+   */
+  embedded?: boolean;
+  /**
+   * Embedded-only: collapse the WHOLE section (title + tabs + body) away.
+   * Driven by the wrapper's grey pencil. Ignored when not embedded.
+   */
+  collapsed?: boolean;
+  /**
+   * Embedded-only: draw a top divider above the section (when a PO-items block
+   * sits above it in the wrapper). Animates in/out with the collapse.
+   */
+  showTopRule?: boolean;
 }) {
   const pkg = toTriagePackage(row);
 
   // No carton record yet → a minimal teaching card (the carton controller needs
   // a real receivingId, so we don't mount it here).
   if (!pkg.receivingId) {
+    const teaching = (
+      <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
+        This package has no carton record yet — scan its tracking to enable pairing.
+      </p>
+    );
+    if (embedded) {
+      return (
+        <div className="space-y-2">
+          <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+            Package Pairing
+          </h3>
+          {teaching}
+        </div>
+      );
+    }
     return (
       <WorkspaceCard label="Package Pairing" overflow="visible">
-        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
-          This package has no carton record yet — scan its tracking to enable pairing.
-        </p>
+        {teaching}
       </WorkspaceCard>
     );
   }
@@ -88,8 +127,10 @@ export function LineMatchingSection({
       row={row}
       staffId={staffId}
       receivingId={pkg.receivingId}
-      c={c}
       showOpenInUnbox={showOpenInUnbox}
+      embedded={embedded}
+      collapsed={collapsed}
+      showTopRule={showTopRule}
     />
   );
 }
@@ -103,19 +144,168 @@ function TriageMatchingCard({
   row,
   staffId,
   receivingId,
-  c,
   showOpenInUnbox,
+  embedded,
+  collapsed,
+  showTopRule,
 }: {
   row: ReceivingLineRow;
   staffId: string;
   receivingId: number;
-  c: MatchingControllerSlice;
   showOpenInUnbox: boolean;
+  embedded: boolean;
+  collapsed: boolean;
+  showTopRule: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const t = useTriagePanel({ row });
+  const pairingCollapse = useMotionPresence(framerPresence.collapseHeight);
+  const pairingCollapseTransition = useMotionTransition(framerTransition.sidebarExpand);
   const { pkg } = t;
-  const [tab, setTab] = useState<MatchTab>('zendesk');
+  // 'ecwid' (Ecwid Search) is the default — the recent-orders search (by order #,
+  // title, or SKU) is the primary add/pair surface; Link-a-Zoho-PO / Zendesk /
+  // Email-PO sit alongside it.
+  const [tab, setTab] = useState<MatchTab>('ecwid');
+
+  // A carton can carry TWO independent linkages, set from ANY of the pairing
+  // tabs and each individually reversible:
+  //   • an ORDER / PO  (Ecwid pairing · Zoho PO relink · Email PO) → pkg.poNumber
+  //   • a Zendesk TICKET (the returns claim match)                → pkg.zendeskTicket
+  // An order/PO link collapses the picker to the linked summary (the pairing job
+  // is done); a ticket-only link keeps the picker open (the operator still needs
+  // to pair the order) but surfaces the ticket linkage above it. Either way both
+  // linkages render with their own Unlink.
+  const orderLinked = !pkg.isUnmatched && Boolean(pkg.poNumber || pkg.zohoPoId);
+  const hasTicket = Boolean(pkg.zendeskTicket);
+  const [forcePicker, setForcePicker] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkingTicket, setUnlinkingTicket] = useState(false);
+  // Picker is hidden only when an order/PO is linked and the operator hasn't
+  // re-opened it to change/add.
+  const pickerCollapsed = orderLinked && !forcePicker;
+
+  // Unlink the ORDER/PO — full revert to Unfound (clears the carton + line
+  // linkage; leaves any Zendesk ticket intact). Patches the open row so the
+  // header chips re-derive immediately, then invalidates the rails/feeds.
+  const unlink = async () => {
+    if (unlinking) return;
+    if (
+      !window.confirm(
+        'Unlink this package? The PO#/platform pairing is cleared and the carton goes back to the Unfound queue.',
+      )
+    )
+      return;
+    setUnlinking(true);
+    try {
+      const res = await fetch(`/api/receiving/${receivingId}/unpair`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error ?? `Unlink failed (${res.status})`);
+        return;
+      }
+      dispatchLineUpdated({
+        id: row.id,
+        zoho_purchaseorder_number: null,
+        zoho_purchaseorder_id: null,
+        receiving_source: 'unmatched',
+        source_platform: null,
+        source_platform_pill: null,
+        receiving_listing_url: null,
+      });
+      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+      window.dispatchEvent(
+        new CustomEvent('receiving-package-updated', {
+          // Clear the listing too — the derived storefront link is gated to a
+          // linked carton, and a pasted one is reset by the unpair revert.
+          detail: {
+            receiving_id: receivingId,
+            source_platform: null,
+            zoho_purchaseorder_number: null,
+            listing_url: null,
+          },
+        }),
+      );
+      invalidateReceivingFeeds(queryClient);
+      setForcePicker(false);
+      // Land the operator in the Unfound view — the carton just reverted to
+      // unfound. Triage only (showOpenInUnbox is the triage tell); the right pane
+      // keeps this carton open (changing the sub-view doesn't clear selection).
+      if (showOpenInUnbox) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('triview', 'unfound');
+        router.replace(`/receiving?${params.toString()}`);
+      }
+      toast.success('Unlinked — back on the Unfound queue');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unlink failed');
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  // Unlink the Zendesk TICKET (carton-grained, matching how the Zendesk tab
+  // links it). Uses the shared zendesk-claim/link DELETE; leaves any order/PO
+  // pairing intact.
+  const unlinkTicket = async () => {
+    if (unlinkingTicket) return;
+    const ticketId = (pkg.zendeskTicket?.match(/(\d+)/) ?? [])[1];
+    if (!ticketId) {
+      toast.error('Could not resolve the ticket number');
+      return;
+    }
+    if (!window.confirm(`Unlink Zendesk ticket #${ticketId} from this package?`)) return;
+    setUnlinkingTicket(true);
+    try {
+      const sp = new URLSearchParams({ receivingId: String(receivingId), ticketId });
+      const res = await fetch(`/api/receiving/zendesk-claim/link?${sp.toString()}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.success === false) {
+        toast.error(data?.error ?? `Ticket unlink failed (${res.status})`);
+        return;
+      }
+      dispatchLineUpdated({ id: row.id, zendesk_ticket: null });
+      await queryClient.invalidateQueries({
+        queryKey: ['triage-ticket-candidates', receivingId],
+      });
+      invalidateReceivingFeeds(queryClient);
+      toast.success('Ticket unlinked');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ticket unlink failed');
+    } finally {
+      setUnlinkingTicket(false);
+    }
+  };
+
+  // The old standalone "+" add popovers (PO-items accordion, unfound items card)
+  // are gone — their pencil buttons now dispatch this to open the Ecwid Search
+  // tab here, the single add surface. (Same-pane sibling → window event is the
+  // simplest bus.) Scroll this card into view since the trigger may sit in
+  // another card below.
+  const cardTopRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const open = () => {
+      setTab('ecwid');
+      // A linked carton shows the compact summary; force the picker back so the
+      // add/pair surface is reachable for an already-paired box.
+      setForcePicker(true);
+      requestAnimationFrame(() =>
+        cardTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      );
+    };
+    window.addEventListener('receiving-open-pairing-add', open);
+    return () => window.removeEventListener('receiving-open-pairing-add', open);
+  }, []);
+
+  // Collapse back to the linked summary whenever the carton's representative
+  // order/PO changes (a fresh pairing from any tab, or switching to another
+  // already-linked carton). Resetting to false = "show summary when linked".
+  useEffect(() => {
+    setForcePicker(false);
+  }, [pkg.poNumber, pkg.zohoPoId]);
 
   // Reused carton controller — owns the add "+" popover + the add-line path the
   // inline repair list selects into.
@@ -125,16 +315,43 @@ function TriageMatchingCard({
     sourcePlatformHint: pkg.sourcePlatform ?? undefined,
     receivingTypeHint: (pkg.intakeType?.toUpperCase() as 'PO' | 'RETURN' | 'TRADE_IN') ?? 'PO',
     listingUrlHint: row.receiving_listing_url ?? undefined,
+    // Update the open panel IMMEDIATELY from the server's returned row — the
+    // mutation already hands back the carton + the new line, so we don't refetch
+    // to reflect them. invalidateReceivingFeeds is the reconcile, not the path to
+    // first paint.
+    onLinked: ({ carton, line }) => {
+      const cartonPatch = {
+        zoho_purchaseorder_number: carton.zoho_purchaseorder_number,
+        receiving_source: carton.source ?? 'zoho_po',
+        source_platform: carton.source_platform ?? 'ecwid',
+        source_platform_pill: carton.source_platform ?? 'ecwid',
+      };
+      // Unfound stub (synthetic negative id, no real line): the new line IS the
+      // carton's content, so re-select it — the detail pane upgrades from
+      // "Unfound PO" → the real item (title/SKU/qty/listing) in one paint.
+      if (line && line.id > 0 && row.id < 0) {
+        const realRow: ReceivingLineRow = {
+          ...row,
+          ...cartonPatch,
+          id: line.id,
+          sku: line.sku ?? row.sku,
+          item_name: line.item_name ?? row.item_name,
+          quantity_expected: line.quantity_expected,
+          quantity_received: line.quantity_received,
+          condition_grade: line.condition_grade ?? row.condition_grade,
+          receiving_listing_url: line.listing_url ?? row.receiving_listing_url,
+          source_platform_pill: line.source_platform_pill ?? cartonPatch.source_platform_pill,
+        };
+        dispatchSelectLine(realRow);
+      } else {
+        // Already a real line (e.g. an off-PO add to a matched carton): patch the
+        // selected row in place; the new line shows in the accordion on reconcile.
+        dispatchLineUpdated({ id: row.id, ...cartonPatch });
+      }
+      invalidateReceivingFeeds(queryClient);
+      setForcePicker(false);
+    },
   });
-
-  const showCartonActions = pkg.isUnmatched;
-
-  const openNewReturnTicket = () => {
-    c.setReturnClaimPrefill(
-      pkg.tracking ? `Return received · tracking ${pkg.tracking}` : null,
-    );
-    c.setClaimModalOpen(true);
-  };
 
   const openInUnbox = () => {
     const params = new URLSearchParams({ recvId: String(receivingId) });
@@ -142,144 +359,217 @@ function TriageMatchingCard({
     router.push(`/receiving?${params.toString()}`);
   };
 
-  const pairedTicket = pkg.zendeskTicket?.trim() || null;
-  const pairedOrder = pkg.poNumber?.trim() || null;
-
   const tabs: HorizontalSliderItem[] = [
-    { id: 'zendesk', label: 'Zendesk tickets', icon: ZendeskMark },
-    // Relaxed Ecwid list covers repairs AND normal orders (returns/trade-ins).
-    { id: 'repair', label: 'Repair Service / Trade in', icon: Wrench },
+    // Ecwid Search (default) — search ALL recent orders by order #, title, or SKU
+    // (relaxed to include normal orders + returns/trade-ins, not just -RS). The
+    // primary add/pair surface for matched AND unmatched cartons.
+    { id: 'ecwid', label: 'Ecwid', icon: ShoppingCart },
+    // Link a Zoho PO — search the local mirror + relink the carton/line (website-as-SoT).
+    { id: 'po', label: 'Zoho PO', icon: Link2 },
+    { id: 'zendesk', label: 'Tickets', icon: ZendeskMark },
+    // Email PO — search the Gmail-ingested PO worklist (purchase-order emails with
+    // no Zoho match) and link the carton to its order. Works for any carton.
+    { id: 'email', label: 'Email PO', icon: Mail },
   ];
 
-  return (
-    <WorkspaceCard
-      label="Package Pairing"
-      overflow="visible"
-      actions={
-        <div className="flex items-center gap-1.5">
-          {showOpenInUnbox ? (
-            <HoverTooltip label="Open this carton in unbox (serials, photos, receive)" focusable={false}>
-              <button
-                type="button"
-                onClick={openInUnbox}
-                className="flex h-6 items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 text-caption font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100"
-              >
-                <PackageOpen className="h-3 w-3" />
-                Open in unbox
-              </button>
-            </HoverTooltip>
-          ) : null}
-          {showCartonActions ? (
-            <HoverTooltip label="Add to carton — catalog item, web search, or a box" focusable={false}>
-              <button
-                type="button"
-                onClick={() => u.setAddOpen(true)}
-                aria-label="Add to carton"
-                className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 text-white hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </HoverTooltip>
-          ) : null}
-        </div>
-      }
-    >
-      {/* Switchable tabs (same control as the Notes/Checklist card). Only when
-          there's a carton to link repair-service orders against. */}
-      {showCartonActions ? (
-        <div className="mb-3 flex items-center gap-2">
-          <HorizontalButtonSlider
-            variant="nav"
-            dense
-            overlay
-            items={tabs}
-            value={tab}
-            onChange={(id) => setTab(id as MatchTab)}
-            aria-label="Matching tabs"
-          />
-          {tab === 'zendesk' && t.hiddenLinked > 0 ? (
-            <HoverTooltip label={`${t.hiddenLinked} ticket(s) already linked elsewhere are hidden`}>
-              <span className="ml-auto shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
-                {t.hiddenLinked} hidden
-              </span>
-            </HoverTooltip>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* ── Tab content ─────────────────────────────────────────────────────── */}
-      {showCartonActions && tab === 'repair' ? (
-        // Inline repair / trade-in order list — reuses the shared inline Ecwid
-        // search (relaxed to include normal orders, not just -RS).
-        <EcwidProductSearchInline
-          receivingId={receivingId}
-          popoverMode="repair_service"
-          relaxRepairToAllOrders
-          onSelect={u.handleAddLine}
-          onClose={() => setTab('zendesk')}
-        />
-      ) : (
-        <ZendeskMatchTab t={t} />
-      )}
-
-      {/* Paired summary — what this carton is currently paired to (last-4 chips). */}
-      {pairedTicket || pairedOrder ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-          <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">Paired</span>
-          {pairedTicket ? (
-            <TicketChip value={pairedTicket.replace(/^#/, '')} display={pairedTicket} />
-          ) : null}
-          {pairedTicket && pairedOrder ? <span className="text-gray-300">·</span> : null}
-          {pairedOrder ? (
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              Order
-              <OrderIdChip value={pairedOrder} display={getLast4(pairedOrder)} dense />
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Actions — file a new return ticket (reuses the panel claim modal) +
-          flag for manual review (unmatched cartons only). */}
-      <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Plus className="h-4 w-4" />}
-          onClick={openNewReturnTicket}
-        >
-          New return ticket
-        </Button>
-        {t.canMarkReview ? (
+  // Header actions are shared between the standalone card and the embedded form.
+  // The edit pencil is dropped when embedded — the wrapper supplies the single
+  // shared pencil (which dispatches `receiving-open-pairing-add` → Items tab).
+  const headerActions = (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {showOpenInUnbox ? (
+        <HoverTooltip label="Open this carton in unbox (serials, photos, receive)" asChild focusable={false}>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
-            icon={
-              t.markingReview ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <AlertTriangle className="h-4 w-4" />
-              )
-            }
-            onClick={() => t.markManualReview()}
-            disabled={t.markingReview}
+            icon={<PackageOpen />}
+            onClick={openInUnbox}
+            className="h-7 border-blue-200 bg-blue-50 px-2.5 text-blue-700 hover:bg-blue-100"
           >
-            Manual review
+            Open in unbox
           </Button>
+        </HoverTooltip>
+      ) : null}
+      {!embedded ? (
+        <HoverTooltip label="Add items — search recent Ecwid orders by order #, title, or SKU" focusable={false}>
+          <IconButton
+            icon={<Pencil className="h-3.5 w-3.5 text-white" />}
+            ariaLabel="Search Ecwid orders to add items"
+            onClick={() => {
+              setTab('ecwid');
+              setForcePicker(true);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 hover:bg-blue-700"
+          />
+        </HoverTooltip>
+      ) : null}
+    </div>
+  );
+
+  const body = (
+    // min-w-0 + overflow-x-clip keep every tab body and result row contained
+    // INSIDE the dropdown card — long order #s / refs truncate instead of
+    // bleeding past the right edge. `clip` (not `hidden`) avoids forcing a
+    // vertical scrollbar and leaves the active pill's shadow intact.
+    <div className="min-w-0 overflow-x-clip">
+      {/* Switchable tabs — Ecwid Search (default) · Link-a-Zoho-PO · Zendesk ·
+          Email PO. All work for matched AND unmatched cartons. The overlay-nav
+          slider has no scroller, so it must be width-constrained (flex-1 +
+          min-w-0) for its pills to WRAP within the card instead of overflowing. */}
+      <div ref={cardTopRef} className="mb-3 flex min-w-0 items-center gap-2">
+        <HorizontalButtonSlider
+          variant="nav"
+          dense
+          overlay
+          className="min-w-0 flex-1"
+          items={tabs}
+          value={tab}
+          onChange={(id) => setTab(id as MatchTab)}
+          aria-label="Pairing tabs"
+        />
+        {tab === 'zendesk' && t.hiddenLinked > 0 ? (
+          <HoverTooltip label={`${t.hiddenLinked} ticket(s) already linked elsewhere are hidden`}>
+            <span className="ml-auto shrink-0 text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+              {t.hiddenLinked} hidden
+            </span>
+          </HoverTooltip>
         ) : null}
       </div>
 
-      {/* Add-to-carton popover ("+"). The repair-service picker is now inline
-          (the tab above), so only this modal remains. */}
-      {u.addOpen ? (
-        <CartonAddPopover
-          tabs={['item', 'web', 'box']}
-          unitIds={u.cartonUnitIds}
-          onAddLine={u.handleAddLine}
-          onAssignedBox={u.setAssignedBox}
-          onClose={() => u.setAddOpen(false)}
+      {/* ── Tab content ─────────────────────────────────────────────────────── */}
+      {tab === 'ecwid' ? (
+        // Ecwid Search (default) — recent-orders list, searchable by order #,
+        // title, or SKU (relaxed to all orders, not just -RS). Selecting a row
+        // adds its item to the carton + links the source order.
+        <EcwidProductSearchInline
+          receivingId={receivingId}
+          popoverMode="repair_service"
+          initialOrderScope="all"
+          onSelect={u.handleAddLine}
+          onClose={() => setTab('po')}
         />
-      ) : null}
+      ) : tab === 'po' ? (
+        // Link a Zoho PO — search the local mirror + relink the carton/line.
+        <PoLinkTab row={row} receivingId={receivingId} />
+      ) : tab === 'email' ? (
+        // Email PO — search the Gmail-ingested PO worklist + link the carton's
+        // tracking to a purchase order that was never imported into the system.
+        <EmailPoLinkTab row={row} receivingId={receivingId} />
+      ) : (
+        <ZendeskMatchTab t={t} />
+      )}
+    </div>
+  );
+
+  // ── Linkage display ─────────────────────────────────────────────────────────
+  // Once an order/PO is linked the carton IS a normal PO — its identity reads in
+  // the carton header chip + the PO# card (and the PO-items accordion in unbox),
+  // NOT a "linked" summary here. So Package Pairing collapses to a minimal action
+  // strip (Change / add · Unlink); we don't repeat the PO as a green badge.
+  // A Zendesk ticket has no other home in this surface, so it keeps its own row.
+  const ticketLinkRow = hasTicket ? (
+    <div className="flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+        <ZendeskMark className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <span className="text-eyebrow font-black uppercase tracking-widest text-violet-700">
+          Claim ticket
+        </span>
+        <p className="truncate text-caption font-bold font-mono text-gray-900">
+          {pkg.zendeskTicket}
+        </p>
+      </div>
+      <HoverTooltip label="Unlink this Zendesk claim ticket (leaves the order pairing intact)" asChild focusable={false}>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={unlinkingTicket ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink />}
+          onClick={unlinkTicket}
+          disabled={unlinkingTicket}
+          className="h-7 shrink-0 border-rose-200 bg-rose-50 px-2.5 text-rose-700 hover:bg-rose-100"
+        >
+          {unlinkingTicket ? 'Unlinking…' : 'Unlink'}
+        </Button>
+      </HoverTooltip>
+    </div>
+  ) : null;
+
+  // Linked → collapse to a minimal action strip (the PO reads as a normal PO in
+  // the header/PO# card); otherwise show the picker. A ticket-only carton keeps
+  // the picker open with its ticket row above it.
+  const content = (
+    <div className="min-w-0 space-y-2 overflow-x-clip">
+      {ticketLinkRow}
+      {pickerCollapsed ? (
+        <div className="flex items-center gap-2">
+          <HoverTooltip label="Re-open the picker to change or add a pairing" asChild focusable={false}>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Link2 />}
+              onClick={() => setForcePicker(true)}
+              className="h-7 px-2.5 text-gray-600"
+            >
+              Change / add pairing
+            </Button>
+          </HoverTooltip>
+          <HoverTooltip label="Unlink this order/PO — sends the carton back to Unfound" asChild focusable={false}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={unlinking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink />}
+              onClick={unlink}
+              disabled={unlinking}
+              className="h-7 border-rose-200 bg-rose-50 px-2.5 text-rose-700 hover:bg-rose-100"
+            >
+              {unlinking ? 'Unlinking…' : 'Unlink'}
+            </Button>
+          </HoverTooltip>
+        </div>
+      ) : (
+        body
+      )}
+    </div>
+  );
+
+  // Embedded → bare sub-section (eyebrow + content) so the unified
+  // POUnboxingSection wrapper owns the single card chrome + edit pencil.
+  if (embedded) {
+    // Stay mounted — animate height + margin (not AnimatePresence) so the PO
+    // items block above doesn't jump when the pencil toggles this section.
+    return (
+      <motion.div
+        initial={false}
+        layout="position"
+        animate={
+          collapsed
+            ? { ...pairingCollapse.exit, marginTop: 0 }
+            : {
+                ...pairingCollapse.animate,
+                marginTop: showTopRule ? 16 : 0,
+              }
+        }
+        transition={pairingCollapseTransition}
+        className={collapsed ? 'overflow-hidden' : 'overflow-visible'}
+        aria-hidden={collapsed}
+      >
+        <div className={showTopRule ? 'border-t border-gray-100 pt-4' : undefined}>
+          <div className="mb-3 flex min-w-0 items-center justify-between gap-2 overflow-visible">
+            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+              Package Pairing
+            </h3>
+            {headerActions}
+          </div>
+          {content}
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <WorkspaceCard label="Package Pairing" overflow="visible" actions={headerActions}>
+      {content}
     </WorkspaceCard>
   );
 }
@@ -309,14 +599,13 @@ function ZendeskMatchTab({ t }: { t: ReturnType<typeof useTriagePanel> }) {
         </p>
       ) : t.candidatesError ? (
         <p className="rounded-lg border border-dashed border-rose-200 bg-rose-50 px-4 py-5 text-center text-xs text-rose-600">
-          Couldn’t load Zendesk matches. Zendesk may be unconfigured — you can still file a new
-          ticket below.
+          Couldn’t load Zendesk matches. Zendesk may be unconfigured.
         </p>
       ) : t.candidates.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-xs text-gray-500">
           {t.matchQuery.trim()
             ? `No tickets match “${t.matchQuery.trim()}”.`
-            : 'No recent claim tickets. Search by order #, email, or file a new return ticket.'}
+            : 'No recent claim tickets. Search by order #, email, or customer name.'}
         </p>
       ) : (
         <div className="space-y-2">

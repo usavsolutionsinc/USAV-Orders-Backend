@@ -7,7 +7,7 @@ import {
   ClipboardList, Loader2, Minus, Plus, Trash2,
 } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
-import { DeferredQtyInput } from '@/design-system/primitives';
+import { Button, DeferredQtyInput, IconButton } from '@/design-system/primitives';
 import { formatCreatedAt, formatPlanDate, type PlanEntry } from './board-detail-shared';
 
 /* ── Entry Card (one plan row) ─────────────────────────────────────── */
@@ -62,6 +62,7 @@ export function PlanEntryCard({
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
+      {/* ds-raw-button: full-width multi-line card-header expand toggle (left-aligned, composite content) */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -98,15 +99,13 @@ export function PlanEntryCard({
           <div>
             <p className={`mb-2 ${sectionLabel}`}>Quantity</p>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
+              <IconButton
+                icon={<Minus className="h-3.5 w-3.5" />}
+                ariaLabel="Decrease quantity"
                 onClick={() => void saveQty(qty - 1)}
                 disabled={saving || qty <= 1}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
-                aria-label="Decrease quantity"
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+              />
               <DeferredQtyInput
                 value={qty}
                 min={1}
@@ -114,15 +113,13 @@ export function PlanEntryCard({
                 onChange={(v) => void saveQty(v)}
                 className="h-10 w-16 rounded-lg border border-gray-200 bg-white text-center text-lg font-black tabular-nums text-gray-900 outline-none transition-colors focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
-              <button
-                type="button"
+              <IconButton
+                icon={<Plus className="h-3.5 w-3.5" />}
+                ariaLabel="Increase quantity"
                 onClick={() => void saveQty(qty + 1)}
                 disabled={saving}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 disabled:opacity-40"
-                aria-label="Increase quantity"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
+              />
               {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
             </div>
           </div>
@@ -169,14 +166,15 @@ export function PlanEntryCard({
           )}
 
           {!confirmDelete ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 className="h-3 w-3" />}
               onClick={() => setConfirmDelete(true)}
-              className="flex items-center gap-1.5 text-micro font-bold text-red-500 transition-colors hover:text-red-700"
+              className="h-auto gap-1.5 px-0 text-micro font-bold text-red-500 hover:bg-transparent hover:text-red-700"
             >
-              <Trash2 className="h-3 w-3" />
               Remove entry
-            </button>
+            </Button>
           ) : (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3">
               <p className="text-caption font-bold text-red-800">
@@ -186,22 +184,22 @@ export function PlanEntryCard({
                 <p className="mt-1 text-micro font-semibold text-red-600">{deleteError}</p>
               )}
               <div className="mt-2 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
-                  className="h-7 rounded-md border border-gray-200 bg-white text-eyebrow font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                  className="h-7 w-full rounded-md text-eyebrow font-black uppercase tracking-wider text-gray-700"
                 >
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="danger"
+                  icon={<Trash2 className="h-2.5 w-2.5" />}
+                  loading={deleting}
                   onClick={() => void handleDelete()}
-                  disabled={deleting}
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-md bg-red-600 text-eyebrow font-black uppercase tracking-wider text-white hover:bg-red-700 disabled:opacity-50"
+                  className="h-7 w-full gap-1 rounded-md bg-red-600 text-eyebrow font-black uppercase tracking-wider hover:bg-red-700"
                 >
-                  {deleting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
                   {deleting ? 'Removing...' : 'Remove'}
-                </button>
+                </Button>
               </div>
             </div>
           )}

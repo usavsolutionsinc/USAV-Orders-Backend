@@ -7,6 +7,8 @@ import { toast } from '@/lib/toast';
 import { cn } from '@/utils/_cn';
 import { formatDateTimePST } from '@/utils/date';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IdentityLinkChip } from './IdentityLinkChip';
 
 /** Numeric Zendesk id parsed out of a stored "#1234" / "1234" / ticket URL. */
@@ -208,27 +210,28 @@ function TicketThreadPanel({
               {ticketId ? `Ticket #${ticketId}` : 'Ticket'}
             </div>
             {data?.ticket.subject ? (
-              <div className="break-words text-[10px] leading-snug text-gray-400">{data.ticket.subject}</div>
+              <div className="break-words text-micro leading-snug text-gray-400">{data.ticket.subject}</div>
             ) : null}
           </div>
         </div>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-1.5">
           {data?.ticket.status ? (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-gray-500">
               {data.ticket.status}
             </span>
           ) : null}
           {data?.ticket.url ? (
-            <a
-              href={data.ticket.url}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="Open in Zendesk"
-              title="Open in Zendesk"
-              className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+            <HoverTooltip label="Open in Zendesk" asChild>
+              <a
+                href={data.ticket.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open in Zendesk"
+                className="rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </HoverTooltip>
           ) : null}
         </div>
       </header>
@@ -241,7 +244,7 @@ function TicketThreadPanel({
             <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
           </div>
         ) : isError ? (
-          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-600">
+          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-caption text-rose-600">
             History unavailable: {error instanceof Error ? error.message : 'request failed'}
           </p>
         ) : !data || data.comments.length === 0 ? (
@@ -256,7 +259,7 @@ function TicketThreadPanel({
                   c.public ? 'border-blue-100 bg-blue-50/60' : 'border-amber-100 bg-amber-50/60',
                 )}
               >
-                <div className="mb-1 flex items-center justify-between gap-2 text-[10px] uppercase tracking-wide">
+                <div className="mb-1 flex items-center justify-between gap-2 text-micro uppercase tracking-wide">
                   <span className={c.public ? 'font-semibold text-blue-600' : 'font-semibold text-amber-600'}>
                     {c.public ? 'Public reply' : 'Internal note'}
                   </span>
@@ -273,28 +276,34 @@ function TicketThreadPanel({
       </div>
 
       <footer className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-        <span className="min-w-0 flex-1 text-[11px] leading-snug text-gray-400">
+        <span className="min-w-0 flex-1 text-caption leading-snug text-gray-400">
           Unlinking only removes our reference — the ticket stays in Zendesk.
         </span>
-        <button
-          type="button"
-          disabled={archive.isPending || receivingId == null || ticketId == null}
-          onClick={() => archive.mutate()}
-          title="Archive this carton's photos to the ticket's NAS folder"
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
-        >
-          {archive.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-          Archive
-        </button>
-        <button
-          type="button"
+        <HoverTooltip label="Archive this carton's photos to the ticket's NAS folder" asChild>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={archive.isPending}
+            icon={<Archive className="h-3.5 w-3.5" />}
+            disabled={archive.isPending || receivingId == null || ticketId == null}
+            onClick={() => archive.mutate()}
+            aria-label="Archive this carton's photos to the ticket's NAS folder"
+            className="shrink-0 border border-blue-200 bg-white text-blue-700 ring-0 hover:bg-blue-50"
+          >
+            Archive
+          </Button>
+        </HoverTooltip>
+        <Button
+          variant="secondary"
+          size="sm"
+          loading={unlink.isPending}
+          icon={<Unlink className="h-3.5 w-3.5" />}
           disabled={unlink.isPending || receivingId == null}
           onClick={() => unlink.mutate()}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+          className="shrink-0 border border-rose-200 bg-white text-rose-600 ring-0 hover:bg-rose-50"
         >
-          {unlink.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Unlink className="h-3.5 w-3.5" />}
           Unlink
-        </button>
+        </Button>
       </footer>
     </div>
   );

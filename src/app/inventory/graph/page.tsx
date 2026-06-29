@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { SkuGraphWorkspace } from '@/components/inventory/graph/SkuGraphWorkspace';
+import { InventoryGraphRouter } from '@/components/inventory/graph/InventoryGraphRouter';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function InventoryGraphPage() {
@@ -12,7 +12,7 @@ export default function InventoryGraphPage() {
           </div>
         }
       >
-        <SkuGraphWorkspace />
+        <InventoryGraphRouter />
       </Suspense>
     </div>
   );

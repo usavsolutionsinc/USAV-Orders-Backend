@@ -52,10 +52,10 @@ function BigGoalRing({ percent, color }: { percent: number; color: string }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[30px] font-extrabold leading-none tabular-nums tracking-tight text-[#2D2A26]">
+        <span className="text-[30px] font-extrabold leading-none tabular-nums tracking-tight text-text-default">
           {clamped}%
         </span>
-        <span className="mt-0.5 text-[9px] font-black uppercase tracking-[0.18em] text-[#A89F91]">
+        <span className="mt-0.5 text-eyebrow font-black uppercase tracking-[0.18em] text-text-muted">
           of goal
         </span>
       </div>
@@ -100,13 +100,13 @@ export function OperationsGoalHero({ staffProgress, isLoading }: OperationsGoalH
 
   if (isLoading && rows.length === 0) {
     return (
-      <section className="h-[180px] animate-pulse rounded-[28px] border border-[#F0EDE8] bg-white/60" />
+      <section className="h-[180px] animate-pulse rounded-[28px] border border-border-soft bg-white/60" />
     );
   }
 
   return (
     <section
-      className="overflow-hidden rounded-[28px] border border-[#F0EDE8] bg-white
+      className="overflow-hidden rounded-[28px] border border-border-soft bg-white
                  shadow-[0_4px_24px_rgba(161,140,90,0.06)]"
     >
       <div className="flex flex-col gap-6 p-5 sm:p-7 lg:flex-row lg:items-center">
@@ -114,35 +114,35 @@ export function OperationsGoalHero({ staffProgress, isLoading }: OperationsGoalH
         <div className="flex items-center gap-5">
           <BigGoalRing percent={totals.percent} color={tone.ring} />
           <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-[#A89F91]">
+            <span className="inline-flex items-center gap-1.5 text-micro font-black uppercase tracking-[0.2em] text-text-muted">
               <Flag className="h-3 w-3" /> Today’s goal
             </span>
-            <h1 className="mt-1.5 text-[26px] font-extrabold leading-none tracking-tight text-[#2D2A26] sm:text-[30px]">
+            <h1 className="mt-1.5 text-[26px] font-extrabold leading-none tracking-tight text-text-default sm:text-[30px]">
               <span className="tabular-nums">{totals.current.toLocaleString()}</span>
-              <span className="text-[#C4BAA8]"> / {totals.goal.toLocaleString()}</span>
-              <span className="ml-2 text-[14px] font-bold text-[#A89F91]">units</span>
+              <span className="text-text-soft"> / {totals.goal.toLocaleString()}</span>
+              <span className="ml-2 text-[14px] font-bold text-text-muted">units</span>
             </h1>
             <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${tone.chip}`}
+                className={`rounded-full px-2 py-0.5 text-micro font-black uppercase tracking-wider ${tone.chip}`}
               >
                 {tone.label}
               </span>
               {totals.goal > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold tabular-nums text-[#6B6356]">
+                <span className="inline-flex items-center gap-1 text-caption font-bold tabular-nums text-text-muted">
                   <span style={{ color: tone.ring }}>
                     <TrendingUp className="h-3 w-3" />
                   </span>
                   {remaining.toLocaleString()} to go
                 </span>
               ) : (
-                <span className="text-[11px] font-semibold text-[#A89F91]">
+                <span className="text-caption font-semibold text-text-muted">
                   No staff goals set yet
                 </span>
               )}
               {totals.staff > 0 && (
-                <span className="text-[11px] font-semibold tabular-nums text-[#A89F91]">
-                  · <span className="font-extrabold text-[#2D2A26]">{totals.onTrack}</span>/
+                <span className="text-caption font-semibold tabular-nums text-text-muted">
+                  · <span className="font-extrabold text-text-default">{totals.onTrack}</span>/
                   {totals.staff} on track
                 </span>
               )}
@@ -152,20 +152,20 @@ export function OperationsGoalHero({ staffProgress, isLoading }: OperationsGoalH
 
         {/* ── Per-station pacing bars ── */}
         {stations.length > 0 && (
-          <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:border-l lg:border-[#F0EDE8] lg:pl-7">
+          <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:border-l lg:border-border-soft lg:pl-7">
             {stations.slice(0, 6).map((s) => {
               const st = toneFor(s.percent);
               return (
                 <div key={s.station} className="min-w-0">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="truncate text-[10px] font-black uppercase tracking-[0.12em] text-[#A89F91]">
+                    <span className="truncate text-micro font-black uppercase tracking-[0.12em] text-text-muted">
                       {s.station}
                     </span>
-                    <span className="text-[10px] font-bold tabular-nums text-[#6B6356]">
+                    <span className="text-micro font-bold tabular-nums text-text-muted">
                       {s.current}/{s.goal}
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[#F0EDE8]">
+                  <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-canvas">
                     <motion.div
                       className="h-full rounded-full"
                       style={{ backgroundColor: st.ring }}

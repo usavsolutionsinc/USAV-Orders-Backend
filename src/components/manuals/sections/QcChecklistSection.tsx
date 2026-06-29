@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, Loader2, Trash2, Pencil } from '@/components/Icons';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface QcCheckRow {
   id: number;
@@ -263,29 +265,35 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
             <span className={`shrink-0 rounded-full border px-1.5 py-0.5 ${microBadge} ${stepTypeBadgeClass(check.step_type)}`}>
               {check.step_type}
             </span>
-            <button
-              type="button"
-              onClick={() => togglePublish(check)}
-              disabled={publishing === check.id}
-              className={`shrink-0 rounded-lg px-1.5 py-0.5 text-micro font-black uppercase tracking-wider transition-colors opacity-0 group-hover:opacity-100 ${
-                isDraft
-                  ? 'text-emerald-600 hover:bg-emerald-50'
-                  : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-              }`}
-              title={isDraft ? 'Publish — make this step live for techs' : 'Unpublish — hide from techs while reworking'}
+            <HoverTooltip
+              label={isDraft ? 'Publish — make this step live for techs' : 'Unpublish — hide from techs while reworking'}
+              asChild
             >
-              {publishing === check.id ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : isDraft ? 'Publish' : 'Unpublish'}
-            </button>
-            <button
-              type="button"
-              onClick={() => openEditForm(check)}
-              className="shrink-0 p-1 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100"
-              title="Edit step"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
+              <Button
+                variant="ghost"
+                onClick={() => togglePublish(check)}
+                disabled={publishing === check.id}
+                className={`shrink-0 h-auto rounded-lg px-1.5 py-0.5 text-micro font-black uppercase tracking-wider opacity-0 group-hover:opacity-100 ${
+                  isDraft
+                    ? 'text-emerald-600 hover:bg-emerald-50'
+                    : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+                }`}
+                ariaLabel={isDraft ? 'Publish — make this step live for techs' : 'Unpublish — hide from techs while reworking'}
+              >
+                {publishing === check.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : isDraft ? 'Publish' : 'Unpublish'}
+              </Button>
+            </HoverTooltip>
+            <HoverTooltip label="Edit step" asChild>
+              <IconButton
+                icon={<Pencil className="h-3 w-3" />}
+                ariaLabel="Edit step"
+                tone="accent"
+                onClick={() => openEditForm(check)}
+                className="shrink-0 p-1 rounded-lg text-gray-300 hover:bg-blue-50 opacity-0 group-hover:opacity-100"
+              />
+            </HoverTooltip>
           </div>
         );
       })}
@@ -307,24 +315,28 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                 className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
               />
               <div className="flex gap-2">
-                <select
-                  value={stepType}
-                  onChange={(e) => setStepType(e.target.value)}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
-                  title="Category badge"
-                >
-                  {STEP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select
-                  value={valueKind}
-                  onChange={(e) => setValueKind(e.target.value)}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
-                  title="How the tester records this step"
-                >
-                  {VALUE_KINDS.map((k) => (
-                    <option key={k || 'default'} value={k}>{VALUE_KIND_LABEL[k]}</option>
-                  ))}
-                </select>
+                <HoverTooltip label="Category badge" asChild>
+                  <select
+                    value={stepType}
+                    onChange={(e) => setStepType(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
+                    aria-label="Category badge"
+                  >
+                    {STEP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </HoverTooltip>
+                <HoverTooltip label="How the tester records this step" asChild>
+                  <select
+                    value={valueKind}
+                    onChange={(e) => setValueKind(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
+                    aria-label="How the tester records this step"
+                  >
+                    {VALUE_KINDS.map((k) => (
+                      <option key={k || 'default'} value={k}>{VALUE_KIND_LABEL[k]}</option>
+                    ))}
+                  </select>
+                </HoverTooltip>
               </div>
 
               {showNumeric && (
@@ -365,46 +377,45 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
                 />
               )}
 
-              <select
-                value={failureModeId}
-                onChange={(e) => setFailureModeId(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
-                title="Auto-tag this failure mode on the unit when this step fails"
-              >
-                <option value="">Auto-tag on fail: none</option>
-                {failureModes.map((m) => (
-                  <option key={m.id} value={m.id}>{`⚠ ${m.label} (${m.severity})`}</option>
-                ))}
-              </select>
+              <HoverTooltip label="Auto-tag this failure mode on the unit when this step fails" asChild>
+                <select
+                  value={failureModeId}
+                  onChange={(e) => setFailureModeId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
+                  aria-label="Auto-tag this failure mode on the unit when this step fails"
+                >
+                  <option value="">Auto-tag on fail: none</option>
+                  {failureModes.map((m) => (
+                    <option key={m.id} value={m.id}>{`⚠ ${m.label} (${m.severity})`}</option>
+                  ))}
+                </select>
+              </HoverTooltip>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="brand"
+                  size="sm"
                   onClick={handleSave}
-                  disabled={saving || !stepLabel.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                  loading={saving}
+                  disabled={!stepLabel.trim()}
+                  className="flex-1"
                 >
-                  {saving && <Loader2 className="h-3 w-3 animate-spin" />}
                   {editingId ? 'Update' : 'Add Step'}
-                </button>
+                </Button>
                 {editingId && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(editingId)}
-                    disabled={removing === editingId}
-                    title="Delete step"
-                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-micro font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
-                  >
-                    {removing === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  </button>
+                  <HoverTooltip label="Delete step" asChild>
+                    <IconButton
+                      icon={removing === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      ariaLabel="Delete step"
+                      onClick={() => handleRemove(editingId)}
+                      disabled={removing === editingId}
+                      className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-red-600 hover:bg-red-50"
+                    />
+                  </HoverTooltip>
                 )}
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
-                >
+                <Button variant="secondary" size="sm" onClick={resetForm}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           </motion.div>
@@ -412,13 +423,15 @@ export function QcChecklistSection({ catalogId, qcChecks, onRefresh }: QcCheckli
       </AnimatePresence>
 
       {!showAdd && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Plus className="h-3 w-3" />}
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
+          className="text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50"
         >
-          <Plus className="h-3 w-3" /> Add Step
-        </button>
+          Add Step
+        </Button>
       )}
     </div>
   );

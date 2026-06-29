@@ -92,7 +92,7 @@ interface UnboxScanBandProps {
   themeColor: StationTheme;
   value: string;
   onChange: (next: string) => void;
-  onSubmit: (mode?: UnboxScanMode) => void;
+  onSubmit: (mode: UnboxScanMode | 'auto') => void;
   inputRef: React.Ref<HTMLInputElement>;
   isResolving: boolean;
   staffId: string;

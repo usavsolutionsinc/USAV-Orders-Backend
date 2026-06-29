@@ -1,5 +1,7 @@
 'use client';
 
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { RepairOrderLinkSearch } from './RepairOrderLinkSearch';
 import type { RepairDetailsController } from './useRepairDetailsPanel';
 
@@ -9,15 +11,17 @@ export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
     <section>
       <div className="flex items-center justify-end mb-3">
         {c.hasAnyLink && (
-          <button
-            type="button"
-            onClick={c.handleClearLinks}
-            disabled={c.savingLink}
-            className="text-eyebrow font-black uppercase tracking-widest text-rose-600 hover:text-rose-800 disabled:opacity-40"
-            title="Unlink — clear all linkage fields (reversible)"
-          >
-            Unlink All
-          </button>
+          <HoverTooltip label="Unlink — clear all linkage fields (reversible)" asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={c.handleClearLinks}
+              disabled={c.savingLink}
+              className="h-auto px-0 text-eyebrow font-black uppercase tracking-widest text-rose-600 hover:bg-transparent hover:text-rose-700"
+            >
+              Unlink All
+            </Button>
+          </HoverTooltip>
         )}
       </div>
       <div className="space-y-3">
@@ -48,14 +52,14 @@ export function RepairLinkageSection({ c }: { c: RepairDetailsController }) {
             />
           </div>
         ))}
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={c.handleSaveLinks}
           disabled={!c.linksDirty || c.savingLink}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-black uppercase tracking-wider transition-all hover:bg-blue-100 hover:border-blue-300 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full border border-blue-200 bg-blue-50 text-blue-700 ring-0 text-sm font-black uppercase tracking-wider hover:border-blue-300 hover:bg-blue-100"
         >
           {c.savingLink ? 'Saving…' : 'Save Links'}
-        </button>
+        </Button>
       </div>
     </section>
   );

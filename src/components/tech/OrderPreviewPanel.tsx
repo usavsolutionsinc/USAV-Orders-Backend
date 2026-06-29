@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { AlertCircle, Calendar, Check, Clock, Copy, ExternalLink, Flag, Layers, Package, Star } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import {
   getDaysLateNumber,
   getDaysLateTone,
@@ -145,9 +147,11 @@ export function OrderPreviewPanel({ order }: OrderPreviewPanelProps) {
         <StatCell icon={Package} iconLabel="Tracking">
           {trackingNumber ? (
             <span className="inline-flex items-center gap-0.5">
-              <span className="font-mono text-sm font-bold text-gray-900" title={trackingNumber}>
-                {getLast4(trackingNumber)}
-              </span>
+              <HoverTooltip label={trackingNumber} asChild>
+                <span className="font-mono text-sm font-bold text-gray-900">
+                  {getLast4(trackingNumber)}
+                </span>
+              </HoverTooltip>
               <CopyButton
                 copied={copiedKey === 'tracking'}
                 onClick={() => handleCopy('tracking', trackingNumber)}
@@ -231,9 +235,11 @@ function StatCell({ icon: Icon, iconLabel, children }: StatCellProps) {
         className="h-3.5 w-3.5 flex-shrink-0 text-gray-400"
         aria-label={iconLabel}
       />
-      <div className="whitespace-nowrap" title={iconLabel}>
-        {children}
-      </div>
+      <HoverTooltip label={iconLabel} asChild>
+        <div className="whitespace-nowrap">
+          {children}
+        </div>
+      </HoverTooltip>
     </div>
   );
 }
@@ -270,17 +276,16 @@ function CopyButton({
   ariaLabel: string;
 }) {
   return (
-    <button
+    <IconButton
       type="button"
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
-      className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-      aria-label={ariaLabel}
-    >
-      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-    </button>
+      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-emerald-50 hover:text-emerald-600"
+      ariaLabel={ariaLabel}
+      icon={copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+    />
   );
 }
 
@@ -294,17 +299,17 @@ function ExternalButton({
   ariaLabel: string;
 }) {
   return (
-    <button
+    <IconButton
       type="button"
       onClick={(e) => {
         e.stopPropagation();
         if (!disabled) onClick();
       }}
       disabled={disabled}
-      className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
-      aria-label={ariaLabel}
-    >
-      <ExternalLink className="h-3 w-3" />
-    </button>
+      tone="accent"
+      className="inline-flex h-5 w-5 items-center justify-center rounded hover:bg-blue-50 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gray-400"
+      ariaLabel={ariaLabel}
+      icon={<ExternalLink className="h-3 w-3" />}
+    />
   );
 }

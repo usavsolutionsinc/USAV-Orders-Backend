@@ -27,6 +27,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import {
   TAB_META,
@@ -99,7 +100,7 @@ export function CartonAddPopover({
                       key={t}
                       type="button"
                       onClick={() => setTab(t)}
-                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-mini font-bold uppercase tracking-wider transition-colors ${
+                      className={`ds-raw-button flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-mini font-bold uppercase tracking-wider transition-colors ${
                         active
                           ? 'bg-gray-900 text-white'
                           : 'text-gray-500 hover:bg-gray-100 hover:text-gray-800'
@@ -124,14 +125,12 @@ export function CartonAddPopover({
                 })()}
               </span>
             )}
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              ariaLabel="Close"
+              icon={<X className="h-4 w-4" />}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            />
           </div>
 
           {/* Body */}

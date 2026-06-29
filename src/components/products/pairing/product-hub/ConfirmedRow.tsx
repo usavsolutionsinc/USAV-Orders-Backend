@@ -1,4 +1,6 @@
 import { Check, ExternalLink, Unlink } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import type { HubConfirmed } from '../types';
 import { CopyableId } from './CopyableId';
 import { identifierParts } from './identifier-parts';
@@ -53,30 +55,29 @@ export function ConfirmedRow({
         {rowTitle && <p className="truncate text-micro text-gray-500">{rowTitle}</p>}
       </div>
       {confirmed.listingUrl && (
-        <button
-          type="button"
-          onClick={() => onPreview(confirmed.listingUrl!, confirmed.listingTitle || value)}
-          className={`shrink-0 rounded p-1 transition-colors ${
-            isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-400 hover:bg-white hover:text-blue-600'
-          }`}
-          title={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'}
-          aria-label="Preview listing"
-          aria-pressed={isPreviewing}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+        <HoverTooltip label={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'} asChild>
+          <IconButton
+            icon={<ExternalLink className="h-3.5 w-3.5" />}
+            ariaLabel="Preview listing"
+            aria-pressed={isPreviewing}
+            tone="accent"
+            onClick={() => onPreview(confirmed.listingUrl!, confirmed.listingTitle || value)}
+            className={`shrink-0 rounded p-1 ${
+              isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'hover:bg-white'
+            }`}
+          />
+        </HoverTooltip>
       )}
-      <button
-        type="button"
-        onClick={() => onUnpair(confirmed)}
-        className={`shrink-0 rounded p-1 transition-colors ${
-          willUnpair ? 'bg-orange-500 text-white hover:bg-orange-600' : 'text-gray-400 hover:bg-white hover:text-orange-600'
-        }`}
-        title={willUnpair ? 'Cancel unpair' : 'Unpair this mapping'}
-        aria-label={willUnpair ? 'Cancel unpair' : 'Unpair'}
-      >
-        <Unlink className="h-3.5 w-3.5" />
-      </button>
+      <HoverTooltip label={willUnpair ? 'Cancel unpair' : 'Unpair this mapping'} asChild>
+        <IconButton
+          icon={<Unlink className="h-3.5 w-3.5" />}
+          ariaLabel={willUnpair ? 'Cancel unpair' : 'Unpair'}
+          onClick={() => onUnpair(confirmed)}
+          className={`shrink-0 rounded p-1 ${
+            willUnpair ? 'bg-orange-500 text-white hover:bg-orange-600' : 'text-gray-400 hover:bg-white hover:text-orange-600'
+          }`}
+        />
+      </HoverTooltip>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import {
   Loader2,
   User,
 } from '@/components/Icons';
-import { Button, EmptyState } from '@/design-system/primitives';
+import { Button, EmptyState, IconButton } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { cn } from '@/utils/_cn';
 import { formatPhoneNumber } from '@/utils/phone';
@@ -72,9 +72,14 @@ export function VoicemailDetail({ voicemailId, onBack }: { voicemailId: number; 
       <CenteredPane>
         <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-6 text-center">
           <p className="text-caption font-semibold text-rose-700">Couldn’t load this voicemail.</p>
-          <button type="button" onClick={onBack} className="mt-2 text-eyebrow font-bold uppercase tracking-widest text-rose-600 hover:text-rose-700">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onBack}
+            className="mt-2 h-auto px-0 text-eyebrow font-bold uppercase tracking-widest text-rose-600 hover:text-rose-700"
+          >
             Back to the list
-          </button>
+          </Button>
         </div>
       </CenteredPane>
     );
@@ -88,18 +93,16 @@ export function VoicemailDetail({ voicemailId, onBack }: { voicemailId: number; 
     <div className="flex h-full min-h-0 flex-col bg-white">
       {/* Header */}
       <header className="flex shrink-0 items-start gap-3 border-b border-gray-100 px-5 py-3.5">
-        <button
-          type="button"
+        <IconButton
+          icon={<ChevronLeft className="h-5 w-5" />}
           onClick={onBack}
-          aria-label="Back to voicemails"
-          className="-ml-1.5 mt-0.5 shrink-0 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 md:hidden"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+          ariaLabel="Back to voicemails"
+          className="-ml-1.5 mt-0.5 shrink-0 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 md:hidden"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-lg font-black tracking-tight text-gray-900">{name}</h1>
-            <span className={cn('inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ring-1 ring-inset', tone.chip)}>
+            <span className={cn('inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset', tone.chip)}>
               <span className={cn('h-1.5 w-1.5 rounded-full', tone.dot)} aria-hidden />
               {VOICEMAIL_STATUS_LABEL[data.followupStatus]}
             </span>
@@ -221,7 +224,7 @@ export function VoicemailDetail({ voicemailId, onBack }: { voicemailId: number; 
           </Button>
           <a
             href={`/support?mode=tickets&compose=vm-${voicemailId}`}
-            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold text-blue-600 transition-colors hover:bg-blue-50"
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-label font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             <Link2 className="h-4 w-4" /> Create ticket
           </a>

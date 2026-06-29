@@ -20,6 +20,7 @@ export function AdminPickerRow({
   trailing,
 }: AdminPickerRowProps) {
   return (
+    // ds-raw-button
     <button
       type="button"
       onClick={onPick}

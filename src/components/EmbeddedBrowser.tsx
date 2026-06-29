@@ -1,6 +1,8 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 type WebviewElement = HTMLElement & {
   src: string;
@@ -98,27 +100,30 @@ export default function EmbeddedBrowser({ url, onNavigate, className = '' }: Emb
     <div className={`flex flex-col h-full ${className}`}>
       {/* Toolbar */}
       <div className="flex items-center gap-1.5 px-2 py-1.5 bg-gray-800 border-b border-gray-700 shrink-0">
-        <button
-          onClick={() => webviewRef.current?.goBack()}
-          title="Back"
-          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
-        >
-          ←
-        </button>
-        <button
-          onClick={() => webviewRef.current?.goForward()}
-          title="Forward"
-          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
-        >
-          →
-        </button>
-        <button
-          onClick={() => webviewRef.current?.reload()}
-          title="Reload"
-          className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm"
-        >
-          ↺
-        </button>
+        <HoverTooltip label="Back" asChild>
+          <IconButton
+            onClick={() => webviewRef.current?.goBack()}
+            ariaLabel="Back"
+            icon="←"
+            className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Forward" asChild>
+          <IconButton
+            onClick={() => webviewRef.current?.goForward()}
+            ariaLabel="Forward"
+            icon="→"
+            className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm font-mono"
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Reload" asChild>
+          <IconButton
+            onClick={() => webviewRef.current?.reload()}
+            ariaLabel="Reload"
+            icon="↺"
+            className="p-1.5 rounded hover:bg-gray-700 text-gray-500 text-sm"
+          />
+        </HoverTooltip>
 
         <input
           value={currentUrl}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import {
   attachNasPhoto,
   listNasDir,
@@ -96,17 +97,19 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
           </p>
           <p className="truncate text-sm font-black text-white">/{dir || 'Photos'}</p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onClose}
-          className="rounded-full bg-white/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest active:bg-white/20"
+          className="h-auto rounded-full bg-white/10 px-3.5 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-white/20 hover:text-white active:bg-white/20"
         >
           Close
-        </button>
+        </Button>
       </div>
 
       {/* Breadcrumb / up */}
       {dir ? (
+        // ds-raw-button: full-width text-left breadcrumb row (not a label/icon button)
         <button
           type="button"
           onClick={goUp}
@@ -127,13 +130,14 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
         ) : error ? (
           <div className="px-6 py-12 text-center">
             <p className="text-label font-bold text-rose-400">{error}</p>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => void load(dir)}
-              className="mt-4 rounded-full bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest active:bg-white/20"
+              className="mt-4 h-auto rounded-full bg-white/10 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-white/20 hover:text-white active:bg-white/20"
             >
               Retry
-            </button>
+            </Button>
           </div>
         ) : entries.length === 0 ? (
           <p className="px-6 py-12 text-center text-label font-bold text-white/70">
@@ -149,7 +153,7 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
                     key={f.relPath}
                     type="button"
                     onClick={() => setDir(f.relPath)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5"
+                    className="ds-raw-button flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5"
                   >
                     <span className="text-lg">📁</span>
                     <span className="truncate text-sm font-bold">{f.name}</span>
@@ -168,7 +172,7 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
                       key={f.relPath}
                       type="button"
                       onClick={() => toggle(f.url)}
-                      className="relative aspect-square bg-gray-900"
+                      className="ds-raw-button relative aspect-square bg-gray-900"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -193,18 +197,18 @@ export function NasPhotoPicker({ scope, onClose, onAttached }: NasPhotoPickerPro
 
       {/* Footer action */}
       <div className="border-t border-white/10 p-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           disabled={selected.size === 0 || attaching}
           onClick={handleAttach}
-          className="w-full rounded-full bg-blue-600 px-4 py-3 text-label font-black uppercase tracking-widest text-white active:bg-blue-700 disabled:opacity-40"
+          className="w-full rounded-full px-4 py-3"
         >
           {attaching
             ? 'Attaching…'
             : selected.size === 0
               ? 'Select photos'
               : `Attach ${selected.size} photo${selected.size === 1 ? '' : 's'}`}
-        </button>
+        </Button>
       </div>
     </div>
   );

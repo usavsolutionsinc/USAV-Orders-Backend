@@ -113,15 +113,28 @@ export async function getShipmentByTracking(
   trackingNumberNormalized: string,
   orgId?: OrgId,
 ): Promise<ShipmentRow | null> {
-  // NEEDS-COL: GUC-wrap only when orgId present; no org predicate possible.
-  const sql = 'SELECT * FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1';
-  const args = [normalizeTrackingNumber(trackingNumberNormalized)];
+  // shipping_tracking_numbers.organization_id now exists (NULLABLE during the
+  // Phase-B transition). When an orgId is threaded, scope the match to that org
+  // so two tenants that happen to share a tracking number can never resolve to
+  // each other's row — the match stays UNIQUE per org. We also still accept an
+  // as-yet-unstamped (NULL-org) row so the transition is seamless, and prefer an
+  // exact-org match over a NULL-org one (ORDER BY + LIMIT 1) for determinism.
+  // The returned row carries organization_id so callers can pin their downstream
+  // writes to the row's real owner. Omitted orgId → byte-identical raw-pool path.
   if (orgId) {
+    const sql = `SELECT * FROM shipping_tracking_numbers
+       WHERE tracking_number_normalized = $1
+         AND (organization_id = $2::uuid OR organization_id IS NULL)
+       ORDER BY (organization_id = $2::uuid) DESC NULLS LAST
+       LIMIT 1`;
+    const args = [normalizeTrackingNumber(trackingNumberNormalized), orgId];
     return withTenantConnection(orgId, async (client) => {
       const result = await client.query<ShipmentRow>(sql, args);
       return result.rows[0] ?? null;
     });
   }
+  const sql = 'SELECT * FROM shipping_tracking_numbers WHERE tracking_number_normalized = $1';
+  const args = [normalizeTrackingNumber(trackingNumberNormalized)];
   const client = await pool.connect();
   try {
     const result = await client.query<ShipmentRow>(sql, args);
@@ -215,8 +228,10 @@ export async function upsertTrackingEvents(
 ): Promise<number> {
   if (events.length === 0) return 0;
 
-  // shipment_tracking_events has no organization_id column (NEEDS-COL): GUC-wrap
-  // writes when orgId present; no org stamp possible.
+  // shipment_tracking_events.organization_id is derived from its PARENT tracking
+  // row (an event definitionally belongs to its STN's org) — so every write is
+  // correctly org-stamped even on the session-less carrier-sync path, with no
+  // webhook org-resolution needed. This is what lets the table be FORCEd.
   const run = async (client: PoolClient): Promise<number> => {
     let inserted = 0;
     for (const ev of events) {
@@ -227,9 +242,10 @@ export async function upsertTrackingEvents(
            external_status_description, normalized_status_category,
            event_occurred_at, event_city, event_state, event_postal_code,
            event_country_code, signed_by, exception_code, exception_description,
-           payload
+           payload, organization_id
          ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+           (SELECT organization_id FROM shipping_tracking_numbers WHERE id = $1)
          )
          ON CONFLICT (
            shipment_id,

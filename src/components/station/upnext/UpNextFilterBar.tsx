@@ -83,7 +83,7 @@ export function UpNextFilterBar({
             <button
               type="button"
               onClick={openSearch}
-              className="flex-shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
+              className="ds-raw-button flex-shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600 transition-colors"
               aria-label="Open search"
             >
               <Search className="h-3.5 w-3.5" />

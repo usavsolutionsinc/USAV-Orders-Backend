@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { startRegistration } from '@simplewebauthn/browser';
+import { Button } from '@/design-system/primitives';
 
 type Stage = 'loading' | 'invalid' | 'set-pin' | 'optional-passkey' | 'done';
 
@@ -161,13 +162,14 @@ export default function EnrollPage() {
           ))}
         </div>
         {err && <div style={errorStyle}>{err}</div>}
+        {/* ds-raw-button: bespoke inline-styled circular numpad keypad — not a design-system Button */}
         <div style={numpadStyle}>
           {['1','2','3','4','5','6','7','8','9'].map((d) => (
             <button key={d} type="button" disabled={busy} style={padStyle} onClick={() => press(d)}>{d}</button>
           ))}
-          <button type="button" style={{ ...padStyle, visibility: 'hidden' }} aria-hidden />
-          <button type="button" disabled={busy} style={padStyle} onClick={() => press('0')}>0</button>
-          <button type="button" disabled={busy || targetPin.length === 0} style={padStyle} onClick={back}>⌫</button>
+          <button type="button" className="ds-raw-button" style={{ ...padStyle, visibility: 'hidden' }} aria-hidden />
+          <button type="button" className="ds-raw-button" disabled={busy} style={padStyle} onClick={() => press('0')}>0</button>
+          <button type="button" className="ds-raw-button" disabled={busy || targetPin.length === 0} style={padStyle} onClick={back}>⌫</button>
         </div>
       </Shell>
     );
@@ -183,12 +185,12 @@ export default function EnrollPage() {
         </p>
         {err && <div style={errorStyle}>{err}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 280, marginTop: 16 }}>
-          <button type="button" disabled={busy} onClick={addPasskey} style={primaryButtonStyle}>
+          <Button variant="brand" size="lg" className="w-full" disabled={busy} onClick={addPasskey}>
             {busy ? 'Adding…' : 'Add passkey'}
-          </button>
-          <button type="button" onClick={() => setStage('done')} style={secondaryButtonStyle}>
+          </Button>
+          <Button variant="secondary" size="lg" className="w-full" onClick={() => setStage('done')}>
             Skip for now
-          </button>
+          </Button>
         </div>
       </Shell>
     );
@@ -201,9 +203,9 @@ export default function EnrollPage() {
       <p style={{ color: '#666', marginTop: 6, textAlign: 'center', maxWidth: 320 }}>
         You can close this page or open the app on a station — your name will appear in the sign-in picker.
       </p>
-      <button type="button" onClick={() => router.replace('/signin')} style={{ ...primaryButtonStyle, marginTop: 18, width: 220 }}>
+      <Button variant="brand" size="lg" className="mt-[18px] w-[220px]" onClick={() => router.replace('/signin')}>
         Open sign-in
-      </button>
+      </Button>
     </Shell>
   );
 }
@@ -246,13 +248,5 @@ const numpadStyle: React.CSSProperties = {
 const padStyle: React.CSSProperties = {
   height: 80, width: 80, borderRadius: 999, background: '#fff',
   border: '1px solid #e6e6e6', fontSize: 26, fontWeight: 600, color: '#111', cursor: 'pointer',
-};
-const primaryButtonStyle: React.CSSProperties = {
-  background: '#111', color: '#fff', padding: '14px 24px', borderRadius: 12,
-  border: 'none', fontSize: 16, fontWeight: 600, cursor: 'pointer',
-};
-const secondaryButtonStyle: React.CSSProperties = {
-  background: 'transparent', color: '#111', padding: '12px 24px', borderRadius: 12,
-  border: '1px solid #ddd', fontSize: 15, fontWeight: 500, cursor: 'pointer',
 };
 const errorStyle: React.CSSProperties = { color: '#b00020', fontSize: 13, marginTop: 4 };

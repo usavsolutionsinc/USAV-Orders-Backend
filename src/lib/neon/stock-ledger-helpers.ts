@@ -27,6 +27,27 @@ export async function emitShippedLedgerForShipment(
 ): Promise<Array<{ id: number; sku: string; delta: number }>> {
   if (!shipmentId) return [];
 
+  // When no orgId is threaded (carrier-sync / webhook paths — shipping_tracking_
+  // numbers has no organization_id column to resolve it from), derive the owning
+  // org from the shipment's own orders. shipment_id is globally unique, so a
+  // shipment maps to exactly one org's orders; this stamps the ledger + targets
+  // the realtime publish at the CORRECT tenant instead of the USAV fallback.
+  // Only adopt it when the orders resolve to a single org (no ambiguity).
+  if (!orgId) {
+    try {
+      const derived = await db.query<{ organization_id: string }>(
+        `SELECT DISTINCT organization_id FROM orders
+          WHERE shipment_id = $1 AND organization_id IS NOT NULL`,
+        [shipmentId],
+      );
+      if (derived.rows.length === 1) {
+        orgId = derived.rows[0].organization_id as OrgId;
+      }
+    } catch {
+      /* derivation is best-effort; fall through to the transitional path */
+    }
+  }
+
   // Tenant-aware path: when an orgId is threaded through, set the org GUC on
   // the supplied executor (so RLS/loud-fail defaults resolve to the right
   // tenant) and add explicit organization_id predicates on the read, the

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Database, RefreshCw, X, Loader2, Check } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrdersSync } from '@/hooks/useOrdersSync';
@@ -33,9 +34,11 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
     <>
       <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger asChild>
+          {/* ds-raw-button: single child of a Radix Popover.Trigger asChild — the Slot clones onto this element; a DS Button would disturb the single-child clone + title. */}
           <button
             type="button"
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-white shadow-lg shadow-blue-600/10 transition-all hover:bg-blue-700 active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-white shadow-lg shadow-blue-600/10 transition-all hover:bg-blue-700 active:scale-95"
+            // ds-allow-title: single child of a Radix Popover.Trigger asChild — wrapping in HoverTooltip would disturb the Slot's single-child clone.
             title="Sync & backfill orders"
           >
             {sync.isTransferring ? (
@@ -60,6 +63,7 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
           >
             <div className="mb-3 flex items-center gap-1 rounded-xl bg-gray-100 p-1">
               {(['sync', 'backfill'] as SyncTab[]).map((t) => (
+                // ds-raw-button: segmented tab toggle (conditional active fill), not a single-variant Button
                 <button
                   key={t}
                   type="button"
@@ -86,24 +90,27 @@ export function OrdersSyncPopover({ onRefresh }: { onRefresh?: () => void }) {
                       disabled={sync.isTransferring}
                     />
                     {sync.isTransferring ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="danger"
                         onClick={sync.handleCancelTransfer}
-                        className={`flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 py-2.5 text-white transition-all hover:bg-red-600 active:scale-95 ${sectionLabel}`}
+                        icon={<X className="h-3.5 w-3.5" />}
+                        className={`w-full rounded-xl py-2.5 ${sectionLabel}`}
                       >
-                        <X className="h-3.5 w-3.5" /> Cancel Import
-                      </button>
+                        Cancel Import
+                      </Button>
                     ) : (
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
                         onClick={sync.handleTransfer}
-                        className={`flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-white transition-all hover:bg-blue-700 active:scale-95 ${sectionLabel}`}
+                        icon={<Database className="h-3.5 w-3.5" />}
+                        className={`w-full rounded-xl py-2.5 ${sectionLabel}`}
                       >
-                        <Database className="h-3.5 w-3.5" /> Import Latest Orders
-                      </button>
+                        Import Latest Orders
+                      </Button>
                     )}
 
                     {sync.isTransferring || sync.sheetsTask.status !== 'idle' || sync.ecwidTask.status !== 'idle' ? (
+                      // ds-raw-button: composite text-left status row (icon + label + "View details" + elapsed time), justify-between — not a standard action button
                       <button
                         type="button"
                         onClick={() => sync.setIsSyncDialogOpen(true)}

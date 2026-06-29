@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,12 +154,9 @@ export default async function CycleCountsAdminPage({
               />
             </div>
             <div className="flex items-end">
-              <button
-                type="submit"
-                className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
+              <Button variant="primary" size="sm" type="submit">
                 Snapshot + create
-              </button>
+              </Button>
             </div>
           </form>
           <p className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-caption text-gray-600">

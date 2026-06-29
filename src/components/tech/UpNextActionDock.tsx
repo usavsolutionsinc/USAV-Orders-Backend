@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { Play, AlertCircle } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import {
   dispatchUpNextActionStart,
   dispatchUpNextActionOos,
@@ -90,26 +91,28 @@ export function UpNextActionDock({ order }: UpNextActionDockProps) {
           but uses the order-card visual language so both surfaces feel
           related. */}
       <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-4 py-3">
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={() => setShowEditor((v) => !v)}
-          className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border text-label font-black uppercase tracking-widest transition-colors ${
+          icon={<AlertCircle className="h-4 w-4" />}
+          className={`h-12 flex-1 rounded-xl border text-label font-black uppercase tracking-widest ${
             hasOutOfStock || showEditor
-              ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-              : 'border-red-200 bg-white text-red-600 hover:bg-red-50'
+              ? 'border-red-300 bg-red-50 text-red-700 ring-0 hover:bg-red-100'
+              : 'border-red-200 bg-white text-red-600 ring-0 hover:bg-red-50'
           }`}
         >
-          <AlertCircle className="h-4 w-4" />
-          <span>{hasOutOfStock ? 'Update Out of Stock' : 'Out of Stock'}</span>
-        </button>
-        <button
+          {hasOutOfStock ? 'Update Out of Stock' : 'Out of Stock'}
+        </Button>
+        <Button
           type="button"
+          variant="primary"
           onClick={handleStart}
-          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 text-label font-black uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(6,95,70,0.34)] transition-colors hover:bg-emerald-700"
+          icon={<Play className="h-4 w-4" />}
+          className="h-12 flex-1 rounded-xl bg-emerald-600 text-label font-black uppercase tracking-widest text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),inset_0_-1px_0_rgba(6,95,70,0.34)] hover:bg-emerald-700"
         >
-          <Play className="h-4 w-4" />
-          <span>Start</span>
-        </button>
+          Start
+        </Button>
       </div>
     </div>
   );

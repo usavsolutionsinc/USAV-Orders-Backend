@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Barcode, Check, ClipboardList, Lock, PackageCheck, Truck } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Single source of truth for FBA status display. Labels + vocabulary mirror
@@ -100,13 +101,14 @@ export function FbaStatusBadge({
 
   if (iconOnly) {
     return (
-      <span
-        aria-label={token.label}
-        title={token.label}
-        className={`inline-flex items-center justify-center ${className ?? ''}`}
-      >
-        <Icon className={`${iconSize} ${token.icon_tone}`} />
-      </span>
+      <HoverTooltip label={token.label} asChild>
+        <span
+          aria-label={token.label}
+          className={`inline-flex items-center justify-center ${className ?? ''}`}
+        >
+          <Icon className={`${iconSize} ${token.icon_tone}`} />
+        </span>
+      </HoverTooltip>
     );
   }
 

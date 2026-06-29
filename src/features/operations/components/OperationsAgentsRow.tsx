@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Cpu, Camera, Zap, ExternalLink, RefreshCw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { useLocalAgents, type AgentStatus, type LocalAgentState } from './useLocalAgents';
 import { agentStatusMeta } from '@/lib/agent-status';
@@ -67,41 +68,41 @@ function AgentCard({ agent, index }: { agent: LocalAgentState; index: number }) 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-      className="group relative flex flex-col rounded-[20px] border border-[#F0EDE8] bg-white p-4
+      className="group relative flex flex-col rounded-[20px] border border-border-soft bg-white p-4
                  shadow-[0_2px_12px_rgba(161,140,90,0.04)] transition-shadow
                  hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)]"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F5F3EF] text-[#6B6356]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-canvas text-text-muted">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-[14px] font-extrabold tracking-tight text-[#2D2A26]">
+            <p className="truncate text-[14px] font-extrabold tracking-tight text-text-default">
               {meta.name}
             </p>
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${tone.chip}`}
+              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${tone.chip}`}
             >
               <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
               {tone.label}
             </span>
           </div>
-          <p className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#A89F91]">
+          <p className="mt-0.5 text-micro font-bold uppercase tracking-[0.12em] text-text-muted">
             {meta.stage}
           </p>
         </div>
       </div>
 
-      <p className="mt-3 text-[12px] font-medium leading-snug text-[#6B6356]">{meta.blurb}</p>
+      <p className="mt-3 text-label font-medium leading-snug text-text-muted">{meta.blurb}</p>
 
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#F5F3EF] pt-2.5">
-        <span className="truncate text-[11px] font-semibold tabular-nums text-[#A89F91]">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border-soft pt-2.5">
+        <span className="truncate text-caption font-semibold tabular-nums text-text-muted">
           {agent.detail}
         </span>
         <Link
           href={meta.href}
-          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wider text-[#6B6356] transition-colors hover:bg-[#F5F3EF] hover:text-[#2D2A26]"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider text-text-muted transition-colors hover:bg-surface-canvas hover:text-text-default"
         >
           Map in Studio
           <ExternalLink className="h-3 w-3" />
@@ -121,20 +122,21 @@ export function OperationsAgentsRow() {
     <section>
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>Local agents</span>
-          <h2 className="mt-1 text-[20px] font-extrabold tracking-tight text-[#2D2A26] sm:text-[22px]">
+          <span className={`${sectionLabel} !text-text-muted`}>Local agents</span>
+          <h2 className="mt-1 text-[20px] font-extrabold tracking-tight text-text-default sm:text-[22px]">
             Agents paired to the workflow
           </h2>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={refetch}
-          disabled={isLoading}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#E8E4DD] bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#6B6356] transition-colors hover:bg-[#F5F3EF] disabled:opacity-50"
+          loading={isLoading}
+          icon={<RefreshCw className="h-3 w-3" />}
+          className="shrink-0 rounded-full text-micro font-black uppercase tracking-[0.14em] text-text-muted"
         >
-          <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
           Re-check
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

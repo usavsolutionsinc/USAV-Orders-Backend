@@ -1,7 +1,6 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { QuarterSidebar } from '@/components/QuarterSelector';
 import { WalkInSidebarPanel } from '@/components/sidebar/WalkInSidebarPanel';
 import { OutboundSidebarPanel } from '@/components/sidebar/OutboundSidebarPanel';
 import { ManualsLibrarySidebar } from '@/components/manuals/ManualsLibrarySidebar';
@@ -56,7 +55,6 @@ export function SidebarContextPanel({ onBackToAppNav }: { onBackToAppNav?: () =>
   if (routeKey === 'warehouse') return <WarehouseSidebarPanel />;
   if (routeKey === 'walk-in') return <WalkInSidebarPanel embedded hideSectionHeader />;
   if (routeKey === 'repair') return <WalkInSidebarPanel embedded hideSectionHeader />;
-  if (routeKey === 'previous-quarters') return <QuarterSidebar hideSectionHeader />;
   if (routeKey === 'manuals-library') return <ManualsLibrarySidebar />;
 
   if (routeKey === 'tech') {

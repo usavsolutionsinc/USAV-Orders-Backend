@@ -75,6 +75,25 @@ export interface JourneyCursor {
   id: number;
 }
 
+/**
+ * Per-serial provenance facts for the journey's serial-grouped "By unit" view —
+ * the band header card (SKU · grade · status · originating PO). Resolved once
+ * per entity lookup ({@link EntityAnchors}); the timeline rows themselves stay
+ * lean. PO comes from `serial_units.origin_receiving_line_id →
+ * receiving_lines.zoho_purchaseorder_number`.
+ */
+export interface SerialProvenance {
+  serialUnitId: number;
+  serial: string;
+  sku: string | null;
+  /** `condition_grade_enum` code — render via `conditionLabel` / `ConditionGradeChip`. */
+  grade: string | null;
+  /** `serial_units.current_status` — render via `serialStatusLabel`/`serialStatusDot`. */
+  status: string | null;
+  /** Originating purchase-order number (the carton this unit was received on). */
+  poNumber: string | null;
+}
+
 export interface EntityAnchors {
   kind: JourneyDimension;
   orderId: number | null;
@@ -83,6 +102,8 @@ export interface EntityAnchors {
   serialUnitIds: number[];
   serials: string[];
   trackingNumbers: string[];
+  /** Per-serial provenance (SKU/grade/status/PO) for the By-unit band headers. */
+  serialProvenance?: SerialProvenance[];
 }
 
 export interface BrowseRow {

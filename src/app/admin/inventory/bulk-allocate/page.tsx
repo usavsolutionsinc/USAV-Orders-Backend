@@ -4,6 +4,8 @@ import { allocateOrder } from '@/lib/inventory/allocate';
 import { revalidatePath } from 'next/cache';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,21 +176,23 @@ export default async function BulkAllocatePage({
                         <td className="px-4 py-2 text-right">
                           <form action={allocateOne}>
                             <input type="hidden" name="orderId" value={r.order_id} />
-                            <button
-                              type="submit"
-                              disabled={!eligible}
-                              className={`rounded-md px-3 py-1 text-xs font-medium ${
-                                !eligible
-                                  ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-                                  : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                              title={
+                            <HoverTooltip
+                              label={
                                 !eligible ? `Need ${qty} stocked, only ${r.available_stocked} available` :
                                 'Allocate this order'
                               }
+                              asChild
                             >
-                              {eligible ? 'Allocate' : 'Insufficient'}
-                            </button>
+                              <Button
+                                type="submit"
+                                variant="primary"
+                                size="sm"
+                                disabled={!eligible}
+                                className={!eligible ? 'bg-gray-100 text-gray-400 hover:bg-gray-100' : undefined}
+                              >
+                                {eligible ? 'Allocate' : 'Insufficient'}
+                              </Button>
+                            </HoverTooltip>
                           </form>
                         </td>
                       </tr>

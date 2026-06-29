@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { OrdersFirstRunEmptyState } from '@/components/dashboard/OrdersFirstRunEmptyState';
 import { stagedOrdersQuery } from '@/lib/queries/outbound-queries';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 
@@ -60,6 +61,12 @@ export function StagedQueueTable({
       searchValue={searchQuery}
       onClearSearch={() => undefined}
       emptyMessage="No packages staged at the dock"
+      firstRunEmpty={
+        <OrdersFirstRunEmptyState
+          title="Nothing staged to ship"
+          description="Packages staged at the dock appear here. Connect a sales channel so orders flow into fulfillment."
+        />
+      }
       searchEmptyTitle="No matching staged packages"
       searchResultLabel="staged packages"
       clearSearchLabel="Show all staged"

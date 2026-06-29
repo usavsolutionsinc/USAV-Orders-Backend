@@ -15,6 +15,7 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 interface FormState {
   companyName: string;
@@ -148,13 +149,14 @@ export default function SignUpPage() {
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
+            variant="brand"
             disabled={!valid || submitting}
-            className="mt-2 inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-gray-900/[0.06] transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="mt-2 h-auto w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-gray-900/[0.06] hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:opacity-100"
           >
             {submitting ? 'Creating…' : 'Create workspace'}
-          </button>
+          </Button>
         </form>
 
         <p className="mt-6 text-center text-label text-gray-500">

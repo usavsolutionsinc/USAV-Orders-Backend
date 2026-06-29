@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { PaneHeader, PaneHeaderLabel, PaneHeaderCount, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 import { BinAddSkuSheet } from '@/components/sku/BinAddSkuSheet';
 import { BinStockNumpadSheet } from '@/components/sku/BinStockNumpadSheet';
@@ -211,13 +212,13 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
         <p className="text-sm font-semibold text-rose-600">
           {error instanceof Error ? error.message : `Bin "${barcode}" not found.`}
         </p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => router.push('/inventory')}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
         >
           ← Back to scan
-        </button>
+        </Button>
       </div>
     );
   }
@@ -245,13 +246,13 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
             {location.capacity != null && (
               <PaneHeaderStatusPill tone="neutral">Cap {location.capacity}</PaneHeaderStatusPill>
             )}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => refetch()}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
             >
               Refresh
-            </button>
+            </Button>
           </>
         }
         belowSlot={
@@ -273,7 +274,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
           <button
             type="button"
             onClick={() => setCycleSheetOpen(true)}
-            className="mb-3 flex w-full items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left active:bg-blue-100"
+            className="ds-raw-button mb-3 flex w-full items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-left active:bg-blue-100"
           >
             <div className="min-w-0">
               <p className="text-micro font-black uppercase tracking-[0.16em] text-blue-700">
@@ -299,14 +300,14 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
           <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Contents ({contents.length})
           </p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus className="h-3.5 w-3.5" />}
             onClick={() => setAddSheetOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-caption font-bold text-white active:bg-blue-700"
           >
-            <Plus className="h-3.5 w-3.5" />
             Add product
-          </button>
+          </Button>
         </div>
         {contents.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500">
@@ -321,7 +322,7 @@ export function LocationDetailView({ barcode }: LocationDetailViewProps) {
                   <button
                     type="button"
                     onClick={() => setNumpadRow(row)}
-                    className="flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
+                    className="ds-raw-button flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="font-mono text-sm font-black text-slate-900">

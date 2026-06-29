@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { Row } from './Row';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 
 const ClockIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
@@ -38,21 +40,23 @@ export function RecentSection({ onNavigate }: RecentSectionProps) {
             subLabel={<span className="font-mono">{r.href}</span>}
             trailing={
               settings.pinned.length < 30 ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    pin({ href: r.href, label: r.label });
-                  }}
-                  aria-label={`Pin ${r.label}`}
-                  title="Pin"
-                  className="invisible flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-blue-50 hover:text-blue-600 group-hover:visible"
-                >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
+                <HoverTooltip label="Pin" asChild focusable={false}>
+                  <IconButton
+                    tone="accent"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pin({ href: r.href, label: r.label });
+                    }}
+                    ariaLabel={`Pin ${r.label}`}
+                    className="invisible flex h-6 w-6 items-center justify-center rounded-md hover:bg-blue-50 group-hover:visible"
+                    icon={
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                    }
+                  />
+                </HoverTooltip>
               ) : null
             }
             onClick={() => {

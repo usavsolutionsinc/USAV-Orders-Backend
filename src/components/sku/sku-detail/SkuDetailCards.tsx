@@ -22,7 +22,7 @@ export function SkuDetailCards({ c, data }: { c: SkuDetailController; data: SkuD
             {data.catalog.upc && (
               <div>
                 <p className={fieldLabel}>UPC</p>
-                <button onClick={() => c.handleCopy(data.catalog!.upc!, 'upc')} className={`${monoValue} text-caption hover:text-blue-600 transition-colors`}>
+                <button onClick={() => c.handleCopy(data.catalog!.upc!, 'upc')} className={`ds-raw-button ${monoValue} text-caption hover:text-blue-600 transition-colors`}>
                   {data.catalog.upc}
                   {c.copiedField === 'upc' && <Check className="inline h-3 w-3 ml-1 text-emerald-500" />}
                 </button>
@@ -77,7 +77,7 @@ export function SkuDetailCards({ c, data }: { c: SkuDetailController; data: SkuD
               <button
                 key={photo.id}
                 onClick={() => c.setLightboxUrl(photo.url)}
-                className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-blue-400 transition-all"
+                className="ds-raw-button relative aspect-square rounded-lg overflow-hidden bg-gray-100 hover:ring-2 hover:ring-blue-400 transition-all"
               >
                 <img src={photo.url} alt={`SKU photo ${photo.id}`} className="h-full w-full object-cover" loading="lazy" />
                 {photo.photoType && (
@@ -104,13 +104,13 @@ export function SkuDetailCards({ c, data }: { c: SkuDetailController; data: SkuD
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     {row.serial_number && (
-                      <button onClick={() => c.handleCopy(row.serial_number!, `serial-${row.id}`)} className="text-caption font-bold font-mono text-gray-900 hover:text-blue-600 transition-colors block">
+                      <button onClick={() => c.handleCopy(row.serial_number!, `serial-${row.id}`)} className="ds-raw-button text-caption font-bold font-mono text-gray-900 hover:text-blue-600 transition-colors block">
                         SN: {row.serial_number}
                         {c.copiedField === `serial-${row.id}` && <Check className="inline h-3 w-3 ml-1 text-emerald-500" />}
                       </button>
                     )}
                     {row.shipping_tracking_number && (
-                      <button onClick={() => c.handleCopy(row.shipping_tracking_number!, `tracking-${row.id}`)} className="text-caption font-bold font-mono text-gray-500 hover:text-blue-600 transition-colors block">
+                      <button onClick={() => c.handleCopy(row.shipping_tracking_number!, `tracking-${row.id}`)} className="ds-raw-button text-caption font-bold font-mono text-gray-500 hover:text-blue-600 transition-colors block">
                         Tracking: {row.shipping_tracking_number}
                         {c.copiedField === `tracking-${row.id}` && <Check className="inline h-3 w-3 ml-1 text-emerald-500" />}
                       </button>

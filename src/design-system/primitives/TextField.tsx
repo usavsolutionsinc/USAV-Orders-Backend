@@ -134,9 +134,9 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           htmlFor={fieldId}
           className={`pointer-events-none absolute left-3.5 origin-left transition-all duration-150 ${
             float
-              ? `top-1.5 text-[10px] font-semibold uppercase tracking-wide ${t.floatLabel}`
+              ? `top-1.5 text-micro font-semibold uppercase tracking-wide ${t.floatLabel}`
               : `${multiline ? 'top-5' : 'top-3'} text-sm text-gray-400`
-          } peer-focus:top-1.5 peer-focus:text-[10px] peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide ${t.focusLabel}`}
+          } peer-focus:top-1.5 peer-focus:text-micro peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide ${t.focusLabel}`}
         >
           {label}
         </label>

@@ -6,6 +6,8 @@ import { PaneHeaderTabs } from '@/components/ui/pane-header';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { PoChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { TABS, type TabId, type IncomingDetailsPanelProps } from './incoming-details/incoming-details-shared';
 import { useIncomingDetails } from './incoming-details/useIncomingDetails';
 import { PoTab } from './incoming-details/PoTab';
@@ -61,26 +63,26 @@ export function IncomingDetailsPanel(props: IncomingDetailsPanelProps) {
               IS a PO. A shipment-only box uses the Shipment tab's "Re-poll"
               (carrier) instead. */}
           {isShipmentOnly ? null : (
-            <button
-              type="button"
-              onClick={() => void syncOne()}
-              disabled={syncing}
-              aria-label="Sync this PO"
-              title="Re-pull this PO from Zoho + re-poll its shipment"
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Syncing' : 'Sync'}
-            </button>
+            <HoverTooltip label="Re-pull this PO from Zoho + re-poll its shipment" asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void syncOne()}
+                disabled={syncing}
+                ariaLabel="Sync this PO"
+                icon={<RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />}
+                className="h-7 gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-eyebrow font-black uppercase tracking-wider text-emerald-700 hover:bg-emerald-100"
+              >
+                {syncing ? 'Syncing' : 'Sync'}
+              </Button>
+            </HoverTooltip>
           )}
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
-            aria-label="Close details panel"
+            ariaLabel="Close details panel"
+            icon={<X className="h-4 w-4" />}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          />
         </div>
 
       </div>

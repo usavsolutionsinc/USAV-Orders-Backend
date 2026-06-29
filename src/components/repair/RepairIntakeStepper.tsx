@@ -2,6 +2,7 @@
 
 import { Fragment } from 'react';
 import { Check } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 export type RepairIntakeStepKey = 'product' | 'issue' | 'contact' | 'review';
 
@@ -48,7 +49,7 @@ export function RepairIntakeStepper({
   const connectorMt = compact || spread ? 'mt-3.5' : 'mt-4';
   const connectorW = compact ? 'w-3 sm:w-5' : 'w-6 sm:w-10';
   const colW = compact || spread ? 'w-auto shrink-0' : 'w-[4.75rem] sm:w-[5.5rem]';
-  const numSize = compact || spread ? 'text-[10px]' : 'text-[11px]';
+  const numSize = compact || spread ? 'text-micro' : 'text-caption';
 
   const renderStepNode = (step: (typeof REPAIR_INTAKE_STEPS)[number], idx: number) => {
     const state = stepState(step.key, currentStep);
@@ -58,27 +59,28 @@ export function RepairIntakeStepper({
       (canNavigateTo ? canNavigateTo(step.key) : true);
 
     return (
-      <button
-        type="button"
-        disabled={!clickable}
-        onClick={() => clickable && onStepClick?.(step.key)}
-        title={step.label}
-        className={`flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-          state === 'done'
-            ? 'border-gray-900 bg-gray-900 text-white'
-            : state === 'active'
-              ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
-              : 'border-gray-200 bg-white text-gray-300'
-        } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
-        aria-current={state === 'active' ? 'step' : undefined}
-        aria-label={step.label}
-      >
-        {state === 'done' ? (
-          <Check className={compact || spread ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-        ) : (
-          <span className={`${numSize} font-black tabular-nums`}>{idx + 1}</span>
-        )}
-      </button>
+      <HoverTooltip label={step.label} asChild>
+        <button
+          type="button"
+          disabled={!clickable}
+          onClick={() => clickable && onStepClick?.(step.key)}
+          className={`ds-raw-button flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+            state === 'done'
+              ? 'border-gray-900 bg-gray-900 text-white'
+              : state === 'active'
+                ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
+                : 'border-gray-200 bg-white text-gray-300'
+          } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
+          aria-current={state === 'active' ? 'step' : undefined}
+          aria-label={step.label}
+        >
+          {state === 'done' ? (
+            <Check className={compact || spread ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+          ) : (
+            <span className={`${numSize} font-black tabular-nums`}>{idx + 1}</span>
+          )}
+        </button>
+      </HoverTooltip>
     );
   };
 
@@ -103,7 +105,7 @@ export function RepairIntakeStepper({
                 <li className="flex shrink-0 flex-col items-center">
                   {renderStepNode(step, idx)}
                   <span
-                    className={`mt-2 max-w-[4.25rem] text-center text-[8px] font-black uppercase leading-tight tracking-[0.08em] sm:max-w-[5rem] sm:text-[9px] sm:tracking-[0.1em] ${
+                    className={`mt-2 max-w-[4.25rem] text-center text-mini font-black uppercase leading-tight tracking-[0.08em] sm:max-w-[5rem] sm:text-eyebrow sm:tracking-[0.1em] ${
                       state === 'active'
                         ? 'text-gray-900'
                         : state === 'done'
@@ -147,31 +149,32 @@ export function RepairIntakeStepper({
               )}
 
               <div className={`flex flex-col items-center ${colW}`}>
-                <button
-                  type="button"
-                  disabled={!clickable}
-                  onClick={() => clickable && onStepClick?.(step.key)}
-                  title={step.label}
-                  className={`flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
-                    state === 'done'
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : state === 'active'
-                        ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
-                        : 'border-gray-200 bg-white text-gray-300'
-                  } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
-                  aria-current={state === 'active' ? 'step' : undefined}
-                  aria-label={step.label}
-                >
-                  {state === 'done' ? (
-                    <Check className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
-                  ) : (
-                    <span className={`${numSize} font-black tabular-nums`}>{idx + 1}</span>
-                  )}
-                </button>
+                <HoverTooltip label={step.label} asChild>
+                  <button
+                    type="button"
+                    disabled={!clickable}
+                    onClick={() => clickable && onStepClick?.(step.key)}
+                    className={`ds-raw-button flex ${nodeSize} shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+                      state === 'done'
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : state === 'active'
+                          ? 'border-gray-900 bg-white text-gray-900 ring-2 ring-gray-900/10'
+                          : 'border-gray-200 bg-white text-gray-300'
+                    } ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-gray-900/10' : 'cursor-default'}`}
+                    aria-current={state === 'active' ? 'step' : undefined}
+                    aria-label={step.label}
+                  >
+                    {state === 'done' ? (
+                      <Check className={compact ? 'h-3 w-3' : 'h-3.5 w-3.5'} />
+                    ) : (
+                      <span className={`${numSize} font-black tabular-nums`}>{idx + 1}</span>
+                    )}
+                  </button>
+                </HoverTooltip>
 
                 {!compact && (
                   <span
-                    className={`mt-2 w-full text-center text-[8px] font-black uppercase leading-tight tracking-[0.1em] sm:text-[9px] sm:tracking-[0.12em] ${
+                    className={`mt-2 w-full text-center text-mini font-black uppercase leading-tight tracking-[0.1em] sm:text-eyebrow sm:tracking-[0.12em] ${
                       state === 'active'
                         ? 'text-gray-900'
                         : state === 'done'

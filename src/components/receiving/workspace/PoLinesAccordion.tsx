@@ -3,21 +3,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, LayoutGroup } from 'framer-motion';
-import { ChevronDown, Plus, FileText, Check } from '@/components/Icons';
+import { ChevronDown, Pencil, FileText, Check } from '@/components/Icons';
+import {
+  framerPresence,
+  framerTransition,
+  motionBezier,
+} from '@/design-system/foundations/motion-framer';
+import {
+  useMotionPresence,
+  useMotionTransition,
+} from '@/design-system/foundations/motion-framer-hooks';
 import type { InlineActionFeedbackPayload } from './InlineActionFeedbackCard';
 import { toast } from '@/lib/toast';
-import { SerialChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { ConditionGradeChip, SerialChip, SkuScanRefChip, UnitPriceChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
+import { InlineEditableText } from '@/components/ui/InlineEditableText';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
+import { qtyProgress } from '@/design-system/tokens/typography/presets';
+import { cn } from '@/utils/_cn';
 import {
   CartonAddPopover,
   type AssignedBox,
   type CartonAddSelection,
 } from '@/components/receiving/workspace/CartonAddPopover';
 import { setSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
-import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import {
   dispatchSelectLine,
+  dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
 
@@ -25,6 +39,33 @@ interface ApiResponse {
   success: boolean;
   receiving_lines: ReceivingLineRow[];
 }
+
+// Stable empty array so `data?.receiving_lines ?? EMPTY_ROWS` keeps a constant
+// reference while loading — prevents the `useMemo`/`layout` deps from churning
+// on every render before the first fetch resolves.
+const EMPTY_ROWS: ReceivingLineRow[] = [];
+
+/** Sibling row reorder when the active line changes — softer than the default layout spring. */
+const PO_LINE_LAYOUT_SPRING = {
+  type: 'spring' as const,
+  stiffness: 220,
+  damping: 36,
+  mass: 0.9,
+};
+
+/** Active row body expand/collapse — slower + layout-eased than stationCollapse. */
+const PO_LINE_BODY_COLLAPSE = {
+  height: {
+    type: 'tween' as const,
+    duration: 0.4,
+    ease: motionBezier.layout,
+  },
+  opacity: {
+    type: 'tween' as const,
+    duration: 0.32,
+    ease: motionBezier.easeOut,
+  },
+};
 
 // `id` is optional to stay structurally compatible with the chip menu's
 // `SavedSerial` (whose id is optional). Callbacks guard with `if (s.id == null)`.
@@ -98,6 +139,26 @@ interface Props {
   onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
   /** Called after a successful local + Zoho item-description save. */
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
+  /**
+   * The already-known active line (the row the workspace opened on). Used as the
+   * query `placeholderData` so the clicked line paints INSTANTLY on a cold open
+   * while the full sibling list fetches — kills the "takes a second to render the
+   * PO line" gap. Ignored once real (or cached) data is present.
+   */
+  placeholderActiveRow?: ReceivingLineRow;
+  /**
+   * Render bare (no own card chrome, no add "+" pencil) — used when composed
+   * inside the unified {@link POUnboxingSection} wrapper, which supplies the
+   * single shared card + edit pencil. Defaults to the standalone card so the
+   * testing display and any other caller are unaffected.
+   */
+  embedded?: boolean;
+  /**
+   * Embedded-only: node rendered at the right of the "PO items · N" header row
+   * (e.g. the wrapper's shared edit pencil). Lets the unified wrapper place its
+   * single control on the same row as the item count.
+   */
+  headerRight?: React.ReactNode;
 }
 
 /**
@@ -119,11 +180,25 @@ export function PoLinesAccordion({
   hideNoTestLines = false,
   onItemDescFeedback,
   onItemDescSaved,
+  placeholderActiveRow,
+  embedded = false,
+  headerRight,
 }: Props) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => ['receiving-siblings', receivingId] as const,
     [receivingId],
+  );
+
+  // Single-line placeholder so a cold open paints the clicked line immediately
+  // (the full sibling list replaces it the moment the fetch resolves). Stable
+  // per line id so it doesn't churn the query each render.
+  const placeholderData = useMemo<ApiResponse | undefined>(
+    () =>
+      placeholderActiveRow && placeholderActiveRow.id > 0
+        ? { success: true, receiving_lines: [placeholderActiveRow] }
+        : undefined,
+    [placeholderActiveRow],
   );
 
   const { data } = useQuery<ApiResponse>({
@@ -136,6 +211,7 @@ export function PoLinesAccordion({
       return res.json();
     },
     enabled: Number.isFinite(receivingId) && receivingId > 0,
+    placeholderData,
     staleTime: 15_000,
     // Do NOT refetch on window focus. The Pass+Print flow opens a print
     // popup / silent-print window, which bounces focus and would otherwise
@@ -153,23 +229,35 @@ export function PoLinesAccordion({
     setActiveCollapsed(false);
   }, [activeLineId]);
 
-  // Local optimistic mirror — receives line-updated patches so progress
-  // badges stay live as the operator works.
-  const [localRows, setLocalRows] = useState<ReceivingLineRow[]>([]);
-  useEffect(() => {
-    if (data?.receiving_lines) setLocalRows(data.receiving_lines);
-  }, [data]);
+  // Optimistic `receiving-line-updated` patches go straight into the QUERY
+  // CACHE, so the render below derives from a SINGLE source of truth (`data`).
+  //
+  // This is the load-bearing flicker fix. The old code mirrored `data` into a
+  // `localRows` state via `useEffect`, and that state starts EMPTY on every
+  // (re)mount. Because passive effects run AFTER paint, each mount painted one
+  // blank frame (`rows.length === 0 → return null`) before the effect
+  // repopulated it — and the workspace REMOUNTS on every sibling line-switch,
+  // so the PO list blinked on each switch. Reading straight from cached `data`
+  // renders the rows immediately: the sibling query is keyed by the shared
+  // carton `receiving_id`, so it's already warm across line switches.
   useEffect(() => {
     const handler = (event: Event) => {
       const patch = (event as CustomEvent<Partial<ReceivingLineRow>>).detail;
       if (!patch || typeof patch.id !== 'number') return;
-      setLocalRows((rows) =>
-        rows.map((r) => (r.id === patch.id ? ({ ...r, ...patch } as ReceivingLineRow) : r)),
+      queryClient.setQueryData<ApiResponse>(queryKey, (prev) =>
+        prev?.receiving_lines
+          ? {
+              ...prev,
+              receiving_lines: prev.receiving_lines.map((r) =>
+                r.id === patch.id ? ({ ...r, ...patch } as ReceivingLineRow) : r,
+              ),
+            }
+          : prev,
       );
     };
     window.addEventListener('receiving-line-updated', handler);
     return () => window.removeEventListener('receiving-line-updated', handler);
-  }, []);
+  }, [queryClient, queryKey]);
 
   // After a sibling click the workspace re-mounts. Invalidate so the new
   // workspace sees fresh siblings (in case a remote actor edited one).
@@ -179,27 +267,26 @@ export function PoLinesAccordion({
     return () => window.removeEventListener('usav-refresh-data', handler);
   }, [queryClient, queryKey]);
 
-  // Keep rows in their original order from the API so clicking a sibling
-  // feels like a local expand/collapse, not a "row jumps to the bottom"
-  // switch. The active row still highlights + shows its slot in place; the
-  // collapsed siblings stay anchored where they were.
-  // In the testing workspace, no-test lines (cables toggled off) are hidden so
-  // they don't clutter the tester's list — but the active line is always kept
-  // so a mid-flow toggle never blanks the workspace.
+  // Single source of truth = the query cache. Original API order is preserved so
+  // clicking a sibling feels like a local expand/collapse, not a "row jumps to
+  // the bottom" switch. In the testing workspace, no-test lines (cables toggled
+  // off) are hidden so they don't clutter the tester's list — but the active
+  // line is always kept so a mid-flow toggle never blanks the workspace.
+  const allRows = data?.receiving_lines ?? EMPTY_ROWS;
   const rows = hideNoTestLines
-    ? localRows.filter((r) => r.id === activeLineId || r.needs_test !== false)
-    : localRows;
+    ? allRows.filter((r) => r.id === activeLineId || r.needs_test !== false)
+    : allRows;
   // Serial-unit ids across every line of this carton — the atoms an LPN box
   // groups. Drives the "Add to box" control in the header (mint H-{id} +
   // seed the whole carton). Empty until at least one serial is scanned.
   const cartonUnitIds = useMemo(
     () =>
-      localRows.flatMap((r) =>
+      allRows.flatMap((r) =>
         (r.serials ?? [])
           .map((s) => s.id)
           .filter((id): id is number => typeof id === 'number'),
       ),
-    [localRows],
+    [allRows],
   );
   // Inline item-description (Zoho line desc). The notes icon toggles the row's
   // meta display between (a) the condition + serial chips and (b) the Zoho item
@@ -211,6 +298,10 @@ export function PoLinesAccordion({
   const [descEdit, setDescEdit] = useState<{ id: number; draft: string } | null>(null);
   const [descSavingLineId, setDescSavingLineId] = useState<number | null>(null);
   const descInputRef = useRef<HTMLInputElement>(null);
+  const rowBodyCollapse = useMotionPresence(framerPresence.collapseHeight);
+  const rowBodyTransition = useMotionTransition(PO_LINE_BODY_COLLAPSE);
+  const rowLayoutTransition = useMotionTransition(PO_LINE_LAYOUT_SPRING);
+  const chevronTransition = useMotionTransition(framerTransition.stationChevron);
 
   function zohoSkipNote(zoho?: { skipped?: string }): string | undefined {
     switch (zoho?.skipped) {
@@ -252,8 +343,15 @@ export function PoLinesAccordion({
         zoho?: { patched?: boolean; skipped?: string };
       } | null;
       if (res.ok) {
-        setLocalRows((prev) =>
-          prev.map((r) => (r.id === lineId ? ({ ...r, zoho_notes: next } as ReceivingLineRow) : r)),
+        queryClient.setQueryData<ApiResponse>(queryKey, (prev) =>
+          prev?.receiving_lines
+            ? {
+                ...prev,
+                receiving_lines: prev.receiving_lines.map((r) =>
+                  r.id === lineId ? ({ ...r, zoho_notes: next } as ReceivingLineRow) : r,
+                ),
+              }
+            : prev,
         );
         setDescEdit({ id: lineId, draft: next ?? '' });
         onItemDescSaved?.(lineId, next);
@@ -287,32 +385,70 @@ export function PoLinesAccordion({
     }
   };
 
+  // Notion-style inline title edit (active row). Writes item_name via the house
+  // PATCH, then optimistically patches the siblings cache + the open workspace
+  // row (dispatchLineUpdated) so the new title shows everywhere at once.
+  const saveLineTitle = async (lineId: number, next: string) => {
+    const res = await fetch('/api/receiving-lines', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: lineId, item_name: next }),
+    });
+    if (!res.ok) {
+      toast.error('Could not save the item title');
+      return;
+    }
+    queryClient.setQueryData<ApiResponse>(queryKey, (prev) =>
+      prev?.receiving_lines
+        ? {
+            ...prev,
+            receiving_lines: prev.receiving_lines.map((r) =>
+              r.id === lineId ? ({ ...r, item_name: next } as ReceivingLineRow) : r,
+            ),
+          }
+        : prev,
+    );
+    dispatchLineUpdated({ id: lineId, item_name: next });
+    toast.success('Item title updated');
+  };
+
   // Always render — even for single-line POs the row layout (title, qty,
-  // condition, sku, serial chip) is the canonical context display the
+  // sku, price, condition, serial chip) is the canonical context display the
   // workspace expects above the body.
   if (rows.length === 0) return null;
 
+  // Embedded → bare wrapper (the POUnboxingSection card supplies the chrome +
+  // the single shared pencil, so the per-card "+" add action is dropped here).
+  const Wrapper = embedded ? 'div' : 'section';
   return (
-    <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60">
+    <Wrapper
+      className={
+        embedded
+          ? 'min-w-0'
+          : 'min-w-0 overflow-hidden rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200/60'
+      }
+    >
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
           PO items · {rows.length}
         </h3>
-        {!readOnly ? (
+        {embedded ? (
+          headerRight ?? null
+        ) : !readOnly ? (
           <CartonAddAction receivingId={receivingId} unitIds={cartonUnitIds} />
         ) : null}
       </div>
       <LayoutGroup id={`po-lines-${receivingId}`}>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex min-w-0 flex-col gap-1">
         {rows.map((line) => {
           const isActive = line.id === activeLineId;
           return (
             <motion.li
               key={line.id}
               layout="position"
-              transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.7 }}
+              transition={rowLayoutTransition}
               aria-current={isActive ? 'true' : undefined}
-              className={`relative rounded-xl border transition-colors ${
+              className={`relative min-w-0 overflow-hidden rounded-xl border transition-colors ${
                 isActive
                   ? 'border-blue-300 bg-blue-50/60'
                   : 'border-gray-200 bg-white hover:bg-gray-50'
@@ -334,7 +470,7 @@ export function PoLinesAccordion({
                     dispatchSelectLine(line);
                   }
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                className={`flex w-full min-w-0 items-start gap-2 px-3 pb-2 pt-1 text-left ${
                   !readOnly && !isActive ? 'cursor-pointer' : ''
                 }`}
               >
@@ -344,7 +480,7 @@ export function PoLinesAccordion({
                     // collapse/expand the row body (condition pills, unit
                     // rows). Essential on multi-qty lines where the expanded
                     // body is taller than the viewport.
-                    <button
+                    <motion.button
                       type="button"
                       aria-expanded={!activeCollapsed}
                       aria-label={activeCollapsed ? 'Expand item details' : 'Collapse item details'}
@@ -352,69 +488,80 @@ export function PoLinesAccordion({
                         e.stopPropagation();
                         setActiveCollapsed((v) => !v);
                       }}
-                      className="-m-1 flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                      animate={{ rotate: activeCollapsed ? -90 : 0 }}
+                      transition={chevronTransition}
+                      className="ds-raw-button mt-0.5 flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
                     >
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 transition-transform ${
-                          activeCollapsed ? '-rotate-90' : ''
-                        }`}
-                        aria-hidden
-                      />
-                    </button>
+                      <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                    </motion.button>
                   ) : (
                     <ChevronDown
-                      className="h-3.5 w-3.5 shrink-0 -rotate-90 text-gray-400 transition-transform"
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 -rotate-90 text-gray-400 transition-transform"
                       aria-hidden
                     />
                   )
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate text-label font-bold text-gray-900"
-                    title={line.item_name ?? undefined}
-                  >
-                    {line.item_name || line.sku || `Line #${line.id}`}
-                  </p>
+                  {!readOnly && isActive ? (
+                    // Click-to-edit the title on the active line (Notion-style).
+                    <InlineEditableText
+                      value={line.item_name || ''}
+                      placeholder={line.sku || `Line #${line.id}`}
+                      onSave={(next) => saveLineTitle(line.id, next)}
+                      ariaLabel="Edit item title"
+                      className="text-label font-bold text-gray-900"
+                    />
+                  ) : (
+                    /* ds-allow-title: native tooltip shows full value when truncated */
+                    <p
+                      className="truncate text-label font-bold text-gray-900"
+                      title={line.item_name ?? undefined}
+                    >
+                      {line.item_name || line.sku || `Line #${line.id}`}
+                    </p>
+                  )}
                   {/* No `truncate` here: `flex flex-wrap` already wraps the
                       badges/chips, and `truncate`'s `overflow: hidden` would
                       clip the SerialChipWithMenu dropdown (positioned below the
                       row). The chip menu is not portaled, so any clipping
                       ancestor hides it. */}
-                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
-                    <ProgressBadge
-                      received={line.quantity_received}
-                      expected={line.quantity_expected}
-                    />
-                    <span aria-hidden>·</span>
-                    <ConditionBadge
-                      grade={
-                        isActive && activeConditionOverride
-                          ? activeConditionOverride
-                          : line.condition_grade
-                      }
-                    />
-                    {/* Zoho unit cost — sits between Condition and the SKU chip
-                        (read-only mirror of the Zoho PO line rate). */}
-                    {line.unit_price != null && Number(line.unit_price) > 0 ? (
-                      <>
-                        <span aria-hidden>·</span>
-                        <span className="tabular-nums normal-case tracking-normal text-emerald-700" title="Zoho unit cost">
-                          ${Number(line.unit_price).toFixed(2)}
-                        </span>
-                      </>
-                    ) : null}
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                    {readOnly ? (
+                      // Triage read-only: scanned qty (1/1, matching the sidebar)
+                      // in blue. The SKU/condition copy chips still render below.
+                      <ScannedBadge expected={line.quantity_expected} />
+                    ) : (
+                      <ProgressBadge
+                        received={line.quantity_received}
+                        expected={line.quantity_expected}
+                      />
+                    )}
                     {(line.sku || '').trim() ? (
                       <>
-                        <span aria-hidden>·</span>
+                        <span aria-hidden className="text-micro text-gray-400">·</span>
                         <SkuScanRefChip
                           value={line.sku as string}
                           display={getLast4(line.sku)}
                         />
                       </>
                     ) : null}
+                    {line.unit_price != null && Number(line.unit_price) > 0 ? (
+                      <>
+                        <span aria-hidden className="text-micro text-gray-400">·</span>
+                        <UnitPriceChip amount={line.unit_price} />
+                      </>
+                    ) : null}
+                    <span aria-hidden className="text-micro text-gray-400">·</span>
+                    <ConditionGradeChip
+                      grade={
+                        isActive && activeConditionOverride
+                          ? activeConditionOverride
+                          : line.condition_grade
+                      }
+                    />
                     {Array.isArray(line.serials) && line.serials.length > 0 ? (
                       <>
-                        <span aria-hidden>·</span>
+                        <span aria-hidden className="text-micro text-gray-400">·</span>
                         {line.serials.map((s, i) => {
                           const sn = (s.serial_number || '').trim();
                           if (!sn) return null;
@@ -471,78 +618,98 @@ export function PoLinesAccordion({
                   </div>
                 </div>
                 {!readOnly ? (
-                  <button
-                    type="button"
-                    title="Toggle item description (Zoho)"
-                    aria-label="Toggle item description"
-                    aria-pressed={descShown === line.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Toggle the 2nd row (condition/serial entry) between the
-                      // pills + serial adder and the Zoho item-description editor.
-                      const opening = descShown !== line.id;
-                      const next = opening ? line.id : null;
-                      setDescShown(next);
-                      // Seed / clear the inline editor draft as the row toggles.
-                      setDescEdit(next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' });
-                      onItemDescFeedback?.(null);
-                      if (opening && isActive) setActiveCollapsed(false);
-                    }}
-                    className={`-m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 transition-colors hover:bg-blue-100 hover:text-gray-600 ${
-                      descShown === line.id ? 'bg-blue-100 text-blue-600' : 'text-gray-400'
-                    }`}
-                  >
-                    <FileText className="h-3.5 w-3.5" aria-hidden />
-                  </button>
+                  <HoverTooltip label="Toggle item description (Zoho)" asChild>
+                    <IconButton
+                      ariaLabel="Toggle item description"
+                      aria-pressed={descShown === line.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Toggle the 2nd row (condition/serial entry) between the
+                        // pills + serial adder and the Zoho item-description editor.
+                        const opening = descShown !== line.id;
+                        const next = opening ? line.id : null;
+                        setDescShown(next);
+                        // Seed / clear the inline editor draft as the row toggles.
+                        setDescEdit(next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' });
+                        onItemDescFeedback?.(null);
+                        if (opening && isActive) setActiveCollapsed(false);
+                      }}
+                      className={`group -m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 transition-colors hover:bg-blue-100 ${
+                        descShown === line.id ? 'bg-blue-100' : ''
+                      }`}
+                      icon={
+                        <FileText
+                          className={`h-3.5 w-3.5 ${
+                            descShown === line.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
+                          }`}
+                          aria-hidden
+                        />
+                      }
+                    />
+                  </HoverTooltip>
                 ) : null}
               </div>
               {/* Active row only — the 2nd row. By default it holds the
                   condition pills + serial adder (activeRowSlot). The notes icon
                   toggles this same row to the Zoho item-description editor
                   (descShown) — full-width entry, green check all the way right.
-                  Hidden while the chevron has collapsed the row. */}
-              {isActive && !activeCollapsed && (activeRowSlot || descShown === line.id) ? (
-                <div className="border-t border-blue-200/60 px-3 py-3">
-                  {descShown === line.id ? (
-                    <div className="space-y-1">
-                      <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
-                        Item description
-                      </p>
-                      <div className="flex h-10 items-stretch gap-2">
-                        <input
-                          ref={descInputRef}
-                          value={descEdit?.draft ?? ''}
-                          onChange={(e) => {
-                            setDescEdit({ id: line.id, draft: e.target.value });
-                            onItemDescFeedback?.(null);
-                          }}
-                          placeholder="Zoho line description"
-                          onKeyDown={(e) => { if (e.key === 'Enter') void saveItemDesc(line.id); }}
-                          className="h-10 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-caption normal-case tracking-normal text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        />
-                        <button
-                          type="button"
-                          title="Save item description"
-                          aria-label="Save item description"
-                          onClick={() => void saveItemDesc(line.id)}
-                          disabled={descSavingLineId === line.id}
-                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white ring-1 ring-inset ring-emerald-700 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Check className="h-4 w-4" aria-hidden />
-                        </button>
+                  Hidden while the chevron has collapsed the row. Read-only
+                  (triage) never renders this body — `activeRowSlot` returns null
+                  there, which would otherwise leave a stray empty `border-t`. */}
+              {!readOnly && isActive && (activeRowSlot || descShown === line.id) ? (
+                <motion.div
+                  initial={false}
+                  layout="position"
+                  animate={
+                    activeCollapsed
+                      ? rowBodyCollapse.exit
+                      : rowBodyCollapse.animate
+                  }
+                  transition={rowBodyTransition}
+                  className="min-w-0 overflow-hidden border-t border-blue-200/60"
+                  aria-hidden={activeCollapsed}
+                >
+                  <div className="min-w-0 px-3 pb-2 pt-1">
+                    {descShown === line.id ? (
+                      <div className="space-y-1">
+                        <p className="text-micro font-bold uppercase tracking-widest text-gray-500">
+                          Item description
+                        </p>
+                        <div className="flex h-10 items-stretch gap-2">
+                          <input
+                            ref={descInputRef}
+                            value={descEdit?.draft ?? ''}
+                            onChange={(e) => {
+                              setDescEdit({ id: line.id, draft: e.target.value });
+                              onItemDescFeedback?.(null);
+                            }}
+                            placeholder="Zoho line description"
+                            onKeyDown={(e) => { if (e.key === 'Enter') void saveItemDesc(line.id); }}
+                            className="h-10 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-caption normal-case tracking-normal text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                          />
+                          <HoverTooltip label="Save item description" asChild>
+                            <IconButton
+                              ariaLabel="Save item description"
+                              onClick={() => void saveItemDesc(line.id)}
+                              disabled={descSavingLineId === line.id}
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white ring-1 ring-inset ring-emerald-700 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              icon={<Check className="h-4 w-4" aria-hidden />}
+                            />
+                          </HoverTooltip>
+                        </div>
                       </div>
-                    </div>
-                  ) : typeof activeRowSlot === 'function'
-                    ? activeRowSlot({ serials: line.serials ?? [] })
-                    : activeRowSlot}
-                </div>
+                    ) : typeof activeRowSlot === 'function'
+                      ? activeRowSlot({ serials: line.serials ?? [] })
+                      : activeRowSlot}
+                  </div>
+                </motion.div>
               ) : null}
             </motion.li>
           );
         })}
       </ul>
       </LayoutGroup>
-    </section>
+    </Wrapper>
   );
 }
 
@@ -570,7 +737,9 @@ function CartonAddAction({ receivingId, unitIds }: { receivingId: number; unitId
           receiving_id: receivingId,
           allow_off_po: true,
           sku_catalog_id: sel.sku_catalog_id,
-          ...(sel.sku_platform_id_row != null ? { sku_platform_id_row: sel.sku_platform_id_row } : {}),
+          ...(sel.sku_platform_id_row != null && sel.sku_platform_id_row > 0
+            ? { sku_platform_id_row: sel.sku_platform_id_row }
+            : {}),
           sku: sel.sku || undefined,
           item_name: sel.item_name,
           client_event_id: clientEventId,
@@ -594,15 +763,14 @@ function CartonAddAction({ receivingId, unitIds }: { receivingId: number; unitId
       {box ? (
         <HandlingUnitChip handlingUnitId={box.id} code={box.code} unitCount={box.total} dense />
       ) : null}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Add to carton"
-        title="Add to carton — off-PO item, web result, or a handling-unit box"
-        className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700"
-      >
-        <Plus className="h-4 w-4" />
-      </button>
+      <HoverTooltip label="Edit carton items — off-PO item, web result, or a handling-unit box" asChild>
+        <IconButton
+          ariaLabel="Edit carton items"
+          onClick={() => setOpen(true)}
+          className="flex h-6 w-6 items-center justify-center rounded-xl bg-blue-600 transition-colors hover:bg-blue-700"
+          icon={<Pencil className="h-3.5 w-3.5 text-white" />}
+        />
+      </HoverTooltip>
       {open ? (
         <CartonAddPopover
           tabs={['item', 'web', 'box']}
@@ -618,34 +786,30 @@ function CartonAddAction({ receivingId, unitIds }: { receivingId: number; unitId
   );
 }
 
-/** Exported for UnmatchedItemsSection so unfound line rows render the exact
- *  same qty/condition meta as matched PO items. */
-export function ProgressBadge({ received, expected }: { received: number; expected: number | null }) {
-  if (expected == null || expected <= 0) {
-    return <span className="text-gray-600">{received} received</span>;
-  }
-  const done = received >= expected;
+/** Scanned-qty badge for read-only (triage) rows. A door scan brings the WHOLE
+ *  carton in, so scanned == expected (e.g. 1/1) — the same semantics the sidebar
+ *  Prioritize/Triage rail renders. Distinct from {@link ProgressBadge}'s
+ *  received count (which is 0 until the carton is unboxed, the "0/1" bug). */
+export function ScannedBadge({ expected }: { expected: number | null }) {
   return (
-    <span className={done ? 'text-emerald-600' : 'text-gray-700'}>
-      {received}/{expected}
+    <span className={cn(qtyProgress, 'normal-case tracking-normal text-blue-600')}>
+      {expected ?? 1}/{expected ?? '?'}
     </span>
   );
 }
 
-export function ConditionBadge({ grade }: { grade: string | null | undefined }) {
-  const g = String(grade || '').trim().toUpperCase();
-  if (!g || g === 'PENDING') {
-    return <span className="text-gray-400">pending</span>;
+/** Exported for UnmatchedItemsSection so unfound line rows render the exact
+ *  same qty/condition meta as matched PO items. */
+export function ProgressBadge({ received, expected }: { received: number; expected: number | null }) {
+  const qtyClass = cn(qtyProgress, 'normal-case tracking-normal');
+  if (expected == null || expected <= 0) {
+    return <span className={cn(qtyClass, 'text-gray-500')}>{received} received</span>;
   }
-  const label = conditionGradeTableLabel(g);
-  const tone =
-    g === 'BRAND_NEW'
-      ? 'text-yellow-600'
-      : g === 'PARTS'
-        ? 'text-amber-800'
-        : g.startsWith('USED')
-          ? 'text-gray-600'
-          : 'text-gray-500';
-  return <span className={tone}>{label}</span>;
+  const done = received >= expected;
+  return (
+    <span className={cn(qtyClass, done ? 'text-emerald-600/80' : 'text-gray-500')}>
+      {received}/{expected}
+    </span>
+  );
 }
 

@@ -24,6 +24,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Download, ExternalLink, FileText } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
 import { mergeJourney } from '@/lib/timeline/journey';
@@ -60,14 +61,12 @@ function HeaderAction({
 }) {
   return (
     <HoverTooltip label={label}>
-      <button
-        type="button"
+      <IconButton
+        icon={children}
         onClick={onClick}
-        aria-label={label}
-        className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-      >
-        {children}
-      </button>
+        ariaLabel={label}
+        className="-my-0.5 inline-flex items-center rounded p-1 hover:bg-gray-100"
+      />
     </HoverTooltip>
   );
 }
@@ -105,13 +104,14 @@ export function SerialJourneySection({
         </header>
         <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-6 text-center text-caption font-semibold text-rose-600">
           Could not load this serial&rsquo;s journey.
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => query.refetch()}
-            className="ml-2 underline decoration-dotted hover:text-rose-700"
+            className="ml-2 h-auto px-0 text-rose-600 underline decoration-dotted hover:bg-transparent hover:text-rose-700"
           >
             Retry
-          </button>
+          </Button>
         </div>
       </section>
     );

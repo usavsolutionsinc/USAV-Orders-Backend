@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnchoredLayer } from '@/design-system';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Star, Trash2, Check, Plus } from '@/components/Icons';
 
 interface SavedView {
@@ -112,19 +114,20 @@ export function SavedViewsControl({
 
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen((o) => !o)}
-        className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors ${
+        icon={<Star className={`h-3.5 w-3.5 ${activeView ? 'text-amber-500' : 'text-gray-400'}`} />}
+        className={`text-caption font-bold uppercase tracking-wide ${
           activeView ? 'text-gray-900' : 'text-gray-500 hover:text-gray-900'
         }`}
         aria-expanded={open}
       >
-        <Star className={`h-3.5 w-3.5 ${activeView ? 'text-amber-500' : 'text-gray-400'}`} />
         <span className="truncate max-w-[120px]">{activeView ? activeView.name : label}</span>
         {views.length > 0 ? <span className="tabular-nums text-gray-400">{views.length}</span> : null}
-      </button>
+      </Button>
 
       <AnchoredLayer open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} placement="bottom-start" gap={6}>
         <div className="w-60 rounded-xl border border-gray-200 bg-white py-1.5 shadow-lg">
@@ -139,21 +142,19 @@ export function SavedViewsControl({
                     <button
                       type="button"
                       onClick={() => applyView(view)}
-                      className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-gray-50 ${
+                      className={`ds-raw-button flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-gray-50 ${
                         isActive ? 'font-semibold text-gray-900' : 'text-gray-700'
                       }`}
                     >
                       <Check className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-blue-600' : 'text-transparent'}`} />
                       <span className="truncate">{view.name}</span>
                     </button>
-                    <button
-                      type="button"
+                    <IconButton
+                      icon={<Trash2 className="h-3.5 w-3.5" />}
+                      ariaLabel={`Delete view ${view.name}`}
                       onClick={() => removeView(view.id)}
                       className="mr-1.5 shrink-0 rounded p-1 text-gray-300 opacity-0 transition-all hover:text-rose-500 group-hover:opacity-100"
-                      aria-label={`Delete view ${view.name}`}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    />
                   </li>
                 );
               })}
@@ -177,31 +178,38 @@ export function SavedViewsControl({
                   placeholder="Name this view…"
                   className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-sm outline-none focus:border-blue-400"
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="brand"
+                  size="sm"
                   disabled={!draftName.trim()}
-                  className="shrink-0 rounded-md bg-gray-900 px-2 py-1 text-xs font-bold text-white transition-colors hover:bg-gray-800 disabled:bg-gray-300"
+                  className="shrink-0"
                 >
                   Save
-                </button>
+                </Button>
               </form>
             ) : (
-              <button
-                type="button"
-                onClick={() => setNaming(true)}
-                disabled={!hasActiveFilters || Boolean(activeView)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
-                title={
+              <HoverTooltip
+                label={
                   !hasActiveFilters
                     ? 'Set a filter first'
                     : activeView
                       ? 'These filters are already saved'
                       : 'Save the current filters as a view'
                 }
+                asChild
               >
-                <Plus className="h-3.5 w-3.5 shrink-0" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setNaming(true)}
+                disabled={!hasActiveFilters || Boolean(activeView)}
+                icon={<Plus className="h-3.5 w-3.5 shrink-0" />}
+                className="w-full justify-start text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
                 Save current view
-              </button>
+              </Button>
+              </HoverTooltip>
             )}
           </div>
         </div>

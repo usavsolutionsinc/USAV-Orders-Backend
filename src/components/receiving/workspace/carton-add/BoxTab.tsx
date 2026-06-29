@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Package, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { printHandlingUnitLabel } from '@/lib/print/printHandlingUnitLabel';
 import { toast } from '@/lib/toast';
 import { type AssignedBox, type OpenBox } from './carton-add-types';
@@ -147,15 +148,17 @@ export function BoxTab({
   return (
     <>
       <div className="px-3 pt-3">
-        <button
-          type="button"
-          onClick={() => void mintNew()}
+        <Button
+          variant="primary"
+          size="md"
+          icon={<Plus />}
+          loading={busyId === 'new'}
           disabled={busyId != null || noUnits}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-label font-bold text-white transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => void mintNew()}
+          className="w-full bg-teal-600 hover:bg-teal-700"
         >
-          {busyId === 'new' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           New box &amp; print label · {unitIds.length} {unitIds.length === 1 ? 'unit' : 'units'}
-        </button>
+        </Button>
         {noUnits ? (
           <p className="mt-1.5 text-center text-micro text-gray-400">
             Scan a serial first — a box groups the carton&apos;s units.
@@ -180,7 +183,7 @@ export function BoxTab({
                   type="button"
                   onClick={() => void assignExisting(b)}
                   disabled={busyId != null || noUnits}
-                  className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left transition-colors hover:border-teal-300 hover:bg-teal-50/60 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Package className="h-4 w-4 shrink-0 text-teal-600" />
                   <span className="flex-1 truncate text-label font-bold text-gray-900">{b.code}</span>

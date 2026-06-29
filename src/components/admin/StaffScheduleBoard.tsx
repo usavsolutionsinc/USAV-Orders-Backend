@@ -22,6 +22,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getStaffColorHex } from '@/utils/staff-colors';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface ShiftRow {
   id: number;
@@ -187,6 +188,7 @@ export function StaffScheduleBoard({
 
 function WeekToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
+    // ds-raw-button
     <button
       type="button"
       onClick={onClick}
@@ -212,28 +214,32 @@ function ShiftAvatarPill({
   // module cache — keeps the pill correct even mid-update.
   const color = getStaffColorHex({ id: shift.staff_id, color_hex: shift.color_hex });
   const isCovering = shift.covers_shift_id != null;
+  const tooltipLabel = `${shift.staff_name} · ${formatHours(shift.starts_at, shift.ends_at, timezone)}${
+    isCovering ? ' · covering shift' : ''
+  }`;
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(shift.staff_id)}
-      title={`${shift.staff_name} · ${formatHours(shift.starts_at, shift.ends_at, timezone)}${
-        isCovering ? ' · covering shift' : ''
-      }`}
-      className="group flex items-center gap-1.5 rounded-full bg-white px-1.5 py-1 text-left ring-1 ring-gray-200 transition hover:bg-gray-50 hover:ring-gray-300"
-    >
-      <span
-        aria-hidden
-        className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-eyebrow font-bold text-white ring-2 ring-white"
-        style={{ backgroundColor: color }}
+    <HoverTooltip label={tooltipLabel} asChild>
+      {/* ds-raw-button */}
+      <button
+        type="button"
+        onClick={() => onSelect?.(shift.staff_id)}
+        aria-label={tooltipLabel}
+        className="group flex items-center gap-1.5 rounded-full bg-white px-1.5 py-1 text-left ring-1 ring-gray-200 transition hover:bg-gray-50 hover:ring-gray-300"
       >
-        {initials(shift.staff_name)}
-      </span>
-      <span className="truncate text-caption font-semibold text-gray-900">{shift.staff_name.split(/\s+/)[0]}</span>
-      {isCovering && (
-        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-amber-800">
-          Cover
+        <span
+          aria-hidden
+          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-eyebrow font-bold text-white ring-2 ring-white"
+          style={{ backgroundColor: color }}
+        >
+          {initials(shift.staff_name)}
         </span>
-      )}
-    </button>
+        <span className="truncate text-caption font-semibold text-gray-900">{shift.staff_name.split(/\s+/)[0]}</span>
+        {isCovering && (
+          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-amber-800">
+            Cover
+          </span>
+        )}
+      </button>
+    </HoverTooltip>
   );
 }

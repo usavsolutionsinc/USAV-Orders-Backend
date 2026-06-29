@@ -69,5 +69,5 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     console.error('Error in POST /api/sourcing/research:', error);
     return NextResponse.json({ success: false, error: msg }, { status });
   }
-}, { permission: 'sourcing.search' });
+}, { permission: 'sourcing.search', feature: 'sourcing' });
 

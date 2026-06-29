@@ -14,6 +14,7 @@ import {
     X,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { triageStatusBadgeClass } from '@/lib/inventory-triage-status';
 
 /** Full `tracking_exceptions` row (GET /api/tracking-exceptions/[id]). */
@@ -136,14 +137,14 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                 <div className="flex items-center gap-3">
                     <span
                         className={cn(
-                            'rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider',
+                            'rounded-full px-3 py-1 text-caption font-bold uppercase tracking-wider',
                             triageStatusBadgeClass(data.status),
                         )}
                     >
                         {data.status}
                     </span>
                     <div className="mx-1 h-4 w-px bg-gray-200" />
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-gray-500">
+                    <div className="flex items-center gap-2 text-caption font-bold text-gray-500">
                         <Clock className="h-3.5 w-3.5 text-gray-400" />
                         Opened {formatWhen(data.created_at)}
                     </div>
@@ -155,28 +156,30 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                                 type="button"
                                 onClick={() => patch.mutate({ status: 'resolved' })}
                                 disabled={patch.isPending}
-                                className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                className="ds-raw-button flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
                             >
                                 <Check className="h-3.5 w-3.5" /> Resolve
                             </button>
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                icon={<X className="h-3.5 w-3.5" />}
                                 onClick={() => patch.mutate({ status: 'discarded' })}
                                 disabled={patch.isPending}
-                                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-60"
                             >
-                                <X className="h-3.5 w-3.5" /> Discard
-                            </button>
+                                Discard
+                            </Button>
                         </>
                     ) : (
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<RotateCcw className="h-3.5 w-3.5" />}
                             onClick={() => patch.mutate({ status: 'open' })}
                             disabled={patch.isPending}
-                            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-500 hover:bg-gray-100 disabled:opacity-60"
                         >
-                            <RotateCcw className="h-3.5 w-3.5" /> Reopen
-                        </button>
+                            Reopen
+                        </Button>
                     )}
                 </div>
             </header>
@@ -233,14 +236,14 @@ export function TriageWorkspace({ selectedId }: TriageWorkspaceProps) {
                             className="min-h-[120px] w-full rounded-2xl border border-gray-200 bg-white p-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none"
                         />
                         <div className="flex items-center gap-3">
-                            <button
-                                type="button"
+                            <Button
+                                variant="brand"
+                                size="sm"
                                 onClick={() => patch.mutate({ notes: notes.trim() || null })}
                                 disabled={patch.isPending || notes === (data.notes ?? '')}
-                                className="rounded-lg bg-gray-900 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-white shadow-lg disabled:opacity-40"
                             >
                                 {patch.isPending ? 'Saving…' : 'Save note'}
-                            </button>
+                            </Button>
                             {patch.isError ? (
                                 <span className="text-xs font-medium text-rose-600">Save failed.</span>
                             ) : null}
@@ -263,7 +266,7 @@ function Field({
 }) {
     return (
         <div className="space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">{label}</p>
+            <p className="text-micro font-black uppercase tracking-widest text-gray-400">{label}</p>
             <div className="flex items-center gap-2">
                 {icon}
                 <span className="text-sm font-black text-gray-900">{children}</span>

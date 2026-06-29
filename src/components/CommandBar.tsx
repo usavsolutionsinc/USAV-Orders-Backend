@@ -37,7 +37,6 @@ import {
   Zap,
   FileText,
   AlertCircle,
-  Calendar,
   ShieldCheck,
   ChevronRight,
   MessageSquare,
@@ -90,7 +89,6 @@ const NAV_ICON_MAP: Record<string, IconComponent> = {
   ai: Zap,
   manuals: FileText,
   support: AlertCircle,
-  'previous-quarters': Calendar,
   admin: ShieldCheck,
 };
 

@@ -12,6 +12,7 @@ import { AuditTimeline } from '@/components/audit/AuditTimeline';
 import { FillBar } from './FillBar';
 import { StatusChips } from './StatusChip';
 import { X, ExternalLink } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import DeleteButton from '@/components/ui/DeleteButton';
 
 interface BinContentRow {
@@ -115,14 +116,13 @@ export function BinDetailFlyout({ row, onClose, onDeleted }: Props) {
               <ExternalLink className="h-4 w-4" />
             </Link>
           )}
-          <button
+          <IconButton
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100"
-            aria-label="Close bin detail"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close bin detail"
+            icon={<X className="h-4 w-4" />}
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-gray-100"
+          />
         </header>
 
         <div className="flex-1 overflow-y-auto">

@@ -7,6 +7,7 @@ import {
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { FnskuChip, SerialChip } from '@/components/ui/CopyChip';
 import { FbaStatusBadge } from './shared/FbaStatusBadge';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
 import type { TimelineItem } from '@/lib/timeline/types';
 
@@ -79,13 +80,14 @@ function FlagPill({ flag }: { flag: TraceFlag }) {
       ? 'border-red-200 bg-red-50 text-red-700'
       : 'border-amber-200 bg-amber-50 text-amber-700';
   return (
-    <span
-      title={flag.message}
-      className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${tone}`}
-    >
-      <AlertTriangle className="h-2.5 w-2.5" />
-      {flag.code.replace(/_/g, ' ')}
-    </span>
+    <HoverTooltip label={flag.message} focusable={false} asChild>
+      <span
+        className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider ${tone}`}
+      >
+        <AlertTriangle className="h-2.5 w-2.5" />
+        {flag.code.replace(/_/g, ' ')}
+      </span>
+    </HoverTooltip>
   );
 }
 
@@ -96,7 +98,7 @@ function UnitRow({ unit }: { unit: TraceUnit }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-gray-100/60"
+        className="ds-raw-button flex w-full items-center justify-between gap-2 px-2.5 py-2 text-left hover:bg-gray-100/60"
       >
         <div className="flex min-w-0 items-center gap-2">
           <Barcode className="h-3.5 w-3.5 shrink-0 text-emerald-600" />

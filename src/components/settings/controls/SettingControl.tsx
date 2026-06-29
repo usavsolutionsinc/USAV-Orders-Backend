@@ -11,6 +11,8 @@
  * to read like its siblings.
  */
 
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { SettingDef, SettingValue } from '@/lib/settings/types';
 
 interface SettingControlProps {
@@ -38,7 +40,7 @@ function Switch({
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`ds-raw-button relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
         checked ? 'bg-blue-600' : 'bg-gray-300'
       }`}
     >
@@ -67,24 +69,31 @@ export function SettingControl({ def, value, disabled, lockedOptions = [], onCha
           {(def.options ?? []).map((opt) => {
             const isActive = value === opt.value;
             const optLocked = lockedOptions.some((lv) => lv === opt.value);
-            return (
-              <button
+            const tip = optLocked ? 'Requires a higher plan' : opt.hint;
+            const el = (
+              <Button
                 key={String(opt.value)}
                 type="button"
+                variant="secondary"
+                size="sm"
                 disabled={disabled || optLocked}
                 onClick={() => onChange(opt.value)}
-                title={optLocked ? 'Requires a higher plan' : opt.hint}
                 aria-pressed={isActive}
-                className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`rounded-xl border px-3 py-1.5 text-xs disabled:opacity-40 ${
                   isActive
                     ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-500/20'
-                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 ring-0'
                 }`}
               >
                 {opt.label}
                 {optLocked && <span className="ml-1" aria-hidden>🔒</span>}
-              </button>
+              </Button>
             );
+            return tip ? (
+              <HoverTooltip key={String(opt.value)} label={tip} asChild>
+                {el}
+              </HoverTooltip>
+            ) : el;
           })}
         </div>
       );

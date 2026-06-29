@@ -1,4 +1,5 @@
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 interface Props {
@@ -22,15 +23,13 @@ export function ClaimModalHeader({ row, submitting, archiveSubmitting, onClose }
               : `Receiving #${row.receiving_id ?? '—'}`}
         </p>
       </div>
-      <button
-        type="button"
+      <IconButton
         onClick={onClose}
         disabled={submitting || archiveSubmitting}
-        aria-label="Cancel"
-        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-gray-700 disabled:opacity-50"
-      >
-        <X className="h-4 w-4" />
-      </button>
+        ariaLabel="Cancel"
+        icon={<X className="h-4 w-4" />}
+        className="rounded-lg p-1.5 text-gray-400 hover:bg-white hover:text-gray-700 disabled:opacity-50"
+      />
     </div>
   );
 }

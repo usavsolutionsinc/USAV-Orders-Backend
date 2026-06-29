@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { Button } from '@/design-system/primitives';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
@@ -92,13 +93,15 @@ export function PhotoLibrarySidebarPanel() {
     >
       {refinements.length > 0 || filters.q ? (
         <div className="mb-3 px-1">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={clearAll}
-            className="text-micro font-bold uppercase tracking-wider text-gray-400 hover:text-gray-900"
+            className="h-auto rounded-none px-0 text-micro font-bold uppercase tracking-wider text-gray-400 hover:bg-transparent hover:text-gray-900"
           >
             Clear all filters
-          </button>
+          </Button>
         </div>
       ) : null}
       <PhotoStationFolders

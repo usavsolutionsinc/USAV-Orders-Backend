@@ -7,6 +7,7 @@ import { useUpdateTicket } from '@/hooks/useZendeskQueries';
 import { formatDateTimePST } from '@/utils/date';
 import { cn } from '@/utils/_cn';
 import { Layers } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TagInput } from '../TagInput';
 import { priorityBadge, statusBadge } from '../badges';
 import { requesterFrom } from './support-chat-utils';
@@ -16,8 +17,8 @@ type Tab = 'details' | 'tags';
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-0.5">
-      <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">{label}</p>
-      <div className="text-[12px] text-gray-700">{children}</div>
+      <p className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{label}</p>
+      <div className="text-label text-gray-700">{children}</div>
     </div>
   );
 }
@@ -42,27 +43,28 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Ticket details"
-        aria-expanded={open}
-        title="Ticket details"
-        className={cn(
-          'relative mt-0.5 shrink-0 rounded-lg border p-1.5 transition',
-          open
-            ? 'border-blue-300 bg-blue-50 text-blue-700'
-            : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700',
-        )}
-      >
-        <Layers className="h-3.5 w-3.5" />
-        {tagCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gray-700 px-1 text-[8px] font-black text-white">
-            {tagCount}
-          </span>
-        ) : null}
-      </button>
+      <HoverTooltip label="Ticket details" asChild>
+        <button
+          ref={anchorRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label="Ticket details"
+          aria-expanded={open}
+          className={cn(
+            'ds-raw-button relative mt-0.5 shrink-0 rounded-lg border p-1.5 transition',
+            open
+              ? 'border-blue-300 bg-blue-50 text-blue-700'
+              : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700',
+          )}
+        >
+          <Layers className="h-3.5 w-3.5" />
+          {tagCount > 0 ? (
+            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gray-700 px-1 text-mini font-black text-white">
+              {tagCount}
+            </span>
+          ) : null}
+        </button>
+      </HoverTooltip>
 
       <AnchoredLayer open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} placement="bottom-end" gap={4}>
         <div className="w-72 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
@@ -74,7 +76,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                 type="button"
                 onClick={() => setTab(t)}
                 className={cn(
-                  'flex-1 px-3 py-2 text-[10px] font-black uppercase tracking-widest transition',
+                  'ds-raw-button flex-1 px-3 py-2 text-micro font-black uppercase tracking-widest transition',
                   tab === t
                     ? 'border-b-2 border-blue-500 text-blue-700'
                     : 'text-gray-400 hover:text-gray-600',
@@ -95,13 +97,13 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                 <Field label="Ticket">#{ticket.id}</Field>
                 <div className="flex gap-6">
                   <Field label="Status">
-                    <span className={cn('inline-block rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', sb.className)}>
+                    <span className={cn('inline-block rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest', sb.className)}>
                       {sb.label}
                     </span>
                   </Field>
                   <Field label="Priority">
                     {pb ? (
-                      <span className={cn('inline-block rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', pb.className)}>
+                      <span className={cn('inline-block rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest', pb.className)}>
                         {pb.label}
                       </span>
                     ) : (
@@ -120,7 +122,7 @@ export function SupportDetailsStack({ ticket }: { ticket: ZendeskTicket }) {
                   placeholder="Add a tag…"
                   onChange={(tags) => update.mutate({ id: ticket.id, patch: { tags } })}
                 />
-                <p className="text-[10px] text-gray-400">Tags sync to Zendesk.</p>
+                <p className="text-micro text-gray-400">Tags sync to Zendesk.</p>
               </div>
             )}
           </div>

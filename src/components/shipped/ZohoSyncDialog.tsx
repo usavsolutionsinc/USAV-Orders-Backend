@@ -25,8 +25,10 @@ import {
   User,
 } from '@/components/Icons';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { Button, IconButton } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 // ─── Shared report shape (mirrors the API's SyncRunReport / OrderSyncResult) ──
 
@@ -104,7 +106,7 @@ function statusBadge(status: ZohoOrderResult['status'], delivered: boolean) {
   };
   const { label, cls } = map[status];
   return (
-    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${cls}`}>
+    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${cls}`}>
       {label}
     </span>
   );
@@ -137,7 +139,7 @@ function ChainStep({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-1 ring-1 ring-gray-200">
       <span className="text-gray-500">{icon}</span>
-      <span className="text-[10px] font-medium text-gray-600">{label}</span>
+      <span className="text-micro font-medium text-gray-600">{label}</span>
     </span>
   );
 }
@@ -147,7 +149,7 @@ function DetailTable({ rows }: { rows: ZohoOrderResult[] }) {
     <div className="max-h-[42vh] overflow-y-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+          <tr className="text-micro uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Date</th>
             <th className="px-3 py-2 font-semibold">Product</th>
             <th className="px-3 py-2 font-semibold">Packer</th>
@@ -169,11 +171,11 @@ function DetailTable({ rows }: { rows: ZohoOrderResult[] }) {
                 <td className="px-3 py-2 align-top text-gray-700">
                   {first?.productTitle || <span className="text-amber-700">Unknown product</span>}
                   {extra > 0 ? (
-                    <span className="ml-1 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                    <span className="ml-1 text-micro font-medium uppercase tracking-wide text-gray-400">
                       +{extra} more
                     </span>
                   ) : null}
-                  {r.error ? <div className="mt-0.5 text-[10px] text-red-500">{r.error}</div> : null}
+                  {r.error ? <div className="mt-0.5 text-micro text-red-500">{r.error}</div> : null}
                 </td>
                 <td className="px-3 py-2 align-top text-xs text-gray-700">
                   {r.packer?.name ? (
@@ -192,7 +194,7 @@ function DetailTable({ rows }: { rows: ZohoOrderResult[] }) {
                     <span className="font-mono text-xs text-gray-400">—</span>
                   )}
                   {r.channel ? (
-                    <div className="mt-0.5 pl-1.5 text-[10px] font-normal uppercase tracking-wide text-gray-400">
+                    <div className="mt-0.5 pl-1.5 text-micro font-normal uppercase tracking-wide text-gray-400">
                       {r.channel}
                     </div>
                   ) : null}
@@ -303,24 +305,23 @@ export function ZohoSyncDialog({
             >
               {(elapsedMs / 1000).toFixed(1)}s
             </motion.span>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`rounded-lg p-1.5 transition ${
-                busy
-                  ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-              }`}
-              aria-label={busy ? 'Cancel sync' : 'Close'}
-              title={busy ? 'Cancel' : 'Close'}
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <HoverTooltip label={busy ? 'Cancel' : 'Close'} asChild>
+              <IconButton
+                onClick={onClose}
+                ariaLabel={busy ? 'Cancel sync' : 'Close'}
+                className={`rounded-lg p-1.5 ${
+                  busy
+                    ? 'text-red-600 hover:bg-red-50 hover:text-red-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                }`}
+                icon={<X className="h-4 w-4" />}
+              />
+            </HoverTooltip>
           </div>
         </header>
 
         <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-100 bg-gray-50/60 px-5 py-2">
-          <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Each order →</span>
+          <span className="text-micro font-medium uppercase tracking-wide text-gray-400">Each order →</span>
           <ChainStep icon={<FileText className="h-3.5 w-3.5" />} label="Sales order" />
           <span className="text-gray-300">→</span>
           <ChainStep icon={<Package className="h-3.5 w-3.5" />} label="Package" />
@@ -361,7 +362,7 @@ export function ZohoSyncDialog({
                   </p>
                   <ul className="mt-1 space-y-0.5">
                     {report.errors.slice(0, 4).map((e, i) => (
-                      <li key={i} className="text-[11px] text-red-600">
+                      <li key={i} className="text-caption text-red-600">
                         {e}
                       </li>
                     ))}
@@ -391,36 +392,33 @@ export function ZohoSyncDialog({
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-gray-200 bg-gray-50 px-5 py-2.5">
-          <p className="text-[10px] leading-snug text-gray-400">
+          <p className="text-micro leading-snug text-gray-400">
             {report?.dryRun !== false
               ? 'Preview is a dry run (no changes).'
               : 'Records created in Zoho.'}
             {report ? ` Invoice mode: ${report.invoiceMode}.` : ''}
           </p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onRefresh}
               disabled={busy}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+              icon={<RefreshCw className={`h-3.5 w-3.5 ${phase === 'previewing' ? 'animate-spin' : ''}`} />}
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${phase === 'previewing' ? 'animate-spin' : ''}`} /> Refresh
-            </button>
-            <button
-              type="button"
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onSync}
               disabled={busy || pendingCount === 0}
-              className={`inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                confirming ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+              loading={phase === 'syncing'}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              className={confirming ? 'bg-amber-600 hover:bg-amber-700' : ''}
             >
-              {phase === 'syncing' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
               {confirming ? 'Confirm sync' : pendingCount > 0 ? `Sync ${pendingCount} now` : 'Sync now'}
-            </button>
+            </Button>
           </div>
         </footer>
       </motion.div>

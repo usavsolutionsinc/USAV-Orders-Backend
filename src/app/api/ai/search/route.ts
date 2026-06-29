@@ -121,4 +121,4 @@ export const POST = withAuth(async (req: NextRequest) => {
       { status: 500 }
     );
   }
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

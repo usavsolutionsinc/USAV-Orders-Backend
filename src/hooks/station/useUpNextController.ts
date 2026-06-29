@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useUpNextData } from '@/hooks/useUpNextData';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import {
   isOutOfStock,
   getRepairSortValue,
@@ -35,6 +35,7 @@ export function useUpNextController({
   const [missingPartsReason, setMissingPartsReason] = useState('');
   const [internalSearchText, setInternalSearchText] = useState('');
   const [internalQuickFilter, setInternalQuickFilter] = useState('must_go');
+  const orderChannelLabel = useOrderChannelLabel();
 
   const searchText = searchTextOverride !== undefined ? searchTextOverride : internalSearchText;
   const quickFilter = quickFilterOverride !== undefined ? quickFilterOverride : internalQuickFilter;
@@ -67,7 +68,7 @@ export function useUpNextController({
     let list = nonStockOrders;
     if (quickFilter !== 'all' && !SORT_FILTER_IDS.has(quickFilter)) {
       list = list.filter((o) => {
-        const plat = getOrderPlatformLabel(o.order_id || '', o.account_source).toLowerCase();
+        const plat = orderChannelLabel(o.order_id || '', o.account_source).toLowerCase();
         if (quickFilter === 'ecwid') return plat === 'ecwid' || (!plat.includes('amazon') && !plat.includes('ebay') && !plat.includes('walmart'));
         return plat.includes(quickFilter);
       });
@@ -76,7 +77,7 @@ export function useUpNextController({
       list = list.filter((o) => matchesSearch(searchText, [o.product_title, o.order_id, o.shipping_tracking_number, o.sku, o.condition]));
     }
     return list;
-  }, [nonStockOrders, quickFilter, searchText]);
+  }, [nonStockOrders, quickFilter, searchText, orderChannelLabel]);
 
   const filteredStockOrders = useMemo(() => {
     if (!searchText.trim()) return stockOrders;

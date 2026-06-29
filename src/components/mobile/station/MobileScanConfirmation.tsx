@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Barcode, Package, Settings, Loader2 } from '@/components/Icons';
+import { MapPin, Barcode, Package, Settings } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import {
   framerPresenceMobile,
   framerTransitionMobile,
@@ -157,11 +158,12 @@ export function MobileScanConfirmation({
               const pillConfig = TYPE_CONFIG[type] || TYPE_CONFIG.TRACKING;
               const PillIcon = pillConfig.Icon;
               return (
+                // ds-raw-button: segmented scan-type override toggle pill — not a DS Button
                 <button
                   key={type}
                   type="button"
                   onClick={() => setCurrentType(type)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
+                  className={`ds-raw-button flex items-center gap-1.5 rounded-full border px-3.5 min-h-[44px] text-xs font-black uppercase tracking-wider transition-all active:scale-95 whitespace-nowrap ${
                     isActive ? pillConfig.badge : 'bg-gray-100 text-gray-500 border-gray-200'
                   }`}
                 >
@@ -175,30 +177,22 @@ export function MobileScanConfirmation({
 
         {/* ── Action buttons ── */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => onConfirm(scannedValue, currentType)}
-            disabled={isLoading}
-            className={`flex-1 h-[52px] rounded-2xl text-white text-label font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${config.confirmBtn}`}
+            loading={isLoading}
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            }
+            className={`h-[52px] flex-1 ${config.confirmBtn}`}
           >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                <svg className="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                Confirm
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={onRescan}
-            className="h-[52px] px-5 rounded-2xl bg-gray-100 text-gray-700 text-label font-black uppercase tracking-wider active:bg-gray-200 transition-colors"
-          >
+            Confirm
+          </Button>
+          <Button variant="secondary" onClick={onRescan} className="h-[52px] px-5">
             Rescan
-          </button>
+          </Button>
         </div>
       </div>
     </motion.div>

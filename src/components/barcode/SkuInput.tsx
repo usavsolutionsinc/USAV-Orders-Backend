@@ -2,6 +2,9 @@
 
 import React from 'react';
 import { Search, Clipboard } from '../Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 
 import type { BarcodeDensity } from './BarcodePreview';
 
@@ -53,22 +56,30 @@ export function SkuInput({ sku, uniqueSku, mode, skuInputRef, isActive, density 
                 />
 
                 {/* Paste from clipboard */}
-                <button
-                    onClick={handlePaste}
-                    title="Paste from clipboard and search"
-                    className={`bg-white text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors border-l border-gray-200 flex items-center justify-center ${comfy ? 'px-5' : 'px-4'}`}
-                >
-                    <Clipboard className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />
-                </button>
+                <HoverTooltip label="Paste from clipboard and search" asChild>
+                    <IconButton
+                        onClick={handlePaste}
+                        ariaLabel="Paste from clipboard and search"
+                        icon={<Clipboard className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />}
+                        className={cn(
+                            'bg-white hover:bg-gray-50 hover:text-gray-800 border-l border-gray-200 flex items-center justify-center',
+                            comfy ? 'px-5' : 'px-4',
+                        )}
+                    />
+                </HoverTooltip>
 
                 {/* Search / confirm */}
-                <button
-                    onClick={onNext}
-                    title="Search"
-                    className={`bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center border-l border-blue-600 ${comfy ? 'px-6' : 'px-5'}`}
-                >
-                    <Search className={comfy ? 'h-5 w-5' : 'h-4 w-4'} />
-                </button>
+                <HoverTooltip label="Search" asChild>
+                    <IconButton
+                        onClick={onNext}
+                        ariaLabel="Search"
+                        icon={<Search className={cn('text-white', comfy ? 'h-5 w-5' : 'h-4 w-4')} />}
+                        className={cn(
+                            'bg-blue-600 hover:bg-blue-700 flex items-center justify-center border-l border-blue-600',
+                            comfy ? 'px-6' : 'px-5',
+                        )}
+                    />
+                </HoverTooltip>
             </div>
         </div>
     );

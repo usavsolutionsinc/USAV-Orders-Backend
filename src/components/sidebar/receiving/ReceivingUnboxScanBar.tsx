@@ -23,14 +23,14 @@ export const UNBOX_SCAN_MODES: readonly UnboxScanModeMeta[] = [
     mode: 'tracking',
     label: 'Tracking #',
     Icon: MapPin,
-    armedClass: 'text-blue-700 bg-blue-50',
+    armedClass: 'text-blue-700 bg-blue-500/10',
     iconClass: 'text-blue-600',
   },
   {
     mode: 'order',
     label: 'PO #',
     Icon: Hash,
-    armedClass: 'text-gray-700 bg-gray-100',
+    armedClass: 'text-gray-700 bg-slate-500/10',
     iconClass: 'text-gray-500',
   },
 ] as const;
@@ -39,6 +39,13 @@ function modeMeta(mode: UnboxScanMode): UnboxScanModeMeta {
   return UNBOX_SCAN_MODES.find((m) => m.mode === mode) ?? UNBOX_SCAN_MODES[0];
 }
 
+/**
+ * Display-only hint for the leading icon when the operator hasn't armed a mode.
+ * It does NOT decide resolution — an un-armed scan submits `'auto'` and the
+ * server resolves the value as EITHER a PO# or a tracking#. (Previously this
+ * heuristic *was* the resolution route, which dumped any dashless PO# into the
+ * Unfound list.)
+ */
 export function classifyUnboxScan(value: string): UnboxScanMode {
   return value.includes('-') ? 'order' : 'tracking';
 }
@@ -46,7 +53,8 @@ export function classifyUnboxScan(value: string): UnboxScanMode {
 interface Props {
   value: string;
   onChange: (next: string) => void;
-  onSubmit: (mode: UnboxScanMode) => void;
+  /** `'auto'` when un-armed (server resolves PO# or tracking); else the armed mode. */
+  onSubmit: (mode: UnboxScanMode | 'auto') => void;
   inputRef?: Ref<HTMLInputElement>;
   isResolving?: boolean;
   staffId?: string;
@@ -72,7 +80,9 @@ export function ReceivingUnboxScanBar({
 
   const handleSubmit = (e?: FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
-    onSubmit(armedMode ?? classifyUnboxScan(value));
+    // Armed mode is strict; un-armed submits 'auto' so the server resolves the
+    // value as either a PO# or a tracking# (the icon is just a visual hint).
+    onSubmit(armedMode ?? 'auto');
   };
 
   return (
@@ -91,11 +101,11 @@ export function ReceivingUnboxScanBar({
         <StationScanLeadingIcon
           Icon={ActiveIcon}
           tintClassName={active.iconClass}
-          ariaLabel={armedMode ? `Armed: ${active.label}` : `Auto-detect (${active.label})`}
+          ariaLabel={armedMode ? `Armed: ${active.label}` : `Auto — looks up PO # and Tracking #`}
           title={
             armedMode
               ? `Next scan forced to ${active.label}. Click the icon again to auto-detect.`
-              : 'Auto-detect — a value with “-” searches PO #, otherwise Tracking'
+              : 'Auto — looks the scan up as both a PO # and a Tracking # before creating a carton'
           }
         />
       }

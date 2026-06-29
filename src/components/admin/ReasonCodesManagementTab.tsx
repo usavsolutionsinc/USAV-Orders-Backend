@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { Edit, Plus, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { toast } from '@/lib/toast';
 import { sectionLabel, fieldLabel, tableHeader, tableCell } from '@/design-system/tokens/typography/presets';
@@ -18,6 +20,7 @@ interface ReasonCodeRecord {
   requires_note: boolean;
   requires_photo: boolean;
   sort_order: number;
+  applies_to?: string[] | null;
 }
 
 type Direction = ReasonCodeRecord['direction'];
@@ -42,6 +45,7 @@ interface ReasonCodeFormState {
   requiresNote: boolean;
   requiresPhoto: boolean;
   sortOrder: string;
+  appliesTo: string[];
 }
 
 const DEFAULT_FORM_STATE: ReasonCodeFormState = {
@@ -52,6 +56,7 @@ const DEFAULT_FORM_STATE: ReasonCodeFormState = {
   requiresNote: false,
   requiresPhoto: false,
   sortOrder: '0',
+  appliesTo: [],
 };
 
 const inputClass =
@@ -73,6 +78,18 @@ export function ReasonCodesManagementTab() {
       return body;
     },
   });
+
+  // Workflow nodes for the D3 applies_to (per-node palette) editor.
+  const { data: nodesData } = useQuery<{ nodes: Array<{ id: string; label: string; definitionName: string | null }> }>({
+    queryKey: ['catalog', 'workflow-nodes'],
+    queryFn: async () => {
+      const res = await fetch('/api/catalog/workflow-nodes');
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('Failed to load workflow nodes');
+      return body;
+    },
+  });
+  const workflowNodes = nodesData?.nodes ?? [];
 
   const rows = data?.reason_codes ?? [];
 
@@ -129,6 +146,7 @@ export function ReasonCodesManagementTab() {
           requiresNote: payload.requiresNote,
           requiresPhoto: payload.requiresPhoto,
           sortOrder: Number(payload.sortOrder || 0),
+          appliesTo: payload.appliesTo.length > 0 ? payload.appliesTo : null,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -179,6 +197,7 @@ export function ReasonCodesManagementTab() {
       requiresNote: row.requires_note,
       requiresPhoto: row.requires_photo,
       sortOrder: String(row.sort_order ?? 0),
+      appliesTo: row.applies_to ?? [],
     });
     setIsFormOpen(true);
   };
@@ -218,14 +237,9 @@ export function ReasonCodesManagementTab() {
               placeholder="Filter code / label / category"
               className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
             />
-            <button
-              type="button"
-              onClick={openAdd}
-              className={`${sectionLabel} inline-flex items-center gap-2 border border-gray-300 px-3 py-1.5 text-gray-800 transition-colors hover:bg-gray-50`}
-            >
-              <Plus className="h-3 w-3" />
+            <Button variant="secondary" size="sm" icon={<Plus />} onClick={openAdd}>
               Add Code
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -269,25 +283,23 @@ export function ReasonCodesManagementTab() {
                     </p>
                     <p className={`${tableCell} text-gray-600`}>{row.sort_order}</p>
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-                        title="Edit reason code"
-                        aria-label={`Edit ${row.code}`}
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(row)}
-                        disabled={deleteMutation.isPending}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
-                        title="Remove reason code"
-                        aria-label={`Remove ${row.code}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverTooltip label="Edit reason code" asChild>
+                        <IconButton
+                          onClick={() => openEdit(row)}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 hover:bg-gray-50"
+                          ariaLabel={`Edit ${row.code}`}
+                          icon={<Edit className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
+                      <HoverTooltip label="Remove reason code" asChild>
+                        <IconButton
+                          onClick={() => handleDelete(row)}
+                          disabled={deleteMutation.isPending}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                          ariaLabel={`Remove ${row.code}`}
+                          icon={<Trash2 className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
                     </div>
                   </div>
                 ))
@@ -299,6 +311,7 @@ export function ReasonCodesManagementTab() {
 
       {isFormOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-bleed modal scrim, not a styled control */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close reason code form" />
           <div className="relative flex w-full max-w-2xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
@@ -308,13 +321,12 @@ export function ReasonCodesManagementTab() {
                   {editingId != null ? `Update ${form.code}` : 'Add an inventory reason code'}
                 </h3>
               </div>
-              <button
-                type="button"
+              <IconButton
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 hover:bg-gray-50"
+                ariaLabel="Close"
+                icon={<X className="h-4 w-4" />}
+              />
             </div>
 
             <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
@@ -381,6 +393,40 @@ export function ReasonCodesManagementTab() {
                 />
               </label>
 
+              <div className="space-y-1 md:col-span-2">
+                <span className={`block ${sectionLabel}`}>Applies to nodes</span>
+                <span className={`block ${fieldLabel} text-gray-400`}>
+                  Empty = applies to every node (global). Select nodes to scope this reason to them (D3 palette).
+                </span>
+                <div className="mt-1 max-h-40 space-y-1 overflow-y-auto border border-gray-200 bg-white p-2">
+                  {workflowNodes.length === 0 ? (
+                    <p className="text-xs font-medium text-gray-400">No workflow nodes available.</p>
+                  ) : (
+                    workflowNodes.map((node) => (
+                      <label key={node.id} className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={form.appliesTo.includes(node.id)}
+                          onChange={(e) =>
+                            setForm((c) => ({
+                              ...c,
+                              appliesTo: e.target.checked
+                                ? [...c.appliesTo, node.id]
+                                : c.appliesTo.filter((nid) => nid !== node.id),
+                            }))
+                          }
+                          className="h-4 w-4 border-gray-300 text-gray-900 focus:ring-gray-300"
+                        />
+                        <span className="text-xs font-medium text-gray-700">
+                          {node.label}
+                          {node.definitionName ? <span className="ml-1 text-gray-400">({node.definitionName})</span> : null}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
               <label className="flex items-center gap-3 border border-gray-200 px-3 py-3">
                 <input
                   type="checkbox"
@@ -403,21 +449,12 @@ export function ReasonCodesManagementTab() {
             </div>
 
             <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeForm}
-                className={`${sectionLabel} border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50`}
-              >
+              <Button variant="secondary" size="md" onClick={closeForm}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSaving}
-                className={`${sectionLabel} border border-gray-900 bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 disabled:opacity-50`}
-              >
+              </Button>
+              <Button variant="brand" size="md" onClick={handleSubmit} disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingId != null ? 'Save Changes' : 'Create Code'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

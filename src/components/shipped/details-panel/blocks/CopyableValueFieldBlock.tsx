@@ -3,6 +3,8 @@
 import { useState, type MouseEvent, type ReactNode } from 'react';
 import { Check, Copy, ExternalLink } from '@/components/Icons';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 interface CopyableValueFieldBlockProps {
   label: string;
@@ -52,37 +54,36 @@ export function CopyableValueFieldBlock({
   const rowActions = (
     <div className="flex items-center gap-1.5">
       {externalUrl && (
-        <button
-          type="button"
-          onClick={handleExternalClick}
-          className={`transition-all text-gray-400 hover:text-blue-600 ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
-          title={externalLabel || 'Open in external tab'}
-          aria-label={externalLabel || 'Open in external tab'}
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-        </button>
+        <HoverTooltip label={externalLabel || 'Open in external tab'} asChild focusable={false}>
+          <IconButton
+            onClick={handleExternalClick}
+            ariaLabel={externalLabel || 'Open in external tab'}
+            tone="accent"
+            icon={<ExternalLink className="w-3.5 h-3.5" />}
+            className={`transition-all text-gray-400 ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
+          />
+        </HoverTooltip>
       )}
       {trailingActions}
       {!isEmpty && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCopy();
-          }}
-          className={`transition-all ${copied ? 'opacity-100' : isFlat ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'} ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
-          title={`Copy ${label}`}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? (
-            <div className="flex items-center gap-1">
-              <span className="text-micro font-black text-emerald-600 uppercase">Copied!</span>
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-            </div>
-          ) : (
-            <Copy className="w-3.5 h-3.5 text-gray-400" />
-          )}
-        </button>
+        <HoverTooltip label={`Copy ${label}`} asChild focusable={false}>
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            ariaLabel={`Copy ${label}`}
+            className={`transition-all ${copied ? 'opacity-100' : isFlat ? 'opacity-100' : 'opacity-0 group-hover/field:opacity-100'} ${isFlat ? '' : 'rounded-lg p-1.5 hover:bg-white hover:shadow-sm'}`}
+            icon={copied ? (
+              <div className="flex items-center gap-1">
+                <span className="text-micro font-black text-emerald-600 uppercase">Copied!</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+              </div>
+            ) : (
+              <Copy className="w-3.5 h-3.5 text-gray-400" />
+            )}
+          />
+        </HoverTooltip>
       )}
     </div>
   );

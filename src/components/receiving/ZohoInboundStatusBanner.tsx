@@ -2,8 +2,10 @@
 
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Clock, RefreshCw, ShieldCheck, Zap } from '@/components/Icons';
+import { AlertTriangle, Clock, ShieldCheck, Zap } from '@/components/Icons';
 import { MetricLineRow, StatusBadge } from '@/design-system';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type ZohoHealthResponse = {
   success: boolean;
@@ -107,20 +109,19 @@ export function ZohoInboundStatusBanner() {
             Budgeted for {zoho?.configured_headroom || '80/100 req per minute'}, capped at {zoho?.max_concurrent ?? 8} concurrent calls.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending || !!zoho?.circuit.isOpen}
-          className="inline-flex items-center gap-2 border-b border-[var(--color-neutral-900)] py-1 text-[var(--text-xs)] font-semibold uppercase tracking-[0.18em] text-[var(--color-neutral-900)] transition hover:text-[var(--color-brand-primary)] disabled:cursor-not-allowed disabled:opacity-40"
-          title="Queue an incremental Zoho purchase-order sync"
-        >
-          {syncMutation.isPending ? (
-            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Zap className="h-3.5 w-3.5" />
-          )}
-          Sync Expected PO Lines
-        </button>
+        <HoverTooltip label="Queue an incremental Zoho purchase-order sync" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => syncMutation.mutate()}
+            loading={syncMutation.isPending}
+            disabled={!!zoho?.circuit.isOpen}
+            icon={<Zap />}
+            className="border-b border-[var(--color-neutral-900)] text-[var(--text-xs)] uppercase tracking-[0.18em] text-[var(--color-neutral-900)] hover:text-[var(--color-brand-primary)]"
+          >
+            Sync Expected PO Lines
+          </Button>
+        </HoverTooltip>
       </div>
 
       <div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Globe, Lock, Mail, Paperclip, Send, X } from '@/components/Icons';
-import { Button } from '@/design-system/primitives';
+import { Button, IconButton } from '@/design-system/primitives';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import { useSupportReply } from '@/hooks/useSupportReply';
 import { useZendeskAgents } from '@/hooks/useZendeskQueries';
@@ -114,57 +114,60 @@ export function SupportChatComposer({
     <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-3">
       <div className="mb-2.5 flex items-center justify-between">
         <div className="inline-flex rounded-lg bg-gray-100 p-0.5">
+          {/* ds-raw-button: segmented toggle (conditional active fill), not a single-variant Button */}
           <button
             type="button"
             onClick={() => setIsPublic(false)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[11px] font-bold transition',
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
               !isPublic ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
             )}
           >
             <Lock className="h-3.5 w-3.5" /> Internal note
           </button>
+          {/* ds-raw-button: segmented toggle (conditional active fill), not a single-variant Button */}
           <button
             type="button"
             onClick={() => setIsPublic(true)}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-[11px] font-bold transition',
+              'inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-caption font-bold transition',
               isPublic ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
             )}
           >
             <Globe className="h-3.5 w-3.5" /> Public reply
           </button>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={picker.openPicker}
-          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-500 transition hover:bg-gray-100 hover:text-gray-700"
+          icon={<Paperclip className="h-3.5 w-3.5" />}
+          className="gap-1.5 px-2 text-caption font-bold"
         >
-          <Paperclip className="h-3.5 w-3.5" /> Attach
-        </button>
+          Attach
+        </Button>
         <input ref={picker.inputRef} {...picker.inputProps} />
       </div>
 
       {/* CC collaborators — public replies only (CCs make no sense on a note). */}
       {isPublic ? (
         <div className="mb-2.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50/60 px-2 py-1.5">
-          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400">
+          <span className="inline-flex items-center gap-1 text-micro font-black uppercase tracking-widest text-gray-400">
             <Mail className="h-3 w-3" /> Cc
           </span>
           {ccs.map((email) => (
             <span
               key={email}
-              className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-200"
+              className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-caption font-semibold text-blue-700 ring-1 ring-inset ring-blue-200"
             >
               {email}
-              <button
-                type="button"
+              <IconButton
                 onClick={() => removeCc(email)}
-                aria-label={`Remove ${email}`}
-                className="rounded-full text-blue-400 transition hover:text-blue-700"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
+                ariaLabel={`Remove ${email}`}
+                tone="accent"
+                icon={<X className="h-2.5 w-2.5" />}
+                className="rounded-full text-blue-400 hover:text-blue-700"
+              />
             </span>
           ))}
           <input
@@ -181,7 +184,7 @@ export function SupportChatComposer({
             }}
             onBlur={() => addCc(ccInput)}
             placeholder={ccs.length ? 'Add another…' : 'Add email to CC…'}
-            className="min-w-[8rem] flex-1 bg-transparent px-1 text-[12px] text-gray-800 outline-none placeholder:text-gray-400"
+            className="min-w-[8rem] flex-1 bg-transparent px-1 text-label text-gray-800 outline-none placeholder:text-gray-400"
           />
           <datalist id="support-cc-suggestions">
             {ccSuggestions.map((email) => (
@@ -208,18 +211,16 @@ export function SupportChatComposer({
                 </div>
               ) : null}
               {s.status === 'error' ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-rose-900/40 text-[8px] font-black uppercase text-white">
+                <div className="absolute inset-0 flex items-center justify-center bg-rose-900/40 text-mini font-black uppercase text-white">
                   Failed
                 </div>
               ) : null}
-              <button
-                type="button"
+              <IconButton
                 onClick={() => staging.remove(s.tempId)}
-                aria-label="Remove"
-                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-white transition hover:bg-gray-900"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
+                ariaLabel="Remove"
+                icon={<X className="h-2.5 w-2.5" />}
+                className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-900/70 text-white hover:bg-gray-900"
+              />
             </div>
           ))}
         </div>
@@ -246,7 +247,7 @@ export function SupportChatComposer({
           className="block w-full resize-none rounded-xl bg-transparent px-3.5 py-2.5 text-[13px] leading-relaxed text-gray-900 outline-none placeholder:text-gray-400"
         />
         <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-          <span className="text-[11px] text-gray-400">{hint}</span>
+          <span className="text-caption text-gray-400">{hint}</span>
           <Button
             variant={isPublic ? 'primary' : 'secondary'}
             size="sm"

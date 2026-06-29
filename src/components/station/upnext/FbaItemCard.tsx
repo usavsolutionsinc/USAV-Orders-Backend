@@ -13,6 +13,7 @@ import {
   DetailCell,
   CopyIconButton,
   ExternalLinkButton,
+  IconButton,
 } from '@/design-system';
 import { ExternalLink, Settings } from '@/components/Icons';
 import { InlineQtyPrefix } from '@/components/ui/QtyBadge';
@@ -65,7 +66,7 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                   e.stopPropagation();
                   if (card.asinUrl) window.open(card.asinUrl, '_blank', 'noopener,noreferrer');
                 }}
-                className="inline-flex items-center gap-1 rounded font-mono font-bold text-purple-700 hover:text-blue-600"
+                className="ds-raw-button inline-flex items-center gap-1 rounded font-mono font-bold text-purple-700 hover:text-blue-600"
                 aria-label="Open FBA item on Amazon"
               >
                 #{card.fnskuLast4}
@@ -163,13 +164,12 @@ export function FbaItemCard({ item, isExpanded, onToggleExpand }: FbaItemCardPro
                       <span className={`${dataValue} text-caption normal-case tracking-normal`}>
                         {item.assigned_tech_name || 'Unassigned'}
                       </span>
-                      <button
+                      <IconButton
+                        icon={<Settings className="w-3.5 h-3.5 text-gray-400 group-hover:text-purple-600" />}
+                        ariaLabel="Edit assignment"
                         onClick={card.openAssignment}
-                        className="flex-shrink-0 text-gray-400 hover:text-purple-600 transition-colors"
-                        aria-label="Edit assignment"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
+                        className="group flex-shrink-0"
+                      />
                     </div>
                   </DetailCell>
                   <DetailCell label="FNSKU">

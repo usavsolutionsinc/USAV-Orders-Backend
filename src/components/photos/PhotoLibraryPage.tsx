@@ -423,7 +423,7 @@ export function PhotoLibraryPage() {
         {query.hasNextPage ? (
           <div
             ref={sentinelRef}
-            className="flex items-center justify-center py-6 text-[10px] font-bold uppercase tracking-widest text-gray-400"
+            className="flex items-center justify-center py-6 text-micro font-bold uppercase tracking-widest text-gray-400"
           >
             {query.isFetchingNextPage ? (
               <>
@@ -432,7 +432,7 @@ export function PhotoLibraryPage() {
             ) : null}
           </div>
         ) : !query.isLoading && photos.length > 0 ? (
-          <p className="mt-6 text-center text-[10px] font-bold uppercase tracking-widest text-gray-400">
+          <p className="mt-6 text-center text-micro font-bold uppercase tracking-widest text-gray-400">
             {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
           </p>
         ) : null}

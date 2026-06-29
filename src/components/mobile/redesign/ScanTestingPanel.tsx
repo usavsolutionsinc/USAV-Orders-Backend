@@ -214,7 +214,7 @@ export function ScanTestingPanel({ query }: { query: string }) {
 
   return (
     <div className="px-3 pb-32">
-      <p className="px-1 pb-2 pt-1 text-[11px] font-black uppercase tracking-[0.2em] text-blue-400">
+      <p className="px-1 pb-2 pt-1 text-caption font-black uppercase tracking-[0.2em] text-blue-400">
         PO Items · {lines.length}
       </p>
       <div className="flex flex-col gap-3">

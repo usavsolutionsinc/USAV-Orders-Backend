@@ -6,23 +6,26 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { ShippedFormData } from '@/components/shipped';
 import { ShippedIntakeForm } from '@/components/shipped/ShippedIntakeForm';
-import { Plus, Check } from '@/components/Icons';
+import { Plus } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { OutboundLabelsSearchHandoffCard } from '@/components/dashboard/OutboundLabelsSearchHandoffCard';
 import { OrdersSyncPopover } from '@/components/unshipped/OrdersSyncPopover';
+import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
+import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 import { motion } from 'framer-motion';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 import type { FilterRefinement } from '@/design-system/components/FilterRefinementBar';
 import { StatusLegend, type StatusLegendItem } from '@/components/ui/StatusLegend';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
 import { FilterDropdownSelect } from '@/design-system/components/FilterDropdownSelect';
 import { useStaffFilter } from '@/hooks/useStaffFilter';
 import { FULFILLMENT_STATE_META, countFulfillmentStates, type FulfillmentState } from '@/lib/unshipped-state';
 
 /** Params that define an Unshipped saved view (filters only — not search text). */
-const UNSHIPPED_VIEW_PARAMS = ['stage', 'sort', 'ustatus', 'staff'] as const;
+const UNSHIPPED_VIEW_PARAMS = ['stage', 'ustatus', 'staff'] as const;
 
 /** Fulfillment-queue status legend — PENDING / TESTED / BLOCKED only. */
 const FULFILLMENT_LEGEND_ITEMS: StatusLegendItem<FulfillmentState>[] = [
@@ -37,13 +40,6 @@ const STAGE_OPTIONS: { id: FulfillmentStage; label: string }[] = [
   { id: 'all', label: 'All fulfillment' },
   { id: 'pending', label: 'Pending packing' },
   { id: 'tested', label: 'Tested, packing' },
-];
-
-/** Sort order for the queue — written to `?sort`, read by UnshippedTable. */
-type UnshippedSort = 'priority' | 'newest';
-const SORT_OPTIONS: { id: UnshippedSort; label: string }[] = [
-  { id: 'priority', label: 'Priority (due soon)' },
-  { id: 'newest', label: 'Newest first' },
 ];
 
 interface UnshippedSidebarProps {
@@ -192,26 +188,11 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
   // Universal all-staff ↔ single-staff filter (P1-WORK-02), shared across modes.
   const staffFilter = useStaffFilter();
 
-  const sortParam = String(searchParams.get('sort') || 'priority').toLowerCase();
-  const sort: UnshippedSort = sortParam === 'newest' ? 'newest' : 'priority';
-
-  const setSort = useCallback(
-    (next: UnshippedSort) => {
-      const params = new URLSearchParams(searchParams.toString());
-      if (next === 'priority') params.delete('sort');
-      else params.set('sort', next);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
-    },
-    [router, pathname, searchParams],
-  );
-
-  // Single-pass clear (both params at once) — chaining setStage + setSort would
-  // each rebuild from the same stale searchParams and clobber the other.
+  // Single-pass clear — chaining setStage + setStaff would each rebuild from the
+  // same stale searchParams and clobber the other.
   const clearAllFilters = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete('stage');
-    params.delete('sort');
     params.delete('staff');
     const qs = params.toString();
     router.replace(qs ? `${pathname || '/dashboard'}?${qs}` : pathname || '/dashboard');
@@ -247,14 +228,6 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200';
       out.push({ id: 'stage', label, onRemove: () => setStage('all'), pillClassName });
     }
-    if (sort !== 'priority') {
-      out.push({
-        id: 'sort',
-        label: 'Newest',
-        onRemove: () => setSort('priority'),
-        pillClassName: 'bg-gray-100 text-gray-700 ring-1 ring-gray-200',
-      });
-    }
     if (staffFilter.staffId != null) {
       out.push({
         id: 'staff',
@@ -264,7 +237,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       });
     }
     return out;
-  }, [stage, sort, setStage, setSort, staffFilter]);
+  }, [stage, setStage, staffFilter]);
 
   if (showIntakeForm) {
     return (
@@ -341,7 +314,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
                       key={opt.id}
                       type="button"
                       onClick={() => { setStage(opt.id); onClose(); }}
-                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      className={`ds-raw-button flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                         active ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'
                       }`}
                     >
@@ -350,30 +323,6 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
                         {count}
                       </span>
                       <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">{opt.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <span className="mb-1.5 block text-eyebrow font-black uppercase tracking-wider text-gray-500">
-                Sort
-              </span>
-              <div className="space-y-1.5">
-                {SORT_OPTIONS.map((opt) => {
-                  const active = sort === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => { setSort(opt.id); onClose(); }}
-                      className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors ${
-                        active ? 'border-blue-300 bg-blue-50 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {opt.label}
-                      {active ? <Check className="h-3.5 w-3.5 shrink-0 text-blue-600" /> : null}
                     </button>
                   );
                 })}
@@ -403,15 +352,16 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
         placeholder: 'Search orders, serials...',
         variant: 'blue',
         rightElement: (
-          <button
-            type="button"
-            onClick={handleOpenIntakeForm}
-            className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-            title="New Order Entry"
-            aria-label="Open new order entry form"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+          <HoverTooltip label="New Order Entry" asChild>
+            <button
+              type="button"
+              onClick={handleOpenIntakeForm}
+              className="ds-raw-button rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+              aria-label="Open new order entry form"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </HoverTooltip>
         ),
       }}
       // Status-dot color key + live counts — pinned so it explains the table's
@@ -419,7 +369,7 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       headerBelow={
         <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+            <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
             <SavedViewsControl storageKey="unshipped_saved_views" paramKeys={UNSHIPPED_VIEW_PARAMS} />
           </div>
           <StatusLegend
@@ -434,6 +384,16 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
       }
       bodyClassName="flex flex-col no-scrollbar pb-6"
     >
+      <OrdersSyncPopover
+        onRefresh={() => {
+          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
+          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        }}
+      />
+      <div className="space-y-3 border-t border-gray-100 pt-3">
+        <FirstScanOnboardingCard variant="sidebar" />
+        <ThroughputRoiCard variant="sidebar" />
+      </div>
       <motion.div variants={itemVariants} initial="hidden" animate="visible" className="space-y-4">
         <RecentSearchesList
           items={visibleSearchHistory}
@@ -455,13 +415,6 @@ export default function UnshippedSidebar(props: UnshippedSidebarProps) {
           onOpenLabelsMatches={onOpenLabelsMatches}
         />
       </motion.div>
-
-      <OrdersSyncPopover
-        onRefresh={() => {
-          window.dispatchEvent(new CustomEvent('dashboard-refresh'));
-          window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-        }}
-      />
     </SidebarShell>
   );
 

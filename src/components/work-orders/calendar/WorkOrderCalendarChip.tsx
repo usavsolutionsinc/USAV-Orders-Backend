@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import type { WorkOrderRow } from '@/components/work-orders/types';
 import { STATUS_COLOR } from '@/components/work-orders/types';
 import { WorkOrderAssignPopover } from '@/components/work-orders/WorkOrderAssignPopover';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * A single assignment placed on a calendar day. Renders a compact chip showing
@@ -26,16 +27,17 @@ export function WorkOrderCalendarChip({
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        className={`block w-full truncate rounded px-1.5 py-0.5 text-left text-[10px] font-semibold leading-tight transition-colors hover:brightness-95 ${tone}`}
-        title={`${row.recordLabel} · ${assignee} · ${row.status}`}
-      >
-        <span className="truncate">{row.recordLabel}</span>
-        <span className="ml-1 font-medium opacity-70">{assignee}</span>
-      </button>
+      <HoverTooltip label={`${row.recordLabel} · ${assignee} · ${row.status}`} asChild>
+        <button
+          ref={anchorRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          className={`ds-raw-button block w-full truncate rounded px-1.5 py-0.5 text-left text-micro font-semibold leading-tight transition-colors hover:brightness-95 ${tone}`}
+        >
+          <span className="truncate">{row.recordLabel}</span>
+          <span className="ml-1 font-medium opacity-70">{assignee}</span>
+        </button>
+      </HoverTooltip>
       <WorkOrderAssignPopover
         row={row}
         open={open}

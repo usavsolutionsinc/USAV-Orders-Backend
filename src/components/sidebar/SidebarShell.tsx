@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { MasterNav, MasterNavProvider } from '@/components/sidebar/master-nav';
 import { SidebarContextPanel } from '@/components/sidebar/SidebarContextPanel';
 
@@ -85,19 +86,17 @@ export function MobileSidebarOverlay({ onClose, children }: MobileSidebarOverlay
     <div className="md:hidden fixed inset-0 z-panel">
       <button
         type="button"
-        className="absolute inset-0 bg-gray-900/35"
+        className="ds-raw-button absolute inset-0 bg-gray-900/35"
         onClick={onClose}
         aria-label="Close sidebar overlay"
       />
       <div className="relative h-full max-w-[94vw]">{children}</div>
-      <button
-        type="button"
+      <IconButton
         onClick={onClose}
+        ariaLabel="Close sidebar"
+        icon={<X className="h-5 w-5" />}
         className="absolute top-4 right-4 h-11 w-11 rounded-2xl bg-white border border-gray-400 text-gray-700 shadow-lg shadow-gray-900/10 flex items-center justify-center"
-        aria-label="Close sidebar"
-      >
-        <X className="h-5 w-5" />
-      </button>
+      />
     </div>
   );
 }

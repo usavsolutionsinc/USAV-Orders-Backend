@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 export type BinStatus = 'empty' | 'low' | 'over' | 'stale' | 'ok';
 
@@ -37,11 +38,12 @@ export function StatusChip({ status, compact }: Props) {
   const tone = TONE[status];
   if (compact) {
     return (
-      <span
-        title={tone.label}
-        className={`inline-block h-2 w-2 rounded-full ${tone.dot}`}
-        aria-label={tone.label}
-      />
+      <HoverTooltip label={tone.label} asChild>
+        <span
+          className={`inline-block h-2 w-2 rounded-full ${tone.dot}`}
+          aria-label={tone.label}
+        />
+      </HoverTooltip>
     );
   }
   return (

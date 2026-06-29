@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Loader2, Plus, Wrench, AlertTriangle, Check, ShieldCheck } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { timeAgo } from '@/utils/_date';
 import { qualityRiskToneClass } from '@/lib/quality-risk-tone';
 import { qualitySeverityToneClass } from '@/lib/quality-severity-tone';
@@ -228,13 +229,15 @@ function FailureTagsCard({
     <section className={CARD}>
       <header className="flex items-center justify-between px-5 py-4">
         <h3 className={HEAD}>Failure tags</h3>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setAdding((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+          className="text-blue-600 hover:bg-blue-50"
+          icon={<Plus />}
         >
-          <Plus className="h-3.5 w-3.5" /> Tag
-        </button>
+          Tag
+        </Button>
       </header>
 
       {adding && (
@@ -256,14 +259,15 @@ function FailureTagsCard({
               placeholder="Note (optional)"
               className="min-w-[8rem] flex-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 text-caption font-medium text-gray-900 placeholder:text-gray-400"
             />
-            <button
-              type="button"
+            <Button
+              variant="brand"
+              size="sm"
+              className="shrink-0"
               disabled={!modeId || addTag.isPending}
               onClick={() => addTag.mutate()}
-              className="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {addTag.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -283,12 +287,12 @@ function FailureTagsCard({
                       {t.label ?? t.code ?? `Mode #${t.failure_mode_id}`}
                     </span>
                     {t.severity && (
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${qualitySeverityToneClass(t.severity)}`}>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-micro font-bold uppercase ${qualitySeverityToneClass(t.severity)}`}>
                         {t.severity}
                       </span>
                     )}
                     {!isOpen && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">{t.resolution_status}</span>
+                      <span className="text-micro font-bold uppercase tracking-wider text-emerald-600">{t.resolution_status}</span>
                     )}
                   </div>
                   <div className="mt-0.5 text-micro text-gray-500">
@@ -297,14 +301,15 @@ function FailureTagsCard({
                   {t.notes && <p className="mt-0.5 text-caption text-gray-600">{t.notes}</p>}
                 </div>
                 {isOpen && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="shrink-0 text-emerald-600 hover:bg-emerald-50"
                     disabled={resolveTag.isPending}
                     onClick={() => resolveTag.mutate(t.id)}
-                    className="shrink-0 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
                   >
                     Resolve
-                  </button>
+                  </Button>
                 )}
               </li>
             );
@@ -365,13 +370,15 @@ function RepairsCard({
     <section className={CARD}>
       <header className="flex items-center justify-between px-5 py-4">
         <h3 className={HEAD}>Repair history</h3>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setOpening((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+          className="text-blue-600 hover:bg-blue-50"
+          icon={<Plus />}
         >
-          <Plus className="h-3.5 w-3.5" /> Log repair
-        </button>
+          Log repair
+        </Button>
       </header>
 
       {opening && (
@@ -387,6 +394,7 @@ function RepairsCard({
               {openFailureModes.map((m) => {
                 const on = linked.has(m.id);
                 return (
+                  // ds-raw-button: two-state toggle chip (conditional active styling), no DS variant
                   <button
                     key={m.id}
                     type="button"
@@ -405,15 +413,16 @@ function RepairsCard({
               })}
             </div>
           )}
-          <button
-            type="button"
+          <Button
+            variant="brand"
+            size="sm"
             disabled={!summary.trim() || openRepair.isPending}
             onClick={() => openRepair.mutate()}
-            className="flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+            loading={openRepair.isPending}
+            icon={<Wrench />}
           >
-            {openRepair.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wrench className="h-3.5 w-3.5" />}
             Open repair
-          </button>
+          </Button>
         </div>
       )}
 
@@ -444,7 +453,7 @@ function RepairRowItem({
   return (
     <li className="px-5 py-3">
       <div className="flex items-center gap-2">
-        <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${repairOutcomeToneClass(repair.status)}`}>
+        <span className={`rounded-md px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${repairOutcomeToneClass(repair.status)}`}>
           {repair.status.replace(/_/g, ' ')}
         </span>
         <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-900">{repair.summary}</span>
@@ -458,7 +467,7 @@ function RepairRowItem({
       {repair.failure_modes && repair.failure_modes.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {repair.failure_modes.map((m) => (
-            <span key={m.id} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">{m.label}</span>
+            <span key={m.id} className="rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-medium text-gray-600">{m.label}</span>
           ))}
         </div>
       )}
@@ -471,14 +480,16 @@ function RepairRowItem({
             placeholder="Cost $ (opt)"
             className="w-28 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-caption font-medium text-gray-900 placeholder:text-gray-400"
           />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={completing}
             onClick={() => onComplete(cost)}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+            className="text-emerald-600 hover:bg-emerald-50"
+            icon={<Check />}
           >
-            <Check className="h-3.5 w-3.5" /> Complete
-          </button>
+            Complete
+          </Button>
         </div>
       )}
     </li>

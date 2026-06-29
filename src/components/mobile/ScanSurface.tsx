@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { ScanLine } from 'lucide-react';
+import { Button } from '@/design-system/primitives';
 import type { UseBarcodeScanner } from '@/hooks/useBarcodeScanner';
 
 interface ScanSurfaceProps {
@@ -123,6 +124,7 @@ export function ScanSurface({
 
         {/* Torch toggle */}
         {scanner.isScanning && (
+          // ds-raw-button: emoji-glyph torch toggle (aria-pressed + dynamic on/off fill) on the camera overlay — not an icon-SVG action; tone color would fight the dynamic fill
           <button
             type="button"
             onClick={scanner.toggleTorch}
@@ -155,13 +157,13 @@ export function ScanSurface({
             <p className="max-w-[280px] text-sm text-red-200">
               {scanner.error || 'Camera unavailable. Check browser permissions and reload.'}
             </p>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => void scanner.startScanning()}
-              className="rounded-2xl bg-white/10 px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-white hover:bg-white/20"
+              className="bg-white/10 text-white hover:bg-white/20 hover:text-white"
             >
               Try again
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -179,34 +181,37 @@ export function ScanSurface({
               inputMode="text"
               className="h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 outline-none focus:border-white/40"
             />
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={!manualValue.trim()}
-              className="h-11 rounded-xl bg-blue-600 px-4 text-xs font-semibold uppercase tracking-wider text-white active:bg-blue-700 disabled:opacity-50"
+              className="h-11"
             >
               Send
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 setManualValue('');
                 setManualOpen(false);
               }}
-              className="h-11 rounded-xl bg-white/5 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 active:bg-white/10"
-              aria-label="Cancel manual entry"
+              className="h-11 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white"
+              ariaLabel="Cancel manual entry"
             >
               Cancel
-            </button>
+            </Button>
           </form>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => setManualOpen(true)}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-xl text-xs font-semibold uppercase tracking-wider text-white/75 active:text-white"
+            icon={<ScanLine aria-hidden="true" />}
+            className="h-10 w-full text-white/75 hover:text-white"
           >
-            <ScanLine className="h-4 w-4" aria-hidden="true" />
             Type code manually
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -155,7 +155,7 @@ async function upsertEcwidOrder(params: {
       productTitle: productTitle || null,
       accountSource: 'ecwid',
       orderId: orderId || null,
-    });
+    }, params.organizationId);
 
     if (existingRows.length === 0) {
       await client.query(

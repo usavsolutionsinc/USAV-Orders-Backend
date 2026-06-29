@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Plus, Star, Trash2, X } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useListingGallery, type ListingGalleryTarget } from '@/hooks/useListingGallery';
 import { PhotoThumb } from './PhotoThumb';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 import type { LibraryPhoto } from './photo-library-types';
 
@@ -42,13 +44,16 @@ export function ListingPhotoGallery({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">{title}</p>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
+          icon={<Plus className="h-3.5 w-3.5" />}
           onClick={() => setPickerOpen(true)}
-          className="-my-1 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-caption font-semibold text-blue-600 transition hover:bg-blue-50"
+          className="-my-1 text-blue-600 hover:bg-blue-50 hover:text-blue-600"
         >
-          <Plus className="h-3.5 w-3.5" /> Add photos
-        </button>
+          Add photos
+        </Button>
       </div>
 
       {isLoading ? (
@@ -66,7 +71,7 @@ export function ListingPhotoGallery({
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-gray-200">
                 <PhotoThumb src={it.thumbUrl} alt="" ratio="square" />
                 {it.isCover ? (
-                  <span className="absolute left-0 top-0 inline-flex items-center gap-0.5 rounded-br-lg bg-amber-500 px-1 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
+                  <span className="absolute left-0 top-0 inline-flex items-center gap-0.5 rounded-br-lg bg-amber-500 px-1 py-0.5 text-mini font-black uppercase tracking-widest text-white">
                     <Star className="h-2.5 w-2.5" /> Cover
                   </span>
                 ) : null}
@@ -74,7 +79,7 @@ export function ListingPhotoGallery({
 
               <div className="min-w-0 flex-1">
                 <div className="text-caption font-semibold text-gray-900">Photo #{it.photoId}</div>
-                <div className="text-[10px] text-gray-500">Position {index + 1}</div>
+                <div className="text-micro text-gray-500">Position {index + 1}</div>
               </div>
 
               <div className="flex items-center gap-0.5">
@@ -146,20 +151,20 @@ function IconBtn({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={label}
-      aria-label={label}
-      className={cn(
-        'inline-flex h-7 w-7 items-center justify-center rounded-lg transition disabled:opacity-30',
-        danger ? 'text-gray-400 hover:bg-rose-50 hover:text-rose-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700',
-        active && 'text-amber-500',
-      )}
-    >
-      {children}
-    </button>
+    <HoverTooltip label={label} asChild>
+      <IconButton
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        ariaLabel={label}
+        className={cn(
+          'inline-flex h-7 w-7 items-center justify-center rounded-lg transition disabled:opacity-30',
+          danger ? 'text-gray-400 hover:bg-rose-50 hover:text-rose-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700',
+          active && 'text-amber-500',
+        )}
+        icon={children}
+      />
+    </HoverTooltip>
   );
 }
 
@@ -219,14 +224,13 @@ function ListingPhotoPicker({
             <ImageIcon className="h-4 w-4 text-gray-500" />
             <h2 className="text-sm font-bold text-gray-900">Add listing photos</h2>
           </div>
-          <button
+          <IconButton
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            ariaLabel="Close"
             className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            icon={<X className="h-4 w-4" />}
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -247,6 +251,7 @@ function ListingPhotoPicker({
               {photos.map((p) => {
                 const on = picked.has(p.id);
                 return (
+                  // ds-raw-button: selectable image/photo tile (not a label/icon button)
                   <button
                     key={p.id}
                     type="button"
@@ -273,21 +278,24 @@ function ListingPhotoPicker({
         <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-3">
           <span className="text-caption text-gray-500">{picked.size} selected</span>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={onClose}
-              className="rounded-lg px-3 py-1.5 text-caption font-semibold text-gray-600 hover:bg-gray-100"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              icon={<Plus className="h-3.5 w-3.5" />}
               disabled={picked.size === 0}
               onClick={() => onAdd([...picked])}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-caption font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
             >
-              <Plus className="h-3.5 w-3.5" /> Add {picked.size > 0 ? picked.size : ''}
-            </button>
+              Add {picked.size > 0 ? picked.size : ''}
+            </Button>
           </div>
         </div>
       </div>

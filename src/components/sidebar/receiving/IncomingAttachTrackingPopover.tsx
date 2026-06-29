@@ -14,8 +14,10 @@ import {
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, Package, Truck, X, Loader2 } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 import { zIndex } from '@/design-system/tokens/z-index';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
@@ -278,15 +280,21 @@ export function IncomingAttachTrackingPopover({
         })
       : trigger
     : (
-      <button
-        type="button"
-        onClick={openModal}
-        title="Search a PO and attach carrier tracking number(s) before the boxes arrive"
-        className="mx-1.5 flex items-center justify-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-caption font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+      <HoverTooltip
+        label="Search a PO and attach carrier tracking number(s) before the boxes arrive"
+        asChild
       >
-        <Link2 className="h-3.5 w-3.5" />
-        Link tracking to PO
-      </button>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Link2 className="h-3.5 w-3.5" />}
+          onClick={openModal}
+          ariaLabel="Search a PO and attach carrier tracking number(s) before the boxes arrive"
+          className="mx-1.5 bg-indigo-50 text-indigo-700 ring-indigo-200 ring-inset hover:bg-indigo-100"
+        >
+          Link tracking to PO
+        </Button>
+      </HoverTooltip>
     );
 
   const modal =
@@ -310,14 +318,12 @@ export function IncomingAttachTrackingPopover({
                 <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500">
                   {selected ? 'Attach tracking' : 'Find a PO'}
                 </span>
-                <button
-                  type="button"
-                  aria-label="Close"
+                <IconButton
+                  icon={<X className="h-3.5 w-3.5" />}
+                  ariaLabel="Close"
                   onClick={() => setOpen(false)}
-                  className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  className="rounded p-0.5 hover:bg-gray-100"
+                />
               </div>
 
               {!selected ? (
@@ -350,7 +356,8 @@ export function IncomingAttachTrackingPopover({
                             <button
                               type="button"
                               onClick={() => pickPo(po)}
-                              className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 px-2.5 py-2 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50"
+                              /* ds-raw-button: text-left PO search result row (title + item count) — not a Button shape */
+                              className="ds-raw-button flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 px-2.5 py-2 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50"
                             >
                               <span className="min-w-0 flex-1 truncate text-caption font-bold text-gray-900">
                                 {po.po_number || po.po_id}
@@ -377,7 +384,8 @@ export function IncomingAttachTrackingPopover({
                       <button
                         type="button"
                         onClick={reset}
-                        className="shrink-0 text-mini font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-800"
+                        /* ds-raw-button: compact inline text link (text-mini) inside a chip row — Button height/padding would bloat it */
+                        className="ds-raw-button shrink-0 text-mini font-bold uppercase tracking-wide text-indigo-600 hover:text-indigo-800"
                       >
                         Change
                       </button>

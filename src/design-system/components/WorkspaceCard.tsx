@@ -64,15 +64,15 @@ export function WorkspaceCard({
         />
       ) : null}
       {(label || actions) && (
-        <header className="flex items-center justify-between px-5 pt-4">
+        <header className="flex items-center justify-between gap-2 overflow-visible px-5 pb-1 pt-4">
           {label ? (
-            <h3 className="text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
+            <h3 className="min-w-0 shrink text-caption font-bold uppercase tracking-[0.14em] text-gray-500">
               {label}
             </h3>
           ) : (
             <span aria-hidden />
           )}
-          {actions ? <div className="flex items-center gap-1.5">{actions}</div> : null}
+          {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
         </header>
       )}
       <div className={bodyClassName ?? 'px-5 py-4'}>{children}</div>

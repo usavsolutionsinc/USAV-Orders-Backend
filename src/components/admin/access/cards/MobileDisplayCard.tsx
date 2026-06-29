@@ -8,6 +8,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import {
   MOBILE_NAV_TAB_IDS,
   resolveMobileDisplayConfig,
@@ -92,15 +94,11 @@ export function MobileDisplayCard({
           </p>
         </div>
         {hasOverride && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={busy}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Clear per-staff override; fall back to role default"
-          >
-            Reset to role
-          </button>
+          <HoverTooltip label="Clear per-staff override; fall back to role default" asChild>
+            <Button type="button" variant="secondary" size="sm" onClick={onReset} disabled={busy}>
+              Reset to role
+            </Button>
+          </HoverTooltip>
         )}
       </header>
 
@@ -113,6 +111,7 @@ export function MobileDisplayCard({
               When off, the phone is locked to a single page — no tabs to wander into other sections.
             </p>
           </div>
+          {/* ds-raw-button: role="switch" toggle track + knob, not a Button/IconButton */}
           <button
             type="button"
             role="switch"
@@ -141,6 +140,7 @@ export function MobileDisplayCard({
             {MOBILE_NAV_TAB_IDS.map((id) => {
               const on = draftTabs.includes(id);
               return (
+                // ds-raw-button: segmented multi-select tab toggle (conditional active fill), not a single DS variant
                 <button
                   key={id}
                   type="button"
@@ -164,14 +164,9 @@ export function MobileDisplayCard({
           <div className="text-micro text-gray-500">
             {hasOverride ? 'Per-staff override active.' : 'Inheriting role default.'}
           </div>
-          <button
-            type="button"
-            onClick={save}
-            disabled={busy || !dirty}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-caption font-semibold uppercase tracking-wider text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="button" variant="brand" size="sm" onClick={save} disabled={busy || !dirty}>
             {busy ? 'Saving…' : dirty ? 'Save override' : 'Saved'}
-          </button>
+          </Button>
         </div>
       </div>
     </section>

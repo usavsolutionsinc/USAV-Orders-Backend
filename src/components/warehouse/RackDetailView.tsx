@@ -22,6 +22,7 @@ import { useBinsOverview, type BinsOverviewRow } from '@/hooks/useBinsOverview';
 import { useLocations } from '@/hooks/useLocations';
 import { BinDetailFlyout } from './BinDetailFlyout';
 import { ChevronDown, ChevronLeft, Layers, Printer } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { PaneHeader, PaneHeaderStatusPill } from '@/components/ui/pane-header';
 import {
   bayHand,
@@ -103,14 +104,9 @@ export function RackDetailView({ code }: RackDetailViewProps) {
           The link <span className="font-mono">{code}</span> doesn't match the rack
           label format. Scan again or pick a rack from the printer below.
         </p>
-        <button
-          type="button"
-          onClick={back}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-label font-semibold text-amber-800 hover:bg-amber-100"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
+        <Button variant="secondary" size="sm" icon={<ChevronLeft />} onClick={back} className="mt-3">
           Back to rack printer
-        </button>
+        </Button>
       </div>
     );
   }
@@ -134,14 +130,12 @@ export function RackDetailView({ code }: RackDetailViewProps) {
         className="sticky top-0 z-10 -mx-4 border-0 bg-white/95 backdrop-blur sm:mx-0 sm:rounded-2xl sm:shadow-sm sm:ring-1 sm:ring-gray-200/60"
         leftSlot={
           <>
-            <button
-              type="button"
+            <IconButton
               onClick={back}
-              aria-label="Back to rack printer"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
+              ariaLabel="Back to rack printer"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+              icon={<ChevronLeft className="h-4 w-4" />}
+            />
             <p className="font-mono text-base font-black leading-none tracking-tight text-gray-900">
               {dashedCode}
             </p>
@@ -180,6 +174,7 @@ export function RackDetailView({ code }: RackDetailViewProps) {
       {/* ─── Neighbor levels expander ──────────────────────────────── */}
       {otherLevels.length > 0 && mode === 'face' && (
         <div className="rounded-2xl border border-gray-200 bg-white">
+          {/* ds-raw-button: full-width disclosure/accordion trigger (justify-between two-column body), not a styled action button */}
           <button
             type="button"
             onClick={() => setNeighborsOpen((v) => !v)}
@@ -247,6 +242,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
       aria-label="View mode"
       className="flex shrink-0 items-center rounded-full bg-gray-100 p-0.5 text-caption font-semibold"
     >
+      {/* ds-raw-button: segmented tab toggle (role=tab + aria-selected), not a standalone action */}
       {(['face', 'list'] as const).map((m) => (
         <button
           key={m}
@@ -341,6 +337,7 @@ function PositionCell({ row, onClick }: { row: BinsOverviewRow; onClick: () => v
   }[tone];
 
   return (
+    // ds-raw-button: bespoke rack-position card tile (fill bar, multi-line layout), not a standard action button
     <button
       type="button"
       onClick={onClick}
@@ -438,6 +435,7 @@ function RackList({
         const pos = (row.col_label || '').split('-')[1] ?? '';
         const hasIssue = row.is_stale || row.has_low_stock || row.is_over_capacity;
         return (
+          // ds-raw-button: full-width master-detail list row (multi-column body), not a standard action button
           <button
             key={row.id}
             type="button"

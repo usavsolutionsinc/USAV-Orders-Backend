@@ -3,7 +3,7 @@
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { AlertCircle, MessageSquare, Paperclip, Send, X } from '@/components/Icons';
-import { Button } from '@/design-system/primitives';
+import { Button, IconButton } from '@/design-system/primitives';
 import { ClaimComposer } from './ClaimComposer';
 import { ClaimSuccessView } from './ClaimSuccessView';
 import { useZendeskClaimController } from './useZendeskClaimController';
@@ -44,20 +44,18 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
             <MessageSquare className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-rose-500">Zendesk</p>
+            <p className="text-micro font-black uppercase tracking-widest text-rose-500">Zendesk</p>
             <h2 className="text-[15px] font-bold tracking-tight text-gray-900">
               {c.result ? 'Done' : c.mode === 'create' ? 'New support ticket' : 'Update ticket'}
             </h2>
           </div>
         </div>
-        <button
-          type="button"
+        <IconButton
+          icon={<X className="h-4 w-4" />}
+          ariaLabel="Close"
           onClick={c.onClose}
-          aria-label="Close"
-          className="-mr-1 -mt-1 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          className="-mr-1 -mt-1 rounded-lg p-1.5 hover:bg-gray-100"
+        />
       </div>
 
       {c.result ? (
@@ -80,13 +78,13 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
 
           {/* Footer */}
           <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-3.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+            <div className="flex items-center gap-1.5 text-caption font-semibold text-gray-400">
               <Paperclip className="h-3.5 w-3.5" />
               {c.totalAttach} attachment{c.totalAttach === 1 ? '' : 's'}
             </div>
             <div className="flex items-center gap-2">
               {c.error ? (
-                <span className="hidden items-center gap-1 text-[11px] font-semibold text-rose-600 sm:flex">
+                <span className="hidden items-center gap-1 text-caption font-semibold text-rose-600 sm:flex">
                   <AlertCircle className="h-3.5 w-3.5" /> {c.error}
                 </span>
               ) : null}

@@ -9,6 +9,8 @@ import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { DateTimeValue } from '@/design-system/components/DateTimeValue';
 import { CopyActionIcon } from '@/design-system/components/CopyActionIcon';
 import { TrackingNumberRow } from '@/components/ui/TrackingNumberRow';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 import { SerialNumbersRow } from './SerialNumbersRow';
 import { buildAllTrackingRows, serialNumberRowsFromShipped, deriveShippingDisplayMeta } from './shipping-information/helpers';
@@ -162,27 +164,25 @@ export function ShippingInformationSection({
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-900">Edit Details</h3>
           <div className="flex items-center gap-1">
             {onCopyAll ? (
-              <button
-                type="button"
-                onClick={onCopyAll}
-                className={`flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-gray-100 ${
-                  copiedAll ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-700'
-                }`}
-                aria-label="Copy all shipped details"
-                title="Copy all shipped details"
-              >
-                {copiedAll ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
+              <HoverTooltip label="Copy all shipped details" asChild>
+                <IconButton
+                  onClick={onCopyAll}
+                  ariaLabel="Copy all shipped details"
+                  icon={copiedAll ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  className={`flex h-6 w-6 items-center justify-center rounded-md hover:bg-gray-100 ${
+                    copiedAll ? 'text-emerald-600' : 'text-gray-400 hover:text-gray-700'
+                  }`}
+                />
+              </HoverTooltip>
             ) : null}
-            <button
-              type="button"
-              onClick={modal.openEditModal}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Edit shipping information"
-              title="Edit shipping information"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            <HoverTooltip label="Edit shipping information" asChild>
+              <IconButton
+                onClick={modal.openEditModal}
+                ariaLabel="Edit shipping information"
+                icon={<Pencil className="h-3.5 w-3.5" />}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              />
+            </HoverTooltip>
           </div>
         </div>
 

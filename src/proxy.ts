@@ -33,6 +33,7 @@ const PUBLIC_PATHS: ReadonlyArray<RegExp> = [
   /^\/m\/enroll\//,
   /^\/invite\/[A-Za-z0-9_-]+(?:$|\/)/,  // org invitation accept (unauthenticated)
   /^\/api\/auth\//,
+  /^\/api\/beta\//,                     // public marketing beta waitlist + spots counter (no auth)
   /^\/api\/health(?:$|\/)/,
   /^\/api\/ready(?:$|\/)/,
   /^\/api\/cron\//,                     // Vercel-cron-fired routes (auth via CRON_SECRET inside handler)

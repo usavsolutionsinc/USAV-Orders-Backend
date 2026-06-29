@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
+import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColumnConfig';
 
 /**
  * Fixed column widths for a table row's identity-chip grid. Each chip type gets
@@ -32,7 +33,7 @@ export interface ChipColumn {
   key: string;
   /** Tailwind width utility (use a CHIP_COL value) — fixed so the column aligns row-to-row. */
   width: string;
-  /** The chip to render, or null to reserve an empty column so later columns stay aligned. */
+  /** The chip to render, or null to reserve an empty column (FBA etc.). Width is always reserved for layout stability. */
   node: ReactNode;
 }
 
@@ -42,10 +43,9 @@ export interface ChipColumn {
  * flush with the day-group count (the `-mr-1.5` cancels the trailing chip's
  * 6px `px-1.5` gutter, matching the count's `pr-1` inset).
  *
- * Pass a `null` node to reserve a column's width (keeps the columns to its right
- * aligned when a row lacks that chip — e.g. an order with no platform or no
- * order-id). Omit the column entirely only when no row in the table has it
- * (e.g. the orders queue never has a serial column).
+ * We always render every registered slot div (in fixed order) so the chip block
+ * has constant total width. Staff-hidden columns render an empty slot (no node)
+ * — visible chips and title truncation never jump on config changes.
  */
 export function ChipColumns({
   columns,
@@ -54,11 +54,17 @@ export function ChipColumns({
   columns: ChipColumn[];
   className?: string;
 }) {
+  // Suppress (but still reserve width for) columns the signed-in staffer has hidden
+  // for this table. We always emit the fixed slot divs in canonical order so the
+  // right-side chip block keeps constant total width and the visible chips never
+  // jump position when the config changes. Title truncation point stays stable.
+  // (no-op outside a TableColumnConfigProvider).
+  const isHidden = useIsColumnHidden();
   return (
     <div className={cn('flex shrink-0 items-center justify-end gap-0.5 pr-1 -mr-1.5', className)}>
       {columns.map((c) => (
-        <div key={c.key} className={cn('flex items-center justify-end', c.width)}>
-          {c.node}
+        <div key={c.key} data-col={c.key} className={cn('flex items-center justify-end', c.width)}>
+          {isHidden(c.key) ? null : c.node}
         </div>
       ))}
     </div>

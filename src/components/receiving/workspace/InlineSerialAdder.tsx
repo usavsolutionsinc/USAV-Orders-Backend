@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from '@/components/Icons';
-import { TextField } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton, TextField } from '@/design-system/primitives';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 
 interface SavedSerial {
@@ -188,6 +189,8 @@ export function InlineSerialAdder({
               ) : (
                 // Adder without an edit handler — bare emerald chip with an X
                 // delete affordance, matching the original testing layout.
+                // ds-allow-title: truncation reveal of the full serial on a
+                // non-interactive chip span (display is shortened to last-12).
                 <span
                   key={s.id ?? `${sn}-${idx}`}
                   className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 font-mono text-caption font-bold text-emerald-800 ring-1 ring-inset ring-emerald-200"
@@ -197,15 +200,14 @@ export function InlineSerialAdder({
                     {sn.length > 14 ? `…${sn.slice(-12)}` : sn}
                   </span>
                   {onDelete ? (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(lineId, s)}
-                      aria-label={`Remove serial ${sn}`}
-                      title="Remove"
-                      className="rounded text-emerald-500 transition-colors hover:bg-emerald-100 hover:text-rose-600"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    <HoverTooltip label="Remove" asChild>
+                      <IconButton
+                        icon={<X className="h-3 w-3" />}
+                        ariaLabel={`Remove serial ${sn}`}
+                        onClick={() => onDelete(lineId, s)}
+                        className="rounded text-emerald-500 hover:bg-emerald-100 hover:text-rose-600"
+                      />
+                    </HoverTooltip>
                   ) : null}
                 </span>
               );
@@ -234,30 +236,27 @@ export function InlineSerialAdder({
           }}
           trailing={
             scan || editing ? (
-              <button
-                type="button"
+              <IconButton
+                icon={<X className="h-3 w-3" />}
+                ariaLabel={editing ? 'Cancel edit' : 'Clear'}
                 onClick={() => (editing ? cancelEdit() : setScan(''))}
-                aria-label={editing ? 'Cancel edit' : 'Clear'}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              >
-                <X className="h-3 w-3" />
-              </button>
+                className="rounded-md p-1 hover:bg-gray-100"
+              />
             ) : undefined
           }
         />
       </div>
-      <button
-        type="button"
-        onClick={() => void submit()}
-        disabled={!scan.trim() || isSubmitting || disabled}
-        aria-label={editing ? 'Save serial' : 'Add serial'}
-        title={editing ? 'Save serial' : 'Add serial'}
-        className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
-          editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
-        }`}
-      >
-        <Plus className="h-4 w-4" />
-      </button>
+      <HoverTooltip label={editing ? 'Save serial' : 'Add serial'} asChild>
+        <IconButton
+          icon={<Plus className="h-4 w-4" />}
+          ariaLabel={editing ? 'Save serial' : 'Add serial'}
+          onClick={() => void submit()}
+          disabled={!scan.trim() || isSubmitting || disabled}
+          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white shadow-sm disabled:bg-gray-300 disabled:opacity-100 ${
+            editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        />
+      </HoverTooltip>
     </div>
   );
 }

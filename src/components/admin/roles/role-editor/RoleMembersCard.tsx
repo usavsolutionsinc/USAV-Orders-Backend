@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/design-system/primitives';
 import type { RoleDetail, StaffPickerRow } from './role-editor-types';
 
 /** Card C — members: staff who hold this role + add/remove. */
@@ -31,14 +32,16 @@ export function RoleMembersCard({
               <div className="text-sm font-semibold text-gray-900">{m.name} <span className="text-micro text-gray-400">#{m.id}</span></div>
               <div className="text-caption text-gray-500">primary role: {m.role}</div>
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               type="button"
               onClick={() => void onRemove(m.id)}
               disabled={busy === `remove:${m.id}`}
-              className="rounded-md border border-red-200 px-2 py-1 text-micro font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
+              className="border border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
             >
               Remove
-            </button>
+            </Button>
           </li>
         ))}
         {members.length === 0 && (
@@ -55,14 +58,15 @@ export function RoleMembersCard({
               {eligibleStaff.map((s) => (
                 <li key={s.id} className="flex items-center justify-between px-3 py-1.5">
                   <span className="text-xs text-gray-800">{s.name} <span className="text-micro text-gray-400">· {s.role}</span></span>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
                     onClick={() => void onAdd(s.id)}
                     disabled={busy === `add:${s.id}`}
-                    className="rounded-md border border-gray-200 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
                   >
                     Add
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

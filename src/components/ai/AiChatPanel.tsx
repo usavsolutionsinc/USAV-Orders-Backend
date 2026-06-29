@@ -15,6 +15,8 @@ import AiAnswerCard from '@/components/ai/AiAnswerCard';
 import AiPromptChips from '@/components/ai/AiPromptChips';
 import type { AiChatMode, AiChatRouteResponse, AiStructuredAnswer } from '@/lib/ai/types';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
+import { Button, IconButton } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 
 type MessageRole = 'user' | 'assistant';
 
@@ -227,9 +229,9 @@ export default function AiChatPanel() {
   const canSend = !!input.trim() && !isLoading && !!sessionId;
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-[#fbfbfa] text-gray-900">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-surface-card text-gray-900">
       <PaneHeader
-        className="border-gray-200 bg-[#fbfbfa]/95 backdrop-blur"
+        className="border-gray-200 bg-surface-card/95 backdrop-blur"
         rowClassName="px-6"
         leftSlot={
           <>
@@ -249,19 +251,19 @@ export default function AiChatPanel() {
             <div className="hidden border border-gray-200 bg-white px-3 py-1.5 text-micro font-medium text-gray-600 md:block">
               PST week ranges
             </div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={startNewChat}
-              className={`flex items-center gap-1.5 border border-gray-300 bg-white px-3 py-1.5 ${sectionLabel} text-gray-700 transition-colors hover:border-gray-400 hover:text-gray-900`}
+              icon={<RefreshIcon className="h-3 w-3" />}
             >
-              <RefreshIcon className="h-3 w-3" />
               New Chat
-            </button>
+            </Button>
           </>
         }
         belowSlot={
           <div className="grid gap-px border-t border-gray-200 bg-gray-200 px-6 py-px md:grid-cols-3">
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-gray-600">
               {connectionStatus === 'online' ? (
                 <Check className="h-4 w-4 text-emerald-600" />
               ) : connectionStatus === 'offline' ? (
@@ -271,11 +273,11 @@ export default function AiChatPanel() {
               )}
               <span>{statusLabel(connectionStatus)}</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-gray-600">
               <Database className="h-4 w-4 text-gray-500" />
               <span>Local shipped summaries use app-side order data</span>
             </div>
-            <div className="flex items-center gap-2 bg-[#fbfbfa] px-3 py-2 text-caption text-gray-600">
+            <div className="flex items-center gap-2 bg-surface-card px-3 py-2 text-caption text-gray-600">
               <Clock className="h-4 w-4 text-gray-500" />
               <span>
                 {connectionStatus === 'offline'
@@ -394,7 +396,7 @@ export default function AiChatPanel() {
 
       <div className="flex-shrink-0 border-t border-gray-200 bg-white px-4 py-3">
         <div className="mx-auto w-full max-w-4xl">
-          <div className="flex items-end gap-2 border border-gray-300 bg-[#fbfbfa] px-3 py-2 focus-within:border-gray-400">
+          <div className="flex items-end gap-2 border border-gray-300 bg-surface-card px-3 py-2 focus-within:border-gray-400">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -412,15 +414,20 @@ export default function AiChatPanel() {
               className="min-h-[24px] flex-1 resize-none bg-transparent text-sm leading-6 text-gray-800 placeholder-gray-400 focus:outline-none disabled:cursor-not-allowed"
               style={{ maxHeight: '160px' }}
             />
-            <button
+            <IconButton
               type="button"
               onClick={() => void sendMessage()}
               disabled={!canSend}
-              aria-label="Send message"
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-gray-900 bg-gray-900 text-white transition-colors hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
-            >
-              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
+              ariaLabel="Send message"
+              icon={
+                isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-500" />
+                ) : (
+                  <Send className={cn('h-4 w-4', canSend ? 'text-white' : 'text-gray-500')} />
+                )
+              }
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-gray-900 bg-gray-900 hover:bg-black disabled:border-gray-300 disabled:bg-gray-200 disabled:text-gray-500"
+            />
           </div>
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-micro text-gray-500">

@@ -1,4 +1,5 @@
 import { WorkspaceCard } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import { Box } from '@/components/Icons';
 import { FillBar } from '../FillBar';
 import { Stat, Tally } from './RoomDetailPieces';
@@ -21,15 +22,16 @@ export function RoomStatsCard({
       tone="blue"
       label="Live overview"
       actions={
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Box />}
           onClick={onOpenBins}
-          className="inline-flex h-7 items-center gap-1 rounded-full bg-blue-50 px-2.5 text-caption font-semibold text-blue-700 ring-1 ring-blue-200 transition-colors hover:bg-blue-100"
           disabled={!selectedRoom}
+          className="h-7 rounded-full bg-blue-50 px-2.5 text-blue-700 ring-blue-200 hover:bg-blue-100"
         >
-          <Box className="h-3.5 w-3.5" />
           Open bins
-        </button>
+        </Button>
       }
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

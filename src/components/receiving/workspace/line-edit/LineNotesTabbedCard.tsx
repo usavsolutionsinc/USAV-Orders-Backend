@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { FileText, Download, ClipboardList, Check, Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { LineChecklistTab } from './LineChecklistTab';
 
 /**
@@ -152,8 +154,7 @@ export function LineNotesTabbedCard({
       />
 
       {tab === 'notes' ? (
-        // Operator notes — no floating label, no placeholder. Pushed to Zoho on
-        // Print · receive.
+        // Operator notes — pushed to label + Zoho PO on print · receive.
         <textarea
           ref={notesTextareaRef}
           rows={2}
@@ -161,7 +162,8 @@ export function LineNotesTabbedCard({
           value={notes}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
-          className={`w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 ${NOTES_TEXTAREA_FOCUS}`}
+          placeholder="Add notes to label and PO"
+          className={`w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 placeholder:text-gray-400 ${NOTES_TEXTAREA_FOCUS}`}
         />
       ) : tab === 'po' ? (
         <div className="space-y-1">
@@ -177,33 +179,42 @@ export function LineNotesTabbedCard({
             className={`min-h-[8rem] w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-caption text-gray-900 ${NOTES_TEXTAREA_FOCUS}`}
           />
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">
               {loadingZoho ? (
                 <span className="inline-flex items-center gap-1 text-blue-500">
                   <Loader2 className="h-3 w-3 animate-spin" /> Syncing from Zoho…
                 </span>
               ) : onLoadZohoNotes ? (
-                <button
-                  type="button"
-                  onClick={() => void loadZohoNotes()}
-                  disabled={overallDirty}
-                  title={overallDirty ? 'Save or discard edits first' : 'Reload the latest notes from Zoho'}
-                  className="inline-flex items-center gap-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
+                <HoverTooltip
+                  label={overallDirty ? 'Save or discard edits first' : 'Reload the latest notes from Zoho'}
+                  asChild
                 >
-                  <Download className="h-3 w-3" /> Sync from Zoho
-                </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Download className="h-3 w-3" />}
+                    onClick={() => void loadZohoNotes()}
+                    disabled={overallDirty}
+                    aria-label={overallDirty ? 'Save or discard edits first' : 'Reload the latest notes from Zoho'}
+                    className="h-auto gap-1 px-0 text-micro font-semibold uppercase tracking-wide text-gray-400 hover:bg-transparent hover:text-gray-600"
+                  >
+                    Sync from Zoho
+                  </Button>
+                </HoverTooltip>
               ) : null}
             </span>
-            <button
-              type="button"
-              onClick={() => void handleSaveOverall()}
-              disabled={!overallDirty || savingOverall || loadingZoho}
-              title="Append the edited note to the Zoho PO field"
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white ring-1 ring-inset ring-emerald-700 transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Check className="h-3.5 w-3.5" />
-              {savingOverall ? 'Saving…' : 'Save to Zoho'}
-            </button>
+            <HoverTooltip label="Append the edited note to the Zoho PO field" asChild>
+              <button
+                type="button"
+                onClick={() => void handleSaveOverall()}
+                disabled={!overallDirty || savingOverall || loadingZoho}
+                aria-label="Append the edited note to the Zoho PO field"
+                className="ds-raw-button inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-caption font-bold uppercase tracking-wide text-white ring-1 ring-inset ring-emerald-700 transition disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className="h-3.5 w-3.5" />
+                {savingOverall ? 'Saving…' : 'Save to Zoho'}
+              </button>
+            </HoverTooltip>
           </div>
         </div>
       ) : (

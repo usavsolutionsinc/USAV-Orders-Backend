@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from '@/components/Icons';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { inventoryStatusBadgeClass } from './status-classes';
 import type {
     SerialUnitDetailPayload,
     TimelineEventRow,
@@ -361,32 +362,9 @@ function Field({ label, children }: FieldProps) {
 
 function StatusBadge({ status }: { status: string | null }) {
     if (!status) return <span className="text-xs text-gray-400">—</span>;
-    const palette: Record<string, string> = {
-        UNKNOWN: 'bg-gray-100 text-gray-600',
-        RECEIVED: 'bg-blue-100 text-blue-700',
-        TRIAGED: 'bg-blue-100 text-blue-700',
-        IN_TEST: 'bg-indigo-100 text-indigo-700',
-        IN_REPAIR: 'bg-amber-100 text-amber-700',
-        REPAIR_DONE: 'bg-amber-100 text-amber-700',
-        GRADED: 'bg-emerald-100 text-emerald-700',
-        TESTED: 'bg-emerald-100 text-emerald-700',
-        STOCKED: 'bg-green-100 text-green-700',
-        ALLOCATED: 'bg-purple-100 text-purple-700',
-        PICKED: 'bg-purple-100 text-purple-700',
-        PACKED: 'bg-purple-100 text-purple-700',
-        LABELED: 'bg-purple-100 text-purple-700',
-        STAGED: 'bg-purple-100 text-purple-700',
-        SHIPPED: 'bg-gray-200 text-gray-700',
-        RETURNED: 'bg-orange-100 text-orange-700',
-        RMA: 'bg-orange-100 text-orange-700',
-        ON_HOLD: 'bg-red-100 text-red-700',
-        SCRAPPED: 'bg-red-100 text-red-700',
-    };
     return (
         <span
-            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                palette[status] ?? 'bg-gray-100 text-gray-600'
-            }`}
+            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${inventoryStatusBadgeClass(status)}`}
         >
             {status}
         </span>

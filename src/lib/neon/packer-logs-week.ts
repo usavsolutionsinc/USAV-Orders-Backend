@@ -141,7 +141,7 @@ export async function fetchPackerLogRows(
         LEFT JOIN LATERAL (
             SELECT ord.id
             FROM orders ord
-            LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
+            LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
             LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
             WHERE (
                 sal.shipment_id IS NOT NULL
@@ -328,7 +328,7 @@ export async function fetchPackerLogRows(
     LEFT JOIN LATERAL (
         SELECT ord.id
         FROM orders ord
-        LEFT JOIN order_shipment_links osl ON osl.order_row_id = ord.id
+        LEFT JOIN shipment_links osl ON osl.owner_id = ord.id AND osl.owner_type = 'ORDER'
         LEFT JOIN shipping_tracking_numbers ord_stn ON ord_stn.id = ord.shipment_id
         WHERE (
             sal.shipment_id IS NOT NULL
@@ -492,10 +492,10 @@ export async function fetchPackerLogRows(
             stn_link.tracking_number_raw,
             COALESCE(osl_link.is_primary, false) AS is_primary,
             CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-          FROM order_shipment_links osl_link
+          FROM shipment_links osl_link
           LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-          WHERE o.id IS NOT NULL
-            AND osl_link.order_row_id = o.id
+          WHERE osl_link.owner_type = 'ORDER' AND o.id IS NOT NULL
+            AND osl_link.owner_id = o.id
 
           UNION
 

@@ -13,6 +13,7 @@ import { ScanHotkeySync } from "../components/scan/ScanHotkeySync";
 import { ThemeSync } from "../components/theme/ThemeSync";
 import { AuthenticatedAblyProvider } from "../components/providers/AuthenticatedAblyProvider";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme/theme";
+import { BOOT_SPLASH_SCRIPT } from "@/lib/boot-splash-script";
 import { designTokenStyleText } from '@/styles/tokens';
 import { OfflineBanner } from "../components/layout/OfflineBanner";
 import { InstallPrompt } from "../components/station/InstallPrompt";
@@ -20,6 +21,7 @@ import { AppearanceApplier } from "../components/settings/AppearanceApplier";
 import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
 import { getInitialAuthUser } from "@/lib/auth/server-session";
 import { Analytics } from "@vercel/analytics/next";
+import { PostHogProvider } from "../components/analytics/PostHogProvider";
 
 export default async function RootLayout({
     children,
@@ -47,6 +49,11 @@ export default async function RootLayout({
                 <style id="app-design-tokens">{designTokenStyleText}</style>
                 {/* Applies the cached theme before paint (no light→dark flash). */}
                 <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+                {/* Paints the loading splash before hydration on a fresh sign-in
+                    (one-shot flag), bridging the white gap until <BootGate> mounts
+                    its own splash. Without this the dashboard's first paint is a
+                    blank shell and the splash flickers off and back on. */}
+                <script dangerouslySetInnerHTML={{ __html: BOOT_SPLASH_SCRIPT }} />
             </head>
             <body className="antialiased m-0 overflow-hidden bg-white">
                 <ElectronDragStrip />
@@ -58,6 +65,7 @@ export default async function RootLayout({
                 */}
                 <div id="app-root" className="fixed inset-0 flex min-h-0 flex-col overflow-hidden">
                     <OfflineBanner />
+                    <PostHogProvider>
                     <Providers>
                         <AuthProvider initial={initialUser}>
                             <AuthenticatedAblyProvider>
@@ -82,6 +90,7 @@ export default async function RootLayout({
                             </AuthenticatedAblyProvider>
                         </AuthProvider>
                     </Providers>
+                    </PostHogProvider>
                 </div>
                 <InstallPrompt />
                 <AppearanceApplier />

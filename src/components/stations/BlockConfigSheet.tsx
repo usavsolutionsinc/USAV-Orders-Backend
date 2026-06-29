@@ -135,7 +135,7 @@ export function BlockConfigSheet({ open, instance, onClose, onApply }: BlockConf
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
-                className={`rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors ${
+                className={`ds-raw-button rounded-md px-2.5 py-1 text-caption font-bold capitalize transition-colors ${
                   tab === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >

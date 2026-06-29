@@ -1,4 +1,6 @@
 import { Loader2, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { EYEBROW, SECTION, type Bundle, type UnitResult } from './sku-testing-types';
 import { useChecklistEditor } from './useChecklistEditor';
 import { ChecklistStepRow } from './ChecklistStepRow';
@@ -14,6 +16,7 @@ export function ChecklistSection({
   onChanged,
   onReloadResults,
   onResultChange,
+  embedded = false,
 }: {
   receivingLineId: number;
   bundle: Bundle;
@@ -23,6 +26,8 @@ export function ChecklistSection({
   onChanged: () => Promise<void>;
   onReloadResults: () => Promise<void>;
   onResultChange: (stepId: number, next: Partial<UnitResult>) => void;
+  /** Bare body for tab panels — drops the card chrome + section eyebrow. */
+  embedded?: boolean;
 }) {
   const steps = bundle.checklist;
   const ed = useChecklistEditor({
@@ -35,10 +40,12 @@ export function ChecklistSection({
     onResultChange,
   });
 
+  const Wrapper = embedded ? 'div' : 'section';
+
   return (
-    <section className={SECTION}>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className={EYEBROW}>Testing checklist</h3>
+    <Wrapper className={embedded ? undefined : SECTION}>
+      <div className={`mb-3 flex items-center ${embedded ? 'justify-end' : 'justify-between'}`}>
+        {!embedded ? <h3 className={EYEBROW}>Testing checklist</h3> : null}
         <div className="flex items-center gap-2">
           {steps.length > 0 ? (
             <span
@@ -53,29 +60,35 @@ export function ChecklistSection({
           ) : null}
           {canRecord && steps.length > 0 ? (
             <>
-              <button
-                type="button"
-                onClick={() => void ed.bulkSet(ed.allDone ? 'clear' : 'pass')}
-                disabled={ed.bulkBusy}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-emerald-600 transition-colors duration-150 hover:bg-emerald-50 disabled:opacity-50"
-                title={ed.allDone ? 'Clear all recorded results for this unit' : 'Mark every step passed for this unit'}
+              <HoverTooltip
+                label={ed.allDone ? 'Clear all recorded results for this unit' : 'Mark every step passed for this unit'}
+                asChild
               >
-                {ed.bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                {ed.allDone ? 'Clear all' : 'Check all'}
-              </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={ed.bulkBusy}
+                  onClick={() => void ed.bulkSet(ed.allDone ? 'clear' : 'pass')}
+                  className="gap-1 rounded-md px-2 text-micro font-bold uppercase tracking-wider text-emerald-600 hover:bg-emerald-50"
+                >
+                  {ed.allDone ? 'Clear all' : 'Check all'}
+                </Button>
+              </HoverTooltip>
               <span className="h-3.5 w-px bg-gray-200" aria-hidden />
             </>
           ) : null}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Plus />}
             onClick={() => {
               ed.setAdding((v) => !v);
               ed.setDraft('');
             }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors duration-150 hover:bg-blue-50"
+            className="gap-1 rounded-md px-2 text-micro font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
           >
-            <Plus className="h-3.5 w-3.5" /> Add
-          </button>
+            Add
+          </Button>
         </div>
       </div>
 
@@ -108,14 +121,15 @@ export function ChecklistSection({
             placeholder="New checklist step…"
             className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-caption font-medium text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
           />
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => void ed.addStep()}
             disabled={ed.busy || !ed.draft.trim()}
-            className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-caption font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            className="shrink-0 rounded-md px-3 text-caption font-bold"
           >
             {ed.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add'}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -128,6 +142,6 @@ export function ChecklistSection({
           Scan a serial to record results
         </p>
       ) : null}
-    </section>
+    </Wrapper>
   );
 }

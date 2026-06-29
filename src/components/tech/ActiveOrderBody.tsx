@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { OrderPreviewPanel } from './OrderPreviewPanel';
 import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import type { Order } from '@/components/station/upnext/upnext-types';
@@ -138,16 +140,15 @@ export function ActiveOrderBody({ activeOrder, onRemoveSerial }: ActiveOrderBody
                             ) : null}
                           </AnimatePresence>
                           {onRemoveSerial ? (
-                            <button
-                              type="button"
-                              onClick={() => void handleRemoveSerial(sn, index)}
-                              disabled={Boolean(removingKey)}
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                              aria-label={`Remove serial ${sn}`}
-                              title={`Remove serial ${sn}`}
-                            >
-                              {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
-                            </button>
+                            <HoverTooltip label={`Remove serial ${sn}`} asChild>
+                              <IconButton
+                                icon={isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                                onClick={() => void handleRemoveSerial(sn, index)}
+                                disabled={Boolean(removingKey)}
+                                ariaLabel={`Remove serial ${sn}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-500 hover:bg-red-50 hover:text-red-600"
+                              />
+                            </HoverTooltip>
                           ) : null}
                         </div>
                       </motion.div>

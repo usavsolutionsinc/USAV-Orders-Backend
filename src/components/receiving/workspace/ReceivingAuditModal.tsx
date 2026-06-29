@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
 import { formatDateTimePST } from '@/utils/date';
 
@@ -180,14 +181,12 @@ export function ReceivingAuditModal({ open, onClose, receivingId }: Props) {
           </p>
           <p className="truncate text-xs font-semibold text-slate-900">{cartonLabel}</p>
         </div>
-        <button
-          type="button"
+        <IconButton
           onClick={onClose}
-          aria-label="Close audit log"
-          className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Close audit log"
+          icon={<X className="h-4 w-4" />}
+          className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {loading ? (
@@ -263,7 +262,7 @@ function SerialBatchRow({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1 text-left font-bold text-slate-900 hover:text-slate-700"
+          className="ds-raw-button flex items-center gap-1 text-left font-bold text-slate-900 hover:text-slate-700"
           aria-expanded={expanded}
         >
           <span>{label}</span>

@@ -1,5 +1,7 @@
 'use client';
 
+import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { MODE_TABS } from './mailbox/po-mailbox-types';
 import { usePoMailbox } from './mailbox/usePoMailbox';
 import { MissingMode } from './mailbox/MissingMode';
@@ -28,18 +30,17 @@ export function PoMailboxPreviewPanel({
       )}
 
       {/* Mode toggle — small inline pill row */}
-      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-gray-200 bg-white p-0.5 ${embedded ? 'text-caption' : 'text-label'} font-medium`}>
+      <div className={`${embedded ? 'flex w-full' : 'inline-flex'} rounded-md border border-gray-200 bg-white p-0.5`}>
         {MODE_TABS.map((t) => (
-          <button
+          <Button
             key={t.id}
-            type="button"
+            variant={m.mode === t.id ? 'primary' : 'ghost'}
+            size="sm"
             onClick={() => m.setMode(t.id)}
-            className={`${embedded ? 'flex-1' : ''} rounded-[5px] ${embedded ? 'px-2 py-1' : 'px-3 py-1.5'} transition-colors ${
-              m.mode === t.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
-            }`}
+            className={cn('rounded-[5px]', embedded && 'flex-1')}
           >
             {embedded ? t.label.replace('Missing from ', '').replace('All scanned', 'Scanned').replace('Raw preview', 'Raw') : t.label}
-          </button>
+          </Button>
         ))}
       </div>
 

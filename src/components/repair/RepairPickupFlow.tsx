@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronLeft, Loader2, X, Camera } from '../Icons';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import type { RSRecord } from '@/lib/neon/repair-service-queries';
 
@@ -114,14 +115,15 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={onClose}
-                className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-eyebrow font-black uppercase tracking-wide text-gray-600 transition-colors hover:bg-gray-50"
+                icon={<ChevronLeft className="h-3 w-3" />}
+                className="text-eyebrow font-black uppercase tracking-wide text-gray-600"
               >
-                <ChevronLeft className="h-3 w-3" />
                 Back
-              </button>
+              </Button>
+              {/* ds-raw-button: solid-orange intake-submit CTA driven by the shared getSidebarIntakeSubmitButtonClass helper */}
               <button
                 type="button"
                 onClick={handleSubmitSignature}
@@ -163,14 +165,14 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
           </div>
 
           <div className="shrink-0 border-t border-gray-100 px-6 py-3 flex items-center justify-center">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={handleDecline}
               disabled={isDeclining || isSubmitting}
-              className="text-micro font-black uppercase tracking-wide text-red-500 hover:text-red-700 disabled:opacity-50"
+              className="h-auto px-0 text-micro font-black uppercase tracking-wide text-rose-600 hover:bg-transparent hover:text-rose-700 disabled:opacity-50"
             >
               {isDeclining ? 'Recording…' : 'Customer declined to sign'}
-            </button>
+            </Button>
           </div>
 
           {error && (
@@ -195,17 +197,18 @@ export function RepairPickupFlow({ repair, onUpdate, onClose }: RepairPickupFlow
                 </p>
               </div>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="brand"
               onClick={onClose}
-              className="flex items-center gap-1 rounded-xl bg-gray-900 px-4 py-2.5 text-micro font-black uppercase tracking-wide text-white transition-colors hover:bg-gray-700"
+              icon={<X className="h-3 w-3" />}
+              className="bg-gray-900 bg-none text-micro font-black uppercase tracking-wide hover:bg-gray-700"
             >
-              <X className="h-3 w-3" />
               Done
-            </button>
+            </Button>
           </div>
 
           <div className="flex-1 min-h-0 bg-gray-100 overflow-hidden">
+            {/* ds-allow-title: iframe title is the required accessible name, not a hover tooltip */}
             <iframe
               src={receiptUrl}
               title={`Repair receipt ${rsCode}`}

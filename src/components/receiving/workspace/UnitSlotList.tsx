@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Plus, X } from '@/components/Icons';
-import { TextField } from '@/design-system/primitives';
+import { TextField, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ConditionBadge } from './ConditionBadge';
 
 export interface UnitLike {
@@ -94,7 +95,7 @@ export function UnitSlotList({
   const firstEmptyIndex = saved.length < count ? saved.length : -1;
 
   return (
-    <div className="flex flex-col divide-y divide-gray-200">
+    <div className="flex min-w-0 flex-col divide-y divide-gray-200">
       {rows.map(({ index, serial }) => {
         const expanded = singleRowExpanded || index === selectedIndex;
         return expanded ? (
@@ -280,8 +281,8 @@ function ExpandedRow({
   };
 
   return (
-    <div className="px-1 py-2.5 group">
-      <div className="flex items-center gap-2">
+    <div className="min-w-0 px-1 py-2.5 group">
+      <div className="flex min-w-0 w-full items-center gap-2">
         {/* Active unit's n/N — same column as the collapsed rows so the qty +
             condition read down one vertical line instead of jumping left.
             Hidden in single-row mode so the active unit mirrors a single-qty line. */}
@@ -293,18 +294,17 @@ function ExpandedRow({
         {meta ? (
           singleRow ? (
             // Single-row mode mirrors the single-qty SerialCard: condition pills
-            // always visible + a hairline divider, left-aligned with the master
-            // "All units" picker (no collapse/overflow, so all 7 pills show).
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="inline-flex items-center">{meta}</div>
+            // scroll inside the row instead of widening the workspace.
+            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <div className="min-w-0 flex-1 overflow-hidden">{meta}</div>
               <div className="h-8 w-px shrink-0 bg-gray-100" />
             </div>
           ) : (
             <div
-              className={`flex items-center gap-2 transition-all duration-700 ease-in-out overflow-hidden ${
+              className={`flex min-w-0 items-center gap-2 transition-all duration-700 ease-in-out overflow-hidden ${
                 showMeta
-                  ? 'max-w-[600px] opacity-100 mr-1'
-                  : 'max-w-[48px] opacity-100 group-hover:max-w-[600px] group-hover:mr-1'
+                  ? 'min-w-0 max-w-full flex-1 opacity-100 mr-1'
+                  : 'max-w-[3rem] opacity-100 group-hover:max-w-full group-hover:flex-1 group-hover:mr-1'
               }`}
             >
               <div className={`${showMeta ? 'hidden' : 'block group-hover:hidden'}`}>
@@ -353,36 +353,35 @@ function ExpandedRow({
             }}
             trailing={
               scan ? (
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => {
                     setScan('');
                     setEditing(false);
                   }}
-                  aria-label={editing ? 'Cancel edit' : 'Clear'}
+                  ariaLabel={editing ? 'Cancel edit' : 'Clear'}
+                  icon={<X className="h-3.5 w-3.5" />}
                   className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                />
               ) : undefined
             }
           />
         </div>
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!scan.trim() || (!singleRow && isSubmitting) || disabled}
-          aria-label={editing ? 'Save serial' : 'Add serial'}
-          title={editing ? 'Save serial' : 'Add serial'}
-          className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:bg-gray-300 ${
-            editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
-          }`}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
-            <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-          </svg>
-        </button>
+        <HoverTooltip label={editing ? 'Save serial' : 'Add serial'} asChild>
+          <IconButton
+            onClick={submit}
+            disabled={!scan.trim() || (!singleRow && isSubmitting) || disabled}
+            ariaLabel={editing ? 'Save serial' : 'Add serial'}
+            icon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            }
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm disabled:cursor-not-allowed disabled:bg-gray-300 ${
+              editing ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          />
+        </HoverTooltip>
       </div>
     </div>
   );

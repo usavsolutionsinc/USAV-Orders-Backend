@@ -17,6 +17,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
 import { Camera, Plus } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
 import { toast } from '@/lib/toast';
 
@@ -110,7 +112,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
   }, []);
 
   const btnClass =
-    'inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-caption font-black tabular-nums text-blue-700 shadow-sm transition-colors hover:bg-blue-100';
+    'h-8 shrink-0 gap-1 self-center rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-caption font-black tabular-nums text-blue-700 shadow-sm hover:bg-blue-100 hover:text-blue-700';
 
   const title =
     count > 0
@@ -132,18 +134,21 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) scheduleCloseGallery();
       }}
     >
-      <button
-        type="button"
-        onClick={handleRequestOnPhone}
-        title={title}
-        aria-label={ariaLabel}
-        aria-expanded={count > 0 ? galleryHover : undefined}
-        className={btnClass}
-      >
-        <Camera className="h-4 w-4" />
-        {count > 0 ? <>×{count}</> : null}
-        <Plus className="h-3 w-3" />
-      </button>
+      <HoverTooltip label={title} asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleRequestOnPhone}
+          ariaLabel={ariaLabel}
+          aria-expanded={count > 0 ? galleryHover : undefined}
+          icon={<Camera className="h-4 w-4" />}
+          iconRight={<Plus className="h-3 w-3" />}
+          className={btnClass}
+        >
+          {count > 0 ? <>×{count}</> : null}
+        </Button>
+      </HoverTooltip>
 
       {count > 0 && galleryHover ? (
         // `pt-1.5` bridges the gap so the pointer stays inside the hover target

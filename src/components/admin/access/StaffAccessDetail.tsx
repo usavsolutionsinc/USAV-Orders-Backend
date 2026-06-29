@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from 'react';
 import QRCode from 'react-qr-code';
+import { Button } from '@/design-system/primitives';
 import { isAdminRoleKey, type StaffRole } from '@/lib/auth/permissions-shared';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { useConfirmedAction } from '@/hooks';
@@ -183,9 +184,9 @@ export function StaffAccessDetail({ staffId }: StaffAccessDetailProps) {
               <QRCode value={qrUrl.url} size={220} level="M" />
             </div>
             <p className="break-all text-micro text-gray-400">{qrUrl.url}</p>
-            <button type="button" onClick={() => setQrUrl(null)} className="mt-5 rounded-xl bg-gray-900 px-5 py-2 text-sm font-semibold text-white hover:bg-black">
+            <Button variant="brand" size="lg" onClick={() => setQrUrl(null)} className="mt-5">
               Done
-            </button>
+            </Button>
           </div>
         </div>
       )}

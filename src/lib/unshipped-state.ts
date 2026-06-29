@@ -23,48 +23,38 @@
  * "Late" is a deadline overlay, not a pipeline stage — see {@link isUnshippedLate}.
  */
 
-import { OUTBOUND_STATE_META } from '@/lib/outbound-state';
-
-export type UnshippedState =
-  | 'AWAITING_LABEL' // sold, no tracking/label yet (shipment_id is null)
-  | 'PENDING' // labeled, waiting for test/pack
-  | 'TESTED' // passed tech scan — ready to pack
-  | 'PACKED_STAGED' // packed + staged, awaiting dock scan‑out (shared seam state)
-  | 'BLOCKED'; // out of stock / can't fulfill — needs attention
-
-export interface UnshippedStateInput {
-  /** orders.shipment_id — null means no tracking/label has been attached yet. */
-  shipmentId?: number | string | null;
-  /** A tech scan exists (order.tested). */
-  hasTechScan?: boolean | null;
-  /** PACK event timestamp (pack completed, not merely a packer assigned). */
-  packedAt?: string | null;
-  /** orders.out_of_stock — a non‑empty string means the line is flagged blocked. */
-  outOfStock?: string | null;
-}
+import { buildStateMeta } from '@/lib/labels/resolve';
+import {
+  resolveOrderLifecycleStage,
+  resolveFulfillmentLane,
+  type OrderLifecycleStage,
+  type FulfillmentLane,
+  type OrderLifecycleSignals,
+} from '@/lib/order-lifecycle';
 
 /**
- * Derive the pre‑dock pipeline state. Precedence is exception‑first within the
- * not‑yet‑packed stages (an out‑of‑stock line needs attention before it can
- * progress), but a completed PACK wins outright — once it is physically packed
- * and staged the stock question is moot and it sits at the seam.
+ * Pre‑dock pipeline state. The canonical vocabulary + derivation now live in
+ * `order-lifecycle.ts` (the single projection per W2 of the engine‑migration
+ * plan); these are re‑exported here so existing importers and the
+ * `*_STATE_META` color maps below keep their stable import path. Color/label
+ * presentation stays in this module.
+ */
+export type UnshippedState = OrderLifecycleStage;
+/** Pre-pack fulfillment lanes shown on Dashboard · Unshipped (excludes label + dock). */
+export type FulfillmentState = FulfillmentLane;
+export type UnshippedStateInput = OrderLifecycleSignals;
+
+/**
+ * Derive the pre‑dock pipeline state — thin alias over the canonical projection
+ * (`resolveOrderLifecycleStage`). Kept for import‑path stability.
  */
 export function deriveUnshippedState(input: UnshippedStateInput): UnshippedState {
-  if (input.packedAt) return 'PACKED_STAGED';
-  if (String(input.outOfStock ?? '').trim() !== '') return 'BLOCKED';
-  if (input.hasTechScan) return 'TESTED';
-  if (input.shipmentId != null && String(input.shipmentId) !== '') return 'PENDING';
-  return 'AWAITING_LABEL';
+  return resolveOrderLifecycleStage(input);
 }
 
-/** Pre-pack fulfillment states shown on Dashboard · Unshipped (excludes label + dock). */
-export type FulfillmentState = 'PENDING' | 'TESTED' | 'BLOCKED';
-
-/** Derive fulfillment-queue state for orders that already have a label/tracking. */
+/** Derive fulfillment-queue lane for orders that already have a label/tracking. */
 export function deriveFulfillmentState(input: UnshippedStateInput): FulfillmentState {
-  if (String(input.outOfStock ?? '').trim() !== '') return 'BLOCKED';
-  if (input.hasTechScan) return 'TESTED';
-  return 'PENDING';
+  return resolveFulfillmentLane(input);
 }
 
 export type FulfillmentCounts = Record<FulfillmentState, number>;
@@ -144,16 +134,12 @@ export interface UnshippedStateMeta {
   dot: string;
 }
 
-// Every dot hue is distinct from the others AND from every outbound state hue.
-// PACKED_STAGED is the shared seam, so its color is sourced from the outbound
-// meta to keep the two models locked together.
-export const UNSHIPPED_STATE_META: Record<UnshippedState, UnshippedStateMeta> = {
-  AWAITING_LABEL: { label: 'Awaiting Label', description: 'Sold — no tracking or label attached yet.',                      pill: 'bg-slate-50 text-slate-600 ring-slate-200',    dot: 'bg-slate-400' },
-  PENDING:        { label: 'Pending',        description: 'Labeled and queued — waiting for test/pack.',                    pill: 'bg-yellow-50 text-yellow-700 ring-yellow-200', dot: 'bg-yellow-500' },
-  TESTED:         { label: 'Tested',         description: 'Passed the tech scan — ready to pack.',                          pill: 'bg-teal-50 text-teal-700 ring-teal-200',       dot: 'bg-teal-500' },
-  PACKED_STAGED:  { label: 'Packed · Staged', description: 'Packed and staged at the dock — awaiting scan‑out.',            pill: OUTBOUND_STATE_META.PACKED_STAGED.pill,         dot: OUTBOUND_STATE_META.PACKED_STAGED.dot },
-  BLOCKED:        { label: 'Blocked',        description: 'Out of stock / can’t fulfill — needs attention.',                pill: 'bg-red-50 text-red-700 ring-red-200',          dot: 'bg-red-500' },
-};
+// Presentation now flows from the one label registry (`src/lib/labels`) — the
+// label/description/tone are seeded defaults there and are tenant‑overridable
+// (Phase 2). The no‑two‑dots‑share‑a‑hue invariant + the PACKED_STAGED seam
+// (shared amber with outbound) are preserved by the registry's distinct tones;
+// `labels/resolve.test.ts` pins this map byte‑identical to the former literals.
+export const UNSHIPPED_STATE_META = buildStateMeta('unshipped') as Record<UnshippedState, UnshippedStateMeta>;
 
 /** Legend meta for Dashboard · Unshipped only (PENDING / TESTED / BLOCKED). */
 export const FULFILLMENT_STATE_META: Record<FulfillmentState, UnshippedStateMeta> = {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Trash2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { DetailsStackProps } from './types';
 import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
@@ -222,19 +223,21 @@ export function TechDetailsStack({
       )}
 
       <section className="mx-8 pt-2">
-        <button
+        <Button
+          variant="danger"
+          size="lg"
           type="button"
           onClick={deleteTechOrder}
           disabled={isDeleting}
-          className="w-full h-10 inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
+          icon={<Trash2 className="w-3.5 h-3.5" />}
+          className="w-full uppercase tracking-wider"
         >
-          <Trash2 className="w-3.5 h-3.5" />
           {isDeleting
             ? 'Deleting...'
             : isDeleteArmed
               ? 'Click Again To Confirm'
               : 'Delete'}
-        </button>
+        </Button>
       </section>
     </div>
   );

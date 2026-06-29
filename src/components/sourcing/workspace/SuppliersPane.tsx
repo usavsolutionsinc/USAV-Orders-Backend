@@ -47,7 +47,7 @@ export function SuppliersPane() {
               <Stat label="acq" value={s.acquisition_count} />
               <div className="w-20">
                 <p className="text-sm font-bold text-gray-900">{formatCents(s.spend_cents)}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">spend</p>
+                <p className="text-micro font-semibold uppercase tracking-wide text-gray-400">spend</p>
               </div>
             </div>
           </li>
@@ -61,7 +61,7 @@ function Stat({ label, value }: { label: string; value: number }) {
   return (
     <div className="w-12">
       <p className="text-sm font-bold text-gray-900">{value}</p>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-micro font-semibold uppercase tracking-wide text-gray-400">{label}</p>
     </div>
   );
 }

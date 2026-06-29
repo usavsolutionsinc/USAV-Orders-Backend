@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, Mail, RefreshCw, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 
@@ -138,15 +139,13 @@ export function IncomingSyncDialog({
             >
               {(elapsedMs / 1000).toFixed(1)}s
             </motion.span>
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
               disabled={isRunning}
-              className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
+              ariaLabel="Close"
+              icon={<X className="w-4 h-4" />}
+              className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+            />
           </div>
         </header>
 
@@ -204,7 +203,7 @@ export function IncomingSyncDialog({
                   </div>
                   <ul className="max-h-40 space-y-1 overflow-y-auto px-3 py-2">
                     {result.errors.map((e, i) => (
-                      <li key={i} className="text-[11px] font-medium text-red-700">{e}</li>
+                      <li key={i} className="text-caption font-medium text-red-700">{e}</li>
                     ))}
                   </ul>
                 </div>
@@ -220,14 +219,14 @@ export function IncomingSyncDialog({
         </div>
 
         <footer className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 px-5 py-2.5">
-          <button
-            type="button"
+          <Button
+            variant="brand"
+            size="sm"
             onClick={onClose}
             disabled={isRunning}
-            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
           >
             {isRunning ? 'Running…' : 'Close'}
-          </button>
+          </Button>
         </footer>
       </motion.div>
     </motion.div>

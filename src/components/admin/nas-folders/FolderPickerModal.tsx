@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { listNasDir, type NasEntry } from '@/lib/nas-photos';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
 import { Layer } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 
 /**
  * Browse the NAS tree and pick a folder. Reuses the same breadcrumb + folder
@@ -50,9 +51,9 @@ export function FolderPickerModal({
             <p className="text-micro font-black uppercase tracking-[0.18em] text-gray-400">Pick folder · {station}</p>
             <p className="truncate text-sm font-bold text-gray-800">/{dir || 'Root'}</p>
           </div>
-          <button type="button" onClick={onCancel} className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-50">
+          <Button variant="secondary" size="sm" type="button" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
 
         {dir ? (
@@ -71,9 +72,9 @@ export function FolderPickerModal({
           ) : error ? (
             <div className="py-10 text-center">
               <p className="text-caption font-bold text-rose-600">{error}</p>
-              <button type="button" onClick={() => void load(dir)} className="mt-3 rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50">
+              <Button variant="secondary" size="sm" type="button" onClick={() => void load(dir)} className="mt-3">
                 Retry
-              </button>
+              </Button>
             </div>
           ) : folders.length === 0 ? (
             <p className="py-10 text-center text-caption font-bold uppercase tracking-widest text-gray-400">No subfolders here.</p>
@@ -91,9 +92,9 @@ export function FolderPickerModal({
           <span className="truncate text-micro font-bold uppercase tracking-widest text-gray-400">
             {dir ? `Selecting: /${dir}` : 'At root — pick a subfolder or use root'}
           </span>
-          <button type="button" onClick={() => onPick(dir)} className="inline-flex h-9 shrink-0 items-center rounded-lg bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700">
+          <Button variant="primary" size="md" type="button" onClick={() => onPick(dir)} className="shrink-0">
             Use this folder
-          </button>
+          </Button>
         </div>
       </div>
     </Layer>

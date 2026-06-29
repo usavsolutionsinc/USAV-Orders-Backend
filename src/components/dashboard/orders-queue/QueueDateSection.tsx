@@ -14,8 +14,6 @@ export interface QueueDateSectionProps {
   isMobile: boolean;
   /** Render a single queue row at the given zebra-stripe index. */
   renderRow: (record: ShippedOrder, stripeIndex: number) => ReactNode;
-  /** Day-header style — `band` (default) or the slim `chip` used by the board. */
-  dateHeaderVariant?: 'band' | 'chip';
 }
 
 /**
@@ -24,7 +22,7 @@ export interface QueueDateSectionProps {
  * `stripeIndex` runs across the whole day (group children included) so zebra
  * striping stays consistent.
  */
-export function QueueDateSection({ date, groups, isMobile, renderRow, dateHeaderVariant = 'band' }: QueueDateSectionProps) {
+export function QueueDateSection({ date, groups, isMobile, renderRow }: QueueDateSectionProps) {
   // groups preserve the per-day sort order (groupRowsBy), matching
   // displayedRecords so shift-range select lines up with the view.
   let stripeIndex = 0;
@@ -32,7 +30,7 @@ export function QueueDateSection({ date, groups, isMobile, renderRow, dateHeader
 
   return (
     <div className="flex flex-col">
-      <DateGroupHeader date={date} total={dayTotal} variant={dateHeaderVariant} />
+      <DateGroupHeader date={date} total={dayTotal} />
       {groups.map((group) => {
         // Singleton order → a plain row (the common case).
         if (group.rows.length === 1) {

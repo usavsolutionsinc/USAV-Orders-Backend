@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { outboundOrderByIdQuery } from '@/lib/queries/outbound-queries';
 import { ShippedDetailsPanel } from '@/components/shipped/ShippedDetailsPanel';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Button } from '@/design-system/primitives';
 import { bustLabelsCaches } from '@/lib/outbound/outbound-cache-keys';
 
 interface LabelsOrderWorkspaceProps {
@@ -34,13 +35,14 @@ export function LabelsOrderWorkspace({ orderId, onClose }: LabelsOrderWorkspaceP
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-white px-8 text-center">
         <p className="text-sm font-semibold text-gray-700">Order not found</p>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={onClose}
-          className="text-sm font-bold text-violet-600 hover:underline"
+          className="h-auto px-0 text-sm text-violet-600 hover:text-violet-700 hover:underline"
         >
           Close
-        </button>
+        </Button>
       </div>
     );
   }

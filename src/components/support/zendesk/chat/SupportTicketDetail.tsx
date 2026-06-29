@@ -126,7 +126,7 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
             <div className="flex flex-col items-center gap-2 text-blue-700">
               <Upload className="h-7 w-7" />
               <p className="text-sm font-bold">Drop photo to add to ticket #{ticketId}</p>
-              <p className="text-[11px] font-semibold text-blue-500">Uploads to the library, attaches on your next reply</p>
+              <p className="text-caption font-semibold text-blue-500">Uploads to the library, attaches on your next reply</p>
             </div>
           </motion.div>
         ) : null}

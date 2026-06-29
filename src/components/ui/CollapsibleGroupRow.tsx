@@ -88,7 +88,7 @@ export function CollapsibleGroupRow({
         }}
         aria-expanded={isOpen}
         className={cn(
-          'flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-blue-50/50',
+          'ds-raw-button flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-blue-50/50',
           isOpen ? 'bg-blue-50/40' : index != null && index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white',
         )}
       >
@@ -102,7 +102,7 @@ export function CollapsibleGroupRow({
         ) : null}
         <div className="min-w-0 flex-1">{summary}</div>
         {count != null ? (
-          <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-gray-500">
+          <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-500">
             {count} {countLabel}
           </span>
         ) : null}

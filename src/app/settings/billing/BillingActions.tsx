@@ -10,6 +10,7 @@
 
 import { useCallback, useState } from 'react';
 import type { PlatformPlan } from '@/lib/tenancy/constants';
+import { Button } from '@/design-system/primitives';
 
 interface BillingActionsProps {
   hasStripeCustomer: boolean;
@@ -35,21 +36,16 @@ export function BillingActions({ hasStripeCustomer }: BillingActionsProps) {
 
   if (!hasStripeCustomer) {
     return (
-      <div className="text-[12px] text-gray-500">
+      <div className="text-label text-gray-500">
         No billing customer yet — upgrade a plan to set one up.
       </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={openPortal}
-      disabled={busy}
-      className="inline-flex items-center rounded-2xl border border-gray-200 bg-white px-4 py-2 text-[12.5px] font-medium text-gray-700 shadow-sm transition-colors hover:border-gray-300 hover:text-gray-900 disabled:cursor-wait disabled:opacity-60"
-    >
+    <Button variant="secondary" type="button" onClick={openPortal} disabled={busy}>
       {busy ? 'Opening…' : 'Manage billing'}
-    </button>
+    </Button>
   );
 }
 
@@ -78,13 +74,8 @@ export function UpgradeButton({ plan }: UpgradeButtonProps) {
   }, [plan]);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      className="inline-flex w-full items-center justify-center rounded-2xl bg-slate-900 px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
-    >
+    <Button variant="brand" type="button" onClick={onClick} disabled={busy} className="w-full">
       {busy ? 'Redirecting…' : 'Upgrade'}
-    </button>
+    </Button>
   );
 }

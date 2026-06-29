@@ -14,6 +14,7 @@ import {
 } from '@/components/Icons';
 import { TOKENS, SectionHeader } from '@/components/mobile/redesign/DesignSystem';
 import { ScanInput } from '@/components/mobile/redesign/ScanInput';
+import { IconButton } from '@/design-system/primitives';
 import {
   OrderIdChip,
   TrackingChip,
@@ -259,14 +260,13 @@ export function MobilePackerFlow() {
               {machine.name === 'what_to_pack' && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 px-1">
-                    <button
+                    <IconButton
                       type="button"
                       onClick={goBack}
-                      aria-label="Back to order details"
-                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-blue-500 shadow-sm ring-1 ring-blue-100 active:scale-90"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
+                      ariaLabel="Back to order details"
+                      icon={<ChevronLeft className="h-4 w-4 text-blue-500" />}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-blue-100 active:scale-90"
+                    />
                     <SectionHeader title="What to pack" />
                   </div>
                   <WhatToPackCard state={packState} lines={packLines} notFound={lastNotFound} />
@@ -304,7 +304,7 @@ function StepPill({
 }) {
   return (
     <span
-      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] transition-colors ${
+      className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-micro font-black uppercase tracking-[0.12em] transition-colors ${
         active
           ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
           : 'bg-blue-50 text-blue-300'
@@ -340,7 +340,7 @@ function OrderDetailsCard({
           {state === 'empty' ? 'No order found for that scan' : 'Order lookup failed'}
         </p>
         {orderRef && (
-          <p className="mt-1 font-mono text-[11px] text-rose-300">{orderRef}</p>
+          <p className="mt-1 font-mono text-caption text-rose-300">{orderRef}</p>
         )}
       </div>
     );
@@ -359,7 +359,7 @@ function OrderDetailsCard({
             <OrderIdChip value={order.orderId} display={getLast4(order.orderId)} />
             {tracking && <TrackingChip value={tracking} display={getLast4(tracking)} />}
             {order.status && (
-              <span className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-600">
+              <span className="rounded-lg border border-blue-100 bg-blue-50 px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest text-blue-600">
                 {order.status}
               </span>
             )}
@@ -447,7 +447,7 @@ function WhatToPackCard({
         <p className="text-xs font-black uppercase tracking-widest text-amber-500">
           {state === 'empty' ? 'No pre-packed stock for that SKU' : 'Pack lookup failed'}
         </p>
-        {notFound && <p className="mt-1 font-mono text-[11px] text-amber-300">{notFound}</p>}
+        {notFound && <p className="mt-1 font-mono text-caption text-amber-300">{notFound}</p>}
       </div>
     );
   }
@@ -506,7 +506,7 @@ function Field({
 }) {
   return (
     <div className={className}>
-      <dt className="text-[9px] font-black uppercase tracking-[0.15em] text-blue-300">{label}</dt>
+      <dt className="text-eyebrow font-black uppercase tracking-[0.15em] text-blue-300">{label}</dt>
       <dd
         className={`mt-0.5 flex items-center gap-1 text-sm font-bold text-blue-950 ${
           mono ? 'font-mono text-xs' : ''

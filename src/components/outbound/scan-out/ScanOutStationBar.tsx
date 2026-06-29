@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { StationScanBar } from '@/components/station/StationScanBar';
+import { Button } from '@/design-system/primitives';
 import { Barcode, Check, AlertTriangle } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { bustScanOutCaches } from '@/lib/outbound/outbound-cache-keys';
@@ -116,14 +117,15 @@ export function ScanOutStationBar({ autoFocus = true }: { autoFocus?: boolean } 
           {lastResult.kind === 'ok' ? <Check className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
           <span className="truncate">{lastResult.text}</span>
           {undoable && lastResult.kind === 'ok' ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => undo.mutate(undoable.shipmentId)}
               disabled={undo.isPending}
-              className="ml-auto shrink-0 font-bold uppercase tracking-wide text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50"
+              className="ml-auto h-auto shrink-0 px-0 text-xs text-emerald-700 underline-offset-2 hover:text-emerald-800 hover:underline"
             >
               {undo.isPending ? 'Undoing…' : 'Undo'}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : null}

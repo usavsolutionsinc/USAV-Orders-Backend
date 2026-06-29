@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { StaffColorWheel } from '../StaffColorWheel';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import type { Staff } from '../types';
@@ -116,16 +118,20 @@ export function StaffEditCard({
             />
           </FieldGroup>
           <FieldGroup label="Role">
-            <select
-              value={editRole}
-              onChange={(e) => setEditRole(e.target.value as StaffRole)}
-              disabled={member.role !== 'technician' && member.role !== 'packer'}
-              className="h-11 w-full rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
-              title={member.role !== 'technician' && member.role !== 'packer' ? `Role "${member.role}" is managed in the Roles tab` : undefined}
+            <HoverTooltip
+              label={member.role !== 'technician' && member.role !== 'packer' ? `Role "${member.role}" is managed in the Roles tab` : ''}
+              asChild
             >
-              <option value="technician">Technician</option>
-              <option value="packer">Packer</option>
-            </select>
+              <select
+                value={editRole}
+                onChange={(e) => setEditRole(e.target.value as StaffRole)}
+                disabled={member.role !== 'technician' && member.role !== 'packer'}
+                className="h-11 w-full rounded-full border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-900 outline-none transition focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+              >
+                <option value="technician">Technician</option>
+                <option value="packer">Packer</option>
+              </select>
+            </HoverTooltip>
           </FieldGroup>
         </div>
 
@@ -174,27 +180,20 @@ export function StaffEditCard({
         {/* Action bar: pill buttons. Primary dark, secondary outline,
             destructive right-aligned. */}
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleSave}
-            className="inline-flex h-11 items-center justify-center rounded-full bg-gray-900 px-6 text-label font-semibold uppercase tracking-wider text-white shadow-md shadow-gray-900/20 transition hover:bg-gray-800 hover:shadow-lg"
-          >
+          <Button variant="brand" type="button" onClick={handleSave} className="h-11">
             Save
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="inline-flex h-11 items-center justify-center rounded-full border border-gray-200 bg-white px-5 text-label font-semibold uppercase tracking-wider text-gray-700 transition hover:bg-gray-50"
-          >
+          </Button>
+          <Button variant="secondary" type="button" onClick={onCancel} className="h-11">
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
             type="button"
             onClick={onDelete}
-            className="ml-auto inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-white px-5 text-label font-semibold uppercase tracking-wider text-red-700 transition hover:bg-red-50"
+            className="ml-auto h-11 border border-rose-200 text-rose-600 hover:bg-rose-50"
           >
             Deactivate
-          </button>
+          </Button>
         </div>
       </div>
     </div>

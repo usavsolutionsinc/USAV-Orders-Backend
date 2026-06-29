@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
+import { Button, IconButton } from '@/design-system/primitives';
 import { SKU_STOCK_DESKTOP_SCAN_EVENT } from '@/utils/events';
 
 /**
@@ -79,16 +80,16 @@ export function GlobalDesktopSkuScanner() {
     <div className="fixed inset-0 z-modal flex flex-col bg-black">
       <div className="flex items-center justify-between px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2">
         <p className="text-micro font-black uppercase tracking-[0.2em] text-white/60">Scan SKU Barcode</p>
-        <button
-          type="button"
+        <IconButton
           onClick={() => void handleCloseScanner()}
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white active:bg-white/20"
-          aria-label="Close scanner"
-        >
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+          ariaLabel="Close scanner"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20"
+          icon={
+            <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          }
+        />
       </div>
       <div className="relative flex-1 overflow-hidden">
         <video
@@ -129,12 +130,9 @@ export function GlobalDesktopSkuScanner() {
             autoCapitalize="characters"
             className="h-11 flex-1 rounded-xl border border-white/20 bg-white/10 px-4 text-sm font-bold text-white placeholder:text-white/40 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400/50"
           />
-          <button
-            type="submit"
-            className="h-11 rounded-xl bg-blue-600 px-4 text-caption font-black uppercase tracking-wider text-white active:bg-blue-700"
-          >
+          <Button type="submit" variant="primary" className="h-11">
             Go
-          </button>
+          </Button>
         </form>
       </div>
     </div>

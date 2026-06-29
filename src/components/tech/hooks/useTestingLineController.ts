@@ -69,7 +69,6 @@ export function useTestingLineController(
   const [notes, setNotes] = useState<string>('');
   const [isPrinting, setIsPrinting] = useState(false);
   const [claimOpen, setClaimOpen] = useState(false);
-  const [pairOpen, setPairOpen] = useState(false);
   const [activeSlotByLine, setActiveSlotByLine] = useState<Record<number, number>>({});
   const [previewBySerialUnit, setPreviewBySerialUnit] = useState<Record<number, AllocatedUnit>>({});
   const [isMutating, setIsMutating] = useState(false);
@@ -571,6 +570,6 @@ export function useTestingLineController(
     handleSlotVerdict, applyLineVerdict, deriveLineVerdict,
     enqueueSerial, deleteSerial, replaceSerial,
     handlePrimary, handleApplyAndPrint,
-    claimOpen, setClaimOpen, pairOpen, setPairOpen,
+    claimOpen, setClaimOpen,
   };
 }

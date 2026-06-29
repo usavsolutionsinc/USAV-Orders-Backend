@@ -93,7 +93,7 @@ export function QualityDashboardTab() {
               {data.top_failures.map((f) => (
                 <li key={f.id} className="flex items-center gap-2 px-5 py-2.5">
                   <span className="min-w-0 flex-1 truncate text-label font-bold text-gray-800">{f.label}</span>
-                  <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-bold uppercase ${qualitySeverityToneClass(f.severity)}`}>
+                  <span className={`rounded-full border px-1.5 py-0.5 text-micro font-bold uppercase ${qualitySeverityToneClass(f.severity)}`}>
                     {f.severity}
                   </span>
                   <span className="w-8 text-right text-label font-black tabular-nums text-gray-900">{f.open_count}</span>

@@ -2,9 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { Row } from './Row';
 import { PinThisPageButton } from './PinThisPageButton';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 const BookmarkIcon = ({ className = 'w-4 h-4' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -41,18 +43,18 @@ export function PinnedSection({ onNavigate }: PinnedSectionProps) {
               label={p.label}
               subLabel={<span className="font-mono">{p.href}</span>}
               trailing={
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    unpin(p.id);
-                  }}
-                  aria-label={`Unpin ${p.label}`}
-                  title="Unpin"
-                  className="invisible flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 group-hover:visible"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <HoverTooltip label="Unpin" asChild focusable={false}>
+                  <IconButton
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      unpin(p.id);
+                    }}
+                    ariaLabel={`Unpin ${p.label}`}
+                    className="invisible flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-700 group-hover:visible"
+                    icon={<X className="h-3.5 w-3.5" />}
+                  />
+                </HoverTooltip>
               }
               onClick={() => {
                 router.push(p.href);

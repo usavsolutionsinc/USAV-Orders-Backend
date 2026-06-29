@@ -12,7 +12,7 @@ export function SessionList({ added }: { added: AddedItem[] }) {
         </div>
       ))}
       {added.length > 0 && (
-        <div className="text-center text-[11px] text-white/40">{added.length} added this session</div>
+        <div className="text-center text-caption text-white/40">{added.length} added this session</div>
       )}
     </div>
   );

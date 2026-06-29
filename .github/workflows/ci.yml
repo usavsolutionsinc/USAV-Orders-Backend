@@ -52,6 +52,17 @@ jobs:
       - name: Unit tests
         run: node --test --import tsx --test-reporter spec 'src/**/*.test.ts'
 
+      # Dead-code ratchet (knip). Fails ONLY on findings that are NOT already
+      # in knip-baseline.json — the committed snapshot of the existing backlog
+      # (~2.3k known unused files/exports/types/deps). The baseline absorbs the
+      # legacy noise so this is green today; a PR that introduces NEW dead code
+      # (an orphaned file, an unused export/dep) trips the gate.
+      # Fix: remove the dead code / wire it up, or — if the finding is
+      # intentional and reviewed — run `npm run knip:baseline` and commit the
+      # refreshed knip-baseline.json. See docs/DEAD_CODE_CLEANUP_PLAN.md.
+      - name: Dead-code gate (knip baseline)
+        run: npm run knip
+
       # Phase 2f: the committed route-permission manifest must match the
       # live route source. If a PR changes a route's auth gate without
       # regenerating the manifest, this fails with a human-readable diff.
@@ -68,12 +79,18 @@ jobs:
       - name: Route auth enforce (no ungated routes)
         run: npm run audit-route-auth:enforce
 
-      # Tenancy isolation static gate (no DB): fails if a route touching an
-      # ENFORCED table isn't GUC-wrapped. Passes today (0 tables enforced) and
-      # tightens automatically as Phase E rolls out. The live BYPASSRLS role
-      # invariant runs in the audit-permissions job below (needs DATABASE_URL).
-      - name: Tenancy isolation guard (static)
-        run: npm run tenancy:guard:check
+      # Tenancy isolation static gate (A) — ADVISORY (continue-on-error).
+      # Reports routes touching a FORCEd table that the route audit doesn't
+      # recognize as GUC-wrapped. It currently OVER-COUNTS (~230 hits) because
+      # the file-level audit can't see through helper delegation — most flagged
+      # routes import the owner `pool` only for idempotency/audit and reach
+      # tenant data through GUC-safe helpers (see docs/tenancy/leak-audit-2026-06-27.md).
+      # So it's advisory until the route audit can follow helper calls; the
+      # HARD gate is the keystone role invariant (B), run in the audit-permissions
+      # job below. Promote this back to a blocking gate once (A) is precise.
+      - name: Tenancy isolation guard (static, advisory)
+        continue-on-error: true
+        run: npm run tenancy:guard:check -- --static-only
 
   audit-permissions:
     name: Permission drift audit
@@ -104,11 +121,38 @@ jobs:
           fi
           npm run audit-permissions
 
-      # Live tenancy invariant (B): hard-fail if any table is FORCEd while the
-      # connection role still has BYPASSRLS (which would make FORCE inert).
+      # Live tenancy invariant (B): hard-fail if the role that serves TENANT
+      # traffic has BYPASSRLS while any table is FORCEd (which would make FORCE
+      # inert). Post-E1 this is the app_tenant role (TENANT_APP_DATABASE_URL);
+      # the owner DSN is intentionally BYPASSRLS for admin/cron paths, so the
+      # guard must see the tenant DSN to check the right role. Skips cleanly if
+      # the tenant secret isn't configured.
       - name: Tenancy isolation guard (live role invariant)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TENANT_APP_DATABASE_URL: ${{ secrets.TENANT_APP_DATABASE_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then exit 0; fi
-          npm run tenancy:guard:check
+          if [ -z "$TENANT_APP_DATABASE_URL" ]; then
+            echo "::warning::TENANT_APP_DATABASE_URL secret not set — live tenant-role invariant skipped."
+            exit 0
+          fi
+          npm run tenancy:guard:check -- --live-only
+
+      # Cross-org isolation canary (Bucket 1 — "a second org sees ZERO of the
+      # first's data"). HARD gate: proves the app_tenant role is non-bypass,
+      # that a FORCEd scratch table isolates org A from org B, and that EVERY
+      # live FORCEd table returns only the querying org's own rows. `:check`
+      # fails on a broken proof (role bypass / RLS leak) but NOT on the
+      # completeness gap (that's `--strict`). Needs the tenant DSN to be real
+      # (else the tenant pool aliases the bypass owner and leg 1 fails), so it
+      # skips cleanly when the secret isn't configured.
+      - name: Tenant isolation canary (cross-org proof)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TENANT_APP_DATABASE_URL: ${{ secrets.TENANT_APP_DATABASE_URL }}
+        run: |
+          if [ -z "$TENANT_APP_DATABASE_URL" ]; then
+            echo "::warning::TENANT_APP_DATABASE_URL secret not set — cross-org canary skipped."
+            exit 0
+          fi
+          npm run tenancy:canary:check

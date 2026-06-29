@@ -19,6 +19,7 @@ import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentity
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { DeliveryStateIcon } from '@/components/station/ReceivingDeliveryStateIcon';
 import { IconWithTooltip } from '@/components/ui/IconWithTooltip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   dashboardOrderRowChipsClass,
   dashboardOrderRowShellClass,
@@ -136,9 +137,8 @@ export function ReceivingLineOrderRow({
                   who. Gated on data so incoming/expected rows stay clean.
                   Desktop-only — the mobile table isn't the history surface. */}
               {!isIncoming && (row.scanned_at || row.received_at || row.unboxed_at) ? (
-                <span
-                  className="hidden items-center gap-1.5 text-eyebrow font-semibold text-gray-400 sm:inline-flex"
-                  title={[
+                <HoverTooltip
+                  label={[
                     fmtShortTs(row.scanned_at ?? row.received_at)
                       ? `Scanned ${fmtShortTs(row.scanned_at ?? row.received_at)}${row.scanned_by_name ? ` by ${row.scanned_by_name}` : ''}`
                       : '',
@@ -146,14 +146,18 @@ export function ReceivingLineOrderRow({
                       ? `Unboxed ${fmtShortTs(row.unboxed_at)}${row.unboxed_by_name ? ` by ${row.unboxed_by_name}` : ''}`
                       : '',
                   ].filter(Boolean).join(' · ')}
+                  asChild
+                  focusable={false}
                 >
-                  {fmtShortTs(row.scanned_at ?? row.received_at) ? (
-                    <span>↓ {fmtShortTs(row.scanned_at ?? row.received_at)}{row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}</span>
-                  ) : null}
-                  {fmtShortTs(row.unboxed_at) ? (
-                    <span>📦 {fmtShortTs(row.unboxed_at)}{row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}</span>
-                  ) : null}
-                </span>
+                  <span className="hidden items-center gap-1.5 text-eyebrow font-semibold text-gray-400 sm:inline-flex">
+                    {fmtShortTs(row.scanned_at ?? row.received_at) ? (
+                      <span>↓ {fmtShortTs(row.scanned_at ?? row.received_at)}{row.scanned_by_name ? ` · ${row.scanned_by_name}` : ''}</span>
+                    ) : null}
+                    {fmtShortTs(row.unboxed_at) ? (
+                      <span>📦 {fmtShortTs(row.unboxed_at)}{row.unboxed_by_name ? ` · ${row.unboxed_by_name}` : ''}</span>
+                    ) : null}
+                  </span>
+                </HoverTooltip>
               ) : null}
               {/* Workflow status icon: shown in the active receive workspace,
                   hidden in History (received is implied; EXPECTED doesn't apply

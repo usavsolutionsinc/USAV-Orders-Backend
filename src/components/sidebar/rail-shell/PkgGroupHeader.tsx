@@ -18,7 +18,7 @@ export function PkgGroupHeader({ groupSize, isCollapsed, staggerReveal, onToggle
         onClick={onToggle}
         aria-expanded={!isCollapsed}
         aria-label={isCollapsed ? 'Expand package' : 'Collapse package'}
-        className="flex w-full items-center gap-1.5 rounded-t-md border-t border-x border-indigo-200/70 bg-indigo-50/80 pl-3 pr-2 py-1 text-left text-indigo-700 transition-colors hover:bg-indigo-100/80"
+        className="ds-raw-button flex w-full items-center gap-1.5 rounded-t-md border-t border-x border-indigo-200/70 bg-indigo-50/80 pl-3 pr-2 py-1 text-left text-indigo-700 transition-colors hover:bg-indigo-100/80"
       >
         <motion.span animate={{ rotate: isCollapsed ? -90 : 0 }} transition={{ duration: 0.18, ease: motionBezier.easeOut }} className="inline-flex">
           <ChevronDown className="h-3 w-3" />

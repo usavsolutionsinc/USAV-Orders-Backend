@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pencil } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { FolderNode } from './manuals-tree';
 import { FolderIcon, ChevronRightTiny, HighlightedText } from './LibraryPrimitives';
 
@@ -55,6 +56,7 @@ export function FolderButton({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* ds-raw-button — full-card overlay click target */}
       <button type="button" onClick={onEnter} className="absolute inset-0 rounded-2xl" aria-label={`Open folder ${node.name}`} />
       <div className="pointer-events-none relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-500 ring-1 ring-inset ring-indigo-100 group-hover:from-indigo-100 group-hover:to-violet-100 group-hover:text-indigo-600">
         <FolderIcon className="h-4 w-4" />
@@ -73,15 +75,17 @@ export function FolderButton({
           {subFileCount} {subFileCount === 1 ? 'manual' : 'manuals'}
         </p>
       </div>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onRename(); }}
-        className="relative inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
-        title="Rename or move folder"
-        aria-label={`Rename or move ${node.name}`}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
+      <HoverTooltip label="Rename or move folder" asChild>
+        {/* ds-raw-button — group-hover reveal pencil on card tile */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRename(); }}
+          className="relative inline-flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 opacity-0 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 focus:opacity-100"
+          aria-label={`Rename or move ${node.name}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      </HoverTooltip>
       <ChevronRightTiny className="pointer-events-none relative h-3.5 w-3.5 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-indigo-400" />
     </div>
   );

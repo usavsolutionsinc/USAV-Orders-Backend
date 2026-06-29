@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Loader2, MessageSquare } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { ClaimType } from '@/lib/zendesk-claim-template';
 
 const sellerMessageKey = (receivingId: number, lineId: number | null) =>
@@ -107,16 +109,16 @@ export function SellerMessageChip({
 
   return (
     <>
-      <button
-        ref={anchorRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label="Seller message draft"
-        title="Seller message draft"
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full border border-blue-200 bg-blue-50 text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
-      >
-        <MessageSquare className="h-3.5 w-3.5" />
-      </button>
+      <HoverTooltip label="Seller message draft" asChild>
+        <IconButton
+          ref={anchorRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          ariaLabel="Seller message draft"
+          icon={<MessageSquare className="h-3.5 w-3.5 text-blue-600" />}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-full border border-blue-200 bg-blue-50 shadow-sm hover:border-blue-300 hover:bg-blue-100"
+        />
+      </HoverTooltip>
       <AnchoredLayer
         open={open}
         onClose={() => setOpen(false)}
@@ -292,16 +294,12 @@ function SellerMessagePanel({
           <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold text-gray-800">Seller message</div>
-            <div className="truncate text-[10px] text-gray-400">Plain text — no links (marketplace TOS)</div>
+            <div className="truncate text-micro text-gray-400">Plain text — no links (marketplace TOS)</div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-100"
-        >
+        <Button variant="ghost" size="sm" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
@@ -310,7 +308,7 @@ function SellerMessagePanel({
             <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
           </div>
         ) : isError ? (
-          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-600">
+          <p className="rounded-md bg-rose-50 px-2 py-1.5 text-caption text-rose-600">
             {error instanceof Error ? error.message : 'Could not load message'}
           </p>
         ) : !data && !draft.trim() ? (
@@ -318,15 +316,15 @@ function SellerMessagePanel({
             <p className="max-w-[260px] text-sm text-gray-400">
               No seller message yet for this ticket.
             </p>
-            <button
-              type="button"
-              disabled={generate.isPending}
+            <Button
+              variant="primary"
+              size="sm"
+              loading={generate.isPending}
               onClick={() => generate.mutate()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-[11px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+              icon={<MessageSquare className="h-3.5 w-3.5" />}
             >
-              {generate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
               AI generate
-            </button>
+            </Button>
           </div>
         ) : (
           <textarea
@@ -340,24 +338,24 @@ function SellerMessagePanel({
       </div>
 
       <footer className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           disabled={!draft.trim()}
           onClick={() => void handleCopy()}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+          icon={<Copy className="h-3.5 w-3.5" />}
         >
-          <Copy className="h-3.5 w-3.5" />
           Copy
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
+          loading={save.isPending}
           disabled={save.isPending || generate.isPending || !dirty || !draft.trim()}
           onClick={() => save.mutate(draft.trim())}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Save
-        </button>
+        </Button>
       </footer>
     </div>
   );

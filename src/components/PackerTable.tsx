@@ -73,6 +73,7 @@ export function PackerTable({ packedBy }: PackerTableProps) {
       emptyMessage="No packer records found"
       scrollRef={scrollRef}
       renderRow={renderRow}
+      tableId="packer"
     />
   );
 }

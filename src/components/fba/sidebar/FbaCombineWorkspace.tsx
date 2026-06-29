@@ -1,6 +1,8 @@
 'use client';
 
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { FbaPairedReviewPanel } from '@/components/fba/sidebar/FbaPairedReviewPanel';
 import type { FbaBoardItem } from '@/components/fba/FbaBoardTable';
 import type { StationTheme } from '@/utils/staff-colors';
@@ -36,15 +38,14 @@ export function FbaCombineWorkspace({
     <div className="flex h-full min-h-0 flex-col bg-white">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-100 px-4 py-2.5">
         <p className="text-micro font-black uppercase tracking-widest text-gray-500">Combine</p>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          aria-label="Close — back to board"
-          title="Back to board"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="Back to board" asChild>
+          <IconButton
+            icon={<X className="h-4 w-4" />}
+            onClick={handleClose}
+            className="flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+            ariaLabel="Close — back to board"
+          />
+        </HoverTooltip>
       </header>
 
       <div className="min-h-0 flex-1">

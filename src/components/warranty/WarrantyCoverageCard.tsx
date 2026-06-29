@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { AlertCircle, Clock, Loader2, ShieldCheck } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { useWarrantyCoverage, useWarrantyUrlState } from '@/hooks/useWarrantyClaims';
 import { WarrantyLogClaimDialog } from '@/components/warranty/WarrantyLogClaimDialog';
 import { WARRANTY_STATUS_LABEL } from '@/lib/warranty/types';
 import { formatDateTimePST } from '@/utils/date';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Read-only warranty-coverage banner for the "on the phone with a customer"
@@ -38,13 +40,14 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
         <p className="text-sm text-gray-500">
           No shipped order matches “<span className="font-medium text-gray-700">{q}</span>”.
         </p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setLogOpen(true)}
-          className="shrink-0 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
+          className="shrink-0 text-xs"
         >
           Log claim manually
-        </button>
+        </Button>
         <WarrantyLogClaimDialog open={logOpen} onClose={() => setLogOpen(false)} onCreated={(id) => openClaim(id)} />
       </div>
     );
@@ -86,23 +89,25 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={cn('text-sm font-semibold', tone.text)}>{headline}</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-white')}>
+              <span className={cn('rounded-full px-2 py-0.5 text-caption font-semibold tabular-nums ring-1 ring-inset', tone.ring, tone.text, 'bg-white')}>
                 {sub}
               </span>
               {provisional && (
-                <span
-                  className="rounded border border-dashed border-amber-300 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-700"
-                  title="Provisional — based on packed date + delivery estimate; confirms when the carrier delivered date lands."
+                <HoverTooltip
+                  label="Provisional — based on packed date + delivery estimate; confirms when the carrier delivered date lands."
+                  asChild
                 >
-                  Est.
-                </span>
+                  <span className="rounded border border-dashed border-amber-300 px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide text-amber-700">
+                    Est.
+                  </span>
+                </HoverTooltip>
               )}
               {isFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-300" />}
             </div>
 
             <p className="mt-1 truncate text-[15px] font-medium text-gray-900">{title}</p>
 
-            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] sm:grid-cols-3">
+            <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-label sm:grid-cols-3">
               <Fact label="Order #" value={data.sourceOrderId} mono />
               <Fact label="Customer" value={data.customerName} />
               <Fact label={provisional ? 'Est. delivered' : 'Delivered'} value={fmt(data.deliveredAt ?? data.warrantyStartsAt)} />
@@ -114,25 +119,27 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {data.existingClaim ? (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => openClaim(data.existingClaim!.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                    className="text-xs"
                   >
                     View claim {data.existingClaim.claimNumber}
-                  </button>
-                  <span className="text-[11px] text-gray-400">
+                  </Button>
+                  <span className="text-caption text-gray-400">
                     Already logged · {WARRANTY_STATUS_LABEL[data.existingClaim.status]}
                   </span>
                 </>
               ) : (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => setLogOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                  className="text-xs"
                 >
                   + Log claim
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -157,8 +164,8 @@ export function WarrantyCoverageCard({ query }: { query: string }) {
 function Fact({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-medium uppercase tracking-wide text-gray-400">{label}</dt>
-      <dd className={cn('truncate text-gray-700', mono && 'font-mono text-[11px]')}>
+      <dt className="text-micro font-medium uppercase tracking-wide text-gray-400">{label}</dt>
+      <dd className={cn('truncate text-gray-700', mono && 'font-mono text-caption')}>
         {value || <span className="text-gray-300">—</span>}
       </dd>
     </div>

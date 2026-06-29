@@ -1,4 +1,5 @@
-import { AlertTriangle, Check, Loader2, Search, X } from '@/components/Icons';
+import { AlertTriangle, Check, Search, X } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import type { MissingStatus, ReconcileItem } from './po-mailbox-types';
 
 export function ScanControls({
@@ -32,15 +33,16 @@ export function ScanControls({
           className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </label>
-      <button
+      <Button
         type="button"
+        variant="primary"
+        size="sm"
+        icon={<Search />}
+        loading={loading}
         onClick={onRun}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
         {actionLabel}
-      </button>
+      </Button>
     </div>
   );
 }

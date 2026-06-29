@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 /**
  * Offline fallback served by the PWA service worker when a navigation
@@ -50,22 +51,17 @@ export default function OfflinePage() {
             : 'The page you tapped isn’t cached yet. Stay in this view and we’ll retry the moment you reconnect.'}
         </p>
         <div className="flex justify-center gap-2 pt-2">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 active:bg-slate-50"
-          >
+          <Button variant="secondary" onClick={() => router.back()}>
             Back
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="brand"
             onClick={() => {
               if (typeof window !== 'undefined') window.location.reload();
             }}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-bold text-white active:bg-slate-800"
           >
             Retry
-          </button>
+          </Button>
         </div>
         <p className="pt-4 text-micro font-bold uppercase tracking-widest text-slate-400">
           {online ? 'online' : 'offline'}

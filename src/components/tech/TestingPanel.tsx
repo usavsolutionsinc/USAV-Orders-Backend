@@ -5,15 +5,14 @@ import { Printer } from '@/components/Icons';
 import { deriveColorFromTitle, resolveTestingLineTitle } from '@/lib/print/printProductLabel';
 import { FloatingButton } from '@/design-system/primitives';
 import { LineEditToolbar } from '@/components/receiving/workspace/line-edit/LineEditToolbar';
-import { LineNotesCard } from '@/components/receiving/workspace/line-edit/LineNotesCard';
+import { LineTestingTabbedCard, TESTING_OPEN_SKU_PAIRING_EVENT } from '@/components/receiving/workspace/line-edit/LineTestingTabbedCard';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import type { ProductLabelDraft } from '@/components/labels/ProductLabelEditPopover';
-import { SkuTestingPanel } from '@/components/tech/SkuTestingPanel';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import { useTestingLineController } from '@/components/tech/hooks/useTestingLineController';
 import { useTestingPrimaryAction } from './testing-panel/useTestingPrimaryAction';
 import { TestingCartonHeader } from './testing-panel/TestingCartonHeader';
-import { TestingActiveRows } from './testing-panel/TestingActiveRows';
+import { TestingPoUnboxingSection } from './testing-panel/TestingPoUnboxingSection';
 import { TestingPanelModals } from './testing-panel/TestingPanelModals';
 
 /**
@@ -43,10 +42,12 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
           receivingId={row.receiving_id ?? null}
           busy={c.saving || c.isMutating}
           copyingAll={c.copyingAll}
-          pairing={c.pairOpen}
           handlers={{
             audit: () => c.setAuditOpen(true),
-            pair: row.sku_catalog_id != null ? () => c.setPairOpen(true) : undefined,
+            pair:
+              row.sku_catalog_id != null
+                ? () => window.dispatchEvent(new CustomEvent(TESTING_OPEN_SKU_PAIRING_EVENT))
+                : undefined,
             copy: () => void c.handleCopyAll(),
           }}
         />
@@ -55,24 +56,20 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
           <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
             <TestingCartonHeader c={c} row={row} staffId={staffId} />
 
-            <TestingActiveRows c={c} row={row} />
+            <TestingPoUnboxingSection c={c} row={row} staffId={staffId} />
 
-            {row.sku ? (
-              <SkuTestingPanel
-                receivingLineId={row.id}
-                sku={row.sku}
-                title={productTitle}
-                serialUnitId={c.activeSerial?.id ?? null}
-              />
-            ) : null}
-
-            <LineNotesCard
-              value={c.notes}
+            <LineTestingTabbedCard
+              notes={c.notes}
               onChange={c.setNotes}
               onBlur={() => {
                 const next = c.notes.trim();
                 if (next !== (row.notes || '')) c.patch({ notes: next || null });
               }}
+              skuCatalogId={row.sku_catalog_id ?? null}
+              headerTitle={productTitle}
+              receivingLineId={row.id}
+              sku={row.sku}
+              serialUnitId={c.activeSerial?.id ?? null}
             />
 
             {c.previewPayload && row.sku ? (
@@ -113,7 +110,7 @@ export function TestingPanel({ row, staffId }: { row: ReceivingLineRow; staffId:
         />
       </div>
 
-      <TestingPanelModals c={c} row={row} productTitle={productTitle} />
+      <TestingPanelModals c={c} row={row} />
     </>
   );
 }

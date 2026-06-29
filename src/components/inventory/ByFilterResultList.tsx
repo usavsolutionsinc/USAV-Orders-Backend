@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import type { UnitListResponse, UnitListRow } from './types';
 import { inventoryStatusBadgeClass } from './status-classes';
 
@@ -136,15 +137,15 @@ export function ByFilterResultList({ states, conditions }: ByFilterResultListPro
 
             {hasMore ? (
                 <div className="flex justify-center py-4">
-                    <button
-                        type="button"
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={loadingMore}
                         onClick={() => fetchPage(rows.length, true)}
-                        disabled={loadingMore}
-                        className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+                        className="disabled:cursor-wait"
                     >
-                        {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                         Load more
-                    </button>
+                    </Button>
                 </div>
             ) : rows.length > 0 ? (
                 <div className="py-4 text-center text-xs text-gray-400">End of results</div>

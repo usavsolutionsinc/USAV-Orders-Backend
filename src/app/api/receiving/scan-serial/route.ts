@@ -227,7 +227,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           sku: skuForEnrichment,
           zoho_item_id: serialResult.serial_unit.zoho_item_id,
           zoho_purchaseorder_id: null,
-        }).catch((err) => {
+        }, ctx.organizationId).catch((err) => {
           console.warn('scan-serial: enrichSerialUnitCatalog failed', err);
         });
       }

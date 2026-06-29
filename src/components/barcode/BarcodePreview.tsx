@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Check } from '../Icons';
+import { Button } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 import { Gs1DataMatrix, type Gs1DataMatrixSymbology } from '@/components/barcode/Gs1DataMatrix';
 export type BarcodeDensity = 'comfortable' | 'compact';
 
@@ -48,10 +49,6 @@ export function BarcodePreview({
 }: BarcodePreviewProps) {
     const isPrintMode = mode === 'print' || mode === 'reprint';
     const comfy = density === 'comfortable';
-
-    const accentClass = mode === 'reprint'
-        ? 'bg-violet-700 hover:bg-violet-800'
-        : 'bg-blue-600 hover:bg-blue-700';
 
     const ctaLabel = mode === 'print'
         ? 'Save & Print Label'
@@ -128,7 +125,7 @@ export function BarcodePreview({
             <div className="border-t border-gray-200">
                 <button
                     onClick={onToggleNotes}
-                    className="w-full px-5 py-3 text-left text-eyebrow font-black uppercase tracking-widest text-gray-500 hover:text-gray-600 transition-colors flex items-center justify-between"
+                    className="ds-raw-button w-full px-5 py-3 text-left text-eyebrow font-black uppercase tracking-widest text-gray-500 hover:text-gray-600 transition-colors flex items-center justify-between"
                 >
                     <span>Notes {notes ? '(1)' : ''}</span>
                     <span>{showNotes ? '−' : '+'}</span>
@@ -144,10 +141,15 @@ export function BarcodePreview({
             </div>
 
             {/* CTA */}
-            <button
+            <Button
+                variant="primary"
                 onClick={onPrint}
                 disabled={isPosting}
-                className={`w-full ${comfy ? 'py-5' : 'py-4'} ${accentClass} text-white ${sectionLabel} transition-colors disabled:opacity-40`}
+                className={cn(
+                    'w-full justify-center rounded-none h-auto',
+                    comfy ? 'py-5' : 'py-4',
+                    mode === 'reprint' && 'bg-violet-700 hover:bg-violet-800',
+                )}
             >
                 {isPosting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -163,7 +165,7 @@ export function BarcodePreview({
                         )}
                     </span>
                 )}
-            </button>
+            </Button>
         </div>
     );
 }

@@ -40,7 +40,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.view' });
+}, { permission: 'sourcing.view', feature: 'sourcing' });
 
 /**
  * POST /api/sourcing/alerts — Manually open a demand row ("Source this").
@@ -106,7 +106,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.manage' });
+}, { permission: 'sourcing.manage', feature: 'sourcing' });
 
 /**
  * PATCH /api/sourcing/alerts — Resolve / dismiss / progress an alert.
@@ -156,4 +156,4 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.manage' });
+}, { permission: 'sourcing.manage', feature: 'sourcing' });

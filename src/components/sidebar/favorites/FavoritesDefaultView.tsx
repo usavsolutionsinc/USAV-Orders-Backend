@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { AlertTriangle, Check, ChevronRight, Loader2, Pencil, Plus, Trash2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { FavoriteForm } from './FavoriteForm';
 import type { FavoritesWorkspaceController } from './useFavoritesWorkspace';
@@ -16,6 +18,7 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
         {hideHeading ? (
           <div />
         ) : (
+          // ds-raw-button: multi-line text-left collapse header (animated chevron + title + description) — not a Button shape
           <button type="button" onClick={() => f.setIsListOpen((prev) => !prev)} className="group flex min-w-0 flex-1 items-center gap-1.5 text-left" aria-expanded={f.isListOpen}>
             <motion.span
               animate={{ rotate: f.isListOpen ? 90 : 0 }}
@@ -34,30 +37,28 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
           </button>
         )}
         <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => f.setIsManageMode((prev) => !prev)}
-            className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center border transition-colors ${
-              f.isManageMode ? 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-600'
-            }`}
-            aria-label={f.isManageMode ? 'Done managing' : 'Manage favorites'}
-            title={f.isManageMode ? 'Done managing' : 'Manage favorites'}
-          >
-            {f.isManageMode ? <X className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} /> : <Pencil className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              f.resetDraft();
-              f.setShowForm((prev) => (f.editingFavoriteId === null ? !prev : true));
-              f.setIsListOpen(true);
-            }}
-            className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center bg-blue-600 text-white transition-colors hover:bg-blue-700`}
-            aria-label="Add favorite"
-            title="Add favorite"
-          >
-            <Plus className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />
-          </button>
+          <HoverTooltip label={f.isManageMode ? 'Done managing' : 'Manage favorites'} asChild>
+            <IconButton
+              onClick={() => f.setIsManageMode((prev) => !prev)}
+              className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center border transition-colors ${
+                f.isManageMode ? 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-600'
+              }`}
+              ariaLabel={f.isManageMode ? 'Done managing' : 'Manage favorites'}
+              icon={f.isManageMode ? <X className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} /> : <Pencil className={inlineRows ? 'h-3 w-3' : 'h-4 w-4'} />}
+            />
+          </HoverTooltip>
+          <HoverTooltip label="Add favorite" asChild>
+            <IconButton
+              onClick={() => {
+                f.resetDraft();
+                f.setShowForm((prev) => (f.editingFavoriteId === null ? !prev : true));
+                f.setIsListOpen(true);
+              }}
+              className={`inline-flex ${inlineRows ? 'h-7 w-7 rounded-lg' : 'h-10 w-10 rounded-2xl'} items-center justify-center bg-blue-600 text-white transition-colors hover:bg-blue-700`}
+              ariaLabel="Add favorite"
+              icon={<Plus className={`${inlineRows ? 'h-3 w-3' : 'h-4 w-4'} text-white`} />}
+            />
+          </HoverTooltip>
         </div>
       </div>
 
@@ -119,46 +120,43 @@ export function FavoritesDefaultView({ f }: { f: FavoritesWorkspaceController })
                               {!inlineRows && favorite.productTitle && <p className="mt-1 text-caption font-semibold text-gray-500">{favorite.productTitle}</p>}
                             </div>
                             <div className={`${inlineRows ? 'flex items-center gap-1 pt-0.5' : 'flex items-center gap-2'}`}>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (f.editingFavoriteId === favorite.id && f.showForm) f.resetDraft();
-                                  else f.openEditForm(favorite);
-                                }}
-                                className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border transition-colors ${
-                                  f.editingFavoriteId === favorite.id && f.showForm
-                                    ? 'border-blue-200 bg-blue-50 text-blue-600'
-                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
-                                }`}
-                                aria-label={`Edit ${favorite.label}`}
-                                title="Edit favorite"
-                              >
-                                <Pencil className={subIconSizeClass} />
-                              </button>
+                              <HoverTooltip label="Edit favorite" asChild>
+                                <IconButton
+                                  onClick={() => {
+                                    if (f.editingFavoriteId === favorite.id && f.showForm) f.resetDraft();
+                                    else f.openEditForm(favorite);
+                                  }}
+                                  className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border transition-colors ${
+                                    f.editingFavoriteId === favorite.id && f.showForm
+                                      ? 'border-blue-200 bg-blue-50 text-blue-600'
+                                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-600'
+                                  }`}
+                                  ariaLabel={`Edit ${favorite.label}`}
+                                  icon={<Pencil className={`${subIconSizeClass} ${f.editingFavoriteId === favorite.id && f.showForm ? 'text-blue-600' : ''}`} />}
+                                />
+                              </HoverTooltip>
 
                               {f.isManageMode ? (
-                                <button
-                                  type="button"
-                                  onClick={() => void f.handleDelete(favorite.id)}
-                                  className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border border-red-200 bg-red-50 text-red-500 transition-colors hover:bg-red-100 hover:text-red-700`}
-                                  aria-label={`Delete ${favorite.label}`}
-                                  title="Delete favorite"
-                                >
-                                  <Trash2 className={subIconSizeClass} />
-                                </button>
+                                <HoverTooltip label="Delete favorite" asChild>
+                                  <IconButton
+                                    onClick={() => void f.handleDelete(favorite.id)}
+                                    className={`inline-flex ${subButtonSizeClass} shrink-0 items-center justify-center border border-red-200 bg-red-50 transition-colors hover:bg-red-100 hover:text-red-700`}
+                                    ariaLabel={`Delete ${favorite.label}`}
+                                    icon={<Trash2 className={`${subIconSizeClass} text-red-500`} />}
+                                  />
+                                </HoverTooltip>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    onUseFavorite(favorite);
-                                    onAddFavorite?.(favorite);
-                                  }}
-                                  className={`inline-flex ${addButtonSizeClass} shrink-0 items-center justify-center transition-colors ${addButtonClassName}`}
-                                  aria-label={useLabel}
-                                  title={useLabel}
-                                >
-                                  {isAdded ? <Check className={addIconSizeClass} /> : <Plus className={addIconSizeClass} />}
-                                </button>
+                                <HoverTooltip label={useLabel} asChild>
+                                  <IconButton
+                                    onClick={() => {
+                                      onUseFavorite(favorite);
+                                      onAddFavorite?.(favorite);
+                                    }}
+                                    className={`inline-flex ${addButtonSizeClass} shrink-0 items-center justify-center transition-colors ${addButtonClassName}`}
+                                    ariaLabel={useLabel}
+                                    icon={isAdded ? <Check className={`${addIconSizeClass} text-white`} /> : <Plus className={`${addIconSizeClass} text-white`} />}
+                                  />
+                                </HoverTooltip>
                               )}
                             </div>
                           </div>

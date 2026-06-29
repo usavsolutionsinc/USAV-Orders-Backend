@@ -43,7 +43,7 @@ export function ResultRow({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex w-full items-center gap-2.5 rounded-lg border border-gray-200 px-2.5 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:opacity-60"
+      className="ds-raw-button flex w-full items-center gap-2.5 rounded-lg border border-gray-200 px-2.5 py-2 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 disabled:cursor-not-allowed disabled:opacity-60"
     >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element

@@ -10,7 +10,7 @@
  * Pure data only — no JSX.
  */
 
-import { Activity, BarChart3, Sparkles, History } from '@/components/Icons';
+import { Activity, BarChart3, Sparkles, History, Barcode, MapPin, PackageCheck } from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import type { JourneyDimension } from '@/lib/timeline/journey';
 
@@ -72,9 +72,9 @@ export const OPERATIONS_MODE_SCOPED_PARAMS = [
 
 /** Journey grouping dimension — one band per order / serial / tracking number. */
 export const JOURNEY_DIMENSION_ITEMS: HorizontalSliderItem[] = [
-  { id: 'order', label: 'Order' },
-  { id: 'serial', label: 'Serial' },
-  { id: 'tracking', label: 'Tracking' },
+  { id: 'order', label: 'Order', icon: PackageCheck },
+  { id: 'serial', label: 'Serial', icon: Barcode },
+  { id: 'tracking', label: 'Tracking', icon: MapPin },
 ];
 
 export function parseJourneyDimension(raw: string | null | undefined): JourneyDimension {

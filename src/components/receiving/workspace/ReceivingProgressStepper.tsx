@@ -85,8 +85,8 @@ export function LinearWorkflowStepper({
   const connectorPt = compact ? 'pt-2' : 'pt-2.5';
   const stepGap = compact ? 'gap-1' : 'gap-1.5';
   const labelClass = compact
-    ? 'text-[9px] font-bold uppercase leading-none tracking-[0.1em]'
-    : 'text-[10px] font-black uppercase leading-none tracking-[0.12em]';
+    ? 'text-eyebrow font-bold uppercase leading-none tracking-[0.1em]'
+    : 'text-micro font-black uppercase leading-none tracking-[0.12em]';
 
   return (
     <nav aria-label={ariaLabel} className={className}>
@@ -128,7 +128,7 @@ export function LinearWorkflowStepper({
                   <button
                     type="button"
                     onClick={() => onStepClick(step.key)}
-                    className={`flex flex-col items-center ${stepGap}`}
+                    className={`ds-raw-button flex flex-col items-center ${stepGap}`}
                   >
                     {stepContent}
                   </button>
@@ -227,7 +227,7 @@ function StepDot({
   index: number;
   compact?: boolean;
 }) {
-  const sizeClass = compact ? 'h-4 w-4 text-[9px]' : 'h-5 w-5 text-[10px]';
+  const sizeClass = compact ? 'h-4 w-4 text-eyebrow' : 'h-5 w-5 text-micro';
   const checkClass = compact ? 'h-2.5 w-2.5' : 'h-3 w-3';
   if (state === 'done') {
     return (

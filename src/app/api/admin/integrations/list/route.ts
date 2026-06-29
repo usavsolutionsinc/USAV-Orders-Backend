@@ -11,7 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 interface Row {
   provider: string;
@@ -24,7 +24,8 @@ interface Row {
 }
 
 export const GET = withAuth(async (_req, ctx) => {
-  const r = await pool.query<Row>(
+  const r = await tenantQuery<Row>(
+    ctx.organizationId,
     `SELECT provider, status, display_label, last_used_at, last_error, scope, updated_at
        FROM organization_integrations
       WHERE organization_id = $1

@@ -24,7 +24,6 @@ export const SIDEBAR_TITLES: Record<string, string> = {
   outbound: 'Outbound',
   support: 'Support',
   'ai-chat': 'AI Chat',
-  'previous-quarters': 'Quarters',
   admin: 'Admin',
   'audit-log': 'Audit Log',
   settings: 'Settings',

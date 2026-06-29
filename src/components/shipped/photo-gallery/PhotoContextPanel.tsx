@@ -79,7 +79,7 @@ function sourceHref(source: SourceDescriptor, meta: PhotoMeta): string | null {
 function Field({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-400">
+      <p className="flex items-center gap-1.5 text-micro font-black uppercase tracking-widest text-gray-400">
         <span className="text-gray-500">{icon}</span>
         {label}
       </p>

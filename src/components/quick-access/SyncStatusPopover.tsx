@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Loader2, RefreshCw, Play } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { useCronRunsSummary } from '@/hooks/useCronRuns';
 import { cronRunsKeys, type JobHealth, type CronJobStatus } from '@/lib/queries/cron-runs-queries';
 
@@ -109,20 +111,21 @@ function JobRow({ job, running, onRun }: { job: CronJobStatus; running: boolean;
           {last?.durationMs != null ? ` · ${(last.durationMs / 1000).toFixed(1)}s` : ''}
         </div>
         {job.health === 'failed' && last?.error ? (
+          // ds-allow-title: truncation-only native title on a non-interactive element
           <div className="mt-0.5 truncate text-mini text-rose-600" title={last.error}>
             {last.error}
           </div>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={onRun}
-        disabled={running}
-        title="Run now"
-        className="shrink-0 rounded-md p-1.5 text-gray-400 opacity-0 transition hover:bg-gray-100 hover:text-gray-700 group-hover:opacity-100 disabled:opacity-100"
-      >
-        {running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-      </button>
+      <HoverTooltip label="Run now" asChild>
+        <IconButton
+          onClick={onRun}
+          disabled={running}
+          ariaLabel="Run now"
+          className="shrink-0 rounded-md p-1.5 opacity-0 hover:bg-gray-100 group-hover:opacity-100 disabled:opacity-100"
+          icon={running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+        />
+      </HoverTooltip>
     </li>
   );
 }

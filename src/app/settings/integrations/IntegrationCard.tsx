@@ -12,7 +12,9 @@
 import { useCallback, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { Button } from '@/design-system/primitives/Button';
+import { IconButton } from '@/design-system/primitives/IconButton';
 import { RefreshCw, Trash2, ExternalLink, Link2 } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import type { ProviderDef, ProviderState, AccountSummary } from './registry';
 import { monogram, managePermission } from './registry';
@@ -263,12 +265,14 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
           <div className="flex items-center gap-2">
             <span className="truncate text-[14px] font-semibold text-gray-900">{def.label}</span>
             {def.docsUrl && (
-              <a href={def.docsUrl} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-gray-500" title="Provider docs">
-                <ExternalLink className="h-3 w-3" />
-              </a>
+              <HoverTooltip label="Provider docs" asChild>
+                <a href={def.docsUrl} target="_blank" rel="noreferrer" aria-label="Provider docs" className="text-gray-300 hover:text-gray-500">
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </HoverTooltip>
             )}
           </div>
-          <p className="mt-0.5 text-[12px] leading-snug text-gray-500">{def.description}</p>
+          <p className="mt-0.5 text-label leading-snug text-gray-500">{def.description}</p>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full ${pill.bg} px-2 py-1 text-[10.5px] font-medium ${pill.text}`}>
           <span className={`h-1.5 w-1.5 rounded-full ${pill.dot}`} />
@@ -282,22 +286,41 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
           {state.accounts.map((acct, i) => (
             <div key={acct.id ?? `${acct.label}-${i}`} className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ACCOUNT_DOT[acct.status]}`} />
-              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-gray-800">{acct.label}</span>
-              {acct.detail && <span className="shrink-0 text-[11px] text-gray-400">{acct.detail}</span>}
+              <span className="min-w-0 flex-1 truncate text-label font-medium text-gray-800">{acct.label}</span>
+              {acct.detail && <span className="shrink-0 text-caption text-gray-400">{acct.detail}</span>}
               {canManage && def.connect === 'amazon' && acct.id != null && (
-                <button type="button" onClick={() => amazonDisconnect(acct.id!, acct.label)} disabled={busy} className="shrink-0 text-gray-300 hover:text-red-600 disabled:opacity-50" title="Disconnect account">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <HoverTooltip label="Disconnect account" asChild>
+                  <IconButton
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                    onClick={() => amazonDisconnect(acct.id!, acct.label)}
+                    disabled={busy}
+                    ariaLabel="Disconnect account"
+                    className="shrink-0 hover:text-red-600"
+                  />
+                </HoverTooltip>
               )}
               {canManage && def.connect === 'ebay' && (
-                <button type="button" onClick={() => ebayRefresh(acct.label)} disabled={busy} className="shrink-0 text-gray-300 hover:text-blue-600 disabled:opacity-50" title="Refresh token">
-                  <RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
-                </button>
+                <HoverTooltip label="Refresh token" asChild>
+                  <IconButton
+                    icon={<RefreshCw className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />}
+                    onClick={() => ebayRefresh(acct.label)}
+                    disabled={busy}
+                    ariaLabel="Refresh token"
+                    tone="accent"
+                    className="shrink-0"
+                  />
+                </HoverTooltip>
               )}
               {canManage && def.connect === 'ebay' && acct.id != null && (
-                <button type="button" onClick={() => ebayDisconnect(acct.id!, acct.label)} disabled={busy} className="shrink-0 text-gray-300 hover:text-red-600 disabled:opacity-50" title="Disconnect account">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <HoverTooltip label="Disconnect account" asChild>
+                  <IconButton
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                    onClick={() => ebayDisconnect(acct.id!, acct.label)}
+                    disabled={busy}
+                    ariaLabel="Disconnect account"
+                    className="shrink-0 hover:text-red-600"
+                  />
+                </HoverTooltip>
               )}
             </div>
           ))}
@@ -305,10 +328,10 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
       )}
 
       {state.displayLabel && state.accounts.length === 0 && (
-        <div className="mt-2 text-[12px] text-gray-600">{state.displayLabel}</div>
+        <div className="mt-2 text-label text-gray-600">{state.displayLabel}</div>
       )}
       {state.lastError && (
-        <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">{state.lastError}</div>
+        <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-caption text-red-700">{state.lastError}</div>
       )}
 
       {/* Actions — pinned to the bottom so buttons align across cards in a row */}
@@ -354,9 +377,9 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
             <span className="flex-1" />
 
             {connected && (def.connect === 'vault' || def.connect === 'oauth' || def.connect === 'nango') && (
-              <button type="button" onClick={vaultDisconnect} disabled={busy} className="text-[11.5px] text-gray-500 transition-colors hover:text-red-600 disabled:opacity-50">
+              <Button variant="ghost" size="sm" onClick={vaultDisconnect} disabled={busy} className="text-gray-500 hover:text-red-600">
                 Disconnect
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -368,17 +391,18 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
       {/* Generic vault credential sheet */}
       {vaultOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
+          {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
           <button type="button" aria-label="Close" onClick={() => setVaultOpen(false)} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
           <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
             <h2 className="text-[16px] font-semibold text-gray-900">{def.label} credentials</h2>
-            <p className="mt-1 text-[12px] text-gray-500">Paste the provider payload JSON. Stored encrypted in the workspace vault.</p>
+            <p className="mt-1 text-label text-gray-500">Paste the provider payload JSON. Stored encrypted in the workspace vault.</p>
             <textarea
-              className="mt-3 block h-48 w-full rounded-xl border border-gray-200 bg-white p-3 font-mono text-[12px] text-gray-900 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="mt-3 block h-48 w-full rounded-xl border border-gray-200 bg-white p-3 font-mono text-label text-gray-900 shadow-inner focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
               value={payload}
               onChange={(e) => setPayload(e.target.value)}
               spellCheck={false}
             />
-            {formError && <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-[11px] font-medium text-red-700">{formError}</div>}
+            {formError && <div className="mt-2 rounded-md bg-red-50 px-2 py-1 text-caption font-medium text-red-700">{formError}</div>}
             <div className="mt-4 flex items-center justify-end gap-2">
               <Button variant="secondary" size="sm" onClick={() => setVaultOpen(false)}>Cancel</Button>
               <Button variant="primary" size="sm" loading={busy} onClick={vaultSave}>Save</Button>

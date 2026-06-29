@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
+import { OrdersFirstRunEmptyState } from '@/components/dashboard/OrdersFirstRunEmptyState';
 import { AddTrackingNavProvider } from '@/components/outbound/labels/add-tracking-context';
 import { awaitingLabelsQuery } from '@/lib/queries/outbound-queries';
 import type { OutboundSort } from '@/components/outbound/outbound-sidebar-shared';
@@ -56,6 +57,12 @@ export function LabelsQueueTable({
         searchValue={searchQuery}
         onClearSearch={() => undefined}
         emptyMessage="No orders awaiting labels"
+        firstRunEmpty={
+          <OrdersFirstRunEmptyState
+            title="No labels to print"
+            description="Orders waiting on a carrier label land here. They flow in automatically once you connect a sales channel."
+          />
+        }
         searchEmptyTitle="No matching orders"
         searchResultLabel="orders awaiting labels"
         clearSearchLabel="Show all awaiting labels"

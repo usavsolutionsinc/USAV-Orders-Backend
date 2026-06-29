@@ -6,4 +6,5 @@ export { techEventsToTimeline, type TechTimelineRow } from './tech-events';
 export { stationActivityToTimeline, type StationActivityRow } from './station-activity-events';
 export { warrantyEventsToTimeline, type WarrantyEventRow } from './warranty-events';
 export { callEventsToTimeline, type CallEventTimelineRow } from './call-events';
+export { amendmentsToTimeline, type AmendmentTimelineRow } from './amendment-events';
 export { collapseTimeline } from './collapse';

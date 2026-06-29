@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, X } from '@/components/Icons';
 import { Layer } from '@/design-system/primitives/Layer';
+import { Button, IconButton } from '@/design-system/primitives';
 import { SidebarIntakeFormField } from '@/design-system/components';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
@@ -81,6 +82,7 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
 
   return (
     <Layer level="panelPopover" className="fixed inset-0 flex items-center justify-center p-4">
+      {/* ds-raw-button: full-screen scrim/backdrop, not a content control */}
       <button
         type="button"
         className="absolute inset-0 bg-black/35"
@@ -96,15 +98,14 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
             <p className={`text-micro font-black uppercase tracking-[0.16em] ${chrome.sectionLabel}`}>Quick add</p>
             <h2 className="mt-1 text-sm font-black text-zinc-900">Add FNSKU details</h2>
           </div>
-          <button
+          <IconButton
             type="button"
             onClick={() => setOpen(false)}
             disabled={saving}
-            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
-            aria-label="Close quick add FNSKU popup"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close quick add FNSKU popup"
+            icon={<X className="h-4 w-4" />}
+            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
+          />
         </div>
 
         <div className="space-y-4 px-4 py-4">
@@ -175,14 +176,15 @@ export function FbaQuickAddFnskuModal({ stationTheme = 'blue' }: { stationTheme?
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-zinc-200 px-4 py-4">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             onClick={() => setOpen(false)}
             disabled={saving}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-micro font-black uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
           >
             Cancel
-          </button>
+          </Button>
+          {/* ds-raw-button: themed gradient solid CTA (blue→sky / emerald→teal) via chrome.primaryButton */}
           <button
             type="button"
             disabled={saving || !canSubmit}

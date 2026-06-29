@@ -288,4 +288,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       'X-Accel-Buffering': 'no',
     },
   });
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

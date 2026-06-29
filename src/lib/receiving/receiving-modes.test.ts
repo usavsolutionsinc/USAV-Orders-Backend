@@ -6,6 +6,7 @@ import {
   RECEIVING_MODES,
   INCOMING_PAGE_SIZE,
   RECEIVING_TABLE_LIMIT,
+  historySortGroupAxis,
   type ReceivingModeContext,
 } from '@/lib/receiving/receiving-modes';
 import {
@@ -93,24 +94,32 @@ test('history buildParams omits search when blank but always sends field/scope',
   assert.equal(p.get('search_scope'), 'all');
 });
 
-test('history sort: default scanned is omitted from the URL, unboxed is sent', () => {
-  // Default axis stays out of the URL so a clean History link has no ?sort=.
-  assert.equal(RECEIVING_MODES.history.buildParams(ctx()).has('sort'), false);
+test('history sort: default unboxed is always sent to the API; scanned when selected', () => {
   assert.equal(
-    RECEIVING_MODES.history.buildParams(ctx({ historySort: 'scanned_newest' })).has('sort'),
-    false,
+    RECEIVING_MODES.history.buildParams(ctx()).get('sort'),
+    'unboxed_newest',
   );
-  // A non-default / unknown axis is normalized and forwarded.
   assert.equal(
     RECEIVING_MODES.history.buildParams(ctx({ historySort: 'unboxed_newest' })).get('sort'),
     'unboxed_newest',
   );
+  assert.equal(
+    RECEIVING_MODES.history.buildParams(ctx({ historySort: 'scanned_newest' })).get('sort'),
+    'scanned_newest',
+  );
+});
+
+test('historySortGroupAxis maps sort ids to lifecycle axes', () => {
+  assert.equal(historySortGroupAxis(''), 'unboxed');
+  assert.equal(historySortGroupAxis('unboxed_newest'), 'unboxed');
+  assert.equal(historySortGroupAxis('scanned_newest'), 'scanned');
+  assert.equal(historySortGroupAxis('received_newest'), 'unboxed');
 });
 
 test('history sort axis varies the query key so a sort flip refetches', () => {
-  const scanned = RECEIVING_MODES.history.queryKey(ctx());
-  const unboxed = RECEIVING_MODES.history.queryKey(ctx({ historySort: 'unboxed_newest' }));
-  assert.notDeepEqual(scanned, unboxed);
+  const unboxed = RECEIVING_MODES.history.queryKey(ctx());
+  const scanned = RECEIVING_MODES.history.queryKey(ctx({ historySort: 'scanned_newest' }));
+  assert.notDeepEqual(unboxed, scanned);
 });
 
 test('incoming buildParams computes server offset from the 1-based page', () => {

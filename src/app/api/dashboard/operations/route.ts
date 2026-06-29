@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { getAllStaffGoalsWithStats } from '@/lib/neon/staff-goals-queries';
 import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
+import { VELOCITY_ACTIVITY_TYPES, TECH_TEST_ACTIVITY_TYPES, sqlInList } from '@/lib/station-activity';
 
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
@@ -45,21 +46,21 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       )
       SELECT
         (SELECT count(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int FROM station_activity_logs
-         WHERE activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+         WHERE activity_type IN (${sqlInList(VELOCITY_ACTIVITY_TYPES)})
            AND organization_id = $1
            AND ${todayFilter}) AS all_today,
         (SELECT count(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int FROM station_activity_logs
-         WHERE activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED', 'PACK_SCAN', 'PACK_COMPLETED', 'FBA_READY')
+         WHERE activity_type IN (${sqlInList(VELOCITY_ACTIVITY_TYPES)})
            AND organization_id = $1
            AND ${yesterdayFilter}) AS all_yesterday,
         (SELECT count(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int FROM station_activity_logs
          WHERE station = 'TECH'
-           AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')
+           AND activity_type IN (${sqlInList(TECH_TEST_ACTIVITY_TYPES)})
            AND organization_id = $1
            AND ${todayFilter}) AS tested_today,
         (SELECT count(DISTINCT COALESCE(shipment_id::text, scan_ref, id::text))::int FROM station_activity_logs
          WHERE station = 'TECH'
-           AND activity_type IN ('TRACKING_SCANNED', 'FNSKU_SCANNED')
+           AND activity_type IN (${sqlInList(TECH_TEST_ACTIVITY_TYPES)})
            AND organization_id = $1
            AND ${yesterdayFilter}) AS tested_yesterday,
         (SELECT count(*)::int FROM repair_service WHERE status NOT IN ('Done', 'Shipped', 'Picked Up') AND organization_id = $1) AS repair_count,

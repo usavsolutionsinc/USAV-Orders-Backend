@@ -12,6 +12,8 @@ import {
 } from '@/lib/clipboard-history';
 import { StaffRecipientList, type StaffRecipient } from './StaffRecipientList';
 import { CHIP_TONES } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface ClipboardHistoryPopoverProps {
   onClose: () => void;
@@ -142,22 +144,19 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
         </div>
         <div className="flex items-center gap-2">
           {entries.length > 0 && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => clearClipboardHistory()}
-              className="text-mini font-bold uppercase tracking-wide text-gray-500 hover:text-gray-800"
+              className="h-auto px-0 text-mini font-bold uppercase tracking-wide text-gray-500 hover:bg-transparent hover:text-gray-800"
             >
               Clear
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <IconButton
+            ariaLabel="Close"
             onClick={onClose}
-            aria-label="Close"
-            className="text-gray-400 hover:text-gray-700"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+            icon={<X className="h-3.5 w-3.5" />}
+          />
         </div>
       </header>
 
@@ -176,48 +175,52 @@ export function ClipboardHistoryPopover({ onClose }: ClipboardHistoryPopoverProp
               return (
                 <li key={entry.id} className="px-2 py-1.5">
                   <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyAgain(entry)}
-                      title="Copy again"
-                      className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
-                    >
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-mono text-label font-bold text-gray-900">
-                          {label}
+                    <HoverTooltip label="Copy again" asChild>
+                      {/* ds-raw-button: text-left multi-element copy-again row (dot + value + time + copy icon), not a single DS Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleCopyAgain(entry)}
+                        aria-label="Copy again"
+                        className="group flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
+                      >
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-mono text-label font-bold text-gray-900">
+                            {label}
+                          </span>
+                          <span className="mt-0.5 flex items-center gap-1 text-micro text-gray-400">
+                            <Clock className="h-3 w-3" />
+                            {timeAgo(entry.ts)}
+                          </span>
                         </span>
-                        <span className="mt-0.5 flex items-center gap-1 text-micro text-gray-400">
-                          <Clock className="h-3 w-3" />
-                          {timeAgo(entry.ts)}
-                        </span>
-                      </span>
-                      {copiedId === entry.id ? (
-                        <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                      ) : (
-                        <Copy className="h-3.5 w-3.5 shrink-0 text-gray-300 group-hover:text-gray-500" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSendingId((s) => (s === entry.id ? null : entry.id))}
-                      aria-label="Send to staff"
-                      aria-expanded={isSending}
-                      title="Send to staff"
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                        isSending
-                          ? 'bg-blue-600 text-white'
-                          : sentToId === entry.id
-                            ? 'text-emerald-500'
-                            : 'text-gray-400 hover:bg-gray-100 hover:text-blue-600'
-                      }`}
-                    >
-                      {sentToId === entry.id ? (
-                        <Check className="h-4 w-4" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </button>
+                        {copiedId === entry.id ? (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5 shrink-0 text-gray-300 group-hover:text-gray-500" />
+                        )}
+                      </button>
+                    </HoverTooltip>
+                    <HoverTooltip label="Send to staff" asChild>
+                      <IconButton
+                        ariaLabel="Send to staff"
+                        aria-expanded={isSending}
+                        onClick={() => setSendingId((s) => (s === entry.id ? null : entry.id))}
+                        className={`group flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                          isSending ? 'bg-blue-600' : 'hover:bg-gray-100'
+                        }`}
+                        icon={
+                          sentToId === entry.id ? (
+                            <Check className="h-4 w-4 text-emerald-500" />
+                          ) : (
+                            <Send
+                              className={`h-4 w-4 ${
+                                isSending ? 'text-white' : 'text-gray-400 group-hover:text-blue-600'
+                              }`}
+                            />
+                          )
+                        }
+                      />
+                    </HoverTooltip>
                   </div>
 
                   {isSending && (

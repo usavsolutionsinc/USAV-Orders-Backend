@@ -84,6 +84,9 @@ export const AUDIT_ENTITY = {
   TECH_SERIAL: 'tech_serial_number',
   SKU: 'sku',
   SKU_RELATIONSHIP: 'sku_relationship',
+  PART_LINK: 'part_link',
+  // Fulfillment substitution / order-line amendment (ordered vs fulfilled unit)
+  ORDER_AMENDMENT: 'order_amendment',
   SKU_STOCK: 'sku_stock',
   BIN: 'bin',
   SHIPMENT: 'shipment',
@@ -128,6 +131,8 @@ export const AUDIT_ENTITY = {
   // Voice (Nextiva) — Support ▸ Voicemail / Calls
   VOICEMAIL: 'voicemail',
   CALL_EVENT: 'call_event',
+  // Tenant / identity (Phase F signup → org provisioning)
+  ORGANIZATION: 'organization',
 } as const;
 
 export const AUDIT_ACTION = {
@@ -138,6 +143,13 @@ export const AUDIT_ACTION = {
   RECEIVING_DISPOSITION_SET: 'receiving.disposition.set',
   RECEIVING_LINE_QTY_UPDATE: 'receiving_line.qty.update',
   RECEIVING_HEADER_UPDATE:   'receiving.header.update',
+  /**
+   * Operator-driven PO relink — make the website authoritative over Zoho. Writes
+   * the chosen PO (and optional SKU correction) onto the line + carton, even when
+   * Zoho already had a different (wrong) link. Distinct from RECEIVING_MATCH
+   * (adopt expected lines) and the upgrade-only header update.
+   */
+  RECEIVING_RELINK:          'receiving.relink',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   // Bin / location
@@ -161,6 +173,7 @@ export const AUDIT_ACTION = {
   TECH_QC_PASS:   'tech.qc.pass',
   TECH_QC_RETEST: 'tech.qc.retest',
   TECH_QC_FAIL:   'tech.qc.fail',
+  TECH_DATA_WIPE: 'tech.data_wipe',   // secure erase / factory reset (electronics)
   // QC checklist templates (authoring CRUD) + per-unit results (execution)
   QC_CHECK_CREATE:  'qc_check.create',
   QC_CHECK_UPDATE:  'qc_check.update',
@@ -243,6 +256,9 @@ export const AUDIT_ACTION = {
   SKU_RELATIONSHIP_CREATE: 'sku_relationship.create',
   SKU_RELATIONSHIP_UPDATE: 'sku_relationship.update',
   SKU_RELATIONSHIP_DELETE: 'sku_relationship.delete',
+  PART_LINK_CREATE: 'part_link.create',
+  PART_LINK_DELETE: 'part_link.delete',
+  PART_LINK_MARK_NOT_PART: 'part_link.mark_not_a_part',
   // Reason codes (CRUD)
   REASON_CODE_CREATE: 'reason_code.create',
   REASON_CODE_UPDATE: 'reason_code.update',
@@ -252,6 +268,12 @@ export const AUDIT_ACTION = {
   RMA_CANCEL: 'rma.cancel',
   // Order record edit (delete uses the legacy 'orders.delete' literal)
   ORDER_UPDATE: 'orders.update',
+  // Fulfillment substitution — the unit that ships deviates from what was
+  // ordered/listed. Re-allocation event recorded in order_unit_amendments;
+  // approve/reject gate the block_until_approved enforcement path.
+  ORDER_SUBSTITUTE_UNIT:   'order.substitute_unit',
+  ORDER_AMENDMENT_APPROVE: 'order.amendment.approve',
+  ORDER_AMENDMENT_REJECT:  'order.amendment.reject',
   // Unshipped governing events — first time a carrier tracking number is added to
   // an order, and when its shipping label is printed/attached. Feed the order
   // timeline (EventTimeline) on the dashboard details panel.
@@ -308,6 +330,8 @@ export const AUDIT_ACTION = {
   VOICEMAIL_FOLLOWUP_RESOLVED: 'voicemail.followup.resolved',
   VOICEMAIL_LINKED:            'voicemail.linked',
   VOICE_CALL_ORIGINATED:       'voice.call.originated',
+  // Tenant lifecycle — self-service signup provisions a new org (Phase F).
+  ORG_CREATE: 'organization.create',
 } as const;
 
 export type AuditEntity = (typeof AUDIT_ENTITY)[keyof typeof AUDIT_ENTITY];
@@ -324,6 +348,8 @@ export const AUDIT_REASON_REQUIRED: ReadonlySet<string> = new Set([
   // Sourcing: resolving an alert and importing a candidate both need a "why".
   AUDIT_ACTION.SOURCING_ALERT_RESOLVE,
   AUDIT_ACTION.SOURCING_CANDIDATE_IMPORT,
+  // A substitution deviates from the order — it must justify itself.
+  AUDIT_ACTION.ORDER_SUBSTITUTE_UNIT,
 ]);
 
 // ── Server-trusted wrapper ─────────────────────────────────────────────────

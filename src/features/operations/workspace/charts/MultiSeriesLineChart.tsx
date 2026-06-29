@@ -85,7 +85,7 @@ export function MultiSeriesLineChart({
               y={model.yFor(t) + 3}
               textAnchor="end"
               fill="currentColor"
-              className="text-[9px] font-semibold tabular-nums"
+              className="text-eyebrow font-semibold tabular-nums"
             >
               {Math.round(t).toLocaleString()}
             </text>
@@ -102,7 +102,7 @@ export function MultiSeriesLineChart({
                 y={height - 7}
                 textAnchor="middle"
                 fill="currentColor"
-                className="text-[9px] font-semibold"
+                className="text-eyebrow font-semibold"
               >
                 {label}
               </text>
@@ -155,7 +155,7 @@ export function MultiSeriesLineChart({
 
         {!hasData && (
           <g className="text-gray-400">
-            <text x={width / 2} y={height / 2} textAnchor="middle" fill="currentColor" className="text-[11px] font-semibold">
+            <text x={width / 2} y={height / 2} textAnchor="middle" fill="currentColor" className="text-caption font-semibold">
               No activity in this range
             </text>
           </g>

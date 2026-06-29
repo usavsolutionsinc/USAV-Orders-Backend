@@ -147,7 +147,7 @@ async function ensureFnskuCatalog(db: typeof pool, orgId: OrgId, fnsku: string) 
   const inserted = await db.query(
     `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at, organization_id)
      VALUES ($1, NULL, NULL, NULL, TRUE, NOW(), NOW(), $2)
-     ON CONFLICT (fnsku) DO UPDATE
+     ON CONFLICT (organization_id, fnsku) DO UPDATE
        SET is_active = TRUE, last_seen_at = NOW(), updated_at = NOW()
      RETURNING fnsku, product_title, asin, sku`,
     [normalized, orgId],

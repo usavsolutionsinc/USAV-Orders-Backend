@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { DEBOUNCE_MS, type CartonAddSelection, type CatalogItem } from './carton-add-types';
@@ -125,14 +126,14 @@ export function ItemTab({
               placeholder="Type a product title…"
               className="flex-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-label outline-none focus:border-blue-500"
             />
-            <button
-              type="button"
-              onClick={() => void submitManual()}
+            <Button
+              variant="primary"
+              size="sm"
               disabled={!manualTitle.trim() || submitting != null}
-              className="rounded-md bg-blue-600 px-2.5 py-1.5 text-mini font-bold uppercase tracking-wider text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={() => void submitManual()}
             >
               {submitting === 'manual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-            </button>
+            </Button>
           </div>
         ) : (
           <SearchBar
@@ -174,7 +175,7 @@ export function ItemTab({
             setManualMode((m) => !m);
             setManualTitle('');
           }}
-          className="text-mini font-bold uppercase tracking-wider text-blue-700 hover:text-blue-900"
+          className="ds-raw-button text-mini font-bold uppercase tracking-wider text-blue-700 hover:text-blue-900"
         >
           {manualMode ? '← Back to catalog search' : 'Product not in catalog? Add by title'}
         </button>

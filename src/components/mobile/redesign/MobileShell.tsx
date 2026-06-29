@@ -8,6 +8,7 @@ import { MobileSidebarDrawer } from './MobileSidebarDrawer';
 import { TOKENS } from './DesignSystem';
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
 import { ErrorBoundary } from '@/components/error/ErrorBoundary';
+import { Button } from '@/design-system/primitives';
 
 /**
  * Phone fallback when a page subtree throws. Without this, a render crash bubbles
@@ -25,13 +26,9 @@ function MobilePageError(error: Error, reset: () => void) {
         <p className="mt-2 break-words text-caption font-semibold text-rose-600">
           {error.message || 'Something went wrong rendering this page.'}
         </p>
-        <button
-          type="button"
-          onClick={reset}
-          className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-rose-600 px-5 text-label font-black uppercase tracking-[0.18em] text-white transition-transform active:scale-95"
-        >
+        <Button variant="danger" size="lg" onClick={reset} className="mt-4">
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   );

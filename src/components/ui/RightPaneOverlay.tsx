@@ -16,6 +16,7 @@ import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { cn } from '@/utils/_cn';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 // ─── Host ─────────────────────────────────────────────────────────────────────
 // Marks the right-pane content column as the anchor for every `RightPaneOverlay`
@@ -285,17 +286,18 @@ export function RightPaneOverlay({
           >
             {children}
             {resizable && align === 'center' ? (
-              <div
-                role="presentation"
-                aria-hidden
-                onPointerDown={startResize}
-                title="Drag to resize"
-                className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize items-end justify-end p-0.5 text-gray-300 transition-colors hover:text-gray-500"
-              >
-                <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
-                  <path d="M9 3 L3 9 M9 6.5 L6.5 9" />
-                </svg>
-              </div>
+              <HoverTooltip label="Drag to resize" asChild focusable={false}>
+                <div
+                  role="presentation"
+                  aria-hidden
+                  onPointerDown={startResize}
+                  className="absolute bottom-0 right-0 z-10 flex h-4 w-4 cursor-nwse-resize items-end justify-end p-0.5 text-gray-300 transition-colors hover:text-gray-500"
+                >
+                  <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+                    <path d="M9 3 L3 9 M9 6.5 L6.5 9" />
+                  </svg>
+                </div>
+              </HoverTooltip>
             ) : null}
           </motion.div>
         </motion.div>

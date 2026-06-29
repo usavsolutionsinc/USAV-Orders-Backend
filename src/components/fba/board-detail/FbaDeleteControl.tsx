@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import { deleteFbaItem } from '@/lib/fba/patch';
 import type { PlanEntry } from './board-detail-shared';
 
@@ -54,14 +55,16 @@ export function FbaDeleteControl({ entries, onDeleted }: { entries: PlanEntry[];
           {error}
         </p>
       )}
-      <button
+      <Button
         type="button"
+        variant="danger"
+        size="lg"
         onClick={() => void handleClick()}
         disabled={deleting}
-        className="w-full h-10 inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
+        className="w-full"
       >
         {deleting ? 'Deleting...' : isArmed ? 'Click Again To Confirm' : 'Delete Permanently'}
-      </button>
+      </Button>
     </div>
   );
 }

@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/CopyChip';
 import { ChipColumns, CHIP_COL, type ChipColumn } from '@/components/ui/ChipColumns';
 import { RowTitle, RowMetaColumns } from '@/components/ui/RowMetaColumns';
-import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import type { ShippedOrder } from '@/lib/neon/orders-queries';
 import {
@@ -30,9 +31,10 @@ import { formatSalePrice, type QueueRowRecord } from './helpers';
  * value when the lines ship together, else a ×N count ({@link TrackingCountChip}).
  */
 export function OrderGroupSummary({ rows, isMobile }: { rows: ShippedOrder[]; isMobile: boolean }) {
+  const orderChannelLabel = useOrderChannelLabel();
   const first = rows[0];
   const orderId = String(first.order_id || '').trim();
-  const platformLabel = getOrderPlatformLabel(orderId, first.account_source);
+  const platformLabel = orderChannelLabel(orderId, first.account_source);
   const isFba = isFbaOrder(orderId, first.account_source);
   const productPageUrl = getExternalUrlByItemNumber(String(first.item_number || '').trim());
   const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';

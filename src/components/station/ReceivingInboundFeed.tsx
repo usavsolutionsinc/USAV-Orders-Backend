@@ -55,7 +55,7 @@ function FeedRow({ log, isSelected, onClick, idx }: FeedRowProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15, delay: Math.min(idx * 0.025, 0.4) }}
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-all ${
+      className={`ds-raw-button w-full text-left px-4 py-3 border-b border-gray-50 transition-all ${
         isSelected
           ? 'bg-blue-50 border-l-2 border-l-blue-600'
           : 'hover:bg-gray-50/60 border-l-2 border-l-transparent'
@@ -146,7 +146,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         <button
           type="button"
           onClick={() => setSection('testing')}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
+          className={`ds-raw-button flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'testing'
               ? 'bg-orange-500 text-white'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -164,7 +164,7 @@ export function ReceivingInboundFeed({ onSelectLog }: ReceivingInboundFeedProps)
         <button
           type="button"
           onClick={() => setSection('unboxed')}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
+          className={`ds-raw-button flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
             section === 'unboxed'
               ? 'bg-indigo-600 text-white'
               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'

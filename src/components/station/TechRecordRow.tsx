@@ -4,7 +4,7 @@ import { SerialChip } from '@/components/ui/CopyChip';
 import { ChipColumns } from '@/components/ui/ChipColumns';
 import { buildStationChipColumns, buildStationFnskuColumns } from '@/components/station/station-chip-columns';
 import { StationRecordShell } from '@/components/station/StationRecordShell';
-import { getOrderPlatformLabel } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { getOrderDisplayValues } from '@/utils/order-display';
 import { resolveStationSource } from '@/utils/source-dot';
@@ -24,6 +24,7 @@ export interface TechRecordRowProps {
  * the shipped table. FNSKU rows take the tracking + serial columns.
  */
 export function TechRecordRow({ record, index, onOpen }: TechRecordRowProps) {
+  const orderChannelLabel = useOrderChannelLabel();
   const displayValues = getOrderDisplayValues({
     sku: record.sku,
     condition: record.condition,
@@ -55,7 +56,7 @@ export function TechRecordRow({ record, index, onOpen }: TechRecordRowProps) {
   if (isFnskuRow) {
     chipGrid = <ChipColumns columns={buildStationFnskuColumns({ fnskuValue, serialNode })} />;
   } else {
-    const plat = getOrderPlatformLabel(record.order_id || '', record.account_source);
+    const plat = orderChannelLabel(record.order_id || '', record.account_source);
     const productUrl = getExternalUrlByItemNumber(
       String(record.item_number || '').trim() ||
         skuScanPrefixBeforeColon(record.shipping_tracking_number),

@@ -12,6 +12,7 @@
 
 import { useCallback, useState } from 'react';
 import { startAuthentication } from '@simplewebauthn/browser';
+import { Button } from '@/design-system/primitives';
 
 const FIELD =
   'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
@@ -118,6 +119,7 @@ export default function AccountSignInPage() {
             <p className="text-xs text-gray-500">
               If {email || 'that address'} has an account, a one-time sign-in link is on its way (valid 15 minutes).
             </p>
+            {/* ds-raw-button: minimal inline text link with hover:underline, not a DS Button control */}
             <button type="button" onClick={() => setLinkSent(false)} className="text-xs text-gray-500 hover:underline">
               ← Back to sign in
             </button>
@@ -127,6 +129,7 @@ export default function AccountSignInPage() {
             <p className="text-xs font-medium text-gray-500">Choose a workspace</p>
             <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200">
               {choices.map((w) => (
+                // ds-raw-button: text-left master-detail picker row (name + "Enter →" suffix), not a standard action button
                 <button
                   key={w.organizationId}
                   type="button"
@@ -139,6 +142,7 @@ export default function AccountSignInPage() {
                 </button>
               ))}
             </div>
+            {/* ds-raw-button: minimal inline text link with hover:underline, not a DS Button control */}
             <button type="button" onClick={() => setChoices(null)} className="text-xs text-gray-500 hover:underline">
               ← Back
             </button>
@@ -155,24 +159,21 @@ export default function AccountSignInPage() {
               <input className={FIELD} type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="Your password" autoComplete="current-password" required />
             </label>
-            <button type="submit" disabled={busy || !email || !password}
-              className="w-full rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50">
+            <Button type="submit" variant="brand" disabled={busy || !email || !password} className="w-full">
               {busy ? 'Signing in…' : 'Sign in'}
-            </button>
+            </Button>
 
             <div className="flex items-center gap-3 py-1 text-xs text-gray-400">
               <span className="h-px flex-1 bg-gray-200" /> or <span className="h-px flex-1 bg-gray-200" />
             </div>
 
-            <button type="button" disabled={busy} onClick={() => void passkeySignin()}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => void passkeySignin()} className="w-full">
               Sign in with a passkey
-            </button>
+            </Button>
 
-            <button type="button" disabled={busy || !email} onClick={() => void magicLink()}
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 disabled:opacity-50">
+            <Button type="button" variant="secondary" disabled={busy || !email} onClick={() => void magicLink()} className="w-full">
               Email me a sign-in link
-            </button>
+            </Button>
           </form>
         )}
       </div>

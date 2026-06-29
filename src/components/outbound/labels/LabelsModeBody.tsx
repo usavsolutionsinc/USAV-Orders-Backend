@@ -74,7 +74,7 @@ export function LabelsModeBody() {
                   key={opt.id}
                   type="button"
                   onClick={() => { setSort(opt.id); onClose(); }}
-                  className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                  className={`ds-raw-button flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors ${
                     active ? 'border-violet-300 bg-violet-50 text-gray-900' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >

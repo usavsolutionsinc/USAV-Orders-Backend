@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 import { TrackingChip, OrderIdChip, SkuScanRefChip, getLast4 } from '@/components/ui/CopyChip';
@@ -57,7 +58,7 @@ function badge(kind: 'inserted' | 'updated' | 'deleted' | 'unknown' | 'resolved'
     resolved: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
     open: 'bg-red-50 text-red-700 ring-red-200',
   };
-  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
+  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
 }
 
 function TransferTab({ tab, label }: { tab: TransferTabState; label: string }) {
@@ -242,7 +243,7 @@ function DetailTable({
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+          <tr className="text-micro uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Order</th>
             <th className="px-3 py-2 font-semibold">Product</th>
             <th className="px-3 py-2 font-semibold">SKU</th>
@@ -262,7 +263,7 @@ function DetailTable({
                     <span className="font-mono text-xs text-gray-400">—</span>
                   )}
                   {provenance ? (
-                    <div className="mt-0.5 pl-1.5 text-[10px] font-normal text-gray-400">{provenance}</div>
+                    <div className="mt-0.5 pl-1.5 text-micro font-normal text-gray-400">{provenance}</div>
                   ) : null}
                 </td>
                 <td className="px-3 py-2 text-gray-700 align-top">
@@ -270,7 +271,7 @@ function DetailTable({
                     <span className="text-amber-700">Unknown Product</span>
                   )}
                   {row.titleSource && row.titleSource !== 'sheet' && row.productTitle ? (
-                    <span className="ml-1 text-[10px] uppercase tracking-wide text-gray-400">
+                    <span className="ml-1 text-micro uppercase tracking-wide text-gray-400">
                       · {row.titleSource.replace('_', ' ')}
                     </span>
                   ) : null}
@@ -319,7 +320,7 @@ function ExceptionTable({
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+          <tr className="text-micro uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Exception</th>
             <th className="px-3 py-2 font-semibold">Tracking</th>
             <th className="px-3 py-2 font-semibold">Source</th>
@@ -431,23 +432,22 @@ export function OrderSyncDialog({
                   {(elapsedMs / 1000).toFixed(1)}s
                 </motion.span>
                 {isRunning && onCancel ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={onCancel}
-                    className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-100"
+                    className="bg-red-50 text-red-700 ring-red-200 ring-inset hover:bg-red-100"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 ) : null}
-                <button
-                  type="button"
+                <IconButton
+                  icon={<X className="w-4 h-4" />}
+                  ariaLabel="Close"
                   onClick={onClose}
                   disabled={isRunning}
-                  className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                  className="rounded-lg p-1.5 hover:bg-gray-100"
+                />
               </div>
             </header>
 
@@ -460,7 +460,8 @@ export function OrderSyncDialog({
                     key={tab.id}
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
-                    className={`relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
+                    /* ds-raw-button: segmented tab with animated layoutId underline — not a Button shape */
+                    className={`ds-raw-button relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
                       isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
@@ -469,7 +470,7 @@ export function OrderSyncDialog({
                       {statusDot(meta.status)}
                     </span>
                     {meta.count > 0 ? (
-                      <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-700">
+                      <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-700">
                         {meta.count}
                       </span>
                     ) : null}
@@ -519,14 +520,9 @@ export function OrderSyncDialog({
                   {statusDot(exceptions.status)} <span>{statusLabel(exceptions.status, exceptions.summary)}</span>
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isRunning}
-                className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-              >
+              <Button variant="brand" size="sm" onClick={onClose} disabled={isRunning}>
                 {isRunning ? 'Running…' : 'Close'}
-              </button>
+              </Button>
             </footer>
       </motion.div>
     </motion.div>

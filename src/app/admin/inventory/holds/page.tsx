@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -181,12 +183,9 @@ export default async function HoldsAdminPage({
               />
             </div>
             <div className="flex items-end">
-              <button
-                type="submit"
-                className="rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700"
-              >
+              <Button variant="danger" size="sm" type="submit">
                 Place on hold
-              </button>
+              </Button>
             </div>
           </form>
         </section>
@@ -229,16 +228,19 @@ export default async function HoldsAdminPage({
                       <td className="px-4 py-2 text-right">
                         <form action={releaseAction} className="flex items-center justify-end gap-2">
                           <input type="hidden" name="serialUnitId" value={h.id} />
-                          <select
-                            name="forceStatus"
-                            defaultValue=""
-                            className="rounded border border-gray-300 px-2 py-1 text-xs"
-                            title="Override the auto-recovered restore status (blank = auto)"
-                          >
-                            {RESTORE_OPTIONS.map((s) => (
-                              <option key={s || 'auto'} value={s}>{s || 'auto'}</option>
-                            ))}
-                          </select>
+                          <HoverTooltip label="Override the auto-recovered restore status (blank = auto)" asChild>
+                            <select
+                              name="forceStatus"
+                              defaultValue=""
+                              aria-label="Override the auto-recovered restore status (blank = auto)"
+                              className="rounded border border-gray-300 px-2 py-1 text-xs"
+                            >
+                              {RESTORE_OPTIONS.map((s) => (
+                                <option key={s || 'auto'} value={s}>{s || 'auto'}</option>
+                              ))}
+                            </select>
+                          </HoverTooltip>
+                          {/* ds-raw-button: solid-green success CTA — no success variant in Button */}
                           <button
                             type="submit"
                             className="rounded-md bg-green-600 px-3 py-1 text-xs font-medium text-white hover:bg-green-700"

@@ -805,22 +805,9 @@ export const packages = pgTable('packages', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const shipmentOrders = pgTable('shipment_orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  zohoShipmentId: text('zoho_shipment_id').unique(),
-  packageId: uuid('package_id').notNull().references(() => packages.id, { onDelete: 'cascade' }),
-  salesOrderId: uuid('sales_order_id').notNull().references(() => salesOrders.id, { onDelete: 'cascade' }),
-  status: text('status'),
-  date: date('date'),
-  trackingNumber: text('tracking_number'),
-  carrier: text('carrier'),
-  shipstationOrderId: text('shipstation_order_id'),
-  shipstationLabelUrl: text('shipstation_label_url'),
-  shipmentId: bigint('shipment_id', { mode: 'number' }),
-  syncedAt: timestamp('synced_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// shipment_orders — DROPPED 2026-06-28 (dead, 0 rows; pre-STN Zoho-shipment table
+// with duplicated tracking/carrier). Superseded by shipment_links + the STN master.
+// See migration 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 export const invoices = pgTable('invoices', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -962,21 +949,9 @@ export const orders = pgTable('orders', {
   typeId: bigint('type_id', { mode: 'number' }),
 });
 
-// Multi-shipment links per order row. Keeps orders.shipment_id as canonical
-// primary link while allowing additional shipment IDs to be associated.
-export const orderShipmentLinks = pgTable('order_shipment_links', {
-  orderRowId: integer('order_row_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
-  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  source: text('source'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  pk: primaryKey({ columns: [table.orderRowId, table.shipmentId] }),
-  orderIdx: index('order_shipment_links_order_row_id_idx').on(table.orderRowId),
-  shipmentIdx: index('order_shipment_links_shipment_id_idx').on(table.shipmentId),
-  primaryIdx: index('order_shipment_links_primary_idx').on(table.orderRowId, table.isPrimary),
-}));
+// order_shipment_links — DROPPED 2026-06-28. Subsumed by shipment_links
+// (owner_type='ORDER', OUTBOUND). orders.shipment_id stays as the primary cache.
+// See migration 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 // Packer logs - audit trail for all packer scans (orders, SKU, FNSKU, FBA, etc.)
 // Photos are stored in the photos table (entity_type='PACKER_LOG', entity_id=packer_logs.id)
@@ -1038,7 +1013,8 @@ export const photos = pgTable('photos', {
 // BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
 export const receiving = pgTable('receiving', {
   id: serial('id').primaryKey(),
-  receivingTrackingNumber: text('receiving_tracking_number'),
+  // receiving_tracking_number dropped — tracking lives in shipping_tracking_numbers
+  // (via shipmentId). See migration 2026-06-28_drop_receiving_tracking_number.sql.
   carrier: text('carrier'),
   receivedAt: timestamp('received_at', { withTimezone: true }),
   receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
@@ -1065,11 +1041,9 @@ export const receiving = pgTable('receiving', {
   zohoNotes: text('zoho_notes'),
   /** Filed Zendesk ticket # for a package-level claim, stored as "#<id>". */
   zendeskTicket: text('zendesk_ticket'),
-  /**
-   * Receiver-entered total carton count for a multi-box PO (denominator for the
-   * boxes-received rollup; NULL = open-ended). docs/multi-tracking-po-plan.md.
-   */
-  expectedBoxCount: integer('expected_box_count'),
+  // expected_box_count dropped 2026-06-28o — never wired (inert stub, 0 rows);
+  // multi-box PO rollup never consumed it. See migration
+  // 2026-06-28o_drop_receiving_expected_box_count.sql.
   /**
    * Catalog flow type (org `types` row). Additive FK from the platform/type
    * catalog (2026-06-14f); the carton's effective type still comes from
@@ -1102,30 +1076,9 @@ export const receiving = pgTable('receiving', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/**
- * receiving_shipments — PO ↔ shipment junction (multi-box per PO).
- *
- * One row per carton/tracking attached to a `receiving` carton. The `isPrimary`
- * row mirrors `receiving.shipment_id` (the Zoho reference# anchor, box_seq 1);
- * extra boxes get box_seq 2..N via /api/receiving/[id]/attach-box. Makes the
- * PO↔shipment relationship many-to-many without touching the one-row-per-PO
- * anchor. docs/multi-tracking-po-plan.md Phase 1.
- */
-export const receivingShipments = pgTable('receiving_shipments', {
-  id: bigserial('id', { mode: 'number' }).primaryKey(),
-  receivingId: integer('receiving_id').notNull().references(() => receiving.id, { onDelete: 'cascade' }),
-  shipmentId: bigint('shipment_id', { mode: 'number' }).notNull(),
-  boxSeq: integer('box_seq').notNull().default(1),
-  isPrimary: boolean('is_primary').notNull().default(false),
-  receivedAt: timestamp('received_at', { withTimezone: true }),
-  receivedBy: integer('received_by').references(() => staff.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => ({
-  receivingShipmentUx: uniqueIndex('ux_receiving_shipments').on(table.receivingId, table.shipmentId),
-  receivingIdx: index('idx_receiving_shipments_receiving').on(table.receivingId),
-  shipmentIdx: index('idx_receiving_shipments_shipment').on(table.shipmentId),
-  primaryUx: uniqueIndex('ux_receiving_shipments_primary').on(table.receivingId).where(sql`is_primary`),
-}));
+// receiving_shipments — DROPPED 2026-06-28. Subsumed by shipment_links
+// (owner_type='RECEIVING', INBOUND); received_at/received_by map to
+// linked_at/linked_by. See 2026-06-28q_drop_legacy_shipment_link_tables.sql.
 
 /**
  * shipment_links — UNIFIED polymorphic owner↔tracking linkage (inbound + outbound).
@@ -1630,8 +1583,6 @@ export type SalesOrder = typeof salesOrders.$inferSelect;
 export type NewSalesOrder = typeof salesOrders.$inferInsert;
 export type Package = typeof packages.$inferSelect;
 export type NewPackage = typeof packages.$inferInsert;
-export type ShipmentOrder = typeof shipmentOrders.$inferSelect;
-export type NewShipmentOrder = typeof shipmentOrders.$inferInsert;
 export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type CreditNote = typeof creditNotes.$inferSelect;
@@ -3001,6 +2952,10 @@ export const workflowNodeStats = pgTable('workflow_node_stats', {
   queueDepth: integer('queue_depth').notNull().default(0),
   blockedCount: integer('blocked_count').notNull().default(0),
   errorCount: integer('error_count').notNull().default(0),
+  // Captured daily THROUGHPUT: units that exited this node on snapshot_date
+  // (derived from workflow_runs). SUM over a date range = throughput for the
+  // range — see 2026-06-28n migration + node-stats.ts.
+  completedCount: integer('completed_count').notNull().default(0),
   oldestEnteredAt: timestamp('oldest_entered_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

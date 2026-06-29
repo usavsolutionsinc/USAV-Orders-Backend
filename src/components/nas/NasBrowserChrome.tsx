@@ -71,7 +71,8 @@ export function NasBreadcrumb({
 
   return (
     <div className="flex items-center gap-1 overflow-x-auto">
-      <button type="button" onClick={() => onNavigate('')} className={`flex items-center gap-1 ${crumbBase} ${inactive}`}>
+      {/* ds-raw-button: breadcrumb root nav crumb — not a DS Button */}
+      <button type="button" onClick={() => onNavigate('')} className={`ds-raw-button flex items-center gap-1 ${crumbBase} ${inactive}`}>
         <ChevronLeftTiny className="h-3 w-3" />
         {rootLabel}
       </button>
@@ -80,10 +81,11 @@ export function NasBreadcrumb({
         return (
           <span key={i} className="flex shrink-0 items-center gap-1">
             <ChevronRightTiny className={`h-2.5 w-2.5 ${dark ? 'text-white/25' : 'text-gray-300'}`} />
+            {/* ds-raw-button: breadcrumb depth nav crumb (active = current depth) — not a DS Button */}
             <button
               type="button"
               onClick={() => onNavigate(segments.slice(0, i + 1).join('/'))}
-              className={`${crumbBase} ${isLast ? active : inactive}`}
+              className={`ds-raw-button ${crumbBase} ${isLast ? active : inactive}`}
             >
               {seg}
             </button>
@@ -108,11 +110,12 @@ export function NasFolderCard({
 }) {
   const dark = tone === 'dark';
   return (
+    // ds-raw-button: card-style folder row tile (group hover, icon + chevron) — not a DS Button
     <button
       type="button"
       onClick={onOpen}
       aria-label={`Open folder ${name}`}
-      className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md active:translate-y-0 active:shadow-sm ${
+      className={`ds-raw-button group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md active:translate-y-0 active:shadow-sm ${
         dark
           ? 'border-white/10 bg-white/[0.04] hover:border-indigo-400/40 hover:bg-white/[0.07]'
           : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'

@@ -6,7 +6,8 @@ import { Check, ChevronRight, ClipboardList } from '@/components/Icons';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { sectionLabel, framerPresence, framerTransition, SkeletonList } from '@/design-system';
-import WeekHeader from '@/components/ui/WeekHeader';
+import { IconButton } from '@/design-system/primitives';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import type { StationTheme } from '@/utils/staff-colors';
 import { printQueueTableUi } from '@/utils/staff-colors';
 
@@ -282,7 +283,7 @@ export function FbaBoardTable({
   }, [sortedItems, emitSelection]);
 
   const weekHeader = (
-    <WeekHeader
+    <DateRangeHeader
       label="Today"
       count={sortedItems.length}
       weekRange={weekRange}
@@ -382,17 +383,16 @@ export function FbaBoardTable({
               <div key="actions" className="flex shrink-0 items-center gap-1.5">
                 <FnskuChip value={item.fnsku} />
                 {onDetailOpen && (
-                  <button
+                  <IconButton
                     type="button"
+                    icon={<ChevronRight className="h-3.5 w-3.5" />}
+                    ariaLabel={`Details for ${item.fnsku}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onDetailOpen(item);
                     }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                    aria-label={`Details for ${item.fnsku}`}
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  />
                 )}
               </div>
             </motion.div>

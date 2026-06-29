@@ -91,7 +91,7 @@ export function TestingStatusPills({ value, onChange, disabled = false }: Props)
             aria-checked={isActive}
             onClick={() => onChange(opt.value)}
             disabled={disabled}
-            className={`inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
+            className={`ds-raw-button inline-flex h-9 shrink-0 snap-start items-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-all active:scale-[0.98] ${
               isActive ? opt.tone.active : opt.tone.inactive
             }`}
           >

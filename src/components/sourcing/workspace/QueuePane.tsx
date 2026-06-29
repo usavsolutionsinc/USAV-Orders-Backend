@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { Button } from '@/design-system/primitives/Button';
 import { AlertCircle, Sparkles } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   jsonFetch,
   formatCents,
@@ -111,8 +112,8 @@ function QueueAlertRow({
   return (
     <li className="rounded-xl border border-gray-200 bg-white p-3">
       <div className="flex items-center gap-3">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ${severityTone[alert.severity] ?? severityTone.info}`}>{alert.severity}</span>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${demandSourceTone[alert.demand_source] ?? demandSourceTone.scan}`}>{DEMAND_SOURCE_LABEL[alert.demand_source] ?? alert.demand_source}</span>
+        <span className={`rounded-full px-2 py-0.5 text-micro font-bold uppercase ring-1 ${severityTone[alert.severity] ?? severityTone.info}`}>{alert.severity}</span>
+        <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${demandSourceTone[alert.demand_source] ?? demandSourceTone.scan}`}>{DEMAND_SOURCE_LABEL[alert.demand_source] ?? alert.demand_source}</span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-gray-900">
             {alert.product_title ?? alert.sku ?? alert.search_query ?? (alert.sku_id ? `SKU #${alert.sku_id}` : 'Untitled demand')}
@@ -123,18 +124,25 @@ function QueueAlertRow({
           </p>
         </div>
         {alert.alert_type === 'replenish' ? (
-          <button type="button" onClick={() => setTarget(alert)} title="Set the replenish price point for this SKU" className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100">
-            {alert.replenish_target_cents != null ? `Target ${formatCents(alert.replenish_target_cents)}` : 'Set target'}
-          </button>
+          <HoverTooltip label="Set the replenish price point for this SKU" asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setTarget(alert)}
+              className="rounded-full bg-indigo-50 text-micro font-semibold text-indigo-700 hover:bg-indigo-100"
+            >
+              {alert.replenish_target_cents != null ? `Target ${formatCents(alert.replenish_target_cents)}` : 'Set target'}
+            </Button>
+          </HoverTooltip>
         ) : null}
         <Button variant="secondary" size="sm" icon={<Sparkles className="h-3.5 w-3.5" />} loading={research.isPending} disabled={!query.trim()} onClick={() => research.mutate()}>
           Research
         </Button>
         {alert.status === 'open' ? (
           <Button variant="secondary" size="sm" onClick={() => patchStatus('sourcing')}>Start sourcing</Button>
-        ) : <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{alert.status}</span>}
-        <button type="button" onClick={() => close(alert.id, 'resolved')} className="rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 hover:bg-emerald-50">Resolve</button>
-        <button type="button" onClick={() => close(alert.id, 'dismissed')} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Dismiss</button>
+        ) : <span className="rounded-full bg-blue-50 px-2 py-0.5 text-micro font-semibold text-blue-700">{alert.status}</span>}
+        <button type="button" onClick={() => close(alert.id, 'resolved')} className="ds-raw-button rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 hover:bg-emerald-50">Resolve</button>
+        <Button variant="ghost" size="sm" onClick={() => close(alert.id, 'dismissed')} className="text-caption font-semibold text-gray-500">Dismiss</Button>
       </div>
 
       {researchResult ? (

@@ -100,12 +100,12 @@ export const OperationsMatrix: React.FC = () => {
   return (
     <section className="bg-white rounded-3xl shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-8">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#E8E4DD] pb-6 mb-6">
+      <div className="flex items-center justify-between border-b border-border-soft pb-6 mb-6">
         <div>
-          <h2 className="text-xl font-bold text-[#2D2A26] tracking-tight">
+          <h2 className="text-xl font-bold text-text-default tracking-tight">
             Operations Hub
           </h2>
-          <p className="text-sm text-[#A89F91] font-medium mt-0.5">
+          <p className="text-sm text-text-muted font-medium mt-0.5">
             Direct access to facility modules
           </p>
         </div>
@@ -128,7 +128,7 @@ export const OperationsMatrix: React.FC = () => {
                 >
                   <Icon className="h-5 w-5" />
                 </div>
-                <h3 className="text-sm font-bold text-[#2D2A26]">
+                <h3 className="text-sm font-bold text-text-default">
                   {domain.title}
                 </h3>
               </div>
@@ -147,7 +147,7 @@ export const OperationsMatrix: React.FC = () => {
                           className={`flex shrink-0 items-center justify-center w-5 h-5 rounded-full ${
                             link.active
                               ? 'bg-[#2D2A26] text-white'
-                              : 'border border-[#E8E4DD] text-transparent'
+                              : 'border border-border-soft text-transparent'
                           }`}
                         >
                           {link.active && (
@@ -157,9 +157,9 @@ export const OperationsMatrix: React.FC = () => {
                         <span
                           className={`text-sm font-medium ${
                             link.active
-                              ? 'text-[#2D2A26]'
-                              : 'text-[#6B6356]'
-                          } group-hover:text-[#2D2A26] transition-colors`}
+                              ? 'text-text-default'
+                              : 'text-text-muted'
+                          } group-hover:text-text-default transition-colors`}
                         >
                           {link.name}
                         </span>
@@ -167,12 +167,12 @@ export const OperationsMatrix: React.FC = () => {
 
                       {link.badge ? (
                         <span
-                          className={`text-[10px] uppercase tracking-widest font-bold px-2 py-1 rounded-full ${domain.tone.badgeClass}`}
+                          className={`text-micro uppercase tracking-widest font-bold px-2 py-1 rounded-full ${domain.tone.badgeClass}`}
                         >
                           {link.badge}
                         </span>
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-[#A89F91] opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronRight className="w-4 h-4 text-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                       )}
                     </a>
                   </li>

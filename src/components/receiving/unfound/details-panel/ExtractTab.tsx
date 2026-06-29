@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { jsonOrThrow, useResourceMutation } from '@/hooks';
 import { toast } from '@/lib/toast';
 import { RefreshCw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import {
   LLM_FIELD_KEYS,
   LLM_FIELD_LABEL,
@@ -89,15 +90,16 @@ export function ExtractTab({ detail, rowId, patchTriage, onRowUpdated }: Extract
       <Section
         title="Extracted fields"
         action={
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => void runExtract()}
             disabled={extracting}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-micro font-bold uppercase tracking-wider text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            icon={<RefreshCw className={extracting ? 'animate-spin' : undefined} />}
+            className="uppercase tracking-wider"
           >
-            <RefreshCw className={`h-3 w-3 ${extracting ? 'animate-spin' : ''}`} />
             {extracting ? 'Extracting…' : 'Extract with AI'}
-          </button>
+          </Button>
         }
       >
         {/* PO numbers as confirmable rows (the regex-extracted ones) */}

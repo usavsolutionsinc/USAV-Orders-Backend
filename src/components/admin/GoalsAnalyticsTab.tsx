@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AdminEmptyDetail } from './shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type StationFilter = 'ALL' | 'TECH' | 'PACK';
 type RangeFilter = 7 | 14 | 30;
@@ -136,6 +137,7 @@ export function GoalsAnalyticsTab() {
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((option) => (
+            // ds-raw-button: segmented two-state range toggle (conditional active fill), not a single DS variant
             <button
               key={option.value}
               type="button"
@@ -196,11 +198,12 @@ export function GoalsAnalyticsTab() {
                 return (
                   <div key={entry.logged_date} className="flex flex-col items-center gap-1">
                     <div className="flex h-16 items-end">
-                      <div
-                        className={`w-4 rounded-sm ${entryTone.barClass}`}
-                        style={{ height: `${height}px` }}
-                        title={`${entry.logged_date}: ${entry.actual}/${entry.goal}`}
-                      />
+                      <HoverTooltip label={`${entry.logged_date}: ${entry.actual}/${entry.goal}`} asChild>
+                        <div
+                          className={`w-4 rounded-sm ${entryTone.barClass}`}
+                          style={{ height: `${height}px` }}
+                        />
+                      </HoverTooltip>
                     </div>
                     <span className="text-eyebrow font-medium text-gray-400">
                       {formatShortDate(entry.logged_date).split(' ')[1]}

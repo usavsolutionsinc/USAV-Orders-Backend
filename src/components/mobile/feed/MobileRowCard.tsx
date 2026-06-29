@@ -41,12 +41,12 @@ export function MobileRowCard({
           : `flex w-full max-w-full flex-col border-b border-gray-100 bg-white ${MOBILE_GUTTER} py-3 transition-colors active:bg-blue-50`
       }`}
     >
-      {/* Tap target for the row sheet / action. */}
+      {/* Tap target for the row sheet / action. ds-raw-button: full-bleed row tap target, not a Button shape */}
       {onTap && (
         <button
           type="button"
           onClick={onTap}
-          className="absolute inset-0 z-0 h-full w-full active:bg-blue-50/30"
+          className="ds-raw-button absolute inset-0 z-0 h-full w-full active:bg-blue-50/30"
           aria-label="Open"
         />
       )}

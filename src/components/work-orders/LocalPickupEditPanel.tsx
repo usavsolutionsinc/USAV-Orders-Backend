@@ -30,6 +30,8 @@ import {
   PaneHeaderIconBadge,
   PaneHeaderLabel,
 } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { receivingIdentityBandClass } from '@/components/layout/header-shell';
 import { ConditionPills } from '@/components/receiving/workspace/ConditionPills';
 import {
@@ -119,28 +121,27 @@ export function LocalPickupEditPanel() {
           <>
             {cart.length > 1 ? (
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={!canPrev}
-                  aria-label="Previous item"
-                  title="Previous item"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={!canNext}
-                  aria-label="Next item"
-                  title="Next item"
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </button>
+                <HoverTooltip label="Previous item" asChild>
+                  <IconButton
+                    onClick={goPrev}
+                    disabled={!canPrev}
+                    ariaLabel="Previous item"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    icon={<ChevronUp className="h-4 w-4" />}
+                  />
+                </HoverTooltip>
+                <HoverTooltip label="Next item" asChild>
+                  <IconButton
+                    onClick={goNext}
+                    disabled={!canNext}
+                    ariaLabel="Next item"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                    icon={<ChevronDown className="h-4 w-4" />}
+                  />
+                </HoverTooltip>
               </div>
             ) : null}
+            {/* ds-raw-button: solid emerald CTA — no green Button variant (primary=blue, brand=navy); className override unreliable vs variant bg */}
             <button
               type="button"
               onClick={() => setAddOpen(true)}
@@ -199,6 +200,7 @@ function PickupEmptyState({ onAdd }: { onAdd: () => void }) {
           Add products to start a local pickup intake. Each item lands in the
           sidebar and opens here for editing.
         </p>
+        {/* ds-raw-button: solid emerald CTA — no green Button variant; override unreliable vs variant bg */}
         <button
           type="button"
           onClick={onAdd}
@@ -234,15 +236,14 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
         ) : (
           <Package className="h-14 w-14 text-gray-200" />
         )}
-        <button
-          type="button"
-          onClick={() => removeLine(line.key)}
-          aria-label="Remove item"
-          title="Remove item"
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-400 shadow-sm transition-colors hover:bg-rose-50 hover:text-rose-600"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="Remove item" asChild>
+          <IconButton
+            onClick={() => removeLine(line.key)}
+            ariaLabel="Remove item"
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-white/90 text-gray-400 shadow-sm hover:bg-rose-50 hover:text-rose-600"
+            icon={<X className="h-4 w-4" />}
+          />
+        </HoverTooltip>
       </div>
 
       {/* Title + SKU */}
@@ -274,6 +275,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
           Parts
         </label>
         <div className="grid grid-cols-2 gap-2">
+          {/* ds-raw-button: two-state segmented toggle (conditional active bg), no single DS variant */}
           <button
             type="button"
             onClick={() => patchLine(line.key, { partsStatus: 'COMPLETE' })}
@@ -285,6 +287,7 @@ function LocalPickupLineEditor({ line }: { line: CartLine }) {
           >
             Complete
           </button>
+          {/* ds-raw-button: two-state segmented toggle (conditional active bg), no single DS variant */}
           <button
             type="button"
             onClick={() => patchLine(line.key, { partsStatus: 'MISSING_PARTS' })}

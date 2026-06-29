@@ -103,6 +103,7 @@ function FilterChips({ value, onChange }: { value: Lens; onChange: (l: Lens) => 
   return (
     <>
       {LENSES.map((opt) => (
+        // ds-raw-button: segmented lens toggle with custom active fill (bg-blue-600)
         <button
           key={opt.value}
           type="button"
@@ -134,10 +135,11 @@ function Dot({ color }: { color: string }) {
 }
 
 function Chip({ label, onClick, mono }: { label: string; onClick?: () => void; mono?: boolean }) {
-  const cls = `inline-block rounded-md border px-1.5 py-0.5 text-[10px] ${
+  const cls = `inline-block rounded-md border px-1.5 py-0.5 text-micro ${
     mono ? 'font-mono' : 'font-medium'
   } ${onClick ? 'cursor-pointer border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-gray-200 bg-gray-50 text-gray-600'}`;
   return onClick ? (
+    // ds-raw-button: clickable chip badge sharing styling with the non-button span branch
     <button type="button" onClick={onClick} className={cls}>
       {label}
     </button>
@@ -163,15 +165,16 @@ function RowShell({
 }) {
   return (
     <li className={`overflow-hidden rounded-lg border ${open ? 'border-blue-300 bg-blue-50/40' : 'border-gray-200 bg-white'}`}>
+      {/* ds-raw-button: full-width left-aligned accordion header (multi-line title/subtitle + chevron) */}
       <button type="button" onClick={onToggle} className="flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-gray-50">
         <Dot color={color} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-gray-900">{title}</span>
-          {subtitle ? <span className="block truncate text-[11px] text-gray-500">{subtitle}</span> : null}
+          {subtitle ? <span className="block truncate text-caption text-gray-500">{subtitle}</span> : null}
         </span>
         <span className={`text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`}>›</span>
       </button>
-      {open ? <div className="space-y-2.5 border-t border-gray-200 px-2.5 py-2.5 text-[12px] text-gray-700">{children}</div> : null}
+      {open ? <div className="space-y-2.5 border-t border-gray-200 px-2.5 py-2.5 text-label text-gray-700">{children}</div> : null}
     </li>
   );
 }
@@ -224,8 +227,8 @@ function IdentifierRow({ id, open, onToggle, onJump }: { id: OpsIdentifier; open
         <ul className="space-y-1">
           {id.travels.map((t, idx) => (
             <li key={`${t.station}-${idx}`} className="flex items-start gap-2">
-              <span className="font-mono text-[11px] font-semibold text-gray-800">{t.station}</span>
-              <span className="text-[11px] text-gray-500">{t.note}</span>
+              <span className="font-mono text-caption font-semibold text-gray-800">{t.station}</span>
+              <span className="text-caption text-gray-500">{t.note}</span>
             </li>
           ))}
         </ul>

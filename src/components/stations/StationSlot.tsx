@@ -20,9 +20,10 @@ import React, { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/design-system/primitives';
+import { Button, IconButton } from '@/design-system/primitives';
 import { GripVertical, Pencil, Plus, Settings, X } from '@/components/Icons';
 import { getBlock } from '@/lib/stations';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { BlockInstanceConfig, SlotId, StationConfig } from '@/lib/stations/contract';
 import {
   stationDefinitionsQuery,
@@ -64,7 +65,7 @@ function SortableBlockRow({ inst, onConfigure, onRemove }: SortableBlockRowProps
   return (
     <div ref={setNodeRef} style={style} className="rounded-md bg-white ring-1 ring-gray-200">
       <div className="flex items-center gap-1.5 border-b border-gray-100 px-2 py-1">
-        {/* Drag handle */}
+        {/* ds-raw-button: dnd-kit drag handle — spreads {...attributes}/{...listeners} and owns cursor-grab/active:cursor-grabbing semantics, not a standard icon action */}
         <button
           type="button"
           {...attributes}
@@ -78,22 +79,22 @@ function SortableBlockRow({ inst, onConfigure, onRemove }: SortableBlockRowProps
         <span className="flex-1 truncate text-mini font-bold text-gray-600">
           {blockDef?.label ?? inst.block}
         </span>
-        <button
-          type="button"
-          onClick={() => onConfigure(inst)}
-          title="Configure source, display & actions"
-          className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onRemove(inst.id)}
-          title="Remove block"
-          className="rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <HoverTooltip label="Configure source, display & actions" asChild>
+          <IconButton
+            onClick={() => onConfigure(inst)}
+            ariaLabel="Configure source, display & actions"
+            className="rounded p-0.5 hover:bg-gray-100 hover:text-gray-700"
+            icon={<Settings className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
+        <HoverTooltip label="Remove block" asChild>
+          <IconButton
+            onClick={() => onRemove(inst.id)}
+            ariaLabel="Remove block"
+            className="rounded p-0.5 hover:bg-red-50 hover:text-red-600"
+            icon={<X className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
       </div>
       <BlockRenderer instance={inst} />
     </div>
@@ -210,25 +211,28 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
             {editing ? `Blocks · editing (${slot})` : instances.length > 0 ? 'Blocks' : ''}
           </span>
           {canManage && !editing ? (
-            <button
-              type="button"
-              onClick={enterEdit}
-              title="Customize this station's blocks"
-              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-mini font-bold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <Pencil className="h-3 w-3" />
-              {instances.length === 0 ? 'Customize' : null}
-            </button>
+            <HoverTooltip label="Customize this station's blocks" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={enterEdit}
+                ariaLabel="Customize this station's blocks"
+                icon={<Pencil className="h-3 w-3" />}
+                className="text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              >
+                {instances.length === 0 ? 'Customize' : null}
+              </Button>
+            </HoverTooltip>
           ) : null}
           {editing ? (
-            <button
-              type="button"
-              onClick={exitEdit}
-              title="Exit edit mode"
-              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <HoverTooltip label="Exit edit mode" asChild>
+              <IconButton
+                onClick={exitEdit}
+                ariaLabel="Exit edit mode"
+                className="rounded-md p-1 hover:bg-gray-100 hover:text-gray-700"
+                icon={<X className="h-3.5 w-3.5" />}
+              />
+            </HoverTooltip>
           ) : null}
         </div>
       )}
@@ -256,13 +260,15 @@ export function StationSlot({ pageKey, modeKey, slot, stationLabel }: StationSlo
         )}
 
         {editing ? (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={openPalette}
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-white px-2 py-2 text-caption font-bold text-gray-500 transition-colors hover:border-blue-400 hover:text-blue-600"
+            icon={<Plus className="h-3.5 w-3.5" />}
+            className="w-full border border-dashed border-gray-300 bg-white text-gray-500 hover:border-blue-400 hover:text-blue-600"
           >
-            <Plus className="h-3.5 w-3.5" /> Add block
-          </button>
+            Add block
+          </Button>
         ) : null}
       </div>
 

@@ -34,7 +34,7 @@ export function ManualPicker({
                   type="button"
                   onClick={() => void pair(m.id)}
                   disabled={pairingId === m.id}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white"
+                  className="ds-raw-button flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-white"
                 >
                   <FileText className="h-4 w-4 shrink-0 text-gray-400" />
                   <span className="min-w-0 flex-1 truncate text-caption font-medium text-gray-800">{name}</span>

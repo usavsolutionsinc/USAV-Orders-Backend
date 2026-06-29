@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 import { useResourceMutation } from '@/hooks';
 import { toast } from '@/lib/toast';
-import { ExternalLink, Loader2, Sparkles } from '@/components/Icons';
+import { ExternalLink, Sparkles } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { UnfoundQueueDetailsRow } from '../unfound-triage-types';
 
 /**
@@ -69,33 +71,41 @@ export function ZendeskPushSection({
   if (!open) {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          icon={<ExternalLink className="h-3 w-3" />}
+          loading={pushing}
+          disabled={pushing || drafting}
           onClick={() => onPush()}
-          disabled={pushing || drafting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          className="border border-blue-200 bg-blue-50 text-blue-700 ring-0 hover:bg-blue-100"
         >
-          {pushing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
           {pushing ? 'Pushing…' : 'Push to Zendesk'}
-        </button>
-        <button
+        </Button>
+        <HoverTooltip label="Generate a clearer ticket with local AI, then review and edit before pushing" asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={<Sparkles className="h-3 w-3" />}
+            loading={drafting}
+            disabled={pushing || drafting}
+            onClick={() => void fetchDraft(true)}
+            className="border border-purple-200 bg-purple-50 text-purple-700 ring-0 hover:bg-purple-100"
+          >
+            Draft with AI
+          </Button>
+        </HoverTooltip>
+        <Button
           type="button"
-          onClick={() => void fetchDraft(true)}
+          variant="ghost"
+          size="sm"
           disabled={pushing || drafting}
-          title="Generate a clearer ticket with local AI, then review and edit before pushing"
-          className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {drafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-          Draft with AI
-        </button>
-        <button
-          type="button"
           onClick={() => void fetchDraft(false)}
-          disabled={pushing || drafting}
-          className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 disabled:opacity-60"
         >
           Review &amp; edit
-        </button>
+        </Button>
       </div>
     );
   }
@@ -125,32 +135,38 @@ export function ZendeskPushSection({
         />
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
-          onClick={() => onPush({ subject: subject.trim(), description: description.trim() })}
+          variant="primary"
+          size="sm"
+          icon={<ExternalLink className="h-3 w-3" />}
+          loading={pushing}
           disabled={pushing || drafting || !subject.trim() || !description.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-wider text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => onPush({ subject: subject.trim(), description: description.trim() })}
         >
-          {pushing ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
           {pushing ? 'Pushing…' : 'Push this ticket'}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
+          icon={<Sparkles className="h-3 w-3" />}
+          loading={drafting}
+          disabled={pushing || drafting}
           onClick={() => void fetchDraft(true)}
-          disabled={pushing || drafting}
-          className="inline-flex items-center gap-1.5 rounded-md border border-purple-200 bg-purple-50 px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-purple-700 hover:bg-purple-100 disabled:opacity-60"
+          className="border border-purple-200 bg-purple-50 text-purple-700 ring-0 hover:bg-purple-100"
         >
-          {drafting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
           Redraft
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          onClick={() => setOpen(false)}
+          variant="ghost"
+          size="sm"
           disabled={pushing || drafting}
-          className="text-micro font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 disabled:opacity-60"
+          onClick={() => setOpen(false)}
         >
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -64,13 +64,13 @@ export function useReceivingGrouping({
         seenByTracking.set(trackingKey, out.length);
         out.push(row);
       } else if (
-        receivingRowActivityMs(row) > receivingRowActivityMs(out[existingIdx])
+        receivingRowActivityMs(row, historyAxis) > receivingRowActivityMs(out[existingIdx], historyAxis)
       ) {
         out[existingIdx] = row;
       }
     }
     return out;
-  }, [localRows]);
+  }, [localRows, historyAxis]);
 
   // Collapse the flat lines into one row per purchase order, GLOBALLY — a PO's
   // lines merge into a single group even when scanned across several days (the
@@ -90,8 +90,8 @@ export function useReceivingGrouping({
       if (mode.groupAxis === 'po_date') {
         anchorTs = rows.find((r) => r.po_date)?.po_date ?? rows[0]?.created_at ?? null;
       } else {
-        // History's Sort axis decides which timestamp the group is banded +
-        // ordered by; Receive always uses scan activity.
+        // History/Receive band + order groups by the active lifecycle axis.
+        // Incoming uses po_date above.
         let bestMs = -1;
         for (const r of rows) {
           const ms = receivingRowActivityMs(r, historyAxis);

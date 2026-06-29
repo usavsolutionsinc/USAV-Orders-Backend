@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Clipboard, Copy, ExternalLink } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
+import { IconButton } from '@/design-system/primitives';
 
 export function ShippingEditableRow({
   label,
@@ -35,41 +37,38 @@ export function ShippingEditableRow({
   const actions = (
     <div className="flex items-center gap-1.5 text-gray-400">
       {onPasteReplace ? (
-        <button
-          type="button"
-          onClick={() => { void onPasteReplace(); }}
-          className="transition-colors hover:text-blue-600"
-          aria-label={`Paste & replace ${label}`}
-          title={`Paste & replace ${label}`}
-        >
-          <Clipboard className={iconClassName} />
-        </button>
+        <HoverTooltip label={`Paste & replace ${label}`} asChild>
+          <IconButton
+            tone="accent"
+            onClick={() => { void onPasteReplace(); }}
+            ariaLabel={`Paste & replace ${label}`}
+            icon={<Clipboard className={iconClassName} />}
+          />
+        </HoverTooltip>
       ) : null}
       {externalUrl ? (
-        <button
-          type="button"
-          onClick={() => {
-            window.open(externalUrl, '_blank', 'noopener,noreferrer');
-          }}
-          className="transition-colors hover:text-blue-700"
-          aria-label={`Open ${label} in external link`}
-          title={`Open ${label}`}
-        >
-          <ExternalLink className={iconClassName} />
-        </button>
+        <HoverTooltip label={`Open ${label}`} asChild>
+          <IconButton
+            tone="accent"
+            onClick={() => {
+              window.open(externalUrl, '_blank', 'noopener,noreferrer');
+            }}
+            ariaLabel={`Open ${label} in external link`}
+            icon={<ExternalLink className={iconClassName} />}
+          />
+        </HoverTooltip>
       ) : null}
-      <button
-        type="button"
-        onClick={() => {
-          if (!displayValue) return;
-          navigator.clipboard.writeText(displayValue);
-        }}
-        className="transition-colors hover:text-gray-900"
-        aria-label={`Copy ${label}`}
-        title={`Copy ${label}`}
-      >
-        <Copy className={iconClassName} />
-      </button>
+      <HoverTooltip label={`Copy ${label}`} asChild>
+        <IconButton
+          tone="neutral"
+          onClick={() => {
+            if (!displayValue) return;
+            navigator.clipboard.writeText(displayValue);
+          }}
+          ariaLabel={`Copy ${label}`}
+          icon={<Copy className={iconClassName} />}
+        />
+      </HoverTooltip>
     </div>
   );
 
@@ -100,6 +99,7 @@ export function ShippingEditableRow({
         />
       ) : (
         allowEdit ? (
+          // ds-raw-button: full-width text-left value row that enters inline edit on click, not a standard action button
           <button type="button" onClick={() => setIsEditing(true)} className="block w-full py-0 text-left">
             <p className="truncate text-sm font-bold text-gray-900">{displayValue || placeholder}</p>
           </button>

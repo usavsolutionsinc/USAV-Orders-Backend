@@ -58,11 +58,62 @@ export interface UnmatchedItemsSectionProps {
    * link `/receiving?recvId=…`). Omitted in the unbox workspace itself.
    */
   onOpenInUnbox?: () => void;
+  /**
+   * Render bare (no own WorkspaceCard chrome, no add pencil) — used when
+   * composed inside the unified {@link POUnboxingSection} wrapper, which
+   * supplies the single shared card + edit pencil. Defaults to the standalone
+   * card so the testing display and any other caller are unaffected.
+   */
+  embedded?: boolean;
+  /**
+   * Embedded-only: node rendered at the right of the "PO items · N" header row
+   * (e.g. the wrapper's shared edit pencil), so the unified wrapper can place
+   * its single control on the same row as the item count.
+   */
+  headerRight?: React.ReactNode;
+  /**
+   * Fired after an Ecwid/repair pairing flips the carton off the Unfound queue.
+   * The host (which owns the selected `row`) uses it to update the open
+   * LineEditPanel IMMEDIATELY from the server's returned row — no refetch wait:
+   *   • `carton` → the recomputed PO#/source/platform for the carton header.
+   *   • `line`   → the full new receiving_line. When the host was on an unfound
+   *     STUB (synthetic negative id, no real line), it re-selects this real line
+   *     so the detail pane upgrades from "Unfound PO" → the actual item (title,
+   *     SKU, qty, listing) in one paint, then reconciles via invalidate.
+   */
+  onLinked?: (result: {
+    carton: {
+      zoho_purchaseorder_number: string | null;
+      source: string | null;
+      source_platform: string | null;
+    };
+    line?: {
+      id: number;
+      sku: string | null;
+      item_name: string | null;
+      quantity_expected: number | null;
+      quantity_received: number;
+      condition_grade: string | null;
+      listing_url: string | null;
+      source_platform_pill: string | null;
+    } | null;
+  }) => void;
 }
 
 export interface CartonResponse {
   success: boolean;
   lines?: UnfoundLine[];
+  /**
+   * Carton header — used to seed the door-classification pill row from the
+   * stored intake columns (GET /api/receiving/[id] returns this). The
+   * intake_type column maps onto `columnsToClassification`'s `receiving_type`.
+   */
+  receiving?: {
+    is_return?: boolean | null;
+    return_platform?: string | null;
+    source_platform?: string | null;
+    intake_type?: string | null;
+  } | null;
   error?: string;
 }
 

@@ -2,6 +2,7 @@
 
 import type { ComponentType, SVGProps } from 'react';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   STATION_SCAN_BAR_MODE_BTN,
   STATION_SCAN_BAR_MODE_BTN_ARMED,
@@ -59,25 +60,27 @@ export function StationScanModeRail<T extends string>({
           getTitle?.(mode, armed) ??
           (armed
             ? `${mode.label} armed — next Enter/scan. Click again to cancel.`
-            : `Arm ${mode.label} (next Enter/scan; or search now if the field has text)`);
+            : `${mode.label} (next Enter/scan; or search now if the field has text)`);
 
         return (
-          <button
-            key={mode.mode}
-            type="button"
-            onClick={() => onToggleMode?.(mode.mode)}
-            aria-pressed={armed}
-            aria-label={ariaLabel}
-            title={title}
-            className={cn(
-              btnShell,
-              armed
-                ? cn(STATION_SCAN_BAR_MODE_BTN_ARMED, mode.armedClass)
-                : STATION_SCAN_BAR_MODE_BTN_INACTIVE,
-            )}
-          >
-            <mode.Icon className="h-3.5 w-3.5" />
-          </button>
+          <HoverTooltip key={mode.mode} label={title} asChild>
+            {/* ds-raw-button: scan-station segmented mode pill (armed/inactive toggle via STATION_SCAN_BAR_MODE_* tokens) — intentionally not a Button/IconButton primitive */}
+            <button
+              type="button"
+              onClick={() => onToggleMode?.(mode.mode)}
+              aria-pressed={armed}
+              aria-label={ariaLabel}
+              className={cn(
+                'ds-raw-button',
+                btnShell,
+                armed
+                  ? cn(STATION_SCAN_BAR_MODE_BTN_ARMED, mode.armedClass)
+                  : STATION_SCAN_BAR_MODE_BTN_INACTIVE,
+              )}
+            >
+              <mode.Icon className="h-3.5 w-3.5" />
+            </button>
+          </HoverTooltip>
         );
       })}
     </div>

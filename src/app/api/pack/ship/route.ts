@@ -6,7 +6,7 @@ import { parseScannedUrl } from '@/lib/scan-resolver';
 import { transition } from '@/lib/inventory/state-machine';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { tapWorkflow } from '@/lib/workflow/tap';
-import { isUnifiedEngineFulfillmentTaps } from '@/lib/feature-flags';
+import { isUnifiedEngineFulfillmentTaps, isFulfillmentSubstitution } from '@/lib/feature-flags';
 
 /**
  * Thrown when a unit's guarded SHIPPED transition is rejected (it isn't in a
@@ -194,6 +194,29 @@ export const POST = withAuth(async (request, ctx) => {
       const order = orderQ.rows[0];
       if (!order) {
         return { ok: false as const, status: 404, error: 'order not found' };
+      }
+
+      // 4b. Block-until-approved gate: a substitution raised under the
+      //     block_until_approved enforcement records a PENDING amendment. The
+      //     order cannot ship until a supervisor approves it. Flag-guarded so
+      //     the query is skipped entirely when substitution is disabled.
+      if (isFulfillmentSubstitution()) {
+        const pendingQ = await client.query<{ id: number }>(
+          `SELECT id FROM order_unit_amendments
+            WHERE order_id = $1
+              AND organization_id = $2
+              AND status = 'PENDING'
+            LIMIT 1`,
+          [orderId, orgId],
+        );
+        if (pendingQ.rows[0]) {
+          return {
+            ok: false as const,
+            status: 409,
+            error: 'amendment_pending',
+            amendment_id: pendingQ.rows[0].id,
+          };
+        }
       }
 
       // 5. Per-unit transitions + events + ledger.

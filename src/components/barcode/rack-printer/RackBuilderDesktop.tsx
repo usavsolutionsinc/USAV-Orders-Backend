@@ -1,5 +1,6 @@
 import { ChevronLeft, Settings } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
+import { Button, IconButton } from '@/design-system/primitives';
 import { STEPS } from './rack-printer-config';
 import { StepPills } from './StepPills';
 import { NumericStep } from './NumericStep';
@@ -18,23 +19,22 @@ export function RackBuilderDesktop({ c }: { c: RackLabelPrinterController }) {
         </h1>
         <div className="flex shrink-0 items-center gap-2">
           {(c.selectedRoom || c.aisle != null) && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="lg"
+              icon={<ChevronLeft />}
               onClick={c.resetAll}
-              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-label font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+              className="rounded-full"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Reset
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <IconButton
+            icon={<Settings className="h-4 w-4" />}
+            ariaLabel="Configure rack printer"
             onClick={() => c.setConfigOpen(true)}
-            aria-label="Configure rack printer"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+          />
         </div>
       </header>
 

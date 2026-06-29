@@ -1,46 +1,42 @@
 import { ChevronLeft, Copy, Link2, Loader2 } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 
 function ProgressChip({ label, dotClass = 'bg-rose-400' }: { label: string; dotClass?: string }) {
   return (
-    <div className="inline-flex h-8 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-[11px] font-semibold text-slate-600">
+    <div className="inline-flex h-8 min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-caption font-semibold text-slate-600">
       <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
       <span className="truncate">{label}</span>
     </div>
   );
 }
 
-const ghostBtn =
-  'inline-flex h-9 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50';
-const roseBtn =
-  'inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-sm transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50';
-const blueBtn =
-  'inline-flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 text-[11px] font-black uppercase tracking-[0.14em] text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50';
-const blueOutlineBtn =
-  'inline-flex h-9 items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50';
-
 /** The Copy + Finish pair shared by the create- and link-mode seller steps. */
 function SellerActions({ c }: { c: ReceivingClaimController }) {
   const { seller } = c;
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="md"
         disabled={!seller.sellerMessage.trim()}
         onClick={() => void seller.handleCopySellerMessage()}
-        className={blueOutlineBtn}
+        className="border-blue-200 text-blue-700 hover:bg-blue-50"
+        icon={<Copy className="h-4 w-4" />}
       >
-        <Copy className="h-4 w-4" />
         Copy
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="primary"
+        size="md"
         onClick={() => void seller.finishSellerStep()}
         disabled={seller.aiLoading || (c.mode === 'link' && !c.linkCommitted)}
-        className={blueBtn}
       >
         Finish seller msg
-      </button>
+      </Button>
     </>
   );
 }
@@ -93,14 +89,20 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
   return (
     <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-4 py-2.5">
       <div className="flex items-center gap-2">
-        <button type="button" onClick={c.onClose} disabled={busy} className={ghostBtn}>
+        <Button type="button" variant="secondary" size="md" onClick={c.onClose} disabled={busy}>
           Cancel
-        </button>
+        </Button>
         {showBack ? (
-          <button type="button" onClick={onBack} disabled={busy} className={ghostBtn}>
-            <ChevronLeft className="h-3.5 w-3.5" />
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            onClick={onBack}
+            disabled={busy}
+            icon={<ChevronLeft className="h-3.5 w-3.5" />}
+          >
             Back
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -109,64 +111,68 @@ export function ClaimModalFooter({ c }: { c: ReceivingClaimController }) {
 
         {/* ── Create flow ─────────────────────────────────────────────── */}
         {isCreate && step === 'photos' ? (
-          <button type="button" onClick={c.goNext} className={roseBtn}>
+          <Button type="button" variant="danger" size="md" onClick={c.goNext}>
             Next: Ticket →
-          </button>
+          </Button>
         ) : null}
 
         {isCreate && step === 'compose' ? (
-          <button
-            type="button"
-            onClick={c.goNext}
-            disabled={!c.composeComplete}
-            title={c.composeComplete ? undefined : 'Add a subject and body first'}
-            className={roseBtn}
-          >
-            Next: Review →
-          </button>
+          c.composeComplete ? (
+            <Button type="button" variant="danger" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
+              Next: Review →
+            </Button>
+          ) : (
+            <HoverTooltip label="Add a subject and body first" asChild>
+              <Button type="button" variant="danger" size="md" onClick={c.goNext} disabled={!c.composeComplete}>
+                Next: Review →
+              </Button>
+            </HoverTooltip>
+          )
         ) : null}
 
         {isCreate && step === 'review' ? (
-          <button
+          <Button
             type="button"
+            variant="danger"
+            size="md"
             onClick={c.submitInternal}
             disabled={c.submitting || c.archiveSubmitting || !c.row.receiving_id || !c.composeComplete}
-            className={roseBtn}
+            icon={c.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
           >
-            {c.submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             {c.submitting ? 'Filing…' : 'File ticket & back up →'}
-          </button>
+          </Button>
         ) : null}
 
         {isCreate && step === 'confirm' ? (
-          <button type="button" onClick={c.continueToSeller} className={blueBtn}>
+          <Button type="button" variant="primary" size="md" onClick={c.continueToSeller}>
             Continue to seller →
-          </button>
+          </Button>
         ) : null}
 
         {isCreate && step === 'seller' ? <SellerActions c={c} /> : null}
 
         {/* ── Link flow ───────────────────────────────────────────────── */}
         {!isCreate && linkStep === 'find' ? (
-          <button
+          <Button
             type="button"
+            variant="danger"
+            size="md"
             onClick={c.submitLink}
             disabled={c.linking || !c.row.receiving_id || !search.selectedTicket}
-            className={roseBtn}
+            icon={c.linking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
           >
-            {c.linking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
             {c.linking
               ? 'Linking…'
               : search.selectedTicket
                 ? `Link ticket #${search.selectedTicket.id} →`
                 : 'Choose a ticket'}
-          </button>
+          </Button>
         ) : null}
 
         {!isCreate && linkStep === 'linked' ? (
-          <button type="button" onClick={c.continueToSeller} className={blueBtn}>
+          <Button type="button" variant="primary" size="md" onClick={c.continueToSeller}>
             Continue to seller →
-          </button>
+          </Button>
         ) : null}
 
         {!isCreate && linkStep === 'seller' ? <SellerActions c={c} /> : null}

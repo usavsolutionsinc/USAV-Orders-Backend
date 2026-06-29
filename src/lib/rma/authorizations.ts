@@ -24,6 +24,32 @@ import { resolvePriorOutbound } from '@/lib/neon/serial-units-queries';
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
+import { isPlacementStrangleRmaRestock } from '@/lib/feature-flags';
+import { resolveSitePlacementBin } from '@/lib/workflow/placement-policy';
+import type { PlacementResolverDeps } from '@/lib/workflow/placement';
+
+/**
+ * A bin lookup (for the placement strangle) scoped to an open tenant client +
+ * org, mirroring receiving's RESERVE + active filter so a restock decision rule
+ * resolves a real, pickable bin. Runs on the passed client so it shares the
+ * disposition transaction's GUC + lock visibility.
+ */
+function reserveBinDepsOn(client: Pick<PoolClient, 'query'>, orgId: string): PlacementResolverDeps {
+  const find = async (barcode: string): Promise<{ id: number; name: string } | null> => {
+    const r = await client.query<{ id: number; name: string }>(
+      `SELECT id, name FROM locations
+        WHERE barcode = $1
+          AND is_active = true
+          AND bin_role = 'RESERVE'
+          AND organization_id = $2
+        ORDER BY id ASC
+        LIMIT 1`,
+      [barcode, orgId],
+    );
+    return r.rows[0] ?? null;
+  };
+  return { findByBarcode: find, findByName: async () => null };
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -296,11 +322,14 @@ export async function recordDisposition(
           sku: string | null;
           current_status: string;
           normalized_serial: string;
+          condition_grade: string | null;
         }>(
           orgId
-            ? `SELECT sku, current_status::text AS current_status, normalized_serial
+            ? `SELECT sku, current_status::text AS current_status, normalized_serial,
+                      condition_grade::text AS condition_grade
                  FROM serial_units WHERE id = $1 AND organization_id = $2 FOR UPDATE`
-            : `SELECT sku, current_status::text AS current_status, normalized_serial
+            : `SELECT sku, current_status::text AS current_status, normalized_serial,
+                      condition_grade::text AS condition_grade
                  FROM serial_units WHERE id = $1 FOR UPDATE`,
           orgId ? [input.serialUnitId, orgId] : [input.serialUnitId],
         );
@@ -374,6 +403,28 @@ export async function recordDisposition(
           // our sellable stock. Only fires when the unit is actually RETURNED;
           // other states / codes record the disposition without a status change.
           if (isInboundReturn && input.dispositionCode === 'ACCEPT' && unit.current_status === 'RETURNED') {
+            // Config-driven restock placement (§1.6 Track 1, opt-in). When the
+            // flag is on, consult the org's Studio decision policy for a restock
+            // bin (NO system default — see resolveSitePlacementBin with [] policy).
+            // With no decision node authored it resolves nothing → restock stays
+            // bin-less, exactly as before; an org that authors a rule gets the
+            // unit physically placed + current_location set, no app change.
+            const effectiveOrg = orgId ?? USAV_ORG_ID;
+            let restockBinId: number | null = null;
+            let restockBinName: string | null = null;
+            if (isPlacementStrangleRmaRestock()) {
+              const resolved = await resolveSitePlacementBin({
+                orgId: effectiveOrg,
+                facts: { disposition: 'ACCEPT', grade: unit.condition_grade ?? undefined },
+                systemPolicy: [], // opt-in only — no built-in restock bin
+                binDeps: reserveBinDepsOn(client, effectiveOrg),
+              });
+              if (resolved) {
+                restockBinId = resolved.bin.binId;
+                restockBinName = resolved.bin.binName;
+              }
+            }
+
             const t = await transition(
               {
                 unitId: input.serialUnitId,
@@ -381,13 +432,27 @@ export async function recordDisposition(
                 eventType: 'ADJUSTED',
                 actorStaffId: input.decidedByStaffId,
                 station: 'SYSTEM',
-                payload: { source: 'rma.restock', rmaId: input.rmaId, dispositionCode: input.dispositionCode },
+                binId: restockBinId ?? undefined,
+                payload: {
+                  source: 'rma.restock',
+                  rmaId: input.rmaId,
+                  dispositionCode: input.dispositionCode,
+                  ...(restockBinName ? { placement: restockBinName } : {}),
+                },
               },
               client,
             );
             // Pre-checked RETURNED → STOCKED is a declared edge, so this is
             // expected to succeed; a failure means concurrent drift — abort.
             if (!t.ok) throw new Error(`restock failed: ${t.error}`);
+            // Mirror parts-sort: when a bin was resolved, set current_location in
+            // the SAME tx so the unit never ends STOCKED-but-not-relocated.
+            if (restockBinId != null && restockBinName) {
+              await client.query(
+                `UPDATE serial_units SET current_location = $1, updated_at = NOW() WHERE id = $2`,
+                [restockBinName, input.serialUnitId],
+              );
+            }
             restocked = true;
           }
         }

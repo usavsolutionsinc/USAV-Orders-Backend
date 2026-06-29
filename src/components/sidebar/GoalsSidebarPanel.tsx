@@ -164,13 +164,14 @@ function CurrentGoalEntry({
 
         <div className="relative flex min-w-[44px] items-center justify-end">
           {!isEditing ? (
+            /* ds-raw-button: inline edit-affordance counter (today/goal with underlined editable segment) — heightless inline layout, not the Button primitive shape */
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
               }}
-              className="flex items-center gap-0.5 text-micro font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
+              className="ds-raw-button flex items-center gap-0.5 text-micro font-black tabular-nums text-slate-600 transition-colors hover:text-blue-600"
             >
               <span>{row.today_count}</span>
               <span className="text-slate-300">/</span>
@@ -363,13 +364,14 @@ export function GoalsSidebarPanel() {
             <p className={sectionLabel}>Goal Tools</p>
           </div>
 
+          {/* ds-raw-button: full-width menu row (two-line text block + bordered icon cell) — not the Button primitive shape */}
           <button
             type="button"
             onClick={() => {
               emitGoalsRefresh();
               void fetchRows();
             }}
-            className="flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+            className="ds-raw-button flex w-full items-center justify-between border-b border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
           >
             <div>
               <p className={dataValue}>Refresh Goal Data</p>
@@ -380,10 +382,11 @@ export function GoalsSidebarPanel() {
             </span>
           </button>
 
+          {/* ds-raw-button: full-width menu row (two-line text block + bordered icon cell) — not the Button primitive shape */}
           <button
             type="button"
             onClick={clearFilters}
-            className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
+            className="ds-raw-button flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50"
           >
             <div>
               <p className={dataValue}>Clear Filters</p>

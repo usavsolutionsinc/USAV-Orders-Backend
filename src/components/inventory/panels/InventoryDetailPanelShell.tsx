@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { ChevronDown, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import {
     dispatchCloseInventoryDetails,
@@ -69,35 +71,37 @@ export function InventoryDetailPanelShell({
                 <div className="flex items-center gap-1">
                     {showNavigation ? (
                         <>
-                            <button
-                                type="button"
-                                onClick={() => dispatchNavigateInventoryDetails('up')}
-                                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-blue-200 hover:text-blue-600"
-                                title="Previous result ([)"
-                                aria-label="Previous result"
-                            >
-                                <ChevronDown className="h-4 w-4 rotate-180" />
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => dispatchNavigateInventoryDetails('down')}
-                                className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-blue-200 hover:text-blue-600"
-                                title="Next result (])"
-                                aria-label="Next result"
-                            >
-                                <ChevronDown className="h-4 w-4" />
-                            </button>
+                            <HoverTooltip label="Previous result ([)" asChild>
+                                <IconButton
+                                    type="button"
+                                    tone="accent"
+                                    onClick={() => dispatchNavigateInventoryDetails('up')}
+                                    className="rounded-lg border border-gray-200 bg-white p-1.5 hover:border-blue-200"
+                                    ariaLabel="Previous result"
+                                    icon={<ChevronDown className="h-4 w-4 rotate-180" />}
+                                />
+                            </HoverTooltip>
+                            <HoverTooltip label="Next result (])" asChild>
+                                <IconButton
+                                    type="button"
+                                    tone="accent"
+                                    onClick={() => dispatchNavigateInventoryDetails('down')}
+                                    className="rounded-lg border border-gray-200 bg-white p-1.5 hover:border-blue-200"
+                                    ariaLabel="Next result"
+                                    icon={<ChevronDown className="h-4 w-4" />}
+                                />
+                            </HoverTooltip>
                         </>
                     ) : null}
-                    <button
-                        type="button"
-                        onClick={close}
-                        className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 transition-colors hover:border-red-200 hover:text-red-600"
-                        title="Close (Esc)"
-                        aria-label="Close detail"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+                    <HoverTooltip label="Close (Esc)" asChild>
+                        <IconButton
+                            type="button"
+                            onClick={close}
+                            className="rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 hover:border-red-200 hover:text-red-600"
+                            ariaLabel="Close detail"
+                            icon={<X className="h-4 w-4" />}
+                        />
+                    </HoverTooltip>
                 </div>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto">

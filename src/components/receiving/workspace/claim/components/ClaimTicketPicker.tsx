@@ -53,7 +53,7 @@ export function ClaimTicketPicker({ search, onSelect }: Props) {
                     type="button"
                     onClick={() => onSelect(isSel ? null : t)}
                     disabled={t.linkedToThis}
-                    className={`flex w-full items-center gap-2.5 border-b border-gray-100 px-3 py-2.5 text-left transition-colors last:border-b-0 ${
+                    className={`ds-raw-button flex w-full items-center gap-2.5 border-b border-gray-100 px-3 py-2.5 text-left transition-colors last:border-b-0 ${
                       isSel ? 'bg-rose-50' : 'hover:bg-gray-50'
                     } ${t.linkedToThis ? 'cursor-default opacity-60' : ''}`}
                   >

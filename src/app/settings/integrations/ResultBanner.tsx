@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from '@/lib/toast';
 import { Check, AlertTriangle, X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 const SUCCESS: Record<string, string> = {
   amazon_connected: 'Amazon connected.',
@@ -72,9 +73,12 @@ export function ResultBanner({ success, error }: { success?: string; error?: str
     >
       {ok ? <Check className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
       <span className="flex-1 text-[12.5px] font-medium">{successMsg ?? errorMsg}</span>
-      <button type="button" onClick={() => setDismissed(true)} className="shrink-0 opacity-60 hover:opacity-100" aria-label="Dismiss">
-        <X className="h-3.5 w-3.5" />
-      </button>
+      <IconButton
+        icon={<X className="h-3.5 w-3.5" />}
+        ariaLabel="Dismiss"
+        onClick={() => setDismissed(true)}
+        className="shrink-0 opacity-60 hover:opacity-100"
+      />
     </div>
   );
 }

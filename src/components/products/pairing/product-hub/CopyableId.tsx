@@ -1,5 +1,6 @@
 import { useCallback, useId, useRef, type MouseEvent } from 'react';
 import { useSiteTooltipOptional } from '@/components/providers/SiteTooltipProvider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * A hover-to-copy identifier. Shows the full SKU/item value in mono style,
@@ -29,7 +30,7 @@ export function CopyableId({ value, className = '' }: { value: string; className
     [trimmed, tooltip, anchorId],
   );
 
-  return (
+  const button = (
     <button
       ref={ref}
       type="button"
@@ -39,10 +40,19 @@ export function CopyableId({ value, className = '' }: { value: string; className
       onFocus={open}
       onBlur={close}
       disabled={!trimmed}
-      title={!tooltip && trimmed ? trimmed : undefined}
-      className={`min-w-0 truncate text-left transition-colors hover:text-blue-600 hover:underline disabled:no-underline disabled:hover:text-current ${className}`}
+      className={`ds-raw-button min-w-0 truncate text-left transition-colors hover:text-blue-600 hover:underline disabled:no-underline disabled:hover:text-current ${className}`}
     >
       {value}
     </button>
+  );
+
+  // When the SiteTooltipProvider isn't present, fall back to a HoverTooltip
+  // showing the full value (the provider otherwise owns the hover affordance).
+  return !tooltip && trimmed ? (
+    <HoverTooltip label={trimmed} asChild>
+      {button}
+    </HoverTooltip>
+  ) : (
+    button
   );
 }

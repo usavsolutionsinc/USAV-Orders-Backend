@@ -1,9 +1,11 @@
 'use client';
 
 import { WorkspaceCard, StickyActionBar } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import { ConfirmSheet } from '@/components/ui/BottomSheet';
 import { PageHeader } from '@/components/ui/pane-header';
 import { Check, Plus, Trash2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { LETTERS } from './room-detail-shared';
 import { BigZoneTile } from './RoomDetailPieces';
 import { RoomStatsCard } from './RoomStatsCard';
@@ -89,24 +91,29 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
           {LETTERS.map((l) => {
             const isLocked = usedLetters.has(l);
             const isSelected = trimmedLetter === l;
-            return (
+            const showLocked = isLocked && !isSelected;
+            const btn = (
               <button
                 key={l}
                 type="button"
                 disabled={isLocked && !isSelected}
                 onClick={() => setForm((f) => ({ ...f, letter: l }))}
-                className={`relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
+                className={`ds-raw-button relative flex h-10 items-center justify-center rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.95] ${
                   isSelected
                     ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-md shadow-blue-600/30'
                     : isLocked
                       ? 'bg-gray-100 text-gray-300'
                       : 'border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50'
                 }`}
-                title={isLocked && !isSelected ? 'Already used by another room' : undefined}
               >
                 {l}
               </button>
             );
+            return showLocked ? (
+              <HoverTooltip key={l} label="Already used by another room" asChild>
+                {btn}
+              </HoverTooltip>
+            ) : btn;
           })}
         </div>
       </WorkspaceCard>
@@ -144,15 +151,15 @@ export function RoomEditForm({ c }: { c: RoomDetailController }) {
                 room by printing labels under that name again.
               </p>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
               onClick={() => setConfirmDelete(true)}
               disabled={roomMutating}
-              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-red-50 px-3 text-label font-semibold text-red-700 ring-1 ring-red-200 transition-colors hover:bg-red-100 active:scale-95 disabled:opacity-50"
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              className="h-10 shrink-0 rounded-full bg-red-50 px-3 text-label text-red-700 ring-red-200 hover:bg-red-100 hover:text-red-700"
             >
-              <Trash2 className="h-3.5 w-3.5" />
               Delete
-            </button>
+            </Button>
           </div>
         </WorkspaceCard>
       )}

@@ -21,6 +21,14 @@
  * Run cadence (per vercel.json):
  *   - every 2h: limit=100 concurrency=5 (rolling sweep)
  *   - daily 00:00 Tue–Sat: limit=200 concurrency=8 carriers=UPS,USPS,FEDEX (deep refresh)
+ *
+ * Tenancy (Phase D category B — global carrier-poll sweep): carrier tracking
+ * reads (UPS/USPS/FedEx) are global, not per-org-credentialed, and each polled
+ * shipment carries its own org via its parent (shipping_tracking_numbers is an
+ * org-less surrogate-keyed spine). So this stays a single global due-poll on the
+ * owner pool. Phase E follow-up: to be FORCE-safe, GUC-scope the due-shipment
+ * selection per org and shard the limit/concurrency budget across orgs (a naive
+ * per-org loop multiplies wall-clock by org count and blows maxDuration).
  */
 
 import { NextRequest, NextResponse } from 'next/server';

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
-import { Panel } from '@/design-system/primitives';
+import { Button, Panel } from '@/design-system/primitives';
 import { LEGAL_DOCS, LEGAL_INDEX_BLURB, type LegalDoc } from '@/content/legal';
 
 /**
@@ -58,29 +58,29 @@ export function LegalSection() {
         {LEGAL_DOCS.map((doc) => {
           const selected = doc.slug === activeSlug;
           return (
-            <button
+            <Button
               key={doc.slug}
               type="button"
               role="tab"
               aria-selected={selected}
+              variant={selected ? 'primary' : 'secondary'}
+              size="sm"
               onClick={() => setActiveSlug(doc.slug)}
-              className={
-                selected
-                  ? 'rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white'
-                  : 'rounded-lg border border-border-soft bg-surface-card px-3 py-1.5 text-xs font-semibold text-text-default hover:bg-surface-canvas'
-              }
+              className="px-3 py-1.5 text-xs"
             >
               {doc.label}
-            </button>
+            </Button>
           );
         })}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => download(active)}
-          className="ml-auto rounded-lg border border-border-soft bg-surface-card px-3 py-1.5 text-xs font-semibold text-text-muted hover:bg-surface-canvas"
+          className="ml-auto px-3 py-1.5 text-xs text-text-muted"
         >
           Download .md
-        </button>
+        </Button>
       </div>
 
       <Panel padding="lg">

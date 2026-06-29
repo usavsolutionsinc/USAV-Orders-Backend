@@ -35,8 +35,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { StatPill } from './access/StatPill';
 import { AddStaffDialog } from './access/AddStaffDialog';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface StaffRow {
   id: number;
@@ -183,6 +185,7 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
       {/* Status filter chips */}
       <div className="flex flex-shrink-0 items-center gap-1.5 border-b border-gray-200 px-3 py-2">
         {(['all', 'active', 'invited', 'disabled'] as const).map((s) => (
+          // ds-raw-button: two-state segmented filter toggle with custom active fill (blue-600)
           <button
             key={s}
             type="button"
@@ -208,14 +211,15 @@ export function AccessSidebarPanel({ basePath = '/settings/access' }: { basePath
 
       {/* Add staff button */}
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setAddOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>}
+          className="w-full border border-dashed border-gray-300 ring-0 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Add staff
-        </button>
+        </Button>
       </div>
 
       {/* Staff list */}
@@ -288,6 +292,7 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
 
   return (
     <li>
+      {/* ds-raw-button: text-left multi-line master-detail picker row (avatar + name + meta + status dot) */}
       <button
         type="button"
         onClick={onPick}
@@ -303,11 +308,13 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
             {initials(row.name)}
           </div>
           {isAdmin && (
-            <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white" title="Admin · All Access">
-              <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-              </svg>
-            </span>
+            <HoverTooltip label="Admin · All Access" asChild focusable={false}>
+              <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white">
+                <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </span>
+            </HoverTooltip>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -319,7 +326,9 @@ function StaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps) {
             {row.role.replace(/_/g, ' ')}
           </div>
         </div>
-        <span title={row.status} className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+        <HoverTooltip label={row.status} asChild focusable={false}>
+          <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+        </HoverTooltip>
       </button>
     </li>
   );
@@ -347,19 +356,20 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
           ? 'border-blue-200 bg-blue-50 ring-1 ring-blue-500/30 shadow-sm shadow-blue-200/40'
           : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
       }`}>
-        <button
-          type="button"
+        <IconButton
           {...attributes}
           {...listeners}
-          aria-label="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <circle cx="9"  cy="6"  r="1.5"/><circle cx="15" cy="6"  r="1.5"/>
-            <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-            <circle cx="9"  cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
-          </svg>
-        </button>
+          icon={
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="9"  cy="6"  r="1.5"/><circle cx="15" cy="6"  r="1.5"/>
+              <circle cx="9"  cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+              <circle cx="9"  cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+            </svg>
+          }
+          ariaLabel="Drag to reorder"
+          className="flex-shrink-0 cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+        />
+        {/* ds-raw-button: text-left multi-line master-detail picker row (avatar + name + meta + status dot) */}
         <button
           type="button"
           onClick={onPick}
@@ -371,11 +381,13 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
               {initials(row.name)}
             </div>
             {isAdmin && (
-              <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white" title="Admin · All Access">
-                <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                </svg>
-              </span>
+              <HoverTooltip label="Admin · All Access" asChild focusable={false}>
+                <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white">
+                  <svg className="h-2 w-2 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                  </svg>
+                </span>
+              </HoverTooltip>
             )}
           </div>
           <div className="min-w-0 flex-1">
@@ -387,7 +399,9 @@ function SortableStaffSidebarRow({ row, selected, onPick }: StaffSidebarRowProps
               {row.role.replace(/_/g, ' ')}
             </div>
           </div>
-          <span title={row.status} className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+          <HoverTooltip label={row.status} asChild focusable={false}>
+            <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT[row.status] || STATUS_DOT.active}`} aria-label={`Status: ${row.status}`} />
+          </HoverTooltip>
         </button>
       </div>
     </li>

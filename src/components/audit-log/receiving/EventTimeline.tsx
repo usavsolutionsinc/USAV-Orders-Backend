@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { User } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { fmtTime, hasNonTrivialDetail, kindMeta, KindIcon, relTime } from './audit-receiving-format';
 import type { AuditEvent } from './audit-receiving-types';
 
@@ -34,7 +35,9 @@ export function EventCard({ event: ev }: { event: AuditEvent }) {
               {ev.station && <span className="text-caption uppercase tracking-wide text-slate-400">{ev.station}</span>}
             </div>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-              <span title={ev.occurred_at}>{fmtTime(ev.occurred_at)}</span>
+              <HoverTooltip label={ev.occurred_at} asChild>
+                <span>{fmtTime(ev.occurred_at)}</span>
+              </HoverTooltip>
               <span>·</span>
               <span className="text-slate-400">{relTime(ev.occurred_at)}</span>
               {ev.actor_name && (

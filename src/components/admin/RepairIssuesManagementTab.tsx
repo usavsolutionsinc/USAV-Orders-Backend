@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { Edit, Plus, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { toast } from '@/lib/toast';
 import { sectionLabel, fieldLabel, tableHeader, tableCell } from '@/design-system/tokens/typography/presets';
@@ -189,14 +191,9 @@ export function RepairIssuesManagementTab() {
               placeholder="Filter label / category"
               className="h-8 w-64 border border-gray-200 bg-white px-3 text-xs font-medium text-gray-900 outline-none focus:border-gray-400"
             />
-            <button
-              type="button"
-              onClick={openAdd}
-              className={`${sectionLabel} inline-flex items-center gap-2 border border-gray-300 px-3 py-1.5 text-gray-800 transition-colors hover:bg-gray-50`}
-            >
-              <Plus className="h-3 w-3" />
+            <Button variant="secondary" size="sm" onClick={openAdd} icon={<Plus />}>
               Add Issue
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -225,6 +222,7 @@ export function RepairIssuesManagementTab() {
               ) : (
                 filtered.map((row) => (
                   <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-3 text-sm last:border-b-0`}>
+                    {/* ds-allow-title: truncation-only title on a non-interactive <p> */}
                     <p className={`${tableCell} truncate`} title={row.label}>{row.label}</p>
                     <p className={`${tableCell} truncate uppercase tracking-[0.16em] text-gray-600`}>{row.category || '-'}</p>
                     <p className={`${tableCell} text-gray-600`}>{row.sort_order}</p>
@@ -232,25 +230,23 @@ export function RepairIssuesManagementTab() {
                       {row.active ? 'Active' : 'Hidden'}
                     </p>
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-                        title="Edit issue template"
-                        aria-label={`Edit ${row.label}`}
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(row)}
-                        disabled={deleteMutation.isPending}
-                        className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
-                        title="Delete issue template"
-                        aria-label={`Delete ${row.label}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverTooltip label="Edit issue template" asChild>
+                        <IconButton
+                          onClick={() => openEdit(row)}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                          ariaLabel={`Edit ${row.label}`}
+                          icon={<Edit className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
+                      <HoverTooltip label="Delete issue template" asChild>
+                        <IconButton
+                          onClick={() => handleDelete(row)}
+                          disabled={deleteMutation.isPending}
+                          className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 hover:bg-rose-50"
+                          ariaLabel={`Delete ${row.label}`}
+                          icon={<Trash2 className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
                     </div>
                   </div>
                 ))
@@ -262,6 +258,7 @@ export function RepairIssuesManagementTab() {
 
       {isFormOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-screen scrim overlay, not a button control */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close issue form" />
           <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
@@ -271,13 +268,12 @@ export function RepairIssuesManagementTab() {
                   {editingId != null ? `Update ${form.label}` : 'Add a global repair issue'}
                 </h3>
               </div>
-              <button
-                type="button"
+              <IconButton
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                ariaLabel="Close"
+                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                icon={<X className="h-4 w-4" />}
+              />
             </div>
 
             <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
@@ -331,21 +327,12 @@ export function RepairIssuesManagementTab() {
             </div>
 
             <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeForm}
-                className={`${sectionLabel} border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50`}
-              >
+              <Button variant="secondary" size="md" onClick={closeForm}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isSaving}
-                className={`${sectionLabel} border border-gray-900 bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 disabled:opacity-50`}
-              >
+              </Button>
+              <Button variant="brand" size="md" onClick={handleSubmit} disabled={isSaving}>
                 {isSaving ? 'Saving...' : editingId != null ? 'Save Changes' : 'Create Issue'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

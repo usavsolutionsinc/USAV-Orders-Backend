@@ -26,6 +26,7 @@ import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { ProgressDots } from '@/components/mobile/ProgressDots';
 import { ConfirmDock } from '@/components/mobile/ConfirmDock';
 import { ShortPickSheet } from '@/components/mobile/picker/ShortPickSheet';
+import { IconButton } from '@/design-system/primitives';
 import { useMobilePicker } from './_picker/useMobilePicker';
 import { PickerTaskCard } from './_picker/PickerTaskCard';
 import { LoadingShell, ErrorShell, EmptyShell, CompleteCard } from './_picker/PickerShells';
@@ -69,16 +70,16 @@ function PickerInner() {
       >
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
+            <IconButton
               onClick={() => router.push('/m/pick')}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-700 active:bg-slate-200"
-              aria-label="Back to queue"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+              ariaLabel="Back to queue"
+              icon={
+                <svg viewBox="0 0 24 24" className="h-5 w-5 text-slate-700" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              }
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 active:bg-slate-200"
+            />
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">
               {order.customerInitials}
             </span>

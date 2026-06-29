@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { Edit, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
 import { toast } from '@/lib/toast';
 import { sectionLabel, fieldLabel, tableHeader, tableCell } from '@/design-system/tokens/typography/presets';
@@ -244,7 +246,9 @@ export function LocationsManagementTab() {
                   const pos = [row.row_label, row.col_label].filter(Boolean).join('-') || '-';
                   return (
                     <div key={row.id} className={`${tableGridClass} items-center border-b border-gray-100 px-4 py-2.5 text-sm last:border-b-0`}>
+                      {/* ds-allow-title: native tooltip shows full value when truncated */}
                       <p className={`${tableCell} truncate font-mono`} title={row.barcode ?? ''}>{row.barcode || '-'}</p>
+                      {/* ds-allow-title: native tooltip shows full value when truncated */}
                       <p className={`${tableCell} truncate`} title={row.name}>{row.name}</p>
                       <p className={`${tableCell} truncate text-gray-600`}>{row.room || '-'}</p>
                       <p className={`${tableCell} text-gray-600`}>{pos}</p>
@@ -254,26 +258,24 @@ export function LocationsManagementTab() {
                       <p className={`${tableCell} text-gray-600`}>{fillLabel(row)}</p>
                       <p className={`${tableHeader} ${status.cls}`}>{status.label}</p>
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(row)}
-                          disabled={!row.barcode}
-                          className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40"
-                          title={row.barcode ? 'Edit bin' : 'Bin has no barcode — cannot edit here'}
-                          aria-label={`Edit ${row.name}`}
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(row)}
-                          disabled={!row.barcode || deleteMutation.isPending}
-                          className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-40"
-                          title={row.barcode ? 'Remove bin' : 'Bin has no barcode — cannot delete here'}
-                          aria-label={`Remove ${row.name}`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <HoverTooltip label={row.barcode ? 'Edit bin' : 'Bin has no barcode — cannot edit here'} asChild>
+                          <IconButton
+                            icon={<Edit className="h-3.5 w-3.5" />}
+                            ariaLabel={`Edit ${row.name}`}
+                            onClick={() => openEdit(row)}
+                            disabled={!row.barcode}
+                            className="inline-flex h-8 w-8 items-center justify-center border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40"
+                          />
+                        </HoverTooltip>
+                        <HoverTooltip label={row.barcode ? 'Remove bin' : 'Bin has no barcode — cannot delete here'} asChild>
+                          <IconButton
+                            icon={<Trash2 className="h-3.5 w-3.5" />}
+                            ariaLabel={`Remove ${row.name}`}
+                            onClick={() => handleDelete(row)}
+                            disabled={!row.barcode || deleteMutation.isPending}
+                            className="inline-flex h-8 w-8 items-center justify-center border border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+                          />
+                        </HoverTooltip>
                       </div>
                     </div>
                   );
@@ -286,6 +288,7 @@ export function LocationsManagementTab() {
 
       {editing && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
           <button type="button" className="absolute inset-0 bg-gray-950/30" onClick={closeForm} aria-label="Close bin form" />
           <div className="relative flex w-full max-w-xl flex-col overflow-hidden border border-gray-200 bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
@@ -295,13 +298,12 @@ export function LocationsManagementTab() {
                   {editing.room ? `${editing.room} · ` : ''}{editing.name}
                 </h3>
               </div>
-              <button
-                type="button"
+              <IconButton
+                icon={<X className="h-4 w-4" />}
+                ariaLabel="Close"
                 onClick={closeForm}
-                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                className="inline-flex h-9 w-9 items-center justify-center border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+              />
             </div>
 
             <div className="grid gap-4 border-b border-gray-200 px-5 py-5 md:grid-cols-2">
@@ -354,21 +356,16 @@ export function LocationsManagementTab() {
             </div>
 
             <div className="flex items-center justify-end gap-2 px-5 py-4">
-              <button
-                type="button"
-                onClick={closeForm}
-                className={`${sectionLabel} border border-gray-300 px-4 py-2 text-gray-700 transition-colors hover:bg-gray-50`}
-              >
+              <Button variant="secondary" onClick={closeForm}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="brand"
                 onClick={handleSubmit}
                 disabled={updateMutation.isPending}
-                className={`${sectionLabel} border border-gray-900 bg-gray-900 px-4 py-2 text-white transition-colors hover:bg-gray-800 disabled:opacity-50`}
               >
                 {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

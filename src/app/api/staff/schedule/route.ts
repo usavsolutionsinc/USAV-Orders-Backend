@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { STAFF_SCHEDULE_TIMEZONE, getCurrentStaffDayOfWeek } from '@/lib/staff-schedule';
@@ -92,7 +93,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       let resultByDate;
       try {
         resultByDate = await queryWithRetry(
-          () => pool.query(sqlByDate, [startDate, endDate, ctx.organizationId]),
+          () => tenantQuery(ctx.organizationId, sqlByDate, [startDate, endDate, ctx.organizationId]),
           { retries: 3, delayMs: 1000 }
         );
       } catch (queryError: any) {
@@ -170,7 +171,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         `;
 
         resultByDate = await queryWithRetry(
-          () => pool.query(fallbackByDateSql, [startDate, endDate, ctx.organizationId]),
+          () => tenantQuery(ctx.organizationId, fallbackByDateSql, [startDate, endDate, ctx.organizationId]),
           { retries: 1, delayMs: 250 }
         );
       }
@@ -206,7 +207,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     let result;
     try {
       result = await queryWithRetry(
-        () => pool.query(sql, [ctx.organizationId]),
+        () => tenantQuery(ctx.organizationId, sql, [ctx.organizationId]),
         { retries: 3, delayMs: 1000 }
       );
     } catch (queryError) {
@@ -224,7 +225,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         ORDER BY s.id ASC, d.day_of_week ASC
       `;
       result = await queryWithRetry(
-        () => pool.query(fallbackSql, [ctx.organizationId]),
+        () => tenantQuery(ctx.organizationId, fallbackSql, [ctx.organizationId]),
         { retries: 1, delayMs: 250 }
       );
     }

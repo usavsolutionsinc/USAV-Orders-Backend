@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Camera } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 
 interface MobilePhotoCountBadgeProps {
@@ -59,13 +60,13 @@ export function MobilePhotoCountBadge({
 
   if (onClick && hasPhotos) {
     return (
-      <button
+      <IconButton
         type="button"
         onClick={onClick}
+        ariaLabel={`${safeCount} photo${safeCount === 1 ? '' : 's'}`}
+        icon={inner}
         className="inline-flex rounded-lg px-1 py-0.5 active:bg-blue-50"
-      >
-        {inner}
-      </button>
+      />
     );
   }
 

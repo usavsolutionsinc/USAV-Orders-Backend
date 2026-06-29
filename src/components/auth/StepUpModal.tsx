@@ -114,23 +114,25 @@ export function StepUpModal({ scope, open, onResolved, onCancel, reason }: StepU
 
         {err && <div className="mb-3 text-xs text-red-600">{err}</div>}
 
+        {/* ds-raw-button: PIN entry numpad keypad (digit/passkey/backspace keys) — auth surface, not design-system Buttons */}
         <div className="grid grid-cols-3 gap-2 mb-3">
           {['1','2','3','4','5','6','7','8','9'].map((d) => (
             <button key={d} type="button" disabled={busy}
-              className="h-12 rounded-lg bg-gray-50 border border-gray-200 text-lg font-medium hover:bg-gray-100"
+              className="ds-raw-button h-12 rounded-lg bg-gray-50 border border-gray-200 text-lg font-medium hover:bg-gray-100"
               onClick={() => press(d)}>{d}</button>
           ))}
           <button type="button" disabled={busy}
-            className="h-12 rounded-lg text-xs text-gray-500 hover:text-gray-900"
+            className="ds-raw-button h-12 rounded-lg text-xs text-gray-500 hover:text-gray-900"
             onClick={() => submitPasskey()}>Passkey</button>
           <button type="button" disabled={busy}
-            className="h-12 rounded-lg bg-gray-50 border border-gray-200 text-lg font-medium hover:bg-gray-100"
+            className="ds-raw-button h-12 rounded-lg bg-gray-50 border border-gray-200 text-lg font-medium hover:bg-gray-100"
             onClick={() => press('0')}>0</button>
           <button type="button" disabled={busy || pin.length === 0}
-            className="h-12 rounded-lg bg-gray-50 border border-gray-200 text-base hover:bg-gray-100"
+            className="ds-raw-button h-12 rounded-lg bg-gray-50 border border-gray-200 text-base hover:bg-gray-100"
             onClick={() => setPin((p) => p.slice(0, -1))}>⌫</button>
         </div>
 
+        {/* ds-raw-button: minimal inline text-link cancel (no chrome) — Button would add height/padding */}
         <button type="button" onClick={onCancel}
           className="text-xs text-gray-500 hover:text-gray-900 mt-1">
           Cancel

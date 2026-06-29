@@ -5,8 +5,11 @@ import { motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { Check } from '@/components/Icons';
 import { OrderIdentityChips } from '@/components/ui/OrderIdentityChips';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { StaffInitials } from '@/design-system/components/StaffBadge';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
-import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { getDaysLateTone } from '@/utils/date';
 import { isSkuSourceRecord } from '@/utils/source-dot';
@@ -52,9 +55,12 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   daysLate,
   testerDisplay,
   packerDisplay,
+  testerId,
+  packerId,
   isMobile,
   onRowClick,
 }: OrdersQueueTableRowProps) {
+  const orderChannelLabel = useOrderChannelLabel();
   const qty = parseInt(String(record.quantity || '1'), 10) || 1;
   const trackingRaw =
     (record.tracking_number as string | undefined) ||
@@ -69,7 +75,7 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
     trackingType: record.tracking_type,
     scanRef: scanRefForSku,
   });
-  const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+  const platformLabel = orderChannelLabel(record.order_id || '', record.account_source);
   const isFba = isFbaOrder(record.order_id, record.account_source);
   const platformColor = platformLabel ? getOrderPlatformColor(platformLabel) : '';
   const productPageUrl = getExternalUrlByItemNumber(
@@ -77,11 +83,15 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   );
   const salePrice = formatSalePrice(record.sale_amount, record.currency);
   // Assigned staff, surfaced contextually so the `staff` sort is legible in-row.
+  // Rendered as the shared two-initial badge display (StaffInitials) — the SAME
+  // tester+packer presentation the Shipped/packed table uses, so the Unshipped /
+  // Tested lanes match it. Both slots always render (muted "--" when unassigned)
+  // so the column stays rigid across rows.
   const hasTester = testerDisplay && testerDisplay !== '---';
   const hasPacker = packerDisplay && packerDisplay !== '---';
-  const staffLabel = [hasTester ? testerDisplay : null, hasPacker ? packerDisplay : null]
-    .filter(Boolean)
-    .join(' · ');
+  // Phase-5 governing-event projection (orders.label_printed_at): glanceable
+  // "done" dot, shown only once the timestamp is stamped.
+  const labelPrintedAt = record.label_printed_at;
 
   return (
     <motion.div
@@ -144,11 +154,32 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
               {daysLate !== null ? (
                 <span className={getDaysLateTone(daysLate)}>{daysLate}</span>
               ) : null}
-              {staffLabel ? (
-                <span className="normal-case tracking-normal text-gray-500">{staffLabel}</span>
-              ) : null}
+              <span className="inline-flex items-center gap-1.5 normal-case tracking-normal">
+                {hasTester ? (
+                  <HoverTooltip label={`Tested by ${testerDisplay}`} focusable={false}>
+                    <StaffInitials staffId={testerId} name={testerDisplay} />
+                  </HoverTooltip>
+                ) : (
+                  <StaffInitials staffId={testerId} name={testerDisplay} />
+                )}
+                {hasPacker ? (
+                  <HoverTooltip label={`Packed by ${packerDisplay}`} focusable={false}>
+                    <StaffInitials staffId={packerId} name={packerDisplay} />
+                  </HoverTooltip>
+                ) : (
+                  <StaffInitials staffId={packerId} name={packerDisplay} />
+                )}
+              </span>
               {hasOutOfStock ? (
                 <span className="text-red-600">{outOfStockValue}</span>
+              ) : null}
+              {labelPrintedAt ? (
+                <HoverTooltip label="Label printed" focusable={false}>
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    LBL
+                  </span>
+                </HoverTooltip>
               ) : null}
             </>
           }
@@ -191,5 +222,6 @@ export const OrdersQueueTableRow = memo(function OrdersQueueTableRow({
   if (prev.record.quantity !== next.record.quantity) return false;
   if (prev.record.sale_amount !== next.record.sale_amount) return false;
   if (prev.record.currency !== next.record.currency) return false;
+  if (prev.record.label_printed_at !== next.record.label_printed_at) return false;
   return true;
 });

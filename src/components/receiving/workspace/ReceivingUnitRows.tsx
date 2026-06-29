@@ -129,12 +129,12 @@ export function ReceivingUnitRows({
   const masterValue = effectiveGrades.every((g) => g === effectiveGrades[0]) ? effectiveGrades[0] : null;
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {/* Umbrella control — one tap grades the whole lot; rows below override.
           Bare pills: the position above the unit list reads as "all" from
           context, so no chrome/label needed. `px-1` matches the unit rows'
           horizontal inset so the master + per-row pills share a left edge. */}
-      <div className="px-1">
+      <div className="min-w-0 px-1">
         <ConditionPills value={masterValue} onChange={setAllUnits} />
       </div>
       <UnitSlotList

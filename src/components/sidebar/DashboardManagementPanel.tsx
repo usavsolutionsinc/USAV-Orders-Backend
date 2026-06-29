@@ -7,6 +7,8 @@ import { Plus } from '@/components/Icons';
 import { DashboardShippedSearchHandoffCard } from '@/components/dashboard/DashboardShippedSearchHandoffCard';
 import { RecentSearchesList } from '@/components/sidebar/RecentSearchesList';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { ShippedIntakeForm, type ShippedFormData } from '@/components/shipped';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrderSyncDialog } from '@/components/sidebar/OrderSyncDialog';
@@ -75,15 +77,14 @@ export function DashboardManagementPanel({
           placeholder: 'Search order ID, tracking, SKU, title, customer...',
           variant: 'blue',
           rightElement: (
-            <button
-              type="button"
+            <HoverTooltip label="New Order Entry" asChild>
+            <IconButton
+              ariaLabel="Open new order entry form"
               onClick={handleOpenIntakeForm}
               className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-              title="New Order Entry"
-              aria-label="Open new order entry form"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
+              icon={<Plus className="h-5 w-5" />}
+            />
+            </HoverTooltip>
           ),
         }}
         bodyClassName="flex flex-col space-y-6 scrollbar-hide pb-6"

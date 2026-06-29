@@ -18,6 +18,9 @@ export const monoValue = 'text-sm font-bold font-mono text-gray-900' as const;
 /** Chip / badge text (e.g. CopyChip display, ID chips in card headers) */
 export const chipText = 'text-caption font-extrabold font-mono' as const;
 
+/** PO line received/expected counts (e.g. accordion "1/3" meta) */
+export const qtyProgress = 'text-caption font-bold font-mono tabular-nums leading-none' as const;
+
 /** Card titles (e.g. OrderCard, FbaItemCard, RepairCard main heading) */
 export const cardTitle = 'text-base font-black text-gray-900 leading-tight' as const;
 
@@ -36,6 +39,7 @@ export const typographyPresets = {
   dataValue,
   monoValue,
   chipText,
+  qtyProgress,
   cardTitle,
   tableHeader,
   tableCell,

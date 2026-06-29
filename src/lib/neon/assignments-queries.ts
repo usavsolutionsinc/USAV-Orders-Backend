@@ -1,4 +1,20 @@
-import pool from '../db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+
+// ─── Tenancy note ────────────────────────────────────────────────────────────
+// `work_assignments` is tenant-owned (organization_id NOT NULL) with RLS FORCE +
+// a tenant_isolation policy (live catalog, docs/tenancy/org-id-coverage.generated.md).
+// Every statement runs via `tenantQuery` under the per-request `app.current_org`
+// GUC — RLS is the primary enforcement — AND carries an explicit
+// `organization_id = $org` predicate (defense-in-depth, so a cross-org id is a
+// no-op even if a future caller runs on the BYPASSRLS owner pool). Every export
+// requires the request's orgId.
+//
+// Follow-up: the `(entity_type, entity_id, work_type)` unique key on
+// upsertAssignment is NOT composited with organization_id. It is safe today only
+// because entity_id references globally-unique PKs (orders.id, etc.); make it
+// `(organization_id, entity_type, entity_id, work_type)` in a migration to remove
+// that latent assumption.
 
 export type WorkType = 'TEST' | 'PACK' | 'REPAIR' | 'QA' | 'RECEIVE' | 'STOCK_REPLENISH';
 export type EntityType = 'ORDER' | 'REPAIR' | 'FBA_SHIPMENT' | 'RECEIVING' | 'SKU_STOCK';
@@ -42,21 +58,24 @@ export interface UpdateAssignmentParams {
 }
 
 /**
- * Get all work assignments with optional filters
+ * Get all work assignments with optional filters (org-scoped).
  */
-export async function getAssignments(filters?: {
-  entityType?: EntityType;
-  entityId?: number;
-  workType?: WorkType;
-  status?: AssignmentStatus;
-  assignedTechId?: number;
-  assignedPackerId?: number;
-  limit?: number;
-  offset?: number;
-}): Promise<WorkAssignment[]> {
-  const conditions: string[] = [];
-  const params: any[] = [];
-  let idx = 1;
+export async function getAssignments(
+  filters: {
+    entityType?: EntityType;
+    entityId?: number;
+    workType?: WorkType;
+    status?: AssignmentStatus;
+    assignedTechId?: number;
+    assignedPackerId?: number;
+    limit?: number;
+    offset?: number;
+  } | undefined,
+  orgId: OrgId,
+): Promise<WorkAssignment[]> {
+  const conditions: string[] = ['organization_id = $1'];
+  const params: any[] = [orgId];
+  let idx = 2;
 
   if (filters?.entityType) { conditions.push(`entity_type = $${idx++}`); params.push(filters.entityType); }
   if (filters?.entityId != null) { conditions.push(`entity_id = $${idx++}`); params.push(filters.entityId); }
@@ -65,12 +84,13 @@ export async function getAssignments(filters?: {
   if (filters?.assignedTechId != null) { conditions.push(`assigned_tech_id = $${idx++}`); params.push(filters.assignedTechId); }
   if (filters?.assignedPackerId != null) { conditions.push(`assigned_packer_id = $${idx++}`); params.push(filters.assignedPackerId); }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = `WHERE ${conditions.join(' AND ')}`;
   const limit = filters?.limit ?? 100;
   const offset = filters?.offset ?? 0;
   params.push(limit, offset);
 
-  const result = await pool.query(
+  const result = await tenantQuery<WorkAssignment>(
+    orgId,
     `SELECT * FROM work_assignments ${where} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx}`,
     params,
   );
@@ -83,21 +103,24 @@ export interface WorkAssignmentWithStaff extends WorkAssignment {
 }
 
 /**
- * Get assignments with staff names joined.
+ * Get assignments with staff names joined (org-scoped).
  */
-export async function getAssignmentsWithStaff(filters?: {
-  entityType?: EntityType;
-  entityId?: number;
-  workType?: WorkType;
-  status?: AssignmentStatus;
-  assignedTechId?: number;
-  assignedPackerId?: number;
-  includeClosed?: boolean;
-  limit?: number;
-}): Promise<WorkAssignmentWithStaff[]> {
-  const conditions: string[] = [];
-  const params: any[] = [];
-  let idx = 1;
+export async function getAssignmentsWithStaff(
+  filters: {
+    entityType?: EntityType;
+    entityId?: number;
+    workType?: WorkType;
+    status?: AssignmentStatus;
+    assignedTechId?: number;
+    assignedPackerId?: number;
+    includeClosed?: boolean;
+    limit?: number;
+  } | undefined,
+  orgId: OrgId,
+): Promise<WorkAssignmentWithStaff[]> {
+  const conditions: string[] = ['wa.organization_id = $1'];
+  const params: any[] = [orgId];
+  let idx = 2;
 
   if (filters?.entityType) { conditions.push(`wa.entity_type = $${idx++}`); params.push(filters.entityType); }
   if (filters?.entityId != null) { conditions.push(`wa.entity_id = $${idx++}`); params.push(filters.entityId); }
@@ -110,11 +133,12 @@ export async function getAssignmentsWithStaff(filters?: {
   if (filters?.assignedTechId != null) { conditions.push(`wa.assigned_tech_id = $${idx++}`); params.push(filters.assignedTechId); }
   if (filters?.assignedPackerId != null) { conditions.push(`wa.assigned_packer_id = $${idx++}`); params.push(filters.assignedPackerId); }
 
-  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const where = `WHERE ${conditions.join(' AND ')}`;
   const limit = filters?.limit ?? 100;
   params.push(limit);
 
-  const result = await pool.query(
+  const result = await tenantQuery<WorkAssignmentWithStaff>(
+    orgId,
     `SELECT
        wa.*,
        st.name AS assigned_tech_name,
@@ -131,46 +155,57 @@ export async function getAssignmentsWithStaff(filters?: {
 }
 
 /**
- * Get a single work assignment by ID
+ * Get a single work assignment by ID (org-scoped).
  */
-export async function getAssignmentById(id: number): Promise<WorkAssignment | null> {
-  const result = await pool.query('SELECT * FROM work_assignments WHERE id = $1', [id]);
-  return result.rows[0] ?? null;
-}
-
-/**
- * Get the active assignment for an entity + work type
- */
-export async function getActiveAssignment(
-  entityType: EntityType,
-  entityId: number,
-  workType: WorkType,
-): Promise<WorkAssignment | null> {
-  const result = await pool.query(
-    `SELECT * FROM work_assignments
-     WHERE entity_type = $1 AND entity_id = $2 AND work_type = $3
-       AND status IN ('ASSIGNED', 'IN_PROGRESS')
-     ORDER BY created_at DESC LIMIT 1`,
-    [entityType, entityId, workType],
+export async function getAssignmentById(id: number, orgId: OrgId): Promise<WorkAssignment | null> {
+  const result = await tenantQuery<WorkAssignment>(
+    orgId,
+    'SELECT * FROM work_assignments WHERE id = $1 AND organization_id = $2',
+    [id, orgId],
   );
   return result.rows[0] ?? null;
 }
 
 /**
- * Get the next unassigned entity ID of a given type/work type
+ * Get the active assignment for an entity + work type (org-scoped).
+ */
+export async function getActiveAssignment(
+  entityType: EntityType,
+  entityId: number,
+  workType: WorkType,
+  orgId: OrgId,
+): Promise<WorkAssignment | null> {
+  const result = await tenantQuery<WorkAssignment>(
+    orgId,
+    `SELECT * FROM work_assignments
+     WHERE entity_type = $1 AND entity_id = $2 AND work_type = $3
+       AND organization_id = $4
+       AND status IN ('ASSIGNED', 'IN_PROGRESS')
+     ORDER BY created_at DESC LIMIT 1`,
+    [entityType, entityId, workType, orgId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Get the next unassigned entity ID of a given type/work type (org-scoped).
  */
 export async function getNextUnassignedEntityId(
   entityType: EntityType,
   workType: WorkType,
+  orgId: OrgId,
   excludeId?: number,
 ): Promise<number | null> {
-  const excludeClause = excludeId != null ? 'AND entity_id != $3' : '';
-  const params: any[] = [entityType, workType];
+  const params: any[] = [entityType, workType, orgId];
+  let idx = 4;
+  const excludeClause = excludeId != null ? `AND entity_id != $${idx++}` : '';
   if (excludeId != null) params.push(excludeId);
 
-  const result = await pool.query(
+  const result = await tenantQuery<{ entity_id: number }>(
+    orgId,
     `SELECT entity_id FROM work_assignments
-     WHERE entity_type = $1 AND work_type = $2 AND status = 'ASSIGNED' ${excludeClause}
+     WHERE entity_type = $1 AND work_type = $2 AND organization_id = $3
+       AND status = 'ASSIGNED' ${excludeClause}
      ORDER BY created_at ASC LIMIT 1`,
     params,
   );
@@ -178,10 +213,12 @@ export async function getNextUnassignedEntityId(
 }
 
 /**
- * Create a new work assignment
+ * Create a new work assignment. organization_id is stamped from params and the
+ * statement runs under that org's GUC.
  */
 export async function createAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
-  const result = await pool.query(
+  const result = await tenantQuery<WorkAssignment>(
+    params.organizationId,
     `INSERT INTO work_assignments
        (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -202,10 +239,11 @@ export async function createAssignment(params: CreateAssignmentParams): Promise<
 }
 
 /**
- * Upsert a work assignment (insert or update on conflict)
+ * Upsert a work assignment (insert or update on conflict).
  */
 export async function upsertAssignment(params: CreateAssignmentParams): Promise<WorkAssignment> {
-  const result = await pool.query(
+  const result = await tenantQuery<WorkAssignment>(
+    params.organizationId,
     `INSERT INTO work_assignments
        (organization_id, entity_type, entity_id, work_type, assigned_tech_id, assigned_packer_id, status, notes, deadline_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -234,9 +272,13 @@ export async function upsertAssignment(params: CreateAssignmentParams): Promise<
 }
 
 /**
- * Update a work assignment by ID
+ * Update a work assignment by ID (org-scoped).
  */
-export async function updateAssignment(id: number, updates: UpdateAssignmentParams): Promise<WorkAssignment | null> {
+export async function updateAssignment(
+  id: number,
+  updates: UpdateAssignmentParams,
+  orgId: OrgId,
+): Promise<WorkAssignment | null> {
   const setClauses: string[] = ['updated_at = NOW()'];
   const params: any[] = [];
   let idx = 1;
@@ -253,29 +295,43 @@ export async function updateAssignment(id: number, updates: UpdateAssignmentPara
   if (updates.priority !== undefined) { setClauses.push(`priority = $${idx++}`); params.push(updates.priority); }
   if (updates.notes !== undefined) { setClauses.push(`notes = $${idx++}`); params.push(updates.notes); }
 
+  const idParam = idx++;
   params.push(id);
-  const result = await pool.query(
-    `UPDATE work_assignments SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
+  const orgParam = idx;
+  params.push(orgId);
+
+  const result = await tenantQuery<WorkAssignment>(
+    orgId,
+    `UPDATE work_assignments SET ${setClauses.join(', ')} WHERE id = $${idParam} AND organization_id = $${orgParam} RETURNING *`,
     params,
   );
   return result.rows[0] ?? null;
 }
 
 /**
- * Delete a work assignment by ID
+ * Delete a work assignment by ID (org-scoped).
  */
-export async function deleteAssignment(id: number): Promise<boolean> {
-  const result = await pool.query('DELETE FROM work_assignments WHERE id = $1', [id]);
+export async function deleteAssignment(id: number, orgId: OrgId): Promise<boolean> {
+  const result = await tenantQuery(
+    orgId,
+    'DELETE FROM work_assignments WHERE id = $1 AND organization_id = $2',
+    [id, orgId],
+  );
   return (result.rowCount ?? 0) > 0;
 }
 
 /**
- * Delete all assignments for an entity
+ * Delete all assignments for an entity (org-scoped).
  */
-export async function deleteAssignmentsForEntity(entityType: EntityType, entityId: number): Promise<number> {
-  const result = await pool.query(
-    'DELETE FROM work_assignments WHERE entity_type = $1 AND entity_id = $2',
-    [entityType, entityId],
+export async function deleteAssignmentsForEntity(
+  entityType: EntityType,
+  entityId: number,
+  orgId: OrgId,
+): Promise<number> {
+  const result = await tenantQuery(
+    orgId,
+    'DELETE FROM work_assignments WHERE entity_type = $1 AND entity_id = $2 AND organization_id = $3',
+    [entityType, entityId, orgId],
   );
   return result.rowCount ?? 0;
 }

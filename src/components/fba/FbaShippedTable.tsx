@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { fbaPaths } from '@/lib/fba/api-paths';
 import { Check, ChevronDown, Loader2, Boxes } from '@/components/Icons';
 import { framerPresence, framerTransition, SkeletonList } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 import { FbaShipmentTracePanel } from './FbaShipmentTracePanel';
 import { stationThemeColors } from '@/utils/staff-colors';
 import type { StationTheme } from '@/utils/staff-colors';
@@ -301,6 +302,7 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                   key={group.key}
                   className="bg-white"
                 >
+                  {/* ds-raw-button: multi-line text-left master-detail expand row */}
                   <button
                     type="button"
                     onClick={() => void toggleExpand(row.id)}
@@ -354,15 +356,17 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                         </label>
                       </div>
 
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => void saveShipment(row)}
                         disabled={savingShipmentId === row.id}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-micro font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        loading={savingShipmentId === row.id}
+                        icon={<Check />}
                       >
-                        {savingShipmentId === row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                         Save Shipment
-                      </button>
+                      </Button>
 
                       {itemLoadingId === row.id ? (
                         <div className="flex items-center gap-2 py-2 text-caption font-semibold text-gray-500">
@@ -385,14 +389,16 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
                                     }
                                     className="h-8 w-40 max-w-full rounded-md border border-gray-300 bg-white px-2 font-mono text-caption font-bold text-gray-900 outline-none focus:border-gray-500"
                                   />
-                                  <button
+                                  <Button
                                     type="button"
+                                    variant="secondary"
+                                    size="sm"
                                     onClick={() => void saveItemFnsku(row.id, item)}
                                     disabled={savingItemId === item.id}
-                                    className="inline-flex h-8 items-center rounded-md border border-gray-300 px-2 text-eyebrow font-black uppercase tracking-wider text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                    loading={savingItemId === item.id}
                                   >
-                                    {savingItemId === item.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
-                                  </button>
+                                    Save
+                                  </Button>
                                 </div>
                                 <p className="mt-1 truncate text-micro font-semibold text-gray-600">
                                   {item.display_title || 'No title'}
@@ -408,17 +414,20 @@ export function FbaShippedTable({ stationTheme = 'green', searchQuery = '', embe
 
                       {/* Audit trace — shipment → FNSKU → unit path (P2-FBA-01) */}
                       <div className="border-t border-gray-100 pt-2">
-                        <button
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={() => toggleTrace(row.id)}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 text-micro font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
+                          icon={<Boxes />}
+                          iconRight={
+                            <ChevronDown
+                              className={`text-gray-400 transition-transform ${tracing.has(row.id) ? 'rotate-180' : ''}`}
+                            />
+                          }
                         >
-                          <Boxes className="h-3.5 w-3.5" />
                           {tracing.has(row.id) ? 'Hide Trace' : 'Trace Units'}
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 text-gray-400 transition-transform ${tracing.has(row.id) ? 'rotate-180' : ''}`}
-                          />
-                        </button>
+                        </Button>
                         {tracing.has(row.id) ? (
                           <FbaShipmentTracePanel shipmentId={row.id} className="mt-2" />
                         ) : null}

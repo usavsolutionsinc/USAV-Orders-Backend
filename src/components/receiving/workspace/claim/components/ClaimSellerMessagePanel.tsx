@@ -1,4 +1,6 @@
 import { Loader2, MessageSquare, Sparkles } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { FiledTicket } from '../claim-types';
 import type { UseClaimSellerMessage } from '../hooks/useClaimSellerMessage';
 import { SellerMessageSkeleton } from './SellerMessageSkeleton';
@@ -20,19 +22,21 @@ export function ClaimSellerMessagePanel({ seller, filedTicket }: Props) {
           <MessageSquare className="h-4 w-4 shrink-0 text-blue-600" />
           <div>
             <p className="text-micro font-black uppercase tracking-[0.14em] text-blue-700">Seller message</p>
-            {aiModel ? <p className="text-[10px] font-semibold text-blue-600/70">Drafted by {aiModel}</p> : null}
+            {aiModel ? <p className="text-micro font-semibold text-blue-600/70">Drafted by {aiModel}</p> : null}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => filedTicket && void draftSellerMessage(filedTicket)}
-          disabled={draftDisabled}
-          title="Regenerate seller message with AI"
-          className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-2 text-micro font-black uppercase tracking-wider text-blue-700 shadow-sm transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-          {aiLoading ? 'Drafting…' : 'Redraft'}
-        </button>
+        <HoverTooltip label="Regenerate seller message with AI" asChild>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => filedTicket && void draftSellerMessage(filedTicket)}
+            disabled={draftDisabled}
+            icon={aiLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            className="h-7 border border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
+          >
+            {aiLoading ? 'Drafting…' : 'Redraft'}
+          </Button>
+        </HoverTooltip>
       </div>
       {aiLoading && !sellerMessage ? (
         <SellerMessageSkeleton />

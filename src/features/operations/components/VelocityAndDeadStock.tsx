@@ -71,8 +71,8 @@ function TierDonut({ counts }: { counts: Record<string, number> }) {
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[24px] font-extrabold text-[#2D2A26] tabular-nums leading-none">{total}</span>
-        <span className="text-[9px] font-black uppercase tracking-[0.16em] text-[#A89F91] mt-1">
+        <span className="text-[24px] font-extrabold text-text-default tabular-nums leading-none">{total}</span>
+        <span className="text-eyebrow font-black uppercase tracking-[0.16em] text-text-muted mt-1">
           SKUs scored
         </span>
       </div>
@@ -114,8 +114,8 @@ export function VelocityAndDeadStock() {
     <section>
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>Inventory motion · 30 days</span>
-          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-[#2D2A26] mt-0.5">
+          <span className={`${sectionLabel} !text-text-muted`}>Inventory motion · 30 days</span>
+          <h2 className="text-[18px] sm:text-[20px] font-extrabold tracking-tight text-text-default mt-0.5">
             What’s moving, what isn’t
           </h2>
         </div>
@@ -126,9 +126,9 @@ export function VelocityAndDeadStock() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl border border-[#F0EDE8] p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)]"
+          className="bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)]"
         >
-          <p className="text-[12px] font-extrabold text-[#2D2A26] tracking-tight mb-4">Velocity tier mix</p>
+          <p className="text-label font-extrabold text-text-default tracking-tight mb-4">Velocity tier mix</p>
           <TierDonut counts={tierCounts} />
           <div className="grid grid-cols-2 gap-2 mt-5">
             {(['A', 'B', 'C', 'D'] as const).map((t) => {
@@ -136,10 +136,10 @@ export function VelocityAndDeadStock() {
               return (
                 <div key={t} className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${tone.bg}`} />
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6356]">
+                  <span className="text-micro font-bold uppercase tracking-[0.12em] text-text-muted">
                     {tone.label}
                   </span>
-                  <span className="ml-auto text-[11px] font-extrabold text-[#2D2A26] tabular-nums">
+                  <span className="ml-auto text-caption font-extrabold text-text-default tabular-nums">
                     {tierCounts[t] ?? 0}
                   </span>
                 </div>
@@ -154,27 +154,27 @@ export function VelocityAndDeadStock() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ y: -2 }}
-          className="block lg:col-span-1 bg-white rounded-2xl border border-[#F0EDE8] p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+          className="block lg:col-span-1 bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
         >
           <div className="flex items-baseline justify-between mb-4">
-            <p className="text-[12px] font-extrabold text-[#2D2A26] tracking-tight">Top movers</p>
-            <span className="text-[10px] font-bold text-[#A89F91] uppercase tracking-[0.14em]">30d</span>
+            <p className="text-label font-extrabold text-text-default tracking-tight">Top movers</p>
+            <span className="text-micro font-bold text-text-muted uppercase tracking-[0.14em]">30d</span>
           </div>
           {velocity.data === null ? (
-            <p className="text-[11px] text-[#A89F91] py-2">Source unavailable.</p>
+            <p className="text-caption text-text-muted py-2">Source unavailable.</p>
           ) : topMovers.length === 0 ? (
-            <p className="text-[11px] text-[#A89F91] py-2">No movement in the last 30 days.</p>
+            <p className="text-caption text-text-muted py-2">No movement in the last 30 days.</p>
           ) : (
             <ul className="space-y-2.5">
               {topMovers.map((row) => (
                 <li key={row.sku} className="flex items-center gap-3">
-                  <span className="text-[10px] font-black text-[#A89F91] tabular-nums w-8">{row.out_qty}</span>
+                  <span className="text-micro font-black text-text-muted tabular-nums w-8">{row.out_qty}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-bold text-[#2D2A26] truncate leading-tight">{row.product_title || row.sku}</p>
-                    <p className="text-[10px] font-medium text-[#A89F91] font-mono truncate">{row.sku}</p>
+                    <p className="text-label font-bold text-text-default truncate leading-tight">{row.product_title || row.sku}</p>
+                    <p className="text-micro font-medium text-text-muted font-mono truncate">{row.sku}</p>
                   </div>
                   {row.velocity_tier && (
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${velocityTierMeta(row.velocity_tier).ring} ${
+                    <span className={`text-eyebrow font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${velocityTierMeta(row.velocity_tier).ring} ${
                       row.velocity_tier === 'A' ? 'text-emerald-700' :
                       row.velocity_tier === 'B' ? 'text-amber-700' :
                       row.velocity_tier === 'C' ? 'text-orange-700' : 'text-rose-700'
@@ -194,16 +194,16 @@ export function VelocityAndDeadStock() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           whileHover={{ y: -2 }}
-          className="block bg-white rounded-2xl border border-[#F0EDE8] p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
+          className="block bg-white rounded-2xl border border-border-soft p-5 shadow-[0_2px_12px_rgba(161,140,90,0.04)] hover:shadow-[0_4px_18px_rgba(161,140,90,0.08)] transition-shadow"
         >
           <div className="flex items-baseline justify-between mb-3">
-            <p className="text-[12px] font-extrabold text-[#2D2A26] tracking-tight">Dead stock</p>
-            <span className="text-[10px] font-bold text-[#A89F91] uppercase tracking-[0.14em]">≥ 90d</span>
+            <p className="text-label font-extrabold text-text-default tracking-tight">Dead stock</p>
+            <span className="text-micro font-bold text-text-muted uppercase tracking-[0.14em]">≥ 90d</span>
           </div>
-          <div className="text-[36px] font-extrabold text-[#2D2A26] leading-none tabular-nums">
+          <div className="text-[36px] font-extrabold text-text-default leading-none tabular-nums">
             {dead.isLoading ? '–' : deadCount}
           </div>
-          <p className="text-[11px] font-medium text-[#A89F91] mt-2">
+          <p className="text-caption font-medium text-text-muted mt-2">
             {oldestDormant != null
               ? `Oldest dormant: ${oldestDormant} days`
               : dead.data === null
@@ -211,12 +211,12 @@ export function VelocityAndDeadStock() {
               : 'No dormant SKUs flagged.'}
           </p>
           {deadRows[0] && (
-            <div className="mt-4 pt-3 border-t border-[#F5F3EF]">
-              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#A89F91] mb-1">
+            <div className="mt-4 pt-3 border-t border-border-soft">
+              <p className="text-micro font-black uppercase tracking-[0.14em] text-text-muted mb-1">
                 Oldest item
               </p>
-              <p className="text-[12px] font-bold text-[#2D2A26] truncate">{deadRows[0].product_title || deadRows[0].sku}</p>
-              <p className="text-[10px] text-[#A89F91] font-mono truncate">{deadRows[0].sku}</p>
+              <p className="text-label font-bold text-text-default truncate">{deadRows[0].product_title || deadRows[0].sku}</p>
+              <p className="text-micro text-text-muted font-mono truncate">{deadRows[0].sku}</p>
             </div>
           )}
         </motion.a>

@@ -46,7 +46,7 @@ export const GET = withAuth(async (_req, ctx) => {
   }>(
     ctx.organizationId,
     `SELECT r.id AS receiving_id,
-            COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+            stn.tracking_number_raw AS tracking,
             r.unboxed_at::text AS unboxed_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
@@ -75,7 +75,7 @@ export const GET = withAuth(async (_req, ctx) => {
   }>(
     ctx.organizationId,
     `SELECT r.id AS receiving_id,
-            COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+            stn.tracking_number_raw AS tracking,
             r.unboxed_at::text AS unboxed_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id

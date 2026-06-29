@@ -31,7 +31,8 @@ import { appendInventoryEvent } from '@/lib/repositories/inventory/inventoryEven
 import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import { applyTransition } from '@/lib/workflow/applyTransition';
-import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
+import { isUnifiedEngineApplyTransition, isUnifiedEngineVerdictConfig } from '@/lib/feature-flags';
+import { parseOrgSettings } from '@/lib/tenancy/settings';
 import type { SerialState } from '@/lib/inventory/state-machine';
 
 /**
@@ -62,6 +63,38 @@ export const VERDICT_TO_STATUS: Record<TestVerdict, VerdictMapping> = {
   TEST_AGAIN: { nextStatus: 'IN_TEST', eventType: 'TEST_START' },
   TESTING_FAILED: { nextStatus: 'ON_HOLD', eventType: 'TEST_FAIL' },
 };
+
+/**
+ * Pure verdict→status resolution: a per-org override (when present) else the
+ * hardcoded default. Testable without a DB. The override is already validated to
+ * the allowed status/event literals by OrgSettingsSchema (workflow.verdictStatus).
+ */
+export function pickVerdictMapping(
+  verdict: TestVerdict,
+  override?: Partial<Record<TestVerdict, VerdictMapping>> | null,
+): VerdictMapping {
+  return override?.[verdict] ?? VERDICT_TO_STATUS[verdict];
+}
+
+/**
+ * Per-org verdict→status mapping (Wave 2 / Class A). Flag OFF (default) returns
+ * the hardcoded map with NO settings read — byte-identical to before. Flag ON
+ * reads the org's workflow.verdictStatus override and falls back per-verdict; any
+ * failure fail-safes to the hardcoded map (a verdict must never fail to resolve).
+ */
+async function resolveVerdictMapping(verdict: TestVerdict, orgId: string | null): Promise<VerdictMapping> {
+  if (!orgId || !isUnifiedEngineVerdictConfig()) return VERDICT_TO_STATUS[verdict];
+  try {
+    const r = await pool.query<{ settings: unknown }>(
+      `SELECT settings FROM organizations WHERE id = $1`,
+      [orgId],
+    );
+    const override = r.rows.length ? parseOrgSettings(r.rows[0].settings).workflow?.verdictStatus : null;
+    return pickVerdictMapping(verdict, override ?? null);
+  } catch {
+    return VERDICT_TO_STATUS[verdict];
+  }
+}
 
 export interface TestedUnit {
   id: number;
@@ -104,7 +137,6 @@ export async function recordTestVerdict(
   args: RecordTestVerdictArgs,
 ): Promise<RecordTestVerdictResult | null> {
   const { serialUnitId, verdict } = args;
-  const mapping = VERDICT_TO_STATUS[verdict];
   const notes = args.notes ?? null;
   const actorStaffId = args.actorStaffId ?? null;
   // Tenant scope. When present (every authenticated route call), every read/write
@@ -113,6 +145,9 @@ export async function recordTestVerdict(
   // RLS, is what isolates tenants here. Mirrors transition()'s `orgId ? …` shape;
   // omitting org keeps the legacy unscoped SQL for any caller that lacks one.
   const orgId = args.organizationId ?? null;
+  // Verdict→status mapping — hardcoded by default; per-org override behind
+  // UNIFIED_ENGINE_VERDICT_CONFIG (flag off ⇒ no settings read, identical behavior).
+  const mapping = await resolveVerdictMapping(verdict, orgId);
 
   // 1. Fetch existing unit + its parent receiving_line (org-scoped).
   const existing = await pool.query<TestedUnit>(

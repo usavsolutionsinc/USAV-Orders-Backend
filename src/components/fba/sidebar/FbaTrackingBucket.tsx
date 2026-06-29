@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, Trash2 } from '@/components/Icons';
 import { FbaDraggableLineRow } from '@/components/fba/sidebar/FbaDraggableLineRow';
 import { FbaQtyStepper } from '@/components/fba/sidebar/FbaQtyStepper';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { microBadge } from '@/design-system/tokens/typography/presets';
@@ -87,14 +89,13 @@ export function FbaTrackingBucket({
     >
       {/* Header */}
       <div className="flex items-center gap-1.5 px-3 py-1.5">
-        <button
+        <IconButton
           type="button"
+          icon={bucket.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          ariaLabel={bucket.collapsed ? 'Expand box' : 'Collapse box'}
           onClick={() => onToggleCollapse(bucket.bucketId)}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:text-gray-600"
-          aria-label={bucket.collapsed ? 'Expand box' : 'Collapse box'}
-        >
-          {bucket.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-        </button>
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-600"
+        />
 
         <input
           value={bucket.trackingNumber}
@@ -109,15 +110,15 @@ export function FbaTrackingBucket({
           {bucket.allocations.length > 0 ? `${bucket.allocations.length} · ${totalUnits}` : ''}
         </span>
 
-        <button
-          type="button"
-          onClick={() => onDelete(bucket.bucketId)}
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"
-          aria-label="Delete this UPS box"
-          title="Remove box (items return to unallocated)"
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+        <HoverTooltip label="Remove box (items return to unallocated)" asChild>
+          <IconButton
+            type="button"
+            icon={<Trash2 className="h-3 w-3" />}
+            ariaLabel="Delete this UPS box"
+            onClick={() => onDelete(bucket.bucketId)}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 hover:bg-red-50 hover:text-red-500"
+          />
+        </HoverTooltip>
       </div>
 
       {/* Collapsible items */}

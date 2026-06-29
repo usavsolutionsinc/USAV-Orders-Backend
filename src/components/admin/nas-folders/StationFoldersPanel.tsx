@@ -1,4 +1,5 @@
 import { nasConfigured } from '@/lib/nas-photos';
+import { Button } from '@/design-system/primitives';
 import { STATIONS } from './nas-folders-config';
 import type { StationNasFoldersController } from './useStationNasFolders';
 
@@ -26,22 +27,14 @@ export function StationFoldersPanel({ c }: { c: StationNasFoldersController }) {
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {nasConfigured() ? (
-                <button
-                  type="button"
-                  onClick={() => setPicking(s.key)}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50"
-                >
+                <Button variant="secondary" size="sm" type="button" onClick={() => setPicking(s.key)}>
                   Browse
-                </button>
+                </Button>
               ) : null}
               {draft[s.key] ? (
-                <button
-                  type="button"
-                  onClick={() => setFolder(s.key, '')}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-gray-500 hover:bg-gray-50"
-                >
+                <Button variant="secondary" size="sm" type="button" onClick={() => setFolder(s.key, '')}>
                   Clear
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
@@ -50,14 +43,15 @@ export function StationFoldersPanel({ c }: { c: StationNasFoldersController }) {
 
       <div className="flex items-center justify-end gap-3">
         {dirty ? <span className="text-micro font-bold uppercase tracking-widest text-amber-600">Unsaved changes</span> : null}
-        <button
+        <Button
+          variant="primary"
+          size="md"
           type="button"
           disabled={!dirty || save.isPending || isLoading}
           onClick={() => save.mutate(draft)}
-          className="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {save.isPending ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
       </div>
     </>
   );

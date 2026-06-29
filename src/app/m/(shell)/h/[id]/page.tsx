@@ -28,6 +28,7 @@ import { getLast4 } from '@/components/ui/CopyChip';
 import { printHandlingUnitLabel } from '@/lib/print/printHandlingUnitLabel';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
 import { ChevronLeft, Check, X, Printer, Plus, Package } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 interface Member {
   id: number;
@@ -166,13 +167,12 @@ export default function MobileHandlingUnitPage() {
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2.5">
-        <button
+        <IconButton
           onClick={() => router.push('/m/scan')}
-          className="rounded-lg p-1.5 text-slate-500 active:bg-slate-100"
-          aria-label="Back to scan"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+          ariaLabel="Back to scan"
+          icon={<ChevronLeft className="h-5 w-5 text-slate-500" />}
+          className="rounded-lg p-1.5 active:bg-slate-100"
+        />
         <Package className="h-5 w-5 text-teal-600" />
         <div className="flex-1 truncate text-base font-extrabold tracking-tight text-slate-900">
           {box ? box.code : 'Box'}
@@ -182,14 +182,13 @@ export default function MobileHandlingUnitPage() {
             {box.status}
           </span>
         )}
-        <button
+        <IconButton
           onClick={printLabel}
           disabled={!box}
-          className="rounded-lg p-1.5 text-slate-500 active:bg-slate-100 disabled:opacity-40"
-          aria-label="Print box label"
-        >
-          <Printer className="h-5 w-5" />
-        </button>
+          ariaLabel="Print box label"
+          icon={<Printer className="h-5 w-5 text-slate-500" />}
+          className="rounded-lg p-1.5 active:bg-slate-100 disabled:opacity-40"
+        />
       </div>
 
       {flash && (
@@ -243,6 +242,7 @@ export default function MobileHandlingUnitPage() {
               autoCapitalize="characters"
               autoCorrect="off"
             />
+            {/* ds-raw-button: solid-teal phone CTA — no DS Button variant maps to teal */}
             <button
               onClick={submitAdd}
               disabled={!addInput.trim() || busy === 'add'}
@@ -269,7 +269,7 @@ export default function MobileHandlingUnitPage() {
                     <span className="font-mono text-sm font-semibold text-slate-900">
                       …{getLast4(u.serial_number)}
                     </span>
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${unitStatusBadgeTone(u.current_status)}`}>
+                    <span className={`rounded px-1.5 py-0.5 text-micro font-bold ${unitStatusBadgeTone(u.current_status)}`}>
                       {u.current_status}
                     </span>
                   </div>
@@ -279,14 +279,13 @@ export default function MobileHandlingUnitPage() {
                     {u.current_location ? ` · ${u.current_location}` : ''}
                   </div>
                 </div>
-                <button
+                <IconButton
                   onClick={() => removeUnit(u.id)}
                   disabled={busy === 'remove'}
-                  className="rounded-lg p-1.5 text-slate-400 active:bg-slate-100 disabled:opacity-40"
-                  aria-label="Remove from box"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                  ariaLabel="Remove from box"
+                  icon={<X className="h-4 w-4 text-slate-400" />}
+                  className="rounded-lg p-1.5 active:bg-slate-100 disabled:opacity-40"
+                />
               </div>
             ))}
           </div>

@@ -2,11 +2,13 @@
 
 import type { ReactNode } from 'react';
 import { X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import {
   resolveSelectionAction,
   type SelectionAction,
 } from '@/lib/selection/selection-actions';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /** Expandable label — slower enter, delayed collapse so right→left hovers read cleanly. */
 const ACTION_LABEL_CLASS =
@@ -51,52 +53,51 @@ export function PhotoLibraryToolbar<T>({
       <span className="shrink-0 text-xs font-bold tabular-nums text-gray-700">
         {count} selected
       </span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={allSelected ? onClear : onSelectAll}
-        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-blue-600 transition-colors hover:bg-blue-50"
+        className="h-7 shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50 hover:text-blue-700"
       >
         {allSelected ? 'Clear' : `Select all ${total}`}
-      </button>
+      </Button>
 
       <div className="ml-auto flex items-center gap-1">
         {leading}
         {visible.map((a) => (
-          <button
-            key={a.key}
-            type="button"
-            title={a.label}
-            aria-label={a.label}
-            onClick={() => void a.run(rows)}
-            className={cn(
-              // Expandable icon button: gray icon always shows; label expands on
-              // hover/focus with a delayed collapse so scanning right→left reads cleanly.
-              'group/action inline-flex items-center rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900',
-            )}
-          >
-            <span className="inline-flex shrink-0 text-gray-400 transition-colors duration-200 group-hover/action:text-gray-600 group-focus-visible/action:text-gray-600">
-              {a.icon}
-            </span>
-            <span
+          <HoverTooltip key={a.key} label={a.label} asChild>
+            <button
+              type="button"
+              aria-label={a.label}
+              onClick={() => void a.run(rows)}
               className={cn(
-                ACTION_LABEL_CLASS,
-                a.primary
-                  ? 'ml-1.5 max-w-[10rem] opacity-100 delay-0'
-                  : 'ml-0 max-w-0 opacity-0 group-hover/action:ml-1.5 group-hover/action:max-w-[10rem] group-hover/action:opacity-100 group-focus-visible/action:ml-1.5 group-focus-visible/action:max-w-[10rem] group-focus-visible/action:opacity-100',
+                // ds-raw-button — bespoke expandable icon→label affordance (hover-driven
+                // max-width/opacity reveal); not expressible via Button/IconButton.
+                'ds-raw-button group/action inline-flex items-center rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-600 transition-colors duration-200 hover:bg-gray-100 hover:text-gray-900',
               )}
             >
-              {a.label}
-            </span>
-          </button>
+              <span className="inline-flex shrink-0 text-gray-400 transition-colors duration-200 group-hover/action:text-gray-600 group-focus-visible/action:text-gray-600">
+                {a.icon}
+              </span>
+              <span
+                className={cn(
+                  ACTION_LABEL_CLASS,
+                  a.primary
+                    ? 'ml-1.5 max-w-[10rem] opacity-100 delay-0'
+                    : 'ml-0 max-w-0 opacity-0 group-hover/action:ml-1.5 group-hover/action:max-w-[10rem] group-hover/action:opacity-100 group-focus-visible/action:ml-1.5 group-focus-visible/action:max-w-[10rem] group-focus-visible/action:opacity-100',
+                )}
+              >
+                {a.label}
+              </span>
+            </button>
+          </HoverTooltip>
         ))}
-        <button
-          type="button"
-          aria-label="Clear selection"
+        <IconButton
+          ariaLabel="Clear selection"
           onClick={onClear}
-          className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          icon={<X className="h-4 w-4" />}
+          className="ml-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+        />
       </div>
     </div>
   );

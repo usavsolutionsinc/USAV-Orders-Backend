@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
-import { X, Loader2, Send } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { X, Send } from '@/components/Icons';
 import { toast } from '@/lib/toast';
 import { useClaimTicketSearch } from './claim/hooks/useClaimTicketSearch';
 import { ClaimTicketPicker } from './claim/components/ClaimTicketPicker';
@@ -115,14 +116,12 @@ export function SendPhotoNoteModal({
           </p>
           <p className="truncate text-xs font-semibold text-gray-900">{poLabel}</p>
         </div>
-        <button
-          type="button"
+        <IconButton
           onClick={onClose}
-          aria-label="Close"
-          className="rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Close"
+          icon={<X className="h-4 w-4" />}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+        />
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 text-[13px]">
@@ -154,15 +153,17 @@ export function SendPhotoNoteModal({
           {selectedTicket ? ` → #${selectedTicket.id}` : ' Pick a ticket.'}
           {photoCount ? ` · ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}
         </p>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="md"
+          icon={<Send />}
+          loading={sending}
           onClick={handleSend}
           disabled={!canSend}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-micro font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+          className="shrink-0"
         >
-          {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
           Send internal note
-        </button>
+        </Button>
       </div>
     </RightPaneOverlay>
   );

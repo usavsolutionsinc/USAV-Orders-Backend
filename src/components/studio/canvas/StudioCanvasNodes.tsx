@@ -4,6 +4,7 @@ import { workflowStage } from '@/lib/receiving/workflow-stages';
 import { computeNodeHeat, type NodeHeat } from '@/lib/studio/live-heat';
 import { computeFlowHeat } from '@/lib/studio/flow-heat';
 import { X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { circledNumber, formatDuration, oldestAgeHours } from '../studio-types';
 import {
   STATIC_ROLE,
@@ -97,7 +98,7 @@ export function ProcessNode({ data }: NodeProps) {
       {gaps.length > 0 && (
         <span
           className={[
-            'absolute -left-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[11px] font-bold text-white shadow',
+            'absolute -left-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-caption font-bold text-white shadow',
             gapErrors.length > 0 ? 'bg-rose-600' : 'bg-amber-500',
           ].join(' ')}
           title={gaps.map((d) => d.message).join('\n')}
@@ -107,7 +108,7 @@ export function ProcessNode({ data }: NodeProps) {
       )}
       {live && live.total > 0 && (
         <span
-          className={`absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full ${heat ? HEAT_BADGE[heat.level] : 'bg-blue-600'} px-1.5 text-[11px] font-bold text-white shadow`}
+          className={`absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full ${heat ? HEAT_BADGE[heat.level] : 'bg-blue-600'} px-1.5 text-caption font-bold text-white shadow`}
           title={heat && heat.reasons.length > 0 ? heat.reasons.join(' · ') : `${live.total} in flight`}
         >
           {live.total}
@@ -115,7 +116,7 @@ export function ProcessNode({ data }: NodeProps) {
       )}
       {live && live.error > 0 && (
         <span
-          className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white shadow"
+          className="absolute -left-2 -top-2 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1 text-micro font-bold text-white shadow"
           title={`${live.error} item(s) parked in error — needs triage`}
         >
           !{live.error}
@@ -123,7 +124,7 @@ export function ProcessNode({ data }: NodeProps) {
       )}
       {flowHeat && (flow!.currentWip > 0 || flow!.runCount > 0) && (
         <span
-          className={`absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full ${HEAT_BADGE[flowHeat.level]} px-1.5 text-[11px] font-bold text-white shadow`}
+          className={`absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full ${HEAT_BADGE[flowHeat.level]} px-1.5 text-caption font-bold text-white shadow`}
           title={flowHeat.reasons.length > 0 ? flowHeat.reasons.join(' · ') : `${flow!.runCount} runs`}
         >
           {flow!.currentWip}
@@ -133,7 +134,7 @@ export function ProcessNode({ data }: NodeProps) {
         <span
           className={`absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full ${
             people.coverage > 0 ? 'bg-violet-600' : 'bg-amber-500'
-          } px-1.5 text-[11px] font-bold text-white shadow`}
+          } px-1.5 text-caption font-bold text-white shadow`}
           title={
             people.coverage > 0
               ? `${people.coverage} staff scoped to ${people.station}`
@@ -151,17 +152,17 @@ export function ProcessNode({ data }: NodeProps) {
         <NodeIcon name={node.meta?.icon} className="h-4 w-4 shrink-0 text-slate-500" />
         <div className="min-w-0">
           <p className="truncate text-xs font-bold text-slate-900">{node.meta?.label ?? node.type}</p>
-          <p className="truncate font-mono text-[10px] text-slate-400">{node.type}</p>
+          <p className="truncate font-mono text-micro text-slate-400">{node.type}</p>
         </div>
         {staticRole ? (
           <span
-            className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATIC_ROLE[staticRole].pill}`}
+            className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ${STATIC_ROLE[staticRole].pill}`}
           >
             {STATIC_ROLE[staticRole].label}
           </span>
         ) : (
           slaHours != null && (
-            <span className="ml-auto shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+            <span className="ml-auto shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-micro font-semibold text-amber-700">
               SLA {slaHours}h
             </span>
           )
@@ -172,32 +173,34 @@ export function ProcessNode({ data }: NodeProps) {
           {states.map((key) => {
             const stage = workflowStage(key);
             return (
-              <span
-                key={key}
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${stage.badge}`}
-                title={stage.description}
-              >
-                {circledNumber(stage.order)} {stage.label}
-              </span>
+              <HoverTooltip key={key} label={stage.description} asChild>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-micro font-semibold ${stage.badge}`}
+                >
+                  {circledNumber(stage.order)} {stage.label}
+                </span>
+              </HoverTooltip>
             );
           })}
         </div>
       )}
       {station && (
         <div className="border-t border-slate-100 px-3 py-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: station.color }}>
+          <span className="text-micro font-semibold uppercase tracking-wide" style={{ color: station.color }}>
             {station.label}
           </span>
         </div>
       )}
       {staticRole && staticDangling.length > 0 && (
         <div className="border-t border-slate-100 px-3 py-1.5">
-          <span
-            className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-            title={`Unwired output port(s): ${staticDangling.join(', ')} — data leaving here goes nowhere`}
+          <HoverTooltip
+            label={`Unwired output port(s): ${staticDangling.join(', ')} — data leaving here goes nowhere`}
+            asChild
           >
-            ⚠ {staticDangling.length} unwired
-          </span>
+            <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-micro font-semibold text-amber-700">
+              ⚠ {staticDangling.length} unwired
+            </span>
+          </HoverTooltip>
         </div>
       )}
       {live && live.total > 0 && (
@@ -209,27 +212,31 @@ export function ProcessNode({ data }: NodeProps) {
             />
           ))}
           {live.total > 8 && (
-            <span className={`text-[10px] font-semibold ${heat ? HEAT_ACCENT[heat.level] : 'text-blue-600'}`}>
+            <span className={`text-micro font-semibold ${heat ? HEAT_ACCENT[heat.level] : 'text-blue-600'}`}>
               +{live.total - 8}
             </span>
           )}
           <span className="ml-auto flex items-center gap-2">
             {live.blocked > 0 && (
-              <span className="text-[10px] text-slate-400" title="Parked, awaiting a human/event">
-                {live.blocked} parked
-              </span>
+              <HoverTooltip label="Parked, awaiting a human/event" asChild>
+                <span className="text-micro text-slate-400">{live.blocked} parked</span>
+              </HoverTooltip>
             )}
             {ageHours != null && (
-              <span
-                className={`text-[10px] font-semibold tabular-nums ${heat ? HEAT_ACCENT[heat.level] : 'text-slate-400'}`}
-                title={`Oldest item waiting ${formatAgeHours(ageHours)}${
+              <HoverTooltip
+                label={`Oldest item waiting ${formatAgeHours(ageHours)}${
                   slaHours != null
                     ? ` · SLA ${slaHours}h${heat?.slaRatio != null ? ` (${Math.round(heat.slaRatio * 100)}%)` : ''}`
                     : ''
                 }`}
+                asChild
               >
-                ⏱ {formatAgeHours(ageHours)}
-              </span>
+                <span
+                  className={`text-micro font-semibold tabular-nums ${heat ? HEAT_ACCENT[heat.level] : 'text-slate-400'}`}
+                >
+                  ⏱ {formatAgeHours(ageHours)}
+                </span>
+              </HoverTooltip>
             )}
           </span>
         </div>
@@ -240,41 +247,44 @@ export function ProcessNode({ data }: NodeProps) {
             flowHeat ? HEAT_ACCENT[flowHeat.level] : 'text-slate-500'
           }`}
         >
-          <span
-            className="text-[10px] font-semibold tabular-nums"
-            title={`${flow.currentWip} in queue${
+          <HoverTooltip
+            label={`${flow.currentWip} in queue${
               flow.dwellMedianS != null
                 ? ` · median dwell ${formatDuration(flow.dwellMedianS)}${
                     flow.dwellP90S != null ? ` · p90 ${formatDuration(flow.dwellP90S)}` : ''
                   }`
                 : ''
             } · ${flow.runCount} runs`}
+            asChild
           >
-            {flow.currentWip} WIP
-            {flow.dwellMedianS != null && ` · ${formatDuration(flow.dwellMedianS)}`}
-          </span>
-          {flow.failRate != null && flow.failRate > 0 && (
-            <span
-              className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700"
-              title={`${Math.round(flow.failRate * 100)}% of runs took a fail/error port`}
-            >
-              {Math.round(flow.failRate * 100)}% fail
+            <span className="text-micro font-semibold tabular-nums">
+              {flow.currentWip} WIP
+              {flow.dwellMedianS != null && ` · ${formatDuration(flow.dwellMedianS)}`}
             </span>
+          </HoverTooltip>
+          {flow.failRate != null && flow.failRate > 0 && (
+            <HoverTooltip label={`${Math.round(flow.failRate * 100)}% of runs took a fail/error port`} asChild>
+              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-micro font-semibold text-rose-700">
+                {Math.round(flow.failRate * 100)}% fail
+              </span>
+            </HoverTooltip>
           )}
           {flow.wipTrend.length > 1 && (
-            <span className="ml-auto flex h-4 items-end gap-px" title="WIP trend over the window">
-              {(() => {
-                const trend = flow.wipTrend;
-                const peak = Math.max(1, ...trend.map((t) => t.queueDepth));
-                return trend.slice(-10).map((t, i) => (
-                  <span
-                    key={`${t.date}-${i}`}
-                    className={`w-0.5 rounded-sm ${flowHeat ? HEAT_DOT[flowHeat.level] : 'bg-slate-400'}`}
-                    style={{ height: `${Math.max(8, (t.queueDepth / peak) * 100)}%` }}
-                  />
-                ));
-              })()}
-            </span>
+            <HoverTooltip label="WIP trend over the window" asChild>
+              <span className="ml-auto flex h-4 items-end gap-px">
+                {(() => {
+                  const trend = flow.wipTrend;
+                  const peak = Math.max(1, ...trend.map((t) => t.queueDepth));
+                  return trend.slice(-10).map((t, i) => (
+                    <span
+                      key={`${t.date}-${i}`}
+                      className={`w-0.5 rounded-sm ${flowHeat ? HEAT_DOT[flowHeat.level] : 'bg-slate-400'}`}
+                      style={{ height: `${Math.max(8, (t.queueDepth / peak) * 100)}%` }}
+                    />
+                  ));
+                })()}
+              </span>
+            </HoverTooltip>
           )}
         </div>
       )}
@@ -283,36 +293,42 @@ export function ProcessNode({ data }: NodeProps) {
           {people.coverage > 0 ? (
             <>
               {people.staff.slice(0, 5).map((s) => (
-                <span
+                <HoverTooltip
                   key={s.id}
-                  title={`${s.name}${s.role ? ` · ${s.role}` : ''}${s.isPrimary ? ' · primary' : ''}`}
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[8.5px] font-bold ${
-                    s.isPrimary
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-200'
-                  }`}
+                  label={`${s.name}${s.role ? ` · ${s.role}` : ''}${s.isPrimary ? ' · primary' : ''}`}
+                  asChild
                 >
-                  {staffInitials(s.name)}
-                </span>
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[8.5px] font-bold ${
+                      s.isPrimary
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-violet-100 text-violet-700 ring-1 ring-inset ring-violet-200'
+                    }`}
+                  >
+                    {staffInitials(s.name)}
+                  </span>
+                </HoverTooltip>
               ))}
               {people.coverage > 5 && (
-                <span className="text-[10px] font-semibold text-violet-600">+{people.coverage - 5}</span>
+                <span className="text-micro font-semibold text-violet-600">+{people.coverage - 5}</span>
               )}
-              <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-violet-600">
+              <span className="ml-auto text-micro font-semibold uppercase tracking-wide text-violet-600">
                 {people.station}
               </span>
             </>
           ) : (
-            <span
-              className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-              title={
+            <HoverTooltip
+              label={
                 people.station
                   ? `No staff scoped to ${people.station} — assign coverage in the staff editor`
                   : 'No staff station maps to this step'
               }
+              asChild
             >
-              ⚠ {people.station ? 'Uncovered' : 'No station'}
-            </span>
+              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-micro font-semibold text-amber-700">
+                ⚠ {people.station ? 'Uncovered' : 'No station'}
+              </span>
+            </HoverTooltip>
           )}
         </div>
       )}
@@ -343,18 +359,18 @@ export function DepartmentNode({ data }: NodeProps) {
     <div className="relative w-52 cursor-zoom-in rounded-2xl border-2 bg-white px-4 py-3 shadow-sm" style={{ borderColor: d.color }}>
       <Handle type="target" position={Position.Left} className="!bg-slate-300" />
       {d.inFlight != null && d.inFlight > 0 && (
-        <span className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold text-white shadow">
+        <span className="absolute -right-2 -top-2 z-10 flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-600 px-1.5 text-caption font-bold text-white shadow">
           {d.inFlight}
         </span>
       )}
       <p className="text-sm font-bold" style={{ color: d.color }}>
         {d.label}
       </p>
-      <p className="mt-0.5 text-[11px] text-slate-500">
+      <p className="mt-0.5 text-caption text-slate-500">
         {d.stepCount} step{d.stepCount === 1 ? '' : 's'} · {d.stepLabels.join(' · ')}
         {d.inFlight != null && <> · {d.inFlight} in flight</>}
       </p>
-      <p className="mt-1 text-[10px] text-slate-300">double-click to expand</p>
+      <p className="mt-1 text-micro text-slate-300">double-click to expand</p>
       <Handle type="source" position={Position.Right} className="!bg-slate-400" />
     </div>
   );
@@ -374,7 +390,7 @@ export function AnnotationNode({ data }: NodeProps) {
         <button
           type="button"
           // nodrag/nopan keep the click from starting a canvas drag/pan.
-          className="nodrag nopan absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-800 opacity-0 shadow transition-opacity hover:bg-amber-300 group-hover:opacity-100"
+          className="ds-raw-button nodrag nopan absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-amber-800 opacity-0 shadow transition-opacity hover:bg-amber-300 group-hover:opacity-100"
           onClick={(e) => {
             e.stopPropagation();
             onDelete?.(annotation.id);
@@ -388,7 +404,7 @@ export function AnnotationNode({ data }: NodeProps) {
       {editable ? (
         <textarea
           // nodrag so typing/selecting inside the note doesn't drag the node.
-          className="nodrag nopan w-full resize-none border-0 bg-transparent text-[11px] leading-snug text-amber-900 placeholder:text-amber-400 focus:outline-none"
+          className="nodrag nopan w-full resize-none border-0 bg-transparent text-caption leading-snug text-amber-900 placeholder:text-amber-400 focus:outline-none"
           rows={3}
           value={annotation.text}
           placeholder="Add a note…"
@@ -396,7 +412,7 @@ export function AnnotationNode({ data }: NodeProps) {
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <p className="whitespace-pre-wrap break-words text-[11px] leading-snug text-amber-900">
+        <p className="whitespace-pre-wrap break-words text-caption leading-snug text-amber-900">
           {annotation.text || <span className="italic text-amber-400">Empty note</span>}
         </p>
       )}

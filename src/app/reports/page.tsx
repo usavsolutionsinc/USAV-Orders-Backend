@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 type Tab = 'utilization' | 'velocity' | 'dead';
 
@@ -50,17 +51,14 @@ function ReportsPageInner() {
       <PageHeader
         title="Reports"
         rightSlot={
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700"
-          >
+          <Button variant="secondary" size="sm" type="button" onClick={load}>
             Refresh
-          </button>
+          </Button>
         }
         belowSlot={
           <div className="flex gap-2 border-t border-slate-100 px-3 py-2">
             {TABS.map((t) => (
+              // ds-raw-button: segmented tab toggle (aria-pressed, conditional active fill), not a single DS variant
               <button
                 key={t.id}
                 type="button"

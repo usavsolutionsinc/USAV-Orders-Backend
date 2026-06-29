@@ -14,6 +14,7 @@ import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { InlineNotice } from '@/design-system/components';
 import { PackChecklist, type PackKitPart } from './PackChecklist';
 import { usePackingPolicy } from '@/hooks/usePackingPolicy';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface SkuQcFlag {
   id: number;
@@ -348,10 +349,12 @@ export default function StationPacking({
                 </div>
                 <h3 className="text-base font-black text-gray-900 leading-tight">{activeFba.productTitle}</h3>
                 <div className="mt-3 flex items-stretch justify-between gap-3 rounded-xl border border-purple-100 bg-purple-50/40 px-3 py-2.5">
-                  <div className="min-w-0 flex-1" title={activeFba.fnsku}>
-                    <p className="text-mini font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
-                    <p className="text-sm font-mono font-black text-gray-900 tabular-nums">{getLast4(activeFba.fnsku)}</p>
-                  </div>
+                  <HoverTooltip label={activeFba.fnsku} asChild>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-mini font-black text-purple-400 uppercase tracking-wider">FNSKU</p>
+                      <p className="text-sm font-mono font-black text-gray-900 tabular-nums">{getLast4(activeFba.fnsku)}</p>
+                    </div>
+                  </HoverTooltip>
                   <div className="flex-1 text-center border-x border-purple-100/80 px-2">
                     <p className="text-mini font-black text-gray-400 uppercase tracking-wider">Planned</p>
                     <p className="text-sm font-black text-gray-900 tabular-nums">

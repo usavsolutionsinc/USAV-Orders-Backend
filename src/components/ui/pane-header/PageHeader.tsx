@@ -108,7 +108,7 @@ export function PageHeader({
       <ChevronLeft className="h-5 w-5" />
     </Link>
   ) : onBack ? (
-    <button type="button" onClick={onBack} aria-label="Back" className={BACK_BUTTON_CLASS}>
+    <button type="button" onClick={onBack} aria-label="Back" className={cn(BACK_BUTTON_CLASS, 'ds-raw-button')}>
       <ChevronLeft className="h-5 w-5" />
     </button>
   ) : null;

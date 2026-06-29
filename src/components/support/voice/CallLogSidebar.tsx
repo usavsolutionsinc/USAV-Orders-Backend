@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
+import { type ReactNode, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/utils/_cn';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
 import { PhoneIncoming, PhoneMissed } from '@/components/Icons';
 import {
   CALL_DIRECTION_ITEMS,
@@ -21,7 +21,7 @@ import { useCallEvents, isNotConfigured } from './useVoiceQueries';
  * ephemeral URL filters (`?direction=`, `?q=`) plus a small at-a-glance
  * summary. No durable selection — that's a Workbench tell.
  */
-export function CallLogSidebar() {
+export function CallLogSidebar({ modeToggle = null }: { modeToggle?: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const direction = parseCallDirection(searchParams.get('direction'));
@@ -57,18 +57,15 @@ export function CallLogSidebar() {
         />
       </div>
 
-      <div className="shrink-0 px-2 py-2">
-        <HorizontalButtonSlider
-          variant="nav"
-          dense
+      <div className={cn('min-h-0 flex-1 overflow-y-auto', SIDEBAR_GUTTER, 'pb-6')}>
+        {modeToggle}
+        <SidebarNavOverlaySlider
           items={CALL_DIRECTION_ITEMS}
           value={direction}
           onChange={(id) => setParam('direction', id, 'all')}
           aria-label="Call direction"
         />
-      </div>
-
-      <div className={cn('min-h-0 flex-1 space-y-5 overflow-y-auto', SIDEBAR_GUTTER, 'pb-6 pt-2')}>
+        <div className="space-y-5 pt-2">
         {notConfigured ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
             <p className="text-caption font-semibold text-gray-700">Call log not connected</p>
@@ -102,6 +99,7 @@ export function CallLogSidebar() {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );

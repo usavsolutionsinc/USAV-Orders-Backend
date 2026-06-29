@@ -15,6 +15,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { getOrganizationBySlug } from '@/lib/tenancy/organizations';
+import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { hashPin, isObviousPin, PinError } from '@/lib/auth/pin';
 import {
   createSession,
@@ -36,6 +38,18 @@ function clientIp(req: NextRequest): string | null {
 function asDeviceKind(raw: unknown): DeviceKind {
   if (raw === 'station' || raw === 'personal' || raw === 'phone') return raw;
   return 'station';
+}
+
+// Tenant scope: this public kiosk route must only enroll staff belonging to the
+// tenant the request is for. Mirror the staff-picker resolver — `x-tenant-slug`
+// (set by proxy.ts) → org; apex host → USAV (transitional); unknown slug → a
+// nil UUID so a cross-tenant staffId matches nothing. Without this, an attacker
+// can enroll an unenrolled staff in ANY org by guessing sequential ids.
+async function resolveOrgId(req: NextRequest): Promise<string> {
+  const slug = req.headers.get('x-tenant-slug');
+  if (!slug) return USAV_ORG_ID;
+  const org = await getOrganizationBySlug(slug);
+  return org?.id ?? '00000000-0000-0000-0000-000000000000';
 }
 
 export async function POST(req: NextRequest) {
@@ -71,6 +85,9 @@ export async function POST(req: NextRequest) {
       throw err;
     }
 
+    // Tenant scope: a staffId from another org matches no row here → 404.
+    const orgId = await resolveOrgId(req);
+
     // Conditional update: only set if pin_hash IS NULL. If another request
     // beats us to it (or an admin enrolled them in the meantime), we get
     // zero rows back and fail closed — never overwrite an existing PIN here.
@@ -82,11 +99,12 @@ export async function POST(req: NextRequest) {
               pin_locked_until = NULL,
               status           = CASE WHEN status = 'invited' THEN 'active' ELSE status END
         WHERE id = $1
+          AND organization_id = $3
           AND pin_hash IS NULL
           AND COALESCE(active, true) = true
           AND COALESCE(status, 'active') IN ('active', 'invited')
         RETURNING id, name, role, status`,
-      [staffId, pinHash],
+      [staffId, pinHash, orgId],
     );
     const row = r.rows[0] as { id: number; name: string; role: string; status: string } | undefined;
     if (!row) {
@@ -95,8 +113,9 @@ export async function POST(req: NextRequest) {
         `SELECT (pin_hash IS NOT NULL) AS has_pin, COALESCE(status, 'active') AS status
            FROM staff
           WHERE id = $1
+            AND organization_id = $2
           LIMIT 1`,
-        [staffId],
+        [staffId, orgId],
       );
       const p = probe.rows[0] as { has_pin: boolean; status: string } | undefined;
       if (!p) return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });

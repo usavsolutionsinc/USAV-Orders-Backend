@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface SetPinDialogProps {
   open: boolean;
@@ -91,12 +92,12 @@ export function SetPinDialog({ open, staffName, onClose, onSubmit }: SetPinDialo
         {err && <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</div>}
 
         <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={() => { reset(); onClose(); }} disabled={busy} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <Button variant="secondary" onClick={() => { reset(); onClose(); }} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" onClick={submit} disabled={busy || pin.length < 4} className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50 hover:bg-blue-700">
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={busy || pin.length < 4}>
             {busy ? 'Saving…' : 'Set PIN'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

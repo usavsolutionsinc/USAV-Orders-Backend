@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Check, Loader2, Plus, Tag, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { useLabels } from '@/hooks/useLabels';
 import { labelChipClasses } from '@/lib/photos/label-colors';
@@ -121,14 +122,12 @@ export function PhotoLabelEditor({
               {single ? 'Edit labels' : `Label ${photos.length} photos`}
             </h2>
           </div>
-          <button
-            type="button"
+          <IconButton
+            icon={<X className="h-4 w-4" />}
             onClick={onClose}
-            aria-label="Close"
-            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close"
+            className="-mr-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100"
+          />
         </div>
 
         <div className="max-h-[50vh] overflow-y-auto px-4 py-3">
@@ -146,13 +145,14 @@ export function PhotoLabelEditor({
                 const checked = isChecked(lbl.id);
                 const indeterminate = isIndeterminate(lbl.id);
                 return (
+                  // ds-raw-button: tri-state label toggle chip (aria-pressed + indeterminate ring + per-label color classes), not a single-variant Button
                   <button
                     key={lbl.id}
                     type="button"
                     onClick={() => toggle(lbl.id)}
                     aria-pressed={checked}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest transition',
+                      'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-black uppercase tracking-widest transition',
                       labelChipClasses(lbl.color),
                       checked
                         ? 'ring-2 ring-offset-1 ring-blue-500'
@@ -171,30 +171,27 @@ export function PhotoLabelEditor({
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-gray-100 px-4 py-3">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={addLabel}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-caption font-semibold text-gray-600 hover:bg-gray-100"
+            icon={<Plus className="h-3.5 w-3.5" />}
           >
-            <Plus className="h-3.5 w-3.5" /> New label
-          </button>
+            New label
+          </Button>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-1.5 text-caption font-semibold text-gray-600 hover:bg-gray-100"
-            >
+            <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={apply}
               disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-caption font-bold text-white transition hover:bg-blue-700 disabled:opacity-50"
+              icon={saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               Apply
-            </button>
+            </Button>
           </div>
         </div>
       </div>

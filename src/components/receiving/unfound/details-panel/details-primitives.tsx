@@ -1,4 +1,5 @@
 import { Check, Loader2 } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { TriageFieldState } from '@/components/po-triage/types';
 import { CONFIDENCE_DOT } from './unfound-details-helpers';
 
@@ -56,7 +57,7 @@ export function FieldRow({
         type="button"
         onClick={onToggle}
         aria-pressed={confirmed}
-        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+        className={`ds-raw-button mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
           confirmed
             ? 'border-emerald-500 bg-emerald-500 text-white'
             : 'border-gray-300 bg-white'
@@ -70,11 +71,12 @@ export function FieldRow({
             {label}
           </span>
           {value != null && (
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${CONFIDENCE_DOT[confidence]}`}
-              title={`Confidence: ${confidence}`}
-              aria-hidden
-            />
+            <HoverTooltip label={`Confidence: ${confidence}`} asChild>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${CONFIDENCE_DOT[confidence]}`}
+                aria-hidden
+              />
+            </HoverTooltip>
           )}
         </div>
         <p className="truncate text-label text-gray-800">{value ?? '—'}</p>

@@ -102,7 +102,7 @@ function RecentRow({
         onClick={() => hasDetail && onSelect(item)}
         disabled={!hasDetail}
         aria-current={isSelected}
-        className={`flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+        className={`ds-raw-button flex w-full items-start gap-3 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
           isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
         }`}
       >
@@ -152,7 +152,7 @@ function RecentRow({
 function StatusChip({ status }: { status: string }) {
   return (
     <span
-      className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${unitStatusBadgeClass(status)}`}
+      className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${unitStatusBadgeClass(status)}`}
     >
       {status}
     </span>

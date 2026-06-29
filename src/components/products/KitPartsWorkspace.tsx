@@ -4,6 +4,8 @@ import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Package, PackageOpen, Check, ChevronRight } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useSkuKitParts } from '@/hooks/useSkuKitParts';
 import { useSkuQcChecks } from '@/hooks/useSkuQcChecks';
 import { KitPartsSection } from '@/components/products/KitPartsSection';
@@ -97,16 +99,20 @@ export function KitPartsWorkspace() {
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => router.replace(`/products?view=qc&skuId=${catalog.id}`)}
-          className="shrink-0 flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-micro font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          title="View this product's QC checklist"
-        >
-          <Check className="h-3 w-3" />
-          {qc?.checks.length ?? 0} QC
-          <ChevronRight className="h-3 w-3" />
-        </button>
+        <HoverTooltip label="View this product's QC checklist" asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={<Check />}
+            iconRight={<ChevronRight />}
+            onClick={() => router.replace(`/products?view=qc&skuId=${catalog.id}`)}
+            ariaLabel="View this product's QC checklist"
+            className="h-auto shrink-0 gap-1 rounded-full bg-gray-50 px-3 py-1 text-micro font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200 hover:bg-gray-100 hover:text-gray-700"
+          >
+            {qc?.checks.length ?? 0} QC
+          </Button>
+        </HoverTooltip>
         <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-blue-600">
           {parts.length} {parts.length === 1 ? 'item' : 'items'}
         </span>

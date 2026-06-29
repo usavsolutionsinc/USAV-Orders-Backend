@@ -38,7 +38,7 @@ import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlide
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { ScrollPane } from '@/design-system/primitives/ScrollPane';
-import { EmptyState } from '@/design-system/primitives';
+import { Button, EmptyState, IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 import { toast } from '@/lib/toast';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
@@ -319,7 +319,7 @@ const TAG_STYLE: Record<EmailTriageTag, { chip: string; dot: string; label: stri
 };
 
 const CHIP_CLASS =
-  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-black uppercase leading-none tracking-widest ring-1 ring-inset';
+  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase leading-none tracking-widest ring-1 ring-inset';
 
 const ROW_ACTION_CLASS =
   'flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50';
@@ -369,6 +369,7 @@ function EmailTriageItem({
       )}
     >
       {/* Selection checkbox */}
+      {/* ds-raw-button: role=checkbox toggle with custom active fill (not a label/icon button) */}
       <button
         type="button"
         role="checkbox"
@@ -407,6 +408,7 @@ function EmailTriageItem({
 
         {/* Description: truncated subject */}
         {email.subject ? (
+          // ds-allow-title: truncation-only title on a non-interactive clipped element
           <p className="mt-0.5 truncate text-mini text-gray-500" title={email.subject}>
             {email.subject}
           </p>
@@ -419,14 +421,13 @@ function EmailTriageItem({
           {!email.done ? (
             <>
               <HoverTooltip label="Link tracking to PO" focusable={false}>
-                <button
+                <IconButton
                   type="button"
-                  aria-label="Link tracking to PO"
+                  ariaLabel="Link tracking to PO"
                   onClick={() => onLinkTracking(email)}
                   className={ROW_ACTION_CLASS}
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                </button>
+                  icon={<Link2 className="h-3.5 w-3.5" />}
+                />
               </HoverTooltip>
 
               <HoverTooltip label={mailto ? 'Reply' : 'No sender to reply to'} focusable={false}>
@@ -441,28 +442,26 @@ function EmailTriageItem({
               </HoverTooltip>
 
               <HoverTooltip label="Archive" focusable={false}>
-                <button
+                <IconButton
                   type="button"
-                  aria-label="Archive email"
+                  ariaLabel="Archive email"
                   disabled={busy}
                   onClick={() => onArchive(email)}
                   className={ROW_ACTION_CLASS}
-                >
-                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                </button>
+                  icon={busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                />
               </HoverTooltip>
             </>
           ) : (
             <HoverTooltip label="Restore to triage" focusable={false}>
-              <button
+              <IconButton
                 type="button"
-                aria-label="Restore email to triage"
+                ariaLabel="Restore email to triage"
                 disabled={busy}
                 onClick={() => onRestore(email)}
                 className={ROW_ACTION_CLASS}
-              >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-              </button>
+                icon={busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              />
             </HoverTooltip>
           )}
         </div>
@@ -689,20 +688,24 @@ export function EmailTriagePanel({ emails, onLinkTracking, className }: EmailTri
         {selected.size > 0 && !isControlled ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-gray-200 bg-white px-3 py-2">
             <span className="text-caption font-bold text-gray-700">{selected.size} selected</span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setSelected(new Set())}
-              className="ml-auto rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              className="ml-auto"
             >
               Clear
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              icon={<Archive className="h-3.5 w-3.5" />}
               onClick={archiveSelected}
-              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-2.5 py-1 text-caption font-bold text-white transition-colors hover:bg-blue-700"
             >
-              <Archive className="h-3.5 w-3.5" /> Archive {selected.size}
-            </button>
+              Archive {selected.size}
+            </Button>
           </div>
         ) : null}
       </div>

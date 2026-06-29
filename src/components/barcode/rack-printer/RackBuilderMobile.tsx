@@ -1,4 +1,5 @@
 import { ChevronLeft, Settings } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { WorkspaceCard } from '@/design-system/components';
 import { STEPS } from './rack-printer-config';
 import { StepPills } from './StepPills';
@@ -30,23 +31,16 @@ export function RackBuilderMobile({ c, variant }: { c: RackLabelPrinterControlle
         </div>
         <div className="flex items-center gap-2">
           {(c.selectedRoom || c.aisle != null) && (
-            <button
-              type="button"
-              onClick={c.resetAll}
-              className="flex h-9 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-[11.5px] font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
+            <Button variant="secondary" size="md" icon={<ChevronLeft />} onClick={c.resetAll}>
               Reset
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <IconButton
+            icon={<Settings className="h-4 w-4" />}
+            ariaLabel="Configure rack printer"
             onClick={() => c.setConfigOpen(true)}
-            aria-label="Configure rack printer"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+            className="h-9 w-9 rounded-full border border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+          />
         </div>
       </header>
 
@@ -72,13 +66,9 @@ export function RackBuilderMobile({ c, variant }: { c: RackLabelPrinterControlle
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => c.setOverrideStep('zone')}
-              className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-caption font-semibold text-gray-700 transition-colors hover:bg-gray-50"
-            >
+            <Button variant="secondary" size="sm" onClick={() => c.setOverrideStep('zone')} className="shrink-0">
               Change
-            </button>
+            </Button>
           </div>
         </WorkspaceCard>
       )}

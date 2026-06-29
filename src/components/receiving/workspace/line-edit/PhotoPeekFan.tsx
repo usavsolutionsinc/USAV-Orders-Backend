@@ -27,6 +27,7 @@ import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import { useEscapeClose } from '@/design-system/hooks';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import type { PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
@@ -233,7 +234,7 @@ export function PhotoPeekFan({
                 <img src={card.imgUrl} alt={card.alt} loading="lazy" className="h-full w-full object-cover" />
                 {/* Count badge rides the FRONT card's visible corner. */}
                 {i === 0 && count > 1 ? (
-                  <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] font-black leading-none text-white tabular-nums backdrop-blur-sm">
+                  <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-micro font-black leading-none text-white tabular-nums backdrop-blur-sm">
                     ×{count}
                   </span>
                 ) : null}
@@ -265,14 +266,12 @@ export function PhotoPeekFan({
                   {/* Fan's own close — hidden while the fullscreen viewer is open so
                       its button doesn't stack a second X above the viewer. */}
                   {!viewerOpen ? (
-                    <button
-                      type="button"
+                    <IconButton
                       onClick={(e) => { e.stopPropagation(); close(); }}
-                      aria-label="Close"
+                      ariaLabel="Close"
+                      icon={<X className="h-4 w-4 text-white" />}
                       className={`${CTRL_BTN} absolute right-3 top-3 z-50 h-9 w-9`}
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    />
                   ) : null}
 
                   {/* Fan stage — the shared GSAP card-fan carousel (hover to spread,

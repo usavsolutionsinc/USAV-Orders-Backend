@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { WifiOff, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '@/design-system/primitives';
 
 export function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(false);
@@ -40,14 +41,16 @@ export function OfflineBanner() {
                 Working offline — scans will sync when reconnected
               </span>
             </div>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<RefreshCw size={12} />}
               onClick={() => window.location.reload()}
-              className="flex items-center gap-1 text-micro text-navy-300 hover:text-white transition-colors touch-manipulation"
-              aria-label="Retry connection"
+              ariaLabel="Retry connection"
+              className="h-auto gap-1 px-0 py-0 font-sans text-micro font-bold uppercase tracking-wide text-navy-300 hover:bg-transparent hover:text-white touch-manipulation"
             >
-              <RefreshCw size={12} />
-              <span className="font-sans font-bold tracking-wide uppercase">Retry</span>
-            </button>
+              Retry
+            </Button>
           </div>
         </motion.div>
       )}

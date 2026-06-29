@@ -31,8 +31,11 @@ export interface OrgRunResult<T> {
 }
 
 /** Enumerate the tenant orgs to sweep. Excludes cancelled orgs; runs on the
- *  privileged pool (see the two-pool note above). */
-async function listSweepOrgIds(): Promise<OrgId[]> {
+ *  privileged pool (see the two-pool note above). Exported for crons that
+ *  manage their own per-org transaction (e.g. one that calls a helper which
+ *  already opens `withTenantTransaction`, so the forEachActiveOrg transaction
+ *  wrapper would just hold an idle connection). */
+export async function listSweepOrgIds(): Promise<OrgId[]> {
   const { rows } = await pool.query<{ id: string }>(
     `SELECT id FROM organizations WHERE status <> 'cancelled'`,
   );

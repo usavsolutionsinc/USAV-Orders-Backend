@@ -23,13 +23,13 @@ export default function CodeBlock({ language, children }: { language?: string; c
   };
 
   return (
-    <div className="my-2 overflow-hidden rounded-lg border border-gray-200 bg-[#fafafa]">
+    <div className="my-2 overflow-hidden rounded-lg border border-gray-200 bg-surface-card">
       <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-3 py-1.5">
         <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">{language || 'code'}</span>
         <button
           type="button"
           onClick={copy}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-semibold text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
+          className="ds-raw-button inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-semibold text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-800"
           aria-label="Copy code"
         >
           <Copy className="h-3 w-3" />

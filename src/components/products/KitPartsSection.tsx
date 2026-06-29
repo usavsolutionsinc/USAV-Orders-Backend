@@ -3,7 +3,9 @@
 import { useCallback, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus, Loader2, Trash2, Pencil } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { KIT_PART_TYPES } from '@/lib/schemas/kit-parts';
 
 interface KitPartRow {
@@ -167,14 +169,15 @@ export function KitPartsSection({ catalogId, kitParts, onRefresh }: KitPartsSect
             <span className={`shrink-0 rounded-full border px-1.5 py-0.5 ${microBadge} ${typeBadgeClass(part.component_type)}`}>
               {part.component_type}
             </span>
-            <button
-              type="button"
-              onClick={() => openEditForm(part)}
-              className="shrink-0 p-1 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100"
-              title="Edit part"
-            >
-              <Pencil className="h-3 w-3" />
-            </button>
+            <HoverTooltip label="Edit part" asChild>
+              <IconButton
+                icon={<Pencil className="h-3 w-3" />}
+                ariaLabel="Edit part"
+                tone="accent"
+                onClick={() => openEditForm(part)}
+                className="shrink-0 p-1 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100"
+              />
+            </HoverTooltip>
           </div>
         );
       })}
@@ -196,33 +199,39 @@ export function KitPartsSection({ catalogId, kitParts, onRefresh }: KitPartsSect
                 className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
               />
               <div className="flex gap-2">
-                <select
-                  value={componentType}
-                  onChange={(e) => setComponentType(e.target.value)}
-                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
-                  title="Component type"
-                >
-                  {KIT_PART_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <input
-                  type="number"
-                  min={1}
-                  value={qtyRequired}
-                  onChange={(e) => setQtyRequired(e.target.value)}
-                  placeholder="Qty"
-                  className="w-20 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
-                  title="Quantity required in the box"
-                />
+                <HoverTooltip label="Component type" asChild>
+                  <select
+                    value={componentType}
+                    onChange={(e) => setComponentType(e.target.value)}
+                    className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900"
+                    aria-label="Component type"
+                  >
+                    {KIT_PART_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </HoverTooltip>
+                <HoverTooltip label="Quantity required in the box" asChild>
+                  <input
+                    type="number"
+                    min={1}
+                    value={qtyRequired}
+                    onChange={(e) => setQtyRequired(e.target.value)}
+                    placeholder="Qty"
+                    className="w-20 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
+                    aria-label="Quantity required in the box"
+                  />
+                </HoverTooltip>
               </div>
 
-              <input
-                type="text"
-                value={requiredForText}
-                onChange={(e) => setRequiredForText(e.target.value)}
-                placeholder="Required for conditions, comma-separated (blank = all)"
-                className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
-                title="Condition grades this part is required for. Blank = required for every condition."
-              />
+              <HoverTooltip label="Condition grades this part is required for. Blank = required for every condition." asChild>
+                <input
+                  type="text"
+                  value={requiredForText}
+                  onChange={(e) => setRequiredForText(e.target.value)}
+                  placeholder="Required for conditions, comma-separated (blank = all)"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
+                  aria-label="Condition grades this part is required for. Blank = required for every condition."
+                />
+              </HoverTooltip>
 
               <label className="flex items-center gap-2 px-0.5 text-caption font-bold text-gray-700 select-none">
                 <input
@@ -235,33 +244,30 @@ export function KitPartsSection({ catalogId, kitParts, onRefresh }: KitPartsSect
               </label>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSave}
+                <Button
+                  variant="brand"
+                  size="sm"
+                  loading={saving}
                   disabled={saving || !componentName.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-gray-800 disabled:opacity-50"
+                  onClick={handleSave}
+                  className="flex-1"
                 >
-                  {saving && <Loader2 className="h-3 w-3 animate-spin" />}
                   {editingId ? 'Update' : 'Add Item'}
-                </button>
+                </Button>
                 {editingId && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemove(editingId)}
-                    disabled={removing === editingId}
-                    title="Delete item"
-                    className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-micro font-black uppercase tracking-wider text-red-600 hover:bg-red-50"
-                  >
-                    {removing === editingId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                  </button>
+                  <HoverTooltip label="Delete item" asChild>
+                    <IconButton
+                      icon={removing === editingId ? <Loader2 className="h-3 w-3 animate-spin text-red-600" /> : <Trash2 className="h-3 w-3 text-red-600" />}
+                      ariaLabel="Delete item"
+                      onClick={() => handleRemove(editingId)}
+                      disabled={removing === editingId}
+                      className="flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1.5 text-red-600 hover:bg-red-50"
+                    />
+                  </HoverTooltip>
                 )}
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-gray-500 hover:bg-gray-50"
-                >
+                <Button variant="secondary" size="sm" onClick={resetForm}>
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           </motion.div>
@@ -269,13 +275,15 @@ export function KitPartsSection({ catalogId, kitParts, onRefresh }: KitPartsSect
       </AnimatePresence>
 
       {!showAdd && (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Plus className="h-3 w-3" />}
           onClick={() => { resetForm(); setShowAdd(true); }}
-          className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-micro font-black uppercase tracking-wider text-blue-600 hover:bg-blue-50 transition-colors"
+          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
         >
-          <Plus className="h-3 w-3" /> Add Item
-        </button>
+          Add Item
+        </Button>
       )}
     </div>
   );

@@ -77,12 +77,15 @@ export const PERMISSIONS = [
   { id: 'packing.scan_order',       category: 'packing', label: 'Scan order to pack' },
   { id: 'packing.print_label',      category: 'packing', label: 'Print packing label' },
   { id: 'packing.complete_order',   category: 'packing', label: 'Complete packed order' },
+  { id: 'packing.substitute_unit',  category: 'packing', label: 'Substitute fulfilled unit' },
+  { id: 'packing.approve_amendment', category: 'packing', label: 'Approve substitution amendment' },
 
   // ─ Tech & Repair ─
   { id: 'tech.view',                category: 'tech', label: 'View tech station' },
   { id: 'tech.scan_serial',         category: 'tech', label: 'Scan serial' },
   { id: 'tech.qc_pass',             category: 'tech', label: 'QC pass' },
   { id: 'tech.qc_fail',             category: 'tech', label: 'QC fail' },
+  { id: 'tech.data_wipe',           category: 'tech', label: 'Data wipe (secure erase)' },
   { id: 'tech.assign_bin',          category: 'tech', label: 'Assign bin from tech' },
   { id: 'serial_units.grade',       category: 'tech', label: 'Grade serial unit (condition)' },
   { id: 'repair.view',              category: 'tech', label: 'View repair queue' },

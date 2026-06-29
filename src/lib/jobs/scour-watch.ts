@@ -2,6 +2,7 @@ import { scour } from '@/lib/sourcing/search';
 import { getDueSourcingSearches, markSourcingSearchRun } from '@/lib/neon/sourcing-searches-queries';
 import type { CandidateSource } from '@/lib/sourcing/normalize';
 import type { BrowseCondition } from '@/lib/ebay/browse-client';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * Scour watcher — the active half of standing searches (Sourcing Hub §4.3).
@@ -22,8 +23,16 @@ export interface ScourWatchResult {
   candidatesSaved: number;
 }
 
-export async function runScourWatch(): Promise<ScourWatchResult> {
-  const due = await getDueSourcingSearches();
+/**
+ * Run the scour watcher for ONE org (or the legacy global pass when `orgId` is
+ * omitted). The cron fans this out per eBay-connected org via
+ * forEachOrgWithProvider('ebay', …) so each org's due searches are read,
+ * scoured, and marked under THAT org's GUC + eBay credentials — never a global
+ * USAV-cred pass over every tenant's searches. `getDueSourcingSearches`,
+ * `scour`, and `markSourcingSearchRun` all org-scope when given an orgId.
+ */
+export async function runScourWatch(orgId?: OrgId): Promise<ScourWatchResult> {
+  const due = await getDueSourcingSearches(orgId);
   let withHits = 0;
   let candidatesSaved = 0;
 
@@ -38,10 +47,11 @@ export async function runScourWatch(): Promise<ScourWatchResult> {
         sources: (s.sources ?? undefined) as CandidateSource[] | undefined,
         limit: 20,
         save: true,
+        orgId,
       });
       candidatesSaved += saved;
       if (results.length) withHits += 1;
-      await markSourcingSearchRun(s.id, results.length);
+      await markSourcingSearchRun(s.id, results.length, orgId);
     } catch (err) {
       // Leave last_run_at untouched so the next tick retries.
       console.warn('[scour.watch] failed for search', s.id, err instanceof Error ? err.message : err);

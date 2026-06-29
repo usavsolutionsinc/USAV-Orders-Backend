@@ -130,7 +130,7 @@ export function InventoryPulseSidebar() {
                                     </span>
                                     <span
                                         className={cn(
-                                            'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                                            'shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wide',
                                             inventoryStatusBadgeClass(row.current_status),
                                         )}
                                     >
@@ -139,7 +139,7 @@ export function InventoryPulseSidebar() {
                                 </div>
                                 {/* SKU + serial copy chips, flush right */}
                                 <div className="flex w-full items-center justify-between gap-2">
-                                    <span className="min-w-0 truncate font-mono text-[11px] text-gray-400">
+                                    <span className="min-w-0 truncate font-mono text-caption text-gray-400">
                                         {meta}
                                     </span>
                                     <div className="flex shrink-0 items-center gap-1.5">

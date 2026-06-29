@@ -120,8 +120,8 @@ export function normalizeReceivingHistorySearchScope(
   raw: string | null | undefined,
 ): ReceivingHistorySearchScope {
   const v = String(raw || '').trim().toLowerCase();
-  if (v === 'zoho_po' || v === 'po') return 'zoho_po';
-  if (v === 'unmatched') return 'unmatched';
+  if (v === 'unmatched' || v === 'unfound') return 'unmatched';
+  // PO-only scope removed from History UI — legacy bookmarks read as All.
   return 'all';
 }
 

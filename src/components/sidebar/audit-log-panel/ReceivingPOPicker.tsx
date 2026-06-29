@@ -73,7 +73,7 @@ export function ReceivingPOPicker({
                   <button
                     type="button"
                     onClick={() => onSelect(po.po_id)}
-                    className={`w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
+                    className={`ds-raw-button w-full ${SIDEBAR_GUTTER} py-2.5 text-left transition ${
                       isSelected
                         ? 'bg-emerald-50/80 ring-1 ring-inset ring-emerald-200'
                         : 'hover:bg-gray-50'

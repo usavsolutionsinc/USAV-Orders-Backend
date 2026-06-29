@@ -48,6 +48,8 @@ export const ReasonCodeUpdateBody = z
     requiresPhoto: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
     isActive: z.boolean().optional(),
+    // D3: workflow_node ids / item-type tags this reason is scoped to; null = global.
+    appliesTo: z.array(z.string().trim().min(1)).nullable().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, {

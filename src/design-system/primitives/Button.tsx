@@ -48,7 +48,7 @@ const variantClasses: Record<ButtonVariant, string> = {
 // ─── Size classes ────────────────────────────────────────────────────────────
 
 const desktopSize: Record<ButtonSize, string> = {
-  sm: 'h-8 gap-1.5 rounded-lg px-3 text-[12px]',
+  sm: 'h-8 gap-1.5 rounded-lg px-3 text-label',
   md: 'h-9 gap-1.5 rounded-xl px-3.5 text-[13px]',
   lg: 'h-10 gap-2 rounded-xl px-5 text-sm',
 };
@@ -87,9 +87,6 @@ const spring = { type: 'spring', stiffness: 520, damping: 36 } as const;
  * - Spring press feedback (framer-motion `whileTap`) on every variant
  * - Mode-aware: promotes to 44px+ touch targets on mobile via `UIModeProvider`
  * - Built-in `loading` (spinner swap) and `iconOnly` (mobile square) states
- *
- * `PrimaryButton` is a thin label-based adapter over this component — prefer
- * `Button` for new code.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {

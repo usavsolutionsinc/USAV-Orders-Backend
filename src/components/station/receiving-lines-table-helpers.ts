@@ -36,25 +36,25 @@ export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: numbe
 export const RECEIVING_SELECTION_SCOPE = 'receiving' as const;
 
 /**
- * Activity timestamp the History feed groups + sorts by. Default ('scanned')
- * axis = the last scan/receive (`last_activity_at` — the same axis the Recent
- * rail orders by, per its "Same as History" label), falling back to created_at.
- * Grouping on created_at alone bucketed today's scans of older Zoho-PO lines
- * into long-past weeks, so the current-week History view rendered its empty
- * state while the rail was full of the very same activity.
+ * Lifecycle timestamp the receiving table day-bands + within-day order by.
+ * These are the same event times the Overview card and row tooltips show —
+ * NOT `last_activity_at` (which folds in MAX(receiving_scans), line writes via
+ * updated_at, and other later touches). A re-scan or qty edit must not bump a
+ * row into today's band when the carton was actually scanned/unboxed days ago.
  *
- * The 'unboxed' axis (History's Sort → Unboxed) bands + orders by `unboxed_at`,
- * and 'received' by `received_done_at` (the terminal DONE transition) — each
- * falling back to scan/created so a row not yet at that stage still lands in a
- * real day band rather than collapsing to "Unknown". History is client-sorted
- * (serverSorted=false), so switching this axis is what actually reorders the
- * feed — the server just returns the matching 500-row window.
+ * Default ('scanned') axis = first tracking scan (`scanned_at`), then door-scan
+ * (`received_at`), then line `created_at`. The 'unboxed' axis bands by
+ * `unboxed_at`; 'received' by `received_done_at` (terminal DONE). Each falls
+ * back to `created_at` so rows not yet at that stage still land in a real day
+ * band. History keys day-bands on the active sort axis (unboxed or scanned);
+ * Receive uses 'scanned'. History is client-sorted (serverSorted=false).
  */
 export type ReceivingActivityAxis = 'scanned' | 'unboxed' | 'received';
 
 export function receivingRowActivityTs(
   row: {
-    last_activity_at?: string | null;
+    scanned_at?: string | null;
+    received_at?: string | null;
     created_at?: string | null;
     unboxed_at?: string | null;
     received_done_at?: string | null;
@@ -62,17 +62,18 @@ export function receivingRowActivityTs(
   axis: ReceivingActivityAxis = 'scanned',
 ): string | null {
   if (axis === 'unboxed') {
-    return row.unboxed_at ?? row.last_activity_at ?? row.created_at ?? null;
+    return row.unboxed_at ?? row.created_at ?? null;
   }
   if (axis === 'received') {
-    return row.received_done_at ?? row.unboxed_at ?? row.last_activity_at ?? row.created_at ?? null;
+    return row.received_done_at ?? row.unboxed_at ?? row.created_at ?? null;
   }
-  return row.last_activity_at ?? row.created_at ?? null;
+  return row.scanned_at ?? row.received_at ?? row.created_at ?? null;
 }
 
 export function receivingRowActivityMs(
   row: {
-    last_activity_at?: string | null;
+    scanned_at?: string | null;
+    received_at?: string | null;
     created_at?: string | null;
     unboxed_at?: string | null;
     received_done_at?: string | null;

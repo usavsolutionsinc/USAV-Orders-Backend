@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Clock } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { routeScan } from '@/lib/barcode-routing';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 
@@ -182,21 +183,23 @@ export function UnitHistoryFinder() {
               <span className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
                 {recentsLabel}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={clearRecents}
-                className="text-micro font-semibold text-gray-400 transition-colors hover:text-gray-600"
+                className="h-auto px-0 text-micro font-semibold text-gray-400 hover:bg-transparent hover:text-gray-600"
               >
                 Clear
-              </button>
+              </Button>
             </div>
             <ul className="divide-y divide-gray-100">
               {recents.map((r) => (
                 <li key={`${r.key}-${r.at}`}>
+                  {/* ds-raw-button: text-left master-detail picker row, not a DS Button */}
                   <button
                     type="button"
                     onClick={() => setHistoryId(r.key)}
-                    className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50 ${
+                    className={`ds-raw-button flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50 ${
                       currentId === r.key ? 'bg-blue-50' : ''
                     }`}
                   >

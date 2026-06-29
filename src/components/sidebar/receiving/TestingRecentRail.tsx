@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
+import { TestingRailFeedToggle, type TestingRailFeed } from './TestingRailFeedToggle';
 
 /**
  * Color logic for the left status dot in Testing view. Colors come straight
@@ -23,15 +24,14 @@ function getTestingStatusDotLabel(row: ReceivingLineRow): string {
 /** Full invalidation triggers — module-scope so the shell's refresh-listener
  * effect keeps a stable identity and subscribes once (a fresh array literal each
  * render made it re-subscribe, risking a dropped event mid-swap). */
-// Full-invalidation triggers for the testing TO-DO feed. A unit ENTERS the
-// needs-test set on receive (`receiving-entry-added` from a tracking scan,
-// `receiving-serial-scanned` when a serial is captured during unbox) and LEAVES
-// it on a recorded verdict (`testing-result-recorded`) — all of which add/remove
-// rows, so the feed must refetch rather than merely patch in place. The receive
-// events are exactly how acceptance B (live updates as units are received) is met.
-const TESTING_REFRESH_EVENTS = [
+const TESTING_QUEUE_REFRESH_EVENTS = [
   'receiving-entry-added',
   'receiving-serial-scanned',
+  'usav-refresh-data',
+  'testing-result-recorded',
+];
+
+const TESTING_TESTED_REFRESH_EVENTS = [
   'usav-refresh-data',
   'testing-result-recorded',
 ];
@@ -57,50 +57,34 @@ interface Props {
   selectedLineId: number | null;
   selectedRow?: ReceivingLineRow | null;
   limit?: number;
-  /**
-   * When set, the rail shows ONLY items this staff member has recently tested
-   * (from the testing_results log, newest verdict first). When null it falls
-   * back to the shared touched-activity feed.
-   */
+  /** Scopes both feeds to this staff member when set (queue → assignments, tested → verdicts). */
   testerId?: number | null;
 }
 
 /**
- * Sidebar "Recent activity" rail for the Testing workspace.
- * Uses RecentActivityRailBase as a shell with Testing-specific logic.
+ * Sidebar activity rail for the Testing workspace. A sticky pill toggle switches
+ * between the recently-tested log (`view=testing`, default) and the needs-test
+ * queue (`view=needs-test`, backed by assignments).
  */
 export function TestingRecentRail({
   selectedLineId,
   selectedRow = null,
-  // Cap the rendered feed at 25 (matches the Receiving rail). The fetch still
-  // pulls up to 500 for selection-pinning, but only the 25 most-recent verdicts
-  // render; the sidebar's overflow-y-auto container scrolls within that.
   limit = 25,
   testerId = null,
 }: Props) {
+  const [feed, setFeed] = useState<TestingRailFeed>('tested');
   const hasTester = Number.isFinite(testerId) && (testerId as number) > 0;
+  const isQueue = feed === 'queue';
 
-  // 'rail' segment keeps this DISTINCT from the main ReceivingLinesTable keys —
-  // the table caches the full ApiResponse object under
-  // ['receiving-lines-table', <view>, 'receive'|...], while the rail caches the
-  // bare receiving_lines array. Sharing a key feeds one query the other's shape
-  // (→ "allRows.slice is not a function"). Still under the
-  // ['receiving-lines-table'] prefix so broad invalidations refresh it. The
-  // tester segment keeps each staff member's feed in its own cache slot.
   const queryKey = useMemo(
-    () => ['receiving-lines-table', 'rail', 'needs-test', String(testerId ?? 'all')] as const,
-    [testerId],
+    () => ['receiving-lines-table', 'rail', feed, String(testerId ?? 'all')] as const,
+    [feed, testerId],
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
     const params = new URLSearchParams({ limit: '500', offset: '0' });
     params.set('include', 'serials');
-    // P1-PCK-03: the testing to-do DEFAULTS to recently-received units awaiting
-    // test — newest-received first (server orders view=needs-test by unbox/
-    // receive time DESC), so freshly-unboxed units surface at the top for
-    // real-time pickup. When a tech identity is known we scope to that tech's
-    // own assignments; otherwise the all-staff needs-test queue.
-    params.set('view', 'needs-test');
+    params.set('view', isQueue ? 'needs-test' : 'testing');
     if (hasTester) params.set('tester', String(testerId));
     const res = await fetch(`/api/receiving-lines?${params.toString()}`);
     if (!res.ok) throw new Error('fetch failed');
@@ -108,33 +92,40 @@ export function TestingRecentRail({
   };
 
   return (
-    <RecentActivityRailBase
-      selectedLineId={selectedLineId}
-      selectedRow={selectedRow}
-      limit={limit}
-      queryKey={queryKey}
-      fetchFn={fetchFn}
-      updateEvent="receiving-line-updated"
-      refreshEvents={TESTING_REFRESH_EVENTS}
-      navigateEvent="testing-navigate-rail"
-      eyebrowTitle="To Test"
-      eyebrowSuffix={hasTester ? 'Your Queue' : 'Newest Received'}
-      getStatusDot={getTestingStatusDot}
-      getStatusDotLabel={getTestingStatusDotLabel}
-      renderQuantity={(row) => {
-        const tested = getTestedQty(row);
-        const received = row.quantity_received;
-        return (
-          <span className={tested >= received && received > 0 ? 'text-emerald-600' : 'text-gray-600'}>
-            {tested}/{received}
-          </span>
-        );
-      }}
-      previewQtyLabel="Tested"
-      getPreviewQty={(row) => ({
-        current: getTestedQty(row),
-        total: row.quantity_received,
-      })}
-    />
+    <>
+      <TestingRailFeedToggle value={feed} onChange={setFeed} />
+      <RecentActivityRailBase
+        selectedLineId={selectedLineId}
+        selectedRow={selectedRow}
+        limit={limit}
+        queryKey={queryKey}
+        fetchFn={fetchFn}
+        updateEvent="receiving-line-updated"
+        refreshEvents={isQueue ? TESTING_QUEUE_REFRESH_EVENTS : TESTING_TESTED_REFRESH_EVENTS}
+        navigateEvent="testing-navigate-rail"
+        eyebrowTitle={isQueue ? 'To Test' : 'Tested'}
+        eyebrowSuffix={
+          isQueue
+            ? (hasTester ? 'Your Queue' : 'Newest Received')
+            : (hasTester ? 'Your Verdicts' : 'All Staff')
+        }
+        getStatusDot={getTestingStatusDot}
+        getStatusDotLabel={getTestingStatusDotLabel}
+        renderQuantity={(row) => {
+          const tested = getTestedQty(row);
+          const received = row.quantity_received;
+          return (
+            <span className={tested >= received && received > 0 ? 'text-emerald-600' : 'text-gray-600'}>
+              {tested}/{received}
+            </span>
+          );
+        }}
+        previewQtyLabel="Tested"
+        getPreviewQty={(row) => ({
+          current: getTestedQty(row),
+          total: row.quantity_received,
+        })}
+      />
+    </>
   );
 }

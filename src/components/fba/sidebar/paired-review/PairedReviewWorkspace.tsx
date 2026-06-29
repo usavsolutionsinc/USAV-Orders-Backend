@@ -9,6 +9,8 @@ import { FbaQtySplitPopover } from '@/components/fba/sidebar/FbaQtySplitPopover'
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import type { StationTheme } from '@/utils/staff-colors';
 import { StickyActionBar } from '@/design-system/components/StickyActionBar';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { PairedReviewController } from './usePairedReview';
 
 /**
@@ -44,15 +46,15 @@ export function PairedReviewWorkspace({
             className={`${c.chrome.monoInput} max-w-[260px] min-w-0 flex-1 ${c.lockedFbaId ? '!bg-emerald-50 !border-emerald-200 !text-emerald-800' : ''}`}
           />
           {c.lockedFbaId && (
-            <button
-              type="button"
-              onClick={c.handleDismissFbaId}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 transition-colors hover:bg-emerald-200"
-              aria-label="Done — clear FBA Shipment ID"
-              title="Done with this FBA Shipment ID"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
+            <HoverTooltip label="Done with this FBA Shipment ID" asChild>
+              <IconButton
+                type="button"
+                icon={<Check className="h-3.5 w-3.5" />}
+                ariaLabel="Done — clear FBA Shipment ID"
+                onClick={c.handleDismissFbaId}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+              />
+            </HoverTooltip>
           )}
         </div>
 
@@ -113,6 +115,7 @@ export function PairedReviewWorkspace({
                 </div>
               ))}
 
+              {/* ds-raw-button: full-height vertical (icon-over-label) dashed drop-tile; Button is a horizontal pill */}
               <button
                 type="button"
                 onClick={c.addBucket}

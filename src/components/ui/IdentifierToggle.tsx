@@ -40,7 +40,7 @@ export function IdentifierToggle<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
-            className={`rounded px-2 py-0.5 text-eyebrow font-bold uppercase tracking-[0.1em] transition-colors ${
+            className={`ds-raw-button rounded px-2 py-0.5 text-eyebrow font-bold uppercase tracking-[0.1em] transition-colors ${
               active ? 'bg-white text-gray-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'
             }`}
           >

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
+import { Button } from '@/design-system/primitives';
 
 interface PhotosStats {
   totals: {
@@ -99,14 +100,13 @@ export function PhotosPlatformPanel() {
               Enqueues mirror jobs for GCS photos older than the configured threshold.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             disabled={mirror.isPending}
             onClick={() => mirror.mutate(25)}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-caption font-black uppercase tracking-widest text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {mirror.isPending ? 'Enqueueing…' : 'Run mirror sync'}
-          </button>
+          </Button>
         </div>
       </div>
 

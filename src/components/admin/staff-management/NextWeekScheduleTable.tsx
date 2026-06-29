@@ -1,4 +1,6 @@
 import { sectionLabel, tableHeader, dataValue } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import type { StaffScheduleMatrixDay } from '@/lib/staff-availability';
 import type { StaffDayOfWeek } from '@/lib/staff-schedule';
@@ -39,29 +41,35 @@ export function NextWeekScheduleTable({
       <div className={`${sectionLabel} mb-2 flex items-center justify-between`}>
         <span>Next Week (Mon-Fri)</span>
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={!thisWeekStartDate || !nextWeekStartDate || copyPending}
             onClick={() => onCopyWeek('from_week')}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${tableHeader} h-7`}
           >
             Copy This Week
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             disabled={!thisWeekStartDate || !nextWeekStartDate || copyPending}
             onClick={() => onCopyWeek('template')}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${tableHeader} h-7`}
           >
             Reset to Template
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onToggleExpanded}
-            className={`${tableHeader} h-7 border border-gray-300 px-3 text-gray-700 hover:bg-gray-50`}
+            className={`${tableHeader} h-7`}
           >
             {calendarExpanded ? 'Hide' : 'Show'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -98,36 +106,41 @@ export function NextWeekScheduleTable({
                   const buttonKey = `${member.id}:${day.date}`;
                   const isDisabled = !member.active || savingScheduleKey === buttonKey || weekUpdatePending;
                   return (
-                    <button
-                      type="button"
+                    <HoverTooltip
                       key={`upcoming-${member.id}-${day.date}`}
-                      disabled={isDisabled}
-                      onClick={() => {
-                        if (blockedByRule) {
-                          onBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
-                          return;
-                        }
-                        onToggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
-                      }}
-                      className={[
-                        `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
-                        !member.active
-                          ? 'border-gray-200 bg-gray-100 text-gray-400'
-                          : hasConflict
-                            ? 'border-amber-300 bg-amber-50 text-amber-800'
-                            : blockedByRule
-                              ? 'border-red-200 bg-red-50 text-red-700'
-                              : isScheduled
-                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                : 'border-gray-200 bg-gray-50 text-gray-500',
-                        isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
-                      ].join(' ')}
-                      aria-pressed={isScheduled}
-                      aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
-                      title={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
+                      label={`${member.name} • ${day.label} ${day.date}${blockedByRule ? ' • blocked by availability rule' : ''}`}
+                      asChild
                     >
-                      {!member.active ? 'Inactive' : hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
-                    </button>
+                      {/* ds-raw-button: multi-state schedule-cell toggle (5 conditional states, aria-pressed) */}
+                      <button
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => {
+                          if (blockedByRule) {
+                            onBlockedScheduleCell(member.id, day.dayOfWeek, day.date);
+                            return;
+                          }
+                          onToggleNextWeekSchedule(member.id, day.dayOfWeek, day.date, Boolean(member.active));
+                        }}
+                        className={[
+                          `${tableHeader} mx-2 h-7 border text-center leading-7 transition-colors`,
+                          !member.active
+                            ? 'border-gray-200 bg-gray-100 text-gray-400'
+                            : hasConflict
+                              ? 'border-amber-300 bg-amber-50 text-amber-800'
+                              : blockedByRule
+                                ? 'border-red-200 bg-red-50 text-red-700'
+                                : isScheduled
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : 'border-gray-200 bg-gray-50 text-gray-500',
+                          isDisabled ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
+                        ].join(' ')}
+                        aria-pressed={isScheduled}
+                        aria-label={`${member.name} next week ${day.label} ${member.active ? (blockedByRule ? 'blocked' : isScheduled ? 'scheduled' : 'off') : 'inactive'}`}
+                      >
+                        {!member.active ? 'Inactive' : hasConflict ? 'Conflict' : blockedByRule ? 'Blocked' : isScheduled ? 'On' : 'Off'}
+                      </button>
+                    </HoverTooltip>
                   );
                 })}
               </div>

@@ -11,6 +11,8 @@ import {
   useReducedMotion,
 } from 'framer-motion';
 import { Trash2, ChevronDown } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   framerPresenceMobile,
@@ -427,27 +429,28 @@ export function MobileSwipePhotoViewer({
                 {index + 1} / {slides.length}
               </span>
               {canDelete ? (
-                <button
-                  type="button"
-                  onClick={handleDeleteClick}
-                  disabled={deleting}
-                  aria-label={deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
-                  title={deleteArmed ? 'Click again to confirm' : 'Delete photo'}
-                  className={`${chromeVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${
-                    deleteArmed
-                      ? 'flex h-11 items-center gap-2 rounded-full bg-red-600/95 px-4 text-white shadow-lg backdrop-blur-md transition-transform active:scale-95 disabled:opacity-60'
-                      : `flex h-11 w-11 items-center justify-center text-white disabled:opacity-60 ${GLASS_CHROME}`
-                  }`}
-                >
-                  <Trash2
-                    className={`h-5 w-5 shrink-0 ${deleteArmed ? 'text-white' : 'text-red-500'}`}
-                  />
-                  {deleteArmed ? (
-                    <span className="text-caption font-black uppercase tracking-wider">
-                      {deleting ? 'Deleting…' : 'Confirm'}
-                    </span>
-                  ) : null}
-                </button>
+                <HoverTooltip label={deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>
+                  <button
+                    type="button"
+                    onClick={handleDeleteClick}
+                    disabled={deleting}
+                    aria-label={deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
+                    className={`ds-raw-button ${chromeVisible ? 'pointer-events-auto' : 'pointer-events-none'} ${
+                      deleteArmed
+                        ? 'flex h-11 items-center gap-2 rounded-full bg-red-600/95 px-4 text-white shadow-lg backdrop-blur-md transition-transform active:scale-95 disabled:opacity-60'
+                        : `flex h-11 w-11 items-center justify-center text-white disabled:opacity-60 ${GLASS_CHROME}`
+                    }`}
+                  >
+                    <Trash2
+                      className={`h-5 w-5 shrink-0 ${deleteArmed ? 'text-white' : 'text-red-500'}`}
+                    />
+                    {deleteArmed ? (
+                      <span className="text-caption font-black uppercase tracking-wider">
+                        {deleting ? 'Deleting…' : 'Confirm'}
+                      </span>
+                    ) : null}
+                  </button>
+                </HoverTooltip>
               ) : (
                 <span className="w-11" aria-hidden />
               )}
@@ -460,25 +463,26 @@ export function MobileSwipePhotoViewer({
             animate={{ opacity: chromeVisible ? 1 : 0, y: chromeVisible ? 0 : 12 }}
             transition={{ duration: 0.2, ease: motionBezier.easeOut }}
           >
-            <button
+            <IconButton
               type="button"
               onClick={() => dismissViewer(0)}
-              aria-label="Dismiss"
+              ariaLabel="Dismiss"
               className={`${chromeVisible ? 'pointer-events-auto' : 'pointer-events-none'} flex h-11 w-11 items-center justify-center text-white ${GLASS_CHROME}`}
-            >
-              <motion.span
-                aria-hidden
-                animate={reduce || !chromeVisible ? { y: 0 } : { y: [0, 4, 0] }}
-                transition={
-                  reduce
-                    ? { duration: 0 }
-                    : { duration: 1.6, repeat: Infinity, ease: motionBezier.easeOut }
-                }
-                className="flex items-center justify-center"
-              >
-                <ChevronDown className="h-6 w-6" />
-              </motion.span>
-            </button>
+              icon={
+                <motion.span
+                  aria-hidden
+                  animate={reduce || !chromeVisible ? { y: 0 } : { y: [0, 4, 0] }}
+                  transition={
+                    reduce
+                      ? { duration: 0 }
+                      : { duration: 1.6, repeat: Infinity, ease: motionBezier.easeOut }
+                  }
+                  className="flex items-center justify-center"
+                >
+                  <ChevronDown className="h-6 w-6" />
+                </motion.span>
+              }
+            />
           </motion.div>
         </motion.div>
       ) : null}

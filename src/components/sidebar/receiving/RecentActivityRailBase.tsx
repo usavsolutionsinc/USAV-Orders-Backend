@@ -6,6 +6,8 @@ import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { getStaffName } from '@/utils/staff';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 import { Camera } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { conditionGradeTableLabel, workflowStatusTableLabel, WORKFLOW_BADGE } from '@/components/station/receiving-constants';
 import {
   OrderIdChip, TrackingChip, SkuScanRefChip, SerialChip, getLast4,
@@ -15,6 +17,7 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import {
   SidebarRailShell, railRelativeTime, type SidebarRailRowContext,
 } from '@/components/sidebar/SidebarRailShell';
+import { RailRowBody } from '@/components/sidebar/rail-shell/RailRowBody';
 
 export interface ApiResponse {
   success: boolean;
@@ -60,6 +63,18 @@ export interface RecentActivityRailBaseProps {
   renderQuantity: (row: ReceivingLineRow) => ReactNode;
   previewQtyLabel: string;
   getPreviewQty: (row: ReceivingLineRow) => { current: number; total: number | null };
+  /**
+   * Optional read-only context node rendered inside the hover popover, beneath
+   * the badge row (e.g. the unfound triage exception dot + tooltip). Additive —
+   * rails that don't pass it render exactly as before.
+   */
+  renderPopoverContext?: (row: ReceivingLineRow) => ReactNode;
+  /**
+   * Optional action node rendered in the popover footer, left of "Open →" (e.g.
+   * the unfound triage "File claim" button). `dismiss` closes the popover.
+   * Additive — unset = today's footer.
+   */
+  renderPopoverActions?: (row: ReceivingLineRow, ctx: { dismiss: () => void }) => ReactNode;
 }
 
 // Stable module-scope callbacks. The shell wires `getId` into its optimistic-
@@ -109,6 +124,8 @@ export function RecentActivityRailBase({
   renderQuantity,
   previewQtyLabel,
   getPreviewQty,
+  renderPopoverContext,
+  renderPopoverActions,
 }: RecentActivityRailBaseProps) {
   return (
     <SidebarRailShell<ReceivingLineRow>
@@ -145,6 +162,8 @@ export function RecentActivityRailBase({
           getQty={getPreviewQty}
           activityAt={getActivityAt(row) ?? null}
           onOpenWorkspace={() => { p.openWorkspace(); p.dismiss(); }}
+          contextSlot={renderPopoverContext?.(row)}
+          actionsSlot={renderPopoverActions?.(row, { dismiss: p.dismiss })}
         />
       )}
     />
@@ -165,22 +184,27 @@ function ReceivingRowMain({
   // Render identical content whether or not the row is selected — selection is
   // a pure ring/background highlight (see SidebarRailShell). Any size/content
   // difference here would change the row's height and shove its neighbors.
+  // Shared row anatomy via `RailRowBody` (`rail` density) — the same primitive
+  // the tech Up-Next `OrderCard` renders; only the slot content differs.
   return (
-    <>
-      <div className="flex min-w-0 items-center gap-1.5">
-        <p className="truncate text-caption font-bold text-gray-900" title={title}>{title}</p>
-        {ctx.pkgChip}
-      </div>
-      <p className="truncate text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
-        {renderQuantity(row)}
-        {techId ? <span className={`ml-1 ${techColor}`}>· {getStaffName(techId)}</span> : null}
-      </p>
-    </>
+    <RailRowBody
+      vm={{
+        title,
+        titleAttr: title,
+        titleAccessory: ctx.pkgChip,
+        meta: (
+          <span className="block truncate font-semibold uppercase tracking-widest text-gray-500">
+            {renderQuantity(row)}
+            {techId ? <span className={`ml-1 ${techColor}`}>· {getStaffName(techId)}</span> : null}
+          </span>
+        ),
+      }}
+    />
   );
 }
 
 function ReceivingPopoverContent({
-  row, groupSize, qtyLabel, getQty, activityAt, onOpenWorkspace,
+  row, groupSize, qtyLabel, getQty, activityAt, onOpenWorkspace, contextSlot, actionsSlot,
 }: {
   row: ReceivingLineRow;
   groupSize: number;
@@ -189,6 +213,10 @@ function ReceivingPopoverContent({
   /** Same timestamp the row's relative-time label shows (the feed's sort axis). */
   activityAt: string | null;
   onOpenWorkspace: () => void;
+  /** Optional read-only context (e.g. unfound exception dot) under the badges. */
+  contextSlot?: ReactNode;
+  /** Optional footer action (e.g. "File claim"), left of "Open →". */
+  actionsSlot?: ReactNode;
 }) {
   const title = row.item_name || row.sku || row.zoho_item_id || `Line #${row.id}`;
   const { current: qtyCurrent, total: qtyTotal } = getQty(row);
@@ -230,7 +258,9 @@ function ReceivingPopoverContent({
               (no Zoho receive). The "No PO" tag marks that the website↔Zoho gap
               is intentional, not a failed sync. */}
           {row.receiving_source === 'unmatched' ? (
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-500 ring-1 ring-inset ring-slate-200" title="No matching Zoho PO — received locally only">No PO</span>
+            <HoverTooltip label="No matching Zoho PO — received locally only" asChild>
+              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-500 ring-1 ring-inset ring-slate-200">No PO</span>
+            </HoverTooltip>
           ) : null}
           {/* Phase 2: a physically-present box whose Zoho PO already reads
               received/closed stays in the queue (not hidden) with this badge,
@@ -238,22 +268,30 @@ function ReceivingPopoverContent({
           {['billed', 'closed', 'cancelled', 'received', 'rejected'].includes(
             String(row.zoho_status || '').toLowerCase(),
           ) ? (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200" title={`Zoho marks this PO "${row.zoho_status}" — already received/closed upstream, but the box is still here to unbox`}>Zoho: {String(row.zoho_status)}</span>
+            <HoverTooltip label={`Zoho marks this PO "${row.zoho_status}" — already received/closed upstream, but the box is still here to unbox`} asChild>
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200">Zoho: {String(row.zoho_status)}</span>
+            </HoverTooltip>
           ) : null}
           {row.needs_test ? (
             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-orange-700">Test</span>
           ) : null}
-          <span
-            className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${
-              (row.photo_count ?? 0) > 0 ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200' : 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200'
-            }`}
-            title={`${row.photo_count ?? 0} ${(row.photo_count ?? 0) === 1 ? 'photo' : 'photos'}`}
+          <HoverTooltip
+            label={`${row.photo_count ?? 0} ${(row.photo_count ?? 0) === 1 ? 'photo' : 'photos'}`}
+            asChild
           >
-            <Camera className="h-3 w-3" />
-            {row.photo_count ?? 0}
-          </span>
+            <span
+              className={`ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ${
+                (row.photo_count ?? 0) > 0 ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200' : 'bg-gray-50 text-gray-400 ring-1 ring-inset ring-gray-200'
+              }`}
+            >
+              <Camera className="h-3 w-3" />
+              {row.photo_count ?? 0}
+            </span>
+          </HoverTooltip>
         </div>
       </div>
+
+      {contextSlot ? <div>{contextSlot}</div> : null}
 
       <div>
         <div className="flex items-baseline justify-between">
@@ -284,13 +322,17 @@ function ReceivingPopoverContent({
           {railRelativeTime(activityAt ?? row.created_at)} ago
           {row.assigned_tech_id ? ` · ${getStaffName(row.assigned_tech_id)}` : ''}
         </span>
-        <button
-          type="button"
-          onClick={onOpenWorkspace}
-          className="rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700"
-        >
-          Open →
-        </button>
+        <div className="flex items-center gap-1.5">
+          {actionsSlot}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onOpenWorkspace}
+            className="h-auto rounded-md px-2.5 py-1 text-micro font-black uppercase tracking-widest"
+          >
+            Open →
+          </Button>
+        </div>
       </div>
     </div>
   );

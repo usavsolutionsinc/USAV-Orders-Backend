@@ -18,6 +18,10 @@ import type { PackerRecord } from '@/hooks/usePackerLogs';
 
 export type ShippedTypeFilter = 'all' | 'orders' | 'sku' | 'fba';
 
+/** Right-pane presentation of the same week-scoped record set:
+ *  `board` = outbound-state swimlanes (default), `all` = flat chronological list. */
+export type ShippedLayout = 'board' | 'all';
+
 export interface UseShippedTableFiltersOptions {
   packedBy?: number;
   testedBy?: number;
@@ -92,6 +96,10 @@ export function useShippedTableFilters({ packedBy, testedBy }: UseShippedTableFi
   const search = searchParams.get('search') || '';
   const normalizedSearch = search.trim().toLowerCase();
 
+  // Presentation lens over the same records — URL-backed so a shared `?layout=board`
+  // link (and a reload) reproduce the exact view. Default `all` drops out of the URL.
+  const layout: ShippedLayout = searchParams.get('layout') === 'board' ? 'board' : 'all';
+
   // Mirror the active type filter into the persisted preference.
   useEffect(() => {
     writeShippedFilterPreference(
@@ -105,7 +113,18 @@ export function useShippedTableFilters({ packedBy, testedBy }: UseShippedTableFi
       mutate(params);
       const nextSearch = params.toString();
       const nextPath = pathname || '/dashboard';
-      router.replace(nextSearch ? `${nextPath}?${nextSearch}` : nextPath, { scroll: false });
+      const nextUrl = nextSearch ? `${nextPath}?${nextSearch}` : nextPath;
+      // Use the History API (Next integrates it with `useSearchParams`) rather
+      // than `router.replace`. These are client-only filter changes on a fully
+      // client-rendered page; `router.replace` does a soft RSC navigation (a
+      // server round-trip) that makes every date change wait seconds — the
+      // "slow to update" symptom. `history.replaceState` updates the URL +
+      // `useSearchParams` instantly with no server fetch.
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', nextUrl);
+      } else {
+        router.replace(nextUrl, { scroll: false });
+      }
     },
     [pathname, router, searchParams],
   );
@@ -131,6 +150,51 @@ export function useShippedTableFilters({ packedBy, testedBy }: UseShippedTableFi
     [replaceParams],
   );
 
+  const setLayout = useCallback(
+    (next: ShippedLayout) => {
+      replaceParams((params) => {
+        if (next === 'all') params.delete('layout');
+        else params.set('layout', next);
+      });
+    },
+    [replaceParams],
+  );
+
+  // Period selectors for the date picker. Each is ONE atomic URL write (week and
+  // explicit-range params are mutually exclusive, so every setter clears the
+  // other axis) — never chain setWeekOffset + a range setter, they'd each build
+  // from the same stale params snapshot and clobber one another.
+  const setPeriodWeek = useCallback(
+    (offset: number) => {
+      replaceParams((params) => {
+        params.delete('dateFrom');
+        params.delete('dateTo');
+        if (offset <= 0) params.delete('shippedWeekOffset');
+        else params.set('shippedWeekOffset', String(offset));
+      });
+    },
+    [replaceParams],
+  );
+
+  const setPeriodRange = useCallback(
+    (from: string, to: string) => {
+      replaceParams((params) => {
+        params.delete('shippedWeekOffset');
+        params.set('dateFrom', from);
+        params.set('dateTo', to);
+      });
+    },
+    [replaceParams],
+  );
+
+  const clearPeriod = useCallback(() => {
+    replaceParams((params) => {
+      params.delete('dateFrom');
+      params.delete('dateTo');
+      params.delete('shippedWeekOffset');
+    });
+  }, [replaceParams]);
+
   return {
     shippedSearchField,
     shippedFilter,
@@ -152,9 +216,14 @@ export function useShippedTableFilters({ packedBy, testedBy }: UseShippedTableFi
     effectiveWeekEnd,
     search,
     normalizedSearch,
+    layout,
     setWeekOffset,
     clearSearch,
     applyShippedFilter,
+    setLayout,
+    setPeriodWeek,
+    setPeriodRange,
+    clearPeriod,
   };
 }
 

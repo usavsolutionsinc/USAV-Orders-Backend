@@ -129,10 +129,10 @@ export function ViewDropdown<T extends string>({
             ...(backgroundColor ? { backgroundColor } : {}),
             ...(fontSize ? { fontSize } : {}),
           }}
-          className={
+          className={`ds-raw-button ${
             buttonClassName ||
             `flex items-center ${isSm ? 'h-10 text-xs' : 'h-14 text-sm'} w-full border-b border-gray-400 bg-white px-4 pr-12 text-left ${caseClass} tracking-wide text-gray-900 outline-none transition-colors hover:bg-gray-50 ${dmSans.className} font-bold`
-          }
+          }`}
         >
           {SelectedIcon ? <SelectedIcon className="mr-2 h-4 w-4 shrink-0 text-blue-600" /> : null}
           <span className="min-w-0 truncate">{selectedOption?.label || ''}</span>
@@ -182,7 +182,7 @@ export function ViewDropdown<T extends string>({
                         ...(backgroundColor ? { backgroundColor } : {}),
                         ...(fontSize ? { fontSize } : {}),
                       }}
-                      className={`flex ${isSm ? 'h-9' : 'h-11'} w-full items-center gap-2 ${
+                      className={`ds-raw-button flex ${isSm ? 'h-9' : 'h-11'} w-full items-center gap-2 ${
                         isBoxy ? 'px-3' : 'px-4'
                       } text-left ${
                         optionClassName || (isSm ? 'text-xs font-bold tracking-wide' : 'text-sm font-bold tracking-wide')

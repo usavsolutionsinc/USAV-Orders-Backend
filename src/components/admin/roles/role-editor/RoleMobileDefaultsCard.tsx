@@ -7,6 +7,8 @@ import {
   sanitizeMobileDisplayConfig,
   type MobileNavTabId,
 } from '@/lib/auth/mobile-display-config';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 // ─── Mobile defaults card ───────────────────────────────────────────────
 //
@@ -81,15 +83,18 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
           </p>
         </div>
         {hasDefaults && (
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={busy}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Clear role defaults; staff fall back to system default"
-          >
-            Reset
-          </button>
+          <HoverTooltip label="Clear role defaults; staff fall back to system default" asChild>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={onReset}
+              disabled={busy}
+              className="uppercase tracking-wider"
+            >
+              Reset
+            </Button>
+          </HoverTooltip>
         )}
       </header>
 
@@ -101,6 +106,7 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
               When off, staff in this role are locked to a single page on their phone.
             </p>
           </div>
+          {/* ds-raw-button: role=switch toggle — not a DS Button variant */}
           <button
             type="button"
             role="switch"
@@ -128,6 +134,7 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
             {MOBILE_NAV_TAB_IDS.map((id) => {
               const on = draftTabs.includes(id);
               return (
+                // ds-raw-button: two-state segmented toggle pill (conditional active bg)
                 <button
                   key={id}
                   type="button"
@@ -150,14 +157,16 @@ export function RoleMobileDefaultsCard({ roleLabel, roleColor, mobileDefaults, b
           <div className="text-micro text-gray-500">
             {hasDefaults ? 'Role defaults active.' : 'No defaults set — using system default.'}
           </div>
-          <button
+          <Button
             type="button"
+            variant="brand"
+            size="sm"
             onClick={save}
             disabled={busy || !dirty}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-caption font-semibold uppercase tracking-wider text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+            className="uppercase tracking-wider"
           >
             {busy ? 'Saving…' : dirty ? 'Save defaults' : 'Saved'}
-          </button>
+          </Button>
         </div>
       </div>
     </section>

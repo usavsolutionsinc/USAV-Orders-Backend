@@ -36,7 +36,7 @@ function styleForType(type: string): {
       if (type.startsWith('REPAIR')) {
         return { Icon: Wrench, ring: 'bg-orange-50', text: 'text-orange-600', label: 'Repair' };
       }
-      return { Icon: Activity, ring: 'bg-[#F5F3EF]', text: 'text-[#6B6356]', label: type.replace(/_/g, ' ').toLowerCase() };
+      return { Icon: Activity, ring: 'bg-surface-canvas', text: 'text-text-muted', label: type.replace(/_/g, ' ').toLowerCase() };
   }
 }
 
@@ -61,14 +61,14 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
     <section>
       <div className="mb-5 flex items-end justify-between gap-4">
         <div>
-          <span className={`${sectionLabel} !text-[#A89F91]`}>
+          <span className={`${sectionLabel} !text-text-muted`}>
             Live feed
           </span>
-          <h2 className="text-[20px] sm:text-[22px] font-extrabold tracking-tight text-[#2D2A26] mt-1">
+          <h2 className="text-[20px] sm:text-[22px] font-extrabold tracking-tight text-text-default mt-1">
             What’s happening on the floor
           </h2>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-[#E8E4DD] shrink-0">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-border-soft shrink-0">
           <span className="relative flex h-1.5 w-1.5">
             <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping ${
               ablyStatus === 'connected' ? 'bg-emerald-500' :
@@ -79,7 +79,7 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
               ablyStatus === 'connecting' ? 'bg-amber-500' : 'bg-rose-500'
             }`} />
           </span>
-          <span className="text-[10px] font-black uppercase tracking-[0.16em] text-[#6B6356]">
+          <span className="text-micro font-black uppercase tracking-[0.16em] text-text-muted">
             {ablyStatus === 'connected' ? 'Live' : ablyStatus}
           </span>
         </div>
@@ -87,24 +87,24 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
 
       <div className="bg-white rounded-[28px] shadow-[0_4px_24px_rgba(161,140,90,0.06)] p-3 sm:p-4">
         {isLoading && rows.length === 0 ? (
-          <ul className="divide-y divide-[#F5F3EF]">
+          <ul className="divide-y divide-border-soft">
             {Array.from({ length: 5 }).map((_, i) => (
               <li key={i} className="flex items-center gap-3 px-3 py-3 animate-pulse">
-                <div className="w-9 h-9 rounded-xl bg-[#F5F3EF]" />
+                <div className="w-9 h-9 rounded-xl bg-surface-canvas" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-3 bg-[#F5F3EF] rounded w-1/2" />
-                  <div className="h-2.5 bg-[#F5F3EF] rounded w-1/3" />
+                  <div className="h-3 bg-surface-canvas rounded w-1/2" />
+                  <div className="h-2.5 bg-surface-canvas rounded w-1/3" />
                 </div>
               </li>
             ))}
           </ul>
         ) : rows.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[13px] font-semibold text-[#6B6356]">No activity yet today.</p>
-            <p className="text-[11px] text-[#A89F91] mt-1">New scans, packs, and tests will appear here in real time.</p>
+            <p className="text-[13px] font-semibold text-text-muted">No activity yet today.</p>
+            <p className="text-caption text-text-muted mt-1">New scans, packs, and tests will appear here in real time.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-[#F5F3EF]">
+          <ul className="divide-y divide-border-soft">
             <AnimatePresence initial={false}>
               {rows.map((row) => {
                 const { Icon, ring, text, label } = styleForType(row.type);
@@ -123,20 +123,20 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-[0.14em] text-[#A89F91]">
+                        <span className="text-micro font-black uppercase tracking-[0.14em] text-text-muted">
                           {label}
                         </span>
                         {row.source && (
-                          <span className="text-[10px] font-bold text-[#C4BAA8] uppercase">
+                          <span className="text-micro font-bold text-text-soft uppercase">
                             · {row.source}
                           </span>
                         )}
                       </div>
-                      <p className="text-[13px] font-semibold text-[#2D2A26] truncate leading-tight mt-0.5">
+                      <p className="text-[13px] font-semibold text-text-default truncate leading-tight mt-0.5">
                         {row.summary}
                       </p>
                       {row.actor_name && (
-                        <p className="text-[10px] font-medium mt-0.5 truncate text-[#A89F91]">
+                        <p className="text-micro font-medium mt-0.5 truncate text-text-muted">
                           by{' '}
                           <span
                             className="font-bold"
@@ -147,7 +147,7 @@ export function LiveFeedCard({ feed, isLoading, ablyStatus = 'connected' }: Live
                         </p>
                       )}
                     </div>
-                    <span className="text-[10px] font-semibold text-[#A89F91] tabular-nums shrink-0">
+                    <span className="text-micro font-semibold text-text-muted tabular-nums shrink-0">
                       {timeAgo(row.timestamp)}
                     </span>
                   </motion.li>

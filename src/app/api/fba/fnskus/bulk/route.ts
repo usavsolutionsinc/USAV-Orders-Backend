@@ -114,7 +114,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       ctx.organizationId,
       `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, condition, is_active, organization_id, created_at, updated_at, last_seen_at)
        VALUES ${placeholders.join(', ')}
-       ON CONFLICT (fnsku) DO UPDATE
+       ON CONFLICT (organization_id, fnsku) DO UPDATE
          SET product_title = COALESCE(EXCLUDED.product_title, fba_fnskus.product_title),
              asin          = COALESCE(EXCLUDED.asin, fba_fnskus.asin),
              sku           = COALESCE(EXCLUDED.sku, fba_fnskus.sku),

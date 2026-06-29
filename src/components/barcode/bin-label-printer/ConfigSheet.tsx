@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Check } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { DEFAULT_GLN, QR_BASE_URL } from '@/lib/barcode-routing';
 import { DEFAULT_CONFIG, type PrinterConfig } from './types';
 import { clampMax } from './storage';
@@ -74,21 +75,21 @@ export function ConfigSheet({ open, onClose, config, onSave }: ConfigSheetProps)
       </div>
 
       <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={handleSave}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold tracking-wide text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98] sm:flex-1"
+          icon={<Check className="h-4 w-4" />}
+          className="h-12 w-full sm:flex-1"
         >
-          <Check className="mr-1.5 h-4 w-4" />
           Save
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
           onClick={handleReset}
-          className="flex h-12 w-full items-center justify-center rounded-2xl text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-100 sm:flex-1"
+          className="h-12 w-full sm:flex-1"
         >
           Reset
-        </button>
+        </Button>
       </div>
     </BottomSheet>
   );

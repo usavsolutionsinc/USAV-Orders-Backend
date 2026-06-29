@@ -19,6 +19,7 @@
  *       platform_ids: [{ platform, platform_sku, platform_item_id, account_name }],
  *       order_id,          // most recent Ecwid order number
  *       order_date,        // ISO ts of that order
+ *       is_repair_service, // true when SKU ends in `-RS`
  *     }]
  *   }
  *
@@ -78,6 +79,7 @@ interface RepairCandidate {
   order_date: string;
   /** Ecwid product page URL, when derivable. Saved as the carton's listing_url when linking. */
   product_url: string | null;
+  is_repair_service: boolean;
 }
 
 const DEFAULT_STOREFRONT = 'https://usavshop.com';
@@ -329,6 +331,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         order_id: bucket.order_id,
         order_date: bucket.order_date,
         product_url: bucket.product_url,
+        is_repair_service: isRepairServiceSku(bucket.sku),
       });
     } else {
       // SKU exists in Ecwid orders but has no sku_platform_ids row — surface
@@ -347,6 +350,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
         order_id: bucket.order_id,
         order_date: bucket.order_date,
         product_url: bucket.product_url,
+        is_repair_service: isRepairServiceSku(bucket.sku),
       });
     }
   }

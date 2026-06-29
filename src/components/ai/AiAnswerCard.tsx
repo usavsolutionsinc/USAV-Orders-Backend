@@ -3,6 +3,7 @@
 import type { AiStructuredAnswer } from '@/lib/ai/types';
 import { sectionLabel, tableHeader, tableCell, dataValue } from '@/design-system/tokens/typography/presets';
 import MarkdownRenderer from '@/components/ai/MarkdownRenderer';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 function confidenceClasses(confidence: AiStructuredAnswer['confidence']) {
   if (confidence === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
@@ -128,9 +129,11 @@ export default function AiAnswerCard({
 
         <div className="flex flex-wrap gap-2 text-micro">
           {analysis.sources.map((source) => (
-            <span key={source.id} className="border border-gray-200 bg-gray-50 px-2 py-1 text-gray-600" title={source.detail}>
-              {source.label}
-            </span>
+            <HoverTooltip key={source.id} label={source.detail ?? ''} asChild>
+              <span className="border border-gray-200 bg-gray-50 px-2 py-1 text-gray-600">
+                {source.label}
+              </span>
+            </HoverTooltip>
           ))}
         </div>
 
@@ -151,6 +154,7 @@ export default function AiAnswerCard({
         {analysis.followUps?.length ? (
           <div className="flex flex-wrap gap-2">
             {analysis.followUps.map((prompt) => (
+              // ds-raw-button: left-aligned multi-line follow-up prompt row, not a centered DS Button
               <button
                 key={prompt}
                 type="button"

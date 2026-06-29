@@ -8,12 +8,15 @@ import { OutOfStockField } from '@/components/ui/OutOfStockField';
 import { OutOfStockEditorBlock } from '@/components/ui/OutOfStockEditorBlock';
 import { dispatchCloseShippedDetails } from '@/utils/events';
 import { getActiveStaff, type StaffMember } from '@/lib/staffCache';
-import { PACKER_IDS, staffHasRole } from '@/utils/staff';
+import { getStaffColorHex } from '@/utils/staff-colors';
+import { PACKER_IDS } from '@/utils/staff';
+import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 import { MarkAsShippedForm } from './MarkAsShippedForm';
 import { DeleteOrderControl } from './DeleteOrderControl';
 import { useOrderFieldSave } from '@/hooks/useOrderFieldSave';
 import { CustomerDetailsTab } from '../CustomerDetailsTab';
 import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
+import { Button } from '@/design-system/primitives';
 
 export function DashboardDetailsStack({
   shipped,
@@ -54,16 +57,22 @@ export function DashboardDetailsStack({
     onUpdate,
   });
 
-  // All packers (by staff_roles), ordered with the preferred PACKER_IDS first.
-  const packerOptions = staffOptions
-    .filter((member) => staffHasRole(member, 'packer'))
+  // Every active staff member in the org, ordered with the preferred PACKER_IDS
+  // first so the usual packers stay at the top. Shaped as StaffRecipient[] so
+  // the picker can reuse the clipboard's StaffRecipientList selector.
+  const packerOptions: StaffRecipient[] = staffOptions
     .slice()
     .sort((a, b) => {
       const ai = packerIdOrder.indexOf(a.id);
       const bi = packerIdOrder.indexOf(b.id);
       return (ai === -1 ? Number.MAX_SAFE_INTEGER : ai) - (bi === -1 ? Number.MAX_SAFE_INTEGER : bi);
     })
-    .map((member) => ({ id: member.id, name: member.name }));
+    .map((member) => ({
+      id: member.id,
+      name: member.name,
+      role: member.role,
+      color_hex: getStaffColorHex({ id: member.id }),
+    }));
 
   const isValidShipByDate = (value: any) => {
     if (!value) return false;
@@ -173,14 +182,16 @@ export function DashboardDetailsStack({
         {mode === 'tech' ? (
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white p-2">
             <span className="text-eyebrow font-black uppercase tracking-wider text-gray-500 whitespace-nowrap">Undo</span>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={handleUndo}
               disabled={isUndoing}
-              className="flex-1 h-8 inline-flex items-center justify-center rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-eyebrow font-black uppercase tracking-wider disabled:opacity-50"
+              className="flex-1 bg-amber-500 hover:bg-amber-600"
             >
               {isUndoing ? 'Undoing...' : 'Undo Last Scan'}
-            </button>
+            </Button>
           </div>
         ) : null}
 

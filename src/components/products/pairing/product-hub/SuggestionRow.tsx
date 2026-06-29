@@ -1,4 +1,5 @@
 import { ExternalLink, Link2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { HubCandidate } from '../types';
 import { CopyableId } from './CopyableId';
 import { identifierParts } from './identifier-parts';
@@ -42,7 +43,9 @@ export function SuggestionRow({
   return (
     <div className={`rounded-md border px-2 py-1.5 ${tone}`}>
       <div className="flex items-center gap-2">
-        <span className={`inline-flex h-2 w-2 shrink-0 rounded-full ${dotColor}`} title={candidate.reason} />
+        <HoverTooltip label={candidate.reason} asChild>
+          <span className={`inline-flex h-2 w-2 shrink-0 rounded-full ${dotColor}`} />
+        </HoverTooltip>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5 font-mono text-xs font-bold text-gray-900">
             <CopyableId value={value} />
@@ -64,41 +67,44 @@ export function SuggestionRow({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {candidate.listingUrl && (
+            <HoverTooltip label={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'} asChild>
+              <button
+                type="button"
+                onClick={() => onPreview(candidate.listingUrl!, candidate.listingTitle || value)}
+                className={`ds-raw-button rounded p-1 transition-colors ${
+                  isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-400 hover:bg-white hover:text-blue-600'
+                }`}
+                aria-label="Preview listing"
+                aria-pressed={isPreviewing}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </button>
+            </HoverTooltip>
+          )}
+          <HoverTooltip label={pending === 'accept' ? 'Will accept on save' : 'Accept this match'} asChild>
             <button
               type="button"
-              onClick={() => onPreview(candidate.listingUrl!, candidate.listingTitle || value)}
-              className={`rounded p-1 transition-colors ${
-                isPreviewing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-400 hover:bg-white hover:text-blue-600'
+              onClick={() => onAccept(candidate)}
+              className={`ds-raw-button rounded p-1 transition-colors ${
+                pending === 'accept' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-400 hover:bg-white hover:text-blue-600'
               }`}
-              title={isPreviewing ? 'Showing in preview pane' : 'Preview listing below'}
-              aria-label="Preview listing"
-              aria-pressed={isPreviewing}
+              aria-label="Accept"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <Link2 className="h-3.5 w-3.5" />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => onAccept(candidate)}
-            className={`rounded p-1 transition-colors ${
-              pending === 'accept' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-gray-400 hover:bg-white hover:text-blue-600'
-            }`}
-            title={pending === 'accept' ? 'Will accept on save' : 'Accept this match'}
-            aria-label="Accept"
-          >
-            <Link2 className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onReject(candidate)}
-            className={`rounded p-1 transition-colors ${
-              pending === 'reject' ? 'bg-gray-700 text-white hover:bg-gray-800' : 'text-gray-400 hover:bg-white hover:text-gray-700'
-            }`}
-            title={pending === 'reject' ? 'Will hide for 30 days' : 'Reject this match'}
-            aria-label="Reject"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          </HoverTooltip>
+          <HoverTooltip label={pending === 'reject' ? 'Will hide for 30 days' : 'Reject this match'} asChild>
+            <button
+              type="button"
+              onClick={() => onReject(candidate)}
+              className={`ds-raw-button rounded p-1 transition-colors ${
+                pending === 'reject' ? 'bg-gray-700 text-white hover:bg-gray-800' : 'text-gray-400 hover:bg-white hover:text-gray-700'
+              }`}
+              aria-label="Reject"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </HoverTooltip>
         </div>
       </div>
     </div>

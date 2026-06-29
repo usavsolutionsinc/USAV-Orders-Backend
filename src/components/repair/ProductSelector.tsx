@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from '../Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import {
     SIDEBAR_INTAKE_LABEL_CLASS,
     getSidebarIntakeInputClass,
@@ -270,7 +271,7 @@ export function ProductSelector({
 
       {/* Back + Search */}
       <div className="flex items-center gap-2">
-        <button
+        <IconButton
           type="button"
           onClick={() => {
             if (showAllProducts) {
@@ -287,10 +288,9 @@ export function ProductSelector({
           }}
           disabled={loading || (isAtRoot && !showAllProducts)}
           className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-gray-50 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label="Go back"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+          ariaLabel="Go back"
+          icon={<ChevronLeft className="h-4 w-4" />}
+        />
         <input
           type="text"
           value={search}
@@ -302,6 +302,7 @@ export function ProductSelector({
 
       {/* Manual Entry + SKU pairing */}
       <div className="space-y-2">
+        {/* ds-raw-button: full-width selectable toggle card with title + conditional subtitle and active-state restyle — not a Button/IconButton shape */}
         <button
           type="button"
           onClick={() => setShowOther((prev) => !prev)}
@@ -327,14 +328,15 @@ export function ProductSelector({
               className={`flex-1 ${blueInputClass}`}
               onKeyDown={(e) => { if (e.key === 'Enter') handleOtherSubmit(); }}
             />
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="lg"
               onClick={handleOtherSubmit}
               disabled={!otherModelText.trim()}
-              className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold uppercase tracking-wide text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
             >
               Add
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -342,6 +344,7 @@ export function ProductSelector({
       {/* Breadcrumbs */}
       {(breadcrumbs.length > 0 || showAllProducts) && (
         <div className="flex flex-wrap items-center gap-1 text-eyebrow font-black uppercase tracking-wide text-gray-500">
+          {/* ds-raw-button: inline breadcrumb text link (no chrome) — Button would add height/padding */}
           <button
             type="button"
             onClick={() => void fetchCategoryLevel(null)}
@@ -358,6 +361,7 @@ export function ProductSelector({
           {!showAllProducts && breadcrumbs.map((b, i) => (
             <React.Fragment key={b.id}>
               <ChevronRight className="h-3 w-3 flex-shrink-0 text-gray-300" />
+              {/* ds-raw-button: inline breadcrumb text link (no chrome) */}
               <button
                 type="button"
                 onClick={() => void fetchCategoryLevel(b.id)}
@@ -395,6 +399,7 @@ export function ProductSelector({
                 {isAtRoot ? 'Categories' : 'Sub-categories'}
               </p>
               <div className="space-y-1.5">
+                {/* ds-raw-button: full-width category nav row card (title + chevron), not a Button shape */}
                 {filteredCategories.map((cat) => (
                   <button
                     key={cat.id}
@@ -409,6 +414,7 @@ export function ProductSelector({
                   </button>
                 ))}
                 {isAtRoot && (
+                  /* ds-raw-button: full-width nav row card (title + chevron), not a Button shape */
                   <button
                     type="button"
                     onClick={() => void fetchAllProducts()}
@@ -438,6 +444,7 @@ export function ProductSelector({
                   {filteredProducts.map((product) => {
                     const selected = isSelected(product.id);
                     return (
+                      // ds-raw-button: selectable product image+price card with checkmark overlay, not a Button shape
                       <button
                         key={product.id}
                         type="button"
@@ -498,14 +505,16 @@ export function ProductSelector({
                 </div>
               )}
               {!loadingProducts && hasMoreProducts && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={loadMoreProducts}
                   disabled={loadingMoreProducts}
-                  className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-micro font-black uppercase tracking-wide text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-2 w-full"
                 >
                   {loadingMoreProducts ? 'Loading More...' : `Load ${PRODUCT_PAGE_SIZE} More`}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -533,15 +542,17 @@ export function ProductSelector({
                   {item.price !== null && (
                     <span className="text-micro font-black text-emerald-600">${item.price.toFixed(2)}</span>
                   )}
-                  <button
+                  <IconButton
                     type="button"
                     onClick={() => removeItem(item.id)}
                     className="flex h-5 w-5 items-center justify-center rounded-md bg-gray-100 transition-colors hover:bg-red-100"
-                  >
-                    <svg className="h-3 w-3 text-gray-500 hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                    ariaLabel="Remove item"
+                    icon={
+                      <svg className="h-3 w-3 text-gray-500 hover:text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    }
+                  />
                 </div>
               </div>
             ))}

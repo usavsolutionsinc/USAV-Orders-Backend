@@ -14,6 +14,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Loader2, Package, ShoppingCart } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
 import { formatCentsToDollars } from '@/lib/square/client';
 import {
@@ -78,29 +79,29 @@ export function SalesCartSidebar() {
               </span>
             </div>
           ) : null}
-          <button
+          <Button
             type="button"
             onClick={() => void checkout()}
             disabled={!canSubmit}
-            className={`flex w-full items-center justify-center gap-2 ${submitClass}`}
+            icon={
+              isSubmitting ? (
+                <Loader2 className="animate-spin" />
+              ) : successMessage ? (
+                <Check />
+              ) : (
+                <ShoppingCart />
+              )
+            }
+            className={`w-full ${submitClass}`}
           >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Sending…
-              </>
-            ) : successMessage ? (
-              <>
-                <Check className="h-4 w-4" /> {successMessage}
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="h-4 w-4" />
-                {cart.length > 0
+            {isSubmitting
+              ? 'Sending…'
+              : successMessage
+                ? successMessage
+                : cart.length > 0
                   ? `Charge ${formatCentsToDollars(subtotal)}`
                   : 'Add Products'}
-              </>
-            )}
-          </button>
+          </Button>
           {submitError ? (
             <p className="text-center text-eyebrow font-bold text-red-600">
               {submitError}
@@ -127,7 +128,7 @@ function SalesListRow({ line, active, onSelect }: SalesListRowProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.18 }}
-      className={`w-full rounded-xl border p-2 text-left transition-colors ${
+      className={`ds-raw-button w-full rounded-xl border p-2 text-left transition-colors ${
         active
           ? 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-200'
           : 'border-gray-200 bg-white hover:bg-gray-50'

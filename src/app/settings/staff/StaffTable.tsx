@@ -9,6 +9,8 @@
  */
 
 import { useCallback, useMemo, useState } from 'react';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface StaffRow {
   id: number;
@@ -20,6 +22,9 @@ interface StaffRow {
   last_login_at: string | null;
   default_home_path: string | null;
   color_hex: string;
+  // WS6.1 per-staff auth policy.
+  auth_method: string;               // 'pin' | 'password'
+  requires_sensitive_stepup: boolean;
 }
 
 interface StaffTableProps {
@@ -73,6 +78,35 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
     }
   }, [refresh]);
 
+  // WS6.1: persist a per-staff auth-policy change, then refetch. The update
+  // route is itself behind the sensitive-info wall, so surface STEP_UP_REQUIRED.
+  const updateAuthPolicy = useCallback(async (
+    id: number,
+    patch: { authMethod?: 'pin' | 'password'; requiresSensitiveStepUp?: boolean },
+  ) => {
+    setBusy(id);
+    try {
+      const r = await fetch('/api/admin/staff/update', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        if (data.error === 'STEP_UP_REQUIRED') {
+          alert('This change needs step-up verification. Re-authenticate (PIN/passkey) and try again.');
+        } else {
+          alert(`Couldn't update auth policy: ${data.error || r.status}`);
+        }
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }, [refresh]);
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return staff;
@@ -92,30 +126,27 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
           placeholder="Filter by name, role, or status…"
           className="w-full max-w-xs rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[13px] focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
         />
-        <button
-          type="button"
-          onClick={() => setInviteOpen(true)}
-          className="inline-flex items-center rounded-2xl bg-slate-900 px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-slate-800"
-        >
+        <Button variant="brand" onClick={() => setInviteOpen(true)}>
           Invite teammate
-        </button>
+        </Button>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-100 text-[13px]">
-          <thead className="bg-gray-50 text-left text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">
+          <thead className="bg-gray-50 text-left text-caption font-medium uppercase tracking-[0.08em] text-gray-500">
             <tr>
               <th className="px-4 py-2">Name</th>
               <th className="px-4 py-2">Role</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2">PIN</th>
+              <th className="px-4 py-2">Auth</th>
               <th className="px-4 py-2">Last login</th>
               <th className="px-4 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No teammates match.</td></tr>
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400">No teammates match.</td></tr>
             ) : filtered.map((s) => (
               <tr key={s.id} className={s.active ? 'text-gray-900' : 'text-gray-400'}>
                 <td className="px-4 py-2">
@@ -128,30 +159,35 @@ export function StaffTable({ initialStaff }: StaffTableProps) {
                   {/* Role is derived from staff_roles[0]. To edit, jump to
                       the access detail page where the Roles card is the
                       authoritative editor. */}
-                  <a
-                    href={`/settings/access?staffId=${s.id}`}
-                    className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-[12px] font-medium text-gray-700 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
-                    title="Edit roles in Settings → Access"
-                  >
-                    {s.role}
-                    <span className="text-gray-400">›</span>
-                  </a>
+                  <HoverTooltip label="Edit roles in Settings → Access" asChild>
+                    <a
+                      href={`/settings/access?staffId=${s.id}`}
+                      className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2 py-0.5 text-label font-medium text-gray-700 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      {s.role}
+                      <span className="text-gray-400">›</span>
+                    </a>
+                  </HoverTooltip>
                 </td>
                 <td className="px-4 py-2">
                   <StatusPill status={s.status} active={s.active} />
                 </td>
-                <td className="px-4 py-2 text-[12px] text-gray-500">{s.has_pin ? 'Set' : '—'}</td>
-                <td className="px-4 py-2 text-[12px] text-gray-500">{fmtLogin(s.last_login_at)}</td>
+                <td className="px-4 py-2 text-label text-gray-500">{s.has_pin ? 'Set' : '—'}</td>
+                <td className="px-4 py-2">
+                  <AuthPolicyCell row={s} disabled={busy === s.id} onChange={updateAuthPolicy} />
+                </td>
+                <td className="px-4 py-2 text-label text-gray-500">{fmtLogin(s.last_login_at)}</td>
                 <td className="px-4 py-2 text-right">
                   {s.active && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => deactivate(s.id, s.name)}
                       disabled={busy === s.id}
-                      className="text-[12px] text-gray-500 transition-colors hover:text-red-600 disabled:opacity-50"
+                      className="text-gray-500 hover:text-red-600"
                     >
                       Deactivate
-                    </button>
+                    </Button>
                   )}
                 </td>
               </tr>
@@ -185,6 +221,46 @@ function StatusPill({ status, active }: { status: string; active: boolean }) {
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ${css}`}>
       {effective}
     </span>
+  );
+}
+
+// WS6.1 per-staff auth policy control: sign-in method (PIN vs password) plus the
+// sensitive-information step-up wall. Both persist via /api/admin/staff/update.
+function AuthPolicyCell({
+  row,
+  disabled,
+  onChange,
+}: {
+  row: StaffRow;
+  disabled: boolean;
+  onChange: (id: number, patch: { authMethod?: 'pin' | 'password'; requiresSensitiveStepUp?: boolean }) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <HoverTooltip label="Sign-in method for this teammate" asChild>
+        <select
+          value={row.auth_method === 'password' ? 'password' : 'pin'}
+          disabled={disabled}
+          onChange={(e) => onChange(row.id, { authMethod: e.target.value as 'pin' | 'password' })}
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-label text-gray-700 focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-50"
+        >
+          <option value="pin">PIN</option>
+          <option value="password">Password</option>
+        </select>
+      </HoverTooltip>
+      <HoverTooltip label="Require password step-up before sensitive screens" asChild>
+        <label className="inline-flex items-center gap-1 text-label text-gray-500">
+          <input
+            type="checkbox"
+            checked={row.requires_sensitive_stepup}
+            disabled={disabled}
+            onChange={(e) => onChange(row.id, { requiresSensitiveStepUp: e.target.checked })}
+            className="h-3.5 w-3.5 rounded border-gray-300 text-slate-600 focus:ring-slate-200 disabled:opacity-50"
+          />
+          Wall
+        </label>
+      </HoverTooltip>
+    </div>
   );
 }
 
@@ -226,18 +302,19 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
 
   return (
     <div className="fixed inset-0 z-modal flex items-center justify-center px-4">
+      {/* ds-raw-button: full-bleed modal scrim/overlay dismiss target, not a DS Button */}
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" />
       <div className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
         <h2 className="text-[16px] font-semibold text-gray-900">Invite a teammate</h2>
-        <p className="mt-1 text-[12px] text-gray-500">
+        <p className="mt-1 text-label text-gray-500">
           They'll get a link to set their PIN. If you provide an email we send the invite automatically.
         </p>
 
         {enrollmentUrl ? (
           <div className="mt-4 space-y-3">
-            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">Invite created.</div>
+            <div className="rounded-xl bg-emerald-50 px-3 py-2 text-label text-emerald-700">Invite created.</div>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">Enrollment link</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Enrollment link</span>
               <input
                 readOnly
                 value={enrollmentUrl}
@@ -246,19 +323,15 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
               />
             </label>
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={onInvited}
-                className="rounded-2xl bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800"
-              >
+              <Button variant="brand" size="sm" onClick={onInvited}>
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div className="mt-4 space-y-3">
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">Name</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Name</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -268,7 +341,7 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">Role</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Role</span>
               <select
                 value={form.role}
                 onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
@@ -278,7 +351,7 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] font-medium uppercase tracking-[0.08em] text-gray-500">Email (optional)</span>
+              <span className="mb-1 block text-caption font-medium uppercase tracking-[0.08em] text-gray-500">Email (optional)</span>
               <input
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
@@ -288,20 +361,20 @@ function InviteModal({ onClose, onInvited }: InviteModalProps) {
               />
             </label>
             {error && (
-              <div className="rounded-lg bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700">{error}</div>
+              <div className="rounded-lg bg-red-50 px-2 py-1.5 text-caption font-medium text-red-700">{error}</div>
             )}
             <div className="flex items-center justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-2xl border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50">
+              <Button variant="secondary" size="sm" onClick={onClose}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="brand"
+                size="sm"
                 onClick={submit}
                 disabled={busy || !form.name.trim()}
-                className="rounded-2xl bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {busy ? 'Inviting…' : 'Send invite'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

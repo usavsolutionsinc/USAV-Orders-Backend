@@ -10,6 +10,7 @@ import { copyToClipboard } from '@/utils/_dom';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
+import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import {
   dispatchLineUpdated,
   type ReceivingLineRow,
@@ -414,7 +415,15 @@ export function useReceivingLineCore(
 
   // ── Derived identity values shared by the carton chip row ──────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-  const listingOpenHref = listingUrlForOpen(listingLink);
+  // Listing link: an explicit pasted URL wins; otherwise derive the storefront
+  // search by SKU — the SAME resolver sales orders use (getExternalUrlByItemNumber:
+  // usavshop.com/products/search?keyword=SKU, with marketplace patterns inferred),
+  // so a paired Ecwid carton's Listing chip is openable instead of "No link".
+  // Only derive for a LINKED carton: an unmatched (unfound) carton has no listing,
+  // so unlinking resets the chip back to empty instead of leaving a stale SKU link.
+  const listingOpenHref =
+    listingUrlForOpen(listingLink) ||
+    (row.receiving_source === 'unmatched' ? null : getExternalUrlByItemNumber(row.sku));
   const poOpenHref = (() => {
     const id = (row.zoho_purchaseorder_id || '').trim();
     if (id) return `https://inventory.zoho.com/app#/purchaseorders/${encodeURIComponent(id)}`;

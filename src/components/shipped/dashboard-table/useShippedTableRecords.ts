@@ -1,9 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEventBridge } from '@/hooks';
-import { dashboardShippedQuery } from '@/lib/queries/dashboard-queries';
+import { dashboardShippedQuery, dashboardShippedWeekQuery } from '@/lib/queries/dashboard-queries';
+import { useShippedWeekBuckets } from './useShippedWeekBuckets';
+import { getRecentWeekBuckets } from '@/lib/dashboard-week-range';
+import { toPSTDateKey } from '@/utils/date';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { isStalled } from '@/components/shipping/ShipmentStatusBadge';
 import {
@@ -43,22 +46,81 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     statusFilter,
     obStatus,
     matchesOutbound,
+    hasDateRange,
+    dateFrom,
+    dateTo,
   } = filters;
 
   const queryClient = useQueryClient();
 
-  const query = useQuery({
+  // Bucketed week cache: the visible window is fetched as canonical Mon–Sun week
+  // buckets (stable, reused keys) so scrubbing a date range reads from cache and
+  // only a never-seen week hits the DB; past weeks are immutable. The
+  // carrier/status/exception filters fetch ALL-TIME (empty window) which can't be
+  // week-bucketed, so that mode stays a single query.
+  const allTimeMode = !effectiveWeekStart || !effectiveWeekEnd;
+
+  const weekBuckets = useShippedWeekBuckets({
+    rangeStart: effectiveWeekStart,
+    rangeEnd: effectiveWeekEnd,
+    packedBy: effPackedBy,
+    testedBy: effTestedBy,
+    staffId: effStaffId ?? undefined,
+    shippedFilter,
+    enabled: !normalizedSearch && !allTimeMode,
+  });
+
+  const allTimeQuery = useQuery({
     ...dashboardShippedQuery({
-      weekStart: effectiveWeekStart,
-      weekEnd: effectiveWeekEnd,
+      weekStart: '',
+      weekEnd: '',
       packedBy: effPackedBy,
       testedBy: effTestedBy,
       staffId: effStaffId ?? undefined,
       shippedFilter,
     }),
-    enabled: !normalizedSearch,
+    enabled: !normalizedSearch && allTimeMode,
     placeholderData: (previousData) => previousData,
   });
+
+  // Unified loading/fetching surface for the active source (the consumer only
+  // reads these two flags).
+  const query = {
+    isLoading: allTimeMode ? allTimeQuery.isLoading : weekBuckets.isLoading,
+    isFetching: allTimeMode ? allTimeQuery.isFetching : weekBuckets.isFetching,
+  };
+
+  // Warm the cache on idle so the common period presets (this/last week,
+  // this/last month) resolve INSTANTLY instead of cold-fetching on click.
+  // Prefetch shares the week-query factory, so a warmed week is the exact entry
+  // the bucket query later reads — past weeks fetch at most once per session.
+  useEffect(() => {
+    if (normalizedSearch) return undefined;
+    const warm = () => {
+      for (const { weekStart, weekEnd } of getRecentWeekBuckets(9)) {
+        void queryClient.prefetchQuery(
+          dashboardShippedWeekQuery({
+            weekStart,
+            weekEnd,
+            packedBy: effPackedBy,
+            testedBy: effTestedBy,
+            staffId: effStaffId ?? undefined,
+            shippedFilter,
+          }),
+        );
+      }
+    };
+    const w = window as typeof window & {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      const id = w.requestIdleCallback(warm);
+      return () => w.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warm, 300);
+    return () => window.clearTimeout(id);
+  }, [normalizedSearch, effPackedBy, effTestedBy, effStaffId, shippedFilter, queryClient]);
 
   const searchResult = useShippedSearch({
     query: search,
@@ -81,7 +143,18 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     },
   });
 
-  const rawRecords = useMemo(() => query.data || [], [query.data]);
+  const fetchedRecords = allTimeMode ? allTimeQuery.data ?? [] : weekBuckets.rows;
+
+  // Week buckets fetch whole Mon–Sun weeks; when the user picked an explicit
+  // range, clip the merged rows to exactly [dateFrom, dateTo] by packed day.
+  // Plain week navigation shows the full week bucket (no clip).
+  const rawRecords = useMemo(() => {
+    if (!hasDateRange) return fetchedRecords;
+    return fetchedRecords.filter((r) => {
+      const key = toPSTDateKey(String((r as { created_at?: string }).created_at ?? ''));
+      return key !== '' && key >= dateFrom && key <= dateTo;
+    });
+  }, [fetchedRecords, hasDateRange, dateFrom, dateTo]);
   const dedupedRecords = useMemo(() => dedupeShippedRecords(rawRecords), [rawRecords]);
 
   const typeFilteredRecords = useMemo(() =>

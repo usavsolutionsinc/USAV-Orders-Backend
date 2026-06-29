@@ -230,7 +230,7 @@ export function RepairCard({ repair, techId, isExpanded, onToggleExpand, onRefre
                       </span>
                       <button
                         onClick={card.openAssignment}
-                        className="flex-shrink-0 text-gray-400 hover:text-orange-600 transition-colors"
+                        className="ds-raw-button flex-shrink-0 text-gray-400 hover:text-orange-600 transition-colors"
                         aria-label="Open work order assignment"
                       >
                         <Settings className="w-3.5 h-3.5" />

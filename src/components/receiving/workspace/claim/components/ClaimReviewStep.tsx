@@ -19,8 +19,8 @@ function ReviewBlock({
     <section className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <span className="text-gray-400">{icon}</span>
-        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">{label}</p>
-        {hint ? <span className="text-[10px] font-semibold text-gray-400">· {hint}</span> : null}
+        <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">{label}</p>
+        {hint ? <span className="text-micro font-semibold text-gray-400">· {hint}</span> : null}
       </div>
       {children}
     </section>
@@ -49,7 +49,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
   return (
     <div className="space-y-4">
       <ReviewBlock icon={<Tag className="h-3.5 w-3.5" />} label="Claim type">
-        <span className="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-rose-700 ring-1 ring-inset ring-rose-200">
+        <span className="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-caption font-bold uppercase tracking-wide text-rose-700 ring-1 ring-inset ring-rose-200">
           {claimLabel}
         </span>
       </ReviewBlock>
@@ -78,7 +78,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
             ))}
           </div>
         ) : (
-          <p className="text-[11px] font-medium text-gray-400">No photos selected to attach.</p>
+          <p className="text-caption font-medium text-gray-400">No photos selected to attach.</p>
         )}
       </ReviewBlock>
 
@@ -98,7 +98,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
       </ReviewBlock>
 
       <ReviewBlock icon={<Archive className="h-3.5 w-3.5" />} label="Local backup">
-        <p className="text-[11px] font-medium leading-5 text-gray-600">
+        <p className="text-caption font-medium leading-5 text-gray-600">
           On file, this carton&apos;s {photos.photos.length || 'carton'}
           {photos.photos.length === 1 ? ' photo' : ' photos'} are saved to local storage in a folder
           named after the new case # (fallback{' '}
@@ -109,7 +109,7 @@ export function ClaimReviewStep({ c }: { c: ReceivingClaimController }) {
       </ReviewBlock>
 
       {c.submitting ? (
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-4 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-rose-700">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-rose-200 bg-rose-50/60 px-4 py-3 text-caption font-bold uppercase tracking-[0.14em] text-rose-700">
           <Loader2 className="h-4 w-4 animate-spin" />
           Filing ticket &amp; backing up photos…
         </div>

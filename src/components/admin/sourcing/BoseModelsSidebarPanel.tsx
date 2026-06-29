@@ -16,6 +16,8 @@ import {
   AdminPickerRow,
   useAdminUrlState,
 } from '../shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 interface BoseModelListRow {
   id: number;
@@ -57,17 +59,21 @@ export function BoseModelsSidebarPanel() {
         variant: 'blue',
       }}
       action={
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           type="button"
           onClick={() => setParam((p) => p.set('model', 'new'))}
-          className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-white px-2 py-1.5 text-caption font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          }
+          className="w-full border border-dashed border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
-          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
           Add model
-        </button>
+        </Button>
       }
     >
       {isLoading ? (
@@ -84,12 +90,15 @@ export function BoseModelsSidebarPanel() {
                 title={row.model_name}
                 subtitle={row.family ? `${row.model_number} · ${row.family}` : row.model_number}
                 trailing={
-                  <span
-                    title={`${row.compat_count} compatible part${row.compat_count === 1 ? '' : 's'}`}
-                    className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600"
+                  <HoverTooltip
+                    label={`${row.compat_count} compatible part${row.compat_count === 1 ? '' : 's'}`}
+                    asChild
+                    focusable={false}
                   >
-                    {row.compat_count}
-                  </span>
+                    <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-semibold text-gray-600">
+                      {row.compat_count}
+                    </span>
+                  </HoverTooltip>
                 }
               />
             </li>

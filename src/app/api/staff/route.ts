@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { staff, staffWeeklySchedule } from '@/lib/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { createCacheLookupKey, getCachedJson, invalidateCacheTags, setCachedJson } from '@/lib/cache/upstash-cache';
@@ -30,7 +30,7 @@ async function handleGet(request: NextRequest, ctx: AuthContext) {
                     { status: 400 },
                 );
             }
-            const r = await pool.query<{
+            const r = await tenantQuery<{
                 id: number;
                 name: string;
                 role: string | null;
@@ -39,6 +39,7 @@ async function handleGet(request: NextRequest, ctx: AuthContext) {
                 color_hex: string;
                 default_home_path: string | null;
             }>(
+                ctx.organizationId,
                 `SELECT id, name, role, employee_id, active, color_hex, default_home_path
                  FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
                 [numId, ctx.organizationId],
@@ -171,7 +172,7 @@ async function handleGet(request: NextRequest, ctx: AuthContext) {
         let result;
         try {
             result = await queryWithRetry(
-                () => pool.query(sql, params),
+                () => tenantQuery(ctx.organizationId, sql, params),
                 { retries: 3, delayMs: 1000 }
             );
         } catch (queryError: any) {
@@ -224,7 +225,7 @@ async function handleGet(request: NextRequest, ctx: AuthContext) {
             `;
 
             result = await queryWithRetry(
-                () => pool.query(fallbackSql, fallbackParams),
+                () => tenantQuery(ctx.organizationId, fallbackSql, fallbackParams),
                 { retries: 1, delayMs: 250 }
             );
         }

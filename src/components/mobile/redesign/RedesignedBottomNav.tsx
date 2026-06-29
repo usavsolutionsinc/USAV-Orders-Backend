@@ -82,7 +82,7 @@ export const RedesignedBottomNav = () => {
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id, tab.href)}
                 aria-label={tab.label}
-                className="flex items-center justify-center flex-1 min-w-0"
+                className="ds-raw-button flex items-center justify-center flex-1 min-w-0"
               >
                 <motion.span
                   whileTap={TOKENS.motion.tap}
@@ -105,7 +105,7 @@ export const RedesignedBottomNav = () => {
               key={tab.id}
               onClick={() => handleTabClick(tab.id, tab.href)}
               aria-label={tab.label}
-              className="flex flex-col items-center justify-center gap-1.5 flex-1 min-w-0 transition-all relative py-2"
+              className="ds-raw-button flex flex-col items-center justify-center gap-1.5 flex-1 min-w-0 transition-all relative py-2"
             >
               <motion.div
                 animate={{
@@ -117,7 +117,7 @@ export const RedesignedBottomNav = () => {
                 <Icon className={`h-6 w-6 ${isActive ? 'fill-blue-600/10' : ''}`} />
               </motion.div>
               <span className={`
-                text-[9px] font-black uppercase tracking-[0.1em] truncate w-full px-1 transition-colors
+                text-eyebrow font-black uppercase tracking-[0.1em] truncate w-full px-1 transition-colors
                 ${isActive ? 'text-blue-600' : 'text-slate-400'}
               `}>
                 {tab.label}

@@ -112,7 +112,7 @@ export function NodeConfigForm({
   const fieldKeys = properties ? Object.keys(properties) : [];
 
   if (!properties || fieldKeys.length === 0) {
-    return <p className="text-[11px] text-slate-400">No configuration for this node type.</p>;
+    return <p className="text-caption text-slate-400">No configuration for this node type.</p>;
   }
 
   return (
@@ -129,7 +129,7 @@ export function NodeConfigForm({
           <div key={key} className="space-y-1">
             <label
               htmlFor={`nodecfg-${nodeId}-${key}`}
-              className="block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+              className="block text-micro font-bold uppercase tracking-wider text-slate-400"
             >
               {title}
             </label>
@@ -144,7 +144,7 @@ export function NodeConfigForm({
                   className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-400"
                   aria-label={title}
                 />
-                <span className="text-[11px] text-slate-500">{value === true ? 'On' : 'Off'}</span>
+                <span className="text-caption text-slate-500">{value === true ? 'On' : 'Off'}</span>
               </label>
             ) : type === 'number' ? (
               <input
@@ -187,7 +187,7 @@ export function NodeConfigForm({
             )}
 
             {renderFieldHint?.(key, value)}
-            {description && <p className="text-[11px] text-slate-400">{description}</p>}
+            {description && <p className="text-caption text-slate-400">{description}</p>}
           </div>
         );
       })}

@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Loader2 } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import {
   framerPresence,
   framerTransition,
@@ -204,17 +205,20 @@ function ReceiveSuccessChecklist({
           ) : null}
 
           {/* Details dropdown — disclosure of the per-action breakdown. */}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setDetailsOpen((v) => !v)}
             aria-expanded={detailsOpen}
-            className="mt-1.5 -ml-0.5 flex items-center gap-1 rounded text-eyebrow font-black uppercase tracking-widest text-slate-400 transition-colors hover:text-slate-600"
+            icon={
+              <ChevronDown
+                className={`transition-transform duration-150 ${detailsOpen ? 'rotate-180' : ''}`}
+              />
+            }
+            className="mt-1.5 -ml-0.5 text-eyebrow font-black uppercase tracking-widest text-slate-400 hover:text-slate-600"
           >
-            <ChevronDown
-              className={`h-3 w-3 transition-transform duration-150 ${detailsOpen ? 'rotate-180' : ''}`}
-            />
             {detailsOpen ? 'Hide details' : 'Details'}
-          </button>
+          </Button>
 
           <AnimatePresence initial={false}>
             {detailsOpen ? (

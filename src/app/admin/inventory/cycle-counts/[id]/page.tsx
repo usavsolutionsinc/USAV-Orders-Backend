@@ -6,6 +6,8 @@ import { submitCount, approveLine, rejectLine, closeCampaign } from '@/lib/inven
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -257,13 +259,11 @@ export default async function CycleCountDetailPage({
               {isOpen ? (
                 <form action={closeAction}>
                   <input type="hidden" name="campaignId" value={campaign.id} />
-                  <button
-                    type="submit"
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                    title="Auto-approve all 'counted' lines and close the campaign"
-                  >
-                    Close campaign
-                  </button>
+                  <HoverTooltip label="Auto-approve all 'counted' lines and close the campaign" asChild>
+                    <Button type="submit" variant="secondary" size="sm">
+                      Close campaign
+                    </Button>
+                  </HoverTooltip>
                 </form>
               ) : null}
             </div>
@@ -348,9 +348,9 @@ export default async function CycleCountDetailPage({
                                 placeholder="qty"
                                 className="w-20 rounded border border-gray-300 px-2 py-1 text-right font-mono text-xs"
                               />
-                              <button type="submit" className="rounded bg-blue-600 px-2.5 py-1 text-caption font-medium text-white hover:bg-blue-700">
+                              <Button type="submit" variant="primary" size="sm">
                                 Submit
-                              </button>
+                              </Button>
                             </form>
                           ) : (
                             l.counted_qty ?? '—'
@@ -382,6 +382,7 @@ export default async function CycleCountDetailPage({
                               <form action={approveAction}>
                                 <input type="hidden" name="campaignId" value={campaign.id} />
                                 <input type="hidden" name="lineId" value={l.id} />
+                                {/* ds-raw-button: solid-green approve CTA — no DS Button variant maps to green */}
                                 <button type="submit" className="rounded bg-green-600 px-2.5 py-1 text-caption font-medium text-white hover:bg-green-700">
                                   Approve
                                 </button>
@@ -389,9 +390,9 @@ export default async function CycleCountDetailPage({
                               <form action={rejectAction}>
                                 <input type="hidden" name="campaignId" value={campaign.id} />
                                 <input type="hidden" name="lineId" value={l.id} />
-                                <button type="submit" className="rounded border border-gray-300 bg-white px-2.5 py-1 text-caption font-medium text-gray-700 hover:bg-gray-50">
+                                <Button type="submit" variant="secondary" size="sm">
                                   Reject
-                                </button>
+                                </Button>
                               </form>
                             </div>
                           ) : (

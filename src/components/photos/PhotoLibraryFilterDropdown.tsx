@@ -11,6 +11,7 @@ import {
 } from '@/lib/photos/library-filter-state';
 import { DATE_PRESET_LABELS } from '@/lib/photos/library-refinements';
 import { StaffRecipientList, type StaffRecipient } from '@/components/quick-access/StaffRecipientList';
+import { Button } from '@/design-system/primitives';
 
 const DATE_PRESET_ITEMS: HorizontalSliderItem[] = [
   { id: 'all', label: 'All', icon: Calendar },
@@ -22,7 +23,7 @@ const DATE_PRESET_ITEMS: HorizontalSliderItem[] = [
 
 const fieldClass =
   'h-10 w-full rounded-xl border border-gray-100 bg-gray-50/50 px-3 text-caption font-bold text-gray-900 outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10';
-const labelClass = 'mb-1.5 block text-[11px] font-black uppercase tracking-[0.2em] text-gray-400';
+const labelClass = 'mb-1.5 block text-caption font-black uppercase tracking-[0.2em] text-gray-400';
 
 /**
  * A business-ID text field that commits to the URL on blur / Enter (not every
@@ -96,7 +97,7 @@ export function PhotoLibraryFilterDropdown({
       <div>
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className={labelClass}>Date range</p>
-          <p className="truncate text-[11px] font-semibold text-gray-500">{dateRangeLabel}</p>
+          <p className="truncate text-caption font-semibold text-gray-500">{dateRangeLabel}</p>
         </div>
         <HorizontalButtonSlider
           items={DATE_PRESET_ITEMS}
@@ -132,7 +133,7 @@ export function PhotoLibraryFilterDropdown({
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-3">
           <span className={labelClass}>Staff</span>
-          <span className="truncate text-[11px] font-semibold text-gray-500">
+          <span className="truncate text-caption font-semibold text-gray-500">
             {filters.staffId
               ? staffOptions.find((opt) => String(opt.id) === filters.staffId)?.name ??
                 `Staff #${filters.staffId}`
@@ -149,13 +150,15 @@ export function PhotoLibraryFilterDropdown({
             className="max-h-[220px]"
           />
           {filters.staffId ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => onPatch({ staffId: undefined })}
-              className="mt-2 w-full rounded-lg border border-dashed border-gray-200 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-gray-500 hover:bg-white hover:text-gray-900"
+              className="mt-2 h-auto w-full rounded-lg border border-dashed border-gray-200 px-3 py-2 text-caption font-bold uppercase tracking-wider text-gray-500 hover:bg-white hover:text-gray-900"
             >
               Clear staff
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -244,13 +247,14 @@ export function PhotoLibraryFilterDropdown({
         </label>
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="brand"
         onClick={onClose}
-        className="w-full rounded-2xl bg-gray-900 py-3.5 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-black"
+        className="h-auto w-full rounded-2xl py-3.5 text-sm font-black uppercase tracking-widest"
       >
         Done
-      </button>
+      </Button>
     </div>
   );
 }

@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@/design-system/primitives';
 
 interface RoleSlim {
   id: number;
@@ -87,16 +88,17 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
 
   return (
     <>
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
         disabled={disabled}
-        className="inline-flex items-center gap-1 rounded-full border border-dashed border-gray-300 bg-white px-2 py-0.5 text-caption font-semibold text-gray-700 transition hover:border-blue-400 hover:text-blue-700 disabled:opacity-50"
+        icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>}
+        className="gap-1 rounded-full border border-dashed border-gray-300 bg-white px-2 py-0.5 text-caption text-gray-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-50"
       >
-        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
         Add role
-      </button>
+      </Button>
 
       {mounted && open && pos && createPortal(
         <div
@@ -109,6 +111,7 @@ export function AddRolePopover({ roles, onAdd, disabled }: AddRolePopoverProps) 
           <ul className="divide-y divide-gray-100">
             {roles.map((r) => (
               <li key={r.id}>
+                {/* ds-raw-button */}
                 <button
                   type="button"
                   onClick={() => { onAdd(r.id); setOpen(false); }}

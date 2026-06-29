@@ -2,6 +2,7 @@
 
 import { Package } from '@/components/Icons';
 import { QtyBadge } from '@/components/ui/QtyBadge';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   PaneHeader,
   PaneHeaderIconBadge,
@@ -67,16 +68,18 @@ export function ShippedDetailsHeader({
           <PaneHeaderLabel
             eyebrow={showExceptionsFallback ? 'Exceptions' : 'Order #'}
             value={
-              <button
-                type="button"
-                onClick={onCopyOrderId}
-                className="truncate text-left transition-colors hover:text-blue-700"
-                title={copiedOrderId ? 'Copied' : 'Click to copy'}
-                aria-label={`Copy ${orderIdDisplay}`}
-              >
-                {orderIdDisplay}
-                {copiedOrderId && <span className="ml-1 text-emerald-600">✓</span>}
-              </button>
+              <HoverTooltip label={copiedOrderId ? 'Copied' : 'Click to copy'} asChild>
+                {/* ds-raw-button: text-left inline value (click-to-copy order id), not a styled CTA */}
+                <button
+                  type="button"
+                  onClick={onCopyOrderId}
+                  className="truncate text-left transition-colors hover:text-blue-700"
+                  aria-label={`Copy ${orderIdDisplay}`}
+                >
+                  {orderIdDisplay}
+                  {copiedOrderId && <span className="ml-1 text-emerald-600">✓</span>}
+                </button>
+              </HoverTooltip>
             }
             valueTitle={orderIdDisplay}
           />

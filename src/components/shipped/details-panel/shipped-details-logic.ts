@@ -3,6 +3,7 @@ import type { WorkOrderRow } from '@/components/work-orders/types';
 import type { DeleteOrderRowPayload } from '@/hooks/useDeleteOrderRow';
 import { getStaffName } from '@/utils/staff';
 import { toPSTDateKey } from '@/utils/date';
+import { resolveFulfillmentLane } from '@/lib/order-lifecycle';
 
 /** Build the work-order assignment row model for a shipped order. */
 export function buildAssignmentRow(shipped: ShippedOrder): WorkOrderRow {
@@ -64,12 +65,18 @@ export function deriveShippedHeaderMeta(shipped: ShippedOrder): ShippedHeaderMet
   const testedById = shipped.tested_by ?? null;
   const canEditAssignment = Number(shipped.id) > 0 && (shipped as any).row_source !== 'exception';
   const hasTechScan = Boolean((shipped as any).has_tech_scan);
-  const statusTone: StatusTone = hasTechScan ? 'emerald' : hasOutOfStock ? 'red' : 'yellow';
-  const statusLabel = hasTechScan
-    ? `Tested by ${getStaffName(testedById)}`
-    : hasOutOfStock
-      ? outOfStockValue
-      : 'Pending';
+  // State decision flows through the canonical fulfillment projection so this
+  // header pill can never disagree with the order's board lane (the projection
+  // is exception‑first: out‑of‑stock → BLOCKED wins over a tech scan). Tone +
+  // label below are presentation only.
+  const lane = resolveFulfillmentLane({ hasTechScan, outOfStock: outOfStockValue });
+  const statusTone: StatusTone = lane === 'TESTED' ? 'emerald' : lane === 'BLOCKED' ? 'red' : 'yellow';
+  const statusLabel =
+    lane === 'TESTED'
+      ? `Tested by ${getStaffName(testedById)}`
+      : lane === 'BLOCKED'
+        ? outOfStockValue
+        : 'Pending';
   const orderIdTrimmed = String(shipped.order_id || '').trim();
   const showExceptionsFallback = !orderIdTrimmed;
   const orderIdDisplay = orderIdTrimmed || String(Math.abs(Number(shipped.id)));

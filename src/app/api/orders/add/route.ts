@@ -66,7 +66,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       productTitle,
       accountSource,
       orderId,
-    });
+    }, ctx.organizationId);
 
     // Insert the new order (tracking linked later via shipment_id when packer scans)
     const result = await tenantQuery(

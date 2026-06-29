@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { EventTimeline, type TimelineGroupMode } from './EventTimeline';
+import { EventTimeline, type TimelineGroupMode, type TimelineGroupView } from './EventTimeline';
 import type { TimelineItem, TimelineGroupKey } from '@/lib/timeline/types';
 
 /**
@@ -28,6 +28,10 @@ export interface TimelineSectionProps {
   groupKeyOf?: (item: TimelineItem) => TimelineGroupKey | null;
   /** Rich (relative + hover-absolute) timestamps, forwarded to {@link EventTimeline}. */
   richTime?: boolean;
+  /** Serial mode: collapse each band behind a chevron, forwarded to {@link EventTimeline}. */
+  collapsibleGroups?: boolean;
+  /** Serial mode: custom band header, forwarded to {@link EventTimeline}. */
+  renderGroupHeader?: (group: TimelineGroupView) => ReactNode;
   /** Outer wrapper classes — spacing/divider live with the caller. */
   className?: string;
 }
@@ -60,6 +64,8 @@ export function TimelineSection({
   groupMode = 'time',
   groupKeyOf,
   richTime = false,
+  collapsibleGroups = false,
+  renderGroupHeader,
   className = 'mx-8 mt-2 border-t border-gray-100 pt-4 pb-8',
 }: TimelineSectionProps) {
   return (
@@ -80,6 +86,8 @@ export function TimelineSection({
           groupMode={groupMode}
           groupKeyOf={groupKeyOf}
           richTime={richTime}
+          collapsibleGroups={collapsibleGroups}
+          renderGroupHeader={renderGroupHeader}
         />
       )}
     </section>

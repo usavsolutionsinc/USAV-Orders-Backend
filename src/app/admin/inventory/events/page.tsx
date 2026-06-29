@@ -2,6 +2,7 @@ import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -260,9 +261,9 @@ export default async function EventsExplorerPage({
             <input id="until" name="until" type="date" defaultValue={until ?? ''} className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm" />
           </div>
           <div className="flex items-end gap-2">
-            <button type="submit" className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+            <Button variant="primary" size="sm" type="submit">
               Apply
-            </button>
+            </Button>
             <Link href="/admin/inventory/events" className="rounded-md border border-gray-300 bg-white px-4 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
               Clear
             </Link>

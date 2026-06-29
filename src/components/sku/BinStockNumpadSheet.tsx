@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Layer } from '@/design-system';
+import { Button, IconButton } from '@/design-system/primitives';
 import { Check, Loader2, X } from '@/components/Icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { ReasonCodePicker, type ReasonCode } from '@/components/sku/ReasonCodePicker';
@@ -263,14 +264,13 @@ export function BinStockNumpadSheet({
     >
       {/* ── Header ── */}
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
-        <button
+        <IconButton
           type="button"
           onClick={onClose}
-          aria-label="Back"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ←
-        </button>
+          ariaLabel="Back"
+          icon={<span className="text-sm font-bold text-slate-700">←</span>}
+          className="h-11 w-11 rounded-md border border-slate-300 bg-white active:bg-slate-50"
+        />
         <div className="min-w-0 flex-1 text-center">
           <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
             Edit stock
@@ -279,14 +279,13 @@ export function BinStockNumpadSheet({
             {row.sku}
           </p>
         </div>
-        <button
+        <IconButton
           type="button"
           onClick={onOpenDetails}
-          aria-label="Details"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ⋯
-        </button>
+          ariaLabel="Details"
+          icon={<span className="text-sm font-bold text-slate-700">⋯</span>}
+          className="h-11 w-11 rounded-md border border-slate-300 bg-white active:bg-slate-50"
+        />
       </header>
 
       {/* ── Body ── */}
@@ -299,30 +298,32 @@ export function BinStockNumpadSheet({
 
         {/* Mode toggle */}
         <div className="mx-auto grid w-full max-w-sm grid-cols-2 overflow-hidden rounded-lg border border-slate-300 bg-white">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setMode('minus')}
             aria-pressed={mode === 'minus'}
-            className={`py-3 text-base font-black ${
+            className={`h-auto w-full justify-center rounded-none py-3 text-base font-black ${
               mode === 'minus'
                 ? 'bg-rose-600 text-white'
                 : 'bg-white text-slate-700'
             }`}
           >
             − TAKE
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setMode('plus')}
             aria-pressed={mode === 'plus'}
-            className={`py-3 text-base font-black ${
+            className={`h-auto w-full justify-center rounded-none py-3 text-base font-black ${
               mode === 'plus'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-white text-slate-700'
             }`}
           >
             + PUT
-          </button>
+          </Button>
         </div>
 
         {/* Current vs projected */}
@@ -378,10 +379,11 @@ export function BinStockNumpadSheet({
           )}
           {reason?.requires_photo && (
             <div className="flex items-center gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setCameraOpen(true)}
-                className={`flex-1 rounded-md px-2 py-2 text-caption font-black uppercase tracking-widest ${
+                className={`h-auto flex-1 justify-center rounded-md px-2 py-2 text-caption font-black uppercase tracking-widest ${
                   pendingShots.length > 0
                     ? 'bg-emerald-600 text-white'
                     : 'border border-amber-400 bg-amber-100 text-amber-800'
@@ -390,10 +392,11 @@ export function BinStockNumpadSheet({
                 {pendingShots.length > 0
                   ? `📷 ${pendingShots.length} photo${pendingShots.length === 1 ? '' : 's'} ready`
                   : '📷 Take photo (required)'}
-              </button>
+              </Button>
               {pendingShots.length > 0 && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => {
                     pendingShots.forEach((s) => {
                       try {
@@ -404,11 +407,11 @@ export function BinStockNumpadSheet({
                     });
                     setPendingShots([]);
                   }}
-                  aria-label="Discard photos"
-                  className="rounded-md border border-slate-300 bg-white px-2 py-2 text-caption font-bold text-slate-700"
+                  ariaLabel="Discard photos"
+                  className="h-auto justify-center rounded-md border border-slate-300 bg-white px-2 py-2 text-caption font-bold text-slate-700"
                 >
                   Clear
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -425,19 +428,20 @@ export function BinStockNumpadSheet({
                 ? '⌫'
                 : String(key);
             return (
-              <button
+              <Button
                 key={String(key)}
                 type="button"
+                variant="ghost"
                 onClick={() => pressKey(key)}
-                aria-label={typeof key === 'string' ? key : `digit ${key}`}
-                className={`h-16 rounded-lg text-3xl font-black active:scale-95 transition-transform ${
+                ariaLabel={typeof key === 'string' ? key : `digit ${key}`}
+                className={`h-16 w-full justify-center rounded-lg text-3xl font-black ${
                   isAction
                     ? 'bg-slate-200 text-slate-700'
                     : 'bg-white border border-slate-300 text-slate-900'
                 }`}
               >
                 {label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -459,22 +463,24 @@ export function BinStockNumpadSheet({
 
       {/* ── Footer / confirm ── */}
       <footer className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="lg"
           onClick={confirm}
           disabled={busy || numericDraft <= 0}
-          className={`w-full rounded-lg py-4 text-lg font-black text-white shadow-md active:scale-[0.99] transition-transform ${
+          className={`h-auto w-full justify-center rounded-lg py-4 text-lg font-black text-white shadow-md ${
             mode === 'minus'
               ? 'bg-rose-600 active:bg-rose-700'
               : 'bg-emerald-600 active:bg-emerald-700'
-          } disabled:opacity-40`}
+          }`}
         >
           {busy ? (
             <Loader2 className="mx-auto h-5 w-5 animate-spin" />
           ) : (
             <>Confirm {mode === 'minus' ? `−${numericDraft || 0}` : `+${numericDraft || 0}`}</>
           )}
-        </button>
+        </Button>
       </footer>
 
       {cameraOpen && (

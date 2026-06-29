@@ -13,9 +13,11 @@ import {
 import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { ReceivingQaActionSheet } from '@/components/mobile/receiving/ReceivingQaActionSheet';
 import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
+import { Button } from '@/design-system/primitives';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -222,13 +224,14 @@ function CartonPageInner() {
                 {platformLabel(carton)}
               </span>
             ) : null}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={load}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
+              className="h-auto rounded-md px-2.5 py-1 text-caption"
             >
               Refresh
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -317,6 +320,7 @@ function CartonPageInner() {
                 const received = line.quantity_received ?? 0;
                 const isComplete = expected != null && received >= expected;
                 return (
+                  // ds-raw-button: multi-line text-left line card (status dot + title + chips + serial rows) — not a design-system Button
                   <button
                     key={line.id}
                     type="button"
@@ -325,10 +329,15 @@ function CartonPageInner() {
                   >
                     {/* Slim identity row — status dot + product title. */}
                     <div className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line.workflow_status, received, expected)}`}
-                        title={workflowStatusTableLabel(line.workflow_status ?? 'EXPECTED')}
-                      />
+                      <HoverTooltip
+                        label={workflowStatusTableLabel(line.workflow_status ?? 'EXPECTED')}
+                        asChild
+                        focusable={false}
+                      >
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line.workflow_status, received, expected)}`}
+                        />
+                      </HoverTooltip>
                       <p className="truncate text-sm font-bold text-slate-900">
                         {line.item_name || line.sku || `Line #${line.id}`}
                       </p>
@@ -357,6 +366,7 @@ function CartonPageInner() {
                     {line.serials && line.serials.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1 pl-4">
                         {line.serials.slice(0, 4).map((s) => (
+                          // ds-allow-title: non-interactive chip showing the clipped last-4 serial; title reveals the full serial.
                           <span
                             key={s.id}
                             title={s.serial_number}
@@ -433,14 +443,15 @@ function CartonPageInner() {
         className="sticky bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={() => setActionsOpen(true)}
           disabled={loading || lines.length === 0}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98] disabled:opacity-40"
+          className="h-12 w-full rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 font-black uppercase tracking-wider shadow-md shadow-blue-600/30"
         >
           {lines.length === 0 ? 'No lines to update' : `Update ${lines.length} line${lines.length === 1 ? '' : 's'}`}
-        </button>
+        </Button>
         <p className="mt-2 text-center text-caption font-semibold text-slate-500">
           Or tap a line above to update one at a time.
         </p>

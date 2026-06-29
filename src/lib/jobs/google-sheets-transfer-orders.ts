@@ -5,15 +5,46 @@ import { customers as customersTable, orders as ordersTable } from '@/lib/drizzl
 import { transitionalUsavOrgId, tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
+import { getIntegrationCredentials, type GoogleSheetsCredentials } from '@/lib/integrations/credentials';
 import { getGoogleAuth } from '@/lib/google-auth';
 import { invalidateAllOrdersApiCaches } from '@/lib/orders/invalidation';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { resolveShipmentId } from '@/lib/shipping/resolve';
+import { linkShipment } from '@/lib/shipping/shipment-links';
 import { fetchEcwidTransferRows } from '@/lib/ecwid/fetch-transfer-rows';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
-const SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
+/**
+ * USAV's hardcoded source sheet — the transitional default used when no per-org
+ * spreadsheet id is supplied. USAV connects Google via env service-account creds
+ * (GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY) and has no organization_integrations
+ * `google_sheets` row to read an id from, so this stays its source. Exported so
+ * the cron fan-out can use it as USAV's includeUsavTransitional source while
+ * every OTHER org supplies its OWN id from its google_sheets integration config.
+ * A non-USAV caller MUST pass an explicit id — never default another tenant onto
+ * USAV's sheet.
+ */
+export const USAV_SOURCE_SPREADSHEET_ID = '1b8uvgk4q7jJPjGvFM2TQs3vMES1o9MiAfbEJ7P1TW9w';
+
+/**
+ * The transfer source sheet for `orgId`, or null to skip the org.
+ *
+ * USAV keeps its hardcoded sheet: it connects Google via env service-account
+ * creds and has no organization_integrations.google_sheets row, so there is no
+ * per-org id to read — preserving the exact prior behavior. Every OTHER org must
+ * supply its OWN id via its google_sheets integration config
+ * (GoogleSheetsCredentials.defaultSpreadsheetId); an org with the provider
+ * connected but NO configured sheet id returns null and is skipped — we never
+ * default a tenant onto USAV's sheet. Lives here (beside the constant + the env
+ * fallback's defaultSpreadsheetId) so the sheet-source rule has one home.
+ */
+export async function resolveTransferSourceSpreadsheetId(orgId: OrgId): Promise<string | null> {
+  if (orgId === transitionalUsavOrgId()) return USAV_SOURCE_SPREADSHEET_ID;
+  const creds = await getIntegrationCredentials<GoogleSheetsCredentials>(orgId, 'google_sheets');
+  const id = creds?.defaultSpreadsheetId?.trim();
+  return id || null;
+}
 
 type SourceRow = any[];
 
@@ -239,51 +270,24 @@ async function upsertOrderShipmentLinks(
   );
   if (uniqueIds.length === 0) return;
 
-  // Tenant path: GUC-wrap + scope the clear-primary UPDATE to this org and
-  // stamp organization_id on every inserted link row. order_shipment_links is
-  // org-bearing in the DB (parent = orders.order_row_id), so the stamp keeps a
-  // tenant from attaching links onto another tenant's order row.
-  if (orgId) {
-    await withTenantTransaction(orgId, async (client) => {
-      await client.query(
-        `UPDATE order_shipment_links
-         SET is_primary = false
-         WHERE order_row_id = $1
-           AND organization_id = $2`,
-        [orderRowId, orgId],
+  // Link every shipment to the order row via the unified shipment_links table
+  // (the sole linkage SoT). The is_primary one matches primaryShipmentId; the
+  // helper demotes the order's other primaries so exactly one stays primary.
+  const effectiveOrg = orgId ?? transitionalUsavOrgId();
+  await withTenantTransaction(effectiveOrg, async (client) => {
+    for (const sid of uniqueIds) {
+      const isPrimary = primaryShipmentId != null && sid === primaryShipmentId;
+      await linkShipment(
+        effectiveOrg,
+        {
+          ownerType: 'ORDER', ownerId: orderRowId, shipmentId: sid,
+          direction: 'OUTBOUND', isPrimary,
+          role: isPrimary ? 'ORDER_PRIMARY' : 'ORDER_SPLIT', source,
+        },
+        client,
       );
-
-      await client.query(
-        `INSERT INTO order_shipment_links (organization_id, order_row_id, shipment_id, is_primary, source)
-         SELECT $5::uuid, $1::int, s.shipment_id, (s.shipment_id = $2::bigint), $3::text
-         FROM UNNEST($4::bigint[]) AS s(shipment_id)
-         ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-           SET is_primary = EXCLUDED.is_primary,
-               source = EXCLUDED.source,
-               updated_at = NOW()`,
-        [orderRowId, primaryShipmentId, source, uniqueIds, orgId],
-      );
-    });
-    return;
-  }
-
-  await pool.query(
-    `UPDATE order_shipment_links
-     SET is_primary = false
-     WHERE order_row_id = $1`,
-    [orderRowId],
-  );
-
-  await pool.query(
-    `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source)
-     SELECT $1::int, s.shipment_id, (s.shipment_id = $2::bigint), $3::text
-     FROM UNNEST($4::bigint[]) AS s(shipment_id)
-     ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-       SET is_primary = EXCLUDED.is_primary,
-           source = EXCLUDED.source,
-           updated_at = NOW()`,
-    [orderRowId, primaryShipmentId, source, uniqueIds],
-  );
+    }
+  });
 }
 
 function pickLatestByKey<T extends { createdAt: Date | null }>(
@@ -306,6 +310,11 @@ export async function runGoogleSheetsTransferOrders(
   source: TransferOrdersSource = 'all',
   progress: SyncProgress = noopProgress,
   orgId?: OrgId,
+  // Which Google Sheet to read. Defaults to USAV's hardcoded sheet so existing
+  // (USAV-context) callers are byte-identical. The per-org cron fan-out passes
+  // each org's OWN sheet id (from its google_sheets integration config) so a
+  // tenant is never read from another tenant's sheet.
+  sourceSpreadsheetId: string = USAV_SOURCE_SPREADSHEET_ID,
 ): Promise<GoogleSheetsTransferOrdersJobResult> {
   const startedAt = Date.now();
 
@@ -332,7 +341,7 @@ export async function runGoogleSheetsTransferOrders(
       progress({ type: 'phase', phase: 'fetching_sheet' });
       const auth = getGoogleAuth();
       const sheets = googleSheets({ version: 'v4', auth });
-      const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SOURCE_SPREADSHEET_ID });
+      const sourceSpreadsheet = await sheets.spreadsheets.get({ spreadsheetId: sourceSpreadsheetId });
 
       if (manualSheetName && manualSheetName.trim() !== '') {
         const sourceTabs = sourceSpreadsheet.data.sheets || [];
@@ -363,7 +372,7 @@ export async function runGoogleSheetsTransferOrders(
       }
 
       const sourceDataResponse = await sheets.spreadsheets.values.get({
-        spreadsheetId: SOURCE_SPREADSHEET_ID,
+        spreadsheetId: sourceSpreadsheetId,
         range: `${targetTabName}!A1:Z`,
       });
 

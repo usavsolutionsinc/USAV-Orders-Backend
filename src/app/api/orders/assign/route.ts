@@ -17,8 +17,8 @@ import {
   updateShipmentTrackingById,
   createAdditionalShipmentLink,
   deleteShipmentTrackingLink,
-  isMissingOrderShipmentLinksRelation,
 } from '@/lib/neon/orders-tracking-queries';
+import { linkShipment } from '@/lib/shipping/shipment-links';
 
 type QueryClient = {
   query: PoolClient['query'];
@@ -276,20 +276,12 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
           [resolvedPrimaryId, idsToUpdate]
         );
-        try {
-          await client.query(
-            `UPDATE order_shipment_links SET is_primary = false WHERE order_row_id = ANY($1::int[])`,
-            [idsToUpdate]
+        for (const orderId of idsToUpdate) {
+          await linkShipment(
+            ctx.organizationId,
+            { ownerType: 'ORDER', ownerId: orderId, shipmentId: resolvedPrimaryId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.assign' },
+            client,
           );
-          await client.query(
-            `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
-             SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign', $3::uuid
-             ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-               SET is_primary = true, source = 'orders.assign', updated_at = NOW()`,
-            [idsToUpdate, resolvedPrimaryId, ctx.organizationId]
-          );
-        } catch (error) {
-          if (!isMissingOrderShipmentLinksRelation(error)) throw error;
         }
       }
 

@@ -10,9 +10,11 @@ import {
   framerPresence,
   framerTransition,
 } from '@/design-system';
+import { IconButton } from '@/design-system/primitives';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
 import { FbaQtyDisplay } from '@/components/fba/sidebar/FbaQtyStepper';
 import { FbaStatusBadge } from '@/components/fba/shared/FbaStatusBadge';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { StationTheme } from '@/utils/staff-colors';
 import type { ActiveShipment, ShipmentCardItem } from '@/lib/fba/types';
 import { TrackingGroup } from './TrackingGroup';
@@ -90,18 +92,18 @@ export function ActiveShipmentCard({
                   {shipment.amazon_shipment_id || shipment.shipment_ref}
                 </span>
                 {editable && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.dispatchEvent(new CustomEvent(FBA_OPEN_SHIPMENT_EDITOR, { detail: shipment }));
-                    }}
-                    className="inline-flex size-3 shrink-0 items-center justify-center rounded-sm text-purple-400 transition-colors hover:bg-purple-100/80 hover:text-purple-700"
-                    aria-label="Edit shipment"
-                    title="Edit shipment"
-                  >
-                    <Pencil className="pointer-events-none h-2 w-2 shrink-0" />
-                  </button>
+                  <HoverTooltip label="Edit shipment" asChild focusable={false}>
+                    <IconButton
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.dispatchEvent(new CustomEvent(FBA_OPEN_SHIPMENT_EDITOR, { detail: shipment }));
+                      }}
+                      ariaLabel="Edit shipment"
+                      icon={<Pencil className="pointer-events-none h-2 w-2 shrink-0" />}
+                      className="inline-flex size-3 shrink-0 items-center justify-center rounded-sm text-purple-400 hover:bg-purple-100/80 hover:text-purple-700"
+                    />
+                  </HoverTooltip>
                 )}
               </span>
               <span className="shrink-0 text-micro font-bold text-gray-400">

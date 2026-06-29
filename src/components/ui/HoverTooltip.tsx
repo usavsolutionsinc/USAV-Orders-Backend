@@ -1,6 +1,15 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  cloneElement,
+  isValidElement,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 const MARGIN = 8;
@@ -21,14 +30,23 @@ export function HoverTooltip({
   children,
   className,
   focusable = true,
+  asChild = false,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
   /** Set false when the trigger sits inside another focusable control (e.g. a row button). */
   focusable?: boolean;
+  /**
+   * Attach the hover/focus handlers directly to the single child element instead
+   * of wrapping it in a `<span>`. Use this when a wrapper span would disturb
+   * flex/grid layout (e.g. a button that relies on parent `items-stretch`).
+   * The child must be a single DOM element. Worst case if misused: the tooltip
+   * doesn't show — never a layout or functional break.
+   */
+  asChild?: boolean;
 }) {
-  const triggerRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const bubbleRef = useRef<HTMLSpanElement | null>(null);
   // Trigger rect captured on open; the bubble is positioned off-screen+hidden
   // first so we can measure it, then clamped into view in the layout effect.
@@ -66,6 +84,60 @@ export function HoverTooltip({
     setPos({ top, left });
   }, [anchor]);
 
+  const bubble =
+    anchor && typeof document !== 'undefined'
+      ? createPortal(
+          <span
+            ref={bubbleRef}
+            role="tooltip"
+            style={{
+              top: pos?.top ?? -9999,
+              left: pos?.left ?? -9999,
+              visibility: pos ? 'visible' : 'hidden',
+            }}
+            className="pointer-events-none fixed z-tooltip max-w-[15rem] rounded-md bg-gray-900 px-2 py-1 text-caption font-semibold leading-snug text-white shadow-lg"
+          >
+            {label}
+          </span>,
+          document.body,
+        )
+      : null;
+
+  // asChild: attach handlers to the single child element — no wrapper <span>, so
+  // flex/grid layout is untouched. Falls back to the span wrapper if the child
+  // isn't a valid element.
+  if (asChild && isValidElement(children)) {
+    const child = children as ReactElement<Record<string, unknown>>;
+    const p = child.props;
+    const compose =
+      (theirs: unknown, ours: () => void) =>
+      (e: unknown) => {
+        if (typeof theirs === 'function') (theirs as (ev: unknown) => void)(e);
+        ours();
+      };
+    const childRef = (p as { ref?: unknown }).ref;
+    const setRef = (node: HTMLElement | null) => {
+      triggerRef.current = node;
+      if (typeof childRef === 'function') (childRef as (n: unknown) => void)(node);
+      else if (childRef && typeof childRef === 'object') {
+        (childRef as { current: unknown }).current = node;
+      }
+    };
+    return (
+      <>
+        {cloneElement(child, {
+          ref: setRef,
+          onMouseEnter: compose(p.onMouseEnter, show),
+          onMouseLeave: compose(p.onMouseLeave, hide),
+          ...(focusable
+            ? { onFocus: compose(p.onFocus, show), onBlur: compose(p.onBlur, hide) }
+            : null),
+        } as Record<string, unknown>)}
+        {bubble}
+      </>
+    );
+  }
+
   return (
     <span
       ref={triggerRef}
@@ -77,23 +149,7 @@ export function HoverTooltip({
       tabIndex={focusable ? 0 : undefined}
     >
       {children}
-      {anchor && typeof document !== 'undefined'
-        ? createPortal(
-            <span
-              ref={bubbleRef}
-              role="tooltip"
-              style={{
-                top: pos?.top ?? -9999,
-                left: pos?.left ?? -9999,
-                visibility: pos ? 'visible' : 'hidden',
-              }}
-              className="pointer-events-none fixed z-tooltip max-w-[15rem] rounded-md bg-gray-900 px-2 py-1 text-caption font-semibold leading-snug text-white shadow-lg"
-            >
-              {label}
-            </span>,
-            document.body,
-          )
-        : null}
+      {bubble}
     </span>
   );
 }

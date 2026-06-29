@@ -71,7 +71,7 @@ export function SearchesPane() {
         <ul className="space-y-2">
           {rows.map((s) => (
             <li key={s.id} className={`flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 ${s.is_active ? '' : 'opacity-60'}`}>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${cadenceTone[s.cadence] ?? cadenceTone.off}`}>{CADENCE_LABEL[s.cadence] ?? s.cadence}</span>
+              <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${cadenceTone[s.cadence] ?? cadenceTone.off}`}>{CADENCE_LABEL[s.cadence] ?? s.cadence}</span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-gray-900">{s.label || s.query}</p>
                 <p className="truncate text-caption text-gray-500">
@@ -81,11 +81,11 @@ export function SearchesPane() {
               </div>
               <Button variant="secondary" size="sm" loading={run.isPending} onClick={() => run.mutate(s.id)}>Run now</Button>
               {s.is_active && s.cadence !== 'off' ? (
-                <button type="button" onClick={() => patch.mutate({ id: s.id, cadence: 'off' })} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Pause</button>
+                <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: s.id, cadence: 'off' })}>Pause</Button>
               ) : (
-                <button type="button" onClick={() => patch.mutate({ id: s.id, isActive: true, cadence: 'daily' })} className="rounded-md px-2 py-1 text-caption font-semibold text-emerald-700 hover:bg-emerald-50">Resume</button>
+                <Button variant="ghost" size="sm" type="button" onClick={() => patch.mutate({ id: s.id, isActive: true, cadence: 'daily' })} className="text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700">Resume</Button>
               )}
-              <button type="button" onClick={() => remove.mutate(s.id)} className="rounded-md px-2 py-1 text-caption font-semibold text-gray-500 hover:bg-gray-100">Remove</button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => remove.mutate(s.id)}>Remove</Button>
             </li>
           ))}
         </ul>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useBodyScrollLock } from '@/design-system/hooks';
+import { Button } from '@/design-system/primitives';
 
 type ActionType = 'replaced' | 'repaired' | 'cleaned' | 'tested' | 'no_fix' | 'awaiting_part';
 
@@ -102,26 +103,19 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
             <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
               Add action
             </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-caption font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
-            >
+            <Button variant="ghost" size="sm" onClick={onClose}>
               Cancel
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => setStep('type')}
-              className="text-caption font-black uppercase tracking-wide text-slate-500 active:text-slate-900"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setStep('type')}>
               ← Back
-            </button>
+            </Button>
             <h2 className="text-sm font-black uppercase tracking-wide text-slate-900">
               {actionType && TYPES.find((t) => t.id === actionType)?.label}
             </h2>
+            {/* ds-raw-button: solid-orange repair-theme save CTA — no orange DS Button variant */}
             <button
               type="button"
               onClick={handleSave}
@@ -138,6 +132,7 @@ export function AddRepairActionSheet({ repairId, onClose, onSaved }: Props) {
         {step === 'type' && (
           <div className="grid grid-cols-2 gap-3">
             {TYPES.map((t) => (
+              // ds-raw-button: multi-line text-left card tile (emoji + label + sub), not a standard action button
               <button
                 key={t.id}
                 type="button"

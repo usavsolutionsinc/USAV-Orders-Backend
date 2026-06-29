@@ -20,7 +20,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
 
   assert.equal(navIds.includes('operations'), false);
   assert.equal(navIds.includes('support'), false);
-  assert.equal(navIds.includes('previous-quarters'), false);
   assert.equal(navIds.includes('admin'), false);
   assert.equal(navIds.includes('dashboard'), true);
   assert.equal(navIds.includes('fba'), true);
@@ -32,7 +31,6 @@ test('getSidebarNavItems omits mobile-restricted routes in mobile mode', () => {
 test('isSidebarRouteMobileRestricted only flags mobile-blocked routes', () => {
   assert.equal(isSidebarRouteMobileRestricted('operations'), true);
   assert.equal(isSidebarRouteMobileRestricted('support'), true);
-  assert.equal(isSidebarRouteMobileRestricted('previous-quarters'), true);
   assert.equal(isSidebarRouteMobileRestricted('admin'), true);
   assert.equal(isSidebarRouteMobileRestricted('dashboard'), false);
   assert.equal(isSidebarRouteMobileRestricted('fba'), false);
@@ -136,9 +134,11 @@ test('getSidebarHref resolves every sidebar page to its real route', () => {
 });
 
 // resolveSidebarMode returns null for single-surface pages (no mode row).
+// NB: `support` gained tickets/voicemail/calls modes in SIDEBAR_PAGE_NAV, so it
+// is no longer modeless — use `ai-chat`, which lives only in APP_SIDEBAR_NAV.
 test('resolveSidebarMode returns null for pages without modes', () => {
-  assert.equal(getSidebarPageNav('support'), undefined);
-  assert.equal(resolveSidebarMode('support', { pathname: '/support', params: new URLSearchParams() }), null);
+  assert.equal(getSidebarPageNav('ai-chat'), undefined);
+  assert.equal(resolveSidebarMode('ai-chat', { pathname: '/ai-chat', params: new URLSearchParams() }), null);
   assert.equal(resolveSidebarMode('settings', { pathname: '/settings', params: new URLSearchParams() }), null);
 });
 

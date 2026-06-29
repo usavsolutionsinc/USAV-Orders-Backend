@@ -1,6 +1,7 @@
 'use client';
 
 import type { StationTheme } from '@/utils/staff-colors';
+import { Button } from '@/design-system/primitives';
 import { PageAccessSwitch } from '../PageAccessSwitch';
 import type { PageAccessMatrix } from '../page-access-matrix';
 
@@ -30,14 +31,9 @@ export function PageAccessCard({
           </p>
         </div>
         {!isAdmin && hasOverrides && (
-          <button
-            type="button"
-            onClick={onResetOverrides}
-            disabled={busy}
-            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-micro font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onResetOverrides} disabled={busy}>
             Reset overrides
-          </button>
+          </Button>
         )}
       </header>
       <ul className="divide-y divide-gray-100">

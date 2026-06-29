@@ -14,6 +14,8 @@ import {
   Wrench,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { useImageTypes } from '@/hooks/useImageTypes';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
 import { toast } from '@/lib/toast';
@@ -72,16 +74,15 @@ export function PhotoStationFolders({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Image type</p>
-        <button
-          type="button"
-          onClick={addType}
-          disabled={adding}
-          title="Add image type"
-          aria-label="Add image type"
-          className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-        >
-          {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-        </button>
+        <HoverTooltip label="Add image type" asChild>
+          <IconButton
+            icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            ariaLabel="Add image type"
+            onClick={addType}
+            disabled={adding}
+            className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 disabled:opacity-40"
+          />
+        </HoverTooltip>
       </div>
 
       <ul className="space-y-1">
@@ -141,7 +142,7 @@ function TypeRow({
         onClick={onClick}
         aria-pressed={active}
         className={cn(
-          'flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition',
+          'ds-raw-button flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition',
           active
             ? 'bg-blue-50 text-blue-900 ring-1 ring-inset ring-blue-400'
             : 'text-gray-700 hover:bg-gray-50',

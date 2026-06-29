@@ -5,7 +5,9 @@ import {
   photoLibraryControlButtonClass,
   photoLibraryControlGroupClass,
 } from '@/components/photos/photo-library-controls';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { PhotoLibrarySortMode } from '@/lib/photos/library-filter-state';
+import { cn } from '@/utils/_cn';
 
 const OPTIONS: {
   value: PhotoLibrarySortMode;
@@ -30,18 +32,18 @@ export function PhotoSortMenu({
         const active = sort === o.value;
         const Icon = o.icon;
         return (
-          <button
-            key={o.value}
-            type="button"
-            title={o.label}
-            aria-label={o.label}
-            aria-pressed={active}
-            onClick={() => onSortChange(o.value)}
-            className={photoLibraryControlButtonClass(active, 'gap-1 whitespace-nowrap px-2')}
-          >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            {o.label}
-          </button>
+          <HoverTooltip key={o.value} label={o.label} asChild>
+            <button
+              type="button"
+              aria-label={o.label}
+              aria-pressed={active}
+              onClick={() => onSortChange(o.value)}
+              className={cn('ds-raw-button', photoLibraryControlButtonClass(active, 'gap-1 whitespace-nowrap px-2'))}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {o.label}
+            </button>
+          </HoverTooltip>
         );
       })}
     </div>

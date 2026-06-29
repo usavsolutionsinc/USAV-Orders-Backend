@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import type { StationTheme } from '@/utils/staff-colors';
 import { fbaSidebarThemeChrome } from '@/utils/staff-colors';
 import { useActiveStaffDirectory } from '@/components/sidebar/hooks';
@@ -92,7 +93,7 @@ export function FbaCreatePlanModal({ stationTheme = 'blue' }: { stationTheme?: S
     <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/35"
+        className="ds-raw-button absolute inset-0 bg-black/35"
         aria-label="Close create plan"
         onClick={() => { if (!submitting) setOpen(false); }}
       />
@@ -104,15 +105,13 @@ export function FbaCreatePlanModal({ stationTheme = 'blue' }: { stationTheme?: S
             </p>
             <h2 className="mt-1 text-sm font-black text-zinc-900">Create FBA shipment plan</h2>
           </div>
-          <button
-            type="button"
+          <IconButton
+            icon={<X className="h-4 w-4" />}
             onClick={() => setOpen(false)}
             disabled={submitting}
-            className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800 disabled:opacity-40"
-            aria-label="Close create plan"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            ariaLabel="Close create plan"
+            className="rounded-full border border-zinc-200 bg-white p-2 hover:border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
+          />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <FbaCreateShipmentForm

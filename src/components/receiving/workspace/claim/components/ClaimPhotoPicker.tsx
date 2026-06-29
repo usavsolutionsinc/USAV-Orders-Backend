@@ -8,6 +8,8 @@ import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRea
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 import { claimThumb } from '../claim-helpers';
 import type { UseClaimPhotos } from '../hooks/useClaimPhotos';
@@ -70,6 +72,7 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
   // ── Empty state — no photos yet: one big send-to-phone tile ────────────────
   if (list.length === 0) {
     return (
+      // ds-raw-button: large multi-line dashed send-to-phone card tile, not a standard action button
       <button
         type="button"
         onClick={() => void handleSendToPhone()}
@@ -100,64 +103,67 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
     <div>
       <div className="mb-2 flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => g.openViewer(0)}
-            aria-label="View all photos fullscreen"
-            title="Expand — view all photos closely"
-            className="-ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          >
-            <ZoomIn className="h-3.5 w-3.5" />
-          </button>
+          <HoverTooltip label="Expand — view all photos closely" asChild>
+            <IconButton
+              icon={<ZoomIn className="h-3.5 w-3.5" />}
+              ariaLabel="View all photos fullscreen"
+              onClick={() => g.openViewer(0)}
+              className="-ml-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            />
+          </HoverTooltip>
           <p className="truncate text-micro font-black uppercase tracking-widest text-gray-500">
             Attach {selectedPhotoIds.size === 1 ? 'photo' : 'photos'} to ticket ({selectedPhotoIds.size}/{list.length})
           </p>
         </div>
-        <button
-          type="button"
-          onClick={toggleSelectAll}
-          className="shrink-0 text-micro font-bold uppercase tracking-widest text-gray-500 hover:text-gray-900"
-        >
+        <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="shrink-0">
           {selectedPhotoIds.size === list.length ? 'Clear all' : 'Select all'}
-        </button>
+        </Button>
       </div>
 
       <div className="grid grid-cols-4 gap-2">
         {list.map((p) => {
           const isSel = selectedPhotoIds.has(p.id);
           return (
-            <button
+            <HoverTooltip
               key={p.id}
-              type="button"
-              onClick={() => togglePhoto(p.id)}
-              className={`relative aspect-square overflow-hidden rounded-lg ring-2 transition ${
-                isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300'
-              }`}
-              title={isSel ? 'Selected — click to remove' : 'Click to attach'}
+              label={isSel ? 'Selected — click to remove' : 'Click to attach'}
+              asChild
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={claimThumb(p.url, p.id)}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className={`h-full w-full bg-gray-100 object-cover ${isSel ? '' : 'opacity-70'}`}
-              />
-              {isSel ? (
-                <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-[11px] font-black text-white shadow-sm">
-                  ✓
-                </span>
-              ) : null}
-            </button>
+              {/* ds-raw-button: photo thumbnail image tile (img selection target), not a standard action button */}
+              <button
+                type="button"
+                onClick={() => togglePhoto(p.id)}
+                aria-label={isSel ? 'Selected — click to remove' : 'Click to attach'}
+                className={`relative aspect-square overflow-hidden rounded-lg ring-2 transition ${
+                  isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300'
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={claimThumb(p.url, p.id)}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className={`h-full w-full bg-gray-100 object-cover ${isSel ? '' : 'opacity-70'}`}
+                />
+                {isSel ? (
+                  <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-caption font-black text-white shadow-sm">
+                    ✓
+                  </span>
+                ) : null}
+              </button>
+            </HoverTooltip>
           );
         })}
 
         {/* Send-to-phone tile — captures happen on the phone, stream back here. */}
+        <HoverTooltip label="Send to phone to take more photos" asChild>
+        {/* ds-raw-button: multi-line dashed send-to-phone card tile in the photo grid, not a standard action button */}
         <button
           type="button"
           onClick={() => void handleSendToPhone()}
           disabled={sending || !receivingId}
-          title="Send to phone to take more photos"
+          aria-label="Send to phone to take more photos"
           className="group flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {sending ? (
@@ -170,10 +176,11 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
                   <Plus className="h-2 w-2" />
                 </span>
               </span>
-              <span className="text-[9px] font-black uppercase tracking-widest">Phone</span>
+              <span className="text-eyebrow font-black uppercase tracking-widest">Phone</span>
             </>
           )}
         </button>
+        </HoverTooltip>
       </div>
       <p className="mt-2 text-micro font-medium text-gray-400">
         Selected photos upload to Zendesk as files. All PO photos are also saved to local storage in

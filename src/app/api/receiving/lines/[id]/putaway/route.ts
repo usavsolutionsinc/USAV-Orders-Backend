@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server';
+import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import {
@@ -265,6 +267,25 @@ export async function POST(
       return NextResponse.json({ success: false, error: result.error }, { status: result.status });
     }
     const { bin, events } = result;
+
+    // Audit the bin assignment (the per-unit PUTAWAY inventory_events are the
+    // lifecycle spine; the audit_log operator trail was missing here). Runs on
+    // the BYPASSRLS pool outside the tenant tx; org is stamped from ctx.
+    await recordAudit(pool, ctx, request, {
+      source: 'receiving-station',
+      action: AUDIT_ACTION.SKU_STOCK_BIN_ASSIGN,
+      entityType: AUDIT_ENTITY.RECEIVING_LINE,
+      entityId: lineId,
+      method: 'scan',
+      scanRef: scanToken,
+      binCode: bin.name,
+      after: { bin_id: bin.id, bin_name: bin.name },
+      extra: {
+        serial_unit_id: serialUnitId,
+        qty,
+        event_count: events.length,
+      },
+    });
 
     after(async () => {
       try {

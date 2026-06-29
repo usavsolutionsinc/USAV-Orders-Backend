@@ -265,7 +265,7 @@ async function syncPurchaseOrderLines(
     const shipment = await registerShipmentPermissive({
       trackingNumber: poReference,
       sourceSystem: 'zoho_po',
-    });
+    }, orgId);
     shipmentId = shipment?.id ?? null;
   }
 

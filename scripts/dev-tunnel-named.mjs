@@ -174,6 +174,16 @@ function ensureTunnelAuth() {
 }
 
 function tunnelSpawnArgs() {
+  // Token mode is fully remote-managed: cloudflared pulls its ingress/route
+  // from the Cloudflare dashboard (Zero Trust → Tunnels → Published app →
+  // Service URL: http://localhost:3000). Passing a local --config OVERRIDES that
+  // ingress — the old isolated `ingress: http_status:404` config made every
+  // request 404 even once the tunnel connected. So token mode runs clean:
+  //   cloudflared tunnel run --token <token>
+  if (tunnelAuth.mode === "token") {
+    return ["tunnel", "--no-autoupdate", "run", "--token", tunnelAuth.token];
+  }
+
   const base = [
     "tunnel",
     "--no-autoupdate",
@@ -183,8 +193,6 @@ function tunnelSpawnArgs() {
   ];
 
   switch (tunnelAuth.mode) {
-    case "token":
-      return [...base, "--token", tunnelAuth.token];
     case "credentials":
       return [
         ...base,

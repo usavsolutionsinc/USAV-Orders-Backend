@@ -8,6 +8,7 @@ import {
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
 import { Camera, X, Check } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useCamera } from '@/hooks/useCamera';
 import { compressPhotoForUpload } from '@/lib/image/compress-for-upload';
 import { safeRandomUUID } from '@/lib/safe-uuid';
@@ -355,22 +356,24 @@ export function MobilePackerSpamCamera({
                 ? 'Enable camera access in your browser settings, then tap Try Again.'
                 : 'No camera detected, or the browser blocked access.'}
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={attemptStart}
-              className="h-11 px-5 rounded-xl bg-blue-600 text-white text-caption font-black uppercase tracking-wider active:bg-blue-700 transition-colors"
+              className="h-11 px-5 rounded-xl text-caption font-black uppercase tracking-wider"
             >
               Try Again
-            </button>
+            </Button>
 
             {showTestPhotoButton && (
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleUseTestPhoto}
-                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-caption font-black uppercase tracking-wider active:bg-amber-600 transition-colors"
+                className="mt-3 h-11 px-5 rounded-xl bg-amber-500 text-black text-caption font-black uppercase tracking-wider hover:bg-amber-600 active:bg-amber-600"
               >
                 Use Test Photo · Dev
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -404,14 +407,13 @@ export function MobilePackerSpamCamera({
               </>
             )}
           </div>
-          <button
+          <IconButton
             type="button"
             onClick={handleCancel}
-            aria-label="Close camera"
-            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm active:bg-black/60 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            ariaLabel="Close camera"
+            className="h-11 w-11 flex-shrink-0 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm active:bg-black/60 transition-colors"
+            icon={<X className="h-5 w-5 text-white" />}
+          />
         </div>
       </div>
 
@@ -431,6 +433,7 @@ export function MobilePackerSpamCamera({
               (no white ring) and smaller than the shutter, so it reads as a
               thumbnail rather than a second shutter. Hidden until the first shot. */}
           <div className="flex justify-start">
+            {/* ds-raw-button: image/photo thumbnail tile (last-shot gallery bubble) */}
             <button
               type="button"
               onClick={openGallery}
@@ -451,6 +454,7 @@ export function MobilePackerSpamCamera({
 
           {/* Shutter */}
           <div className="flex justify-center">
+            {/* ds-raw-button: camera shutter (bespoke ring-over-fill control) */}
             <button
               type="button"
               onClick={shutter}
@@ -464,15 +468,14 @@ export function MobilePackerSpamCamera({
 
           {/* Done — checkmark only */}
           <div className="flex justify-end">
-            <button
+            <IconButton
               type="button"
               onClick={handleDone}
               disabled={shots.length === 0}
-              aria-label="Done"
-              className="h-14 w-14 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg active:bg-emerald-600 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 disabled:active:bg-emerald-500"
-            >
-              <Check className="h-7 w-7" />
-            </button>
+              ariaLabel="Done"
+              className="h-14 w-14 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg active:bg-emerald-600 active:scale-95 transition-all disabled:opacity-40 disabled:active:scale-100 disabled:active:bg-emerald-500"
+              icon={<Check className="h-7 w-7 text-white" />}
+            />
           </div>
         </div>
       </div>

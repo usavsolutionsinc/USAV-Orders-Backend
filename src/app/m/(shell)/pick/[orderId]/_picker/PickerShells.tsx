@@ -1,5 +1,7 @@
 // ─── Helper shells ───────────────────────────────────────────────────────────
 
+import { Button } from '@/design-system/primitives';
+
 export function LoadingShell({ label }: { label: string }) {
   return (
     <div className="grid min-h-full place-items-center bg-slate-50 px-6 py-10 text-center">
@@ -17,13 +19,9 @@ export function ErrorShell({ error, onBack }: { error: string; onBack: () => voi
       <div>
         <p className="text-base font-bold text-red-700">Could not load picker</p>
         <p className="mt-2 text-sm text-slate-600">{error}</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="mt-5 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white active:bg-slate-800"
-        >
+        <Button variant="brand" size="lg" className="mt-5" onClick={onBack}>
           Back to queue
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -35,13 +33,9 @@ export function EmptyShell({ onBack }: { onBack: () => void }) {
       <div>
         <p className="text-base font-bold text-slate-700">Nothing to pick</p>
         <p className="mt-2 text-sm text-slate-500">All allocations for this order are already picked or shipped.</p>
-        <button
-          type="button"
-          onClick={onBack}
-          className="mt-5 rounded-2xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white active:bg-slate-800"
-        >
+        <Button variant="brand" size="lg" className="mt-5" onClick={onBack}>
           Back to queue
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -57,6 +51,7 @@ export function CompleteCard({ onBack }: { onBack: () => void }) {
       </div>
       <p className="mt-3 text-base font-bold text-emerald-900">Pick complete</p>
       <p className="mt-1 text-sm text-emerald-800/80">Cart is ready to hand off to the pack station.</p>
+      {/* ds-raw-button: solid-emerald success CTA inside the emerald complete card — keep the bespoke emerald tone */}
       <button
         type="button"
         onClick={onBack}

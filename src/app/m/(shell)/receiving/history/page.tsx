@@ -24,6 +24,7 @@ import { useRealtimeInvalidation } from '@/hooks/useRealtimeInvalidation';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { receivingLinePhotoHrefs } from '@/lib/photos/mobile-gallery-url';
 import { getCurrentPSTDateKey, toPSTDateKey } from '@/utils/date';
+import { IconButton } from '@/design-system/primitives';
 
 interface ApiResponse {
   success: boolean;
@@ -128,14 +129,12 @@ export default function MobileReceivingPipelinePage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-white">
       <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
-        <button
-          type="button"
+        <IconButton
           onClick={openDrawer}
-          aria-label="Open navigation"
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100 transition-colors outline-none"
-        >
-          <Menu className="h-6 w-6" />
-        </button>
+          ariaLabel="Open navigation"
+          icon={<Menu className="h-6 w-6 text-gray-700" />}
+          className="flex h-11 w-11 items-center justify-center rounded-xl active:bg-gray-100 outline-none"
+        />
 
         <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
           Receiving
@@ -163,24 +162,20 @@ export default function MobileReceivingPipelinePage() {
                 className="h-11 w-full rounded-full border border-gray-200 bg-white pl-9 pr-9 text-sm font-semibold text-gray-900 placeholder:text-gray-400 shadow-md shadow-black/10 focus:border-blue-500 focus:outline-none"
               />
               {search && (
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-full text-gray-400 active:bg-gray-200"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                  ariaLabel="Clear search"
+                  icon={<X className="h-4 w-4 text-gray-400" />}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 flex items-center justify-center rounded-full active:bg-gray-200"
+                />
               )}
             </div>
-            <button
-              type="button"
+            <IconButton
               onClick={() => setScanOpen(true)}
-              aria-label="Scan PO barcode"
-              className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 active:bg-blue-700 transition-colors"
-            >
-              <Barcode className="h-5 w-5" />
-            </button>
+              ariaLabel="Scan PO barcode"
+              icon={<Barcode className="h-5 w-5 text-white" />}
+              className="h-11 w-11 shrink-0 inline-flex items-center justify-center rounded-full bg-blue-600 shadow-lg shadow-blue-600/30 active:bg-blue-700"
+            />
           </div>
 
           <div className="pointer-events-auto">

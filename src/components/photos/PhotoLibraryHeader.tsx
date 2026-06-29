@@ -9,6 +9,7 @@ import {
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import type { PhotoLibrarySortMode, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { PhotoSortMenu } from './PhotoSortMenu';
 import { photoLibraryControlButtonClass, photoLibraryControlGroupClass } from './photo-library-controls';
 
@@ -55,17 +56,17 @@ export function PhotoLibraryHeader({
             {VIEW_OPTIONS.map(({ id, label, icon: Icon }) => {
               const active = view === id;
               return (
-                <button
-                  key={id}
-                  type="button"
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={active}
-                  onClick={() => onViewChange(id)}
-                  className={photoLibraryControlButtonClass(active, 'w-7')}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </button>
+                <HoverTooltip key={id} label={label} asChild>
+                  <button
+                    type="button"
+                    aria-label={label}
+                    aria-pressed={active}
+                    onClick={() => onViewChange(id)}
+                    className={cn('ds-raw-button', photoLibraryControlButtonClass(active, 'w-7'))}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                  </button>
+                </HoverTooltip>
               );
             })}
           </div>

@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 
 export default function MobileError({
   error,
@@ -41,20 +42,12 @@ export default function MobileError({
         </p>
       </div>
       <div className="grid w-full max-w-xs grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => reset()}
-          className="flex h-12 items-center justify-center rounded-2xl border border-slate-300 bg-white text-sm font-black uppercase tracking-wider text-slate-700 active:bg-slate-50"
-        >
+        <Button variant="secondary" onClick={() => reset()} className="h-12 w-full">
           Try again
-        </button>
-        <button
-          type="button"
-          onClick={() => router.push('/m/receiving')}
-          className="flex h-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-black uppercase tracking-wider text-white shadow-md shadow-blue-600/30 active:scale-[0.98]"
-        >
+        </Button>
+        <Button variant="primary" onClick={() => router.push('/m/receiving')} className="h-12 w-full">
           Back to Unbox
-        </button>
+        </Button>
       </div>
     </div>
   );

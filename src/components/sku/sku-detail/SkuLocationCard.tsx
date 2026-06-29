@@ -1,4 +1,6 @@
 import { Check, MapPin, X } from '@/components/Icons';
+import { Button } from '@/design-system/primitives/Button';
+import { IconButton } from '@/design-system/primitives/IconButton';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { SkuDetailData } from './sku-detail-types';
 import type { SkuDetailController } from './useSkuDetailView';
@@ -21,7 +23,9 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
           Location
         </h2>
         {!c.editingLocation && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => {
               c.setEditingLocation(true);
               c.setSelectedLocation(data.locations[0] || '');
@@ -29,7 +33,7 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
             className="text-micro font-bold uppercase tracking-wider text-blue-600 hover:text-blue-800"
           >
             Change
-          </button>
+          </Button>
         )}
       </div>
 
@@ -59,14 +63,17 @@ export function SkuLocationCard({ c, data }: { c: SkuDetailController; data: Sku
           <button
             onClick={c.handleLocationSave}
             disabled={c.saving || !c.selectedLocation.trim()}
-            className="h-10 px-3 rounded-lg bg-emerald-600 text-white"
+            className="ds-raw-button h-10 px-3 rounded-lg bg-emerald-600 text-white"
             aria-label="Save location"
           >
             <Check className="h-4 w-4" />
           </button>
-          <button onClick={() => c.setEditingLocation(false)} className="h-10 px-3 rounded-lg bg-gray-200 text-gray-600" aria-label="Cancel">
-            <X className="h-4 w-4" />
-          </button>
+          <IconButton
+            onClick={() => c.setEditingLocation(false)}
+            className="h-10 px-3 rounded-lg bg-gray-200 text-gray-600"
+            ariaLabel="Cancel"
+            icon={<X className="h-4 w-4" />}
+          />
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">

@@ -56,7 +56,7 @@ export function PODetailView({ detail }: { detail: PODetail }) {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
+            className={`ds-raw-button -mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
               activeTab === key ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >

@@ -877,22 +877,16 @@ export async function enrichSerialUnitCatalog(params: {
   sku?: string | null;
   zoho_item_id?: string | null;
   zoho_purchaseorder_id?: string | null;
-}, orgId?: OrgId): Promise<void> {
+}, orgId: OrgId): Promise<void> {
   try {
-    // serial_units is tenant-owned; when org is threaded, scope both the read
-    // and the write to the org and run them GUC-wrapped. ensureSkuCatalogEntry
-    // is not yet org-aware (Phase 1 pending there), so we leave that call as-is.
-    const current = orgId
-      ? await tenantQuery<{ sku_catalog_id: number | null }>(
-          orgId,
-          `SELECT sku_catalog_id FROM serial_units
-           WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-          [params.serial_unit_id, orgId],
-        )
-      : await pool.query<{ sku_catalog_id: number | null }>(
-          `SELECT sku_catalog_id FROM serial_units WHERE id = $1 LIMIT 1`,
-          [params.serial_unit_id],
-        );
+    // serial_units is tenant-owned; orgId is required, so scope both the read
+    // and the catalog ensure to the org and run them GUC-wrapped.
+    const current = await tenantQuery<{ sku_catalog_id: number | null }>(
+      orgId,
+      `SELECT sku_catalog_id FROM serial_units
+       WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [params.serial_unit_id, orgId],
+    );
     if (current.rows.length === 0) return;
     if (current.rows[0].sku_catalog_id != null) return;
 
@@ -901,7 +895,7 @@ export async function enrichSerialUnitCatalog(params: {
     const catalog = await ensureSkuCatalogEntry(params.sku ?? '', {
       zoho_item_id: params.zoho_item_id ?? undefined,
       zoho_purchaseorder_id: params.zoho_purchaseorder_id ?? undefined,
-    });
+    }, orgId);
     if (!catalog) return;
 
     if (orgId) {

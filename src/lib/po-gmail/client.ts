@@ -67,6 +67,26 @@ export function assertUsavMailbox(orgId: string): void {
   }
 }
 
+/**
+ * Soft, non-throwing companion to {@link assertUsavMailbox}. The PO Gmail
+ * mailbox is a global singleton owned by USAV (see {@link PoGmailWrongTenantError}),
+ * so it is only ever "available" to USAV today.
+ *
+ * Route handlers should call this FIRST and, when it returns false, short-circuit
+ * with a clean "not configured for this org" result (empty list / `{ configured:
+ * false }`) BEFORE invoking any token-touching function (`getAccessToken`,
+ * `poGmailFetch`, …). Those functions still hard-guard via `assertUsavMailbox`,
+ * so security is unchanged — this predicate just lets callers degrade gracefully
+ * instead of catching a thrown `PoGmailWrongTenantError`.
+ *
+ * Note: this answers "is the PO mailbox feature available to this org at all",
+ * NOT "is a mailbox currently connected" (that's a token-row read gated by the
+ * hard guard). A non-USAV org is never available regardless of connection state.
+ */
+export function isPoGmailAvailableForOrg(orgId: string): boolean {
+  return orgId === USAV_ORG_ID;
+}
+
 interface TokenRow {
   id: number;
   refresh_token: string;

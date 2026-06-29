@@ -18,6 +18,8 @@ import {
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
 import { OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -160,12 +162,12 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
     return (
       <div className={`min-h-screen ${TOKENS.colors.background} px-4 pt-2`}>
         <div className="flex items-center justify-between py-2 px-1">
-          <button
+          <IconButton
+            icon={<X className="h-5 w-5 text-blue-400" />}
             onClick={() => router.back()}
-            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center text-blue-400 shadow-sm active:scale-90 transition-all"
-          >
-            <X className="h-5 w-5" />
-          </button>
+            ariaLabel="Go back"
+            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+          />
         </div>
         <MobileCard className="mt-10 py-12 text-center">
           <Package className="mx-auto mb-3 h-10 w-10 text-blue-200" />
@@ -182,25 +184,24 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
     <div className={`min-h-screen ${TOKENS.colors.background} px-4 pb-40 pt-2`}>
       {/* Header */}
       <div className="flex items-center justify-between py-2 px-1">
-        <button
+        <IconButton
+          icon={<X className="h-5 w-5 text-blue-400" />}
           onClick={() => router.back()}
-          className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center text-blue-400 shadow-sm active:scale-90 transition-all"
-        >
-          <X className="h-5 w-5" />
-        </button>
+          ariaLabel="Go back"
+          className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+        />
         <div className="flex items-center gap-2">
           {order.status && (
-            <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.1em] border border-blue-100 shadow-sm">
+            <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-eyebrow font-black uppercase tracking-[0.1em] border border-blue-100 shadow-sm">
               {order.status}
             </div>
           )}
-          <button
+          <IconButton
+            icon={<Copy className="h-5 w-5 text-blue-600" />}
             onClick={copyId}
-            aria-label="Copy order number"
-            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center text-blue-600 shadow-sm active:scale-90 transition-all"
-          >
-            <Copy className="h-5 w-5" />
-          </button>
+            ariaLabel="Copy order number"
+            className="h-10 w-10 rounded-full bg-white border border-blue-100 flex items-center justify-center shadow-sm"
+          />
         </div>
       </div>
 
@@ -210,16 +211,15 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
           {(() => {
             const extUrl = getExternalUrlByItemNumber(order.sku);
             return (
-              <button
-                type="button"
-                disabled={!extUrl}
-                onClick={() => extUrl && window.open(extUrl, '_blank', 'noopener,noreferrer')}
-                aria-label="Open listing in new tab"
-                title={extUrl ? 'Open listing' : 'No listing link'}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-blue-500 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                <ExternalLink className="h-4 w-4" />
-              </button>
+              <HoverTooltip label={extUrl ? 'Open listing' : 'No listing link'} asChild>
+                <IconButton
+                  icon={<ExternalLink className="h-4 w-4 text-blue-500" />}
+                  disabled={!extUrl}
+                  onClick={() => extUrl && window.open(extUrl, '_blank', 'noopener,noreferrer')}
+                  ariaLabel="Open listing in new tab"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-blue-50"
+                />
+              </HoverTooltip>
             );
           })()}
         </div>
@@ -234,15 +234,15 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
           <p className="text-base font-black text-blue-950 leading-snug tracking-tight">{order.product}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {order.sku && (
-              <span className="text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg border border-blue-100 font-mono">
+              <span className="text-micro font-black uppercase tracking-wider bg-blue-50 text-blue-600 px-2.5 py-1 rounded-lg border border-blue-100 font-mono">
                 {order.sku}
               </span>
             )}
-            <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-lg border border-emerald-100">
+            <span className="text-micro font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 px-2.5 py-1 rounded-lg border border-emerald-100">
               {order.quantity} Unit{order.quantity === 1 ? '' : 's'}
             </span>
             {order.serials.length > 0 && (
-              <span className="text-[10px] font-black uppercase tracking-wider bg-slate-50 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200">
+              <span className="text-micro font-black uppercase tracking-wider bg-slate-50 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200">
                 {order.serials.length} Serial{order.serials.length === 1 ? '' : 's'}
               </span>
             )}
@@ -254,7 +254,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
           <SectionHeader title="Activity Timeline" />
           <MobileCard className="py-5">
             {order.activity.length === 0 ? (
-              <p className="py-2 text-center text-[11px] font-bold uppercase tracking-widest text-blue-200">
+              <p className="py-2 text-center text-caption font-bold uppercase tracking-widest text-blue-200">
                 No recorded activity yet
               </p>
             ) : (
@@ -272,7 +272,7 @@ export default function RedesignedMobileOrderDetail({ orderId }: { orderId: stri
                       <p className="text-xs font-black text-blue-950 uppercase tracking-tight">
                         {[ev.work_type, ev.status].filter(Boolean).join(' · ') || 'Update'}
                       </p>
-                      <p className="text-[10px] font-bold text-blue-300 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                      <p className="text-micro font-bold text-blue-300 uppercase tracking-widest mt-1 flex items-center gap-1.5">
                         <Clock className="h-3 w-3" />
                         {fmtDateTime(ev.event_at)}
                         {ev.actor_name ? ` • ${ev.actor_name}` : ''}

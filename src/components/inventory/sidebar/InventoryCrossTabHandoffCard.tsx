@@ -70,7 +70,7 @@ export function InventoryCrossTabHandoffCard({
                             key={tab}
                             type="button"
                             onClick={() => onJump(tab)}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-white px-2.5 py-2 text-left transition-colors hover:border-blue-400 hover:bg-blue-100"
+                            className="ds-raw-button flex items-center justify-between gap-2 rounded-lg border border-blue-200 bg-white px-2.5 py-2 text-left transition-colors hover:border-blue-400 hover:bg-blue-100"
                         >
                             <span className="flex min-w-0 items-center gap-2">
                                 <Icon className="h-4 w-4 text-blue-600" />

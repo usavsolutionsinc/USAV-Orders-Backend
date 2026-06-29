@@ -125,8 +125,6 @@ async function searchFba(orgId: OrgId, query: string, limit: number): Promise<Se
 async function searchReceiving(orgId: OrgId, query: string, limit: number): Promise<SearchResult[]> {
   // Join shipping_tracking_numbers so search matches rows reachable only via
   // receiving.shipment_id (post inbound-tracking unification). Falls back to
-  // the legacy receiving_tracking_number text column during the deprecation
-  // window. A normalized-tracking match catches queries typed without the
   // hyphens/spaces carriers sometimes include.
   // Tenant scope: receiving carries organization_id, so filter on it. The
   // shipping_tracking_numbers join (`stn`) has NO organization_id column yet
@@ -136,12 +134,12 @@ async function searchReceiving(orgId: OrgId, query: string, limit: number): Prom
   const result = await tenantQuery(
     orgId,
     `SELECT r.id,
-            COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking_number,
+            stn.tracking_number_raw AS tracking_number,
             COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier
      FROM receiving r
      LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
      WHERE r.organization_id = $5
-       AND (r.receiving_tracking_number ILIKE $1
+       AND (stn.tracking_number_raw ILIKE $1
         OR stn.tracking_number_raw     ILIKE $1
         OR stn.tracking_number_normalized = $3
         OR CAST(r.id AS TEXT) = $2)

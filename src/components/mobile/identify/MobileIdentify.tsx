@@ -20,6 +20,7 @@
  */
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Check, X, RotateCcw, Loader2, AlertTriangle, Search, Zap } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { RETICLE_TINT } from './mobile-identify-shared';
 import { useMobileIdentify } from './useMobileIdentify';
 import { CandidateCard } from './CandidateCard';
@@ -39,18 +40,26 @@ export function MobileIdentify() {
     <div className="relative h-[100dvh] w-full overflow-hidden bg-[#0B0B0F] text-white">
       {/* Top bar */}
       <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
-        <button onClick={() => history.back()} className="flex items-center gap-1 text-sm text-white/70">
-          <X className="h-5 w-5" /> Identify
-        </button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => history.back()}
+          icon={<X className="h-5 w-5" />}
+          className="h-auto gap-1 px-0 text-sm text-white/70"
+        >
+          Identify
+        </Button>
 
         {/* Live / Manual capture toggle */}
         <div className="flex items-center rounded-full bg-white/10 p-0.5 text-xs font-medium">
+          {/* ds-raw-button: dark-theme segmented camera-mode toggle with custom emerald/white active states */}
           <button
             onClick={() => switchMode('live')}
             className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${isLive ? 'bg-emerald-500 text-black' : 'text-white/70'}`}
           >
             <Zap className="h-3.5 w-3.5" /> Live
           </button>
+          {/* ds-raw-button: dark-theme segmented camera-mode toggle with custom emerald/white active states */}
           <button
             onClick={() => switchMode('manual')}
             className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors ${!isLive ? 'bg-white text-black' : 'text-white/70'}`}
@@ -137,6 +146,7 @@ export function MobileIdentify() {
       {manualIdle && (
         <div className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {added.length > 0 && <SessionList added={added} />}
+          {/* ds-raw-button: circular camera shutter (no icon/label), not a DS Button */}
           <button
             onClick={() => void capture()}
             aria-label="Capture"
@@ -187,12 +197,14 @@ export function MobileIdentify() {
                   {added.length > 1 ? ` · ${added.length} this session` : ''}
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="lg"
                 onClick={retake}
-                className="w-full rounded-xl bg-white py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
+                className="h-auto w-full rounded-xl bg-white py-3.5 text-sm font-semibold text-black active:scale-[0.99]"
               >
                 Next item
-              </button>
+              </Button>
             </div>
           </motion.div>
         )}
@@ -217,15 +229,23 @@ export function MobileIdentify() {
                   <p className="text-sm">{error}</p>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={retake} className="flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-black">
-                    Retake
-                  </button>
-                  <button
-                    onClick={() => recvId && (window.location.href = `/m/receive/${recvId}`)}
-                    className="flex items-center justify-center gap-1.5 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium text-white/80"
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={retake}
+                    className="h-auto flex-1 rounded-xl bg-white py-3 text-sm font-semibold text-black"
                   >
-                    <Search className="h-4 w-4" /> Search
-                  </button>
+                    Retake
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={() => recvId && (window.location.href = `/m/receive/${recvId}`)}
+                    icon={<Search className="h-4 w-4" />}
+                    className="h-auto gap-1.5 rounded-xl bg-white/10 px-4 py-3 text-sm font-medium text-white/80"
+                  >
+                    Search
+                  </Button>
                 </div>
               </div>
             )}
@@ -248,11 +268,17 @@ export function MobileIdentify() {
                   />
                 ))}
                 {rawText && (
-                  <p className="px-1 pt-1 text-[11px] text-white/30">read: “{rawText.slice(0, 90)}”</p>
+                  <p className="px-1 pt-1 text-caption text-white/30">read: “{rawText.slice(0, 90)}”</p>
                 )}
-                <button onClick={retake} className="mt-1 inline-flex items-center gap-1.5 px-1 text-xs text-white/50">
-                  <RotateCcw className="h-3 w-3" /> Retake
-                </button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={retake}
+                  icon={<RotateCcw className="h-3 w-3" />}
+                  className="mt-1 h-auto gap-1.5 px-1 text-xs text-white/50"
+                >
+                  Retake
+                </Button>
               </div>
             )}
           </motion.div>

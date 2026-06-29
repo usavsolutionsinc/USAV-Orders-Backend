@@ -81,7 +81,7 @@ export function InventoryGraphSidebar() {
                                 type="button"
                                 onClick={() => focusSku(item.sku)}
                                 className={cn(
-                                    'flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition-colors',
+                                    'ds-raw-button flex w-full flex-col items-start rounded-lg px-2.5 py-1.5 text-left transition-colors',
                                     active
                                         ? 'bg-blue-50 ring-1 ring-inset ring-blue-200'
                                         : 'hover:bg-gray-50',
@@ -95,7 +95,7 @@ export function InventoryGraphSidebar() {
                                 >
                                     {item.sku}
                                 </span>
-                                <span className="line-clamp-1 text-[11px] text-gray-500">
+                                <span className="line-clamp-1 text-caption text-gray-500">
                                     {item.product_title}
                                 </span>
                             </button>

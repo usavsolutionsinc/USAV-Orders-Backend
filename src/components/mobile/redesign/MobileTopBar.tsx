@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { ChevronLeft, Menu } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { GlobalHeaderActions } from '@/components/layout/GlobalHeaderActions';
 import { HeaderGoalChip } from '@/components/layout/HeaderGoalChip';
 
@@ -33,22 +34,20 @@ export const MobileTopBar = ({
   <header className="sticky top-0 z-header flex w-full shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-2.5 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80">
     <div className="flex min-w-0 items-center gap-2">
       {onMenu && (
-        <button
+        <IconButton
           onClick={onMenu}
-          aria-label="Open menu"
+          ariaLabel="Open menu"
+          icon={<Menu className="h-5 w-5" />}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-all active:scale-90"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+        />
       )}
       {onBack && (
-        <button
+        <IconButton
           onClick={onBack}
-          aria-label="Back"
+          ariaLabel="Back"
+          icon={<ChevronLeft className="h-5 w-5" />}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-500 shadow-sm transition-all active:scale-90"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+        />
       )}
       {/* Daily-goal chip pinned to the far left of every mobile page. */}
       <HeaderGoalChip />

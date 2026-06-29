@@ -9,7 +9,7 @@ export const metadata = { title: 'AI Chat · USAV' };
  */
 export default function AiChatPage() {
   return (
-    <div className="h-full w-full overflow-hidden bg-[#fbfbfa]">
+    <div className="h-full w-full overflow-hidden bg-surface-card">
       <AiChatWorkspace />
     </div>
   );

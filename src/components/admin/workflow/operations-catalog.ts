@@ -222,7 +222,7 @@ export const IDENTIFIERS: OpsIdentifier[] = [
     example: 'SO-01042 / eBay 12-…',
     blurb:
       'The customer order. Drives allocation → pick → pack → ship. Carries the eBay/Zoho sales-order numbers.',
-    tables: ['orders', 'sales_orders', 'order_shipment_links', 'shipment_orders'],
+    tables: ['orders', 'sales_orders', 'shipment_links'],
     travels: [
       { station: 'ADMIN', note: 'order synced in from marketplace / Zoho' },
       { station: 'PACK', note: 'allocated + packed against the order' },
@@ -238,7 +238,7 @@ export const IDENTIFIERS: OpsIdentifier[] = [
     tables: [
       'serial_units.shipment_id',
       'station_activity_logs.shipment_id',
-      'shipment_orders',
+      'shipment_links',
       'packages',
     ],
     travels: [

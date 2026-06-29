@@ -12,7 +12,9 @@ import { createPortal } from 'react-dom';
 import { Clock, Pencil } from '../Icons';
 import { RepairPickupFlow } from '@/components/repair/RepairPickupFlow';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import DeleteButton from '@/components/ui/DeleteButton';
+import { IconButton } from '@/design-system/primitives';
 import {
   PaneHeader,
   PaneHeaderActionBar,
@@ -91,15 +93,16 @@ export function RepairDetailsPanel({
                       disabled={c.isSavingTicket}
                     />
                   ) : c.zendeskTicketUrl ? (
-                    <a
-                      href={c.zendeskTicketUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block truncate transition-colors hover:text-blue-600"
-                      title={`Open Zendesk ticket ${c.ticketNumber}`}
-                    >
-                      {c.ticketNumber}
-                    </a>
+                    <HoverTooltip label={`Open Zendesk ticket ${c.ticketNumber}`} asChild>
+                      <a
+                        href={c.zendeskTicketUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate transition-colors hover:text-blue-600"
+                      >
+                        {c.ticketNumber}
+                      </a>
+                    </HoverTooltip>
                   ) : (
                     <span className="text-gray-400">TK Number</span>
                   )
@@ -110,15 +113,13 @@ export function RepairDetailsPanel({
           }
           rightSlot={
             <>
-              <button
-                type="button"
+              <IconButton
+                icon={<Pencil className="h-4 w-4" />}
                 onClick={() => c.setIsEditingTicket(true)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-                aria-label="Edit ticket number"
+                ariaLabel="Edit ticket number"
                 disabled={c.isSavingTicket}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100"
+              />
               <PaneHeaderCloseButton onClick={onClose} ariaLabel="Close repair details" />
             </>
           }
@@ -130,7 +131,7 @@ export function RepairDetailsPanel({
                   pulse
                   className={
                     repair.status === 'Repaired, Contact Customer'
-                      ? 'text-[10px] tracking-[0.14em]'
+                      ? 'text-micro tracking-[0.14em]'
                       : undefined
                   }
                 >

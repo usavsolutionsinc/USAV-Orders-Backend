@@ -38,4 +38,4 @@ export const GET = withAuth(async (req: NextRequest) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.view' });
+}, { permission: 'walk_in.view', feature: 'walkIn' });

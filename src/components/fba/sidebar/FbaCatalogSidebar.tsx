@@ -83,6 +83,7 @@ export function FbaCatalogSidebar() {
       <div className={`min-h-0 flex-1 space-y-2 overflow-y-auto ${SIDEBAR_GUTTER} py-3`}>
         <p className="text-micro font-semibold uppercase tracking-widest text-zinc-500">Catalog actions</p>
 
+        {/* ds-raw-button */}
         <button type="button" onClick={emitOpenAddFba} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Add Catalog Row</span>
@@ -93,6 +94,7 @@ export function FbaCatalogSidebar() {
           </span>
         </button>
 
+        {/* ds-raw-button */}
         <button type="button" onClick={emitOpenUploadFba} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Upload CSV</span>
@@ -110,6 +112,7 @@ export function FbaCatalogSidebar() {
           </span>
         </button>
 
+        {/* ds-raw-button */}
         <button type="button" onClick={clearFilters} className={actionRowClass}>
           <span>
             <span className="block text-xs font-bold text-zinc-900">Clear search</span>

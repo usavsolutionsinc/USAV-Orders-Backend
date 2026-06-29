@@ -54,6 +54,7 @@ function PoMailboxAdminSectionInner() {
 
 function SubTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
+    // ds-raw-button: segmented sub-tab toggle (aria-pressed, conditional active fill), not a single DS variant
     <button
       type="button"
       onClick={onClick}

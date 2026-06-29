@@ -252,6 +252,7 @@ export function ConfirmSheet({
         </p>
       )}
       <div className="flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
+        {/* ds-raw-button: full-width gradient sheet CTA (h-12, blue/red gradient + shadow) — DS Button has no gradient variant */}
         <button
           type="button"
           onClick={() => {
@@ -266,6 +267,7 @@ export function ConfirmSheet({
         >
           {confirmLabel}
         </button>
+        {/* ds-raw-button: full-width sheet cancel paired to the gradient CTA (h-12, equal flex) — kept consistent with its sibling */}
         <button
           type="button"
           onClick={onClose}
@@ -340,6 +342,7 @@ export function PromptSheet({
         className="mb-4 h-12 w-full rounded-2xl border border-gray-300 bg-gray-50 px-4 text-sm font-semibold text-gray-900 outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-200"
       />
       <div className="flex flex-col gap-2 sm:flex-row-reverse sm:gap-3">
+        {/* ds-raw-button: full-width gradient sheet CTA (h-12, blue gradient + shadow) — DS Button has no gradient variant */}
         <button
           type="button"
           onClick={commit}
@@ -347,6 +350,7 @@ export function PromptSheet({
         >
           {confirmLabel}
         </button>
+        {/* ds-raw-button: full-width sheet cancel paired to the gradient CTA (h-12, equal flex) — kept consistent with its sibling */}
         <button
           type="button"
           onClick={onClose}

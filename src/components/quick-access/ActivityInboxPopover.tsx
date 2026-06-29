@@ -6,6 +6,8 @@ import { formatDistanceToNowStrict } from 'date-fns';
 import { Copy, Check, X } from '@/components/Icons';
 import { copyToClipboard } from '@/utils/_dom';
 import { useActivityInbox } from '@/contexts/ActivityInboxContext';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface ActivityInboxPopoverProps {
     onClose: () => void;
@@ -43,22 +45,19 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                 </div>
                 <div className="flex items-center gap-2">
                     {items.length > 0 ? (
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
                             onClick={() => clear()}
-                            className="text-mini font-bold uppercase tracking-wide text-gray-500 hover:text-gray-800"
+                            className="h-auto px-0 text-mini font-bold uppercase tracking-wide text-gray-500 hover:bg-transparent hover:text-gray-800"
                         >
                             Clear
-                        </button>
+                        </Button>
                     ) : null}
-                    <button
-                        type="button"
+                    <IconButton
+                        ariaLabel="Close"
                         onClick={onClose}
-                        aria-label="Close"
-                        className="text-gray-400 hover:text-gray-700"
-                    >
-                        <X className="h-3.5 w-3.5" />
-                    </button>
+                        icon={<X className="h-3.5 w-3.5" />}
+                    />
                 </div>
             </header>
 
@@ -111,31 +110,32 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-1">
                                         {it.kind === 'staff_message' && it.body && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (!it.body) return;
-                                                    void handleCopyBack(it.body, it.id);
-                                                }}
-                                                aria-label="Copy message"
-                                                title="Copy message"
-                                                className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                                            >
-                                                {copiedId === it.id ? (
-                                                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                                                ) : (
-                                                    <Copy className="h-3.5 w-3.5" />
-                                                )}
-                                            </button>
+                                            <HoverTooltip label="Copy message" asChild>
+                                                <IconButton
+                                                    ariaLabel="Copy message"
+                                                    onClick={() => {
+                                                        if (!it.body) return;
+                                                        void handleCopyBack(it.body, it.id);
+                                                    }}
+                                                    className="group flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+                                                    icon={
+                                                        copiedId === it.id ? (
+                                                            <Check className="h-3.5 w-3.5 text-emerald-500" />
+                                                        ) : (
+                                                            <Copy className="h-3.5 w-3.5 text-gray-400 group-hover:text-gray-700" />
+                                                        )
+                                                    }
+                                                />
+                                            </HoverTooltip>
                                         )}
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="ghost"
                                             onClick={() => dismissItem(it.id)}
-                                            className="text-micro font-bold uppercase tracking-wide text-gray-400 hover:text-gray-700"
-                                            aria-label="Dismiss"
+                                            ariaLabel="Dismiss"
+                                            className="h-auto px-0 text-micro font-bold uppercase tracking-wide text-gray-400 hover:bg-transparent hover:text-gray-700"
                                         >
                                             Dismiss
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             </li>

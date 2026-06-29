@@ -23,8 +23,7 @@ import type { PoolClient } from 'pg';
 import { detectCarrier, normalizeTrackingNumber } from '@/lib/shipping/normalize';
 import { transitionalUsavOrgId, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
-import { linkShipment } from '@/lib/shipping/shipment-links';
-import { isShipmentLinksDualWrite } from '@/lib/feature-flags';
+import { linkShipment, unlinkShipment, setPrimaryShipmentLink } from '@/lib/shipping/shipment-links';
 
 /** Minimal pg client surface the helpers need (a pool client mid-transaction). */
 type Tx = Pick<PoolClient, 'query'>;
@@ -45,11 +44,6 @@ type Tx = Pick<PoolClient, 'query'>;
 // (orders/assign, orders/[id]/tracking, shipped/scan-out) have ctx.organizationId
 // in scope and now pass it through.
 
-export function isMissingOrderShipmentLinksRelation(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return /order_shipment_links/i.test(message) && /does not exist|undefined table/i.test(message);
-}
-
 /**
  * Is this shipment currently owned by any order — via `orders.shipment_id` or an
  * `order_shipment_links` row? Used to distinguish a genuine cross-order
@@ -61,16 +55,11 @@ async function isShipmentOwnedByAnyOrder(shipmentId: number, client: Tx): Promis
     [shipmentId],
   );
   if ((primary.rowCount ?? 0) > 0) return true;
-  try {
-    const linked = await client.query(
-      `SELECT 1 FROM order_shipment_links WHERE shipment_id = $1 LIMIT 1`,
-      [shipmentId],
-    );
-    return (linked.rowCount ?? 0) > 0;
-  } catch (error) {
-    if (isMissingOrderShipmentLinksRelation(error)) return false;
-    throw error;
-  }
+  const linked = await client.query(
+    `SELECT 1 FROM shipment_links WHERE owner_type = 'ORDER' AND shipment_id = $1 LIMIT 1`,
+    [shipmentId],
+  );
+  return (linked.rowCount ?? 0) > 0;
 }
 
 export async function upsertOrderTracking(
@@ -105,16 +94,7 @@ export async function upsertOrderTracking(
 
       if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue;
 
-      try {
-        await client.query(
-          `DELETE FROM order_shipment_links
-           WHERE order_row_id = $1
-             AND shipment_id = $2`,
-          [orderId, shipmentId]
-        );
-      } catch (error) {
-        if (!isMissingOrderShipmentLinksRelation(error)) throw error;
-      }
+      await unlinkShipment(orgId, 'ORDER', orderId, shipmentId, client);
     }
     return;
   }
@@ -139,19 +119,15 @@ export async function upsertOrderTracking(
       .filter((sid: number) => Number.isFinite(sid) && sid > 0)
   );
 
-  try {
-    const allLinks = await client.query(
-      `SELECT DISTINCT shipment_id
-       FROM order_shipment_links
-       WHERE order_row_id = ANY($1::int[])`,
-      [orderIds]
-    );
-    for (const row of allLinks.rows) {
-      const sid = Number(row.shipment_id);
-      if (Number.isFinite(sid) && sid > 0) shipmentIdSet.add(sid);
-    }
-  } catch (error) {
-    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+  const allLinks = await client.query(
+    `SELECT DISTINCT shipment_id
+     FROM shipment_links
+     WHERE owner_type = 'ORDER' AND owner_id = ANY($1::int[])`,
+    [orderIds]
+  );
+  for (const row of allLinks.rows) {
+    const sid = Number(row.shipment_id);
+    if (Number.isFinite(sid) && sid > 0) shipmentIdSet.add(sid);
   }
 
   const currentShipmentIds: number[] = Array.from(shipmentIdSet);
@@ -293,36 +269,15 @@ export async function upsertOrderTracking(
   // Keep link table in sync with canonical orders.shipment_id and preserve
   // additional shipment links for future multi-tracking compatibility.
   if (shipmentId) {
-    try {
-      await client.query(
-        `UPDATE order_shipment_links
-         SET is_primary = false
-         WHERE order_row_id = ANY($1::int[])`,
-        [orderIds]
+    // Link via the unified shipment_links table (the sole linkage SoT). The
+    // helper demotes the order's other primaries first so the partial-unique
+    // one-primary-per-owner index holds.
+    for (const orderId of orderIds) {
+      await linkShipment(
+        orgId,
+        { ownerType: 'ORDER', ownerId: orderId, shipmentId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.assign' },
+        client,
       );
-      await client.query(
-        `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
-         SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.assign', $3::uuid
-         ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-           SET is_primary = true,
-               source = EXCLUDED.source,
-               updated_at = NOW()`,
-        [orderIds, shipmentId, orgId]
-      );
-      // Dual-write the unified shipment_links table (flag-gated; legacy
-      // order_shipment_links stays the read path during the bake). Same tx →
-      // can't drift. Mirrors the primary link just written above.
-      if (isShipmentLinksDualWrite()) {
-        for (const orderId of orderIds) {
-          await linkShipment(
-            orgId,
-            { ownerType: 'ORDER', ownerId: orderId, shipmentId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.assign' },
-            client,
-          );
-        }
-      }
-    } catch (error) {
-      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
     }
   }
 }
@@ -346,7 +301,7 @@ export async function updateShipmentTrackingById(
   const ownershipCheck = await client.query(
     `SELECT 1
      FROM orders o
-     LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+     LEFT JOIN shipment_links osl ON osl.owner_id = o.id AND osl.owner_type = 'ORDER'
      WHERE o.id = ANY($1::int[])
        AND (o.shipment_id = $2 OR osl.shipment_id = $2)
      LIMIT 1`,
@@ -360,17 +315,15 @@ export async function updateShipmentTrackingById(
   // doesn't reject tracking numbers that already belong to the same order
   // (e.g. consolidating tracking 2 into slot 1).
   const ownedShipmentIds: number[] = [shipmentId];
-  try {
+  {
     const allLinks = await client.query(
-      `SELECT DISTINCT shipment_id FROM order_shipment_links WHERE order_row_id = ANY($1::int[])`,
+      `SELECT DISTINCT shipment_id FROM shipment_links WHERE owner_type = 'ORDER' AND owner_id = ANY($1::int[])`,
       [orderIds],
     );
     for (const row of allLinks.rows) {
       const sid = Number(row.shipment_id);
       if (Number.isFinite(sid) && sid > 0 && sid !== shipmentId) ownedShipmentIds.push(sid);
     }
-  } catch (error) {
-    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
   }
   // Also include orders.shipment_id
   try {
@@ -474,7 +427,7 @@ export async function createAdditionalShipmentLink(
       const ownershipCheck = await client.query(
         `SELECT 1
          FROM orders o
-         LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+         LEFT JOIN shipment_links osl ON osl.owner_id = o.id AND osl.owner_type = 'ORDER'
          WHERE o.id = ANY($1::int[])
            AND (o.shipment_id = $2 OR osl.shipment_id = $2)
          LIMIT 1`,
@@ -566,18 +519,12 @@ export async function createAdditionalShipmentLink(
 
   if (!shipmentId) throw new Error('Failed to create tracking link');
 
-  try {
-    await client.query(
-      `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
-       SELECT UNNEST($1::int[]), $2::bigint, false, 'orders.assign', $3::uuid
-       ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-         SET is_primary = false,
-             source = EXCLUDED.source,
-             updated_at = NOW()`,
-      [orderIds, shipmentId, orgId],
+  for (const orderId of orderIds) {
+    await linkShipment(
+      orgId,
+      { ownerType: 'ORDER', ownerId: orderId, shipmentId, direction: 'OUTBOUND', isPrimary: false, role: 'ORDER_SPLIT', source: 'orders.assign' },
+      client,
     );
-  } catch (error) {
-    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
   }
 
   return shipmentId;
@@ -600,18 +547,13 @@ export async function deleteShipmentTrackingLink(
     [orderIds, shipmentId],
   );
 
-  let deletedLinks = 0;
-  try {
-    const result = await client.query(
-      `DELETE FROM order_shipment_links
-       WHERE order_row_id = ANY($1::int[])
-         AND shipment_id = $2`,
-      [orderIds, shipmentId],
-    );
-    deletedLinks = result.rowCount ?? 0;
-  } catch (error) {
-    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
-  }
+  const deleteResult = await client.query(
+    `DELETE FROM shipment_links
+      WHERE owner_type = 'ORDER' AND owner_id = ANY($1::int[])
+        AND shipment_id = $2`,
+    [orderIds, shipmentId],
+  );
+  const deletedLinks = deleteResult.rowCount ?? 0;
 
   if ((primaryOrders.rowCount ?? 0) > 0) {
     await client.query(
@@ -701,23 +643,14 @@ export async function reconcileOrderTrackingSet(
 
   // Gather every shipment currently owned by the order (primary + links).
   const ownedIds = new Set<number>();
-  let ownedRows;
-  try {
-    ownedRows = await client.query(
-      `SELECT DISTINCT sid FROM (
-         SELECT shipment_id AS sid FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL
-         UNION
-         SELECT shipment_id AS sid FROM order_shipment_links WHERE order_row_id = ANY($1::int[])
-       ) x WHERE sid IS NOT NULL`,
-      [orderIds],
-    );
-  } catch (error) {
-    if (!isMissingOrderShipmentLinksRelation(error)) throw error;
-    ownedRows = await client.query(
-      `SELECT shipment_id AS sid FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL`,
-      [orderIds],
-    );
-  }
+  const ownedRows = await client.query(
+    `SELECT DISTINCT sid FROM (
+       SELECT shipment_id AS sid FROM orders WHERE id = ANY($1::int[]) AND shipment_id IS NOT NULL
+       UNION
+       SELECT shipment_id AS sid FROM shipment_links WHERE owner_type = 'ORDER' AND owner_id = ANY($1::int[])
+     ) x WHERE sid IS NOT NULL`,
+    [orderIds],
+  );
   for (const row of ownedRows.rows) {
     const sid = Number(row.sid);
     if (Number.isFinite(sid) && sid > 0) ownedIds.add(sid);
@@ -766,15 +699,9 @@ export async function reconcileOrderTrackingSet(
     [primaryShipmentId, orderIds],
   );
   if (primaryShipmentId) {
-    try {
-      await client.query(
-        `UPDATE order_shipment_links
-         SET is_primary = (shipment_id = $1), updated_at = NOW()
-         WHERE order_row_id = ANY($2::int[])`,
-        [primaryShipmentId, orderIds],
-      );
-    } catch (error) {
-      if (!isMissingOrderShipmentLinksRelation(error)) throw error;
+    const orgId = organizationId ?? transitionalUsavOrgId();
+    for (const orderId of orderIds) {
+      await setPrimaryShipmentLink(orgId, 'ORDER', orderId, primaryShipmentId, client);
     }
   }
 
@@ -862,20 +789,12 @@ export async function applyOrderTrackingOps(
         `UPDATE orders SET shipment_id = $1 WHERE id = ANY($2::int[])`,
         [resolvedPrimaryId, orderIds]
       );
-      try {
-        await client.query(
-          `UPDATE order_shipment_links SET is_primary = false WHERE order_row_id = ANY($1::int[])`,
-          [orderIds]
+      for (const orderId of orderIds) {
+        await linkShipment(
+          orgId,
+          { ownerType: 'ORDER', ownerId: orderId, shipmentId: resolvedPrimaryId, direction: 'OUTBOUND', isPrimary: true, role: 'ORDER_PRIMARY', source: 'orders.tracking' },
+          client,
         );
-        await client.query(
-          `INSERT INTO order_shipment_links (order_row_id, shipment_id, is_primary, source, organization_id)
-           SELECT UNNEST($1::int[]), $2::bigint, true, 'orders.tracking', $3::uuid
-           ON CONFLICT (order_row_id, shipment_id) DO UPDATE
-             SET is_primary = true, source = 'orders.tracking', updated_at = NOW()`,
-          [orderIds, resolvedPrimaryId, orgId]
-        );
-      } catch (error) {
-        if (!isMissingOrderShipmentLinksRelation(error)) throw error;
       }
     }
 

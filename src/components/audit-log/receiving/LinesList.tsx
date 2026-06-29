@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { User } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { fmtTime, relTime } from './audit-receiving-format';
 import { DispositionBadge, KV, QABadge, WorkflowBadge } from './AuditPrimitives';
 import { EventCard } from './EventTimeline';
@@ -38,7 +39,7 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
+      <button onClick={() => setOpen((v) => !v)} className="ds-raw-button flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-caption uppercase tracking-wider text-slate-400">Line #{l.id}</span>
@@ -87,10 +88,12 @@ function LineCard({ line: l, events }: { line: Line; events: AuditEvent[] }) {
                       {s.current_status && <span className="rounded-full bg-white px-1.5 py-0.5 text-micro ring-1 ring-slate-200">{s.current_status}</span>}
                       {s.current_location && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-micro text-violet-800 ring-1 ring-violet-100">{s.current_location}</span>}
                       {s.received_at && (
-                        <span title={s.received_at}>
-                          {relTime(s.received_at)}
-                          {s.received_by_name ? ` · ${s.received_by_name}` : ''}
-                        </span>
+                        <HoverTooltip label={s.received_at} asChild>
+                          <span>
+                            {relTime(s.received_at)}
+                            {s.received_by_name ? ` · ${s.received_by_name}` : ''}
+                          </span>
+                        </HoverTooltip>
                       )}
                     </div>
                   </li>

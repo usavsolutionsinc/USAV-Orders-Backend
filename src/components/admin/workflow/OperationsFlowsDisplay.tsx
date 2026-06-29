@@ -72,7 +72,7 @@ export function OperationsFlowsDisplay() {
           <div key={section.group}>
             <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
               {section.group}
-              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-micro font-semibold text-slate-500">
                 {section.flows.length}
               </span>
             </h3>
@@ -97,7 +97,7 @@ function FlowCard({ flow, occupancy }: { flow: OpsFlow; occupancy: Occupancy }) 
           <h3 className="text-sm font-bold text-slate-900">{flow.label}</h3>
           <div className="flex flex-wrap justify-end gap-1">
             {flow.stations.map((s) => (
-              <span key={s} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+              <span key={s} className="rounded-md bg-slate-100 px-1.5 py-0.5 text-micro font-semibold text-slate-600">
                 {s}
               </span>
             ))}
@@ -105,13 +105,13 @@ function FlowCard({ flow, occupancy }: { flow: OpsFlow; occupancy: Occupancy }) 
         </div>
         <p className="mt-1 text-xs text-slate-500">{flow.blurb}</p>
         <div className="mt-2 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Source</span>
-          <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">{flow.source}</span>
+          <span className="text-micro font-bold uppercase tracking-wider text-slate-400">Source</span>
+          <span className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-micro text-slate-600">{flow.source}</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Implemented in</span>
+          <span className="text-micro font-bold uppercase tracking-wider text-slate-400">Implemented in</span>
           {flow.code.map((c) => (
-            <span key={c} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+            <span key={c} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-micro text-slate-600">
               {c}
             </span>
           ))}
@@ -128,7 +128,7 @@ function FlowCard({ flow, occupancy }: { flow: OpsFlow; occupancy: Occupancy }) 
               {/* Rail + node */}
               <div className="relative flex flex-col items-center">
                 <span
-                  className="z-10 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-white"
+                  className="z-10 mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-micro font-bold text-white ring-2 ring-white"
                   style={{ background: flow.color }}
                 >
                   {idx + 1}
@@ -140,31 +140,31 @@ function FlowCard({ flow, occupancy }: { flow: OpsFlow; occupancy: Occupancy }) 
               <div className="min-w-0 flex-1 pb-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className="rounded-md px-2 py-0.5 text-[12px] font-bold"
+                    className="rounded-md px-2 py-0.5 text-label font-bold"
                     style={{ background: `${flow.color}18`, color: flow.color }}
                   >
                     {step.stage}
                   </span>
                   {step.key && step.key !== step.stage && (
-                    <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                    <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-micro text-slate-400">
                       {step.key}
                     </span>
                   )}
-                  <span className="text-[11px] font-semibold text-slate-500">{step.station}</span>
+                  <span className="text-caption font-semibold text-slate-500">{step.station}</span>
                   {step.signal && (
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-micro text-slate-500">
                       {step.signal}
                     </span>
                   )}
                   {typeof here === 'number' && here > 0 && (
-                    <span className="ml-auto rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    <span className="ml-auto rounded-full bg-emerald-50 px-2 py-0.5 text-micro font-semibold text-emerald-700">
                       {here.toLocaleString()} here now
                     </span>
                   )}
                 </div>
                 <p className="mt-0.5 text-xs text-slate-600">{step.note}</p>
                 {step.by && (
-                  <p className="mt-0.5 font-mono text-[10px] text-slate-400">↳ {step.by}</p>
+                  <p className="mt-0.5 font-mono text-micro text-slate-400">↳ {step.by}</p>
                 )}
               </div>
             </li>
@@ -175,12 +175,12 @@ function FlowCard({ flow, occupancy }: { flow: OpsFlow; occupancy: Occupancy }) 
       {/* Off-path / branches */}
       {flow.offPath && flow.offPath.length > 0 && (
         <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3">
-          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="mb-1.5 text-micro font-bold uppercase tracking-wider text-slate-400">
             Branches &amp; terminal states
           </p>
           <ul className="space-y-1">
             {flow.offPath.map((b) => (
-              <li key={b.stage} className="flex items-baseline gap-2 text-[11px]">
+              <li key={b.stage} className="flex items-baseline gap-2 text-caption">
                 <span className="shrink-0 rounded bg-slate-200/70 px-1.5 py-0.5 font-semibold text-slate-600">{b.stage}</span>
                 <span className="text-slate-500">{b.note}</span>
               </li>

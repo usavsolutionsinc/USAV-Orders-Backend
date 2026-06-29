@@ -586,7 +586,7 @@ export const POST = withAuth(async (request, ctx) => {
     try {
       const trackingRes = await tenantQuery<{ tracking: string | null }>(
         ctx.organizationId,
-        `SELECT COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking
+        `SELECT stn.tracking_number_raw AS tracking
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
           WHERE r.id = $1

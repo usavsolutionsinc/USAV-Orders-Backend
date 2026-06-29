@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, ExternalLink, Pencil, Trash2, Plus } from '@/components/Icons';
 import { microBadge, tableHeader } from '@/design-system/tokens/typography/presets';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 import { generatePdfThumbnail } from '@/lib/manuals/pdfThumbnail';
 import {
@@ -264,34 +266,41 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
               {manual.type}
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-            title="Edit manual metadata"
-          >
-            <Pencil className="h-3 w-3" />
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={() => setReplaceOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-            title="Replace the underlying file"
-          >
-            <Plus className="h-3 w-3" />
-            Replace
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-wider text-red-700 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
-            title="Soft-delete this manual"
-          >
-            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-            Delete
-          </button>
+          <HoverTooltip label="Edit manual metadata" asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Pencil />}
+              onClick={() => setEditOpen(true)}
+              ariaLabel="Edit manual metadata"
+            >
+              Edit
+            </Button>
+          </HoverTooltip>
+          <HoverTooltip label="Replace the underlying file" asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus />}
+              onClick={() => setReplaceOpen(true)}
+              ariaLabel="Replace the underlying file"
+            >
+              Replace
+            </Button>
+          </HoverTooltip>
+          <HoverTooltip label="Soft-delete this manual" asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Trash2 />}
+              loading={deleting}
+              onClick={handleDelete}
+              ariaLabel="Soft-delete this manual"
+              className="text-red-700 ring-red-200 hover:bg-red-50 hover:text-red-700"
+            >
+              Delete
+            </Button>
+          </HoverTooltip>
           {href && (
             <a
               href={href}
@@ -320,6 +329,7 @@ function ManualViewer({ manual }: { manual: ManualDetail }) {
           // where the server renamed the blob to match a new display name —
           // browsers cache iframes aggressively, so just changing the src
           // attribute isn't always enough.
+          // ds-allow-title: iframe requires a native title for its accessible name
           <iframe
             key={`${manual.id}::${manual.source_url || ''}`}
             src={appendCacheBust(href, manual.updated_at || String(manual.id))}

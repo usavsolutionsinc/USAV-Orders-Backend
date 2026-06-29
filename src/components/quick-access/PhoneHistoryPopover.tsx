@@ -7,6 +7,7 @@ import { getLast4 } from '@/components/ui/CopyChip';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { safeChannelName, getScanLogChannelName } from '@/lib/realtime/channels';
+import { IconButton } from '@/design-system/primitives';
 
 interface ScanHistoryEntry {
   id: number;
@@ -173,14 +174,11 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
             Recent packs · tap to resume
           </p>
         </div>
-        <button
-          type="button"
+        <IconButton
+          ariaLabel="Close"
           onClick={onClose}
-          aria-label="Close"
-          className="text-gray-400 hover:text-gray-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          icon={<X className="h-3.5 w-3.5" />}
+        />
       </header>
 
       {/* Fixed-height body: scans + packs load/refetch at different times, so
@@ -194,6 +192,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
             </p>
             <div className="overflow-hidden rounded-lg border border-gray-100 divide-y divide-gray-100">
               {scans.map((s) => (
+                // ds-raw-button: text-left scan row (type badge + raw value + time), not a single DS Button
                 <button
                   key={s.id}
                   type="button"
@@ -223,6 +222,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
         ) : (
           <div className="space-y-2">
           {first && (
+            // ds-raw-button: multi-line text-left "resume last pack" card tile, not a single DS Button
             <button
               type="button"
               onClick={() => handleResume(first)}
@@ -259,6 +259,7 @@ export function PhoneHistoryPopover({ onClose }: PhoneHistoryPopoverProps) {
           {rest.length > 0 && (
             <div className="max-h-[260px] overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
               {rest.map((entry) => (
+                // ds-raw-button: text-left multi-line history row (title + meta + photo count), not a single DS Button
                 <button
                   key={entry.packerLogId}
                   type="button"

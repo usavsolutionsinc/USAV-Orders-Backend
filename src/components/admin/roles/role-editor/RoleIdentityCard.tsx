@@ -2,6 +2,8 @@
 
 import { RoleColorPicker } from '../RoleColorPicker';
 import { InlineEdit } from './InlineEdit';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { RoleDetail } from './role-editor-types';
 
 type Role = RoleDetail['role'];
@@ -53,22 +55,23 @@ export function RoleIdentityCard({
           </div>
         </div>
         <div className="flex flex-shrink-0 flex-col gap-1.5">
-          <button
-            type="button"
-            onClick={onDuplicate}
-            className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50"
-          >
+          <Button variant="secondary" size="sm" onClick={onDuplicate}>
             Duplicate
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={role.is_system || role.member_count > 0 || busy === 'delete'}
-            title={role.is_system ? 'System roles cannot be deleted' : role.member_count > 0 ? 'Remove all members first' : 'Delete role'}
-            className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          </Button>
+          <HoverTooltip
+            label={role.is_system ? 'System roles cannot be deleted' : role.member_count > 0 ? 'Remove all members first' : 'Delete role'}
+            asChild
           >
-            Delete
-          </button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onDelete}
+              disabled={role.is_system || role.member_count > 0 || busy === 'delete'}
+              className="text-red-700 hover:bg-red-50"
+            >
+              Delete
+            </Button>
+          </HoverTooltip>
         </div>
       </div>
     </section>

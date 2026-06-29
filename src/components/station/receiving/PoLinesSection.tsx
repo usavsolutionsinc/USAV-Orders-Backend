@@ -13,6 +13,8 @@ import {
   workflowStatusTableLabel,
   WORKFLOW_BADGE,
 } from '@/components/station/receiving-constants';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 interface ReceivingLine {
   id: number;
@@ -64,15 +66,22 @@ function PoLineRow({ line }: { line: ReceivingLine }) {
     ? line.serials.map((s) => (s.serial_number || '').trim()).filter(Boolean).join(', ')
     : '';
 
+  // Row 1 — full-width product title. No truncation; wraps as needed.
+  const titleNode = (
+    <p className="text-label font-bold text-gray-900 leading-snug">
+      {line.item_name || line.sku || `Line #${line.id}`}
+    </p>
+  );
+
   return (
     <div className="border-b border-gray-100 last:border-b-0 px-3 py-2.5">
-      {/* Row 1 — full-width product title. No truncation; wraps as needed. */}
-      <p
-        className="text-label font-bold text-gray-900 leading-snug"
-        title={line.item_name ?? undefined}
-      >
-        {line.item_name || line.sku || `Line #${line.id}`}
-      </p>
+      {line.item_name ? (
+        <HoverTooltip label={line.item_name} asChild>
+          {titleNode}
+        </HoverTooltip>
+      ) : (
+        titleNode
+      )}
 
       {/* Row 2 — bottom strip:
             LEFT  → qty + workflow / condition / needs-test badges
@@ -175,15 +184,15 @@ export function PoLinesSection({ receivingId, trackingNumber }: PoLinesSectionPr
       {lines.length === 0 ? (
         <div className="text-center py-4 space-y-2">
           <p className="text-micro font-bold text-gray-400">No items linked yet.</p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Package />}
+            loading={markingReceived}
             onClick={handleSearchAndLink}
-            disabled={markingReceived}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-micro font-black uppercase tracking-widest disabled:opacity-50 transition-all"
           >
-            {markingReceived ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
             Search Zoho PO
-          </button>
+          </Button>
           {markResult === 'err' && (
             <p className="text-eyebrow text-red-500 font-bold">Search failed — try again</p>
           )}

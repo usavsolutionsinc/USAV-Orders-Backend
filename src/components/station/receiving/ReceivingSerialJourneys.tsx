@@ -14,6 +14,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SerialJourneySection } from '@/components/serial/SerialJourneySection';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
@@ -56,13 +57,13 @@ export function ReceivingSerialJourneys({ receivingId }: { receivingId: number |
     return (
       <div className="rounded-xl border border-dashed border-rose-200 bg-rose-50 px-4 py-6 text-center text-caption font-semibold text-rose-600">
         Could not load this carton&rsquo;s serials.
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => query.refetch()}
-          className="ml-2 underline decoration-dotted hover:text-rose-700"
+          className="ml-2 inline h-auto p-0 align-baseline text-rose-600 underline decoration-dotted hover:bg-transparent hover:text-rose-700"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }

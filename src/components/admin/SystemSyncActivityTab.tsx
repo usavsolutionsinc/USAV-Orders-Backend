@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { Loader2, RefreshCw, Play, Activity } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useCronRunsSummary, useCronRunsList } from '@/hooks/useCronRuns';
 import { cronRunsKeys, type JobHealth, type CronJobStatus, type CronRunRow } from '@/lib/queries/cron-runs-queries';
 import { syncRunStatusChipClass } from '@/lib/sync-run-status';
+import { Button, IconButton } from '@/design-system/primitives';
 
 /**
  * Admin → System sync activity: every cron/job's health, last run, and a
@@ -63,13 +65,14 @@ export function SystemSyncActivityTab() {
             Cron health, last runs, and history across every scheduled job.
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<RefreshCw />}
           onClick={() => queryClient.invalidateQueries({ queryKey: cronRunsKeys.all })}
-          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-caption font-bold text-gray-600 hover:bg-gray-50"
         >
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh
-        </button>
+          Refresh
+        </Button>
       </header>
 
       {/* Health cards */}
@@ -101,13 +104,14 @@ export function SystemSyncActivityTab() {
             Run history {jobFilter ? `· ${jobFilter}` : ''}
           </h3>
           {jobFilter && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => setJobFilter(null)}
-              className="text-mini font-bold text-blue-600 hover:underline"
+              className="text-blue-600 hover:underline"
             >
               Clear filter
-            </button>
+            </Button>
           )}
         </header>
         {list.isLoading ? (
@@ -150,23 +154,25 @@ function JobCard({
     >
       <div className="flex items-start gap-2">
         <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${DOT[job.health]}`} aria-hidden />
+        {/* ds-raw-button: text-left multi-line master-detail select row (label + schedule meta) */}
         <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
           <div className="truncate text-label font-bold text-gray-900">{job.label}</div>
           <div className="truncate text-mini text-gray-500">
             {job.schedule ?? 'unscheduled'} · {rel(last?.finishedAt ?? last?.startedAt ?? null)}
           </div>
         </button>
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={running}
-          title="Run now"
-          className="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        >
-          {running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-        </button>
+        <HoverTooltip label="Run now" asChild>
+          <IconButton
+            icon={running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            onClick={onRun}
+            disabled={running}
+            ariaLabel="Run now"
+            className="shrink-0 rounded-md p-1.5 hover:bg-gray-100"
+          />
+        </HoverTooltip>
       </div>
       {job.health === 'failed' && last?.error ? (
+        // ds-allow-title: truncation-reveal of the full error on a non-interactive line
         <div className="mt-1.5 truncate text-mini text-rose-600" title={last.error}>
           {last.error}
         </div>
@@ -180,6 +186,7 @@ function RunRow({ run }: { run: CronRunRow }) {
   const hasDetail = !!run.error || (!!run.summary && typeof run.summary === 'object');
   return (
     <li className="px-5 py-2.5">
+      {/* ds-raw-button: text-left master-detail expander row (status chip + job + meta) */}
       <button
         type="button"
         onClick={() => hasDetail && setOpen((o) => !o)}

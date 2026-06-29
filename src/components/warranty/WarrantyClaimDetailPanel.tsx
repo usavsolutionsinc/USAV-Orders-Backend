@@ -10,6 +10,8 @@ import { WarrantyTicketButton } from '@/components/warranty/WarrantyTicketPopove
 import { WarrantyQuotesSection } from '@/components/warranty/WarrantyQuotesSection';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
 import { EventTimeline } from '@/components/ui/EventTimeline';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { warrantyEventsToTimeline } from '@/lib/timeline';
 import { formatDateTimePST } from '@/utils/date';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
@@ -23,7 +25,7 @@ interface WarrantyClaimDetailPanelProps {
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{label}</dt>
+      <dt className="text-caption font-medium uppercase tracking-wide text-gray-400">{label}</dt>
       <dd className="mt-0.5 text-sm text-gray-800">{value || <span className="text-gray-300">—</span>}</dd>
     </div>
   );
@@ -64,7 +66,7 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
           <div className="truncate text-sm font-semibold text-gray-900">
             {claim?.productTitle || claim?.sku || claim?.serialNumber || 'Warranty claim'}
           </div>
-          <div className="font-mono text-[11px] text-gray-400">{claim?.claimNumber}</div>
+          <div className="font-mono text-caption text-gray-400">{claim?.claimNumber}</div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           {claim && (claim.productTitle || claim.sku) && (
@@ -72,25 +74,22 @@ export function WarrantyClaimDetailPanel({ claimId, onClose }: WarrantyClaimDeta
           )}
           {claim && <WarrantyTicketButton claimId={claim.id} linked={claim.zendeskTicketId != null} />}
           {claim && (
-            <button
-              type="button"
-              onClick={deleteClaim}
-              disabled={remove.isPending}
-              className="rounded-md p-1.5 text-gray-300 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-              aria-label="Delete claim"
-              title="Delete claim"
-            >
-              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            </button>
+            <HoverTooltip label="Delete claim" asChild>
+              <IconButton
+                onClick={deleteClaim}
+                disabled={remove.isPending}
+                ariaLabel="Delete claim"
+                className="rounded-md p-1.5 text-gray-300 transition hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                icon={remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              />
+            </HoverTooltip>
           )}
-          <button
-            type="button"
+          <IconButton
             onClick={onClose}
+            ariaLabel="Close"
             className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
+            icon={<X className="h-4 w-4" />}
+          />
         </div>
       </header>
 
@@ -220,11 +219,11 @@ function DetailBody({ claim }: { claim: WarrantyClaimDetail }) {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-600">Attempt #{a.attemptNo}</span>
                   {a.outcome && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">{a.outcome}</span>
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-caption text-gray-600">{a.outcome}</span>
                   )}
                 </div>
                 {a.diagnosis && <p className="mt-1 text-sm text-gray-700">{a.diagnosis}</p>}
-                {a.notes && <p className="mt-1 text-[12px] text-gray-500">{a.notes}</p>}
+                {a.notes && <p className="mt-1 text-label text-gray-500">{a.notes}</p>}
               </li>
             ))}
           </ul>

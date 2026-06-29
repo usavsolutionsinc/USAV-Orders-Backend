@@ -139,7 +139,7 @@ export async function resolveLineCatalog(
  */
 export async function resolveOrCreateLineCatalog(
   lineId: number,
-  orgId?: OrgId,
+  orgId: OrgId,
 ): Promise<LineCatalogResolution | null> {
   const resolved = await resolveLineCatalog(lineId, orgId);
   if (!resolved) return null;

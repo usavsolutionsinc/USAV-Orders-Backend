@@ -65,6 +65,7 @@ export function ShippedCarrierFilters({
         <CarrierSelect value={carrier} onChange={a.setCarrier} />
         <StatusSelect value={statusCategory} onChange={a.setStatus} />
         {activeCount > 0 ? (
+          // ds-raw-button: minimal inline text link with hover:underline, not a DS Button control
           <button type="button" onClick={clearAll} className="text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
             Clear
           </button>
@@ -78,6 +79,7 @@ export function ShippedCarrierFilters({
       {/* Single filter entry point — Type (All/Orders/SKU/FBA) lives inside the
           popover alongside every other refinement (Shopify / Linear pattern). */}
       <div className="relative" ref={popoverRef}>
+        {/* ds-raw-button: popover trigger (aria-haspopup dialog) with conditional active fill + count badge + chevron, not a DS variant */}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -168,6 +170,7 @@ export function ShippedCarrierFilters({
             </label>
 
             {activeCount > 0 ? (
+              // ds-raw-button: minimal inline text link with hover:underline, not a DS Button control
               <button type="button" onClick={clearAll} className="w-full text-center text-xs font-bold text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline">
                 Clear filters
               </button>
@@ -180,6 +183,7 @@ export function ShippedCarrierFilters({
       {chips.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {chips.map((chip) => (
+            // ds-raw-button: removable active-filter pill chip (label + embedded X), not a standard action button
             <button
               key={chip.key}
               type="button"

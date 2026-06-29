@@ -1,8 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { LineEditPanel } from './LineEditPanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
 import type { ReceivingWorkspaceVariant } from './workspace-capabilities';
@@ -94,13 +92,20 @@ export function ReceivingLineWorkspace({
   }, [row.id, row.receiving_id]);
 
   return (
-    <motion.div
-      key={row.id}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 4 }}
-      transition={{ duration: 0.22, ease: motionBezier.easeOut }}
+    // Plain wrapper — NO per-line key/crossfade. Switching between sibling lines
+    // of the same carton must be an in-place update, not a remount: the outer
+    // ReceivingRightPane crossfade is keyed on the CARTON (receiving_id), and the
+    // controller re-seeds its per-line state on `row.id` change via effects. A
+    // `key={row.id}` + enter animation here re-mounted the whole workspace on
+    // every line click (the "re-rendering the whole page" jank). Carton→carton
+    // transitions still crossfade via the outer AnimatePresence.
+    <div
       className="flex h-full w-full flex-col bg-gray-50"
+      data-testid="receiving-workspace"
+      // E2E hook: distinguishes a matched-PO carton ('zoho_po') from an unfound
+      // intake carton ('unmatched'), so the scan-resolution spec can assert a
+      // scanned PO# opens the PO workspace and never the Unfound flow.
+      data-receiving-source={String(row.receiving_source ?? '')}
     >
       {/* Step-by-step progress stepper — first row in the workspace now that
           the PO identity hero has been removed. The global header carries the
@@ -130,6 +135,6 @@ export function ReceivingLineWorkspace({
           onClose={onClose}
         />
       </div>
-    </motion.div>
+    </div>
   );
 }

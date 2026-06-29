@@ -35,27 +35,29 @@ export function DashboardOrdersView({
   selectionActions,
 }: DashboardOrdersViewProps) {
   return (
-    <div className="relative flex min-w-0 flex-1 overflow-hidden">
-      <Suspense
-        fallback={
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          </div>
-        }
-      >
-        {orderView === 'shipped' ? (
-          <DashboardShippedTable selectMode={selectMode} />
-        ) : orderView === 'fba' ? (
-          <FBAShipmentsTable />
-        ) : orderView === 'warranty' ? (
-          <WarrantyWorkspace />
-        ) : (
-          // 'unshipped' (the merged pre-ship backlog) + the default.
-          <UnshippedTable strictSearchScope selectMode={selectMode} />
-        )}
-      </Suspense>
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
+        <Suspense
+          fallback={
+            <div className="flex-1 flex items-center justify-center bg-gray-50">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          }
+        >
+          {orderView === 'shipped' ? (
+            <DashboardShippedTable selectMode={selectMode} />
+          ) : orderView === 'fba' ? (
+            <FBAShipmentsTable />
+          ) : orderView === 'warranty' ? (
+            <WarrantyWorkspace />
+          ) : (
+            // 'unshipped' (the merged pre-ship backlog) + the default.
+            <UnshippedTable strictSearchScope selectMode={selectMode} />
+          )}
+        </Suspense>
+      </div>
 
-      {/* Bulk-action capsule — pins to the bottom of the table region when rows
+      {/* Bulk-action capsule — pins to the bottom of the orders region when rows
           are checked in the Unshipped / Shipped tables. */}
       {selectionEnabled ? (
         <ContextualSelectionBar

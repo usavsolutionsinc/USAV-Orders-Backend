@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { Pencil } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { FnskuChip } from '@/components/ui/CopyChip';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
@@ -78,22 +80,21 @@ export function FbaSelectedLineRow({
       </div>
       <div className={`${metaColStart} row-start-2 flex items-center justify-end gap-1.5 self-end pt-0.5`}>
         {onEditDetails ? (
-          <button
-            type="button"
-            onPointerDown={(e) => {
-              /* Beat parent taps / drag handlers that might steal activation on touch */
-              e.stopPropagation();
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEditDetails();
-            }}
-            className="relative z-10 flex min-h-[2.25rem] min-w-[2.25rem] shrink-0 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200"
-            aria-label={`Edit catalog details for ${fnsku}`}
-            title="Edit catalog details"
-          >
-            <Pencil className="h-4 w-4 shrink-0" />
-          </button>
+          <HoverTooltip label="Edit catalog details" asChild>
+            <IconButton
+              icon={<Pencil className="h-4 w-4 shrink-0" />}
+              onPointerDown={(e) => {
+                /* Beat parent taps / drag handlers that might steal activation on touch */
+                e.stopPropagation();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditDetails();
+              }}
+              className="relative z-10 flex min-h-[2.25rem] min-w-[2.25rem] shrink-0 items-center justify-center rounded-md hover:bg-gray-100 active:bg-gray-200"
+              ariaLabel={`Edit catalog details for ${fnsku}`}
+            />
+          </HoverTooltip>
         ) : null}
         <FnskuChip value={fnsku} />
       </div>

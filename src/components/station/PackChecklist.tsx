@@ -230,7 +230,7 @@ function ChecklistRow({
         type="button"
         onClick={onToggle}
         aria-pressed={checked}
-        className={`group flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors ${
+        className={`ds-raw-button group flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left transition-colors ${
           checked
             ? 'border-emerald-200 bg-emerald-50'
             : critical

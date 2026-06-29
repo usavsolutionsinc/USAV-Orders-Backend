@@ -17,6 +17,7 @@ import {
 } from '@/lib/sync/sheet-sync-common';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
 import { mirrorLegacyPackToAllocations } from '@/lib/inventory/sync-legacy-pack';
+import { attachTechSerial } from '@/lib/inventory/tech-serial';
 import { getOrderPlatformLabel } from '@/utils/order-platform';
 
 export const maxDuration = 60;
@@ -190,7 +191,7 @@ async function syncShippedSheet(params: {
                 sku,
                 productTitle,
                 orderId,
-            });
+            }, organizationId);
 
             // Derive account_source from order_id pattern so Amazon / eBay / Walmart /
             // Ecwid / FBA orders pick up their channel tag at ingest time instead of
@@ -387,16 +388,25 @@ async function syncTechSheets(params: {
                     continue;
                 }
 
-                await client.query(
-                    `INSERT INTO tech_serial_numbers (
-                        shipment_id,
-                        scan_ref,
-                        serial_number,
-                        serial_type,
-                        tested_by,
-                        organization_id
-                    ) VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [tsnShipmentId, tsnScanRef, serialNumber, 'SERIAL', techSheet.testedBy, organizationId]
+                // Canonical TSN writer (relational-reuse plan §2). Drop-in for the
+                // raw INSERT: identical columns/values on the same tenant txn
+                // client — station_source falls to the table default 'TECH', org is
+                // bound explicitly (no extra GUC set, since the surrounding
+                // withTenantTransaction already set it). attachTechSerial normalizes
+                // serial_number to upper-case (the table convention every primary
+                // writer already follows); these legacy sheet rows de-dupe on
+                // created_at / shipment_id / scan_ref above, never on serial casing,
+                // so the normalization is inert for matching/dedup.
+                await attachTechSerial(
+                    {
+                        serialNumber,
+                        serialType: 'SERIAL',
+                        shipmentId: tsnShipmentId,
+                        scanRef: tsnScanRef,
+                        testedBy: techSheet.testedBy,
+                        organizationId,
+                    },
+                    client,
                 );
 
                 inserted++;
@@ -643,7 +653,7 @@ async function syncScanFbaInSheet(params: {
                 await client.query(
                     `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, is_active, last_seen_at, updated_at, organization_id)
                      VALUES ($1, $2, $3, $4, TRUE, NOW(), NOW(), $5::uuid)
-                     ON CONFLICT (fnsku) DO UPDATE
+                     ON CONFLICT (organization_id, fnsku) DO UPDATE
                      SET product_title = EXCLUDED.product_title,
                          asin = EXCLUDED.asin,
                          sku = EXCLUDED.sku,

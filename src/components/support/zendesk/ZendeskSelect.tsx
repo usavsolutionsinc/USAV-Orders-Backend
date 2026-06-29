@@ -37,7 +37,7 @@ export function ZendeskSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex max-w-[180px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+        className="ds-raw-button inline-flex max-w-[180px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
       >
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <svg
@@ -66,7 +66,7 @@ export function ZendeskSelect({
                 onChange(o.value);
                 setOpen(false);
               }}
-              className={`flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-gray-50 ${
+              className={`ds-raw-button flex w-full flex-col items-start rounded-md px-2.5 py-1.5 text-left hover:bg-gray-50 ${
                 o.value === value ? 'bg-gray-50' : ''
               }`}
             >

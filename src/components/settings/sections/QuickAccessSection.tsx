@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { MAX_PINS, type ActionToggles } from '@/lib/quick-access/types';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 const FIELD_CLS =
   'w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 ' +
@@ -28,7 +30,7 @@ function ToggleRow({ label, description, checked, onChange }: ToggleRowProps) {
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+        className={`ds-raw-button relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
           checked ? 'bg-blue-600' : 'bg-gray-300'
         }`}
       >
@@ -189,24 +191,27 @@ export function QuickAccessSection() {
                       className={FIELD_CLS}
                     />
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(p.id, p.label)}
-                      className="block w-full text-left text-sm font-semibold text-gray-900 hover:text-blue-600"
-                      title="Click to rename"
-                    >
-                      {p.label}
-                    </button>
+                    <HoverTooltip label="Click to rename" asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => startEdit(p.id, p.label)}
+                        className="w-full justify-start text-left text-sm font-semibold text-gray-900 hover:text-blue-600"
+                      >
+                        {p.label}
+                      </Button>
+                    </HoverTooltip>
                   )}
                   <p className="truncate font-mono text-caption text-gray-500">{p.href}</p>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => unpin(p.id)}
-                  className="rounded-md border border-gray-300 px-2 py-1 text-caption font-medium text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  className="text-gray-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                 >
                   Unpin
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -229,13 +234,13 @@ export function QuickAccessSection() {
               onChange={(e) => setAddLabel(e.target.value)}
               className={FIELD_CLS}
             />
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleAddManually}
-              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-500"
             >
               Add
-            </button>
+            </Button>
           </div>
           {addError && <p className="text-caption text-red-600">{addError}</p>}
         </div>
@@ -247,14 +252,14 @@ export function QuickAccessSection() {
             <h3 className="text-sm font-semibold text-gray-900">Recent pages</h3>
             <p className="text-caption text-gray-500">{recents.length} stored on this device</p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={wipeRecents}
             disabled={recents.length === 0}
-            className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
           >
             Clear recents
-          </button>
+          </Button>
         </div>
       </div>
     </div>

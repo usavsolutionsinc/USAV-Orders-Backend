@@ -1,5 +1,6 @@
 'use client';
 
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   STATION_LABELS,
   STATION_OPTIONS,
@@ -58,32 +59,37 @@ export function StationsCard({ stations, borderClass, busy, onSave }: StationsCa
               const selected = stations.secondary.includes(st);
               const disabled = busy || !stations.primary || isPrimary;
               return (
-                <button
+                <HoverTooltip
                   key={st}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    if (!stations.primary || isPrimary) return;
-                    const has = stations.secondary.includes(st);
-                    onSave({
-                      primary: stations.primary,
-                      secondary: has
-                        ? stations.secondary.filter((s) => s !== st)
-                        : [...stations.secondary, st],
-                    });
-                  }}
-                  className={
-                    isPrimary
-                      ? 'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-caption font-semibold text-blue-600 ring-1 ring-inset ring-blue-200'
-                      : selected
-                        ? 'inline-flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-1 text-caption font-semibold text-white ring-1 ring-inset ring-gray-900 transition disabled:opacity-50'
-                        : 'inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-caption font-semibold text-gray-600 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-50 disabled:opacity-50'
-                  }
-                  title={isPrimary ? 'This is the primary station' : !stations.primary ? 'Pick a primary station first' : selected ? 'Remove secondary station' : 'Add secondary station'}
+                  label={isPrimary ? 'This is the primary station' : !stations.primary ? 'Pick a primary station first' : selected ? 'Remove secondary station' : 'Add secondary station'}
+                  asChild
                 >
-                  {STATION_LABELS[st]}
-                  {isPrimary && <span className="text-eyebrow font-bold uppercase tracking-wider opacity-70">primary</span>}
-                </button>
+                  {/* ds-raw-button: segmented secondary-station toggle pill (primary/selected/unselected fills), not a single DS variant */}
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      if (!stations.primary || isPrimary) return;
+                      const has = stations.secondary.includes(st);
+                      onSave({
+                        primary: stations.primary,
+                        secondary: has
+                          ? stations.secondary.filter((s) => s !== st)
+                          : [...stations.secondary, st],
+                      });
+                    }}
+                    className={
+                      isPrimary
+                        ? 'inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-caption font-semibold text-blue-600 ring-1 ring-inset ring-blue-200'
+                        : selected
+                          ? 'inline-flex items-center gap-1 rounded-full bg-gray-900 px-2.5 py-1 text-caption font-semibold text-white ring-1 ring-inset ring-gray-900 transition disabled:opacity-50'
+                          : 'inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-caption font-semibold text-gray-600 ring-1 ring-inset ring-gray-200 transition hover:bg-gray-50 disabled:opacity-50'
+                    }
+                  >
+                    {STATION_LABELS[st]}
+                    {isPrimary && <span className="text-eyebrow font-bold uppercase tracking-wider opacity-70">primary</span>}
+                  </button>
+                </HoverTooltip>
               );
             })}
           </div>

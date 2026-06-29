@@ -45,6 +45,7 @@ export function PageAccessSwitch({ label, permission, enabled, source, theme, di
           </span>
         </div>
       </div>
+      {/* ds-raw-button */}
       <button
         type="button"
         role="switch"

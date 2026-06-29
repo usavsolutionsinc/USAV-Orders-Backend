@@ -7,10 +7,16 @@
  *
  * `triage` (the "Receiving" identify-before-unbox step) is a fast priority
  * pass: the carton top bar (classify pills, PO#/tracking/listing chips, photos
- * + claim), a read-only PO-items view, the Smart-Matching section (pair the
- * inbound/return package to a Zendesk claim ticket) and the operator notes card.
- * Unbox-only actions — label preview, print·receive, serial scan (serials are
- * captured only at unbox) — stay hidden.
+ * + claim), a read-only PO-items view, the Package-Pairing section (pair the
+ * inbound/return package to a Zendesk claim ticket / repair service / Ecwid
+ * order) and the operator notes card. Unbox-only actions — label preview,
+ * print·receive, serial scan (serials are captured only at unbox) — stay hidden.
+ *
+ * `unbox` also shows the Package-Pairing section, but only for UNFOUND (unmatched)
+ * cartons — an operator unboxing a no-PO box needs the same Zendesk/repair/Ecwid
+ * pairing affordances as triage. Matched POs in unbox keep the plain PO-items
+ * editor. `matching` (does this mode offer pairing) and `poItems` (does this mode
+ * show the PO-items card) are independent so unbox can show BOTH.
  *
  * Adding a new mode/use-case = one row here; the editor never changes.
  */
@@ -45,23 +51,30 @@ export interface WorkspaceCapabilities {
    */
   openInUnbox: boolean;
   /**
-   * Smart-Matching section — pair the inbound (return) package to a real
-   * Zendesk claim ticket / marketplace delivery signal. Triage-only; unbox is
-   * past the identify step.
+   * Package-Pairing section — pair the inbound (return) package to a real
+   * Zendesk claim ticket / repair service / Ecwid order. On in triage (the
+   * identify step) and in unbox for UNFOUND cartons (the no-PO unbox case).
    */
   matching: boolean;
+  /**
+   * PO-items card (`LinePoItemsSection`). On in unbox (where you edit lines /
+   * add to an unmatched carton); off in triage, where the Package-Pairing hub
+   * subsumes the carton actions. Independent of `matching` so unbox can show the
+   * pairing section AND the PO-items card together for an unfound carton.
+   */
+  poItems: boolean;
 }
 
 export const WORKSPACE_CAPABILITIES: Record<ReceivingWorkspaceVariant, WorkspaceCapabilities> = {
   unbox: {
     photos: true, claim: true, labelPreview: true, receiveBar: true,
     serialScan: true, editLines: true, saveBar: false, notes: true,
-    openInUnbox: false, matching: false,
+    openInUnbox: false, matching: true, poItems: true,
   },
   triage: {
     photos: true, claim: true, labelPreview: false, receiveBar: false,
     serialScan: false, editLines: false, saveBar: true, notes: true,
-    openInUnbox: true, matching: true,
+    openInUnbox: true, matching: true, poItems: false,
   },
 };
 

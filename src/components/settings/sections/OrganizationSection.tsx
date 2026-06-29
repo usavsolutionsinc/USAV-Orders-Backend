@@ -6,7 +6,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 function orgInitials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('') || 'W';
@@ -96,7 +98,7 @@ function ActiveWorkspaceCard() {
                 type="button"
                 disabled={!!switching}
                 onClick={() => void switchTo(m.organizationId, m.organizationName)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 disabled:opacity-50"
+                className="ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-gray-50 disabled:opacity-50"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-200 text-xs font-bold text-gray-700">
                   {orgInitials(m.organizationName)}
@@ -284,14 +286,14 @@ function InvitationsSection() {
         <select value={role} onChange={(e) => setRole(e.target.value)} className={FIELD_CLS + ' sm:w-44'}>
           {INVITE_ROLES.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
         </select>
-        <button
-          type="button"
+        <Button
+          variant="brand"
+          size="md"
           disabled={submitting || !email}
           onClick={() => void invite()}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
           {submitting ? 'Inviting…' : 'Invite'}
-        </button>
+        </Button>
       </div>
 
       {err && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
@@ -301,13 +303,14 @@ function InvitationsSection() {
           <p className="text-xs font-medium text-emerald-800">Invitation created — share this link:</p>
           <div className="flex items-center gap-2">
             <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 text-xs text-gray-700 ring-1 ring-emerald-200">{lastUrl}</code>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() => void copy(lastUrl)}
-              className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+              className="shrink-0 bg-emerald-600 text-white shadow-none hover:bg-emerald-700 active:bg-emerald-700"
             >
               {copied ? 'Copied' : 'Copy'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -330,14 +333,15 @@ function InvitationsSection() {
                     {new Date(inv.expiresAt).toLocaleDateString()}
                   </div>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   disabled={revoking === inv.id}
                   onClick={() => void revoke(inv.id)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  className="shrink-0 text-rose-600 hover:text-rose-700"
                 >
                   {revoking === inv.id ? 'Revoking…' : 'Revoke'}
-                </button>
+                </Button>
               </div>
             ))}
           </div>
@@ -415,6 +419,8 @@ export function OrganizationSection() {
       {ok && <div className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{ok}</div>}
 
       <ActiveWorkspaceCard />
+
+      <WorkspaceSwitcher />
 
       <InvitationsSection />
 
@@ -573,14 +579,14 @@ export function OrganizationSection() {
       </div>
 
       <div className="flex justify-end">
-        <button
-          type="button"
+        <Button
+          variant="brand"
+          size="md"
           disabled={saving}
           onClick={() => void save()}
-          className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50"
         >
           {saving ? 'Saving…' : 'Save changes'}
-        </button>
+        </Button>
       </div>
     </section>
   );

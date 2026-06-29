@@ -20,6 +20,7 @@ import { getConnector } from '@/lib/integrations/connectors/registry';
 import { integrationLimitStatus } from '@/lib/integrations/connectors/connections';
 import { IntegrationCard } from './IntegrationCard';
 import { ResultBanner } from './ResultBanner';
+import { CsvOrderImport } from '@/components/orders/CsvOrderImport';
 import {
   PROVIDER_CATALOG,
   INTEGRATION_CATEGORIES,
@@ -159,11 +160,11 @@ export default async function IntegrationsPage({
           </p>
           <div className="flex items-center gap-2">
             {!limit.unlimited && (
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${limit.atLimit ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`rounded-full px-2.5 py-1 text-caption font-semibold ${limit.atLimit ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
                 {limit.used} / {limit.max} integrations{limit.atLimit ? ' · upgrade to add more' : ''}
               </span>
             )}
-            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-caption font-semibold text-gray-600">
               {connectedCount} / {PROVIDER_CATALOG.length} connected
             </span>
           </div>
@@ -176,7 +177,7 @@ export default async function IntegrationsPage({
           if (providers.length === 0) return null;
           return (
             <section key={category} className="space-y-3">
-              <h2 className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">{category}</h2>
+              <h2 className="text-caption font-black uppercase tracking-[0.18em] text-gray-400">{category}</h2>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {providers.map((def) => {
                   const state = buildState(def);
@@ -194,6 +195,13 @@ export default async function IntegrationsPage({
             </section>
           );
         })}
+
+        <section className="space-y-3">
+          <h2 className="text-caption font-black uppercase tracking-[0.18em] text-gray-400">Import</h2>
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <CsvOrderImport />
+          </div>
+        </section>
         </div>
       </main>
     </div>

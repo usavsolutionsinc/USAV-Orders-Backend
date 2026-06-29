@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Info } from 'lucide-react';
 import { AlertCircle, Clock } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import type { DashboardData } from '@/features/operations/types';
 import { DataSourcePopover, type DataSourceInfo } from '@/features/operations/components/DataSourcePopover';
 import { OPERATIONS_SECONDARY_KPI_SOURCES } from '@/features/operations/operations-data-sources';
@@ -45,7 +46,7 @@ function SecondaryTile({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
-      className={`relative rounded-2xl border border-[#F0EDE8] bg-white p-4 shadow-[0_2px_8px_rgba(161,140,90,0.04)] transition-shadow hover:shadow-[0_4px_14px_rgba(161,140,90,0.08)] ${'cursor-pointer'}`}
+      className={`ds-raw-button relative rounded-2xl border border-border-soft bg-white p-4 shadow-[0_2px_8px_rgba(161,140,90,0.04)] transition-shadow hover:shadow-[0_4px_14px_rgba(161,140,90,0.08)] ${'cursor-pointer'}`}
       role="button"
       tabIndex={0}
       aria-label={`${label}: ${value}. ${sub}`}
@@ -63,18 +64,16 @@ function SecondaryTile({
         open={sourceOpen}
         onOpenChange={setSourceOpen}
       />
-      <button
-        type="button"
-        aria-label={`Data source for ${label}`}
+      <IconButton
+        ariaLabel={`Data source for ${label}`}
         aria-expanded={sourceOpen}
-        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg text-[#A89F91] transition-colors hover:bg-[#F5F3EF] hover:text-[#5C5548]"
+        icon={<Info className="h-3.5 w-3.5" strokeWidth={2.25} />}
         onClick={(e) => {
           e.stopPropagation();
           setSourceOpen((o) => !o);
         }}
-      >
-        <Info className="h-3.5 w-3.5" strokeWidth={2.25} />
-      </button>
+        className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-canvas"
+      />
 
       <div className="flex items-start justify-between pr-7">
         <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone.ring} ${tone.text}`}>
@@ -89,9 +88,9 @@ function SecondaryTile({
           </span>
         )}
       </div>
-      <div className="mt-2 tabular-nums text-[24px] font-extrabold leading-none text-[#2D2A26]">{value}</div>
-      <p className="mt-1.5 text-[11px] font-bold text-[#2D2A26]">{label}</p>
-      <p className="mt-0.5 text-[10px] font-medium text-[#A89F91]">{sub}</p>
+      <div className="mt-2 tabular-nums text-[24px] font-extrabold leading-none text-text-default">{value}</div>
+      <p className="mt-1.5 text-caption font-bold text-text-default">{label}</p>
+      <p className="mt-0.5 text-micro font-medium text-text-muted">{sub}</p>
     </motion.div>
   );
 }

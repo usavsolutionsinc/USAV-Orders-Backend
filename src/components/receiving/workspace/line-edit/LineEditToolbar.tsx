@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { Copy, History, Info, Link2, RefreshCw, ZendeskMark } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   PaneHeaderActionBar,
   type PaneHeaderActionBarAction,
@@ -120,15 +122,14 @@ export function LineEditToolbar({
       iconOnly
       rightSlot={
         def.showDetails && receivingId != null ? (
-          <button
-            type="button"
-            onClick={() => dispatchReceivingDetailsOverlay(receivingId)}
-            aria-label="Open receiving details"
-            title="Receiving details"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
-          >
-            <Info className="h-4 w-4" />
-          </button>
+          <HoverTooltip label="Receiving details" asChild>
+            <IconButton
+              onClick={() => dispatchReceivingDetailsOverlay(receivingId)}
+              ariaLabel="Open receiving details"
+              icon={<Info className="h-4 w-4 text-slate-500 hover:text-slate-800" />}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-slate-50"
+            />
+          </HoverTooltip>
         ) : null
       }
       actions={actions}

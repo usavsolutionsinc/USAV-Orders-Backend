@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Settings } from '@/components/Icons';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { dispatchNavigateShippedDetails } from '@/utils/events';
 import { usePanelActions } from '@/hooks/usePanelActions';
@@ -118,20 +117,23 @@ export function ShippedDetailsPanel({
     label: action.label,
     icon: <span className={action.toneClassName}>{action.icon}</span>,
     onClick: action.onAction,
+    // Highlight the button while its panel is open, so the selected action is clear.
+    active:
+      action.key === 'status'
+        ? isMarkAsShippedOpen
+        : action.key === 'out_of_stock'
+          ? activeInput === 'out_of_stock'
+          : action.key === 'notes'
+            ? activeInput === 'notes'
+            : false,
+    // The "Status" action opens the Mark-as-shipped form — name the tooltip for
+    // what it does, not the generic catalog label.
+    ...(action.key === 'status' ? { title: 'Mark as shipped' } : {}),
   }));
   const notesAction = mappedPanelActions.find((action) => action.key === 'notes');
   const headerBarActions: PaneHeaderActionBarAction[] = [
-    ...(meta.canEditAssignment
-      ? [{
-          key: 'assign',
-          label: 'Assign',
-          icon: <Settings className="h-3.5 w-3.5" />,
-          onClick: openAssignmentCard,
-          title: 'Open assignment',
-        }]
-      : []),
     ...(showDashboardExtras
-      ? mappedPanelActions.filter((action) => action.key !== 'notes')
+      ? mappedPanelActions.filter((action) => action.key !== 'notes' && action.key !== 'goals')
       : []),
     ...(notesAction ? [notesAction] : []),
   ];

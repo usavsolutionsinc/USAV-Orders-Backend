@@ -6,6 +6,7 @@ import { Loader2 } from '@/components/Icons';
 import { sectionLabel, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { mainStickyHeaderClass, mainStickyHeaderRowClass } from '@/components/layout/header-shell';
 import { CopyChip, HashIcon } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { PlatformChip } from '@/components/ui/CopyChip';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
@@ -127,7 +128,9 @@ export function ReplenishmentNeedTable({ skuSearch, statusFilter }: Replenishmen
                     {/* Left: two-line info */}
                     <div className="flex flex-col min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" title="Needs reorder" />
+                        <HoverTooltip label="Needs reorder" asChild>
+                          <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                        </HoverTooltip>
                         <div className="text-label font-bold text-gray-900 truncate">
                           {row.item_name || 'Unknown Item'}
                         </div>

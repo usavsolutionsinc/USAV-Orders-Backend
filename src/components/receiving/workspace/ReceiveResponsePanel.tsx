@@ -1,6 +1,8 @@
 'use client';
 
 import { ChevronDown, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -334,26 +336,26 @@ export function ReceiveResponsePanel({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label={expanded ? 'Hide raw response' : 'Show raw response'}
-              title={expanded ? 'Hide raw response' : 'Show raw response'}
-              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-            >
-              <ChevronDown
-                className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+            <HoverTooltip label={expanded ? 'Hide raw response' : 'Show raw response'} asChild>
+              <IconButton
+                onClick={onToggle}
+                ariaLabel={expanded ? 'Hide raw response' : 'Show raw response'}
+                className="rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+                icon={
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform duration-150 ${expanded ? 'rotate-180' : ''}`}
+                  />
+                }
               />
-            </button>
-            <button
-              type="button"
-              onClick={onDismiss}
-              aria-label="Dismiss response"
-              title="Dismiss"
-              className="rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            </HoverTooltip>
+            <HoverTooltip label="Dismiss" asChild>
+              <IconButton
+                onClick={onDismiss}
+                ariaLabel="Dismiss response"
+                className="rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+                icon={<X className="h-3 w-3" />}
+              />
+            </HoverTooltip>
           </div>
         </div>
         {expanded ? (
@@ -365,8 +367,9 @@ export function ReceiveResponsePanel({
 {JSON.stringify(response.body ?? { networkError: response.networkError }, null, 2)}
             </pre>
             <div className="mt-1 flex justify-end">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   try {
                     void navigator.clipboard.writeText(
@@ -377,10 +380,9 @@ export function ReceiveResponsePanel({
                     /* clipboard unavailable */
                   }
                 }}
-                className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-wider text-slate-600 transition-colors hover:bg-slate-50"
               >
                 Copy JSON
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}

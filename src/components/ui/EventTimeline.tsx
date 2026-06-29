@@ -1,10 +1,12 @@
 'use client';
 
+import { useState, type ReactNode } from 'react';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import type { TimelineItem, TimelineTone, TimelineRef, TimelineGroupKey } from '@/lib/timeline/types';
 import { TIMELINE_OTHER_BAND_KEY } from '@/lib/timeline/types';
+import { ChevronRight } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   TrackingChip,
@@ -125,9 +127,9 @@ function TimelineRefChip({ refItem }: { refItem: TimelineRef }) {
     case 'tracking':
       return <TrackingChip value={v} display={getLast4(v)} dense fitDisplayWidth />;
     case 'serial':
-      return <SerialChip value={v} width="w-auto" dense />;
+      return <SerialChip value={v} width="w-fit max-w-full" dense />;
     case 'fnsku':
-      return <FnskuChip value={v} width="w-auto" />;
+      return <FnskuChip value={v} width="w-fit max-w-full" />;
     case 'sku':
       return <SkuScanRefChip value={v} display={getLast4(v)} dense />;
     case 'id':
@@ -178,10 +180,35 @@ export interface EventTimelineProps {
    * tech, warranty timelines) are unaffected; the serial journey opts in.
    */
   richTime?: boolean;
+  /**
+   * Serial mode only: render each band collapsed behind a chevron header (the
+   * latest band opens by default), so a multi-unit record reads as a tidy tree
+   * instead of a wall of rows. Default `false` ⇒ today's always-expanded bands,
+   * so existing serial-toggle callers are unaffected.
+   */
+  collapsibleGroups?: boolean;
+  /**
+   * Serial mode only: replace the default band header (kind label + chip) with a
+   * caller-supplied node — e.g. the operations journey's per-serial provenance
+   * card (SKU · grade · status · PO). Receives the band; the count/peek chrome
+   * stays owned by {@link EventTimeline}.
+   */
+  renderGroupHeader?: (group: TimelineGroupView) => ReactNode;
 }
 
 /** A serial-view band: an identifier header + that identifier's rows. */
 interface SerialGroup {
+  key: string;
+  ref: TimelineRef | null;
+  label: string;
+  items: TimelineItem[];
+}
+
+/**
+ * Public band shape handed to {@link EventTimelineProps.renderGroupHeader} so a
+ * caller can render a custom band header without reaching into internals.
+ */
+export interface TimelineGroupView {
   key: string;
   ref: TimelineRef | null;
   label: string;
@@ -226,6 +253,40 @@ function groupBySerial(
   return groups;
 }
 
+/** The built-in serial-band header: kind label + identifier chip + event count. */
+function DefaultGroupHeader({ group }: { group: SerialGroup }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+        {group.ref ? `${REF_KIND_LABEL[group.ref.kind]} ` : ''}
+      </span>
+      {group.ref ? (
+        <TimelineRefChip refItem={group.ref} />
+      ) : (
+        <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
+          {group.label}
+        </span>
+      )}
+      <span className="text-micro font-medium text-gray-300">
+        {group.items.length} {group.items.length === 1 ? 'event' : 'events'}
+      </span>
+    </div>
+  );
+}
+
+/** Collapsed-band peek: the latest event's title + relative time, muted. */
+function GroupLatestPeek({ items, richTime }: { items: TimelineItem[]; richTime: boolean }) {
+  const latest = items[0];
+  if (!latest) return null;
+  const when = richTime ? relTime(latest.at) : fmt(latest.at, 'h:mma').toLowerCase();
+  return (
+    <span className="ml-auto hidden min-w-0 shrink items-center gap-1.5 truncate text-micro font-medium text-gray-400 sm:flex">
+      <span className="truncate">{latest.title}</span>
+      <span className="shrink-0 whitespace-nowrap tabular-nums text-gray-300">· {when}</span>
+    </span>
+  );
+}
+
 export function EventTimeline({
   items,
   emptyMessage = 'No events yet.',
@@ -235,9 +296,15 @@ export function EventTimeline({
   groupMode = 'time',
   groupKeyOf,
   richTime = false,
+  collapsibleGroups = false,
+  renderGroupHeader,
 }: EventTimelineProps) {
   const reduce = useReducedMotion();
   const d = DENSITY[density];
+  // Explicit open/closed overrides per band (serial mode + collapsibleGroups).
+  // Default openness is "first (latest-activity) band open, the rest collapsed";
+  // a click writes an override here.
+  const [groupOverrides, setGroupOverrides] = useState<Record<string, boolean>>({});
 
   if (items.length === 0) {
     return (
@@ -252,25 +319,21 @@ export function EventTimeline({
   // single timeline primitive — the serial view is the time view, re-bucketed.
   if (groupMode === 'serial') {
     const groups = groupBySerial(items, groupKeyOf);
+    const isOpen = (key: string, idx: number): boolean =>
+      !collapsibleGroups || (groupOverrides[key] ?? idx === 0);
+    const toggle = (key: string, idx: number) =>
+      setGroupOverrides((prev) => ({ ...prev, [key]: !(prev[key] ?? idx === 0) }));
+
     return (
-      <div className="space-y-5">
-        {groups.map((g) => (
-          <div key={g.key}>
-            <div className="mb-2 flex items-center gap-2 pl-px">
-              <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
-                {g.ref ? `${REF_KIND_LABEL[g.ref.kind]} ` : ''}
-              </span>
-              {g.ref ? (
-                <TimelineRefChip refItem={g.ref} />
-              ) : (
-                <span className="text-mini font-bold uppercase tracking-[0.12em] text-gray-400">
-                  {g.label}
-                </span>
-              )}
-              <span className="text-micro font-medium text-gray-300">
-                {g.items.length} {g.items.length === 1 ? 'event' : 'events'}
-              </span>
-            </div>
+      <div className={collapsibleGroups ? 'space-y-1.5' : 'space-y-5'}>
+        {groups.map((g, gi) => {
+          const open = isOpen(g.key, gi);
+          const header = renderGroupHeader ? (
+            renderGroupHeader(g)
+          ) : (
+            <DefaultGroupHeader group={g} />
+          );
+          const body = (
             <EventTimeline
               items={g.items}
               groupByDay={false}
@@ -279,8 +342,48 @@ export function EventTimeline({
               groupMode="time"
               richTime={richTime}
             />
-          </div>
-        ))}
+          );
+
+          // Non-collapsible: today's behavior — header label above the rows.
+          if (!collapsibleGroups) {
+            return (
+              <div key={g.key}>
+                <div className="mb-2 flex items-center gap-2 pl-px">{header}</div>
+                {body}
+              </div>
+            );
+          }
+
+          // Collapsible: a chevron header row; the latest band opens by default,
+          // the rest collapse to a one-line "latest event" peek. The toggle is a
+          // `role="button"` div (not a <button>) so the header's interactive
+          // CopyChips nest validly — chips stopPropagation, so a chip click copies
+          // without toggling the band.
+          return (
+            <div key={g.key} className="rounded-lg">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => toggle(g.key, gi)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle(g.key, gi);
+                  }
+                }}
+                aria-expanded={open}
+                className="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+              >
+                <ChevronRight
+                  className={`h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+                />
+                <div className="min-w-0 flex-1">{header}</div>
+                {!open ? <GroupLatestPeek items={g.items} richTime={richTime} /> : null}
+              </div>
+              {open ? <div className="mt-1.5 pl-[18px]">{body}</div> : null}
+            </div>
+          );
+        })}
       </div>
     );
   }

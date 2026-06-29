@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Button } from '@/design-system/primitives';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 
 export function LabelPrintWorkspace() {
@@ -44,13 +45,14 @@ export function LabelPrintWorkspace() {
               Bulk-grid print lands in the next update. For now, step through each bin below to print it.
             </p>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setQueuedBins([])}
-            className="shrink-0 text-caption font-semibold text-blue-700 hover:text-blue-900"
+            className="shrink-0 text-blue-700 hover:text-blue-900"
           >
             Clear
-          </button>
+          </Button>
         </div>
       )}
 

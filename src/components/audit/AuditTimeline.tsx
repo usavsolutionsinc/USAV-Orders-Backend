@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface EntityAuditEvent {
   id: string;
@@ -194,12 +195,13 @@ export function AuditTimeline(props: Props) {
                 className={compact ? 'px-3 py-2' : 'px-3 py-2.5'}
               >
                 <div className="min-w-0">
-                  <span
-                    className={`inline-block rounded-sm px-1.5 py-px text-eyebrow font-bold uppercase tracking-wider ${SOURCE_BADGE[ev.source]}`}
-                    title={ev.source}
-                  >
-                    {SOURCE_LABEL[ev.source]}
-                  </span>
+                  <HoverTooltip label={ev.source} asChild>
+                    <span
+                      className={`inline-block rounded-sm px-1.5 py-px text-eyebrow font-bold uppercase tracking-wider ${SOURCE_BADGE[ev.source]}`}
+                    >
+                      {SOURCE_LABEL[ev.source]}
+                    </span>
+                  </HoverTooltip>
                   <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                     <span className="font-mono text-label font-semibold text-slate-900">
                       {ev.kind}
@@ -242,9 +244,11 @@ export function AuditTimeline(props: Props) {
                     <span className="font-semibold text-slate-700">
                       {ev.actor_name ?? 'Unknown'}
                     </span>
-                    <span title={fmtTime(ev.occurred_at)}>
-                      · {fmtAgo(ev.occurred_at)} ago
-                    </span>
+                    <HoverTooltip label={fmtTime(ev.occurred_at)} asChild>
+                      <span>
+                        · {fmtAgo(ev.occurred_at)} ago
+                      </span>
+                    </HoverTooltip>
                     {ev.station && (
                       <span className="font-mono">· {ev.station}</span>
                     )}

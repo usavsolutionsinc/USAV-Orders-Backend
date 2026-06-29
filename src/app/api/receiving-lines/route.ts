@@ -205,7 +205,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const one = await tenantQuery(
         orgId,
         `SELECT rl.*,
-                r.receiving_tracking_number,
+                stn.tracking_number_raw AS receiving_tracking_number,
                 r.carrier,
                 r.source                     AS receiving_source,
                 r.source_platform            AS receiving_source_platform,
@@ -319,7 +319,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const [rows, pkgRes] = await withTenantConnection(orgId, (client) => Promise.all([
         client.query(
           `SELECT rl.*,
-                  r.receiving_tracking_number,
+                  stn.tracking_number_raw AS receiving_tracking_number,
                   r.carrier,
                   r.source                     AS receiving_source,
                   r.source_platform            AS receiving_source_platform,
@@ -434,7 +434,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           break;
         case 'tracking':
           conditions.push(
-            `(COALESCE(r.receiving_tracking_number, '') ILIKE $${idx}
+            `(COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
              OR COALESCE(stn.tracking_number_raw, '') ILIKE $${idx}
              OR COALESCE(stn.tracking_number_normalized, '') ILIKE $${idx})`,
           );
@@ -476,7 +476,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             `COALESCE(rl.source_order_id, '') ILIKE $${patternIdx}`,
             `COALESCE(rl.zoho_item_id, '') ILIKE $${patternIdx}`,
             `COALESCE(r.zoho_purchaseorder_number, '') ILIKE $${patternIdx}`,
-            `COALESCE(r.receiving_tracking_number, '') ILIKE $${patternIdx}`,
+            `COALESCE(stn.tracking_number_raw, '') ILIKE $${patternIdx}`,
             `COALESCE(stn.tracking_number_raw, '') ILIKE $${patternIdx}`,
             `COALESCE(stn.tracking_number_normalized, '') ILIKE $${patternIdx}`,
             `EXISTS (
@@ -830,8 +830,8 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 // rows with neither.
                 ? `ORDER BY COALESCE(GREATEST(r.unboxed_at, rl.updated_at)::text, rl.created_at::text) DESC NULLS LAST, rl.id DESC`
               : historySort === 'scanned_oldest'
-                ? `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
-                : `ORDER BY COALESCE(rs_agg.last_scan::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
+                ? `ORDER BY COALESCE(scan_first.scanned_at::text, r.received_at::text, rl.created_at::text) ASC, rl.id ASC`
+                : `ORDER BY COALESCE(scan_first.scanned_at::text, r.received_at::text, rl.created_at::text) DESC, rl.id DESC`)
           : view === 'scanned'
             // Newest door-scan first — the triage to-do reads like an inbox.
             ? `ORDER BY r.received_at::text DESC NULLS LAST, rl.id DESC`
@@ -984,7 +984,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const [rowsRes, countRes] = await withTenantConnection(orgId, (client) => Promise.all([
       client.query(
         `SELECT rl.*,
-                r.receiving_tracking_number,
+                stn.tracking_number_raw AS receiving_tracking_number,
                 r.carrier,
                 r.received_at::text          AS receiving_received_at,
                 r.unboxed_at::text           AS receiving_unboxed_at,
@@ -1131,13 +1131,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             ` AND COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2`;
         } else if (searchField === 'tracking') {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
           )`;
         } else {
           unmatchedSearchSql = ` AND (
-               COALESCE(r.receiving_tracking_number, '') ILIKE $2
+               COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_raw, '') ILIKE $2
             OR COALESCE(stn.tracking_number_normalized, '') ILIKE $2
             OR COALESCE(r.zoho_purchaseorder_number, '') ILIKE $2
@@ -1147,7 +1147,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       const [unmatchedPkgsRes, unmatchedCntRes] = await withTenantConnection(orgId, (client) => Promise.all([
         client.query(
           `SELECT r.id,
-                  r.receiving_tracking_number,
+                  stn.tracking_number_raw AS receiving_tracking_number,
                   r.carrier,
                   r.received_at::text          AS receiving_received_at,
                   r.unboxed_at::text           AS receiving_unboxed_at,
@@ -1166,10 +1166,18 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   stn.latest_status_category   AS shipment_status_category,
                   stn.is_delivered             AS shipment_is_delivered,
                   stn.delivered_at::text       AS shipment_delivered_at,
+                  scan_first.scanned_at::text  AS first_scanned_at,
                   rs_agg.last_scan::text       AS last_scan_at,
                 ${sqlReceivingPhotoCount('r.id', 'r.organization_id')} AS photo_count
            FROM receiving r
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+           LEFT JOIN LATERAL (
+               SELECT rs.scanned_at, rs.scanned_by
+               FROM receiving_scans rs
+               WHERE rs.receiving_id = r.id
+               ORDER BY rs.scanned_at ASC NULLS LAST, rs.id ASC
+               LIMIT 1
+           ) scan_first ON TRUE
            LEFT JOIN LATERAL (
                SELECT MAX(rs.scanned_at) AS last_scan
                FROM receiving_scans rs
@@ -1219,7 +1227,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           ? compareReceivingRowsByUnboxedAt(a, b)
           : historySort === 'unbox_activity'
             ? compareReceivingRowsByUnboxActivity(a, b)
-            : compareReceivingRowsByRecentActivity(a, b),
+            : compareReceivingRowsByScannedAt(a, b),
       );
       normalizedList = normalizedList.slice(offset, offset + limit);
     }
@@ -1547,7 +1555,7 @@ export const PATCH = withAuth(async (request: NextRequest, ctx) => {
     const fresh = await tenantQuery(
       orgId,
       `SELECT rl.*,
-              r.receiving_tracking_number,
+              stn.tracking_number_raw AS receiving_tracking_number,
               r.carrier,
               r.source                     AS receiving_source,
               r.source_platform            AS receiving_source_platform,
@@ -1836,11 +1844,31 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     unit_price: null,
     receiving_type: 'PO',
     created_at: pkg.created_at,
+    first_scanned_at: pkg.first_scanned_at,
     last_scan_at: pkg.last_scan_at,
     image_url: null,
     photo_count: pkg.photo_count,
     zoho_reference_number: null,
   };
+}
+
+function receivingRowScannedTs(row: {
+  scanned_at?: string | null;
+  received_at?: string | null;
+  created_at?: string | null;
+}) {
+  const raw = row.scanned_at ?? row.received_at ?? row.created_at ?? null;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function compareReceivingRowsByScannedAt(
+  a: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+  b: { scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+) {
+  const d = receivingRowScannedTs(b) - receivingRowScannedTs(a);
+  return d !== 0 ? d : b.id - a.id;
 }
 
 function receivingRowActivityTs(row: {
@@ -1874,11 +1902,11 @@ function receivingRowUnboxedTs(row: { unboxed_at?: string | null }) {
 }
 
 function compareReceivingRowsByUnboxedAt(
-  a: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
-  b: { unboxed_at?: string | null; last_activity_at?: string | null; created_at?: string | null; id: number },
+  a: { unboxed_at?: string | null; scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
+  b: { unboxed_at?: string | null; scanned_at?: string | null; received_at?: string | null; created_at?: string | null; id: number },
 ) {
   const d = receivingRowUnboxedTs(b) - receivingRowUnboxedTs(a);
-  return d !== 0 ? d : compareReceivingRowsByRecentActivity(a, b);
+  return d !== 0 ? d : compareReceivingRowsByScannedAt(a, b);
 }
 
 /**

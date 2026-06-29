@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { replenishmentStatusBadgeClass } from '@/lib/replenishment-status';
+import { Button } from '@/design-system/primitives';
 
 interface TaskRow {
   id: number;
@@ -120,13 +121,9 @@ export default function ReplenishmentPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <NetworkChip />
-          <button
-            type="button"
-            onClick={() => void fetchTasks()}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
+          <Button variant="secondary" size="sm" onClick={() => void fetchTasks()}>
             Refresh
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -227,22 +224,23 @@ function Section({ title, count, tone, tasks, actionLabel, onAction, onCancel, w
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="brand"
                   disabled={working === t.id}
                   onClick={() => onAction(t)}
-                  className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm active:bg-slate-800 disabled:opacity-50"
+                  className="rounded-2xl"
                 >
                   {working === t.id ? 'Working…' : actionLabel}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   disabled={working === t.id}
                   onClick={() => onCancel(t)}
-                  className="rounded-2xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-2xl"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </li>
           ))}

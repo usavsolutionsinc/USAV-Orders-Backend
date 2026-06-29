@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { ProductHubPanel } from './ProductHubPanel';
 
@@ -63,14 +64,13 @@ export function SkuPairingModal({ open, onClose, skuCatalogId, headerTitle }: Pr
             >
               Pair SKUs
             </p>
-            <button
+            <IconButton
               type="button"
               onClick={onClose}
-              aria-label="Close SKU pairing"
+              ariaLabel="Close SKU pairing"
               className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              icon={<X className="h-4 w-4" />}
+            />
           </div>
           <div className="min-h-0 flex-1">
             <ProductHubPanel skuCatalogId={skuCatalogId} allowManualPair headerTitle={headerTitle} />

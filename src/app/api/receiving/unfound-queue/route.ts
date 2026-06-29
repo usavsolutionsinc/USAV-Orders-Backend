@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 
@@ -106,7 +106,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     LIMIT $${idx++} OFFSET $${idx++}
   `;
 
-  const result = await pool.query<QueueRow>(sql, params);
+  const result = await tenantQuery<QueueRow>(ctx.organizationId, sql, params);
 
   return NextResponse.json({
     success: true,

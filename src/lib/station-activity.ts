@@ -22,6 +22,38 @@ export type StationActivityType =
   | 'WS_RECEIVING_CHANGED'
   | 'WS_FBA_SCAN';
 
+// ─── Activity-type vocabularies (SoT for the SQL lifecycle filters) ─────────────
+// These named groupings replace the literal `activity_type IN (...)` lists that
+// were duplicated across the orders / operations / staff-goals routes. Each set
+// is a deliberate membership — do NOT merge two that happen to overlap (e.g. the
+// orders board's TECH-tested signal is `= 'TRACKING_SCANNED'` only and stays a
+// single literal; it is intentionally NOT the 2-type TECH_TEST set below).
+
+/** A packer completed/scanned the box (the "packed" signal). */
+export const PACK_ACTIVITY_TYPES = ['PACK_COMPLETED', 'PACK_SCAN'] as const;
+
+/** A tech bench "tested today" signal (tracking or FNSKU scan at TECH). */
+export const TECH_TEST_ACTIVITY_TYPES = ['TRACKING_SCANNED', 'FNSKU_SCANNED'] as const;
+
+/** Every scan that counts toward daily throughput / staff-velocity rollups. */
+export const VELOCITY_ACTIVITY_TYPES = [
+  'TRACKING_SCANNED',
+  'FNSKU_SCANNED',
+  'PACK_SCAN',
+  'PACK_COMPLETED',
+  'FBA_READY',
+] as const;
+
+/**
+ * Render a string vocabulary as the body of a SQL `IN (...)` clause, producing
+ * exactly `'A', 'B'` (single-quoted, comma+space) — byte-identical to the
+ * literals these constants replace. Values are compile-time constants (never
+ * user input), so interpolation is safe.
+ */
+export function sqlInList(values: readonly string[]): string {
+  return values.map((v) => `'${v}'`).join(', ');
+}
+
 export async function createStationActivityLog(
   db: Queryable,
   params: {

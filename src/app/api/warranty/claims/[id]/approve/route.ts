@@ -30,7 +30,7 @@ export const POST = withAuth(async (request, ctx) => {
     route: 'POST /api/warranty/claims/[id]/approve',
     bodyKey,
     produce: async () => {
-      const result = await approveClaim(id, ctx.staffId ?? null);
+      const result = await approveClaim(id, ctx.staffId ?? null, ctx.organizationId);
       if (!result.ok) return { status: result.status, body: { ok: false, error: result.error } };
       await recordAudit(pool, ctx, request, {
         source: 'warranty-logger',

@@ -29,7 +29,7 @@ const TONE = {
   purple:  { dot: 'bg-purple-500',  barActive: 'bg-purple-500',  soft: 'bg-purple-50',  text: 'text-purple-600' },
   emerald: { dot: 'bg-emerald-500', barActive: 'bg-emerald-500', soft: 'bg-emerald-50', text: 'text-emerald-600' },
   orange:  { dot: 'bg-orange-500',  barActive: 'bg-orange-500',  soft: 'bg-orange-50',  text: 'text-orange-600' },
-  amber:   { dot: 'bg-[#F59E0B]',   barActive: 'bg-[#F59E0B]',   soft: 'bg-amber-50',   text: 'text-amber-700' },
+  amber:   { dot: 'bg-amber-500',   barActive: 'bg-amber-500',   soft: 'bg-amber-50',   text: 'text-amber-700' },
 } as const;
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -82,7 +82,7 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
       }`}
     >
       <div className="mb-3 flex items-start justify-between gap-2">
-        <span className="min-w-0 text-[12px] font-semibold tracking-tight text-[#6B6356]">{title}</span>
+        <span className="min-w-0 text-label font-semibold tracking-tight text-text-muted">{title}</span>
         <div className="flex shrink-0 items-start gap-1">
           <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${tone.soft} ${tone.text}`}>
             <Icon className="h-4 w-4" />
@@ -91,22 +91,22 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
       </div>
 
       <div className="mb-1 flex items-baseline gap-1">
-        <span className="text-[34px] font-extrabold leading-none tracking-tight text-[#2D2A26] tabular-nums sm:text-[40px]">
+        <span className="text-[34px] font-extrabold leading-none tracking-tight text-text-default tabular-nums sm:text-[40px]">
           {valueHead}
         </span>
         {valueTail && (
-          <span className="text-[20px] font-medium leading-none tracking-tight text-[#C4BAA8] tabular-nums sm:text-[22px]">
+          <span className="text-[20px] font-medium leading-none tracking-tight text-text-soft tabular-nums sm:text-[22px]">
             {valueTail}
           </span>
         )}
       </div>
-      <p className="mb-4 text-[11px] font-medium leading-tight text-[#A89F91]">{subtext}</p>
+      <p className="mb-4 text-caption font-medium leading-tight text-text-muted">{subtext}</p>
 
       {chartType === 'bar' && (
         <div className="mt-auto">
           <div className="relative flex h-[72px] items-end justify-between gap-1 px-1">
             <div
-              className="absolute -top-1 rounded-full border border-[#F0EDE8] bg-white px-2 py-0.5 text-[10px] font-bold tracking-tighter text-[#2D2A26] shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
+              className="absolute -top-1 rounded-full border border-border-soft bg-white px-2 py-0.5 text-micro font-bold tracking-tighter text-text-default shadow-[0_2px_6px_rgba(0,0,0,0.04)] tabular-nums"
               style={{
                 left: `calc(${(activeBarIndex / 6) * 100}% - 18px)`,
               }}
@@ -122,7 +122,7 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
                   initial={{ height: 0 }}
                   animate={{ height: `${h}%` }}
                   transition={{ duration: 0.8, delay: 0.1 + i * 0.05, ease: 'easeOut' }}
-                  className={`w-1.5 rounded-full ${active ? tone.barActive : 'bg-[#E8E4DD]'}`}
+                  className={`w-1.5 rounded-full ${active ? tone.barActive : 'bg-surface-sunken'}`}
                   style={{ minHeight: 6 }}
                 />
               );
@@ -134,9 +134,9 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
               const active = i === activeBarIndex;
               return (
                 <div key={i} className="flex w-1.5 flex-col items-center gap-1">
-                  <span className={`h-1 w-1 rounded-full ${active ? tone.dot : 'bg-[#E8E4DD]'}`} />
+                  <span className={`h-1 w-1 rounded-full ${active ? tone.dot : 'bg-surface-sunken'}`} />
                   <span
-                    className={`text-[9px] font-bold tracking-wide ${active ? 'text-[#2D2A26]' : 'text-[#C4BAA8]'}`}
+                    className={`text-eyebrow font-bold tracking-wide ${active ? 'text-text-default' : 'text-text-soft'}`}
                   >
                     {d}
                   </span>
@@ -172,18 +172,18 @@ export const DashboardKPICard: React.FC<DashboardKPICardProps> = ({
             />
           </svg>
           <div className="relative text-center">
-            <div className="text-[20px] font-extrabold leading-none tracking-tighter text-[#2D2A26] tabular-nums">{progress}%</div>
-            <div className="mt-1 text-[8px] font-black uppercase tracking-[0.14em] text-[#A89F91]">
+            <div className="text-[20px] font-extrabold leading-none tracking-tighter text-text-default tabular-nums">{progress}%</div>
+            <div className="mt-1 text-mini font-black uppercase tracking-[0.14em] text-text-muted">
               Capacity
             </div>
           </div>
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-between border-t border-[#F5F3EF] pt-3">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#A89F91]">7-day</span>
+      <div className="mt-3 flex items-center justify-between border-t border-border-soft pt-3">
+        <span className="text-micro font-bold uppercase tracking-wider text-text-muted">7-day</span>
         <div
-          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-caption font-bold ${
             isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
           }`}
         >

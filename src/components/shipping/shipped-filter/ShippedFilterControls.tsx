@@ -1,4 +1,5 @@
 import { AlertTriangle, Truck } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { CarrierCode, ShipmentStatusCategory } from '@/components/shipping/ShipmentStatusBadge';
 import { CARRIERS, STATUS_CATEGORIES } from './shipped-filter-constants';
 
@@ -12,17 +13,17 @@ export function NeedsAttentionButton({
   compact?: boolean;
 }) {
   return (
+    <HoverTooltip label="Show only shipments with a carrier exception or no scan in >72h" asChild>
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      title="Show only shipments with a carrier exception or no scan in >72h"
       className={
         compact
-          ? `inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
+          ? `ds-raw-button inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 ${
               active ? 'bg-rose-600 text-white ring-rose-600 hover:bg-rose-700' : 'bg-white text-rose-700 ring-rose-200 hover:bg-rose-50'
             }`
-          : `flex w-full items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/40 ${
+          : `ds-raw-button flex w-full items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-label font-bold ring-1 ring-inset transition-colors focus:outline-none focus:ring-2 focus:ring-rose-500/40 ${
               active ? 'bg-rose-600 text-white ring-rose-600 hover:bg-rose-700' : 'bg-white text-rose-700 ring-rose-200 hover:bg-rose-50'
             }`
       }
@@ -30,6 +31,7 @@ export function NeedsAttentionButton({
       <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
       Needs attention
     </button>
+    </HoverTooltip>
   );
 }
 

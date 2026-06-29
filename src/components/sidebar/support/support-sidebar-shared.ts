@@ -9,7 +9,19 @@
  * Mirrors `operations-sidebar-shared.ts`. Pure data only — no JSX.
  */
 
-import { Inbox, Voicemail, Phone } from '@/components/Icons';
+import {
+  Bell,
+  CheckCircle,
+  Clock,
+  Inbox,
+  Layers,
+  Lock,
+  Phone,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOutgoing,
+  Voicemail,
+} from '@/components/Icons';
 import type { HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 
 // ── Sidebar mode switcher ───────────────────────────────────────────────────
@@ -50,15 +62,25 @@ export const SUPPORT_MODE_SCOPED_PARAMS = [
   'range', // calls: time window
 ] as const;
 
+// ── Tickets mode — Zendesk status filter ────────────────────────────────────
+
+export const TICKET_STATUS_ITEMS: HorizontalSliderItem[] = [
+  { id: 'open', label: 'Open', icon: Inbox },
+  { id: 'pending', label: 'Pending', icon: Clock },
+  { id: 'hold', label: 'Hold', icon: Lock },
+  { id: 'solved', label: 'Solved', icon: CheckCircle },
+  { id: 'all', label: 'All', icon: Layers },
+];
+
 // ── Voicemail mode — follow-up status filter ────────────────────────────────
 
 export type VoicemailStatusFilter = 'open' | 'snoozed' | 'done' | 'all';
 
 export const VOICEMAIL_STATUS_ITEMS: HorizontalSliderItem[] = [
-  { id: 'open', label: 'Open' },
-  { id: 'snoozed', label: 'Snoozed' },
-  { id: 'done', label: 'Done' },
-  { id: 'all', label: 'All' },
+  { id: 'open', label: 'Open', icon: Bell },
+  { id: 'snoozed', label: 'Snoozed', icon: Clock },
+  { id: 'done', label: 'Done', icon: CheckCircle },
+  { id: 'all', label: 'All', icon: Layers },
 ];
 
 export function parseVoicemailStatus(raw: string | null | undefined): VoicemailStatusFilter {
@@ -70,10 +92,10 @@ export function parseVoicemailStatus(raw: string | null | undefined): VoicemailS
 export type CallDirectionFilter = 'all' | 'inbound' | 'outbound' | 'missed';
 
 export const CALL_DIRECTION_ITEMS: HorizontalSliderItem[] = [
-  { id: 'all', label: 'All' },
-  { id: 'inbound', label: 'In' },
-  { id: 'outbound', label: 'Out' },
-  { id: 'missed', label: 'Missed' },
+  { id: 'all', label: 'All', icon: Phone },
+  { id: 'inbound', label: 'In', icon: PhoneIncoming },
+  { id: 'outbound', label: 'Out', icon: PhoneOutgoing },
+  { id: 'missed', label: 'Missed', icon: PhoneMissed },
 ];
 
 export function parseCallDirection(raw: string | null | undefined): CallDirectionFilter {

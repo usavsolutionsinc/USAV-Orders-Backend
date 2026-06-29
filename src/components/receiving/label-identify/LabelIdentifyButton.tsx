@@ -2,6 +2,8 @@
 
 import { useRef } from 'react';
 import { Camera, Loader2, Check, AlertTriangle, RotateCcw } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { useLabelIdentify } from './useLabelIdentify';
 import type { LabelCandidate } from '@/lib/vision-identify';
 
@@ -57,14 +59,14 @@ export function LabelIdentifyButton({
       />
 
       {(status === 'idle' || status === 'error') && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="md"
+          icon={<Camera />}
           onClick={() => fileRef.current?.click()}
-          className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          <Camera className="h-4 w-4" />
           {label}
-        </button>
+        </Button>
       )}
 
       {status === 'identifying' && (
@@ -90,17 +92,21 @@ export function LabelIdentifyButton({
             <CandidateRow key={`${c.model}-${i}`} candidate={c} onConfirm={onConfirm} />
           ))}
           {rawText && (
-            <div className="px-1 pt-1 text-[11px] text-gray-400" title="Raw OCR text">
-              read: “{rawText.slice(0, 80)}”
-            </div>
+            <HoverTooltip label="Raw OCR text" asChild>
+              <div className="px-1 pt-1 text-caption text-gray-400">
+                read: “{rawText.slice(0, 80)}”
+              </div>
+            </HoverTooltip>
           )}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<RotateCcw />}
             onClick={() => fileRef.current?.click()}
-            className="inline-flex items-center gap-1.5 px-1 pt-1 text-xs text-gray-500 hover:text-gray-700"
+            className="px-1"
           >
-            <RotateCcw className="h-3 w-3" /> Retake
-          </button>
+            Retake
+          </Button>
         </div>
       )}
     </div>
@@ -132,14 +138,14 @@ function CandidateRow({
           {candidate.resolved ? '' : ' · not in catalog yet'}
         </div>
       </div>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        icon={<Check />}
         onClick={() => onConfirm(candidate)}
-        className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+        className="bg-emerald-600 text-white shadow-emerald-600/25 hover:bg-emerald-500 active:bg-emerald-700"
       >
-        <Check className="h-3.5 w-3.5" />
         Add
-      </button>
+      </Button>
     </div>
   );
 }

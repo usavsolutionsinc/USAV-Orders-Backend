@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
+import { Button } from '@/design-system/primitives';
 import { AdminEmptyDetail, useAdminUrlState } from './shared';
 
 interface FbaFnskuRow {
@@ -203,26 +204,29 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                 >
                   {isStub ? 'Stub' : 'Hydrated'}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setIsDeleteOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-micro font-bold uppercase tracking-wider text-red-600 hover:border-red-300 hover:bg-red-50"
+                  className="border border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                  icon={
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    </svg>
+                  }
                 >
-                  <svg
-                    className="h-3 w-3"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  </svg>
                   Delete
-                </button>
+                </Button>
               </div>
             </header>
 
@@ -263,26 +267,28 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
 
               {isEditing ? (
                 <div className="flex items-center justify-end gap-2 pt-1">
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       setEditTitle(detail.product_title ?? '');
                       setEditAsin(detail.asin ?? '');
                       setEditSku(detail.sku ?? '');
                       setIsEditing(false);
                     }}
-                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-label font-semibold text-gray-700 hover:bg-gray-200"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="primary"
+                    size="sm"
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate()}
-                    className="rounded-lg bg-blue-600 px-3 py-1.5 text-label font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {updateMutation.isPending ? 'Saving…' : 'Save changes'}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
             </div>
@@ -292,6 +298,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
 
       {isDeleteOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
             className="absolute inset-0 bg-black/30"
@@ -313,21 +320,23 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
               </p>
             ) : null}
             <div className="flex items-center justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => setIsDeleteOpen(false)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="danger"
+                size="md"
                 disabled={deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate()}
-                className="rounded-xl bg-red-600 px-3 py-2 text-label font-semibold text-white hover:bg-red-700 disabled:opacity-50"
               >
                 {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -335,6 +344,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
 
       {isUploadInfoOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
             className="absolute inset-0 bg-black/30"
@@ -353,23 +363,26 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
               file are skipped.
             </p>
             <div className="flex items-center justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => setIsUploadInfoOpen(false)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={() => {
                   setIsUploadInfoOpen(false);
                   fileInputRef.current?.click();
                 }}
-                className="rounded-xl bg-emerald-600 px-3 py-2 text-label font-semibold text-white hover:bg-emerald-700"
+                className="bg-emerald-600 shadow-emerald-600/25 hover:bg-emerald-500 active:bg-emerald-700"
               >
                 Choose File
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -377,6 +390,7 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
 
       {isAddOpen && (
         <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
+          {/* ds-raw-button: full-screen invisible click-catcher scrim, not a UI button */}
           <button
             type="button"
             className="absolute inset-0 bg-black/30"
@@ -431,15 +445,18 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
               </Field>
             </div>
             <div className="flex items-center justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={() => setIsAddOpen(false)}
-                className="rounded-xl bg-gray-100 px-3 py-2 text-label font-semibold text-gray-700 hover:bg-gray-200"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 disabled={createMutation.isPending || !fnsku.trim()}
                 onClick={() =>
                   createMutation.mutate({
@@ -449,10 +466,9 @@ export function FBAManagementTab(_props: FBAManagementTabProps = {}) {
                     fnsku,
                   })
                 }
-                className="rounded-xl bg-blue-600 px-3 py-2 text-label font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {createMutation.isPending ? 'Saving…' : 'Save Row'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

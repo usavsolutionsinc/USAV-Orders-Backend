@@ -8,6 +8,8 @@
 
 import { useState } from 'react';
 import { Check, Loader2 } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { BlockProps, FieldKind, SourceRow } from '@/lib/stations/contract';
 
 /** Kind-aware inline renderer for the `ref` role (PO#, tracking#, SKU…). */
@@ -101,18 +103,19 @@ export function ChecklistBlock({
         return (
           <li key={row.id} className={`group flex items-start gap-2 px-2.5 py-2 ${done ? 'opacity-50' : ''}`}>
             {variant === 'check_only' ? (
-              <button
-                type="button"
+              <IconButton
+                icon={done ? <Check className="h-3 w-3 text-white" /> : null}
                 onClick={() => toggleTick(row.id)}
+                ariaLabel="Toggle complete"
                 aria-pressed={done}
-                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                   done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-300 bg-white hover:border-emerald-400'
                 }`}
-              >
-                {done ? <Check className="h-3 w-3" /> : null}
-              </button>
+              />
             ) : (
-              <span className="mt-0.5 h-4 w-4 shrink-0 rounded border border-dashed border-gray-300" title="Completed by its action" />
+              <HoverTooltip label="Completed by its action" asChild>
+                <span className="mt-0.5 h-4 w-4 shrink-0 rounded border border-dashed border-gray-300" />
+              </HoverTooltip>
             )}
 
             <div className="min-w-0 flex-1">
@@ -134,20 +137,23 @@ export function ChecklistBlock({
                   const pending = a.pendingRowId === row.id;
                   const isDone = doneWhen === a.def.id;
                   return (
-                    <button
-                      key={a.def.id}
-                      type="button"
-                      disabled={pending}
-                      onClick={() => void runAction(a.def.id, row)}
-                      title={a.def.label}
-                      className={`rounded px-1.5 py-0.5 text-mini font-bold ring-1 ring-inset transition-colors disabled:opacity-50 ${
-                        isDone
-                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100'
-                          : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : a.def.label}
-                    </button>
+                    <HoverTooltip key={a.def.id} label={a.def.label} asChild>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={pending}
+                        disabled={pending}
+                        onClick={() => void runAction(a.def.id, row)}
+                        ariaLabel={a.def.label}
+                        className={`h-auto rounded px-1.5 py-0.5 text-mini font-bold ring-inset ${
+                          isDone
+                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100'
+                            : 'bg-white text-gray-600 ring-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {a.def.label}
+                      </Button>
+                    </HoverTooltip>
                   );
                 })}
               </div>

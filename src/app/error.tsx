@@ -13,6 +13,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, RotateCcw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 
 export default function RouteError({
   error,
@@ -44,20 +45,12 @@ export default function RouteError({
           ) : null}
         </p>
         <div className="mt-5 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={() => reset()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-caption font-black uppercase tracking-wider text-white hover:bg-blue-700"
-          >
-            <RotateCcw className="h-3.5 w-3.5" /> Try again
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push('/')}
-            className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-caption font-black uppercase tracking-wider text-gray-700 hover:bg-gray-50"
-          >
+          <Button variant="primary" icon={<RotateCcw />} onClick={() => reset()}>
+            Try again
+          </Button>
+          <Button variant="secondary" onClick={() => router.push('/')}>
             Go home
-          </button>
+          </Button>
         </div>
       </div>
     </div>

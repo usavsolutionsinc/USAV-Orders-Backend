@@ -316,7 +316,7 @@ function ArchToggle({
         e.preventDefault();
         onClick();
       }}
-      className={`rounded-md px-2.5 py-1 font-semibold transition-colors ${
+      className={`ds-raw-button rounded-md px-2.5 py-1 font-semibold transition-colors ${
         active ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
       }`}
     >

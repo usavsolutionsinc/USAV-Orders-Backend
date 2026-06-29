@@ -1,6 +1,5 @@
 import pool from '@/lib/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
-import { extractCanonicalTracking } from '@/lib/tracking-format';
 
 export type ReceivingScanSource = 'zoho_po' | 'unmatched';
 
@@ -20,10 +19,17 @@ async function linkScanToStn(
   source: ReceivingScanSource,
 ): Promise<boolean> {
   try {
+    // Derive the org from the receiving row so the STN write is correctly
+    // org-stamped (a scan's tracking belongs to that receiving's tenant).
+    const orgRow = await pool.query<{ organization_id: string }>(
+      'SELECT organization_id FROM receiving WHERE id = $1 LIMIT 1',
+      [receivingId],
+    );
+    const orgId = orgRow.rows[0]?.organization_id;
     const stn = await registerShipmentPermissive({
       trackingNumber,
       sourceSystem: `receiving_scan:${source}`,
-    });
+    }, orgId);
     const shipmentId = stn?.id ?? null;
     if (shipmentId == null) return false;
     await pool.query(
@@ -61,37 +67,24 @@ export async function recordReceivingScan(
     [receivingId, trackingNumber, carrier || null, staffId, source],
   );
   const scanId = Number(result.rows[0].id);
-  const canonicalTracking = extractCanonicalTracking(trackingNumber) || trackingNumber;
 
-  // Register the scan's tracking into the STN master FIRST so we know whether STN
-  // owns it. STN-backed → the carton needs no legacy tracking string (MAIN
-  // criterion: tracking lives only in shipping_tracking_numbers by shipment_id).
-  const stnLinked = await linkScanToStn(scanId, receivingId, trackingNumber, source);
+  // Register the scan's tracking into the STN master — the canonical (and now
+  // sole) home for the tracking string. Linked via receiving.shipment_id; the
+  // legacy receiving_tracking_number text column has been dropped.
+  await linkScanToStn(scanId, receivingId, trackingNumber, source);
 
   // A recorded scan IS the physical door-arrival event, so stamp received_at on
   // the carton here — the one chokepoint every scan path funnels through
   // (lookup-po, touch-scan, the local-first re-scan, test cartons). COALESCE so
   // only the FIRST scan sets it (idempotent; re-scans never reset the arrival
   // time).
-  //
-  // receiving_tracking_number is now written ONLY as a FALLBACK when STN did not
-  // claim the tracking (stnLinked=false — e.g. a non-carrier reference# that
-  // failed registration). When STN owns it the column is left untouched: the
-  // workspace tracking chip already reads STN-by-shipment_id first
-  // (COALESCE(stn.tracking_number_raw, r.receiving_tracking_number)), so the chip
-  // still renders. This stops legacy tracking CRUD on the receiving table for the
-  // ~88% of scans STN claims, while the 287 legacy-only rows keep their value.
   await pool.query(
     `UPDATE receiving
         SET received_at = COALESCE(received_at, NOW()),
             received_by = COALESCE(received_by, $2),
-            receiving_tracking_number = CASE
-              WHEN $4::boolean THEN receiving_tracking_number
-              ELSE COALESCE(receiving_tracking_number, $3)
-            END,
             updated_at  = NOW()
       WHERE id = $1`,
-    [receivingId, staffId, canonicalTracking || null, stnLinked],
+    [receivingId, staffId],
   );
   return scanId;
 }

@@ -99,6 +99,10 @@ function classifyExemption(path: string): string | null {
   // The desktop auto-updater polls this for the latest installer BEFORE a user
   // signs in, so it is public release metadata by design.
   if (path.includes('/api/desktop-app/release')) return 'public desktop release feed (polled pre-auth by the updater)';
+  // Public marketing-site capture (beta waitlist + spots counter): CORS-restricted
+  // to MARKETING_ORIGIN, IP-throttled (~5/10min like signup), email-only into
+  // beta_waitlist — no session cookie, no tenant data, by design.
+  if (path.includes('/api/beta/')) return 'public marketing capture (CORS + IP-throttled; no session/tenant data)';
   return null;
 }
 

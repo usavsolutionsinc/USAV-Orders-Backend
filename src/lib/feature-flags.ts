@@ -176,6 +176,18 @@ export function isUnifiedEngineApplyTransition(): boolean {
 }
 
 /**
+ * Per-org verdict→status override (Wave 2 / Class A — the §3.A verdict map config
+ * deferred out of the Class-D reason-codes work). When ON, recordTestVerdict
+ * resolves a tenant's verdict→status mapping from organizations.settings
+ * (workflow.verdictStatus), falling back to the hardcoded VERDICT_TO_STATUS for
+ * any unset verdict. Default OFF — when off, the hardcoded map is used with NO
+ * settings read, so behavior is byte-identical. Set UNIFIED_ENGINE_VERDICT_CONFIG=true.
+ */
+export function isUnifiedEngineVerdictConfig(): boolean {
+  return readBoolEnv('UNIFIED_ENGINE_VERDICT_CONFIG');
+}
+
+/**
  * Unified-engine fulfillment-tail taps (UNIFIED-ENGINE-MASTER-PLAN §1.4). When
  * ON, the domain mutations that finish the lifecycle fire their engine taps so a
  * unit flows past the dormant tail of the graph:
@@ -193,6 +205,107 @@ export function isUnifiedEngineApplyTransition(): boolean {
  */
 export function isUnifiedEngineFulfillmentTaps(): boolean {
   return readBoolEnv('UNIFIED_ENGINE_FULFILLMENT_TAPS');
+}
+
+/**
+ * Decision-node ZEN evaluator cutover (UNIFIED-ENGINE-MASTER-PLAN §1.6, Stage 2).
+ * When ON, the `decision` node routes through the GoRules ZEN expression engine
+ * (@gorules/zen-engine-wasm) instead of the in-house rule-table matcher
+ * (src/lib/workflow/decision-eval.ts). The operator-editable rule table is
+ * compiled to an equivalent ZEN expression at evaluation time and evaluated in
+ * WASM; the node, editor, config shape, and result (a port id, or null → park) are
+ * all unchanged — this swaps only the matching ENGINE, not behavior. The ZEN path
+ * is itself guarded: if the WASM module can't load/init, it transparently falls
+ * back to the in-house evaluator, so a miss is a no-op rather than a broken route.
+ * Default OFF: until flipped, evaluation is byte-identical Stage-1 in-house
+ * matching and the WASM module is never loaded. Set DECISION_ENGINE_ZEN=true to
+ * enable. See src/lib/workflow/decision-eval-zen.ts.
+ */
+export function isDecisionEngineZen(): boolean {
+  return readBoolEnv('DECISION_ENGINE_ZEN');
+}
+
+/**
+ * Placement-strangle OBSERVE-ONLY parity logging (UNIFIED-ENGINE-MASTER-PLAN
+ * §1.6 Track 1, Stage 1.x). When ON, a converting placement site (parts-sort
+ * first) ALSO computes what the declarative decision-table → resolvePlacementBin
+ * mechanism WOULD pick, and logs match / DIVERGENCE / unseeded against the bin
+ * the live hardcoded path actually used. It changes NO behavior — the hardcoded
+ * path stays the source of truth; this only proves the new mechanism yields the
+ * identical bin before any site is flipped to consume it (PLACEMENT_STRANGLE_*
+ * per-site flags do the actual cutover, later). Fire-and-forget + self-guarded,
+ * so a parity-observer fault never affects the real move. Default OFF — set
+ * PLACEMENT_PARITY_OBSERVE=true to start collecting parity signal in an env.
+ */
+export function isPlacementParityObserve(): boolean {
+  return readBoolEnv('PLACEMENT_PARITY_OBSERVE');
+}
+
+/**
+ * Placement-strangle CUTOVER for parts-sort (UNIFIED-ENGINE-MASTER-PLAN §1.6
+ * Track 1, Stage 1.x — the first live site). When ON, sortSerialUnitToParts
+ * resolves its destination bin from the declarative placement policy (the org's
+ * Studio decision nodes → the system-default parts policy → resolvePlacementBin)
+ * instead of the hardcoded env-constant resolvePartsBin(). It degrades to the
+ * env-constant bin whenever the policy resolves nothing, so flipping it ON with
+ * no decision node authored is byte-identical to today (the system-default policy
+ * targets the same PARTS_BIN_BARCODE). Default OFF — flip per env after the
+ * PLACEMENT_PARITY_OBSERVE window shows a clean `match`. Set
+ * PLACEMENT_STRANGLE_PARTS_SORT=true to enable.
+ */
+export function isPlacementStranglePartsSort(): boolean {
+  return readBoolEnv('PLACEMENT_STRANGLE_PARTS_SORT');
+}
+
+/**
+ * Placement-strangle CUTOVER for receiving default-putaway (UNIFIED-ENGINE-MASTER-PLAN
+ * §1.6 Track 1, Stage 1.x — second live site). When ON, mark-received resolves the
+ * default putaway bin (disposition=ACCEPT, no operator-scanned bin) from the
+ * declarative placement policy (org Studio decision nodes → the system-default
+ * receiving policy → a RESERVE+active bin lookup) instead of the env/settings
+ * resolveDefaultPutawayBinId(). It degrades to the legacy bin whenever the policy
+ * resolves nothing, and the system-default policy targets the org's configured
+ * default-putaway barcode via the SAME RESERVE+active lookup — so ON with no
+ * decision node authored is byte-identical to today. Default OFF — flip per env
+ * after the PLACEMENT_PARITY_OBSERVE window is clean. Set
+ * PLACEMENT_STRANGLE_RECEIVING_PUTAWAY=true to enable.
+ */
+export function isPlacementStrangleReceivingPutaway(): boolean {
+  return readBoolEnv('PLACEMENT_STRANGLE_RECEIVING_PUTAWAY');
+}
+
+/**
+ * Config-driven RMA restock placement (UNIFIED-ENGINE-MASTER-PLAN §1.6 Track 1,
+ * Stage 1.x — third site). Unlike parts-sort / receiving-putaway, RMA restock has
+ * NO legacy hardcoded bin: an ACCEPT'd inbound return goes RETURNED→STOCKED with
+ * no bin today. When ON, recordDisposition consults the org's Studio decision
+ * policy (NO system default — purely opt-in) for a restock bin and threads it
+ * into the restock transition + current_location. With no decision node authored
+ * it resolves nothing → restock stays bin-less, exactly as today. So this is
+ * additive: it never changes an existing placement, only enables one an org
+ * configures. Default OFF. Set PLACEMENT_STRANGLE_RMA_RESTOCK=true to enable.
+ */
+export function isPlacementStrangleRmaRestock(): boolean {
+  return readBoolEnv('PLACEMENT_STRANGLE_RMA_RESTOCK');
+}
+
+/**
+ * Fulfillment substitution / order-line amendment capability (the
+ * ordered-vs-fulfilled deviation flow: release the original allocation +
+ * allocate a substitute unit, recorded in order_unit_amendments).
+ *
+ * This is the rollout MASTER SWITCH only — it gates whether the substitute
+ * action is exposed/accepted at all. The behavioral knobs are NOT here:
+ *   - WHICH node may raise an amendment (default 'pick'),
+ *   - advisory vs block_until_approved enforcement,
+ *   - propagation reach (internal / notify-customer / channel-sync),
+ * all live per-org in the settings registry (docs/settings-registry.md) so a
+ * tenant tunes them from /studio without an env redeploy. Default OFF until the
+ * 2026-06-27e_order_unit_amendments migration is applied + the flow is verified.
+ * Set FULFILLMENT_SUBSTITUTION=true to enable.
+ */
+export function isFulfillmentSubstitution(): boolean {
+  return readBoolEnv('FULFILLMENT_SUBSTITUTION');
 }
 
 /**

@@ -5,6 +5,8 @@ import { createCacheLookupKey, getCachedJson, setCachedJson } from '@/lib/cache/
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { logRouteMetric } from '@/lib/route-metrics';
 import { SHIPPED_BY_CARRIER_SQL } from '@/lib/sql-fragments';
+import { SHIPMENT_STATUS_CATEGORIES } from '@/lib/order-lifecycle';
+import { PACK_ACTIVITY_TYPES, sqlInList } from '@/lib/station-activity';
 import { withAuth } from '@/lib/auth/withAuth';
 
 let replenishmentSchemaCheck:
@@ -106,7 +108,6 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
     const carrierFilter      = carrierRaw === 'UPS' || carrierRaw === 'USPS' || carrierRaw === 'FEDEX' ? carrierRaw : '';
     /** shipment status category filter — restricts to a single normalized category */
     const statusCategoryRaw  = String(searchParams.get('statusCategory') || '').toUpperCase();
-    const SHIPMENT_STATUS_CATEGORIES = ['LABEL_CREATED','ACCEPTED','IN_TRANSIT','OUT_FOR_DELIVERY','DELIVERED','EXCEPTION','RETURNED','UNKNOWN'] as const;
     const statusCategoryFilter = (SHIPMENT_STATUS_CATEGORIES as readonly string[]).includes(statusCategoryRaw)
       ? statusCategoryRaw
       : '';
@@ -247,7 +248,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         FROM station_activity_logs sal
         WHERE sal.station = 'PACK'
           AND sal.shipment_id IS NOT NULL
-          AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+          AND sal.activity_type IN (${sqlInList(PACK_ACTIVITY_TYPES)})
         ORDER BY sal.shipment_id, sal.created_at DESC NULLS LAST, sal.id DESC
       ),
       next_pack_activity AS (
@@ -258,7 +259,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         JOIN station_activity_logs sal
           ON sal.shipment_id = pa.shipment_id
          AND sal.station = 'PACK'
-         AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+         AND sal.activity_type IN (${sqlInList(PACK_ACTIVITY_TYPES)})
          AND pa.staff_id IS NOT NULL
          AND sal.staff_id = pa.staff_id
          AND pa.created_at IS NOT NULL
@@ -305,7 +306,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         JOIN station_activity_logs sal
           ON sal.shipment_id = pa.shipment_id
          AND sal.station = 'PACK'
-         AND sal.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+         AND sal.activity_type IN (${sqlInList(PACK_ACTIVITY_TYPES)})
          AND (pa.staff_id IS NULL OR sal.staff_id = pa.staff_id)
         GROUP BY pa.shipment_id
       ),
@@ -402,6 +403,8 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         stn.is_terminal,
         ${shippedByCarrierOrLatestStatusSql} AS is_shipped,
         to_char(timezone('America/Los_Angeles', o.created_at), 'YYYY-MM-DD HH24:MI:SS') AS created_at,
+        o.tracking_added_at::text AS tracking_added_at,
+        o.label_printed_at::text  AS label_printed_at,
         wa_t.assigned_tech_id   AS tester_id,
         wa_p.assigned_packer_id AS packer_id,
         pl_latest.packed_at,
@@ -455,9 +458,9 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             stn_link.tracking_number_raw,
             COALESCE(osl_link.is_primary, false) AS is_primary,
             CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-          FROM order_shipment_links osl_link
+          FROM shipment_links osl_link
           LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-          WHERE osl_link.order_row_id = o.id
+          WHERE osl_link.owner_type = 'ORDER' AND osl_link.owner_id = o.id
 
           UNION
 
@@ -528,9 +531,16 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
 
     if (fulfillmentScope) {
       sql += ` AND o.shipment_id IS NOT NULL`;
+      // Exclude only PACK events (PACKED_STAGED → Outbound · Scan-out). A tech
+      // scan writes a TRACKING_SCANNED row into station_activity_logs; that row
+      // must NOT drop the order from this dataset, or it would vanish from the
+      // board entirely instead of moving to the TESTED lane (derived client-side
+      // from has_tech_scan via resolveFulfillmentLane). Carrier-shipped orders
+      // are already excluded by the `!includeShipped` branch above.
       sql += ` AND NOT EXISTS (
         SELECT 1 FROM station_activity_logs sal
         WHERE sal.shipment_id IS NOT NULL AND sal.shipment_id = o.shipment_id
+          AND sal.activity_type IN (${sqlInList(PACK_ACTIVITY_TYPES)})
       )`;
     }
 
@@ -539,7 +549,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         SELECT 1 FROM station_activity_logs sal_pack
         WHERE sal_pack.shipment_id IS NOT NULL
           AND sal_pack.shipment_id = o.shipment_id
-          AND sal_pack.activity_type IN ('PACK_COMPLETED', 'PACK_SCAN')
+          AND sal_pack.activity_type IN (${sqlInList(PACK_ACTIVITY_TYPES)})
       )`;
       sql += ` AND NOT EXISTS (
         SELECT 1 FROM station_activity_logs sal_out

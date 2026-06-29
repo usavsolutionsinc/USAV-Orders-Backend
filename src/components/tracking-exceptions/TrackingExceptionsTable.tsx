@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pencil, RefreshCw, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 
 type StatusFilter = 'open' | 'resolved' | 'discarded' | 'all';
@@ -170,18 +172,15 @@ export function TrackingExceptionsTable() {
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-3">
         <div className="flex items-center gap-1">
           {STATUS_TABS.map((tab) => (
-            <button
+            <Button
               key={tab.id}
               type="button"
+              size="sm"
+              variant={statusTab === tab.id ? 'brand' : 'secondary'}
               onClick={() => setStatusTab(tab.id)}
-              className={`rounded-md px-2.5 py-1 text-micro font-black uppercase tracking-widest transition-colors ${
-                statusTab === tab.id
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:text-gray-900'
-              }`}
             >
               {tab.label}
-            </button>
+            </Button>
           ))}
         </div>
         <input
@@ -191,15 +190,16 @@ export function TrackingExceptionsTable() {
           placeholder="Search tracking…"
           className="ml-auto w-64 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-label font-semibold text-gray-900 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
         />
-        <button
+        <Button
           type="button"
+          size="sm"
+          variant="brand"
           onClick={() => void fetchRows()}
           disabled={loading}
-          className="rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
           aria-label="Reload list"
         >
           {loading ? 'Loading…' : 'Reload'}
-        </button>
+        </Button>
         <span className="text-micro font-bold uppercase tracking-widest text-gray-500">
           {total} {total === 1 ? 'row' : 'rows'}
         </span>
@@ -267,34 +267,42 @@ export function TrackingExceptionsTable() {
                   <td className="px-4 py-2 font-mono text-gray-700">{row.zoho_check_count}</td>
                   <td className="px-4 py-2 text-gray-600">{formatRelative(row.last_zoho_check_at)}</td>
                   <td className="px-4 py-2 text-gray-600">{formatRelative(row.created_at)}</td>
+                  {/* ds-allow-title: truncation-only on a non-interactive cell — native title surfaces the clipped notes */}
                   <td className="px-4 py-2 max-w-[260px] truncate text-gray-600" title={row.notes ?? ''}>
                     {row.notes || '—'}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => void handleRefreshRow(row)}
-                        disabled={refreshing || row.status !== 'open'}
-                        aria-label="Refresh from Zoho"
-                        title={
+                      <HoverTooltip
+                        label={
                           row.status === 'open'
                             ? 'Refresh: re-query Zoho with this tracking number'
                             : 'Only open exceptions can be refreshed'
                         }
-                        className="rounded-md p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        asChild
                       >
-                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditing(row)}
-                        aria-label="Edit exception"
-                        title="Edit — opens a dialog where you can update or delete this row"
-                        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
+                        {/* ds-raw-button: HoverTooltip asChild clones a ref onto the child for positioning; IconButton is a plain fn component (no forwardRef), so the tooltip would stop showing. */}
+                        <button
+                          type="button"
+                          onClick={() => void handleRefreshRow(row)}
+                          disabled={refreshing || row.status !== 'open'}
+                          aria-label="Refresh from Zoho"
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                      </HoverTooltip>
+                      <HoverTooltip label="Edit — opens a dialog where you can update or delete this row" asChild>
+                        {/* ds-raw-button: HoverTooltip asChild clones a ref onto the child for positioning; IconButton is a plain fn component (no forwardRef), so the tooltip would stop showing. */}
+                        <button
+                          type="button"
+                          onClick={() => setEditing(row)}
+                          aria-label="Edit exception"
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      </HoverTooltip>
                     </div>
                   </td>
                 </tr>
@@ -376,14 +384,13 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
           <h2 className="text-label font-black uppercase tracking-widest text-gray-900">
             Edit exception #{row.id}
           </h2>
-          <button
+          <IconButton
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            ariaLabel="Close"
+            icon={<X className="h-4 w-4" />}
             className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          />
         </div>
 
         <div className="space-y-3 px-5 py-4">
@@ -442,6 +449,7 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
 
         <div className="flex items-center justify-between border-t border-gray-200 px-5 py-3">
           {!confirmingDelete ? (
+            // ds-raw-button: low-emphasis destructive action — transparent bg with red text. No variant fits: `danger` is solid red-fill, `ghost` would drop the red affordance.
             <button
               type="button"
               onClick={() => setConfirmingDelete(true)}
@@ -455,42 +463,46 @@ function TrackingExceptionEditDialog({ row, onClose, onSave, onDelete }: EditDia
               <span className="text-micro font-bold uppercase tracking-widest text-red-700">
                 Confirm delete?
               </span>
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant="danger"
                 onClick={() => void handleDelete()}
                 disabled={saving}
-                className="rounded-md bg-red-600 px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-red-700 disabled:opacity-50"
               >
                 Yes, delete
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                size="sm"
+                variant="ghost"
                 onClick={() => setConfirmingDelete(false)}
                 disabled={saving}
-                className="rounded-md px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           )}
 
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="ghost"
               onClick={onClose}
               disabled={saving}
-              className="rounded-md px-2.5 py-1.5 text-micro font-black uppercase tracking-widest text-gray-600 hover:bg-gray-100 disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="sm"
+              variant="brand"
               onClick={() => void handleSave()}
               disabled={saving || !dirty}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-micro font-black uppercase tracking-widest text-white hover:bg-gray-800 disabled:opacity-50"
             >
               {saving ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -40,7 +40,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.view' });
+}, { permission: 'walk_in.view', feature: 'walkIn' });
 
 /**
  * DELETE /api/walk-in/sales?id=<uuid> — soft-delete (hide) a walk-in sale.
@@ -75,4 +75,4 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'walk_in.intake' });
+}, { permission: 'walk_in.intake', feature: 'walkIn' });

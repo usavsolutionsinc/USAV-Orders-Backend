@@ -10,6 +10,8 @@
 import type { ReactNode } from 'react';
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { AlertTriangle, Check, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { useMotionPresence } from '@/design-system/foundations/motion-framer-hooks';
 
 export type InlineActionFeedbackTone = 'emerald' | 'amber';
@@ -144,15 +146,14 @@ export function InlineActionFeedbackCard({
         </div>
 
         {onDismiss ? (
-          <button
-            type="button"
-            onClick={onDismiss}
-            aria-label="Dismiss"
-            title="Dismiss"
-            className="shrink-0 rounded p-0.5 text-slate-400 transition-colors hover:bg-white/60 hover:text-slate-700"
-          >
-            <X className="h-3 w-3" />
-          </button>
+          <HoverTooltip label="Dismiss" asChild>
+            <IconButton
+              ariaLabel="Dismiss"
+              onClick={onDismiss}
+              className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-white/60 hover:text-slate-700"
+              icon={<X className="h-3 w-3" />}
+            />
+          </HoverTooltip>
         ) : null}
       </div>
     </div>

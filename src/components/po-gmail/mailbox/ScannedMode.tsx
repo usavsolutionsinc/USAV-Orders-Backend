@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import type { ReconcileResponse } from './po-mailbox-types';
 import { ReconcileStatusChip, ScanControls, SummaryRow } from './mailbox-shared';
 
@@ -34,13 +35,13 @@ export function ScannedMode({
                 return (
                   <li key={item.id} className="px-3 py-2.5">
                     <div className="flex items-start gap-3">
-                      <button
+                      <IconButton
                         type="button"
                         onClick={() => setExpanded((p) => ({ ...p, [item.id]: !p[item.id] }))}
-                        className="mt-0.5 shrink-0 rounded-md p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                      >
-                        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
+                        ariaLabel={isOpen ? 'Collapse' : 'Expand'}
+                        icon={isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        className="mt-0.5 shrink-0 rounded-md p-0.5 hover:bg-gray-100"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
                           <span className="truncate text-sm font-medium text-gray-900">{item.subject || '(no subject)'}</span>

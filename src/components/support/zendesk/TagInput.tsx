@@ -41,7 +41,7 @@ export function TagInput({
       {tags.map((t) => (
         <span
           key={t}
-          className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-700"
+          className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-caption font-bold text-gray-700"
         >
           <Tag className="h-3 w-3 text-gray-400" />
           {t}
@@ -49,7 +49,7 @@ export function TagInput({
             type="button"
             onClick={() => onChange(tags.filter((x) => x !== t))}
             aria-label={`Remove ${t}`}
-            className="text-gray-400 hover:text-gray-700"
+            className="ds-raw-button text-gray-400 hover:text-gray-700"
           >
             <X className="h-3 w-3" />
           </button>
@@ -62,7 +62,7 @@ export function TagInput({
         onKeyDown={onKey}
         onBlur={add}
         placeholder={tags.length ? '' : placeholder}
-        className="min-w-[80px] flex-1 bg-transparent text-[12px] outline-none disabled:cursor-not-allowed"
+        className="min-w-[80px] flex-1 bg-transparent text-label outline-none disabled:cursor-not-allowed"
       />
     </div>
   );

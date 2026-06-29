@@ -15,67 +15,24 @@
  * server. Stalled/exception time math is passed in by the caller.
  */
 
-export type OutboundState =
-  | 'PACKED_STAGED' // packed, sitting in staging, not yet scanned out
-  | 'SCANNED_OUT' // dock scan recorded, carrier hasn't reported custody yet
-  | 'IN_CUSTODY' // carrier accepted / in transit / out for delivery
-  | 'DELIVERED' // terminal delivered
-  | 'EXCEPTION' // carrier exception or stalled (no movement)
-  | 'PROCESS_GAP' // scanned out but no pack record — backfill / coach
-  | 'ORPHAN'; // carrier took custody but it was never scanned out internally
+// The outbound stage vocabulary + derivation + custody predicates now live in
+// the canonical `order-lifecycle.ts` projection (W2 display‑logic
+// consolidation); re‑exported here under their established names so every
+// importer + the color META below keep their stable path. This module keeps
+// only the presentation (the OUTBOUND_STATE_META hues + the seam contract).
+export {
+  CUSTODY_CATEGORIES,
+  carrierHasCustody,
+  hasLeftWarehouse,
+  effectiveShipTime,
+  resolveOutboundStage as deriveOutboundState,
+} from '@/lib/order-lifecycle';
+import type { OutboundStage, OutboundSignals } from '@/lib/order-lifecycle';
+import { buildStateMeta } from '@/lib/labels/resolve';
 
-/** Carrier status categories that mean the carrier physically has the package. */
-const CUSTODY_CATEGORIES = new Set(['ACCEPTED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED']);
-
-export interface OutboundStateInput {
-  /** PACK event present (packer scanned it). */
-  packedAt?: string | null;
-  /** SHIP_CONFIRM event present (scanned out at the dock). */
-  shipConfirmedAt?: string | null;
-  /** shipping_tracking_numbers.latest_status_category. */
-  latestStatusCategory?: string | null;
-  /** shipping_tracking_numbers.is_terminal. */
-  isTerminal?: boolean | null;
-  /** shipping_tracking_numbers.has_exception. */
-  hasException?: boolean | null;
-  /** Caller-computed `isStalled(...)` result (kept out of here so this stays pure). */
-  stalled?: boolean | null;
-}
-
-/** Carrier has physical custody (accepted or further along). */
-export function carrierHasCustody(input: OutboundStateInput): boolean {
-  const cat = String(input.latestStatusCategory ?? '').toUpperCase();
-  return CUSTODY_CATEGORIES.has(cat);
-}
-
-/**
- * Has the package left the building? Either we scanned it out, or the carrier
- * already has it. Used to partition the staging table from the shipped-out table.
- */
-export function hasLeftWarehouse(input: OutboundStateInput): boolean {
-  return Boolean(input.shipConfirmedAt) || carrierHasCustody(input);
-}
-
-export function deriveOutboundState(input: OutboundStateInput): OutboundState {
-  const cat = String(input.latestStatusCategory ?? '').toUpperCase();
-  const hasPack = Boolean(input.packedAt);
-  const hasShipOut = Boolean(input.shipConfirmedAt);
-  const delivered = cat === 'DELIVERED' || (input.isTerminal === true && cat !== 'RETURNED');
-  const custody = carrierHasCustody(input);
-
-  // Delivered is terminal and always the last word — it overrides scanned-out,
-  // process-gap, exception, everything. A delivered package shows the delivered
-  // dot no matter what its internal scan history looks like.
-  if (delivered) return 'DELIVERED';
-  // Scanned out with no pack record at all → a process gap worth surfacing.
-  if (hasShipOut && !hasPack) return 'PROCESS_GAP';
-  if (input.hasException || input.stalled) return 'EXCEPTION';
-  if (custody && hasShipOut) return 'IN_CUSTODY';
-  // Carrier has it, but it was never scanned out internally — left outside the flow.
-  if (custody && !hasShipOut) return 'ORPHAN';
-  if (hasShipOut) return 'SCANNED_OUT';
-  return 'PACKED_STAGED';
-}
+/** The post‑dock outbound stage vocabulary. Canonical definition in `order-lifecycle.ts`. */
+export type OutboundState = OutboundStage;
+export type OutboundStateInput = OutboundSignals;
 
 export interface OutboundStateMeta {
   label: string;
@@ -87,17 +44,11 @@ export interface OutboundStateMeta {
   dot: string;
 }
 
-// Dot colors are mutually distinct hues: In Custody (indigo) and Orphan (pink)
-// are deliberately far apart on the wheel so they never read as the same state.
-export const OUTBOUND_STATE_META: Record<OutboundState, OutboundStateMeta> = {
-  PACKED_STAGED: { label: 'In Staging',  description: 'Packed and waiting at the dock — not scanned out yet.',                            pill: 'bg-amber-50 text-amber-700 ring-amber-200',       dot: 'bg-amber-400' },
-  SCANNED_OUT:   { label: 'Scanned Out', description: 'Scanned out at the dock — left the building; carrier hasn’t confirmed custody.',   pill: 'bg-blue-50 text-blue-700 ring-blue-200',          dot: 'bg-blue-500' },
-  IN_CUSTODY:    { label: 'In Custody',  description: 'Carrier has it — accepted, in transit, or out for delivery.',                      pill: 'bg-indigo-50 text-indigo-700 ring-indigo-200',    dot: 'bg-indigo-500' },
-  DELIVERED:     { label: 'Delivered',   description: 'Carrier confirmed delivery (terminal).',                                          pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
-  EXCEPTION:     { label: 'Exception',   description: 'Carrier exception or stalled — no movement.',                                     pill: 'bg-rose-50 text-rose-700 ring-rose-200',          dot: 'bg-rose-500' },
-  PROCESS_GAP:   { label: 'Process Gap', description: 'Scanned out but no pack record — needs backfill / coaching.',                      pill: 'bg-orange-50 text-orange-700 ring-orange-200',    dot: 'bg-orange-500' },
-  ORPHAN:        { label: 'Orphan',      description: 'Carrier took custody, but it was never scanned out internally.',                   pill: 'bg-pink-50 text-pink-700 ring-pink-200',          dot: 'bg-pink-500' },
-};
+// Dot colors are mutually distinct hues (In Custody indigo vs Orphan pink are
+// deliberately far apart). Presentation now flows from the one label registry
+// (`src/lib/labels`) — seeded defaults, tenant‑overridable (Phase 2);
+// `labels/resolve.test.ts` pins this map byte‑identical to the former literals.
+export const OUTBOUND_STATE_META = buildStateMeta('outbound') as Record<OutboundState, OutboundStateMeta>;
 
 /** Fields the table/scan-out view attach to each record after derivation. */
 export interface WithOutboundState {
@@ -106,12 +57,4 @@ export interface WithOutboundState {
   hasLeft: boolean;
   /** Day-key time: ship_confirmed_at ?? packed_at. */
   effShipTime: string | null;
-}
-
-/** The "effective ship time" used to file a package under the day it left, not the day it was packed. */
-export function effectiveShipTime(input: {
-  shipConfirmedAt?: string | null;
-  packedAt?: string | null;
-}): string | null {
-  return input.shipConfirmedAt || input.packedAt || null;
 }

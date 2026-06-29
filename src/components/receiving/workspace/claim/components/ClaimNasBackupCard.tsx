@@ -6,6 +6,8 @@ import {
   Loader2,
   RotateCcw,
 } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import type { ReceivingClaimController } from '../hooks/useReceivingClaimController';
 
 /**
@@ -36,10 +38,10 @@ export function ClaimNasBackupCard({
         <div className="flex items-start gap-2.5">
           <Folder className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-800">
+            <p className="text-micro font-black uppercase tracking-[0.14em] text-blue-800">
               Back up photos to local storage
             </p>
-            <p className="mt-0.5 text-[11px] font-medium leading-5 text-blue-800/80">
+            <p className="mt-0.5 text-caption font-medium leading-5 text-blue-800/80">
               Save this carton&apos;s photos to local storage in a folder
               {folder ? (
                 <>
@@ -51,21 +53,19 @@ export function ClaimNasBackupCard({
               with a <span className="font-bold">case-info.txt</span> notepad.
             </p>
             {canArchive ? (
-              <button
-                type="button"
-                onClick={c.archiveToNas}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Archive />}
+                loading={c.archiveSubmitting}
                 disabled={c.archiveSubmitting || !c.row.receiving_id}
-                className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 text-micro font-black uppercase tracking-wider text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={c.archiveToNas}
+                className="mt-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
               >
-                {c.archiveSubmitting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Archive className="h-3.5 w-3.5" />
-                )}
                 {c.archiveSubmitting ? 'Saving…' : 'Back up locally'}
-              </button>
+              </Button>
             ) : (
-              <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-blue-800/80">
+              <p className="mt-1 flex items-center gap-1.5 text-caption font-medium text-blue-800/80">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 Backing up…
               </p>
@@ -91,7 +91,7 @@ export function ClaimNasBackupCard({
         )}
         <div className="min-w-0 flex-1">
           <p
-            className={`text-[10px] font-black uppercase tracking-[0.14em] ${
+            className={`text-micro font-black uppercase tracking-[0.14em] ${
               backupOk ? 'text-blue-800' : 'text-amber-800'
             }`}
           >
@@ -106,37 +106,44 @@ export function ClaimNasBackupCard({
             {folder ? <span className="font-semibold"> → /{folder}</span> : null}
           </p>
           {backupOk ? (
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-blue-800/80">
+            <p className="mt-1 flex items-center gap-1.5 text-caption font-medium text-blue-800/80">
               <FileText className="h-3 w-3 shrink-0" />
               case-info.txt written with the ticket details
             </p>
           ) : (
-            <p className="mt-1 text-[11px] font-medium text-amber-800/90">
+            <p className="mt-1 text-caption font-medium text-amber-800/90">
               {a.warning || 'Some photos did not copy. Retry the backup.'}
             </p>
           )}
 
           {canArchive ? (
-            <button
-              type="button"
-              onClick={c.archiveToNas}
-              disabled={c.archiveSubmitting || !c.row.receiving_id}
-              title={backupOk ? 'Save the carton photos to local storage again' : undefined}
-              className={`mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-3 text-micro font-black uppercase tracking-wider transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                backupOk
-                  ? 'border-blue-200 text-blue-700 hover:bg-blue-100'
-                  : 'border-amber-300 text-amber-800 hover:bg-amber-100'
-              }`}
-            >
-              {c.archiveSubmitting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : backupOk ? (
-                <Archive className="h-3.5 w-3.5" />
-              ) : (
-                <RotateCcw className="h-3.5 w-3.5" />
-              )}
-              {c.archiveSubmitting ? 'Saving…' : backupOk ? 'Back up again' : 'Retry backup'}
-            </button>
+            backupOk ? (
+              <HoverTooltip label="Save the carton photos to local storage again" asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Archive />}
+                  loading={c.archiveSubmitting}
+                  disabled={c.archiveSubmitting || !c.row.receiving_id}
+                  onClick={c.archiveToNas}
+                  className="mt-2 border-blue-200 bg-white text-blue-700 hover:bg-blue-100"
+                >
+                  {c.archiveSubmitting ? 'Saving…' : 'Back up again'}
+                </Button>
+              </HoverTooltip>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RotateCcw />}
+                loading={c.archiveSubmitting}
+                disabled={c.archiveSubmitting || !c.row.receiving_id}
+                onClick={c.archiveToNas}
+                className="mt-2 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+              >
+                {c.archiveSubmitting ? 'Saving…' : 'Retry backup'}
+              </Button>
+            )
           ) : null}
         </div>
       </div>

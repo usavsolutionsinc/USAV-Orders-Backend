@@ -81,6 +81,7 @@ function EmailHtmlFrame({ html }: { html: string }) {
 
   return (
     <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
+      {/* ds-allow-title: iframe title is the required accessible name, not a tooltip */}
       <iframe
         ref={ref}
         sandbox=""

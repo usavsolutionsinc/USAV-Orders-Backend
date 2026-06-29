@@ -13,6 +13,7 @@ import {
   SectionHeader,
   GlassButton,
 } from '@/components/mobile/redesign/DesignSystem';
+import { IconButton } from '@/design-system/primitives';
 import { MobileFeed } from '@/components/mobile/feed/MobileFeed';
 import { useFeedWindow } from '@/components/mobile/feed/useMobileFeed';
 import { ScanResultRow, type ScanFeedItem } from '@/components/mobile/feed/rows/ScanResultRow';
@@ -267,17 +268,18 @@ export default function RedesignedMobileReceive() {
           {/* "Receiving as" — sticky intake default applied to every scan, so a
               whole pallet of FBA returns can be tagged with one pick. */}
           <div>
-            <p className="mb-1.5 px-1 text-[10px] font-black uppercase tracking-widest text-blue-300">
+            <p className="mb-1.5 px-1 text-micro font-black uppercase tracking-widest text-blue-300">
               Receiving as
             </p>
             <div className="flex gap-2 overflow-x-auto no-scrollbar">
               {INTAKE_CLASSIFICATION_OPTS.map((o) => {
                 const active = intake === o.value;
                 return (
+                  // ds-raw-button: segmented "Receiving as" intake toggle pill — not a DS Button
                   <button
                     key={o.value}
                     onClick={() => selectIntake(o.value)}
-                    className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${intakeToneClass(o.tone, active)}`}
+                    className={`ds-raw-button shrink-0 rounded-full border px-3 py-1.5 text-caption font-black uppercase tracking-wider transition-all active:scale-95 ${intakeToneClass(o.tone, active)}`}
                   >
                     {o.label}
                   </button>
@@ -299,12 +301,12 @@ export default function RedesignedMobileReceive() {
               placeholder="Scan or enter tracking..."
               className="w-full bg-white border border-blue-100 rounded-[24px] pl-11 pr-14 py-5 text-base font-bold text-blue-950 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm placeholder:text-blue-300"
             />
-            <button
+            <IconButton
+              ariaLabel="Look up tracking"
               onClick={() => lookup(input)}
-              className="absolute right-2 top-2 bottom-2 h-12 w-12 bg-blue-600 text-white rounded-[18px] flex items-center justify-center active:scale-90 transition-all shadow-lg"
-            >
-              <Plus className="h-6 w-6" />
-            </button>
+              icon={<Plus className="h-6 w-6" />}
+              className="absolute right-2 top-2 bottom-2 flex h-12 w-12 items-center justify-center rounded-[18px] bg-blue-600 text-white shadow-lg active:scale-90"
+            />
           </div>
 
           <GlassButton
@@ -371,10 +373,11 @@ export default function RedesignedMobileReceive() {
                     ? 'bg-blue-600 text-white border-blue-600'
                     : 'bg-white text-blue-600 border-blue-100';
             return (
+              // ds-raw-button: segmented triage filter toggle pill (with count) — not a DS Button
               <button
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 ${tone}`}
+                className={`ds-raw-button flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-caption font-black uppercase tracking-wider transition-all active:scale-95 ${tone}`}
               >
                 {label}
                 <span className={`tabular-nums ${active ? 'opacity-90' : 'opacity-50'}`}>{count}</span>

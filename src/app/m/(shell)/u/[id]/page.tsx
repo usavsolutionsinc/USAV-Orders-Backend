@@ -34,6 +34,7 @@ import {
   AlertTriangle,
 } from '@/components/Icons';
 import { timeAgo } from '@/utils/_date';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface UnitDetail {
   id: number;
@@ -258,13 +259,9 @@ export default function MobileUnitPage() {
         <p className="mt-2 text-caption text-gray-500">
           {error instanceof Error ? error.message : 'Try scanning again.'}
         </p>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mt-6 rounded-xl border border-gray-200 px-4 py-2 text-label font-semibold text-gray-700"
-        >
+        <Button variant="secondary" onClick={() => router.back()} className="mt-6">
           Back
-        </button>
+        </Button>
       </div>
     );
   }
@@ -275,14 +272,12 @@ export default function MobileUnitPage() {
     <div className="min-h-dvh bg-gray-50 pb-10">
       {/* Header */}
       <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-100 bg-white px-3 py-3">
-        <button
-          type="button"
+        <IconButton
+          icon={<ChevronLeft className="h-5 w-5" />}
           onClick={() => router.back()}
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100"
-          aria-label="Back"
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </button>
+          ariaLabel="Back"
+          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-400">
             Unit
@@ -412,6 +407,7 @@ function ActionButton({
   active: boolean;
   onClick: () => void;
 }) {
+  // ds-raw-button: two-state segmented toggle with custom active fill (blue-600)
   return (
     <button
       type="button"
@@ -459,14 +455,12 @@ function ActionPanel({
         <p className="text-eyebrow font-black uppercase tracking-[0.18em] text-gray-500">
           {heading}
         </p>
-        <button
-          type="button"
+        <IconButton
+          icon={<X className="h-3.5 w-3.5" />}
           onClick={onCancel}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100"
-          aria-label="Cancel"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+          ariaLabel="Cancel"
+          className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100"
+        />
       </div>
       <input
         type="text"
@@ -478,18 +472,17 @@ function ActionPanel({
         spellCheck={false}
         className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-label font-mono text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
       />
-      <button
+      <Button
         type="submit"
+        variant="primary"
+        size="lg"
+        loading={busy}
         disabled={busy || !input.trim()}
-        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-label font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50"
+        icon={<Check />}
+        className="mt-2 w-full"
       >
-        {busy ? (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-        ) : (
-          <Check className="h-4 w-4" />
-        )}
         {primaryLabel}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -527,7 +520,7 @@ function Timeline({ events }: { events: TimelineEvent[] }) {
                   <span className="text-micro font-medium text-gray-500">{e.actor_name}</span>
                 ) : null}
                 {e.station ? (
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-gray-500">
                     {e.station}
                   </span>
                 ) : null}

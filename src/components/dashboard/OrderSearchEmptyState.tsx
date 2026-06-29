@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Search } from '@/components/Icons';
 import { sectionLabel } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 
 interface OrderSearchEmptyStateProps {
   query: string;
@@ -39,13 +40,14 @@ export function OrderSearchEmptyState({
       <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
         No {resultLabel} match &quot;{query}&quot;
       </p>
-      <button
+      <Button
         type="button"
+        variant="brand"
         onClick={onClear}
-        className={`mt-6 px-6 py-2 bg-gray-900 text-white ${sectionLabel} rounded-xl hover:bg-gray-800 transition-all active:scale-95 shadow-sm hover:shadow-md`}
+        className={`mt-6 bg-none bg-gray-900 px-6 ${sectionLabel} text-white hover:bg-gray-800`}
       >
         {clearLabel}
-      </button>
+      </Button>
     </motion.div>
   );
 }

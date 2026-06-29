@@ -11,7 +11,7 @@
  *   • Per-staff theme accents on hover (background tint + ring + chevron color)
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getStaffTheme, getStaffColorHex, type StationTheme } from '@/utils/staff-colors';
 import { SkeletonBase } from '@/design-system/components/Skeletons';
 
@@ -20,6 +20,14 @@ export type StaffRow = { id: number; name: string; role: string; has_pin: boolea
 interface StaffPickerListProps {
   /** Staff that should appear at the top under a "RECENT" header. */
   recent?: number[];
+  /**
+   * Whether `recent` has finished hydrating (callers read it from localStorage
+   * in an effect to avoid an SSR mismatch). While false the skeleton is held so
+   * the "Recent" group never pops in — and re-groups rows — after first paint,
+   * which would otherwise shift a row out from under the user's click. Defaults
+   * to true for callers that pass `recent` synchronously.
+   */
+  recentReady?: boolean;
   /** Called when a staff is tapped. Disabled rows (no PIN) are intercepted. */
   onPick: (s: StaffRow) => void;
   /** Optional error display when a no-PIN row is tapped. */
@@ -50,9 +58,15 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
 }
 
-export function StaffPickerList({ recent = [], onPick, onMessage, onPolicy }: StaffPickerListProps) {
+export function StaffPickerList({ recent = [], recentReady = true, onPick, onMessage, onPolicy }: StaffPickerListProps) {
   const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Keep the latest onPolicy without retriggering the load effect. Passing the
+  // callback in the dep array re-runs the fetch on every parent render (callers
+  // often pass an inline function), which re-renders the list mid-interaction.
+  const onPolicyRef = useRef(onPolicy);
+  onPolicyRef.current = onPolicy;
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +77,7 @@ export function StaffPickerList({ recent = [], onPick, onMessage, onPolicy }: St
           const data = (await r.json()) as { staff: StaffRow[]; pinless?: boolean };
           if (!cancelled) {
             setStaff(data.staff || []);
-            onPolicy?.({ pinless: Boolean(data.pinless) });
+            onPolicyRef.current?.({ pinless: Boolean(data.pinless) });
           }
         }
       } finally {
@@ -71,7 +85,7 @@ export function StaffPickerList({ recent = [], onPick, onMessage, onPolicy }: St
       }
     })();
     return () => { cancelled = true; };
-  }, [onPolicy]);
+  }, []);
 
   const { recentRows, otherRows } = useMemo(() => {
     const map = new Map(staff.map((s) => [s.id, s] as const));
@@ -83,7 +97,7 @@ export function StaffPickerList({ recent = [], onPick, onMessage, onPolicy }: St
     return { recentRows: recents, otherRows: Array.from(map.values()) };
   }, [staff, recent]);
 
-  if (loading) return <StaffPickerSkeleton />;
+  if (loading || !recentReady) return <StaffPickerSkeleton />;
   if (staff.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-gray-300 px-6 py-10 text-center text-sm text-gray-500">
@@ -143,7 +157,7 @@ function Row({ staff: s, onPick, onMessage, isRecent }: RowProps) {
         onMessage?.(null);
         onPick(s);
       }}
-      className={`group flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-3.5 py-3 text-left ring-1 ring-transparent transition-all duration-150 last:border-b-0 ${t.hoverBg} ${t.hoverRing}`}
+      className={`ds-raw-button group flex w-full cursor-pointer items-center gap-3 border-b border-gray-100 px-3.5 py-3 text-left ring-1 ring-transparent transition-all duration-150 last:border-b-0 ${t.hoverBg} ${t.hoverRing}`}
       aria-label={needsSetup ? `Set up PIN for ${s.name}, ${s.role}` : `Sign in as ${s.name}, ${s.role}`}
     >
       <div className="relative flex-shrink-0">

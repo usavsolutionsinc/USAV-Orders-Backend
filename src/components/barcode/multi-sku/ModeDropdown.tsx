@@ -36,7 +36,7 @@ export function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
+        className={`ds-raw-button flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-gray-300 ${
           open ? 'rounded-b-none border-b-0' : ''
         }`}
       >
@@ -65,7 +65,7 @@ export function ModeDropdown({ mode, onChange }: ModeDropdownProps) {
                   onChange(id);
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
+                className="ds-raw-button flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-gray-50"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
                   <Icon className="h-4 w-4" />

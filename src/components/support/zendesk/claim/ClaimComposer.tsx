@@ -9,7 +9,7 @@ import { ClaimTicketPicker } from './ClaimTicketPicker';
 import { PRIORITY_OPTIONS } from './claim-types';
 import type { ZendeskClaimController } from './useZendeskClaimController';
 
-const labelCls = 'text-[10px] font-black uppercase tracking-widest text-gray-500';
+const labelCls = 'text-micro font-black uppercase tracking-widest text-gray-500';
 const inputCls =
   'w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-[13px] text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
 
@@ -31,7 +31,7 @@ function VisibilityToggle({
         type="button"
         onClick={() => onChange(false)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-bold transition',
+          'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
           !value ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
         )}
       >
@@ -41,7 +41,7 @@ function VisibilityToggle({
         type="button"
         onClick={() => onChange(true)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-bold transition',
+          'ds-raw-button inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-caption font-bold transition',
           value ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700',
         )}
       >
@@ -96,8 +96,8 @@ export function ClaimComposer({ c }: { c: ZendeskClaimController }) {
           <div className="space-y-2.5 rounded-xl bg-gray-50/80 p-3.5 ring-1 ring-inset ring-gray-100">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[12px] font-bold text-gray-700">First message</p>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-label font-bold text-gray-700">First message</p>
+                <p className="text-caption text-gray-500">
                   {c.createPublic ? 'Emails the requester below.' : 'Internal note — nobody is emailed.'}
                 </p>
               </div>

@@ -28,6 +28,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CreateRoleDialog } from './roles/CreateRoleDialog';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 
 interface RoleRow {
   id: number;
@@ -108,14 +110,15 @@ export function RolesSidebarPanel({ basePath = '/settings/roles' }: { basePath?:
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <div className="flex-shrink-0 border-b border-gray-200 px-3 py-2.5">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setCreateOpen(true)}
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-white px-3 py-1.5 text-label font-semibold text-gray-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
+          icon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>}
+          className="w-full justify-center border border-dashed border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700"
         >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
           Create role
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-2">
@@ -172,26 +175,27 @@ function SortableRoleRow({ role, selected, onPick }: SortableRoleRowProps) {
           : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
       }`}>
         {/* Drag handle */}
-        <button
-          type="button"
+        <IconButton
           {...attributes}
           {...listeners}
-          aria-label="Drag to reorder"
-          className="flex-shrink-0 cursor-grab text-gray-300 transition hover:text-gray-500 active:cursor-grabbing"
-        >
-          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <circle cx="9"  cy="6"  r="1.5"/>
-            <circle cx="15" cy="6"  r="1.5"/>
-            <circle cx="9"  cy="12" r="1.5"/>
-            <circle cx="15" cy="12" r="1.5"/>
-            <circle cx="9"  cy="18" r="1.5"/>
-            <circle cx="15" cy="18" r="1.5"/>
-          </svg>
-        </button>
+          ariaLabel="Drag to reorder"
+          className="flex-shrink-0 cursor-grab text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+          icon={
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <circle cx="9"  cy="6"  r="1.5"/>
+              <circle cx="15" cy="6"  r="1.5"/>
+              <circle cx="9"  cy="12" r="1.5"/>
+              <circle cx="15" cy="12" r="1.5"/>
+              <circle cx="9"  cy="18" r="1.5"/>
+              <circle cx="15" cy="18" r="1.5"/>
+            </svg>
+          }
+        />
 
         {/* Color swatch */}
         <span className="h-6 w-6 flex-shrink-0 rounded-full ring-2 ring-white" style={{ backgroundColor: role.color }} aria-hidden />
 
+        {/* ds-raw-button */}
         <button
           type="button"
           onClick={() => onPick(role.id)}
@@ -210,9 +214,11 @@ function SortableRoleRow({ role, selected, onPick }: SortableRoleRowProps) {
           </div>
         </button>
 
-        <span title={`${role.member_count} member${role.member_count === 1 ? '' : 's'}`} className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-semibold tabular-nums text-gray-600">
-          {role.member_count}
-        </span>
+        <HoverTooltip label={`${role.member_count} member${role.member_count === 1 ? '' : 's'}`} asChild>
+          <span className="flex-shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-semibold tabular-nums text-gray-600">
+            {role.member_count}
+          </span>
+        </HoverTooltip>
       </div>
     </li>
   );

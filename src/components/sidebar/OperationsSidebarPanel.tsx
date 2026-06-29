@@ -14,9 +14,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/utils/_cn';
-import { SIDEBAR_GUTTER, sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
+import { OperationsModeToggle } from '@/components/sidebar/operations/OperationsModeToggle';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav/MasterNavContext';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import {
@@ -26,14 +29,10 @@ import {
   Layers,
   MessageSquare,
   PackageCheck,
-  Plus,
   RefreshCw,
   Sparkles,
-  Star,
-  Trash2,
   TrendingUp,
   Wrench,
-  X,
 } from '@/components/Icons';
 import { emitAiChatNew, emitAiChatPrompt } from '@/components/ai/ai-chat-events';
 import { useQuery } from '@tanstack/react-query';
@@ -41,20 +40,13 @@ import { OPERATIONS_QUERY_KEY } from '@/features/operations/components/operation
 import type { DashboardData } from '@/features/operations/types';
 import {
   ANALYTICS_RANGE_LABELS,
-  OPERATIONS_MODE_ITEMS,
   JOURNEY_DIMENSION_ITEMS,
-  JOURNEY_STATION_ITEMS,
-  JOURNEY_TYPE_ITEMS,
   parseAnalyticsRange,
   type AnalyticsRange,
   type OperationsMode,
 } from '@/components/sidebar/operations/operations-sidebar-shared';
 import { useOperationsMode } from '@/components/sidebar/operations/useOperationsMode';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
-import { useOperationsSavedViews } from '@/hooks/useOperationsSavedViews';
-import { DateRangePickerField } from '@/design-system/components/DateRangePickerField';
-import type { DateRange } from 'react-day-picker';
-import { startOfDay, endOfDay } from 'date-fns';
 import type { JourneyDimension } from '@/lib/timeline/journey';
 
 const ANALYTICS_RANGES: AnalyticsRange[] = ['24h', '7d', '30d'];
@@ -87,29 +79,19 @@ export function OperationsSidebarPanel() {
 
   // The mode rail is suppressed when the master-nav drives mode switching
   // (operations isn't in MASTER_NAV_RAIL_PAGES today, so it renders its own).
-  const modeRail = masterNavEnabled ? null : (
-    <div className={cn(sidebarHeaderPillRowClass, 'gap-0')}>
-      <HorizontalButtonSlider
-        items={OPERATIONS_MODE_ITEMS}
-        value={mode}
-        onChange={(id) => updateMode(id as OperationsMode)}
-        variant="nav"
-        dense
-        className="w-full"
-        aria-label="Operations mode"
-      />
-    </div>
+  const modeToggle = masterNavEnabled ? null : (
+    <OperationsModeToggle value={mode} onChange={(id) => updateMode(id as OperationsMode)} />
   );
 
-  if (mode === 'analytics') return <AnalyticsSidebar modeRail={modeRail} />;
-  if (mode === 'insights') return <InsightsSidebar modeRail={modeRail} />;
-  if (mode === 'history') return <HistorySidebar modeRail={modeRail} />;
-  return <LiveSidebar modeRail={modeRail} />;
+  if (mode === 'analytics') return <AnalyticsSidebar modeToggle={modeToggle} />;
+  if (mode === 'insights') return <InsightsSidebar modeToggle={modeToggle} />;
+  if (mode === 'history') return <HistorySidebar modeToggle={modeToggle} />;
+  return <LiveSidebar modeToggle={modeToggle} />;
 }
 
 // ── Live ────────────────────────────────────────────────────────────────────
 
-function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function LiveSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const [q, setQ] = useState('');
   // Read-only view of the shared dashboard cache. The right-pane
   // OperationsDashboard owns the fetch + Ably subscription (Live mode mounts
@@ -148,10 +130,11 @@ function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
   return (
     <SidebarShell
-      headerAbove={modeRail}
       search={{ value: q, onChange: setQ, placeholder: 'Search live activity…', variant: 'blue' }}
+      bodyClassName="pt-0 pb-6"
     >
-      <div className={cn('space-y-4', SIDEBAR_GUTTER, 'pb-6')}>
+      {modeToggle}
+      <div className={cn('space-y-4 pt-4')}>
         <div className="grid grid-cols-2 gap-2">
           {kpis.map((k) => {
             const cell = data?.summary?.[k.key];
@@ -195,7 +178,7 @@ function LiveSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
-function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function AnalyticsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const range = parseAnalyticsRange(searchParams.get('range'));
@@ -212,8 +195,9 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
   );
 
   return (
-    <SidebarShell headerAbove={modeRail}>
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+    <SidebarShell bodyClassName="pt-0 pb-6">
+      {modeToggle}
+      <div className={cn('space-y-5 pt-3')}>
         <header>
           <h2 className="text-xl font-black uppercase leading-none tracking-tighter text-gray-900">Analytics</h2>
           <p className="mt-1 text-eyebrow font-bold uppercase tracking-widest text-blue-600">
@@ -229,8 +213,9 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
                 key={r}
                 type="button"
                 onClick={() => setParam('range', r)}
+                /* ds-raw-button: vertical segmented time-range toggle (selection ring) — not a Button shape */
                 className={cn(
-                  'flex items-center justify-between rounded-lg border px-3 py-1.5 text-left text-caption font-semibold transition-colors',
+                  'ds-raw-button flex items-center justify-between rounded-lg border px-3 py-1.5 text-left text-caption font-semibold transition-colors',
                   range === r
                     ? 'border-blue-400 bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
                     : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
@@ -251,8 +236,9 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setParam('section', s.id)}
+                  /* ds-raw-button: jump-to nav row (icon + label, selection ring) — not a Button shape */
                   className={cn(
-                    'flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-caption font-semibold transition-colors',
+                    'ds-raw-button flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-caption font-semibold transition-colors',
                     activeSection === s.id
                       ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-400'
                       : 'text-gray-700 hover:bg-gray-50',
@@ -272,10 +258,11 @@ function AnalyticsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
 // ── Insights (AI) ─────────────────────────────────────────────────────────────
 
-function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function InsightsSidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   return (
-    <SidebarShell headerAbove={modeRail}>
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pt-3 pb-6')}>
+    <SidebarShell bodyClassName="pt-0 pb-6">
+      {modeToggle}
+      <div className={cn('space-y-5 pt-3')}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
@@ -283,15 +270,14 @@ function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
             </div>
             <p className="text-base font-semibold tracking-tight text-gray-900">Ops Assistant</p>
           </div>
-          <button
-            type="button"
-            onClick={() => emitAiChatNew()}
-            aria-label="New chat"
-            title="New chat"
-            className="-my-1 rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
+          <HoverTooltip label="New chat" asChild>
+            <IconButton
+              icon={<RefreshCw className="h-4 w-4" />}
+              ariaLabel="New chat"
+              onClick={() => emitAiChatNew()}
+              className="-my-1 rounded-md p-1.5 hover:bg-gray-100"
+            />
+          </HoverTooltip>
         </div>
 
         <p className="text-caption leading-5 text-gray-600">
@@ -319,7 +305,8 @@ function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
                 key={p}
                 type="button"
                 onClick={() => emitAiChatPrompt(p)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+                /* ds-raw-button: multi-line text-left prompt suggestion card — not a Button shape */
+                className="ds-raw-button rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
               >
                 {p}
               </button>
@@ -333,27 +320,8 @@ function InsightsSidebar({ modeRail }: { modeRail: React.ReactNode }) {
 
 // ── History ───────────────────────────────────────────────────────────────────
 
-function ToggleChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'rounded-md px-2 py-1 text-eyebrow font-bold uppercase tracking-wide ring-1 ring-inset transition-colors',
-        active ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50',
-      )}
-    >
-      {label}
-    </button>
-  );
-}
-
-function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
+function HistorySidebar({ modeToggle }: { modeToggle: React.ReactNode }) {
   const url = useOperationsTimelineUrlState();
-  const savedViews = useOperationsSavedViews();
-  const [naming, setNaming] = useState(false);
-  const [draftName, setDraftName] = useState('');
 
   const placeholder =
     url.dim === 'order'
@@ -362,29 +330,10 @@ function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
         ? 'Search a serial number…'
         : 'Search a tracking number…';
 
-  const dateValue: DateRange | undefined =
-    url.from || url.until
-      ? { from: url.from ? new Date(url.from) : undefined, to: url.until ? new Date(url.until) : undefined }
-      : undefined;
-
-  const onDateChange = (r: DateRange | undefined) => {
-    url.setRange(
-      r?.from ? startOfDay(r.from).toISOString() : null,
-      r?.to ? endOfDay(r.to).toISOString() : null,
-    );
-  };
-
-  const handleSaveView = () => {
-    const name = draftName.trim();
-    if (!name) return;
-    savedViews.create({ name, filters: url.filters });
-    setDraftName('');
-    setNaming(false);
-  };
-
+  // Pure record lookup: pick a dimension, paste a number. The right pane teaches
+  // the empty state; the body stays clean (no date/station/type/saved-view rails).
   return (
     <SidebarShell
-      headerAbove={modeRail}
       search={{
         value: url.entityValue,
         onChange: (v) => url.setEntity(v),
@@ -392,157 +341,15 @@ function HistorySidebar({ modeRail }: { modeRail: React.ReactNode }) {
         variant: 'blue',
         debounceMs: 250,
       }}
-      headerRows={[
-        <HorizontalButtonSlider
-          key="dimension"
-          items={JOURNEY_DIMENSION_ITEMS}
-          value={url.dim}
-          onChange={(id) => url.setDim(id as JourneyDimension)}
-          variant="nav"
-          dense
-          className="w-full"
-          aria-label="Journey dimension"
-        />,
-      ]}
+      bodyClassName="pt-0"
     >
-      <div className={cn('space-y-5', SIDEBAR_GUTTER, 'pb-6 pt-1')}>
-        {/* Date range */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Date range</p>
-          <DateRangePickerField value={dateValue} onChange={onDateChange} placeholder="Any time" className="w-full" />
-        </div>
-
-        {/* Stations */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Stations</p>
-          <div className="flex flex-wrap gap-1.5">
-            {JOURNEY_STATION_ITEMS.map((s) => (
-              <ToggleChip
-                key={s.id}
-                label={s.label}
-                active={url.stations.includes(s.id)}
-                onClick={() => url.toggleStation(s.id)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Event types */}
-        <div className="space-y-1.5">
-          <p className={sectionLabel}>Event types</p>
-          <div className="flex flex-wrap gap-1.5">
-            {JOURNEY_TYPE_ITEMS.map((t) => (
-              <ToggleChip
-                key={t.id}
-                label={t.label}
-                active={url.types.includes(t.id)}
-                onClick={() => url.toggleType(t.id)}
-              />
-            ))}
-          </div>
-        </div>
-
-        {url.activeFilterCount > 0 ? (
-          <button
-            type="button"
-            onClick={url.clearFilters}
-            className="inline-flex items-center gap-1.5 text-caption font-semibold text-gray-500 hover:text-gray-700"
-          >
-            <X className="h-3.5 w-3.5" /> Clear {url.activeFilterCount} filter
-            {url.activeFilterCount === 1 ? '' : 's'}
-          </button>
-        ) : null}
-
-        {/* Saved views */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <p className={sectionLabel}>Saved views</p>
-            <button
-              type="button"
-              onClick={() => setNaming((v) => !v)}
-              className="-my-0.5 inline-flex items-center gap-0.5 text-eyebrow font-bold uppercase tracking-wide text-blue-600 hover:text-blue-700"
-            >
-              <Plus className="h-3.5 w-3.5" /> Save
-            </button>
-          </div>
-
-          {naming ? (
-            <div className="flex items-center gap-1.5">
-              <input
-                autoFocus
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveView();
-                  if (e.key === 'Escape') {
-                    setNaming(false);
-                    setDraftName('');
-                  }
-                }}
-                placeholder="Name this view…"
-                className="min-w-0 flex-1 rounded-md border border-gray-200 px-2 py-1 text-caption text-gray-900 focus:border-blue-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleSaveView}
-                disabled={!draftName.trim() || savedViews.creating}
-                className="rounded-md bg-blue-600 px-2 py-1 text-eyebrow font-bold uppercase tracking-wide text-white disabled:opacity-50"
-              >
-                Save
-              </button>
-            </div>
-          ) : null}
-          {savedViews.createError ? (
-            <p className="text-micro font-semibold text-rose-600">{savedViews.createError}</p>
-          ) : null}
-
-          {savedViews.views.length > 0 ? (
-            <ul className="divide-y divide-gray-100">
-              {savedViews.views.map((v) => (
-                <li key={v.id} className="flex items-center gap-2 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() => url.applyView(v.filters)}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-                  >
-                    <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                    <span className="truncate text-caption font-semibold text-gray-700">{v.name}</span>
-                    {v.is_shared ? (
-                      <span className="shrink-0 rounded bg-gray-100 px-1 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-gray-500">
-                        Shared
-                      </span>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Delete the saved view “${v.name}”?`)) savedViews.remove(v.id);
-                    }}
-                    aria-label={`Delete view ${v.name}`}
-                    className="-my-0.5 shrink-0 text-gray-300 hover:text-rose-500"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : !naming ? (
-            <p className="text-micro leading-5 text-gray-400">
-              Save the current filters as a named view to reuse later.
-            </p>
-          ) : null}
-        </div>
-
-        {/* Teaching card */}
-        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4">
-          <p className="text-caption font-semibold text-gray-700">Operations record</p>
-          <p className="mt-1 text-micro leading-5 text-gray-500">
-            Pick a dimension above and paste a record number to open its complete timeline across
-            every station. Event-type and station filters narrow that record&rsquo;s logs; save
-            frequently-checked records as views.
-          </p>
-        </div>
-      </div>
+      {modeToggle}
+      <SidebarNavOverlaySlider
+        items={JOURNEY_DIMENSION_ITEMS}
+        value={url.dim}
+        onChange={(id) => url.setDim(id as JourneyDimension)}
+        aria-label="Journey dimension"
+      />
     </SidebarShell>
   );
 }

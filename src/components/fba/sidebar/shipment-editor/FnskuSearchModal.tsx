@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Check, Loader2, Package, Plus, Search, X } from '@/components/Icons';
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import type { FnskuSearchResult } from '@/components/fba/hooks/useFnskuSearch';
 import type { StationTheme } from '@/utils/staff-colors';
 import type { ShipmentCardItem } from '@/lib/fba/types';
@@ -48,6 +50,7 @@ export function FnskuSearchModal({
           transition={{ duration: 0.15 }}
           className="fixed inset-0 z-modal flex items-stretch justify-center p-4 sm:p-6 md:p-10"
         >
+          {/* ds-raw-button */}
           <button
             type="button"
             className="absolute inset-0 bg-black/50"
@@ -68,14 +71,13 @@ export function FnskuSearchModal({
                   <p className="text-micro font-black uppercase tracking-[0.16em] text-purple-600">Add FNSKU</p>
                   <h2 className="mt-0.5 text-sm font-black text-zinc-900">Search shipment catalog</h2>
                 </div>
-                <button
+                <IconButton
                   type="button"
                   onClick={onClose}
-                  className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                  className="rounded-full border border-zinc-200 bg-white p-2 text-zinc-500 hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-800"
+                  ariaLabel="Close"
+                  icon={<X className="h-4 w-4" />}
+                />
               </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
@@ -128,29 +130,31 @@ export function FnskuSearchModal({
                           </div>
                         }
                         rightSlot={
-                          <button
-                            type="button"
-                            disabled={alreadyAdded || isAdding}
-                            onClick={() => void onAddFnsku(result)}
-                            className={[
-                              'flex h-7 w-7 items-center justify-center rounded-lg border transition-colors',
-                              alreadyAdded
-                                ? 'cursor-default border-emerald-200 bg-emerald-50 text-emerald-600'
-                                : isAdding
-                                  ? 'cursor-wait border-purple-200 bg-purple-50 text-purple-500'
-                                  : 'border-purple-200 bg-white text-purple-600 hover:border-purple-400 hover:bg-purple-50',
-                            ].join(' ')}
-                            aria-label={alreadyAdded ? 'Already in shipment' : `Add ${result.fnsku} to shipment`}
-                            title={alreadyAdded ? 'Already in shipment' : 'Add to shipment'}
-                          >
-                            {isAdding ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : alreadyAdded ? (
-                              <Check className="h-3.5 w-3.5" />
-                            ) : (
-                              <Plus className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                          <HoverTooltip label={alreadyAdded ? 'Already in shipment' : 'Add to shipment'} asChild>
+                            <IconButton
+                              type="button"
+                              disabled={alreadyAdded || isAdding}
+                              onClick={() => void onAddFnsku(result)}
+                              className={[
+                                'flex h-7 w-7 items-center justify-center rounded-lg border',
+                                alreadyAdded
+                                  ? 'cursor-default border-emerald-200 bg-emerald-50 text-emerald-600'
+                                  : isAdding
+                                    ? 'cursor-wait border-purple-200 bg-purple-50 text-purple-500'
+                                    : 'border-purple-200 bg-white text-purple-600 hover:border-purple-400 hover:bg-purple-50',
+                              ].join(' ')}
+                              ariaLabel={alreadyAdded ? 'Already in shipment' : `Add ${result.fnsku} to shipment`}
+                              icon={
+                                isAdding ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : alreadyAdded ? (
+                                  <Check className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Plus className="h-3.5 w-3.5" />
+                                )
+                              }
+                            />
+                          </HoverTooltip>
                         }
                       />
                     );

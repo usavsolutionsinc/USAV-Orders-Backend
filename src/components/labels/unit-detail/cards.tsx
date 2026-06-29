@@ -289,7 +289,7 @@ function TimelineRow({
           <span className="text-label font-bold text-gray-900">{prettyLabel(event.event_type)}</span>
           <span className="text-micro text-gray-400">{timeAgo(event.occurred_at)}</span>
           {event.station ? (
-            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider text-gray-500">
               {event.station}
             </span>
           ) : null}
@@ -334,7 +334,7 @@ export function AllocationsCard({ rows }: { rows: Allocation[] }) {
             <div className="flex items-baseline justify-between gap-3">
               <span className="font-mono text-label font-bold text-gray-900">{a.order_id}</span>
               <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${
                   a.state === 'RELEASED'
                     ? 'bg-gray-100 text-gray-500'
                     : 'bg-emerald-100 text-emerald-700'

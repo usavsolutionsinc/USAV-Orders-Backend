@@ -93,7 +93,7 @@ export function FilterRefinementBar({
           <Filter className={isSidebar ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
         </div>
         
-        <span className={`flex-1 text-left ${isSidebar ? 'text-micro font-black uppercase tracking-wider' : 'font-black uppercase tracking-wider text-[11px]'}`}>
+        <span className={`flex-1 text-left ${isSidebar ? 'text-micro font-black uppercase tracking-wider' : 'font-black uppercase tracking-wider text-caption'}`}>
           {label}
         </span>
 
@@ -102,7 +102,7 @@ export function FilterRefinementBar({
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             className={`flex items-center justify-center rounded-full bg-blue-600 font-black text-white shadow-sm shadow-blue-600/20 ${
-              isSidebar ? 'h-4 min-w-[16px] px-1 text-[9px]' : 'h-5 min-w-[20px] px-1.5 text-[10px]'
+              isSidebar ? 'h-4 min-w-[16px] px-1 text-eyebrow' : 'h-5 min-w-[20px] px-1.5 text-micro'
             }`}
           >
             {count}
@@ -172,7 +172,7 @@ export function FilterRefinementBar({
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 className={cn(
-                  'group inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-[12px] font-bold shadow-sm ring-1 ring-inset transition-all',
+                  'group inline-flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-label font-bold shadow-sm ring-1 ring-inset transition-all',
                   ref.pillClassName ??
                     'bg-white text-gray-900 ring-gray-200 hover:ring-blue-300',
                 )}
@@ -197,7 +197,7 @@ export function FilterRefinementBar({
                 layout
                 type="button"
                 onClick={onClearAll}
-                className="ml-1 text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
+                className="ml-1 text-caption font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-colors"
               >
                 Clear all
               </motion.button>

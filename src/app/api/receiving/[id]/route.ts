@@ -29,6 +29,21 @@ const SOURCE_PLATFORMS = new Set([
 // receiving_lines.receiving_type overrides; see migration 2026-06-13b.
 const INTAKE_TYPES = new Set(['PO', 'RETURN', 'TRADE_IN']);
 
+// Return-platform vocabulary (receiving.return_platform). Mirrors the
+// return_platform_enum DB type and the RETURN_PLATFORM_LABELS keys in
+// src/components/sidebar/receiving/receiving-sidebar-shared.ts. Kept as a local
+// Set so the API route stays independent of the UI layer, matching the
+// SOURCE_PLATFORMS / INTAKE_TYPES convention above.
+const RETURN_PLATFORMS = new Set([
+  'AMZ',
+  'EBAY_DRAGONH',
+  'EBAY_USAV',
+  'EBAY_MK',
+  'FBA',
+  'WALMART',
+  'ECWID',
+]);
+
 /**
  * GET /api/receiving/:id
  * Full carton view used by the mobile /m/r/:id page. One round-trip:
@@ -59,9 +74,8 @@ export async function GET(
       orgId,
       `SELECT
          r.id,
-         r.receiving_tracking_number,
          r.shipment_id,
-         COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS tracking,
+         stn.tracking_number_raw AS tracking,
          COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)            AS carrier,
          r.source,
          r.source_platform,
@@ -150,7 +164,7 @@ export async function GET(
          rl.source_platform_pill,
          rl.location_code,
          rl.listing_reference,
-         COALESCE(stn_line.tracking_number_raw, r_cart.receiving_tracking_number) AS tracking_number,
+         stn_line.tracking_number_raw AS tracking_number,
          rl.notes,
          to_char(rl.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
          to_char(rl.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS updated_at
@@ -428,6 +442,31 @@ export async function PATCH(
       values.push(next);
     }
 
+    // Return flag (receiving.is_return). Coerced to a strict boolean so a
+    // stringified 'false' / 0 from a form never lands as truthy.
+    if (Object.prototype.hasOwnProperty.call(body, 'is_return')) {
+      const raw = body.is_return;
+      const next = raw === true || raw === 'true' || raw === 1 || raw === '1';
+      updates.push(`is_return = $${idx++}`);
+      values.push(next);
+    }
+
+    // Return-platform tag (receiving.return_platform). Validated against the
+    // return_platform vocabulary (return_platform_enum); '' / null clears it.
+    // Mirrors the source_platform handler block above.
+    if (Object.prototype.hasOwnProperty.call(body, 'return_platform')) {
+      const raw = body.return_platform;
+      const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
+      if (next != null && !RETURN_PLATFORMS.has(next)) {
+        return NextResponse.json(
+          { success: false, error: `Invalid return_platform. Allowed: ${Array.from(RETURN_PLATFORMS).join(', ')}` },
+          { status: 400 },
+        );
+      }
+      updates.push(`return_platform = $${idx++}`);
+      values.push(next);
+    }
+
     // Carton-level default receiving type (PO|RETURN|TRADE_IN + org custom).
     // Per-line receiving_lines.receiving_type overrides this; null clears it.
     if (Object.prototype.hasOwnProperty.call(body, 'intake_type')) {
@@ -504,9 +543,8 @@ export async function PATCH(
           registeredShipmentId = Number(shipment.id);
           updates.push(`shipment_id = $${idx++}`);
           values.push(registeredShipmentId);
-          // Keep legacy receiving_tracking_number in sync for older readers.
-          updates.push(`receiving_tracking_number = COALESCE(receiving_tracking_number, $${idx++})`);
-          values.push(trackingStr);
+          // Tracking lives solely in STN (shipment_id) — legacy
+          // receiving_tracking_number has been dropped.
         }
       }
     }
@@ -525,8 +563,9 @@ export async function PATCH(
     const { before, result } = await withTenantTransaction(ctx.organizationId, async (client) => {
       // Snapshot the row before the update so the audit row carries a real diff.
       const beforeRow = await client.query(
-        `SELECT id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number,
-                shipment_id, support_notes, listing_url, source, receiving_tracking_number
+        `SELECT id, source_platform, intake_type, is_return, return_platform,
+                zoho_purchaseorder_id, zoho_purchaseorder_number,
+                shipment_id, support_notes, listing_url, source
          FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
         [id, ctx.organizationId],
       );
@@ -536,6 +575,8 @@ export async function PATCH(
         id: number;
         source_platform: string | null;
         intake_type: string | null;
+        is_return: boolean | null;
+        return_platform: string | null;
         zoho_purchaseorder_id: string | null;
         zoho_purchaseorder_number: string | null;
         shipment_id: number | null;
@@ -544,7 +585,7 @@ export async function PATCH(
       }>(
         `UPDATE receiving SET ${updates.join(', ')}
          WHERE id = $${values.length - 1} AND organization_id = $${orgParamIdx}
-         RETURNING id, source_platform, intake_type, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
+         RETURNING id, source_platform, intake_type, is_return, return_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
         values,
       );
       return { before, result };

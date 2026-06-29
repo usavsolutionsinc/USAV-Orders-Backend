@@ -2,18 +2,13 @@
 
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
-import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav/MasterNavContext';
 import { SupportTicketQueue } from '@/components/support/zendesk/queue/SupportTicketQueue';
 import { VoicemailQueue } from '@/components/support/voice/VoicemailQueue';
 import { CallLogSidebar } from '@/components/support/voice/CallLogSidebar';
-import {
-  SUPPORT_MODE_ITEMS,
-  type SupportMode,
-} from '@/components/sidebar/support/support-sidebar-shared';
+import { SupportModeToggle } from '@/components/sidebar/support/SupportModeToggle';
+import type { SupportMode } from '@/components/sidebar/support/support-sidebar-shared';
 import { useSupportMode } from '@/components/sidebar/support/useSupportMode';
 
 /**
@@ -53,32 +48,19 @@ export function SupportSidebarPanel() {
     );
   }
 
-  const modeRail = masterNavEnabled ? null : (
-    <div className={cn(sidebarHeaderPillRowClass, 'gap-0')}>
-      <HorizontalButtonSlider
-        items={SUPPORT_MODE_ITEMS}
-        value={mode}
-        onChange={(id) => updateMode(id as SupportMode)}
-        variant="nav"
-        dense
-        className="w-full"
-        aria-label="Support mode"
-      />
-    </div>
+  const modeToggle = masterNavEnabled ? null : (
+    <SupportModeToggle value={mode} onChange={(id) => updateMode(id as SupportMode)} />
   );
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      {modeRail ? <div className="shrink-0">{modeRail}</div> : null}
-      <div className="min-h-0 flex-1">
-        {mode === 'voicemail' ? (
-          <VoicemailQueue />
-        ) : mode === 'calls' ? (
-          <CallLogSidebar />
-        ) : (
-          <SupportTicketQueue />
-        )}
-      </div>
+      {mode === 'voicemail' ? (
+        <VoicemailQueue modeToggle={modeToggle} />
+      ) : mode === 'calls' ? (
+        <CallLogSidebar modeToggle={modeToggle} />
+      ) : (
+        <SupportTicketQueue modeToggle={modeToggle} />
+      )}
     </div>
   );
 }

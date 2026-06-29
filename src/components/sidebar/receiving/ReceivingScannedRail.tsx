@@ -19,7 +19,7 @@ import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRe
  * eyebrow differ.
  */
 
-function matchesQuery(row: ReceivingLineRow, q: string): boolean {
+export function matchesQuery(row: ReceivingLineRow, q: string): boolean {
   if (!q) return true;
   const hay = [
     row.tracking_number,

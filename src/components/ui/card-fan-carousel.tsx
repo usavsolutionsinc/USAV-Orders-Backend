@@ -277,7 +277,7 @@ export default function SocialCards({ cards, onCardClick, cardTestId }: SocialCa
             );
             if (onCardClick) {
               return (
-                <button key={index} type="button" data-testid={cardTestId} onClick={() => onCardClick(index)} aria-label={card.alt || `Open card ${index + 1}`} className="fan-card block cursor-zoom-in">{image}</button>
+                <button key={index} type="button" data-testid={cardTestId} onClick={() => onCardClick(index)} aria-label={card.alt || `Open card ${index + 1}`} className="ds-raw-button fan-card block cursor-zoom-in">{image}</button>
               );
             }
             return card.linkUrl ? (
@@ -291,7 +291,7 @@ export default function SocialCards({ cards, onCardClick, cardTestId }: SocialCa
 
       {needsPagination && (
         <div className="flex items-center justify-center gap-4 mt-4 md:mt-6 z-30">
-          <button className={`${ARROW_CLASSES} w-10 h-10 md:w-12 md:h-12`} onClick={() => cycle("left")} aria-label="Previous">
+          <button className={`ds-raw-button ${ARROW_CLASSES} w-10 h-10 md:w-12 md:h-12`} onClick={() => cycle("left")} aria-label="Previous">
             {chevron("left")}
           </button>
           <div className="flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function SocialCards({ cards, onCardClick, cardTestId }: SocialCa
               <span key={i} className={`w-2 h-2 rounded-full transition-all duration-300 ${i === centerIndex ? "bg-black/70 dark:bg-white/80 scale-[1.3]" : "bg-black/15 dark:bg-white/15"}`} />
             ))}
           </div>
-          <button className={`${ARROW_CLASSES} w-10 h-10 md:w-12 md:h-12`} onClick={() => cycle("right")} aria-label="Next">
+          <button className={`ds-raw-button ${ARROW_CLASSES} w-10 h-10 md:w-12 md:h-12`} onClick={() => cycle("right")} aria-label="Next">
             {chevron("right")}
           </button>
         </div>

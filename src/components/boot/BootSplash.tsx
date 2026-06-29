@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { motionBezier } from '@/design-system/foundations/motion-framer';
 
 /**
  * Full-screen sign-in splash. Shown by {@link BootGate} from first paint after
@@ -10,8 +9,11 @@ import { motionBezier } from '@/design-system/foundations/motion-framer';
  * filling in box-by-box.
  *
  * Visual language matches `RedirectingSplash` in AuthContext (white field,
- * uppercase tracked caption) but with a softer entrance and an indeterminate
- * progress sweep, since this moment lasts a beat longer.
+ * uppercase tracked caption) plus an indeterminate progress sweep, since this
+ * moment lasts a beat longer.
+ *
+ * Paints settled (no entrance fade) so it's seamless across the sign-in → dest
+ * hard navigation — see the `initial={false}` note below.
  */
 export function BootSplash({ label = 'Loading your workspace' }: { label?: string }) {
   return (
@@ -26,10 +28,22 @@ export function BootSplash({ label = 'Loading your workspace' }: { label?: strin
         aria-hidden
       />
 
+      {/*
+        `initial={false}` — paint settled (opacity 1), never fade the whole panel
+        in. This splash brackets a HARD navigation (sign-in → window.location.assign
+        → destination), so two separate BootSplash instances exist: one on the
+        sign-in page, one on the destination. A mount-entrance (opacity 0 → 1) would
+        replay on the second instance, flashing the panel back to transparent right
+        after the first one finished — the "Loading your workspace appears twice"
+        flicker. Painting settled makes every instance identical and idempotent
+        across the document swap, so the handoff is seamless. The breathing ring and
+        sweep below stay animated (an ambient loop restart is imperceptible; a
+        whole-panel re-fade is not). The fade-OUT on reveal is owned by BootGate's
+        AnimatePresence wrapper, not here.
+      */}
       <motion.div
-        initial={{ opacity: 0, y: 6 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: motionBezier.easeOut }}
         className="relative flex flex-col items-center gap-6"
         role="status"
         aria-live="polite"

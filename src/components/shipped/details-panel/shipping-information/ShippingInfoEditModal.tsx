@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Plus, Trash2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { PasteableDraftInput } from './PasteableDraftInput';
 import type { ShippingInfoEditDraft } from './types';
 
@@ -51,15 +53,14 @@ export function ShippingInfoEditModal({
                 <p className="text-micro font-black uppercase tracking-[0.24em] text-gray-500">Shipping Info</p>
                 <h3 className="mt-1 text-lg font-black tracking-tight text-gray-900">Edit Order Details</h3>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-                aria-label="Close shipping editor"
-                title="Close shipping editor"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <HoverTooltip label="Close shipping editor" asChild>
+                <IconButton
+                  onClick={onClose}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 hover:text-gray-700"
+                  ariaLabel="Close shipping editor"
+                  icon={<X className="h-4 w-4" />}
+                />
+              </HoverTooltip>
             </div>
 
             <div className="space-y-4 px-5 py-5">
@@ -122,40 +123,41 @@ export function ShippingInfoEditModal({
                           title="Paste tracking number"
                         />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDraft((current) => {
-                            const next = current.trackingRows.filter((_, i) => i !== index);
-                            return {
-                              ...current,
-                              trackingRows: next.length > 0 ? next : [{ shipmentId: null, tracking: '' }],
-                            };
-                          });
-                        }}
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-400 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600"
-                        aria-label={`Delete tracking number ${index + 1}`}
-                        title={`Delete tracking number ${index + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <HoverTooltip label={`Delete tracking number ${index + 1}`} asChild>
+                        <IconButton
+                          onClick={() => {
+                            setDraft((current) => {
+                              const next = current.trackingRows.filter((_, i) => i !== index);
+                              return {
+                                ...current,
+                                trackingRows: next.length > 0 ? next : [{ shipmentId: null, tracking: '' }],
+                              };
+                            });
+                          }}
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                          ariaLabel={`Delete tracking number ${index + 1}`}
+                          icon={<Trash2 className="h-4 w-4" />}
+                        />
+                      </HoverTooltip>
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraft((current) => ({
-                        ...current,
-                        trackingRows: [...current.trackingRows, { shipmentId: null, tracking: '' }],
-                      }));
-                    }}
-                    className="flex h-8 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-gray-300 text-xs font-bold text-gray-500 transition-colors hover:border-blue-400 hover:text-blue-600"
-                    aria-label="Add tracking number"
-                    title="Add tracking number"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Tracking Number
-                  </button>
+                  <HoverTooltip label="Add tracking number" asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setDraft((current) => ({
+                          ...current,
+                          trackingRows: [...current.trackingRows, { shipmentId: null, tracking: '' }],
+                        }));
+                      }}
+                      icon={<Plus className="h-3.5 w-3.5" />}
+                      className="w-full rounded-xl border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"
+                      ariaLabel="Add tracking number"
+                    >
+                      Add Tracking Number
+                    </Button>
+                  </HoverTooltip>
                 </div>
               </div>
 
@@ -200,20 +202,19 @@ export function ShippingInfoEditModal({
                       return (
                         <div key={`serial-${index}`} className="flex items-center gap-2">
                           <div className="min-w-0 flex-1">{input}</div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDraft((current) => ({
-                                ...current,
-                                serialRows: current.serialRows.length > 0 ? [...current.serialRows, ''] : [''],
-                              }));
-                            }}
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 text-white transition-colors hover:border-blue-700 hover:bg-blue-700"
-                            aria-label="Add serial number"
-                            title="Add serial number"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
+                          <HoverTooltip label="Add serial number" asChild>
+                            <IconButton
+                              onClick={() => {
+                                setDraft((current) => ({
+                                  ...current,
+                                  serialRows: current.serialRows.length > 0 ? [...current.serialRows, ''] : [''],
+                                }));
+                              }}
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-blue-600 bg-blue-600 transition-colors hover:border-blue-700 hover:bg-blue-700"
+                              ariaLabel="Add serial number"
+                              icon={<Plus className="h-4 w-4 text-white" />}
+                            />
+                          </HoverTooltip>
                         </div>
                       );
                     }
@@ -227,23 +228,20 @@ export function ShippingInfoEditModal({
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-4">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={onClose}
                 disabled={isSaving || isSaveSuccess}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={onSave}
                 disabled={isSaving || isSaveSuccess}
-                className={`relative min-w-[140px] rounded-xl px-4 py-2 text-sm font-bold text-white transition-all duration-200 disabled:opacity-50 ${
-                  isSaveSuccess
-                    ? 'bg-emerald-600 hover:bg-emerald-600'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
+                className={`relative min-w-[140px] ${isSaveSuccess ? 'bg-emerald-600 hover:bg-emerald-600' : ''}`}
               >
                 <span className="flex items-center justify-center">
                   {isSaveSuccess ? 'Saved' : isSaving ? 'Saving…' : 'Save Changes'}
@@ -253,7 +251,7 @@ export function ShippingInfoEditModal({
                 }`}>
                   <Check className="h-4 w-4" />
                 </span>
-              </button>
+              </Button>
             </div>
           </motion.div>
         </motion.div>

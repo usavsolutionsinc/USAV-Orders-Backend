@@ -4,10 +4,12 @@ import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Package, PackageOpen, ChevronRight } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { useSkuQcChecks } from '@/hooks/useSkuQcChecks';
 import { useSkuKitParts } from '@/hooks/useSkuKitParts';
 import { QcChecklistSection } from '@/components/manuals/sections/QcChecklistSection';
 import { SourceThisButton } from '@/components/sourcing/SourceThisButton';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Right-pane workspace for the Products → QC Checklist view. Reads the selected
@@ -99,16 +101,20 @@ export function QcChecklistWorkspace() {
           </div>
         </div>
         <SourceThisButton skuId={catalog.id} label="Source" variant="secondary" />
-        <button
-          type="button"
-          onClick={() => router.replace(`/products?view=kit&skuId=${catalog.id}`)}
-          className="shrink-0 flex items-center gap-1 rounded-full bg-gray-50 px-3 py-1 text-micro font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200 transition-colors hover:bg-gray-100 hover:text-gray-700"
-          title="View what's in this product's box"
-        >
-          <PackageOpen className="h-3 w-3" />
-          {kit?.parts.length ?? 0} kit
-          <ChevronRight className="h-3 w-3" />
-        </button>
+        <HoverTooltip label="View what's in this product's box" asChild>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            icon={<PackageOpen />}
+            iconRight={<ChevronRight />}
+            onClick={() => router.replace(`/products?view=kit&skuId=${catalog.id}`)}
+            ariaLabel="View what's in this product's box"
+            className="h-auto shrink-0 gap-1 rounded-full bg-gray-50 px-3 py-1 text-micro font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200 hover:bg-gray-100 hover:text-gray-700"
+          >
+            {kit?.parts.length ?? 0} kit
+          </Button>
+        </HoverTooltip>
         <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-micro font-black uppercase tracking-wider text-blue-600">
           {checks.length} {checks.length === 1 ? 'step' : 'steps'}
         </span>

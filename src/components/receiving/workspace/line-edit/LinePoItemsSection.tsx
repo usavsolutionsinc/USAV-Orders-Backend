@@ -26,6 +26,14 @@ interface LinePoItemsSectionProps {
   c: UnboxLineController;
   onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
+  /**
+   * Render bare (no own card chrome / pencil) — set when composed inside the
+   * unified {@link POUnboxingSection} wrapper. Forwarded to the matched
+   * accordion and the unmatched section. Defaults to the standalone card.
+   */
+  embedded?: boolean;
+  /** Embedded-only: node rendered on the "PO items · N" header row (the wrapper's pencil). */
+  headerRight?: React.ReactNode;
 }
 
 export function LinePoItemsSection({
@@ -35,6 +43,8 @@ export function LinePoItemsSection({
   c,
   onItemDescFeedback,
   onItemDescSaved,
+  embedded = false,
+  headerRight,
 }: LinePoItemsSectionProps) {
   const router = useRouter();
 
@@ -45,6 +55,8 @@ export function LinePoItemsSection({
       <UnmatchedItemsSection
         receivingId={row.receiving_id}
         staffId={staffId}
+        embedded={embedded}
+        headerRight={headerRight}
         showSerialScan={caps.serialScan}
         // Triage identifies; unboxing (serials, photos, receive) happens in unbox
         // mode — this jumps there with the carton pre-opened via the recvId deep link.
@@ -75,6 +87,10 @@ export function LinePoItemsSection({
     <PoLinesAccordion
       receivingId={row.receiving_id}
       activeLineId={row.id}
+      embedded={embedded}
+      headerRight={headerRight}
+      // Paint the clicked line instantly on a cold open while siblings fetch.
+      placeholderActiveRow={row}
       readOnly={!caps.editLines}
       onItemDescFeedback={onItemDescFeedback}
       onItemDescSaved={onItemDescSaved}

@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import SignaturePadLib, { type PointGroup } from 'signature_pad';
+import { Button } from '@/design-system/primitives';
 
 export interface SignatureData {
   strokes: PointGroup[];
@@ -121,23 +122,24 @@ export function SignaturePad({ onSignatureChange, label = 'Customer Signature', 
     <div className={fillHeight ? 'flex h-full flex-col gap-2 px-3 pt-3' : 'space-y-2'}>
       {/* Label row */}
       <div className="flex items-center justify-between">
-        <label className={`block font-black uppercase tracking-[0.15em] text-gray-500 ${isDropoff ? 'text-[10px]' : 'text-eyebrow'}`}>
+        <label className={`block font-black uppercase tracking-[0.15em] text-gray-500 ${isDropoff ? 'text-micro' : 'text-eyebrow'}`}>
           {label}
         </label>
         <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1.5 font-black uppercase tracking-wide border transition-opacity ${isDropoff ? 'rounded-none px-2 py-1 text-[10px]' : 'text-eyebrow px-2 py-1'} ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
+            <span className={`flex items-center gap-1.5 font-black uppercase tracking-wide border transition-opacity ${isDropoff ? 'rounded-none px-2 py-1 text-micro' : 'text-eyebrow px-2 py-1'} ${signed ? 'text-gray-900 bg-gray-100 border-gray-200' : 'opacity-0 border-transparent'}`}>
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               Signed
             </span>
-          <button
+          <Button
+            variant="ghost"
             type="button"
             onClick={handleClear}
-            className={`font-black text-red-500 hover:text-red-700 uppercase tracking-wide transition-colors px-2 py-1 hover:bg-red-50 ${isDropoff ? 'text-[10px]' : 'text-eyebrow'}`}
+            className={`h-auto rounded px-2 py-1 font-black uppercase tracking-wide text-red-500 hover:bg-red-50 hover:text-red-700 ${isDropoff ? 'text-micro' : 'text-eyebrow'}`}
           >
             Clear
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { toast } from '@/lib/toast';
 import { Check, Loader2, Pencil, Plus, Trash2, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import type { PlatformAccountRow } from '@/lib/neon/catalog-queries';
 import { usePlatformAccountCatalog, usePlatformCatalog, useInvalidateCatalog } from '@/hooks/useCatalog';
 
@@ -106,16 +107,18 @@ export function PlatformAccountsManager() {
           <div key={p.id}>
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{p.label}</span>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setAddingFor(isAdding ? null : p.id);
                   setAddLabel('');
                 }}
-                className="flex items-center gap-1 rounded px-1.5 py-0.5 text-mini font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+                className="text-blue-600 hover:bg-blue-50"
+                icon={<Plus />}
               >
-                <Plus className="h-3 w-3" /> Account
-              </button>
+                Account
+              </Button>
             </div>
 
             <ul className="space-y-1.5">
@@ -157,44 +160,36 @@ export function PlatformAccountsManager() {
                       <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                     ) : isEditing ? (
                       <>
-                        <button
-                          type="button"
+                        <IconButton
                           onClick={() => void saveRename(a.id)}
-                          aria-label="Save"
+                          ariaLabel="Save"
                           className="rounded p-1 text-emerald-600 hover:bg-emerald-50"
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
+                          icon={<Check className="h-4 w-4" />}
+                        />
+                        <IconButton
                           onClick={() => setEditingId(null)}
-                          aria-label="Cancel"
+                          ariaLabel="Cancel"
                           className="rounded p-1 text-gray-400 hover:bg-gray-100"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                          icon={<X className="h-4 w-4" />}
+                        />
                       </>
                     ) : (
                       <>
-                        <button
-                          type="button"
+                        <IconButton
                           onClick={() => {
                             setEditingId(a.id);
                             setEditLabel(a.label);
                           }}
-                          aria-label={`Rename ${a.label}`}
+                          ariaLabel={`Rename ${a.label}`}
                           className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
+                          icon={<Pencil className="h-3.5 w-3.5" />}
+                        />
+                        <IconButton
                           onClick={() => void setActive(a, false)}
-                          aria-label={`Remove ${a.label}`}
+                          ariaLabel={`Remove ${a.label}`}
                           className="rounded p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                          icon={<Trash2 className="h-3.5 w-3.5" />}
+                        />
                       </>
                     )}
                   </li>
@@ -214,15 +209,16 @@ export function PlatformAccountsManager() {
                     placeholder={`New ${p.label} account…`}
                     className={`${TEXT_INPUT} flex-1`}
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => void add(p.id)}
                     disabled={!addLabel.trim() || busyId != null}
-                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-mini font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    loading={busyId === 'new'}
+                    icon={<Plus />}
                   >
-                    {busyId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                     Add
-                  </button>
+                  </Button>
                 </li>
               ) : null}
             </ul>
@@ -238,13 +234,14 @@ export function PlatformAccountsManager() {
                     {busyId === a.id ? (
                       <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                     ) : (
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => void setActive(a, true)}
-                        className="rounded px-2 py-0.5 text-mini font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+                        className="text-blue-600 hover:bg-blue-50"
                       >
                         Restore
-                      </button>
+                      </Button>
                     )}
                   </li>
                 ))}

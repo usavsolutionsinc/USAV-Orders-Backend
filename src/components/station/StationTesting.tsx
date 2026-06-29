@@ -13,6 +13,8 @@ import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { useStationTheme } from '@/hooks/useStationTheme';
 import { useIsMobile } from '@/hooks';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 const STATION_EASE_OUT = motionBezier.easeOut;
 const STATION_EASE_HEIGHT = [0.25, 0.1, 0.25, 1] as const;
@@ -231,14 +233,15 @@ export default function StationTesting({
         placeholder="ORDERS, FNSKU, RS, SN"
         autoFocus
         icon={(
-          <span
-            className="flex items-center justify-center"
-            role="status"
-            aria-label={`Current input mode: ${modeBadge.label}`}
-            title={`Current mode: ${modeBadge.label}`}
-          >
-            <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
-          </span>
+          <HoverTooltip label={`Current mode: ${modeBadge.label}`} asChild>
+            <span
+              className="flex items-center justify-center"
+              role="status"
+              aria-label={`Current input mode: ${modeBadge.label}`}
+            >
+              <ActiveModeIcon className={`h-[17px] w-[17px] transition-colors ${modeBadge.leftDisplayClassName}`} />
+            </span>
+          </HoverTooltip>
         )}
         inputClassName={`focus:ring-4 focus:ring-${themeColor}-500/10 focus:border-${themeColor}-500 pr-32`}
         rightContentClassName="right-1.5 gap-0.5"
@@ -248,78 +251,86 @@ export default function StationTesting({
               <Loader2 className="h-4 w-4 animate-spin text-gray-700" />
             )}
             <div className="flex items-center gap-0">
-              <button
-                type="button"
-                onClick={() => toggleMode('tracking')}
-                aria-pressed={isTrackingArmed}
-                aria-label={
-                  isTrackingArmed
-                    ? 'Tracking armed for next Enter or scan. Click again to cancel.'
-                    : 'Arm tracking: next Enter or scan uses tracking. If the field already has text, send now.'
-                }
-                title={
+              <HoverTooltip
+                label={
                   isTrackingArmed
                     ? 'Tracking armed — next Enter/scan. Click again to cancel.'
-                    : 'Arm tracking (next Enter/scan; or send now if field has text)'
+                    : 'Tracking (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isTrackingArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-blue-700 bg-blue-50` : inactiveModeButtonClass}`}
+                asChild
               >
-                <MapPin className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleMode('fba')}
-                aria-pressed={isFbaArmed}
-                aria-label={
-                  isFbaArmed
-                    ? 'FBA armed for next Enter or scan. Click again to cancel.'
-                    : 'Arm FBA: next Enter or scan uses FNSKU. If the field already has text, send now.'
-                }
-                title={
+                <IconButton
+                  icon={<MapPin className="h-3.5 w-3.5" />}
+                  onClick={() => toggleMode('tracking')}
+                  aria-pressed={isTrackingArmed}
+                  ariaLabel={
+                    isTrackingArmed
+                      ? 'Tracking armed for next Enter or scan. Click again to cancel.'
+                      : 'Arm tracking: next Enter or scan uses tracking. If the field already has text, send now.'
+                  }
+                  className={`${modeButtonBaseClass} ${isTrackingArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-blue-700 bg-blue-50` : inactiveModeButtonClass}`}
+                />
+              </HoverTooltip>
+              <HoverTooltip
+                label={
                   isFbaArmed
                     ? 'FBA armed — next Enter/scan. Click again to cancel.'
-                    : 'Arm FBA (next Enter/scan; or send now if field has text)'
+                    : 'FBA (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isFbaArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-violet-700 bg-violet-50` : inactiveModeButtonClass}`}
+                asChild
               >
-                <Package className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleMode('repair')}
-                aria-pressed={isRepairArmed}
-                aria-label={
-                  isRepairArmed
-                    ? 'Repair armed for next Enter or scan. Click again to cancel.'
-                    : 'Arm repair: next Enter or scan uses RS- ID. If the field already has text, send now.'
-                }
-                title={
+                <IconButton
+                  icon={<Package className="h-3.5 w-3.5" />}
+                  onClick={() => toggleMode('fba')}
+                  aria-pressed={isFbaArmed}
+                  ariaLabel={
+                    isFbaArmed
+                      ? 'FBA armed for next Enter or scan. Click again to cancel.'
+                      : 'Arm FBA: next Enter or scan uses FNSKU. If the field already has text, send now.'
+                  }
+                  className={`${modeButtonBaseClass} ${isFbaArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-violet-700 bg-violet-50` : inactiveModeButtonClass}`}
+                />
+              </HoverTooltip>
+              <HoverTooltip
+                label={
                   isRepairArmed
                     ? 'Repair armed — next Enter/scan. Click again to cancel.'
-                    : 'Arm repair (next Enter/scan; or send now if field has text)'
+                    : 'Repair (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isRepairArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-amber-700 bg-amber-50` : inactiveModeButtonClass}`}
+                asChild
               >
-                <Settings className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleMode('serial')}
-                aria-pressed={isSerialArmed}
-                aria-label={
-                  isSerialArmed
-                    ? 'Serial armed for next Enter or scan. Click again to cancel.'
-                    : 'Arm serial: next Enter or scan adds a serial. If the field already has text, send now.'
-                }
-                title={
+                <IconButton
+                  icon={<Settings className="h-3.5 w-3.5" />}
+                  onClick={() => toggleMode('repair')}
+                  aria-pressed={isRepairArmed}
+                  ariaLabel={
+                    isRepairArmed
+                      ? 'Repair armed for next Enter or scan. Click again to cancel.'
+                      : 'Arm repair: next Enter or scan uses RS- ID. If the field already has text, send now.'
+                  }
+                  className={`${modeButtonBaseClass} ${isRepairArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-amber-700 bg-amber-50` : inactiveModeButtonClass}`}
+                />
+              </HoverTooltip>
+              <HoverTooltip
+                label={
                   isSerialArmed
                     ? 'Serial armed — next Enter/scan. Click again to cancel.'
-                    : 'Arm serial (next Enter/scan; or send now if field has text)'
+                    : 'Serial (next Enter/scan; or send now if field has text)'
                 }
-                className={`${modeButtonBaseClass} ${isSerialArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-emerald-700 bg-emerald-50` : inactiveModeButtonClass}`}
+                asChild
               >
-                <Barcode className="h-3.5 w-3.5" />
-              </button>
+                <IconButton
+                  icon={<Barcode className="h-3.5 w-3.5" />}
+                  onClick={() => toggleMode('serial')}
+                  aria-pressed={isSerialArmed}
+                  ariaLabel={
+                    isSerialArmed
+                      ? 'Serial armed for next Enter or scan. Click again to cancel.'
+                      : 'Arm serial: next Enter or scan adds a serial. If the field already has text, send now.'
+                  }
+                  className={`${modeButtonBaseClass} ${isSerialArmed ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} text-emerald-700 bg-emerald-50` : inactiveModeButtonClass}`}
+                />
+              </HoverTooltip>
             </div>
           </>
         )}

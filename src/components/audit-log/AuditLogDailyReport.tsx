@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type Section = 'receiving' | 'packing' | 'tech' | 'sku' | 'staff';
 
@@ -154,12 +155,12 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
           <Card title="Hourly distribution">
             <div className="flex h-24 items-end gap-[2px]">
               {data.by_hour.map((h) => (
-                <div
-                  key={h.hour}
-                  className="flex-1 rounded-sm bg-emerald-500/80"
-                  style={{ height: `${Math.max(2, (h.count / peakHourCount) * 100)}%` }}
-                  title={`${h.hour}:00 — ${fmtNumber(h.count)}`}
-                />
+                <HoverTooltip key={h.hour} label={`${h.hour}:00 — ${fmtNumber(h.count)}`} asChild>
+                  <div
+                    className="flex-1 rounded-sm bg-emerald-500/80"
+                    style={{ height: `${Math.max(2, (h.count / peakHourCount) * 100)}%` }}
+                  />
+                </HoverTooltip>
               ))}
             </div>
             <div className="mt-1 flex justify-between text-eyebrow tabular-nums text-gray-400">
@@ -208,7 +209,7 @@ export function AuditLogDailyReport({ section }: { section: Section }) {
                     <button
                       type="button"
                       onClick={() => setParam('staffId', String(s.staff_id))}
-                      className="flex w-full items-center gap-2 text-left text-caption hover:opacity-80"
+                      className="ds-raw-button flex w-full items-center gap-2 text-left text-caption hover:opacity-80"
                     >
                       <span className="w-32 shrink-0 truncate font-semibold text-gray-800">
                         {s.name ?? `#${s.staff_id}`}

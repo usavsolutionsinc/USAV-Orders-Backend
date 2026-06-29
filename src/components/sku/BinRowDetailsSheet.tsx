@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStaffRole } from '@/hooks/useStaffRole';
 import { safeRandomUUID } from '@/lib/safe-uuid';
@@ -281,9 +281,6 @@ export function BinRowDetailsSheet({
 
   if (!open || !row) return null;
 
-  const overrideEffective =
-    titleDraft.trim().length > 0 && titleDraft.trim() !== (row.productTitle || '');
-
   return (
     <div
       role="dialog"
@@ -292,14 +289,12 @@ export function BinRowDetailsSheet({
       className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
     >
       <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-3">
-        <button
-          type="button"
+        <IconButton
+          icon={<span className="text-sm font-bold">←</span>}
+          ariaLabel="Back"
           onClick={onClose}
-          aria-label="Back"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ←
-        </button>
+          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-slate-700 active:bg-slate-50"
+        />
         <div className="min-w-0 flex-1 text-center">
           <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
             Row details
@@ -343,22 +338,16 @@ export function BinRowDetailsSheet({
             className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 text-sm font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
           />
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={saveTitle}
+              loading={busy === 'rename'}
               disabled={busy !== null}
-              className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-xs font-bold text-white active:bg-blue-700 disabled:opacity-40"
+              className="flex-1"
             >
-              {busy === 'rename' ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : titleDraft.trim() === '' ? (
-                'Clear override'
-              ) : overrideEffective ? (
-                'Save title'
-              ) : (
-                'Save title'
-              )}
-            </button>
+              {titleDraft.trim() === '' ? 'Clear override' : 'Save title'}
+            </Button>
           </div>
           <p className="text-micro font-bold uppercase tracking-widest text-slate-400">
             Stored in sku_stock.display_name_override · wins over Ecwid
@@ -389,18 +378,16 @@ export function BinRowDetailsSheet({
             placeholder="New SKU"
             className="w-full rounded-md border border-slate-300 px-3 py-3 text-center font-mono text-base font-black text-slate-900 focus:border-blue-500 focus:outline-none"
           />
-          <button
-            type="button"
+          <Button
+            variant="brand"
+            size="md"
             onClick={swapSku}
+            loading={busy === 'swap'}
             disabled={busy !== null || !skuDraft.trim()}
-            className="w-full rounded-md bg-slate-900 px-3 py-2 text-xs font-bold text-white active:bg-slate-800 disabled:opacity-40"
+            className="w-full"
           >
-            {busy === 'swap' ? (
-              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-            ) : (
-              `Swap → ${skuDraft.trim() || '…'}`
-            )}
-          </button>
+            {`Swap → ${skuDraft.trim() || '…'}`}
+          </Button>
         </section>
 
         {/* Transfer to another bin */}
@@ -432,20 +419,18 @@ export function BinRowDetailsSheet({
               className="rounded-md border border-slate-300 px-2 py-2.5 text-center font-mono text-sm font-black text-slate-900 focus:border-blue-500 focus:outline-none"
             />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={transfer}
+            loading={busy === 'transfer'}
             disabled={
               busy !== null || !transferToDraft.trim() || !transferQtyDraft.trim()
             }
-            className="w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-bold text-white active:bg-blue-700 disabled:opacity-40"
+            className="w-full"
           >
-            {busy === 'transfer' ? (
-              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-            ) : (
-              `Move ${transferQtyDraft || '…'} → ${transferToDraft.trim() || '…'}`
-            )}
-          </button>
+            {`Move ${transferQtyDraft || '…'} → ${transferToDraft.trim() || '…'}`}
+          </Button>
         </section>
 
         {/* Min / max */}
@@ -481,18 +466,16 @@ export function BinRowDetailsSheet({
               />
             </label>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={saveLimits}
+            loading={busy === 'limits'}
             disabled={busy !== null}
-            className="w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-xs font-bold text-slate-700 active:bg-slate-50 disabled:opacity-40"
+            className="w-full"
           >
-            {busy === 'limits' ? (
-              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-            ) : (
-              'Save limits'
-            )}
-          </button>
+            Save limits
+          </Button>
         </section>
 
         {error && (

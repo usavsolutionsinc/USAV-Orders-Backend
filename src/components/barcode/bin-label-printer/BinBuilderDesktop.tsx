@@ -1,5 +1,6 @@
 import { ChevronLeft, Settings } from '@/components/Icons';
 import { WorkspaceCard } from '@/design-system/components';
+import { Button, IconButton } from '@/design-system/primitives';
 import { STEPS, NumericStep, ConfigSheet, GiantPreviewPanel } from './index';
 import { StepPills } from './StepPills';
 import { MissingLetterBanner } from './BinBuilderMobile';
@@ -15,23 +16,22 @@ export function BinBuilderDesktop({ c }: { c: BinLabelPrinterController }) {
         </h1>
         <div className="flex shrink-0 items-center gap-2">
           {(c.selectedRoom || c.aisle != null) && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="lg"
               onClick={c.resetAll}
-              className="flex h-10 items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 text-label font-semibold text-gray-700 transition-colors hover:bg-gray-50 active:scale-[0.97]"
+              icon={<ChevronLeft className="h-3.5 w-3.5" />}
+              className="rounded-full"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Reset
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
+          <IconButton
             onClick={() => c.setConfigOpen(true)}
-            aria-label="Configure label printer"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50 active:scale-95"
-          >
-            <Settings className="h-4 w-4" />
-          </button>
+            ariaLabel="Configure label printer"
+            icon={<Settings className="h-4 w-4" />}
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+          />
         </div>
       </header>
 

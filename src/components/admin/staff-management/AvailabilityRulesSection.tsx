@@ -1,4 +1,6 @@
 import { sectionLabel, tableHeader, dataValue } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import { getStaffWeekdayLabel } from '@/lib/staff-schedule';
 import type { StaffDayOfWeek } from '@/lib/staff-schedule';
@@ -49,13 +51,13 @@ export function AvailabilityRulesSection({
                 {selectedAvailabilityStaff.name} • {getStaffWeekdayLabel(availabilityEditor.dayOfWeek)}
               </p>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => setAvailabilityEditor(null)}
-              className={`${tableHeader} h-8 border border-amber-300 px-3 text-amber-800 hover:bg-amber-100`}
+              className={`${tableHeader} h-8 rounded-none border border-amber-300 px-3 text-amber-800 hover:bg-amber-100 hover:text-amber-800`}
             >
               Close
-            </button>
+            </Button>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -112,32 +114,32 @@ export function AvailabilityRulesSection({
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               disabled={upsertAvailabilityRuleMutation.isPending}
               onClick={() => saveAvailabilityRule(availabilityEditor.staffId, availabilityEditor.dayOfWeek, availabilityDraft, selectedAvailabilityRule)}
-              className={`${sectionLabel} h-9 border border-amber-800 bg-amber-800 px-4 text-white hover:bg-amber-900 disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`${sectionLabel} h-9 rounded-none border border-amber-800 bg-amber-800 px-4 text-white hover:bg-amber-900 hover:text-white`}
             >
               {selectedAvailabilityRule ? 'Save Rule' : 'Create Rule'}
-            </button>
+            </Button>
             {selectedAvailabilityRule && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 disabled={deleteAvailabilityRuleMutation.isPending}
                 onClick={() => deleteAvailabilityRuleMutation.mutate(selectedAvailabilityRule.id)}
-                className={`${sectionLabel} h-9 border border-red-300 bg-white px-4 text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50`}
+                className={`${sectionLabel} h-9 rounded-none border border-red-300 bg-white px-4 text-red-700 hover:bg-red-50 hover:text-red-700`}
               >
                 Delete Rule
-              </button>
+              </Button>
             )}
             {!selectedAvailabilityRule && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() => setAvailabilityDraft({ ...DEFAULT_AVAILABILITY_DRAFT })}
-                className={`${sectionLabel} h-9 border border-gray-300 bg-white px-4 text-gray-700 hover:bg-gray-50`}
+                className={`${sectionLabel} h-9 rounded-none border border-gray-300 bg-white px-4 text-gray-700 hover:bg-gray-50`}
               >
                 Reset Draft
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -162,12 +164,13 @@ export function AvailabilityRulesSection({
               }`}
             >
               <div className="flex min-w-0 items-start gap-2.5 pr-3">
-                <span
-                  aria-hidden
-                  className="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
-                  style={{ backgroundColor: getStaffColorHex(member) }}
-                  title={`Color: ${getStaffColorHex(member)}`}
-                />
+                <HoverTooltip label={`Color: ${getStaffColorHex(member)}`} asChild focusable={false}>
+                  <span
+                    aria-hidden
+                    className="mt-1 inline-block h-3 w-3 flex-shrink-0 rounded-full ring-1 ring-black/5"
+                    style={{ backgroundColor: getStaffColorHex(member) }}
+                  />
+                </HoverTooltip>
                 <div className="min-w-0">
                   <p className={`${dataValue} truncate uppercase tracking-[0.02em]`}>
                     {member.name}
@@ -191,30 +194,32 @@ export function AvailabilityRulesSection({
 
                 return (
                   <div key={`availability-cell-${member.id}-${day.dayOfWeek}`} className="px-1 text-center">
-                    <button
-                      type="button"
-                      disabled={!member.active || upsertAvailabilityRuleMutation.isPending}
-                      onClick={() => toggleAvailabilityAllowed(member.id, day.dayOfWeek, !bucket.displayedIsAllowed)}
-                      title={titleParts.join(' • ')}
-                      className={[
-                        `${tableHeader} h-8 w-full border transition-colors`,
-                        bucket.displayedIsAllowed
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-red-200 bg-red-50 text-red-700',
-                        isSelected ? 'ring-1 ring-amber-500' : '',
-                        !member.active ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
-                      ].join(' ')}
-                    >
-                      {bucket.displayedIsAllowed ? 'Allowed' : 'Blocked'}
-                    </button>
-                    <button
-                      type="button"
+                    <HoverTooltip label={titleParts.join(' • ')} asChild>
+                      {/* ds-raw-button: weekday allow/block toggle with custom active fill (emerald/red) */}
+                      <button
+                        type="button"
+                        disabled={!member.active || upsertAvailabilityRuleMutation.isPending}
+                        onClick={() => toggleAvailabilityAllowed(member.id, day.dayOfWeek, !bucket.displayedIsAllowed)}
+                        className={[
+                          `${tableHeader} h-8 w-full border transition-colors`,
+                          bucket.displayedIsAllowed
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-red-200 bg-red-50 text-red-700',
+                          isSelected ? 'ring-1 ring-amber-500' : '',
+                          !member.active ? 'cursor-not-allowed opacity-50' : 'hover:border-gray-400',
+                        ].join(' ')}
+                      >
+                        {bucket.displayedIsAllowed ? 'Allowed' : 'Blocked'}
+                      </button>
+                    </HoverTooltip>
+                    <Button
+                      variant="ghost"
                       disabled={!member.active}
                       onClick={() => openAvailabilityEditorForDay(member.id, day.dayOfWeek)}
-                      className={`${tableHeader} mt-1 text-micro ${member.active ? 'text-gray-600 hover:text-gray-900' : 'text-gray-400'}`}
+                      className={`${tableHeader} mt-1 h-auto rounded-none px-0 text-micro hover:bg-transparent ${member.active ? 'text-gray-600 hover:text-gray-900' : 'text-gray-400'}`}
                     >
                       Edit
-                    </button>
+                    </Button>
                     {bucket.extraRulesCount > 0 && (
                       <div className="mt-1 text-micro font-bold text-amber-700">
                         +{bucket.extraRulesCount} window

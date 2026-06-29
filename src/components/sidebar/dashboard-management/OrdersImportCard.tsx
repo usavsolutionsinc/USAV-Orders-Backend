@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
+import { Button } from '@/design-system/primitives';
 import { Check, Database, Loader2, X } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { OrdersImportController } from './useOrdersImport';
@@ -24,21 +25,25 @@ export function OrdersImportCard({ imp, canImportOrders }: { imp: OrdersImportCo
       />
 
       {isTransferring ? (
-        <button
+        <Button
+          variant="danger"
+          size="lg"
+          icon={<X />}
           onClick={handleCancelTransfer}
-          className={`w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl ${sectionLabel} shadow-lg shadow-red-500/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
+          className="w-full text-micro font-black uppercase tracking-[0.2em]"
         >
-          <X className="w-3.5 h-3.5" />
           Cancel Import
-        </button>
+        </Button>
       ) : (
-        <button
+        <Button
+          variant="primary"
+          size="lg"
+          icon={<Database />}
           onClick={handleTransfer}
-          className={`w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl ${sectionLabel} shadow-lg shadow-blue-600/10 transition-all active:scale-95 flex items-center justify-center gap-2`}
+          className="w-full text-micro font-black uppercase tracking-[0.2em]"
         >
-          <Database className="w-3.5 h-3.5" />
           Import Latest Orders
-        </button>
+        </Button>
       )}
 
       {/* Compact status row — full details live in the centered OrderSyncDialog */}
@@ -51,10 +56,11 @@ export function OrdersImportCard({ imp, canImportOrders }: { imp: OrdersImportCo
             transition={expansionTransition}
             className="overflow-hidden"
           >
+            {/* ds-raw-button: structured full-width status row (icon + label + live timer span), not the Button primitive shape */}
             <button
               type="button"
               onClick={() => setIsSyncDialogOpen(true)}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-left transition hover:bg-blue-100/60"
+              className="ds-raw-button flex w-full items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2.5 text-left transition hover:bg-blue-100/60"
             >
               <div className="flex items-center gap-2 min-w-0">
                 {isTransferring ? <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" /> : <Check className="w-3.5 h-3.5 text-blue-600" />}

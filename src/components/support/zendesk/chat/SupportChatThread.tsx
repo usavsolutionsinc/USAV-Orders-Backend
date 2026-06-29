@@ -43,7 +43,7 @@ function Avatar({ name, photo, ours }: { name: string; photo: string | null; our
   return (
     <span
       className={cn(
-        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-black',
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-micro font-black',
         ours ? 'bg-blue-100 text-blue-700' : 'bg-gray-200 text-gray-600',
       )}
     >
@@ -74,7 +74,7 @@ function Attachments({
           type="button"
           onClick={() => onOpenPhoto?.(a.content_url)}
           className={cn(
-            'block h-28 w-28 overflow-hidden rounded-xl ring-1 ring-inset transition hover:opacity-90 hover:ring-2',
+            'ds-raw-button block h-28 w-28 overflow-hidden rounded-xl ring-1 ring-inset transition hover:opacity-90 hover:ring-2',
             onDark ? 'ring-white/30 hover:ring-white/60' : 'ring-gray-200 hover:ring-blue-300',
           )}
         >
@@ -166,16 +166,16 @@ export function SupportChatThread({
             <div className={cn('min-w-0 max-w-[78%]', a.isOurs ? 'items-end' : 'items-start')}>
               <div
                 className={cn(
-                  'mb-1 flex items-center gap-2 text-[11px]',
+                  'mb-1 flex items-center gap-2 text-caption',
                   a.isOurs ? 'justify-end' : 'justify-start',
                 )}
               >
                 {internal ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700">
+                  <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700">
                     <Lock className="h-2.5 w-2.5" /> Internal
                   </span>
                 ) : a.isOurs ? (
-                  <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-700">
+                  <span className="inline-flex items-center gap-1 rounded bg-blue-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-blue-700">
                     <Globe className="h-2.5 w-2.5" /> Public
                   </span>
                 ) : null}

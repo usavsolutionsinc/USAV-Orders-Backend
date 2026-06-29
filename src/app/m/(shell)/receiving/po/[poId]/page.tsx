@@ -132,6 +132,7 @@ export default function MobilePoDetailPage(props: { params: Promise<{ poId: stri
         {(['items', 'photos'] as Tab[]).map((t) => {
           const active = tab === t;
           return (
+            // ds-raw-button: segmented tab with underline indicator (role=tab)
             <button
               key={t}
               type="button"

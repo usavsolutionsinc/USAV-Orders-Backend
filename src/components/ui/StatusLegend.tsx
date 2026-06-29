@@ -58,7 +58,7 @@ export function StatusLegend<K extends string>({
         const inner = (
           <>
             <span className={`h-2 w-2 shrink-0 rounded-full ${m.dot} ${dimmed ? 'opacity-40' : ''}`} />
-            <span className={`text-[10px] font-bold uppercase tracking-wide ${active ? 'text-gray-900' : 'text-gray-500'} ${dimmed ? 'opacity-60' : ''}`}>{short}</span>
+            <span className={`text-micro font-bold uppercase tracking-wide ${active ? 'text-gray-900' : 'text-gray-500'} ${dimmed ? 'opacity-60' : ''}`}>{short}</span>
             <span className={`text-xs font-black tabular-nums ${active ? 'text-gray-900' : 'text-gray-900'} ${dimmed ? 'opacity-60' : ''}`}>{value}</span>
           </>
         );
@@ -73,7 +73,7 @@ export function StatusLegend<K extends string>({
                 type="button"
                 aria-pressed={active}
                 onClick={() => onSelectState?.(state)}
-                className={`-mx-0.5 inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors ${
+                className={`ds-raw-button -mx-0.5 inline-flex items-center gap-1.5 rounded px-1 py-0.5 transition-colors ${
                   active ? 'bg-white ring-1 ring-gray-300 shadow-sm' : 'hover:bg-gray-100'
                 }`}
               >

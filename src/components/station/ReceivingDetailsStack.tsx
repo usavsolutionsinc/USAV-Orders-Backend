@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Copy, Edit, Loader2, Package, RefreshCw, Trash2, X } from '@/components/Icons';
+import { Copy, Edit, Package, RefreshCw, Trash2, X } from '@/components/Icons';
+import { Button } from '@/design-system/primitives/Button';
+import { IconButton } from '@/design-system/primitives/IconButton';
 import { copyToClipboard } from '@/utils/_dom';
 import { formatDateTimePST } from '@/utils/date';
 import { CopyableValueFieldBlock } from '@/components/shipped/details-panel/blocks/CopyableValueFieldBlock';
@@ -156,28 +158,25 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
         }
         rightSlot={
           <>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={handleEditPO}
               disabled={isOpeningEditor || form.isSaving}
-              className="group inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-caption font-black uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              loading={isOpeningEditor}
+              icon={<Edit />}
+              iconRight={<span aria-hidden className="text-white/70">→</span>}
+              className="text-caption font-black uppercase tracking-wider"
             >
-              {isOpeningEditor ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Edit className="h-3.5 w-3.5" />
-              )}
-              <span>{isOpeningEditor ? 'Opening…' : 'Edit PO'}</span>
-              <span aria-hidden className="text-white/70 transition-transform group-hover:translate-x-0.5">→</span>
-            </button>
-            <button
+              {isOpeningEditor ? 'Opening…' : 'Edit PO'}
+            </Button>
+            <IconButton
               onClick={handleClose}
               disabled={form.isSaving || form.isDeleting}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900 active:scale-95 disabled:opacity-50"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
+              ariaLabel="Close"
+              icon={<X className="h-5 w-5" />}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl hover:bg-gray-100"
+            />
           </>
         }
         belowSlot={
@@ -327,8 +326,10 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             Save failed — check connection
           </p>
         )}
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="lg"
           onClick={() => {
             if (!confirmingDelete) {
               setConfirmingDelete(true);
@@ -339,17 +340,17 @@ export function ReceivingDetailsStack({ log, onClose, onUpdated, onDeleted }: Re
             void form.handleDelete();
           }}
           disabled={form.isDeleting || form.isSaving}
-          className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl text-micro font-black uppercase tracking-wider text-white transition-colors disabled:opacity-50 ${
-            confirmingDelete ? 'bg-red-700 hover:bg-red-800' : 'bg-red-600 hover:bg-red-700'
+          icon={<Trash2 />}
+          className={`w-full text-micro font-black uppercase tracking-wider ${
+            confirmingDelete ? 'bg-rose-700 hover:bg-rose-800' : ''
           }`}
         >
-          <Trash2 className="h-3.5 w-3.5" />
           {form.isDeleting
             ? 'Deleting...'
             : confirmingDelete
               ? 'Click again to confirm'
               : 'Delete'}
-        </button>
+        </Button>
       </div>
     </motion.div>
     </>

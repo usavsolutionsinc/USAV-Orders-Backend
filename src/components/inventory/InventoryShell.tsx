@@ -14,6 +14,7 @@ import { cn } from '@/utils/_cn';
 import { receivingHeaderHairlineClass } from '@/components/layout/header-shell';
 import { TriageWorkspace } from './TriageWorkspace';
 import { PulseWorkspace } from './PulseWorkspace';
+import { Button } from '@/design-system/primitives';
 
 export function InventoryShell() {
     const { state, sidebar, clearAll } = useInventoryUrlState();
@@ -75,13 +76,14 @@ export function InventoryShell() {
                 title="Inventory"
                 rightSlot={
                     hasAnyTarget ? (
-                        <button
-                            type="button"
+                        <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={clearAll}
-                            className="text-xs text-gray-500 underline hover:text-gray-900"
+                            className="px-0 text-xs text-gray-500 underline hover:bg-transparent hover:text-gray-900"
                         >
                             Back to recent activity
-                        </button>
+                        </Button>
                     ) : null
                 }
             />

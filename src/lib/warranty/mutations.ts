@@ -302,6 +302,7 @@ export async function updateClaimMeta(
   claimId: number,
   fields: UpdateClaimMetaInput,
   actorStaffId: number | null,
+  orgId: OrgId,
 ): Promise<UpdateClaimMetaResult> {
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -313,9 +314,13 @@ export async function updateClaimMeta(
   }
   if (sets.length === 0) return { ok: false, status: 400, error: 'no editable fields provided' };
 
+  // Scope the edit by org: a cross-org id matches 0 rows → 404 (raw owner pool,
+  // so the explicit predicate is the only IDOR guard — RLS won't catch it).
   values.push(claimId);
+  const idParam = values.length;
+  values.push(orgId);
   const { rowCount } = await pool.query(
-    `UPDATE warranty_claims SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,
+    `UPDATE warranty_claims SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${idParam} AND organization_id = $${values.length}`,
     values,
   );
   if (rowCount === 0) return { ok: false, status: 404, error: 'claim not found' };
@@ -332,7 +337,7 @@ export async function updateClaimMeta(
     client.release();
   }
 
-  const claim = await getClaim(claimId);
+  const claim = await getClaim(claimId, orgId);
   if (!claim) return { ok: false, status: 404, error: 'claim not found' };
   return { ok: true, claim };
 }
@@ -402,20 +407,22 @@ export interface RestoreClaimsResult {
 export async function restoreClaims(
   ids: number[],
   actorStaffId: number | null,
+  orgId: OrgId = USAV_ORG_ID,
 ): Promise<RestoreClaimsResult> {
   const unique = [...new Set(ids)].filter((n) => Number.isFinite(n) && n > 0);
   if (unique.length === 0) return { restored: [], notFound: [] };
 
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
+  return withTenantTransaction(orgId, async (client) => {
+    // Org-scoped restore (mirrors softDeleteClaims): a cross-org id matches 0
+    // rows and lands in notFound — never un-tombstones another tenant's claim.
     const { rows } = await client.query<{ id: number; claim_number: string }>(
       `UPDATE warranty_claims
           SET deleted_at = NULL, updated_at = NOW()
         WHERE id = ANY($1::bigint[])
           AND deleted_at IS NOT NULL
+          AND organization_id = $2
         RETURNING id, claim_number`,
-      [unique],
+      [unique, orgId],
     );
     if (rows.length > 0) {
       await client.query(
@@ -426,19 +433,12 @@ export async function restoreClaims(
         [rows.map((r) => Number(r.id)), actorStaffId],
       );
     }
-    await client.query('COMMIT');
-
     const restoredIds = new Set(rows.map((r) => Number(r.id)));
     return {
       restored: rows.map((r) => ({ id: Number(r.id), claimNumber: r.claim_number })),
       notFound: unique.filter((id) => !restoredIds.has(id)),
     };
-  } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
+  });
 }
 
 // ─── Lifecycle transitions ───────────────────────────────────────────────────
@@ -456,13 +456,17 @@ interface TransitionOptions {
   eventPayload?: Record<string, unknown>;
 }
 
-async function transition(claimId: number, opts: TransitionOptions): Promise<TransitionResult> {
+async function transition(claimId: number, orgId: OrgId, opts: TransitionOptions): Promise<TransitionResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Scope by org: a cross-org id returns 0 rows → 404 (never reveal the
+    // claim's existence to another tenant). warranty_claims runs through the raw
+    // (owner, BYPASSRLS) pool here, so the explicit predicate is the ONLY guard
+    // against an IDOR-by-global-id — RLS does not catch this class.
     const current = await client.query<{ status: WarrantyClaimStatus }>(
-      `SELECT status FROM warranty_claims WHERE id = $1 FOR UPDATE`,
-      [claimId],
+      `SELECT status FROM warranty_claims WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+      [claimId, orgId],
     );
     if (current.rowCount === 0) {
       await client.query('ROLLBACK');
@@ -484,7 +488,11 @@ async function transition(claimId: number, opts: TransitionOptions): Promise<Tra
       values.push(e.value);
       sets.push(`${e.col} = $${values.length}`);
     }
-    await client.query(`UPDATE warranty_claims SET ${sets.join(', ')} WHERE id = $1`, values);
+    values.push(orgId);
+    await client.query(
+      `UPDATE warranty_claims SET ${sets.join(', ')} WHERE id = $1 AND organization_id = $${values.length}`,
+      values,
+    );
     await insertEvent(client, {
       claimId,
       eventType: 'STATUS_CHANGE',
@@ -495,7 +503,7 @@ async function transition(claimId: number, opts: TransitionOptions): Promise<Tra
     });
     await client.query('COMMIT');
 
-    const claim = await getClaim(claimId);
+    const claim = await getClaim(claimId, orgId);
     if (!claim) return { ok: false, status: 404, error: 'claim not found' };
     return { ok: true, claim };
   } catch (err) {
@@ -506,19 +514,20 @@ async function transition(claimId: number, opts: TransitionOptions): Promise<Tra
   }
 }
 
-export function submitClaim(claimId: number, actorStaffId: number | null): Promise<TransitionResult> {
-  return transition(claimId, { allowedFrom: WARRANTY_LIFECYCLE.submit.from, to: WARRANTY_LIFECYCLE.submit.to, actorStaffId });
+export function submitClaim(claimId: number, actorStaffId: number | null, orgId: OrgId): Promise<TransitionResult> {
+  return transition(claimId, orgId, { allowedFrom: WARRANTY_LIFECYCLE.submit.from, to: WARRANTY_LIFECYCLE.submit.to, actorStaffId });
 }
 
-export function approveClaim(claimId: number, actorStaffId: number | null): Promise<TransitionResult> {
-  return transition(claimId, { allowedFrom: WARRANTY_LIFECYCLE.approve.from, to: WARRANTY_LIFECYCLE.approve.to, actorStaffId });
+export function approveClaim(claimId: number, actorStaffId: number | null, orgId: OrgId): Promise<TransitionResult> {
+  return transition(claimId, orgId, { allowedFrom: WARRANTY_LIFECYCLE.approve.from, to: WARRANTY_LIFECYCLE.approve.to, actorStaffId });
 }
 
 export function denyClaim(
   claimId: number,
   args: { reasonCode: string; denialNotes?: string | null; actorStaffId: number | null },
+  orgId: OrgId,
 ): Promise<TransitionResult> {
-  return transition(claimId, {
+  return transition(claimId, orgId, {
     allowedFrom: WARRANTY_LIFECYCLE.deny.from,
     to: WARRANTY_LIFECYCLE.deny.to,
     actorStaffId: args.actorStaffId,
@@ -530,8 +539,8 @@ export function denyClaim(
   });
 }
 
-export function closeClaim(claimId: number, actorStaffId: number | null): Promise<TransitionResult> {
-  return transition(claimId, {
+export function closeClaim(claimId: number, actorStaffId: number | null, orgId: OrgId): Promise<TransitionResult> {
+  return transition(claimId, orgId, {
     allowedFrom: WARRANTY_LIFECYCLE.close.from,
     to: WARRANTY_LIFECYCLE.close.to,
     actorStaffId,
@@ -554,22 +563,25 @@ export function closeClaim(claimId: number, actorStaffId: number | null): Promis
 export async function revertClaimStatus(
   claimId: number,
   actorStaffId: number | null,
+  orgId: OrgId,
 ): Promise<TransitionResult> {
+  // Org-scoped probe: a cross-org id 404s here, so revert can never reach
+  // another tenant's claim (raw owner pool → explicit predicate is the guard).
   const cur = await pool.query<{ status: WarrantyClaimStatus }>(
-    `SELECT status FROM warranty_claims WHERE id = $1 AND deleted_at IS NULL`,
-    [claimId],
+    `SELECT status FROM warranty_claims WHERE id = $1 AND organization_id = $2 AND deleted_at IS NULL`,
+    [claimId, orgId],
   );
   if (cur.rowCount === 0) return { ok: false, status: 404, error: 'claim not found' };
   const status = cur.rows[0].status;
 
   if (status === 'SUBMITTED') {
-    return transition(claimId, { allowedFrom: ['SUBMITTED'], to: 'LOGGED', actorStaffId, eventPayload: { via: 'revert' } });
+    return transition(claimId, orgId, { allowedFrom: ['SUBMITTED'], to: 'LOGGED', actorStaffId, eventPayload: { via: 'revert' } });
   }
   if (status === 'APPROVED') {
-    return transition(claimId, { allowedFrom: ['APPROVED'], to: 'SUBMITTED', actorStaffId, eventPayload: { via: 'revert' } });
+    return transition(claimId, orgId, { allowedFrom: ['APPROVED'], to: 'SUBMITTED', actorStaffId, eventPayload: { via: 'revert' } });
   }
   if (status === 'DENIED') {
-    return transition(claimId, {
+    return transition(claimId, orgId, {
       allowedFrom: ['DENIED'],
       to: 'SUBMITTED',
       actorStaffId,
@@ -594,7 +606,7 @@ export async function revertClaimStatus(
     // a literal restore would strand a "reopened" claim. An expired-then-closed
     // claim reopens to SUBMITTED for re-review instead.
     const reopenTo: WarrantyClaimStatus = prior === 'EXPIRED' ? 'SUBMITTED' : prior;
-    return transition(claimId, {
+    return transition(claimId, orgId, {
       allowedFrom: ['CLOSED'],
       to: reopenTo,
       actorStaffId,

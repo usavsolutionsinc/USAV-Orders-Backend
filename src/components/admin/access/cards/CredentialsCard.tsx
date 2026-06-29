@@ -1,6 +1,7 @@
 'use client';
 
 import { fmtRelative, type DetailEnvelope } from '../staff-access-shared';
+import { Button } from '@/design-system/primitives';
 
 interface CredentialsCardProps {
   staff: DetailEnvelope['staff'];
@@ -44,22 +45,18 @@ export function CredentialsCard({
             </div>
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onUpdatePin}
-              disabled={anyBusy}
-              className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-gray-700 hover:bg-gray-50 hover:text-gray-900"
-            >
+            <Button variant="secondary" size="sm" onClick={onUpdatePin} disabled={anyBusy}>
               Update PIN
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onResetPin}
               disabled={busyResetPin}
-              className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-caption font-semibold uppercase tracking-wider text-amber-800 hover:bg-amber-100"
+              className="border border-amber-200 bg-amber-50 text-amber-800 ring-0 hover:bg-amber-100"
             >
               {busyResetPin ? 'Resetting…' : 'Reset PIN'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -81,14 +78,15 @@ export function CredentialsCard({
                       added {fmtRelative(p.created_at)}{p.last_used_at && ` · used ${fmtRelative(p.last_used_at)}`}
                     </div>
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => onRevokePasskey(p.id)}
                     disabled={busyRevokePasskey}
-                    className="rounded-md border border-red-200 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
+                    className="border border-red-200 text-red-700 ring-0 hover:bg-red-50"
                   >
                     Revoke
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
@@ -131,14 +129,15 @@ export function CredentialsCard({
             <div className="flex items-center gap-2">
               <div className="text-caption text-gray-500">{sessions.length}</div>
               {sessions.length > 0 && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={onRevokeAll}
                   disabled={busyRevokeAll}
-                  className="rounded-md border border-red-200 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
+                  className="border border-red-200 text-red-700 ring-0 hover:bg-red-50"
                 >
                   Revoke all
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -157,14 +156,15 @@ export function CredentialsCard({
                       {s.ip || 'no-ip'} · seen {fmtRelative(s.last_seen_at)}
                     </div>
                   </div>
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => onRevokeSession(s.sid)}
                     disabled={busyRevokeSession}
-                    className="rounded-md border border-red-200 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-red-700 hover:bg-red-50"
+                    className="border border-red-200 text-red-700 ring-0 hover:bg-red-50"
                   >
                     Revoke
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

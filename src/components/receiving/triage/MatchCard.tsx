@@ -14,8 +14,12 @@
  * background+ring, never a size shift.
  */
 
-import { Check, ExternalLink, Link2, Loader2, ZendeskMark } from '@/components/Icons';
+import { ExternalLink, ZendeskMark } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import {
+  PairingLinkButton,
+  PairingLinkedBadge,
+} from '@/components/receiving/workspace/line-edit/PairingLinkButton';
 import { ticketStatusTone, relativeTime, type TicketCandidate } from './triage-types';
 
 interface MatchCardProps {
@@ -77,7 +81,7 @@ export function MatchCard({ candidate, onLink, linking, anyLinking }: MatchCardP
           {/* Meta row: status + age */}
           <div className="mt-1 flex items-center gap-2">
             <span
-              className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ring-1 ring-inset ${tone.bg} ${tone.text} ${tone.ring}`}
+              className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${tone.bg} ${tone.text} ${tone.ring}`}
             >
               {tone.label}
             </span>
@@ -89,23 +93,17 @@ export function MatchCard({ candidate, onLink, linking, anyLinking }: MatchCardP
           </div>
         </div>
 
-        {/* Right action: link / linked */}
+        {/* Right action: link / linked — shared with the other pairing tabs. */}
         <div className="shrink-0">
           {linked ? (
-            <span className="flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-caption font-black uppercase tracking-wider text-emerald-700">
-              <Check className="h-3.5 w-3.5" />
-              Matched
-            </span>
+            <PairingLinkedBadge label="Matched" />
           ) : (
-            <button
-              type="button"
-              onClick={() => onLink(candidate.id)}
+            <PairingLinkButton
+              label="Match"
+              loading={linking}
               disabled={anyLinking}
-              className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-caption font-black uppercase tracking-wider text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-40"
-            >
-              {linking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-              Match
-            </button>
+              onClick={() => onLink(candidate.id)}
+            />
           )}
         </div>
       </div>

@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { Button } from '@/design-system/primitives';
 
 export const dynamic = 'force-dynamic';
 
@@ -200,12 +201,14 @@ export default async function ReturnsIntakeAdminPage({
               </div>
             </div>
             <div className="flex items-center gap-3 pt-1">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 type="submit"
-                className="rounded-md bg-orange-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-orange-700"
+                className="bg-orange-600 hover:bg-orange-500 active:bg-orange-700 shadow-orange-600/25"
               >
                 Record intake
-              </button>
+              </Button>
               <p className="text-caption text-gray-500">
                 After intake, run the triage flow to re-enter refurb if applicable.
               </p>

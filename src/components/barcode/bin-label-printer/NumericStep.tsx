@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, ChevronDown, ChevronUp } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { noPad, pad2 } from '@/lib/barcode-routing';
 
 interface NumericStepProps {
@@ -84,6 +85,7 @@ export function NumericStep({
             const isSelected = selected === n;
             const tag = renderTag ? renderTag(n) : null;
             return (
+              // ds-raw-button: numpad quick-pick tile — fixed grid sizing, multi-line content, gradient-selected
               <button
                 key={n}
                 type="button"
@@ -146,33 +148,30 @@ export function NumericStep({
             />
 
             <div className="ml-1 flex h-12 shrink-0 flex-col justify-center gap-0.5">
-              <button
+              <IconButton
                 type="button"
                 onClick={() => stepBy(1)}
-                aria-label="Increment"
-                className="flex h-[22px] w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              >
-                <ChevronUp className="h-3.5 w-3.5" />
-              </button>
-              <button
+                ariaLabel="Increment"
+                className="flex h-[22px] w-7 items-center justify-center rounded-md hover:bg-gray-100"
+                icon={<ChevronUp className="h-3.5 w-3.5" />}
+              />
+              <IconButton
                 type="button"
                 onClick={() => stepBy(-1)}
-                aria-label="Decrement"
-                className="flex h-[22px] w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-95"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
+                ariaLabel="Decrement"
+                className="flex h-[22px] w-7 items-center justify-center rounded-md hover:bg-gray-100"
+                icon={<ChevronDown className="h-3.5 w-3.5" />}
+              />
             </div>
 
-            <button
+            <IconButton
               type="button"
               onClick={confirmCustom}
               disabled={!customValid}
-              aria-label={`Confirm ${customLabel.toLowerCase()}`}
-              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-sm transition-all active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:bg-none disabled:text-gray-400 disabled:shadow-none"
-            >
-              <Check className="h-4 w-4" />
-            </button>
+              ariaLabel={`Confirm ${customLabel.toLowerCase()}`}
+              className="ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-sm disabled:bg-gray-200 disabled:bg-none disabled:text-gray-400 disabled:shadow-none"
+              icon={<Check className="h-4 w-4" />}
+            />
           </div>
         </div>
       </motion.div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 
 interface NasBackupStatus {
@@ -93,14 +94,15 @@ export function PhotoLibraryNasBackup() {
           {pending > 0 ? ` · ${pending} pending` : ' · up to date'}.
         </p>
       </div>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         disabled={backup.isPending || pending === 0}
         onClick={() => backup.mutate()}
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-50"
       >
         {backup.isPending ? 'Backing up…' : pending === 0 ? 'Backed up' : 'Backup to NAS'}
-      </button>
+      </Button>
     </div>
   );
 }

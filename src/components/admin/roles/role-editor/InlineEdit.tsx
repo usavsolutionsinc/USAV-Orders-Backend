@@ -9,6 +9,7 @@ export function InlineEdit({ value, onSave, displayClassName }: { value: string;
 
   if (!editing) {
     return (
+      // ds-raw-button
       <button type="button" onClick={() => setEditing(true)} className={`group ${displayClassName} text-left hover:underline`}>
         {value}
       </button>

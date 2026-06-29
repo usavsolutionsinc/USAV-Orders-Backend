@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 export type ReturnEvent = {
   id: string;
@@ -65,14 +66,12 @@ export function ReceivingReturnBanner({
               </p>
             )}
           </div>
-          <button
-            type="button"
+          <IconButton
+            ariaLabel="Dismiss return notice"
             onClick={() => onDismiss(ret.id)}
             className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-amber-700 hover:bg-amber-100"
-            aria-label="Dismiss return notice"
-          >
-            <X className="h-3 w-3" />
-          </button>
+            icon={<X className="h-3 w-3" />}
+          />
         </div>
       ))}
     </div>

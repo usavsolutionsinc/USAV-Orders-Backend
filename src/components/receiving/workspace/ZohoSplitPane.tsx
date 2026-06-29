@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EmbeddedBrowser from '@/components/EmbeddedBrowser';
 import { X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 
 type OpenPaneDetail = { poId?: string; poNumber?: string };
 
@@ -129,14 +130,12 @@ export function ZohoSplitPane() {
         <span className="text-caption font-black uppercase tracking-[0.18em] text-gray-600">
           Zoho · Purchase Order
         </span>
-        <button
-          type="button"
+        <IconButton
           onClick={() => setOpen(false)}
-          aria-label="Close Zoho pane"
-          className="flex h-7 w-7 items-center justify-center rounded text-gray-500 hover:bg-gray-200 hover:text-gray-900"
-        >
-          <X className="h-4 w-4" />
-        </button>
+          ariaLabel="Close Zoho pane"
+          icon={<X className="h-4 w-4" />}
+          className="flex h-7 w-7 items-center justify-center rounded hover:bg-gray-200"
+        />
       </header>
 
       <div className="min-h-0 flex-1">

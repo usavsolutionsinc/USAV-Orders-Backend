@@ -1,3 +1,4 @@
+import { Button } from '@/design-system/primitives';
 import type { FiledTicket } from '../claim-types';
 import type { UseClaimTemplate } from '../hooks/useClaimTemplate';
 
@@ -25,21 +26,22 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
     <div className="rounded-2xl border border-slate-300 bg-slate-100 p-3.5 shadow-sm">
       <div className="mb-2.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">
+          <p className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
             Zendesk ticket {previewLoading ? '(updating…)' : '(editable)'}
           </p>
           {filedTicket ? (
-            <p className="mt-0.5 text-[10px] font-semibold text-emerald-600">Filed {filedTicket.number}</p>
+            <p className="mt-0.5 text-micro font-semibold text-emerald-600">Filed {filedTicket.number}</p>
           ) : null}
         </div>
         {edited ? (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={resetTemplate}
-            className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 hover:text-gray-900"
+            className="text-gray-500 hover:text-gray-900"
           >
             Reset to template
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -66,13 +68,14 @@ export function ClaimTemplateEditor({ template, filedTicket }: Props) {
           >
             Body
           </label>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => onDescriptionChange('')}
-            className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 transition-colors hover:text-slate-700"
+            className="text-slate-400 hover:text-slate-700"
           >
             Clear
-          </button>
+          </Button>
         </div>
         <textarea
           id="claim-body"

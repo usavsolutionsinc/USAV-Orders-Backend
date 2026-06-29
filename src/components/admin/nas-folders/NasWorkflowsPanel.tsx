@@ -1,4 +1,5 @@
 import { nasConfigured } from '@/lib/nas-photos';
+import { Button } from '@/design-system/primitives';
 import { TARGETS } from './nas-folders-config';
 import type { StationNasFoldersController } from './useStationNasFolders';
 
@@ -41,13 +42,15 @@ export function NasWorkflowsPanel({ c }: { c: StationNasFoldersController }) {
                   className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-caption text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 {target.key !== 'claims' && nasConfigured() ? (
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setPicking(`target:${target.key}`)}
-                    className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-micro font-black uppercase tracking-widest text-gray-700 hover:bg-gray-50"
+                    className="shrink-0"
                   >
                     Browse
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -57,14 +60,15 @@ export function NasWorkflowsPanel({ c }: { c: StationNasFoldersController }) {
 
       <div className="flex items-center justify-end gap-3">
         {targetsDirty ? <span className="text-micro font-bold uppercase tracking-widest text-amber-600">Unsaved changes</span> : null}
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
           disabled={!targetsDirty || saveTargets.isPending || isLoading}
           onClick={() => saveTargets.mutate(targets)}
-          className="inline-flex h-9 items-center rounded-lg bg-blue-600 px-4 text-caption font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {saveTargets.isPending ? 'Saving…' : 'Save folders'}
-        </button>
+        </Button>
       </div>
     </div>
   );

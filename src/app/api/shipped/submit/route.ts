@@ -50,7 +50,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       sku,
       productTitle: product_title,
       orderId: order_id,
-    });
+    }, ctx.organizationId);
 
     // Insert the order row (tracking linked later via shipment_id).
     // Stamp organization_id so the new row is owned by the caller's tenant.

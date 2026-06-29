@@ -12,6 +12,7 @@ import { applyTransition } from '@/lib/workflow/applyTransition';
 import { isUnifiedEngineApplyTransition } from '@/lib/feature-flags';
 import type { SerialState } from '@/lib/inventory/state-machine';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 const ALLOWED_EVENT_TYPES: ReadonlySet<InventoryEventType> = new Set([
   'TEST_START',
@@ -252,6 +253,34 @@ export async function POST(
       } catch (err) {
         console.warn('receiving/lines/status: cache/realtime failed', err);
       }
+    });
+
+    // Audit the lifecycle advance (inventory_events is the lifecycle spine; the
+    // audit_log is the operator/who-did-what trail and was missing here). Never
+    // throws — failures are logged + dropped inside recordAudit.
+    await recordAudit(pool, ctx, request, {
+      source: 'receiving-station',
+      action: AUDIT_ACTION.RECEIVING_LINE_ADVANCE,
+      entityType: AUDIT_ENTITY.RECEIVING_LINE,
+      entityId: lineId,
+      method: 'scan',
+      scanRef: scanToken,
+      before: {
+        workflow_status: line.workflow_status,
+        serial_status: priorSerialStatus,
+      },
+      after: {
+        workflow_status: nextWorkflow ?? line.workflow_status,
+        serial_status: nextSerialStatus ?? priorSerialStatus,
+      },
+      extra: {
+        event_type: eventType,
+        serial_unit_id: serialUnitId,
+        qa_status: qaStatus,
+        disposition_code: dispositionCode,
+        condition_grade: conditionGrade,
+        event_id: event?.id ?? null,
+      },
     });
 
     return NextResponse.json({

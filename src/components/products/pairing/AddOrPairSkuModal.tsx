@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, Loader2, Check, Link2, Plus, AlertCircle } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useBodyScrollLock, useEscapeClose } from '@/design-system/hooks';
 import { platformStyle } from './platform-style';
 import type { UnmappedPlatformId } from './types';
@@ -187,14 +188,12 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
             <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
               {headerLabel}
             </p>
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="h-4 w-4" />}
+              ariaLabel="Close"
               onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            />
           </div>
 
           {/* Pending identifier banner */}
@@ -290,6 +289,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
                     results.map((r) => {
                       const isSel = selected?.id === r.id;
                       return (
+                        // ds-raw-button: text-left master-detail picker row (SKU + title), not a standard action button
                         <button
                           key={r.id}
                           type="button"
@@ -317,22 +317,19 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
 
           {/* Footer */}
           <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 px-4 py-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-3 py-2 text-micro font-bold uppercase tracking-wider text-slate-500 transition-colors hover:bg-slate-100"
-            >
+            <Button variant="ghost" size="md" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={mode === 'create' ? handleCreate : handlePairExisting}
+            </Button>
+            <Button
+              variant="brand"
+              size="md"
+              loading={submitting}
               disabled={submitting || (mode === 'existing' && !selected)}
-              className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-micro font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={mode === 'create' ? handleCreate : handlePairExisting}
+              icon={mode === 'create' ? <Plus className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
             >
-              {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : mode === 'create' ? <Plus className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
               {mode === 'create' ? (pending ? 'Create & pair' : 'Add SKU') : 'Pair SKU'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -343,6 +340,7 @@ export function AddOrPairSkuModal({ open, onClose, query, pending, onDone }: Pro
 
 function ModeTab({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: ReactNode; label: string }) {
   return (
+    // ds-raw-button: segmented mode toggle (conditional active fill), not a single DS variant
     <button
       type="button"
       onClick={onClick}

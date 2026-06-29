@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Search } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { InventoryResultRow } from '@/hooks/useInventorySearch';
 import { InventoryResultCard } from './InventoryResultCard';
@@ -54,13 +55,13 @@ export function InventoryResultList({
                         Try a different field or clear filters.
                     </p>
                     <div className="mt-4 flex items-center justify-center gap-3">
-                        <button
-                            type="button"
+                        <Button
+                            variant="secondary"
                             onClick={onClearQuery}
-                            className={`rounded-xl border border-blue-200 bg-white px-4 py-2 text-blue-700 ${sectionLabel} transition-colors hover:border-blue-300 hover:bg-blue-100`}
+                            className="bg-white text-blue-700 ring-blue-200 hover:bg-blue-100"
                         >
                             Clear Search
-                        </button>
+                        </Button>
                     </div>
                 </div>
             );
@@ -76,13 +77,14 @@ export function InventoryResultList({
                     {label ?? `${rows.length} Result${rows.length !== 1 ? 's' : ''}`}
                 </p>
                 {hasQuery ? (
-                    <button
-                        type="button"
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={onClearQuery}
-                        className={`${microBadge} text-blue-600 hover:underline`}
+                        className={`${microBadge} h-auto px-0 text-blue-600 hover:bg-transparent hover:underline`}
                     >
                         Clear
-                    </button>
+                    </Button>
                 ) : null}
             </div>
             <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin">

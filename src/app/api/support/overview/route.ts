@@ -11,9 +11,9 @@ export const dynamic = 'force-dynamic';
  * dashboard's Zendesk tile. Requires a valid session (was previously
  * unauthenticated — the proxy only checks cookie presence).
  */
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_req, ctx) => {
   try {
-    const zendesk = await getZendeskSupportOverview(10);
+    const zendesk = await getZendeskSupportOverview(10, ctx.organizationId);
 
     const totals = {
       zendeskTickets: zendesk.count,
@@ -36,4 +36,4 @@ export const GET = withAuth(async () => {
       { status: 500 }
     );
   }
-});
+}, { feature: 'support' });

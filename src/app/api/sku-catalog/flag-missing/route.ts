@@ -28,7 +28,7 @@ import { parseBody } from '@/lib/schemas/parse';
 import { SkuCatalogFlagMissingBody } from '@/lib/schemas/sku-catalog';
 import { queuePendingSku } from '@/lib/inventory/pending-skus';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
-import pool from '@/lib/db';
+import { withTenantTransaction } from '@/lib/tenancy/db';
 
 export const POST = withAuth(
   async (req: NextRequest, ctx) => {
@@ -37,10 +37,37 @@ export const POST = withAuth(
       const parsed = parseBody(SkuCatalogFlagMissingBody, raw);
       if (parsed instanceof NextResponse) return parsed;
 
-      const pending = await queuePendingSku({
-        rawSku: parsed.sku,
-        source: parsed.source ?? 'scan',
-        suggestedTitle: parsed.suggestedTitle ?? null,
+      // Tenant GUC: run both the pending-sku enqueue and the audit write on the
+      // tenant client so they execute under `app.current_org` (RLS-subject under
+      // the app_tenant role). `pending_skus` is global today, but routing it
+      // through the tenant connection keeps every DB touch on one GUC-scoped path
+      // and auto-stamps the org-scoped audit row.
+      const pending = await withTenantTransaction(ctx.organizationId, async (client) => {
+        const row = await queuePendingSku(
+          {
+            rawSku: parsed.sku,
+            source: parsed.source ?? 'scan',
+            suggestedTitle: parsed.suggestedTitle ?? null,
+          },
+          client,
+        );
+        if (!row) return null;
+
+        await recordAudit(client, ctx, req, {
+          source: 'sku-catalog-flag-missing',
+          action: AUDIT_ACTION.SKU_CATALOG_FLAG_MISSING,
+          entityType: AUDIT_ENTITY.SKU,
+          entityId: row.id,
+          before: null,
+          after: {
+            normalized_sku: row.normalized_sku,
+            raw_sku: row.raw_sku,
+            status: row.status,
+            occurrences: row.occurrences,
+            suggested_title: row.suggested_title,
+          },
+        });
+        return row;
       });
 
       if (!pending) {
@@ -49,21 +76,6 @@ export const POST = withAuth(
           { status: 400 },
         );
       }
-
-      await recordAudit(pool, ctx, req, {
-        source: 'sku-catalog-flag-missing',
-        action: AUDIT_ACTION.SKU_CATALOG_FLAG_MISSING,
-        entityType: AUDIT_ENTITY.SKU,
-        entityId: pending.id,
-        before: null,
-        after: {
-          normalized_sku: pending.normalized_sku,
-          raw_sku: pending.raw_sku,
-          status: pending.status,
-          occurrences: pending.occurrences,
-          suggested_title: pending.suggested_title,
-        },
-      });
 
       return NextResponse.json({ success: true, pending }, { status: 201 });
     } catch (error: any) {

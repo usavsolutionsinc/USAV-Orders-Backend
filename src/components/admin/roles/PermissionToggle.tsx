@@ -8,6 +8,7 @@
  */
 
 import { requiresStepUp, type PermissionString } from '@/lib/auth/permissions-shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface PermissionToggleProps {
   label: string;
@@ -27,13 +28,16 @@ export function PermissionToggle({ label, permission, enabled, color, disabled, 
         <div className={`flex items-center gap-1.5 truncate text-sm font-semibold ${enabled ? 'text-gray-900' : 'text-gray-500'}`}>
           <span className="truncate">{label}</span>
           {stepUp && (
-            <span title="Requires step-up (fresh PIN) before this action" className="rounded-full bg-amber-100 px-1 py-0 text-eyebrow font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">
-              ⚡
-            </span>
+            <HoverTooltip label="Requires step-up (fresh PIN) before this action" asChild>
+              <span className="rounded-full bg-amber-100 px-1 py-0 text-eyebrow font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-200">
+                ⚡
+              </span>
+            </HoverTooltip>
           )}
         </div>
         <code className="truncate text-micro font-mono text-gray-500">{permission}</code>
       </div>
+      {/* ds-raw-button */}
       <button
         type="button"
         role="switch"

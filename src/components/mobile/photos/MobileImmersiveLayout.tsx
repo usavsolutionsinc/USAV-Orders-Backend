@@ -2,6 +2,7 @@
 
 import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/ReceivingPhoneBridgeMount';
 import { ErrorBoundary } from '@/components/error/ErrorBoundary';
+import { Button } from '@/design-system/primitives';
 
 function ImmersivePageError(error: Error, reset: () => void) {
   return (
@@ -14,13 +15,14 @@ function ImmersivePageError(error: Error, reset: () => void) {
           {error.message || 'Something went wrong.'}
         </p>
       </div>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={reset}
-        className="h-12 rounded-2xl bg-white/10 px-6 text-caption font-black uppercase tracking-wider text-white active:bg-white/20"
+        className="h-12 bg-white/10 px-6 text-white hover:bg-white/20 active:bg-white/20"
       >
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

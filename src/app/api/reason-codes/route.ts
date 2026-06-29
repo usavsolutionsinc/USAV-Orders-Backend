@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { tenantQuery } from '@/lib/tenancy/db';
 import { withAuth } from '@/lib/auth/withAuth';
 import { parseBody } from '@/lib/schemas/parse';
 import { ReasonCodeCreateBody } from '@/lib/schemas/reason-codes';
-import { createReasonCode } from '@/lib/neon/reason-codes-queries';
+import { createReasonCode, getActiveReasonCodes } from '@/lib/neon/reason-codes-queries';
 import {
   getApiIdempotencyResponse,
   readIdempotencyKey,
@@ -14,57 +13,28 @@ import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 const ROUTE_REASON_CODES_POST = 'reason-codes.post';
 
-export interface ReasonCodeRow {
-  id: number;
-  code: string;
-  label: string;
-  category: string;
-  direction: 'in' | 'out' | 'either';
-  requires_note: boolean;
-  requires_photo: boolean;
-  sort_order: number;
-}
-
 /**
- * GET /api/reason-codes?direction=out&category=shrinkage
- * Returns active reason codes, optionally filtered. Used by ReasonCodePicker
- * in the mobile bin editor (and any future write surface).
+ * GET /api/reason-codes?direction=out&category=shrinkage&flowContext=substitution
+ * Returns active reason codes, optionally filtered by direction / ledger category
+ * / Class-D flow_context. Delegates to getActiveReasonCodes (the single read SoT —
+ * org scoping + filters live there, never inline). Used by ReasonCodePicker +
+ * useSubstitutionReasons.
  */
 export const GET = withAuth(async (request: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(request.url);
     const direction = searchParams.get('direction'); // in | out | either
     const category = searchParams.get('category');
+    const flowContext = searchParams.get('flowContext'); // Class-D vocabulary (e.g. 'substitution')
+    const workflowNodeId = searchParams.get('workflowNodeId'); // D3: per-node palette scoping
 
-    const clauses: string[] = ['is_active = true'];
-    const params: string[] = [];
-
-    // Tenant ownership filter — never return another org's reason codes.
-    params.push(ctx.organizationId);
-    clauses.push(`organization_id = $${params.length}`);
-
-    // Direction filter — when the caller specifies 'out' we still want
-    // 'either'-direction codes available (e.g. CYCLE_COUNT_ADJ).
-    if (direction === 'in' || direction === 'out') {
-      params.push(direction);
-      clauses.push(`(direction = $${params.length} OR direction = 'either')`);
-    } else if (direction === 'either') {
-      // Pass — no filter.
-    }
-    if (category) {
-      params.push(category);
-      clauses.push(`category = $${params.length}`);
-    }
-
-    const sql = `
-      SELECT id, code, label, category, direction,
-             requires_note, requires_photo, sort_order
-      FROM reason_codes
-      WHERE ${clauses.join(' AND ')}
-      ORDER BY sort_order ASC, label ASC
-    `;
-    const result = await tenantQuery<ReasonCodeRow>(ctx.organizationId, sql, params);
-    return NextResponse.json({ success: true, reason_codes: result.rows });
+    const reason_codes = await getActiveReasonCodes(ctx.organizationId, {
+      direction: direction === 'in' || direction === 'out' || direction === 'either' ? direction : undefined,
+      category: category ?? undefined,
+      flowContext: flowContext ?? undefined,
+      workflowNodeId: workflowNodeId ?? undefined,
+    });
+    return NextResponse.json({ success: true, reason_codes });
   } catch (err: any) {
     console.error('[GET /api/reason-codes] error:', err);
     return NextResponse.json(

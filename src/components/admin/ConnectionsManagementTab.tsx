@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { ConnectionLogEntryInput } from '@/components/sidebar/ConnectionsSidebarPanel';
 import { ZohoManagementPage } from '@/components/admin/connections/ZohoManagementPage';
 import { mainStickyHeaderClass, mainStickyHeaderShellRowClass } from '@/components/layout/header-shell';
+import { Button } from '@/design-system/primitives';
 
 interface ConnectionLogEntry extends ConnectionLogEntryInput {
   id: string;
@@ -68,13 +69,14 @@ export function ConnectionsManagementTab() {
         <div className={`${mainStickyHeaderShellRowClass} px-6`}>
           <p className="truncate text-caption font-black uppercase tracking-[0.2em] text-gray-900">Connection Activity</p>
           <div className="flex items-center gap-4 text-micro font-black uppercase tracking-widest text-gray-500">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => navigateTo('zoho-management')}
-              className="hidden border-b border-gray-900 py-1 text-micro font-black uppercase tracking-widest text-gray-900 sm:inline-block"
+              className="hidden h-auto rounded-none border-b border-gray-900 px-0 py-1 text-micro font-black uppercase tracking-widest text-gray-900 hover:text-gray-900 sm:inline-flex"
             >
               Open Zoho Tools
-            </button>
+            </Button>
             <span>Success {groupedSummary.success}</span>
             <span>Errors {groupedSummary.error}</span>
             <span>Total {logs.length}</span>
@@ -88,13 +90,14 @@ export function ConnectionsManagementTab() {
           <p className="mt-1 text-caption font-bold text-gray-500">
             Every sync, import, and upload run from the sidebar writes a result here so you can confirm what happened.
           </p>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => navigateTo('zoho-management')}
-            className="mt-3 inline-flex border-b border-gray-900 py-1 text-micro font-black uppercase tracking-widest text-gray-900 sm:hidden"
+            className="mt-3 h-auto rounded-none border-b border-gray-900 px-0 py-1 text-micro font-black uppercase tracking-widest text-gray-900 hover:text-gray-900 sm:hidden"
           >
             Open Zoho Tools
-          </button>
+          </Button>
         </div>
 
         {logs.length === 0 ? (

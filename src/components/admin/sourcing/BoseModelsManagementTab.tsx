@@ -20,6 +20,7 @@ import { qk } from '@/queries/keys';
 import { Button } from '@/design-system/primitives/Button';
 import { AdminEmptyDetail } from '../shared';
 import { Cpu } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 // ─── Types (mirror the API responses) ───────────────────────────────────────
 
@@ -264,13 +265,15 @@ function CompatibilityManager({ modelId, parts, onChanged }: { modelId: number; 
               <RoleChip role={p.part_role} />
               <FitChip fit={p.fit} oem={p.is_oem} />
               <StockBadge onHand={p.on_hand} lifecycle={p.lifecycle_status} alerts={p.open_alert_count} />
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 type="button"
                 onClick={() => remove.mutate(p.compatibility_id)}
-                className="rounded-md px-2 py-1 text-caption font-semibold text-red-600 hover:bg-red-50"
+                className="text-rose-600 hover:text-rose-700"
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
@@ -322,7 +325,7 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
     return (
       <div className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
         <span className="truncate text-sm text-gray-800">{value}</span>
-        <button type="button" onClick={onClear} className="text-caption font-semibold text-gray-500 hover:text-gray-800">Change</button>
+        <Button variant="ghost" size="sm" type="button" onClick={onClear}>Change</Button>
       </div>
     );
   }
@@ -340,6 +343,7 @@ function SkuSearchField({ value, onSelect, onClear }: { value: string; onSelect:
         <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
           {data!.items.map((s) => (
             <li key={s.id}>
+              {/* ds-raw-button: full-width left-aligned dropdown menu row (composite content) */}
               <button
                 type="button"
                 onClick={() => { onSelect(s); setOpen(false); setTerm(''); }}
@@ -371,12 +375,12 @@ function Field({ label, required, children }: { label: string; required?: boolea
 }
 
 function RoleChip({ role }: { role: string }) {
-  return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{role}</span>;
+  return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-slate-600">{role}</span>;
 }
 
 function FitChip({ fit, oem }: { fit: string; oem: boolean }) {
   const tone = fit === 'exact' ? 'bg-emerald-50 text-emerald-700' : fit === 'equivalent' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700';
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`}>{oem ? 'OEM ' : ''}{fit}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${tone}`}>{oem ? 'OEM ' : ''}{fit}</span>;
 }
 
 function StockBadge({ onHand, lifecycle, alerts }: { onHand: number; lifecycle: string; alerts: number }) {
@@ -384,9 +388,15 @@ function StockBadge({ onHand, lifecycle, alerts }: { onHand: number; lifecycle: 
   const out = onHand <= 0;
   const tone = out || (eol && onHand < 2) ? 'bg-red-50 text-red-700' : eol ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600';
   const label = out ? '0 in stock' : `${onHand} in stock`;
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`} title={eol ? `lifecycle: ${lifecycle}${alerts ? ` · ${alerts} open alert(s)` : ''}` : undefined}>
+  const badge = (
+    <span className={`rounded-full px-2 py-0.5 text-micro font-semibold ${tone}`}>
       {label}{eol ? ` · ${lifecycle}` : ''}
     </span>
+  );
+  if (!eol) return badge;
+  return (
+    <HoverTooltip label={`lifecycle: ${lifecycle}${alerts ? ` · ${alerts} open alert(s)` : ''}`} asChild>
+      {badge}
+    </HoverTooltip>
   );
 }

@@ -5,7 +5,7 @@
  * Zendesk attachments. To show them we resolve the ticket's internal entity,
  * then fetch that entity's photos. See migration 2026-06-01_ticket_links.sql.
  */
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { getTicket, updateTicket } from './zendesk';
 import { photoContentUrl } from '@/lib/photos/display-url';
 import { listPhotosForEntity } from '@/lib/photos/service';
@@ -41,7 +41,8 @@ export async function linkTicket(args: {
   entityId: number;
   staffId?: number | null;
 }): Promise<void> {
-  await pool.query(
+  await tenantQuery(
+    args.orgId,
     `INSERT INTO ticket_links
        (organization_id, zendesk_ticket_id, entity_type, entity_id, created_by)
      VALUES ($1, $2, $3, $4, $5)
@@ -64,7 +65,8 @@ export async function unlinkTicket(args: {
   entityType: string;
   entityId: number;
 }): Promise<boolean> {
-  const res = await pool.query(
+  const res = await tenantQuery(
+    args.orgId,
     `DELETE FROM ticket_links
       WHERE organization_id = $1
         AND zendesk_ticket_id = $2
@@ -111,7 +113,8 @@ export async function getTicketEntity(
   zendeskTicketId: number,
 ): Promise<ResolvedTicketEntity | null> {
   // 1. ticket_links (cheapest, authoritative)
-  const links = await pool.query<{ entity_type: string; entity_id: string }>(
+  const links = await tenantQuery<{ entity_type: string; entity_id: string }>(
+    orgId,
     `SELECT entity_type, entity_id FROM ticket_links
       WHERE organization_id = $1 AND zendesk_ticket_id = $2 LIMIT 1`,
     [orgId, zendeskTicketId],
@@ -130,7 +133,8 @@ export async function getTicketEntity(
   if (parsed) return { ...parsed, source: 'external_id' };
 
   // 3. unfound_overlay — stores zendesk_ticket_id as text ("1234" or "#1234")
-  const ov = await pool.query<{ source_kind: string; source_id: string }>(
+  const ov = await tenantQuery<{ source_kind: string; source_id: string }>(
+    orgId,
     `SELECT source_kind, source_id FROM unfound_overlay
       WHERE organization_id = $1
         AND zendesk_ticket_id IN ($2, $3) LIMIT 1`,
@@ -186,9 +190,10 @@ export async function getEntityPhotos(
         entityId: entity.id,
       }),
     );
-    const parent = await pool.query<{ receiving_id: number | null }>(
-      `SELECT receiving_id FROM receiving_lines WHERE id = $1 LIMIT 1`,
-      [entity.id],
+    const parent = await tenantQuery<{ receiving_id: number | null }>(
+      organizationId,
+      `SELECT receiving_id FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [entity.id, organizationId],
     );
     const receivingId = parent.rows[0]?.receiving_id;
     if (receivingId != null) {

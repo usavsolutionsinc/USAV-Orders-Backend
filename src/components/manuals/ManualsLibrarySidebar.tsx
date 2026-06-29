@@ -1,6 +1,7 @@
 'use client';
 
 import { Loader2, Search, X, ChevronLeft } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { tableHeader } from '@/design-system/tokens/typography/presets';
 import { sidebarHeaderBandClass, sidebarHeaderRowClass, SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
@@ -61,14 +62,12 @@ export function ManualsLibrarySidebar() {
             className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-9 text-label font-semibold text-gray-900 placeholder:text-gray-400 transition-all focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-100"
           />
           {query && (
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="h-3.5 w-3.5" />}
               onClick={handleClear}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              ariaLabel="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-gray-100"
+            />
           )}
         </div>
       </div>
@@ -80,7 +79,7 @@ export function ManualsLibrarySidebar() {
             key={opt.value}
             type="button"
             onClick={() => setStatus(opt.value)}
-            className={`flex-1 rounded-xl px-2 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
+            className={`ds-raw-button flex-1 rounded-xl px-2 py-1.5 text-micro font-black uppercase tracking-wider transition-all ${
               status === opt.value
                 ? 'bg-gray-900 text-white shadow-sm shadow-gray-900/20'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
@@ -97,7 +96,7 @@ export function ManualsLibrarySidebar() {
           <button
             type="button"
             onClick={() => goToCrumb(0)}
-            className={`flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors ${
+            className={`ds-raw-button flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors ${
               currentPath.length === 0
                 ? 'bg-indigo-50 text-indigo-700'
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
@@ -112,7 +111,7 @@ export function ManualsLibrarySidebar() {
               <button
                 type="button"
                 onClick={() => goToCrumb(i + 1)}
-                className={`shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors ${
+                className={`ds-raw-button shrink-0 rounded-lg px-2 py-1 text-micro font-black uppercase tracking-wider transition-colors ${
                   i === currentPath.length - 1
                     ? 'bg-gray-900 text-white'
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'

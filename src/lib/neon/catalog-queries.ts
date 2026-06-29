@@ -14,6 +14,11 @@
 
 import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
+import { SUBSTITUTION_REASONS } from '@/lib/fulfillment/substitution-reasons';
+import { SHORT_PICK_REASONS } from '@/lib/picking/short-pick-reasons';
+import { REPAIR_FAILURE_REASONS } from '@/lib/repair/repair-failure-reasons';
+import { RECEIVING_EXCEPTION_CODES, RECEIVING_EXCEPTION_META } from '@/lib/receiving/exception-codes';
+import { SKU_STOCK_REASONS } from '@/lib/sku/sku-stock-reasons';
 
 export interface PlatformRow {
   id: number;
@@ -100,6 +105,64 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
          VALUES ($1, $2, $3, $4, $5, $6, true)
          ON CONFLICT (organization_id, slug) DO NOTHING`,
         [organizationId, slug, label, kind, isReturn, sort],
+      );
+    }
+    // Class-D substitution reason vocabulary (flow_context='substitution'),
+    // derived from the built-in registry SoT (substitution-reasons.ts) so the
+    // codes/labels never drift. `category` is NULL — the inventory ledger axis
+    // doesn't apply. Mirrors migration 2026-06-28_reason_codes_flow_context.sql.
+    let subSort = 0;
+    for (const r of SUBSTITUTION_REASONS) {
+      subSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'substitution', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, subSort],
+      );
+    }
+    let spSort = 0;
+    for (const r of SHORT_PICK_REASONS) {
+      spSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'short_pick', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, spSort],
+      );
+    }
+    let rfSort = 0;
+    for (const r of REPAIR_FAILURE_REASONS) {
+      rfSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'repair_failure', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, rfSort],
+      );
+    }
+    // Receiving-exception vocabulary is BEHAVIOR-BEARING (codes stay system, owned
+    // by exception-codes.ts); seeded here only so tenants can see/relabel them.
+    let reSort = 0;
+    for (const code of RECEIVING_EXCEPTION_CODES) {
+      reSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'receiving_exception', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, code, RECEIVING_EXCEPTION_META[code].label, reSort],
+      );
+    }
+    // SKU-stock quick-adjust reasons (codes stay system — the replenish trigger
+    // keys on 'SOLD'; seeded for tenant relabeling).
+    let ssSort = 0;
+    for (const r of SKU_STOCK_REASONS) {
+      ssSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'inventory_adjust', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, ssSort],
       );
     }
     // platform_accounts (mirrors migration 2026-06-14f): eBay storefronts from

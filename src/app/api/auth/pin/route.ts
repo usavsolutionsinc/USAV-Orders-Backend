@@ -64,20 +64,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'INVALID_REQUEST', field: 'pin' }, { status: 400 });
     }
 
+    // Tenant scope (CVE class: IDOR cross-tenant PIN reset → account takeover).
+    // BOTH the self-change and admin-reset target must belong to the CALLER's
+    // org. Probe the target row scoped to me.organizationId: a cross-org id
+    // (the admin-reset IDOR) reads as NOT_FOUND and 404s BEFORE any mutation.
+    // `me` is guaranteed non-null above — both branches 401 when it's missing.
+    const callerOrgId = me!.organizationId;
+    const probe = await pool.query(
+      `SELECT pin_hash FROM staff WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+      [targetStaffId, callerOrgId],
+    );
+    const targetRow = probe.rows[0] as { pin_hash: string | null } | undefined;
+    if (!targetRow) {
+      // Either no such staff, or it belongs to another tenant. Same 404 either
+      // way — never reveal cross-org existence.
+      return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+    }
+
     if (!isAdminReset) {
       // Self-change: if a PIN already exists, current PIN must verify first.
-      const r = await pool.query(
-        `SELECT pin_hash FROM staff WHERE id = $1 LIMIT 1`,
-        [targetStaffId],
-      );
-      const existingRow = r.rows[0] as { pin_hash: string | null } | undefined;
-      const hasExisting = !!existingRow?.pin_hash;
+      const hasExisting = !!targetRow.pin_hash;
       if (hasExisting) {
         if (!currentPin) {
           return NextResponse.json({ error: 'CURRENT_PIN_REQUIRED' }, { status: 400 });
         }
         try {
-          await verifyStaffPin(targetStaffId!, currentPin);
+          await verifyStaffPin(targetStaffId!, currentPin, callerOrgId);
         } catch (err) {
           if (err instanceof PinError) {
             return NextResponse.json({ error: err.code }, { status: 401 });
@@ -87,9 +99,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Validate via hashPin's shape check, then persist.
+    // Validate via hashPin's shape check, then persist — org-scoped so a
+    // cross-org id can never be written even if the probe above is bypassed.
     await hashPin(pin); // throws PinError for bad shape; result discarded
-    await setStaffPin(targetStaffId!, pin);
+    await setStaffPin(targetStaffId!, pin, callerOrgId);
 
     await audit({
       staffId: targetStaffId,

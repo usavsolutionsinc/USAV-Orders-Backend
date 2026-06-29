@@ -28,6 +28,7 @@
 
 import { and, asc, desc, eq, notExists, sql } from 'drizzle-orm';
 import { db } from '@/lib/drizzle/db';
+import { withTenantDrizzle } from '@/lib/drizzle/tenant-db';
 import {
   itemWorkflowState,
   workflowDefinitions,
@@ -42,6 +43,12 @@ import { enrollItem } from './store';
 export type WorkflowTapEvent =
   | 'unit_received'
   | 'test_verdict'
+  // Fired by the data-wipe station action (recordDataWipe) after a secure
+  // erase / factory reset. The `data_wipe` node maps wipeSuccess → 'wiped'
+  // (→ grade) vs 'failed' (→ repair). Unlike most taps this advances ONLY the
+  // graph position — the wipe is a recorded compliance event, not a
+  // serial_units status change.
+  | 'data_wiped'
   | 'repair_completed'
   | 'listed'
   | 'packed'
@@ -85,25 +92,7 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
     // updateRepair), and advance() must keep doing its own read so the state
     // is fresh once a real per-unit lock lands (acquire → read → write).
     // One indexed point-select per human-paced scan is the accepted cost.
-    const [state] = await db
-      .select({
-        organizationId: itemWorkflowState.organizationId,
-        status: itemWorkflowState.status,
-        // Current parked node's registry type — for the opt-in position guard
-        // below. LEFT JOIN so an enrolled unit on a since-removed node still
-        // loads (currentNodeType null → guard treats it as a mismatch no-op).
-        currentNodeType: workflowNodes.type,
-      })
-      .from(itemWorkflowState)
-      .leftJoin(
-        workflowNodes,
-        and(
-          eq(workflowNodes.id, itemWorkflowState.currentNodeId),
-          eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
-        ),
-      )
-      .where(eq(itemWorkflowState.serialUnitId, args.serialUnitId))
-      .limit(1);
+    const state = await loadTapState(args.serialUnitId, args.orgId ?? null);
 
     let orgId = state?.organizationId ?? null;
 
@@ -145,6 +134,82 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
       err,
     );
   }
+}
+
+interface TapStateRow {
+  organizationId: string;
+  status: string;
+  /** Current parked node's registry type — for the opt-in position guard. */
+  currentNodeType: string | null;
+}
+
+/**
+ * The org-discovery + position-guard pre-read against item_workflow_state.
+ *
+ * When the caller knows the org (every route tap + the applyTransition
+ * chokepoint always pass it), the read is scoped through `withTenantDrizzle` so
+ * it carries the `app.current_org` GUC and keeps working once
+ * item_workflow_state is RLS-FORCED (Phase E); the org predicate is explicit
+ * (defense in depth). When the caller does NOT know the org — legacy lib
+ * re-taps that omit it (recordTestVerdict's pre-chokepoint path, updateRepair) —
+ * it falls back to the stateless neon-http `db` to discover the owning org by
+ * the globally-unique serial_unit_id. That fallback is an INTENTIONAL cross-org
+ * lookup and is the one residual item_workflow_state read not behind the GUC;
+ * it relies on the owner connection's RLS bypass and would need an org threaded
+ * through those legacy callers before item_workflow_state can be FORCE-enforced.
+ *
+ * LEFT JOIN on workflow_nodes (no org column) so an enrolled unit parked on a
+ * since-removed node still loads (currentNodeType null → guard treats it as a
+ * mismatch no-op).
+ */
+async function loadTapState(
+  serialUnitId: number,
+  orgId: string | null,
+): Promise<TapStateRow | undefined> {
+  if (orgId) {
+    const [row] = await withTenantDrizzle(orgId, (tx) =>
+      tx
+        .select({
+          organizationId: itemWorkflowState.organizationId,
+          status: itemWorkflowState.status,
+          currentNodeType: workflowNodes.type,
+        })
+        .from(itemWorkflowState)
+        .leftJoin(
+          workflowNodes,
+          and(
+            eq(workflowNodes.id, itemWorkflowState.currentNodeId),
+            eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
+          ),
+        )
+        .where(
+          and(
+            eq(itemWorkflowState.organizationId, orgId),
+            eq(itemWorkflowState.serialUnitId, serialUnitId),
+          ),
+        )
+        .limit(1),
+    );
+    return row;
+  }
+
+  const [row] = await db
+    .select({
+      organizationId: itemWorkflowState.organizationId,
+      status: itemWorkflowState.status,
+      currentNodeType: workflowNodes.type,
+    })
+    .from(itemWorkflowState)
+    .leftJoin(
+      workflowNodes,
+      and(
+        eq(workflowNodes.id, itemWorkflowState.currentNodeId),
+        eq(workflowNodes.workflowDefinitionId, itemWorkflowState.workflowDefinitionId),
+      ),
+    )
+    .where(eq(itemWorkflowState.serialUnitId, serialUnitId))
+    .limit(1);
+  return row;
 }
 
 /**

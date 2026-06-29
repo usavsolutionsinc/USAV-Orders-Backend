@@ -10,6 +10,7 @@ import { ErrorBoundary } from '@/components/error/ErrorBoundary';
 import { useUIMode } from '@/design-system/providers/UIModeProvider';
 import { useBodyScrollLock } from '@/design-system/hooks';
 import { AlertTriangle, RotateCcw, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { isMobileAllowedPath } from '@/lib/sidebar-navigation';
 import { GlobalHeader } from '@/components/layout/GlobalHeader';
 import { GlobalDesktopSkuScanner } from '@/components/layout/GlobalDesktopSkuScanner';
@@ -20,7 +21,7 @@ import { ReceivingPhoneBridgeMount } from '@/components/mobile/receiving/Receivi
 /**
  * Mount-only component. Subscribes to phone-originated scans on
  * `phone:{staffId}` for the signed-in user and echoes lookups back on
- * `station:{staffId}`. Runs on both desktop and mobile so either side can
+ * `staffstation:{staffId}`. Runs on both desktop and mobile so either side can
  * service a scan from the other.
  */
 function PhoneScanBridgeMount() {
@@ -53,13 +54,15 @@ function SidebarFallback({ reset }: { reset: () => void }) {
         <p className="mt-1 text-eyebrow font-semibold uppercase tracking-widest text-rose-500">
           The rest of the page still works
         </p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={reset}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1 text-caption font-bold text-rose-700 hover:bg-rose-50"
+          icon={<RotateCcw />}
+          className="mt-3 bg-white text-rose-700 ring-rose-200 hover:bg-rose-50"
         >
-          <RotateCcw className="h-3.5 w-3.5" /> Retry
-        </button>
+          Retry
+        </Button>
       </div>
     </aside>
   );
@@ -220,14 +223,12 @@ export function ResponsiveLayout({ children }: ResponsiveLayoutProps) {
             transition={drawerTransition}
             className="fixed inset-y-0 left-0 z-panel w-full max-w-xs shadow-2xl"
           >
-            <button
-              type="button"
+            <IconButton
               onClick={closeDrawer}
-              aria-label="Close navigation"
-              className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 text-gray-700 active:scale-95 active:bg-gray-200 transition-transform"
-            >
-              <X className="h-5 w-5" />
-            </button>
+              ariaLabel="Close navigation"
+              className="absolute top-[max(0.5rem,env(safe-area-inset-top))] right-3 z-10 h-11 w-11 flex items-center justify-center rounded-xl bg-gray-100 active:scale-95 active:bg-gray-200 transition-transform"
+              icon={<X className="h-5 w-5 text-gray-700" />}
+            />
             <ErrorBoundary
               label="sidebar-drawer"
               fallback={(_e, reset) => <SidebarFallback reset={reset} />}

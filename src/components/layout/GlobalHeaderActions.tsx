@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { AnchoredLayer } from '@/design-system';
+import { IconButton } from '@/design-system/primitives';
 import { Search, Inbox, Pencil, Clipboard } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 import { useAuth } from '@/contexts/AuthContext';
 import { useHeader } from '@/contexts/HeaderContext';
@@ -92,52 +94,54 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
       {/* Selection toggle — registered per page via usePageSelection(). A
           pencil that flips the active surface into select mode. */}
       {!isMobile && selection && (
-        <button
-          type="button"
-          onClick={selection.onToggle}
-          aria-pressed={selection.active}
-          aria-label={selection.active ? 'Done selecting' : 'Select'}
-          title={selection.active ? 'Done selecting' : 'Select'}
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
-            selection.active && 'bg-gray-900 text-white hover:bg-gray-800',
-          )}
-        >
-          <Pencil className="h-4 w-4" />
-        </button>
+        <HoverTooltip label={selection.active ? 'Done selecting' : 'Select'} asChild>
+          {/* ds-raw-button: select-mode toggle with strong active fill (bg-gray-900 text-white) that conflicts with IconButton's tone color, not a single DS variant */}
+          <button
+            type="button"
+            onClick={selection.onToggle}
+            aria-pressed={selection.active}
+            aria-label={selection.active ? 'Done selecting' : 'Select'}
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
+              selection.active && 'bg-gray-900 text-white hover:bg-gray-800',
+            )}
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+        </HoverTooltip>
       )}
 
       {/* Search — opens the ⌘K command bar (same as the keyboard shortcut),
           not the quick-access surface. Desktop-only (no keyboard on mobile). */}
       {!isMobile && (
-        <button
-          type="button"
-          onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
-          aria-label="Open command bar"
-          title="Search (⌘K)"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95"
-        >
-          <Search className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="Search (⌘K)" asChild>
+          <IconButton
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('usav-command-bar-open'))}
+            ariaLabel="Open command bar"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95"
+            icon={<Search className="h-4 w-4" />}
+          />
+        </HoverTooltip>
       )}
 
       {/* Clipboard history — recent copies + send-to-staff. Sits between the
           search launcher and the notifications bell. */}
       <div ref={clipboardAnchorRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setPopover((p) => (p === 'clipboard' ? 'none' : 'clipboard'))}
-          aria-label="Clipboard history"
-          aria-expanded={clipboardOpen}
-          title="Clipboard history"
-          className={cn(
-            'flex items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
-            ctrlSize,
-            clipboardOpen && 'bg-gray-100',
-          )}
-        >
-          <Clipboard className={iconSize} />
-        </button>
+        <HoverTooltip label="Clipboard history" asChild>
+          <IconButton
+            type="button"
+            onClick={() => setPopover((p) => (p === 'clipboard' ? 'none' : 'clipboard'))}
+            ariaLabel="Clipboard history"
+            aria-expanded={clipboardOpen}
+            className={cn(
+              'flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+              ctrlSize,
+              clipboardOpen && 'bg-gray-100',
+            )}
+            icon={<Clipboard className={iconSize} />}
+          />
+        </HoverTooltip>
         <AnchoredLayer
           open={clipboardOpen}
           onClose={() => setPopover('none')}
@@ -151,27 +155,29 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
 
       {/* Notifications */}
       <div ref={inboxAnchorRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setPopover((p) => (p === 'inbox' ? 'none' : 'inbox'))}
-          aria-label="Notifications"
-          aria-expanded={inboxOpen}
-          title="Notifications"
-          className={cn(
-            'relative flex items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-gray-100 active:scale-95',
-            ctrlSize,
-            inboxOpen && 'bg-gray-100',
-          )}
-        >
-          <span className="relative inline-flex shrink-0">
-            <Inbox className={iconSize} />
-            {inboxCount > 0 && (
-              <span className="pointer-events-none absolute -right-1 -top-1 flex h-3 min-w-[12px] items-center justify-center rounded-full bg-rose-600 px-0.5 text-[8px] font-bold leading-none tabular-nums text-white ring-1 ring-white">
-                {inboxCount > 9 ? '9+' : inboxCount}
-              </span>
+        <HoverTooltip label="Notifications" asChild>
+          <IconButton
+            type="button"
+            onClick={() => setPopover((p) => (p === 'inbox' ? 'none' : 'inbox'))}
+            ariaLabel="Notifications"
+            aria-expanded={inboxOpen}
+            className={cn(
+              'relative flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+              ctrlSize,
+              inboxOpen && 'bg-gray-100',
             )}
-          </span>
-        </button>
+            icon={
+              <span className="relative inline-flex shrink-0">
+                <Inbox className={iconSize} />
+                {inboxCount > 0 && (
+                  <span className="pointer-events-none absolute -right-1 -top-1 flex h-3 min-w-[12px] items-center justify-center rounded-full bg-rose-600 px-0.5 text-mini font-bold leading-none tabular-nums text-white ring-1 ring-white">
+                    {inboxCount > 9 ? '9+' : inboxCount}
+                  </span>
+                )}
+              </span>
+            }
+          />
+        </HoverTooltip>
         <AnchoredLayer
           open={inboxOpen}
           onClose={() => setPopover('none')}
@@ -188,26 +194,28 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           (which already holds the staff card, switch-staff, settings + sign
           out). */}
       <div ref={accountAnchorRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setPopover((p) => (p === 'account' ? 'none' : 'account'))}
-          aria-label="Account & quick access"
-          aria-expanded={accountOpen}
-          title={displayName || `Staff #${user.staffId}`}
-          className={cn(
-            'flex items-center justify-center rounded-full font-bold transition-transform active:scale-95',
-            avatarSize,
-            sc.bg,
-            // `text-white` must come AFTER avatarSize: tailwind-merge treats the
-            // custom `text-eyebrow`/`text-caption` size tokens as text-color
-            // classes, so an earlier `text-white` gets stripped and the initial
-            // falls back to the dark inherited body color.
-            'text-white',
-            accountOpen && 'ring-2 ring-gray-300 ring-offset-1',
-          )}
-        >
-          {accountInitial}
-        </button>
+        <HoverTooltip label={displayName || `Staff #${user.staffId}`} asChild>
+          {/* ds-raw-button: avatar control rendering a text initial with dynamic staff-theme bg + conditional ring, not an icon button */}
+          <button
+            type="button"
+            onClick={() => setPopover((p) => (p === 'account' ? 'none' : 'account'))}
+            aria-label="Account & quick access"
+            aria-expanded={accountOpen}
+            className={cn(
+              'flex items-center justify-center rounded-full font-bold transition-transform active:scale-95',
+              avatarSize,
+              sc.bg,
+              // `text-white` must come AFTER avatarSize: tailwind-merge treats the
+              // custom `text-eyebrow`/`text-caption` size tokens as text-color
+              // classes, so an earlier `text-white` gets stripped and the initial
+              // falls back to the dark inherited body color.
+              'text-white',
+              accountOpen && 'ring-2 ring-gray-300 ring-offset-1',
+            )}
+          >
+            {accountInitial}
+          </button>
+        </HoverTooltip>
         <AnchoredLayer
           open={accountOpen}
           onClose={() => setPopover('none')}

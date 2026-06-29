@@ -14,7 +14,7 @@ import {
 } from './RepairIntakeStepper';
 import { FavoritesWorkspaceSection } from '@/components/sidebar/FavoritesWorkspaceSection';
 import { RepairPaperworkSheet } from './RepairPaperworkSheet';
-import { TextField, FloatingButton } from '@/design-system/primitives';
+import { TextField, FloatingButton, Button, IconButton } from '@/design-system/primitives';
 import type { FavoriteSkuRecord } from '@/lib/favorites/sku-favorites';
 import { REPAIR_STEP_COPY, buildInitialFormData, isContactFieldValid, canSubmitRepairIntake, getRepairSubmitBlockReason, hasRepairIssue, isContactComplete, isProductSelected } from './repair-intake-logic';
 import { useRepairIntakeData } from './useRepairIntakeData';
@@ -64,7 +64,7 @@ export interface RepairFormData {
 
 const REPAIR_INTAKE_MAX_WIDTH = 'max-w-[720px]';
 const REPAIR_INTAKE_COLUMN_CLASS = `mx-auto w-full ${REPAIR_INTAKE_MAX_WIDTH}`;
-const SECTION_LABEL = 'text-[10px] font-black uppercase tracking-[0.16em] text-gray-500';
+const SECTION_LABEL = 'text-micro font-black uppercase tracking-[0.16em] text-gray-500';
 
 export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId }: RepairIntakeFormProps) {
     const [currentStep, setCurrentStep] = useState<RepairIntakeStepKey>('product');
@@ -321,7 +321,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 <Check className="h-4 w-4" />
                             </span>
                             <div className="min-w-0">
-                                <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-[10px]">
+                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-micro">
                                     Repair submitted
                                 </p>
                                 <h1 className="truncate text-sm font-black tracking-tight text-gray-900 sm:text-[15px]">
@@ -329,14 +329,12 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 </h1>
                             </div>
                         </div>
-                        <button
-                            type="button"
+                        <IconButton
                             onClick={onClose}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
-                            aria-label="Done"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                            ariaLabel="Done"
+                            icon={<X className="h-4 w-4" />}
+                        />
                     </div>
                 </header>
 
@@ -355,26 +353,27 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 href={submitted.zendeskTicketUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="truncate text-[10px] font-black uppercase tracking-[0.14em] text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+                                className="truncate text-micro font-black uppercase tracking-[0.14em] text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
                             >
                                 {submitted.zendeskTicketNumber ? `Ticket ${submitted.zendeskTicketNumber}` : 'View ticket'}
                             </a>
                         ) : null}
                         <div className="ml-auto flex items-center gap-2">
-                            <button
-                                type="button"
+                            <Button
+                                variant="secondary"
+                                size="md"
                                 onClick={onClose}
-                                className="rounded-lg border border-gray-200 px-4 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] text-gray-600 transition-colors hover:border-gray-900 hover:text-gray-900"
                             >
                                 Done
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="brand"
+                                size="md"
+                                icon={<Printer className="h-4 w-4" />}
                                 onClick={() => window.open(printHref, '_blank', 'noopener,noreferrer')}
-                                className="flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-[11px] font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-black"
                             >
-                                <Printer className="h-4 w-4" /> Print document
-                            </button>
+                                Print document
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -390,14 +389,12 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     <div className="relative flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
                             {currentStep !== 'product' ? (
-                                <button
-                                    type="button"
+                                <IconButton
                                     onClick={handleBack}
-                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-gray-900 hover:text-gray-900"
-                                    aria-label="Go back"
-                                >
-                                    <ChevronLeft className="h-4 w-4" />
-                                </button>
+                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                                    ariaLabel="Go back"
+                                    icon={<ChevronLeft className="h-4 w-4" />}
+                                />
                             ) : (
                                 <div
                                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-900"
@@ -407,7 +404,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 </div>
                             )}
                             <div className="min-w-0">
-                                <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-[10px]">
+                                <p className="truncate text-eyebrow font-bold uppercase tracking-[0.18em] text-gray-400 sm:text-micro">
                                     Repair Intake
                                 </p>
                                 <h1
@@ -426,14 +423,12 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                 active={showPaperwork}
                                 onToggle={() => setShowPaperwork((v) => !v)}
                             />
-                            <button
-                                type="button"
+                            <IconButton
                                 onClick={onClose}
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-gray-900 hover:text-gray-900"
-                                aria-label="Close"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 transition-colors hover:border-gray-900"
+                                ariaLabel="Close"
+                                icon={<X className="h-4 w-4" />}
+                            />
                         </div>
                     </div>
 
@@ -565,28 +560,22 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                     {currentStep === 'contact' && (
                         <div className="w-full space-y-6">
                             <div className="grid grid-cols-2 gap-2 rounded-xl border border-gray-200 p-1">
-                                <button
-                                    type="button"
+                                <Button
+                                    variant={customerMode === 'existing' ? 'brand' : 'ghost'}
+                                    size="md"
                                     onClick={() => setCustomerMode('existing')}
-                                    className={`rounded-lg py-2.5 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
-                                        customerMode === 'existing'
-                                            ? 'bg-gray-900 text-white'
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
+                                    className="w-full"
                                 >
                                     Existing
-                                </button>
-                                <button
-                                    type="button"
+                                </Button>
+                                <Button
+                                    variant={customerMode === 'new' ? 'brand' : 'ghost'}
+                                    size="md"
                                     onClick={() => setCustomerMode('new')}
-                                    className={`rounded-lg py-2.5 text-[10px] font-black uppercase tracking-[0.14em] transition-colors ${
-                                        customerMode === 'new'
-                                            ? 'bg-gray-900 text-white'
-                                            : 'text-gray-500 hover:text-gray-900'
-                                    }`}
+                                    className="w-full"
                                 >
                                     New
-                                </button>
+                                </Button>
                             </div>
 
                             {customerMode === 'existing' && (
@@ -598,7 +587,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                         tone="neutral"
                                     />
                                     <div className="overflow-hidden rounded-xl border border-gray-200">
-                                        <div className="grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 text-[9px] font-black uppercase tracking-[0.12em] text-gray-500">
+                                        <div className="grid grid-cols-[1fr_1fr_0.55fr] gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500">
                                             <span>Name</span>
                                             <span>Phone</span>
                                             <span className="text-right">Action</span>
@@ -623,13 +612,13 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                                                     <span className="truncate font-bold text-gray-900">{customer.name}</span>
                                                     <span className="truncate text-gray-600">{customer.phone || '—'}</span>
                                                     <div className="text-right">
-                                                        <button
-                                                            type="button"
+                                                        <Button
+                                                            variant="brand"
+                                                            size="sm"
                                                             onClick={() => applyExistingCustomer(customer)}
-                                                            className="rounded-lg bg-gray-900 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-white hover:bg-black"
                                                         >
                                                             Select
-                                                        </button>
+                                                        </Button>
                                                     </div>
                                                 </div>
                                             ))}
@@ -690,7 +679,7 @@ export function RepairIntakeForm({ onClose, onSubmit, initialData, favoriteSkuId
                             </div>
 
                             {signatureData && (
-                                <div className="mt-3 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-700">
+                                <div className="mt-3 flex items-center gap-2 text-micro font-black uppercase tracking-[0.14em] text-gray-700">
                                     <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-900">
                                         <Check className="h-2.5 w-2.5 text-white" />
                                     </span>

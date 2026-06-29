@@ -8,6 +8,8 @@ import { FbaDraggableLineRow } from '@/components/fba/sidebar/FbaDraggableLineRo
 import { FbaQtyStepper } from '@/components/fba/sidebar/FbaQtyStepper';
 import { PrintTableCheckbox } from '@/components/fba/table/Checkbox';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import type { StationTheme } from '@/utils/staff-colors';
 
@@ -97,15 +99,15 @@ export function FbaTrackingBundleCard({
         {showChip ? (
           <div className="flex min-w-0 items-center gap-1">
             <TrackingChip value={bundle.tracking_number} display={getLast4(bundle.tracking_number)} />
-            <button
-              type="button"
-              onClick={() => setEditingTracking(true)}
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Edit tracking number"
-              title="Edit tracking number"
-            >
-              <Pencil className="h-2.5 w-2.5" />
-            </button>
+            <HoverTooltip label="Edit tracking number" asChild>
+              <IconButton
+                type="button"
+                onClick={() => setEditingTracking(true)}
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                ariaLabel="Edit tracking number"
+                icon={<Pencil className="h-2.5 w-2.5" />}
+              />
+            </HoverTooltip>
           </div>
         ) : (
           <input
@@ -127,24 +129,22 @@ export function FbaTrackingBundleCard({
               ? `${bundle.allocations.length} · ${totalUnits}`
               : ''}
           </span>
-          <button
+          <IconButton
             type="button"
             onClick={() => onToggleCollapse(bundleIndex)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 transition-colors hover:text-gray-600"
-            aria-label={bundle.collapsed ? 'Expand box' : 'Collapse box'}
-          >
-            {bundle.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-          </button>
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-600"
+            ariaLabel={bundle.collapsed ? 'Expand box' : 'Collapse box'}
+            icon={bundle.collapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          />
           {/* Divider + extra padding so the destructive trash button is harder to mis-tap next to the chevron */}
           <span aria-hidden className="mx-0.5 h-3 w-px bg-gray-200" />
-          <button
+          <IconButton
             type="button"
             onClick={() => onRemoveBundle(bundleIndex)}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500"
-            aria-label="Remove this box"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-300 hover:bg-red-50 hover:text-red-500"
+            ariaLabel="Remove this box"
+            icon={<Trash2 className="h-3 w-3" />}
+          />
         </div>
       </div>
 

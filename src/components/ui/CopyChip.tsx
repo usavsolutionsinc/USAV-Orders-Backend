@@ -13,9 +13,13 @@
  */
 import React, { MouseEvent } from 'react';
 import { isEmptyDisplayValue } from '@/utils/empty-display-value';
-import { Barcode, ExternalLink, MapPin, Package, Pencil } from '../Icons';
+import { Barcode, DollarSign, ExternalLink, MapPin, Package, Pencil, Tags } from '../Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { monoValue } from '@/design-system/tokens/typography/presets';
 import { useChipTooltip, useCopyChip } from '@/hooks';
+import { conditionGradeChipStyleOrPending } from '@/lib/condition-tone';
+import { conditionGradeTableLabel } from '@/components/station/receiving-constants';
 import { skuScanPrefixBeforeColon, getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import {
   getLast4,
@@ -68,6 +72,7 @@ export const HashIcon = () => (
  *   sku       yellow / pencil   SKU-driven values (static scan refs, sku-table serials)
  *   fnsku     purple / package  Amazon FNSKUs scanned at FBA intake ONLY
  *   ticket    orange / hash     support ticket ids
+ *   price     emerald / $ stroke  Zoho PO unit cost on a receiving line (Lucide dollar-sign)
  */
 // `dot` = accent-dot bg per tone, so surfaces that show a copied ref as a dot
 // (e.g. the clipboard-history popover) read the same hue as the chip it came
@@ -108,6 +113,12 @@ export const CHIP_TONES = {
     underline: 'border-orange-500',
     iconClass: 'text-orange-500',
     dot: 'bg-orange-500',
+  },
+  price: {
+    icon: <DollarSign className="h-4 w-4 shrink-0" />,
+    underline: 'border-emerald-500',
+    iconClass: 'inline-flex items-center justify-center text-emerald-600',
+    dot: 'bg-emerald-500',
   },
 } as const;
 
@@ -204,6 +215,13 @@ export function CopyChip({
   const resolvedUnderline = underlineClass ?? toneDef?.underline ?? 'border-gray-500';
   const resolvedIconClass = iconClass ?? toneDef?.iconClass;
 
+  // The site tooltip anchors to this wrapper's bounding rect. A block `div` with
+  // `w-auto` stretches to the parent row, so the bubble centers on the row —
+  // not the chip. fitDisplayWidth chips must shrink-wrap unless they pass an
+  // explicit width (fixed column, flex-1 grow, etc.).
+  const wrapperWidth =
+    fitDisplayWidth && width === 'w-auto' ? 'w-fit max-w-full' : width;
+
   const normalizedDisplay = normalizeCopyText(display);
   const displayOverflowClass = truncateDisplay ? 'truncate' : 'whitespace-nowrap';
   const outerPx = outerPad === 'flush' ? 'px-0' : 'px-1.5';
@@ -212,10 +230,11 @@ export function CopyChip({
   return (
     <div
       ref={chipRef}
-      className={`relative flex items-center justify-start ${outerPx} ${width}`}
+      className={`relative inline-flex items-center justify-start ${outerPx} ${wrapperWidth}`}
       onMouseEnter={hoverTooltipEnabled ? openTooltip : undefined}
       onMouseLeave={hoverTooltipEnabled ? closeTooltip : undefined}
     >
+      {/* ds-raw-button: the copy-chip face — bespoke underlined-mono chip styling (transparent bg, tone underline), not a DS Button */}
       <button
         type="button"
         onClick={(e) => {
@@ -250,7 +269,7 @@ export function CopyChip({
       >
         {resolvedIcon ? <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''} ${resolvedIconClass ?? ''}`}>{resolvedIcon}</span> : null}
         <span
-          className={`${dense ? 'text-[11px] font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${resolvedUnderline} ${
+          className={`${dense ? 'text-caption font-bold font-mono text-gray-900' : monoValue} tracking-tight leading-none border-b-2 pb-0.5 text-left ${displayOverflowClass} ${resolvedUnderline} ${
             fitDisplayWidth ? 'min-w-0 shrink-0' : 'min-w-0 flex-1'
           }`}
         >
@@ -369,19 +388,19 @@ export function ListingUrlChip({
 
   return (
     <div className="flex min-w-0 flex-1 basis-0 items-center gap-0.5">
-      <button
-        type="button"
-        disabled={openHref == null}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (openHref) window.open(openHref, '_blank', 'noopener,noreferrer');
-        }}
-        aria-label="Open listing URL in new tab"
-        title={openHref ? 'Open link' : 'No valid URL'}
-        className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
-      >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-      </button>
+      <HoverTooltip label={openHref ? 'Open link' : 'No valid URL'} asChild>
+        <IconButton
+          icon={<ExternalLink className="h-3.5 w-3.5 shrink-0" />}
+          tone="accent"
+          disabled={openHref == null}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (openHref) window.open(openHref, '_blank', 'noopener,noreferrer');
+          }}
+          ariaLabel="Open listing URL in new tab"
+          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded hover:bg-slate-100"
+        />
+      </HoverTooltip>
       <CopyChip
         value={trimmed}
         display={chipDisplay}
@@ -415,6 +434,60 @@ export const SkuScanRefChip = ({
     dense={dense}
   />
 );
+
+/**
+ * Zoho PO unit cost on a receiving line. Lucide stroke `$` + underlined amount.
+ * Copies the full formatted dollar string (`$88.77`).
+ */
+export const UnitPriceChip = ({
+  amount,
+  dense,
+}: {
+  amount: number | string;
+  dense?: boolean;
+}) => {
+  const numeric = Number(amount).toFixed(2);
+  const formatted = `$${numeric}`;
+  return (
+    <CopyChip
+      value={formatted}
+      display={numeric}
+      tone="price"
+      truncateDisplay={false}
+      fitDisplayWidth
+      dense={dense}
+    />
+  );
+};
+
+/**
+ * Condition grade on a PO line meta row. Tags icon + underlined label; hue comes
+ * from `src/lib/condition-tone.ts` (same registry as {@link ConditionPills}).
+ */
+export const ConditionGradeChip = ({
+  grade,
+  dense,
+}: {
+  grade: string | null | undefined;
+  dense?: boolean;
+}) => {
+  const { underline, iconClass, isPending } = conditionGradeChipStyleOrPending(grade);
+  const code = String(grade || '').trim().toUpperCase();
+  const label = isPending ? '---' : conditionGradeTableLabel(code);
+  return (
+    <CopyChip
+      value={isPending ? '' : code}
+      display={label}
+      icon={<Tags className="h-4 w-4 shrink-0" />}
+      underlineClass={underline}
+      iconClass={iconClass}
+      disableCopy={isPending}
+      truncateDisplay={false}
+      fitDisplayWidth
+      dense={dense}
+    />
+  );
+};
 
 /**
  * Picks blue carrier {@link TrackingChip} vs yellow {@link SkuScanRefChip} when the value contains `:`.
@@ -525,7 +598,7 @@ function GroupCountChip({ count, tone, dense }: { count: number; tone: ChipTone;
             icon lands at the same x and the underline matches the sibling chips'
             width. Value sits right within that footprint; underline color matches
             the column's real chip. */}
-        <span className={`${dense ? 'text-[11px]' : 'text-sm'} w-[4ch] border-b-2 ${toneDef.underline} pb-0.5 text-right font-mono font-bold leading-none tracking-tight text-yellow-600`}>
+        <span className={`${dense ? 'text-caption' : 'text-sm'} w-[4ch] border-b-2 ${toneDef.underline} pb-0.5 text-right font-mono font-bold leading-none tracking-tight text-yellow-600`}>
           ×{count}
         </span>
       </span>
@@ -613,7 +686,7 @@ export function AddValueChipFace({
    */
   size?: 'mini' | 'chip';
 }) {
-  const labelSize = size === 'chip' ? 'text-[10px]' : dense ? 'text-[11px]' : 'text-mini';
+  const labelSize = size === 'chip' ? 'text-micro' : dense ? 'text-caption' : 'text-mini';
   return (
     <span className={`inline-flex items-center gap-0.5 ${colorClass}`}>
       <span className={`shrink-0 ${dense ? '[&_svg]:h-3 [&_svg]:w-3' : ''}`}>{icon}</span>
@@ -670,6 +743,7 @@ export const PlatformChip = ({
       onMouseEnter={openTooltip}
       onMouseLeave={closeTooltip}
     >
+      {/* ds-raw-button: the platform-chip face — bespoke underlined chip styling (transparent bg, tone underline), not a DS Button */}
       <button
         type="button"
         disabled={isEmpty}

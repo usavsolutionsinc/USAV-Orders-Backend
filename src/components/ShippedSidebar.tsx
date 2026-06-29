@@ -14,6 +14,7 @@ import { ShippedIntakeForm, type ShippedFormData } from './shipped';
 import { ShippedDetailsPanel } from './shipped/ShippedDetailsPanel';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useShippedSearch } from '@/hooks/useShippedSearch';
 import { useDebounce } from '@/hooks';
 import { formatDateTimePST } from '@/utils/date';
@@ -26,9 +27,12 @@ import {
     type ShippedSearchField,
 } from '@/lib/shipped-search';
 import { useShippedFilterRefinements, ShippedFilterDropdown } from '@/components/shipping/ShippedFilterToolbar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ShippedActionsButton } from '@/components/shipped/ShippedActionsButton';
 import { OutboundStatusLegend } from '@/components/shipped/OutboundStatusLegend';
 import { SavedViewsControl } from '@/components/sidebar/SavedViewsControl';
+import { FirstScanOnboardingCard } from '@/components/dashboard/FirstScanOnboardingCard';
+import { ThroughputRoiCard } from '@/components/dashboard/ThroughputRoiCard';
 
 interface SearchHistory {
     query: string;
@@ -308,20 +312,19 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 variant: 'blue',
                 autoFocus: Boolean(embedded && autoFocusSearch),
                 rightElement: (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            const params = new URLSearchParams(searchParams.toString());
-                            params.set('new', 'true');
-                            const nextSearch = params.toString();
-                            router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
-                        }}
-                        className="rounded-xl bg-emerald-500 p-2.5 text-white transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
-                        title="New Order Entry"
-                        aria-label="Open new order entry form"
-                    >
-                        <Plus className="h-5 w-5" />
-                    </button>
+                    <HoverTooltip label="New Order Entry" asChild>
+                        <IconButton
+                            onClick={() => {
+                                const params = new URLSearchParams(searchParams.toString());
+                                params.set('new', 'true');
+                                const nextSearch = params.toString();
+                                router.replace(nextSearch ? `${pathname || '/dashboard'}?${nextSearch}` : pathname || '/dashboard');
+                            }}
+                            className="rounded-xl bg-emerald-500 p-2.5 transition-colors hover:bg-emerald-600 disabled:bg-gray-300"
+                            ariaLabel="Open new order entry form"
+                            icon={<Plus className="h-5 w-5 text-white" />}
+                        />
+                    </HoverTooltip>
                 ),
             }}
             // Filters bar stays pinned at the top of the sidebar (above the body).
@@ -342,7 +345,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
             headerBelow={
                 <div className={`${SIDEBAR_GUTTER} space-y-1.5 pb-1`}>
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
+                        <span className="text-micro font-semibold uppercase tracking-wide text-gray-400">Click a dot to filter</span>
                         <SavedViewsControl storageKey="shipped_saved_views" paramKeys={SHIPPED_VIEW_PARAMS} />
                     </div>
                     <OutboundStatusLegend />
@@ -353,6 +356,10 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                 <motion.div variants={itemVariants} className="space-y-4">
                         {/* Combined Zoho sync + daily pickup report (tabbed) */}
                         <ShippedActionsButton />
+                        <div className="space-y-3 border-t border-gray-100 pt-3">
+                            <FirstScanOnboardingCard variant="sidebar" />
+                            <ThroughputRoiCard variant="sidebar" />
+                        </div>
 
                         {/* Search Results */}
                         {results.length > 0 && (
@@ -361,6 +368,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                     <p className={`${microBadge} text-gray-500`}>
                                         {results.length} Result{results.length !== 1 ? 's' : ''}
                                     </p>
+                                    {/* ds-raw-button: inline text link (microBadge + hover:underline, no chrome) — Button would add height/padding */}
                                     <button
                                         onClick={() => setInputValue('')}
                                         className={`${microBadge} text-blue-600 hover:underline`}
@@ -372,6 +380,7 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin">
                                     {results.map((result) => (
                                         <div key={result.id} className="relative group/card">
+                                            {/* ds-raw-button: multi-line text-left master-detail result row (order id + product + tracking) — not a Button shape */}
                                             <button
                                                 onClick={() => openDetails(result)}
                                                 className="w-full text-left p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all group"
@@ -391,21 +400,23 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                             </button>
                                             
                                             {/* Copy All Button - Top Left of the card area */}
-                                            <button
-                                                onClick={(e) => handleCopyAll(e, result)}
-                                                className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
-                                                    copiedId === result.id
-                                                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                                                        : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
-                                                }`}
-                                                title="Copy all details"
-                                            >
-                                                {copiedId === result.id ? (
-                                                    <Check className="w-3 h-3" />
-                                                ) : (
-                                                    <Copy className="w-3 h-3" />
-                                                )}
-                                            </button>
+                                            <HoverTooltip label="Copy all details" asChild>
+                                                <IconButton
+                                                    tone="accent"
+                                                    onClick={(e) => handleCopyAll(e, result)}
+                                                    className={`absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 ${
+                                                        copiedId === result.id
+                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                                            : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm'
+                                                    }`}
+                                                    ariaLabel="Copy all details"
+                                                    icon={copiedId === result.id ? (
+                                                        <Check className="w-3 h-3 text-emerald-600" />
+                                                    ) : (
+                                                        <Copy className="w-3 h-3" />
+                                                    )}
+                                                />
+                                            </HoverTooltip>
                                         </div>
                                     ))}
                                 </div>
@@ -423,23 +434,24 @@ Shipped: ${result.packed_at ? formatDateTimePST(result.packed_at) : 'Not Shipped
                                 </p>
                                 <div className="mt-4 flex items-center justify-center gap-3">
                                     {shippedSearchField !== 'all' && onShippedSearchFieldChange ? (
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="primary"
+                                            size="md"
                                             onClick={() => {
                                                 onShippedSearchFieldChange('all');
                                             }}
-                                            className={`rounded-xl bg-blue-600 px-4 py-2 text-white ${sectionLabel} shadow-sm transition-colors hover:bg-blue-700`}
                                         >
                                             Change To All
-                                        </button>
+                                        </Button>
                                     ) : null}
-                                    <button
-                                        type="button"
+                                    <Button
+                                        variant="secondary"
+                                        size="md"
                                         onClick={() => setInputValue('')}
-                                        className={`rounded-xl border border-blue-200 bg-white px-4 py-2 text-blue-700 ${sectionLabel} transition-colors hover:border-blue-300 hover:bg-blue-100`}
+                                        className="border border-blue-200 bg-white text-blue-700 hover:border-blue-300 hover:bg-blue-100"
                                     >
                                         Clear Search
-                                    </button>
+                                    </Button>
                                 </div>
                             </div>
                         )}

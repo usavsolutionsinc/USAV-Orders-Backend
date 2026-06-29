@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 import { STATUS_OPTIONS, type DetailEnvelope, type RoleSlim } from '../staff-access-shared';
 import { initials } from '../staff-access-shared';
 
@@ -29,6 +31,7 @@ export function IdentityCard({
         <div className={`relative flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-full ${avatarBgClass} text-xl font-bold text-white ring-4 ring-white shadow`}>
           {initials(staff.name)}
           {isAdmin && (
+            // ds-allow-title (reviewed: absolutely-positioned badge)
             <span className="absolute -bottom-1 -right-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 ring-2 ring-white" title="Admin · All Access">
               <svg className="h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             </span>
@@ -56,25 +59,26 @@ export function IdentityCard({
                 with the chosen one. staff.role is mirrored server-side. */}
             <label className="inline-flex items-center gap-2">
               <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Primary</span>
-              <select
-                value={primaryRole?.id ?? ''}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
-                  if (Number.isFinite(id) && id > 0) onSetRoles([id]);
-                }}
-                disabled={busyRoles}
-                className="h-7 rounded-full bg-gray-100 px-2.5 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition disabled:opacity-60"
-                style={primaryRole ? { color: primaryRole.color } : undefined}
-                title="Replaces this staffer's roles with the selected one."
-              >
-                {!primaryRole && <option value="">no roles</option>}
-                {[...availableRoles, ...roles]
-                  .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i)
-                  .sort((a, b) => a.position - b.position)
-                  .map((r) => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
-                  ))}
-              </select>
+              <HoverTooltip label="Replaces this staffer's roles with the selected one." asChild>
+                <select
+                  value={primaryRole?.id ?? ''}
+                  onChange={(e) => {
+                    const id = Number(e.target.value);
+                    if (Number.isFinite(id) && id > 0) onSetRoles([id]);
+                  }}
+                  disabled={busyRoles}
+                  className="h-7 rounded-full bg-gray-100 px-2.5 text-micro font-bold uppercase tracking-wider text-gray-700 outline-none ring-1 ring-gray-200 transition disabled:opacity-60"
+                  style={primaryRole ? { color: primaryRole.color } : undefined}
+                >
+                  {!primaryRole && <option value="">no roles</option>}
+                  {[...availableRoles, ...roles]
+                    .filter((r, i, arr) => arr.findIndex((x) => x.id === r.id) === i)
+                    .sort((a, b) => a.position - b.position)
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                </select>
+              </HoverTooltip>
             </label>
             <label className="inline-flex items-center gap-2">
               <span className="text-micro font-semibold uppercase tracking-wider text-gray-500">Status</span>
@@ -109,6 +113,7 @@ function InlineNameAndCode({ name, code, onSave }: {
 
   if (!editing) {
     return (
+      // ds-raw-button
       <button type="button" onClick={() => setEditing(true)} className="group flex flex-wrap items-baseline gap-2 text-left">
         <span className="truncate text-2xl font-semibold tracking-tight text-gray-900 group-hover:underline">{name}</span>
         {code && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-micro font-semibold uppercase tracking-wider text-gray-600">{code}</span>}
@@ -123,12 +128,12 @@ function InlineNameAndCode({ name, code, onSave }: {
         className="h-9 min-w-[180px] flex-1 rounded-md border border-gray-300 px-2 text-base font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
       <input value={draftCode} onChange={(e) => setDraftCode(e.target.value)} placeholder="Employee code"
         className="h-9 w-36 rounded-md border border-gray-300 px-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/15" />
-      <button type="button" onClick={() => { onSave(draftName.trim() || name, draftCode.trim()); setEditing(false); }} className="h-9 rounded-md bg-gray-900 px-3 text-sm font-semibold text-white hover:bg-black">
+      <Button variant="brand" size="md" onClick={() => { onSave(draftName.trim() || name, draftCode.trim()); setEditing(false); }}>
         Save
-      </button>
-      <button type="button" onClick={() => { setDraftName(name); setDraftCode(code); setEditing(false); }} className="h-9 rounded-md border border-gray-200 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+      </Button>
+      <Button variant="secondary" size="md" onClick={() => { setDraftName(name); setDraftCode(code); setEditing(false); }}>
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }

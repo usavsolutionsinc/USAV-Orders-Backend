@@ -8,6 +8,21 @@ import type { JourneyEvent, JourneyDimension } from '@/lib/timeline/journey';
  * uses `useInfiniteQuery` with the keyset `cursor` (wired in `useOperationsJourney`).
  */
 
+/**
+ * Per-serial provenance for the By-unit band headers (SKU · grade · status ·
+ * originating PO). Client mirror of `SerialProvenance` in
+ * `@/lib/operations/journey-helpers` — kept structurally local so this client
+ * module never imports the server-side journey domain.
+ */
+export interface SerialProvenance {
+  serialUnitId: number;
+  serial: string;
+  sku: string | null;
+  grade: string | null;
+  status: string | null;
+  poNumber: string | null;
+}
+
 export interface JourneyEntitySummary {
   kind: JourneyDimension;
   orderId: number | null;
@@ -16,6 +31,8 @@ export interface JourneyEntitySummary {
   serialUnitIds: number[];
   serials: string[];
   trackingNumbers: string[];
+  /** Per-serial provenance for the By-unit band headers (may be absent on older payloads). */
+  serialProvenance?: SerialProvenance[];
 }
 
 export interface JourneyResponse {

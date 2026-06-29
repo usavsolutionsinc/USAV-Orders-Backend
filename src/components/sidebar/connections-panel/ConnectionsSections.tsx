@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { Button } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 import { SidebarSection, LineItem, ActionButton } from './connections-panel-pieces';
 import type { ConnectionsPanelController } from './useConnectionsPanel';
@@ -10,7 +12,7 @@ export function OrdersSection({ c }: { c: ConnectionsPanelController }) {
       <LineItem label="Sync eBay Orders" detail="Pull eBay changes and reconcile order exceptions" right={<ActionButton onClick={() => c.ebaySyncMutation.mutate()} loading={c.ebaySyncMutation.isPending} title="Sync eBay orders" tone="blue" />} />
       <LineItem label="Sync Ecwid Exceptions" detail="Copy tracking updates onto open Ecwid exceptions" right={<ActionButton onClick={() => c.ecwidExceptionTrackingMutation.mutate()} loading={c.ecwidExceptionTrackingMutation.isPending} title="Sync Ecwid exceptions" tone="blue" />} />
       <LineItem label="Clear Resolved Exceptions" detail="Remove exception rows that no longer need attention" right={<ActionButton onClick={() => c.exceptionsSyncMutation.mutate()} loading={c.exceptionsSyncMutation.isPending} title="Clear resolved exceptions" tone="green" />} />
-      <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={<button type="button" onClick={() => c.shipStationFileInputRef.current?.click()} className={`h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-700 hover:bg-gray-100`}>Up</button>} />
+      <LineItem label="Upload ShipStation CSV" detail="Import a local ShipStation export" right={/* ds-raw-button: flush w-12 h-full cell action mirroring ActionButton geometry — not a Button shape */<button type="button" onClick={() => c.shipStationFileInputRef.current?.click()} className={`ds-raw-button h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-700 hover:bg-gray-100`}>Up</button>} />
       {c.tokenAccounts.map((account) => {
         const minutesLeft = Math.floor((new Date(account.token_expires_at).getTime() - c.now.getTime()) / 60000);
         const isRefreshing = c.refreshTokenMutation.isPending && c.refreshTokenMutation.variables === account.account_name;
@@ -49,11 +51,12 @@ export function ZohoSection({ c }: { c: ConnectionsPanelController }) {
             placeholder="Paste purchase receive ID"
             className={`flex-1 bg-gray-50 px-2 py-2 ${sectionLabel} text-gray-900 outline-none`}
           />
+          {/* ds-raw-button: flush w-12 input-adjoined cell action (no rounding, border-l seam) — not a Button shape */}
           <button
             type="button"
             onClick={() => c.zohoImportOneMutation.mutate(c.purchaseReceiveId.trim())}
             disabled={!c.purchaseReceiveId.trim() || c.zohoImportOneMutation.isPending}
-            className={`w-12 border-l border-blue-300 bg-blue-50 ${sectionLabel} text-blue-700 disabled:opacity-50`}
+            className={`ds-raw-button w-12 border-l border-blue-300 bg-blue-50 ${sectionLabel} text-blue-700 disabled:opacity-50`}
           >
             {c.zohoImportOneMutation.isPending ? '...' : 'Run'}
           </button>
@@ -106,13 +109,16 @@ export function AmazonSection({ c }: { c: ConnectionsPanelController }) {
         label="Connect via OAuth"
         detail="Authorize Amazon for this organization (multi-tenant)"
         right={
-          <a
-            href="/api/amazon/oauth/start"
-            className={`inline-flex h-full w-12 items-center justify-center border-l border-indigo-300 bg-indigo-50 ${sectionLabel} text-indigo-700 hover:bg-indigo-100`}
-            title="Connect Amazon via OAuth"
-          >
-            Go
-          </a>
+          <HoverTooltip label="Connect Amazon via OAuth" asChild>
+            {/* ds-raw-button: navigation <a> (href), flush w-12 cell — not a Button (renders <button>) */}
+            <a
+              href="/api/amazon/oauth/start"
+              className={`ds-raw-button inline-flex h-full w-12 items-center justify-center border-l border-indigo-300 bg-indigo-50 ${sectionLabel} text-indigo-700 hover:bg-indigo-100`}
+              aria-label="Connect Amazon via OAuth"
+            >
+              Go
+            </a>
+          </HoverTooltip>
         }
       />
       <LineItem
@@ -157,14 +163,15 @@ export function AmazonSection({ c }: { c: ConnectionsPanelController }) {
               <option value="FE">FE</option>
             </select>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={() => c.amazonConnectMutation.mutate()}
             disabled={!c.amazonRefreshToken.trim() || c.amazonConnectMutation.isPending}
-            className={`w-full border border-blue-300 bg-blue-50 px-2 py-2 ${sectionLabel} text-blue-700 disabled:opacity-50`}
+            className="w-full bg-blue-50 text-blue-700 ring-blue-300 ring-inset hover:bg-blue-100"
           >
             {c.amazonConnectMutation.isPending ? 'Verifying…' : 'Verify & Connect'}
-          </button>
+          </Button>
         </div>
       </div>
       {c.amazonAccounts.map((acc) => (
@@ -173,15 +180,18 @@ export function AmazonSection({ c }: { c: ConnectionsPanelController }) {
           label={acc.account_name}
           detail={acc.last_error ? `Error: ${acc.last_error}` : `${acc.region} · ${acc.status}`}
           right={
-            <button
-              type="button"
-              onClick={() => c.amazonDisconnectMutation.mutate(acc.id)}
-              disabled={c.amazonDisconnectMutation.isPending && c.amazonDisconnectMutation.variables === acc.id}
-              className={`h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-600 hover:bg-gray-100 disabled:opacity-50`}
-              title={`Disconnect ${acc.account_name}`}
-            >
-              Off
-            </button>
+            <HoverTooltip label={`Disconnect ${acc.account_name}`} asChild>
+              {/* ds-raw-button: flush w-12 h-full cell action mirroring ActionButton geometry — not a Button shape */}
+              <button
+                type="button"
+                onClick={() => c.amazonDisconnectMutation.mutate(acc.id)}
+                disabled={c.amazonDisconnectMutation.isPending && c.amazonDisconnectMutation.variables === acc.id}
+                className={`ds-raw-button h-full w-12 border-l border-gray-200 ${sectionLabel} text-gray-600 hover:bg-gray-100 disabled:opacity-50`}
+                aria-label={`Disconnect ${acc.account_name}`}
+              >
+                Off
+              </button>
+            </HoverTooltip>
           }
         />
       ))}

@@ -30,7 +30,7 @@ function Badge({ tone, children }: { tone: 'amber' | 'gray'; children: React.Rea
       ? 'bg-amber-50 text-amber-700 ring-amber-200'
       : 'bg-gray-100 text-gray-600 ring-gray-200';
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ring-1 ring-inset ${cls}`}>
+    <span className={`rounded px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest ring-1 ring-inset ${cls}`}>
       {children}
     </span>
   );
@@ -61,12 +61,12 @@ function SettingRow({ def, resolved, value, caption, onChange }: RowProps) {
         </div>
         {def.description && <p className="mt-0.5 text-caption text-gray-500">{def.description}</p>}
         {upgradeFor && (
-          <p className="mt-0.5 text-[11px] font-medium text-amber-600">Available on the {upgradeFor} plan.</p>
+          <p className="mt-0.5 text-caption font-medium text-amber-600">Available on the {upgradeFor} plan.</p>
         )}
         {lockedOptionPlan && (
-          <p className="mt-0.5 text-[11px] font-medium text-amber-600">Direct mode needs the {lockedOptionPlan} plan.</p>
+          <p className="mt-0.5 text-caption font-medium text-amber-600">Direct mode needs the {lockedOptionPlan} plan.</p>
         )}
-        {caption && <p className="mt-0.5 text-[11px] font-medium text-gray-400">{caption}</p>}
+        {caption && <p className="mt-0.5 text-caption font-medium text-gray-400">{caption}</p>}
       </div>
       <div className="flex-shrink-0 pt-0.5">
         <SettingControl

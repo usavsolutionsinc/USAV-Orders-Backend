@@ -23,7 +23,7 @@ function parseEnum<T extends string>(value: string | null, allowed: Set<T>): T |
   return allowed.has(upper) ? upper : null;
 }
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const assignedTechIdParam = searchParams.get('assigned_tech_id');
@@ -55,7 +55,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       assignedPackerId: assignedPackerId ?? undefined,
       includeClosed,
       limit,
-    });
+    }, ctx.organizationId);
 
     return NextResponse.json({ success: true, assignments });
   } catch (error) {
@@ -89,7 +89,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const notes = String(body?.notes || '').trim() || null;
 
     // Check for existing active assignment — update if found
-    const existing = await getActiveAssignment(entityType, entityId, workType);
+    const existing = await getActiveAssignment(entityType, entityId, workType, ctx.organizationId);
 
     if (existing) {
       const col = workType === 'PACK' ? 'assignedPackerId' : 'assignedTechId';
@@ -98,7 +98,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         status,
         priority,
         notes,
-      });
+      }, ctx.organizationId);
       return NextResponse.json({ success: true, assignment: updated });
     }
 
@@ -120,7 +120,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
   }
 }, { permission: 'work_orders.claim' });
 
-export const PATCH = withAuth(async (req: NextRequest) => {
+export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   try {
     const body = await req.json().catch(() => null);
     if (!body) throw ApiError.badRequest('Invalid JSON body');
@@ -147,7 +147,7 @@ export const PATCH = withAuth(async (req: NextRequest) => {
       throw ApiError.badRequest('No valid fields to update');
     }
 
-    const result = await updateAssignment(id, updates);
+    const result = await updateAssignment(id, updates, ctx.organizationId);
     if (!result) throw ApiError.notFound('assignment', id);
 
     return NextResponse.json({ success: true, assignment: result });
@@ -156,13 +156,13 @@ export const PATCH = withAuth(async (req: NextRequest) => {
   }
 }, { permission: 'work_orders.claim' });
 
-export const DELETE = withAuth(async (req: NextRequest) => {
+export const DELETE = withAuth(async (req: NextRequest, ctx) => {
   try {
     const { searchParams } = new URL(req.url);
     const id = parsePositiveInt(searchParams.get('id'));
     if (id === null) throw ApiError.badRequest('Valid id is required');
 
-    const deleted = await deleteAssignment(id);
+    const deleted = await deleteAssignment(id, ctx.organizationId);
     if (!deleted) throw ApiError.notFound('assignment', id);
 
     return NextResponse.json({ success: true, id });

@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
+import { Button } from '@/design-system/primitives';
 import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 
@@ -46,16 +47,20 @@ export function PinThisPageButton({ onPinned }: PinThisPageButtonProps) {
   };
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="sm"
       onClick={handleClick}
-      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-50"
+      icon={
+        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      }
+      className="text-micro font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-50"
     >
-      <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
       Pin page
-    </button>
+    </Button>
   );
 }

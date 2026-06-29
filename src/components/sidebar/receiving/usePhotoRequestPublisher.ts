@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Publishes a `receiving_photo_request` on `station:{staffId}` so a phone
+ * Publishes a `receiving_photo_request` on `staffstation:{staffId}` so a phone
  * loaded on the same staff id auto-navigates to the photo capture page.
  *
  * Implicit pairing: the channel name is the gate — no claim flow required.
@@ -18,7 +18,7 @@ type AblyGetClient = ReturnType<typeof useAblyClient>['getClient'];
 interface UsePhotoRequestPublisherArgs {
   staffIdNum: number;
   getAblyClient: AblyGetClient;
-  /** `station:{staffId}` channel name (`''` when org/staff unresolved). */
+  /** `staffstation:{staffId}` channel name (`''` when org/staff unresolved). */
   stationChannelName: string;
 }
 

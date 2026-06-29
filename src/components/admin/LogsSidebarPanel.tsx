@@ -18,6 +18,8 @@ import {
   AdminPickerRow,
   useAdminUrlState,
 } from './shared';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 type LogKind = 'all' | 'audit' | 'sal';
 
@@ -215,10 +217,11 @@ export function LogsSidebarPanel() {
                         title={row.action}
                         subtitle={`${formatTime(row.created_at)} · ${actor}`}
                         trailing={
-                          <span
-                            title={row.kind}
-                            className={`h-2 w-2 rounded-full ${KIND_DOT[row.kind] ?? 'bg-gray-400'}`}
-                          />
+                          <HoverTooltip label={row.kind} asChild focusable={false}>
+                            <span
+                              className={`h-2 w-2 rounded-full ${KIND_DOT[row.kind] ?? 'bg-gray-400'}`}
+                            />
+                          </HoverTooltip>
                         }
                       />
                     </li>
@@ -229,23 +232,23 @@ export function LogsSidebarPanel() {
           ))}
 
           <div className="flex items-center justify-between gap-2 border-t border-gray-200 pt-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setOffset((prev) => Math.max(0, prev - PAGE_LIMIT))}
               disabled={offset <= 0}
-              className="rounded-md border border-gray-300 px-2 py-1 text-caption font-semibold text-gray-700 disabled:opacity-50"
             >
               Prev
-            </button>
+            </Button>
             <span className="text-micro text-gray-500">offset {offset}</span>
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setOffset((prev) => prev + PAGE_LIMIT)}
               disabled={!hasMore}
-              className="rounded-md border border-gray-300 px-2 py-1 text-caption font-semibold text-gray-700 disabled:opacity-50"
             >
               Next
-            </button>
+            </Button>
           </div>
         </>
       )}

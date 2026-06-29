@@ -18,7 +18,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/withAuth';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
+import { requireSensitiveStepUp } from '@/lib/auth/sensitive-stepup';
 
 const Body = z.object({
   id: z.number().int().positive(),
@@ -29,9 +30,19 @@ const Body = z.object({
   active: z.boolean().optional(),
   defaultHomePath: z.string().max(120).nullable().optional(),
   defaultHomePathMobile: z.string().max(120).nullable().optional(),
+  // WS6.1 per-staff auth policy. Persisted only when present; absence leaves
+  // the existing values (defaults 'pin' / false) untouched.
+  authMethod: z.enum(['pin', 'password']).optional(),
+  requiresSensitiveStepUp: z.boolean().optional(),
 });
 
 export const POST = withAuth(async (req, ctx) => {
+  // WS6.1 reference wiring of the sensitive-information wall. No-op unless the
+  // caller's staff row has requires_sensitive_stepup=true (and then only until
+  // they hold a fresh step-up grant). Returns 403 STEP_UP_REQUIRED otherwise.
+  const stepUpBlock = await requireSensitiveStepUp(ctx);
+  if (stepUpBlock) return stepUpBlock;
+
   let parsed: z.infer<typeof Body>;
   try {
     parsed = Body.parse(await req.json());
@@ -54,6 +65,8 @@ export const POST = withAuth(async (req, ctx) => {
   if (parsed.active !== undefined)                setField('active', parsed.active);
   if (parsed.defaultHomePath !== undefined)       setField('default_home_path', parsed.defaultHomePath);
   if (parsed.defaultHomePathMobile !== undefined) setField('default_home_path_mobile', parsed.defaultHomePathMobile);
+  if (parsed.authMethod !== undefined)            setField('auth_method', parsed.authMethod);
+  if (parsed.requiresSensitiveStepUp !== undefined) setField('requires_sensitive_stepup', parsed.requiresSensitiveStepUp);
 
   if (sets.length === 0) {
     return NextResponse.json({ error: 'NO_FIELDS' }, { status: 400 });
@@ -61,7 +74,8 @@ export const POST = withAuth(async (req, ctx) => {
 
   args.push(parsed.id);
   args.push(ctx.organizationId);
-  const r = await pool.query(
+  const r = await tenantQuery(
+    ctx.organizationId,
     `UPDATE staff SET ${sets.join(', ')}
       WHERE id = $${args.length - 1} AND organization_id = $${args.length}
       RETURNING id, name, role, COALESCE(active, true) AS active,

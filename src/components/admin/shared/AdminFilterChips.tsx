@@ -14,6 +14,7 @@ export function AdminFilterChips<T extends string>({
   return (
     <>
       {options.map((opt) => (
+        // ds-raw-button
         <button
           key={opt.value}
           type="button"

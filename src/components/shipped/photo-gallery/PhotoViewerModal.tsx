@@ -6,6 +6,8 @@ import {
   AlertCircle, Check, Trash2, Link2 as LinkIcon, Plus, Info, RotateCcw, RefreshCw,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import type { PhotoGalleryController } from './usePhotoGallery';
 
 /** Fullscreen lightbox: zoomable image, nav arrows, thumbnail strip, toolbar. */
@@ -43,119 +45,121 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
 
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 p-1 backdrop-blur-md">
-            <button
-              onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
-              disabled={zoomLevel <= 1}
-              className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label="Zoom out"
-              title="Zoom out (-)"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
+            <HoverTooltip label="Zoom out (-)" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.zoomOut(); }}
+                disabled={zoomLevel <= 1}
+                className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                ariaLabel="Zoom out"
+                icon={<ZoomOut className="h-4 w-4 text-white" />}
+              />
+            </HoverTooltip>
             <span className="min-w-[44px] text-center text-xs font-bold tabular-nums text-white">
               {Math.round(zoomLevel * 100)}%
             </span>
-            <button
-              onClick={(e) => { e.stopPropagation(); g.zoomIn(); }}
-              disabled={zoomLevel >= 3}
-              className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label="Zoom in"
-              title="Zoom in (+)"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
+            <HoverTooltip label="Zoom in (+)" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.zoomIn(); }}
+                disabled={zoomLevel >= 3}
+                className="rounded-full p-2 text-white transition-all hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                ariaLabel="Zoom in"
+                icon={<ZoomIn className="h-4 w-4 text-white" />}
+              />
+            </HoverTooltip>
             <div className="mx-0.5 h-5 w-px bg-white/20" aria-hidden="true" />
-            <button
-              onClick={(e) => { e.stopPropagation(); g.rotateCw(); }}
-              className="rounded-full p-2 text-white transition-all hover:bg-white/10"
-              aria-label="Rotate 90 degrees"
-              title="Rotate (r)"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); g.resetZoom(); }}
-              disabled={!canReset}
-              className={`ml-0.5 rounded-full p-2 transition-all ${
-                canReset ? 'bg-white/20 text-white hover:bg-white/30' : 'text-white/30'
-              }`}
-              aria-label="Reset view"
-              title="Reset (0)"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
+            <HoverTooltip label="Rotate (r)" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.rotateCw(); }}
+                className="rounded-full p-2 text-white transition-all hover:bg-white/10"
+                ariaLabel="Rotate 90 degrees"
+                icon={<RotateCcw className="h-4 w-4 text-white" />}
+              />
+            </HoverTooltip>
+            <HoverTooltip label="Reset (0)" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.resetZoom(); }}
+                disabled={!canReset}
+                className={`ml-0.5 rounded-full p-2 transition-all ${
+                  canReset ? 'bg-white/20 text-white hover:bg-white/30' : 'text-white/30'
+                }`}
+                ariaLabel="Reset view"
+                icon={<RefreshCw className="h-4 w-4" />}
+              />
+            </HoverTooltip>
           </div>
 
           <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
 
           {g.onAddPhotos && (
-            <button
-              onClick={(e) => { e.stopPropagation(); g.addPhotosFromViewer(); }}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
-              aria-label="Add photos"
-              title="Add photos"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
+            <HoverTooltip label="Add photos" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.addPhotosFromViewer(); }}
+                className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
+                ariaLabel="Add photos"
+                icon={<Plus className="h-5 w-5 text-white" />}
+              />
+            </HoverTooltip>
           )}
 
-          <button
-            onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
-            disabled={g.downloadingAll || photoItems.every((p) => p.status === 'error')}
-            className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-            aria-label={`Download all ${photoItems.length} photos`}
-            title={g.downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`}
-          >
-            <Download className="h-5 w-5" />
-          </button>
+          <HoverTooltip label={g.downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`} asChild>
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
+              disabled={g.downloadingAll || photoItems.every((p) => p.status === 'error')}
+              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+              ariaLabel={`Download all ${photoItems.length} photos`}
+              icon={<Download className="h-5 w-5 text-white" />}
+            />
+          </HoverTooltip>
 
           {g.showCopyLinks ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); void g.copyAllPhotoUrls(); }}
-              disabled={photoItems.length === 0}
-              className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-              aria-label={g.linksCopied ? 'Links copied' : 'Copy all photo links'}
-              title={g.linksCopied ? 'Copied' : 'Copy all photo links'}
-            >
-              {g.linksCopied ? <Check className="h-5 w-5 text-emerald-300" /> : <LinkIcon className="h-5 w-5" />}
-            </button>
+            <HoverTooltip label={g.linksCopied ? 'Copied' : 'Copy all photo links'} asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); void g.copyAllPhotoUrls(); }}
+                disabled={photoItems.length === 0}
+                className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
+                ariaLabel={g.linksCopied ? 'Links copied' : 'Copy all photo links'}
+                icon={g.linksCopied ? <Check className="h-5 w-5 text-emerald-300" /> : <LinkIcon className="h-5 w-5 text-white" />}
+              />
+            </HoverTooltip>
           ) : null}
 
           {g.canDeleteCurrent && (
-            <button
-              onClick={(e) => { e.stopPropagation(); g.handleDeleteClick(); }}
-              disabled={g.deletingPhoto}
-              className={
-                g.deleteArmed
-                  ? 'flex items-center gap-2 px-4 py-3 rounded-full transition-all text-white backdrop-blur-md border bg-red-500/80 border-red-300 hover:bg-red-500 disabled:opacity-60'
-                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-red-500/30 border-white/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
-              }
-              aria-label={g.deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
-              title={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'}
-            >
-              <Trash2 className="h-5 w-5" />
-              {g.deleteArmed && (
-                <span className="text-xs font-bold uppercase tracking-wider">
-                  {g.deletingPhoto ? 'Deleting…' : 'Confirm'}
-                </span>
-              )}
-            </button>
+            <HoverTooltip label={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>
+              {/* ds-raw-button: morphs icon-only ↔ icon+label ("Confirm"/"Deleting…") on arm; neither Button nor IconButton models that conditional label swap */}
+              <button
+                onClick={(e) => { e.stopPropagation(); g.handleDeleteClick(); }}
+                disabled={g.deletingPhoto}
+                className={
+                  g.deleteArmed
+                    ? 'flex items-center gap-2 px-4 py-3 rounded-full transition-all text-white backdrop-blur-md border bg-red-500/80 border-red-300 hover:bg-red-500 disabled:opacity-60'
+                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-red-500/30 border-white/20 hover:border-red-300 hover:scale-110 disabled:opacity-60'
+                }
+                aria-label={g.deleteArmed ? 'Confirm delete photo' : 'Delete photo'}
+              >
+                <Trash2 className="h-5 w-5" />
+                {g.deleteArmed && (
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    {g.deletingPhoto ? 'Deleting…' : 'Confirm'}
+                  </span>
+                )}
+              </button>
+            </HoverTooltip>
           )}
 
           {g.hasContext && (
-            <button
-              onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
-              aria-pressed={g.panelOpen}
-              className={
-                g.panelOpen
-                  ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
-                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110'
-              }
-              aria-label={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
-              title="Toggle details (i)"
-            >
-              <Info className="h-5 w-5" />
-            </button>
+            <HoverTooltip label="Toggle details (i)" asChild>
+              <IconButton
+                onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
+                aria-pressed={g.panelOpen}
+                className={
+                  g.panelOpen
+                    ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
+                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110'
+                }
+                ariaLabel={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
+                icon={<Info className="h-5 w-5 text-white" />}
+              />
+            </HoverTooltip>
           )}
         </div>
       </div>
@@ -216,22 +220,22 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       {/* Navigation Arrows */}
       {photoItems.length > 1 && (
         <>
-          <button
-            onClick={(e) => { e.stopPropagation(); g.handlePrevious(); }}
-            className="absolute left-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
-            aria-label="Previous photo"
-            title="Previous (←)"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); g.handleNext(); }}
-            className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
-            aria-label="Next photo"
-            title="Next (→)"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
+          <HoverTooltip label="Previous (←)" asChild>
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); g.handlePrevious(); }}
+              className="absolute left-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
+              ariaLabel="Previous photo"
+              icon={<ChevronLeft className="h-6 w-6 text-white" />}
+            />
+          </HoverTooltip>
+          <HoverTooltip label="Next (→)" asChild>
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); g.handleNext(); }}
+              className="absolute right-8 top-1/2 -translate-y-1/2 p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 z-10"
+              ariaLabel="Next photo"
+              icon={<ChevronRight className="h-6 w-6 text-white" />}
+            />
+          </HoverTooltip>
         </>
       )}
 
@@ -243,6 +247,7 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <div className="mx-auto w-fit max-w-full overflow-x-auto no-scrollbar rounded-2xl border border-white/20 bg-black/50 p-3 backdrop-blur-md">
             <div className="flex items-center gap-2">
               {photoItems.map((photo, index) => (
+                // ds-raw-button: image thumbnail tile (selectable), not an icon/label button
                 <button
                   key={index}
                   onClick={(e) => { e.stopPropagation(); g.setCurrentIndex(index); g.resetZoom(); }}
@@ -272,14 +277,14 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
       {/* Close — pinned to the WINDOW's top-right corner (outside the shrinking
           stage, above the panel via z-50) so it stays in the exact same place
           whether the info panel is open or closed. */}
-      <button
-        onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
-        className="absolute right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-white/30 hover:bg-white/20"
-        aria-label="Close photo viewer"
-        title="Close (Esc)"
-      >
-        <X className="h-5 w-5" />
-      </button>
+      <HoverTooltip label="Close (Esc)" asChild>
+        <IconButton
+          onClick={(e) => { e.stopPropagation(); g.closeViewer(); }}
+          className="absolute right-6 top-6 z-50 rounded-full border border-white/20 bg-white/10 p-3 text-white backdrop-blur-md transition-all hover:scale-110 hover:border-white/30 hover:bg-white/20"
+          ariaLabel="Close photo viewer"
+          icon={<X className="h-5 w-5 text-white" />}
+        />
+      </HoverTooltip>
     </motion.div>
   );
 }

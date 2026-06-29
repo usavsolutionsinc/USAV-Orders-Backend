@@ -1,5 +1,7 @@
 import React from 'react';
 import { Search, Clipboard, Printer } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { LabelPreviewCard } from '@/components/labels/LabelPreviewCard';
 import type { ProductLabelDraft } from '@/components/labels/ProductLabelEditPopover';
 import type { BarcodeMode } from '@/components/barcode/ModeSelector';
@@ -71,23 +73,26 @@ export function ModernSkuField({ value, inputRef, accent, onChange, onNext, onFi
           className={`block h-12 w-full rounded-xl border border-gray-200 bg-white px-4 font-mono text-base text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 ${accent.focusRing}`}
         />
       </div>
-      <button
-        type="button"
-        onClick={handlePaste}
-        title="Paste from clipboard and search"
-        className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
-      >
-        <Clipboard className="h-4 w-4" />
-      </button>
-      <button
-        type="button"
-        onClick={onNext}
-        title="Search"
-        className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white shadow-sm transition-colors ${accent.ctaBg} ${accent.ctaHover}`}
-      >
-        <Search className="h-4 w-4" />
-        <span>Search</span>
-      </button>
+      <HoverTooltip label="Paste from clipboard and search" asChild>
+        <IconButton
+          icon={<Clipboard className="h-4 w-4" />}
+          onClick={handlePaste}
+          ariaLabel="Paste from clipboard and search"
+          className="h-12 w-12 rounded-xl border border-gray-200 bg-white hover:bg-gray-50"
+        />
+      </HoverTooltip>
+      <HoverTooltip label="Search" asChild>
+        {/* ds-raw-button: solid accent CTA (renders emerald in sn-to-sku mode) */}
+        <button
+          type="button"
+          onClick={onNext}
+          aria-label="Search"
+          className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-sm font-semibold text-white shadow-sm transition-colors ${accent.ctaBg} ${accent.ctaHover}`}
+        >
+          <Search className="h-4 w-4" />
+          <span>Search</span>
+        </button>
+      </HoverTooltip>
     </div>
   );
 }
@@ -161,6 +166,7 @@ interface NotesCardProps {
 export function NotesCard({ notes, showNotes, accent, onToggleNotes, onNotesChange }: NotesCardProps) {
   return (
     <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-200/60">
+      {/* ds-raw-button: full-width text-left collapsible header row (label + ± affordance) */}
       <button
         type="button"
         onClick={onToggleNotes}

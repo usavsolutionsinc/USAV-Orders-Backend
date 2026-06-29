@@ -3,6 +3,7 @@
 import type { MouseEvent } from 'react';
 import Link from 'next/link';
 import { Camera, Image as ImageIcon } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
 
 interface MobileRowPhotoActionsProps {
@@ -55,15 +56,16 @@ export function MobileRowPhotoActions({
   return (
     <div className={cn('pointer-events-auto flex shrink-0 items-center gap-1', className)}>
       {onOpenGallery ? (
-        <button
-          type="button"
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={<ImageIcon />}
           onClick={openGallery}
-          aria-label={hasPhotos ? `View ${safeCount} photos` : 'Open photo gallery'}
+          ariaLabel={hasPhotos ? `View ${safeCount} photos` : 'Open photo gallery'}
           className={galleryClass}
         >
-          <ImageIcon className="h-3.5 w-3.5" />
-          {hasPhotos ? <span className="text-caption font-black tabular-nums">x{safeCount}</span> : null}
-        </button>
+          {hasPhotos ? <span className="text-caption font-black tabular-nums">x{safeCount}</span> : undefined}
+        </Button>
       ) : (
         <Link
           href={galleryHref}

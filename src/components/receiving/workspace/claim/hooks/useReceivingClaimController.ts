@@ -28,6 +28,13 @@ import { useClaimTicketReply } from './useClaimTicketReply';
 export interface ClaimModalProps {
   open: boolean;
   row: ReceivingLineRow;
+  /**
+   * Overrides the entity the claim is filed against. Default (`undefined`) keeps
+   * today's behavior: `lineId = row.id`. Pass `null` to file a CARTON-level claim
+   * (`entityType='RECEIVING'`, sets `receiving.zendesk_ticket`) — used for unfound
+   * triage cartons whose rail row is a synthetic stub with no real receiving_line.
+   */
+  lineIdOverride?: number | null;
   /** Seeds the "What happened?" note when the modal opens (RETURN match CTA). */
   prefillReason?: string;
   onClose: () => void;
@@ -47,13 +54,16 @@ export interface ClaimModalProps {
 export function useReceivingClaimController({
   open,
   row,
+  lineIdOverride,
   prefillReason,
   onClose,
   onTicketCreated,
   onTicketUnlinked,
 }: ClaimModalProps) {
   const receivingId = row.receiving_id;
-  const lineId = row.id;
+  // `undefined` override = default to the row's own line; an explicit value
+  // (incl. `null` for a carton-level claim) wins.
+  const lineId = lineIdOverride !== undefined ? lineIdOverride : row.id;
   // A real PO# (number or id) — when present, 'unfound' is neither defaulted nor
   // offered, even if the carton came in as an unmatched scan.
   const hasPo = !!(row.zoho_purchaseorder_number || row.zoho_purchaseorder_id);

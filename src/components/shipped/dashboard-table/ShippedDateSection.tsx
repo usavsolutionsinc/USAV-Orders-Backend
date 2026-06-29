@@ -17,7 +17,7 @@ export interface ShippedDateSectionProps {
   onToggle: (id: number, shiftKey: boolean) => void;
 }
 
-/** One packed-date band: a {@link DateGroupHeader} plus its shipped rows. */
+/** One packed-date group: a {@link DateGroupHeader} pill plus its shipped rows. */
 export function ShippedDateSection({
   date,
   records,

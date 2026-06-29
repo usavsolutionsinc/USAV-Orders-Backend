@@ -11,6 +11,37 @@
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 
+/**
+ * Per-lane prefs inside a swimlane board. Lane ids and `sort` are open strings:
+ * the valid set is owned by each board surface (which validates + falls back on
+ * hydrate), so one shape serves every board. See {@link SwimlaneBoard}.
+ */
+export interface BoardLanePref {
+  sort?: string;
+  expanded?: boolean;
+  /** Drag-resized body height (px); `null`/absent → expanded/collapsed preset. */
+  height?: number | null;
+  /** Per-lane date-range filter (each lane header owns its own picker). */
+  range?: { from?: string | null; to?: string | null } | null;
+}
+
+/**
+ * Generic swimlane-board layout prefs (cross-device), reused per surface.
+ * `columns` is the 1/2/3-up bubble layout; `order` is the staffer's
+ * drag-reordered lane order (lane ids; unknown/missing ids fall back to the
+ * board's canonical order); `lanes` holds per-lane sort/expand/height/range.
+ * Callers send the full object since the JSONB merge is shallow at this key.
+ */
+export interface BoardPrefs {
+  columns?: 1 | 2 | 3;
+  order?: string[];
+  range?: { from?: string | null; to?: string | null } | null;
+  lanes?: Record<string, BoardLanePref>;
+}
+
+/** Top-level prefs keys that hold a {@link BoardPrefs} bag (one per board surface). */
+export type BoardPrefsKey = 'unshippedBoard' | 'shippedBoard';
+
 /** Known, typed preference keys. The column is open JSONB; this is the contract. */
 export interface StaffPreferences {
   /** Function key (F1–F12) that focuses the active scan bar. Absent = default (F2). */
@@ -18,32 +49,25 @@ export interface StaffPreferences {
   /** Color theme. Absent = light (the default). Drives `data-theme` on <html>. */
   theme?: 'light' | 'dark' | null;
   /**
-   * Unshipped shelf-board layout prefs (cross-device). `columns` is the 1-up /
-   * 2-up bubble layout; `range` is the picked date filter (ISO day strings);
-   * `order` is the staffer's drag-reordered lane order (top → bottom); `lanes`
-   * holds per-state sort + expand. Callers send the full object since the JSONB
-   * merge is shallow at this key.
+   * Unshipped · Shelf-board layout prefs (cross-device). Lanes are PENDING /
+   * TESTED / BLOCKED; see {@link BoardPrefs} for the shape. One board surface =
+   * one key; the generic {@link SwimlaneBoard} reads/writes `prefs[prefsKey]`.
    */
-  unshippedBoard?: {
-    columns?: 1 | 2 | 3;
-    range?: { from?: string | null; to?: string | null } | null;
-    /** Drag-reordered lane order. Any state missing here falls back to the
-     *  canonical SHELF_ORDER (appended in order), so a partial list is safe. */
-    order?: Array<'PENDING' | 'TESTED' | 'BLOCKED'>;
-    lanes?: Partial<
-      Record<
-        'PENDING' | 'TESTED' | 'BLOCKED',
-        {
-          sort?: 'priority' | 'newest' | 'deadline' | 'price' | 'staff';
-          expanded?: boolean;
-          /** Drag-resized body height (px); `null`/absent → expanded/collapsed preset. */
-          height?: number | null;
-          /** Per-lane date-range filter (each table header owns its own picker). */
-          range?: { from?: string | null; to?: string | null } | null;
-        }
-      >
-    >;
-  } | null;
+  unshippedBoard?: BoardPrefs | null;
+  /**
+   * Dashboard · Shipped board layout prefs (cross-device). Lanes are the
+   * outbound states (`OUTBOUND_STATE_META`); same shape as {@link BoardPrefs}.
+   */
+  shippedBoard?: BoardPrefs | null;
+  /**
+   * Per-staff column visibility for the shared list tables, keyed by TableId
+   * ('receiving' | 'orders' | 'shipped' | 'tech' | 'packer'). `hidden` lists the
+   * column keys this staffer turned off (chip keys platform/orderid/tracking/
+   * serial, or meta keys qty/condition/rest). Absent = every column shown. The
+   * JSONB merge is shallow at this key, so writers send the whole map. See
+   * src/lib/tables/table-columns.ts + TableColumnConfigProvider.
+   */
+  tableColumns?: Record<string, { hidden?: string[] }> | null;
 }
 
 /** Read one staffer's prefs bag (empty object when no row yet). */

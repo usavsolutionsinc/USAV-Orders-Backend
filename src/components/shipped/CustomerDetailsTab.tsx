@@ -4,6 +4,8 @@ import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { User, Mail, MapPin, Copy, Check } from '@/components/Icons';
 import { sectionLabel, fieldLabel, dataValue } from '@/design-system/tokens/typography/presets';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button } from '@/design-system/primitives';
 
 interface CustomerRecord {
   id: number;
@@ -60,23 +62,25 @@ export function CustomerDetailsTab({ customerId }: CustomerDetailsTabProps) {
   };
 
   const field = (key: string, label: string, value: string, icon?: ReactNode) => (
-    <button
-      type="button"
-      onClick={() => copy(key, value)}
-      className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50"
-      title="Click to copy"
-    >
-      <span className="mt-1 w-3.5 shrink-0 text-gray-400">{icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className={`block ${fieldLabel} text-gray-500`}>{label}</span>
-        <span className={`mt-0.5 block whitespace-pre-line break-words ${dataValue}`}>{value}</span>
-      </span>
-      {copied === key ? (
-        <Check className="mt-1 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-      ) : (
-        <Copy className="mt-1 h-3.5 w-3.5 shrink-0 text-gray-300" />
-      )}
-    </button>
+    <HoverTooltip label="Click to copy" asChild>
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={() => copy(key, value)}
+        className="flex w-full items-start justify-start gap-3 rounded-none px-4 py-3 text-left font-normal hover:bg-gray-50"
+      >
+        <span className="mt-1 w-3.5 shrink-0 text-gray-400">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className={`block ${fieldLabel} text-gray-500`}>{label}</span>
+          <span className={`mt-0.5 block whitespace-pre-line break-words ${dataValue}`}>{value}</span>
+        </span>
+        {copied === key ? (
+          <Check className="mt-1 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        ) : (
+          <Copy className="mt-1 h-3.5 w-3.5 shrink-0 text-gray-300" />
+        )}
+      </Button>
+    </HoverTooltip>
   );
 
   if (!customerId) {
@@ -127,14 +131,15 @@ export function CustomerDetailsTab({ customerId }: CustomerDetailsTabProps) {
       </div>
 
       {lines.length > 0 && (
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={() => copy('full', fullAddress)}
-          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2 ${sectionLabel} text-gray-700 hover:bg-gray-50`}
+          icon={copied === 'full' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+          className={`w-full rounded-xl border border-gray-200 bg-white py-2 ring-0 ${sectionLabel} text-gray-700 hover:bg-gray-50`}
         >
-          {copied === 'full' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
           {copied === 'full' ? 'Copied' : 'Copy full address'}
-        </button>
+        </Button>
       )}
 
       {!hasAnything && (

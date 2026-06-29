@@ -24,10 +24,11 @@ export async function seedDefaultWorkflowForOrg(orgId: OrgId, staffId: number): 
     );
     if (already.rows[0]) return;
 
-    // The default blueprint: the first system template (today "standard-refurb-
-    // and-list"). Global table, no org predicate by design.
+    // The default blueprint: the system template flagged is_default (today the
+    // "electronics-av-refurb" flagship), falling back to the first system row if
+    // none is flagged (pre-2026-06-28m DBs). Global table, no org predicate by design.
     const tpl = await client.query<{ id: number }>(
-      `SELECT id FROM workflow_templates WHERE is_system = true ORDER BY id LIMIT 1`,
+      `SELECT id FROM workflow_templates WHERE is_system = true ORDER BY is_default DESC, id LIMIT 1`,
     );
     if (!tpl.rows[0]) return; // no system template seeded in this DB
 

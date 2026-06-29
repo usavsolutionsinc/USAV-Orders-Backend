@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EmbeddedBrowser from '@/components/EmbeddedBrowser';
+import { Button, IconButton } from '@/design-system/primitives';
 import { ChevronDown, ExternalLink } from '@/components/Icons';
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -179,23 +180,24 @@ export function ListingResizePanel({
           <span className="truncate">{title}</span>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
-            className="text-micro font-bold text-blue-600 hover:text-blue-800"
+            className="h-auto px-0 text-micro font-bold text-blue-600 hover:bg-transparent hover:text-blue-800"
           >
             Open externally
-          </button>
-          <button
-            type="button"
+          </Button>
+          <IconButton
+            icon={
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${isCollapsed ? 'rotate-180' : ''}`}
+              />
+            }
+            ariaLabel={isCollapsed ? 'Expand listing' : 'Collapse listing'}
             onClick={() => setIsCollapsed((c) => !c)}
-            aria-label={isCollapsed ? 'Expand listing' : 'Collapse listing'}
             className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-          >
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${isCollapsed ? 'rotate-180' : ''}`}
-            />
-          </button>
+          />
         </div>
       </div>
 
@@ -215,6 +217,7 @@ export function ListingResizePanel({
             <div className="flex h-full items-center justify-center px-6 py-10 text-center">
               <p className="text-label font-semibold text-gray-500">
                 Listing preview is only available in the desktop app. Use{' '}
+                {/* ds-raw-button — inline prose link */}
                 <button
                   type="button"
                   onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}

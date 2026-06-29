@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from '@/lib/toast';
 import { SkeletonCard } from '@/components/ui/SkeletonCard';
-import { AlertTriangle, Check, Loader2, Mail, RefreshCw, X } from '@/components/Icons';
+import { AlertTriangle, Check, Mail, RefreshCw, X } from '@/components/Icons';
 import { PoMailboxPreviewPanel } from '@/components/po-gmail/PoMailboxPreviewPanel';
+import { Button } from '@/design-system/primitives';
 
 interface PoMailboxStatus {
   connected: boolean;
@@ -130,36 +131,27 @@ export function PoMailboxTab() {
               )}
 
               <div className="flex flex-wrap gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleConnect}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <RefreshCw className="h-4 w-4" />
+                <Button variant="secondary" icon={<RefreshCw />} onClick={handleConnect}>
                   Reconnect
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={<X />}
+                  loading={disconnecting}
                   disabled={disconnecting}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={handleDisconnect}
+                  className="border border-red-200 text-red-600 hover:bg-red-50"
                 >
-                  {disconnecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                   Disconnect
-                </button>
+                </Button>
               </div>
             </>
           ) : (
             <>
               <StatusRow ok={false} label="Not connected" detail="No mailbox has been authorized yet." />
-              <button
-                type="button"
-                onClick={handleConnect}
-                className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                <Mail className="h-4 w-4" />
+              <Button variant="primary" icon={<Mail />} onClick={handleConnect}>
                 Connect PO mailbox
-              </button>
+              </Button>
               <p className="text-label text-gray-500">
                 You&apos;ll be redirected to Google to sign in as the dedicated PO email account and approve
                 the <code className="rounded bg-gray-100 px-1 py-0.5">gmail.modify</code> scope.

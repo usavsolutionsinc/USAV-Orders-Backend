@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { listNasDir, nasConfigured, type NasEntry } from '@/lib/nas-photos';
 import { NasBreadcrumb, NasFolderCard, NasSectionLabel } from '@/components/nas/NasBrowserChrome';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * /photos — standalone PREVIEW of the NAS photo source.
@@ -60,12 +61,12 @@ export default function NasPhotosPreviewPage() {
       <header className="sticky top-0 z-10 border-b border-white/10 bg-black/90 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-400">
+            <p className="text-micro font-black uppercase tracking-[0.22em] text-amber-400">
               NAS Photos · Preview (read-only, no attach)
             </p>
             <p className="truncate text-sm font-black">/{dir || 'Photos'}</p>
           </div>
-          <code className="hidden shrink-0 rounded bg-white/10 px-2 py-1 text-[11px] text-white/70 sm:block">
+          <code className="hidden shrink-0 rounded bg-white/10 px-2 py-1 text-caption text-white/70 sm:block">
             {base}
           </code>
         </div>
@@ -98,6 +99,7 @@ export default function NasPhotosPreviewPage() {
       ) : error ? (
         <div className="px-6 py-16 text-center">
           <p className="text-label font-bold text-rose-400">{error}</p>
+          {/* ds-raw-button: dark-theme translucent pill on hardcoded bg-black — light-surface DS variants don't fit */}
           <button
             type="button"
             onClick={() => void load(dir)}
@@ -128,24 +130,25 @@ export default function NasPhotosPreviewPage() {
               <NasSectionLabel tone="dark">Photos · {files.length}</NasSectionLabel>
               <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-6">
               {files.map((f) => (
-                <button
-                  key={f.relPath}
-                  type="button"
-                  onClick={() => setZoom(f)}
-                  className="group relative aspect-square overflow-hidden rounded bg-white/5"
-                  title={f.name}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={f.url}
-                    alt={f.name}
-                    loading="lazy"
-                    className="absolute inset-0 h-full w-full object-cover transition group-active:scale-95"
-                  />
-                  <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-0.5 text-[10px] text-white/80">
-                    {f.name}
-                  </span>
-                </button>
+                <HoverTooltip key={f.relPath} label={f.name} asChild>
+                  {/* ds-raw-button: image card tile + HoverTooltip asChild trigger */}
+                  <button
+                    type="button"
+                    onClick={() => setZoom(f)}
+                    className="group relative aspect-square overflow-hidden rounded bg-white/5"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={f.url}
+                      alt={f.name}
+                      loading="lazy"
+                      className="absolute inset-0 h-full w-full object-cover transition group-active:scale-95"
+                    />
+                    <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1.5 py-0.5 text-micro text-white/80">
+                      {f.name}
+                    </span>
+                  </button>
+                </HoverTooltip>
               ))}
               </div>
             </div>

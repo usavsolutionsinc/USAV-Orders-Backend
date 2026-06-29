@@ -70,7 +70,7 @@ export function AppearanceSection() {
                 key={d}
                 type="button"
                 onClick={() => updateDensity(d)}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
+                className={`ds-raw-button rounded-xl border px-4 py-3 text-left transition ${
                   isActive
                     ? 'border-blue-500 bg-blue-50 text-text-default ring-2 ring-blue-500/20'
                     : 'border-border-soft bg-surface-card text-gray-700 hover:border-border-default hover:bg-surface-canvas'
@@ -95,7 +95,7 @@ export function AppearanceSection() {
                 key={scale}
                 type="button"
                 onClick={() => updateFontScale(scale)}
-                className={`min-w-16 rounded-xl border px-4 py-2 font-medium transition ${
+                className={`ds-raw-button min-w-16 rounded-xl border px-4 py-2 font-medium transition ${
                   isActive
                     ? 'border-blue-500 bg-blue-50 text-text-default ring-2 ring-blue-500/20'
                     : 'border-border-soft bg-surface-card text-gray-700 hover:border-border-default hover:bg-surface-canvas'
@@ -123,7 +123,7 @@ export function AppearanceSection() {
                 key={opt.value}
                 type="button"
                 onClick={() => updateTheme(opt.value)}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
+                className={`ds-raw-button rounded-xl border px-4 py-3 text-left transition ${
                   isActive
                     ? 'border-blue-500 bg-blue-50 text-text-default ring-2 ring-blue-500/20'
                     : 'border-border-soft bg-surface-card text-gray-700 hover:border-border-default hover:bg-surface-canvas'

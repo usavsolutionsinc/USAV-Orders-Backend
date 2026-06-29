@@ -6,6 +6,7 @@ import { ShippedDetailsPanelContent } from '../ShippedDetailsPanelContent';
 import { DetailsStackProps } from './types';
 import { dispatchCloseShippedDetails, dispatchDashboardAndStationRefresh } from '@/utils/events';
 import { ShippedNotesComposer } from '@/components/shipped/details-panel/ShippedNotesComposer';
+import { Button } from '@/design-system/primitives';
 
 export function PackerDetailsStack({
   shipped,
@@ -123,19 +124,21 @@ export function PackerDetailsStack({
       )}
 
       <section className="mx-8 pt-2">
-        <button
+        <Button
           type="button"
+          variant="danger"
+          size="lg"
           onClick={deletePackerLog}
           disabled={isDeleting}
-          className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-micro font-black uppercase tracking-wider disabled:opacity-50"
+          icon={<Trash2 className="w-3.5 h-3.5" />}
+          className="w-full"
         >
-          <Trash2 className="w-3.5 h-3.5" />
           {isDeleting
             ? 'Deleting...'
             : isDeleteArmed
               ? 'Click Again To Confirm'
               : 'Delete'}
-        </button>
+        </Button>
       </section>
     </div>
   );

@@ -138,7 +138,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
           o.out_of_stock,
           o.created_at
         FROM orders o
-        LEFT JOIN order_shipment_links osl ON osl.order_row_id = o.id
+        LEFT JOIN shipment_links osl ON osl.owner_id = o.id AND osl.owner_type = 'ORDER'
         WHERE sal.shipment_id IS NOT NULL
           AND o.organization_id = sal.organization_id
           AND (
@@ -179,10 +179,10 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
             stn_link.tracking_number_raw,
             COALESCE(osl_link.is_primary, false) AS is_primary,
             CASE WHEN COALESCE(osl_link.is_primary, false) THEN 0 ELSE 1 END AS sort_key
-          FROM order_shipment_links osl_link
+          FROM shipment_links osl_link
           LEFT JOIN shipping_tracking_numbers stn_link ON stn_link.id = osl_link.shipment_id
-          WHERE ord_match.id IS NOT NULL
-            AND osl_link.order_row_id = ord_match.id
+          WHERE osl_link.owner_type = 'ORDER' AND ord_match.id IS NOT NULL
+            AND osl_link.owner_id = ord_match.id
 
           UNION
 

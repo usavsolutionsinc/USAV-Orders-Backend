@@ -17,6 +17,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Plus, Trash2, Pencil, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 import { useChecklist, checklistQueryKey } from '@/hooks/useChecklist';
 import { GLOBAL_RECEIVING_CHECKLIST } from '@/lib/receiving/global-checklist';
@@ -183,7 +185,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1">
-        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+        <p className="text-micro font-black uppercase tracking-widest text-gray-500">
           Receiving checklist
         </p>
         <div className="flex items-center gap-2">
@@ -196,32 +198,35 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
               {doneCount}/{items.length}
             </span>
           ) : null}
-          <button
-            type="button"
-            onClick={() => setManaging((v) => !v)}
-            className={`inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-micro font-black uppercase tracking-wider transition-colors ${
-              managing ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
-            }`}
-            title={managing ? 'Done editing' : 'Edit checklist steps'}
-          >
-            {managing ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
-            {managing ? 'Done' : 'Edit'}
-          </button>
+          <HoverTooltip label={managing ? 'Done editing' : 'Edit checklist steps'} asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setManaging((v) => !v)}
+              ariaLabel={managing ? 'Done editing' : 'Edit checklist steps'}
+              icon={managing ? <Check className="h-3 w-3" /> : <Pencil className="h-3 w-3" />}
+              className={managing ? 'bg-blue-50 text-blue-600' : ''}
+            >
+              {managing ? 'Done' : 'Edit'}
+            </Button>
+          </HoverTooltip>
         </div>
       </div>
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
           <p className="text-caption text-gray-500">No checklist steps yet.</p>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={seedDefaults}
             disabled={busy}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-blue-700 disabled:opacity-50"
+            loading={busy}
+            icon={<Plus className="h-3 w-3" />}
+            className="mt-2"
           >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             Add default steps
-          </button>
+          </Button>
         </div>
       ) : (
         items.map((it, idx) => {
@@ -237,6 +242,7 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
               }`}
             >
               {!managing ? (
+                // ds-raw-button: composite checkbox-row toggle (checkbox + index + label), not a DS Button
                 <button
                   type="button"
                   onClick={() => toggle(it.id)}
@@ -273,21 +279,21 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                     }}
                     className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-caption font-bold text-gray-900"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="brand"
+                    size="sm"
                     onClick={() => void renameStep(it.id, editLabel)}
                     disabled={busy}
-                    className="shrink-0 rounded-lg bg-gray-900 px-2 py-1 text-micro font-black uppercase tracking-wider text-white disabled:opacity-50"
+                    className="shrink-0"
                   >
                     Save
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <IconButton
                     onClick={() => setEditingId(null)}
-                    className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-100"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                    className="shrink-0 rounded-lg p-1 hover:bg-gray-100"
+                    ariaLabel="Cancel editing"
+                    icon={<X className="h-3.5 w-3.5" />}
+                  />
                 </div>
               ) : (
                 <>
@@ -297,26 +303,27 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
                   <span className="flex-1 min-w-0 truncate text-caption font-bold text-gray-800">
                     {it.step_label}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingId(it.id);
-                      setEditLabel(it.step_label);
-                    }}
-                    className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    title="Rename step"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void removeStep(it.id)}
-                    disabled={busy}
-                    className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
-                    title="Delete step"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  <HoverTooltip label="Rename step" asChild>
+                    <IconButton
+                      onClick={() => {
+                        setEditingId(it.id);
+                        setEditLabel(it.step_label);
+                      }}
+                      ariaLabel="Rename step"
+                      tone="accent"
+                      className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-blue-50"
+                      icon={<Pencil className="h-3 w-3" />}
+                    />
+                  </HoverTooltip>
+                  <HoverTooltip label="Delete step" asChild>
+                    <IconButton
+                      onClick={() => void removeStep(it.id)}
+                      disabled={busy}
+                      ariaLabel="Delete step"
+                      className="shrink-0 rounded-lg p-1 text-gray-300 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                      icon={<Trash2 className="h-3 w-3" />}
+                    />
+                  </HoverTooltip>
                 </>
               )}
             </div>
@@ -335,15 +342,17 @@ export function LineChecklistTab({ lineId }: { lineId: number; sku?: string | nu
             placeholder="Add a checklist step…"
             className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-900 placeholder:text-gray-400"
           />
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => void addStep(newLabel)}
             disabled={busy || !newLabel.trim()}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-micro font-black uppercase tracking-wider text-white hover:bg-blue-700 disabled:opacity-50"
+            loading={busy}
+            icon={<Plus className="h-3 w-3" />}
+            className="shrink-0"
           >
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             Add
-          </button>
+          </Button>
         </div>
       ) : null}
 

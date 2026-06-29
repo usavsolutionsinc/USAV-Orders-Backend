@@ -1,4 +1,6 @@
 import { ExternalLink } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { DetailsPanelRow } from '@/design-system/components/DetailsPanelRow';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
 import type { PrepackedSkuInfo } from './types';
@@ -11,17 +13,17 @@ export function PrepackedSkuRow({ sku }: { sku: PrepackedSkuInfo }) {
     <DetailsPanelRow
       label="From Prepacked SKU"
       actions={
-        <button
-          type="button"
-          onClick={() => {
-            window.open(skuBrowserUrl, '_blank', 'noopener,noreferrer');
-          }}
-          className="text-gray-400 transition-colors hover:text-blue-700"
-          aria-label="Open SKU table view"
-          title="Open SKU table view"
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-        </button>
+        <HoverTooltip label="Open SKU table view" asChild>
+          <IconButton
+            type="button"
+            onClick={() => {
+              window.open(skuBrowserUrl, '_blank', 'noopener,noreferrer');
+            }}
+            tone="accent"
+            ariaLabel="Open SKU table view"
+            icon={<ExternalLink className="h-3.5 w-3.5" />}
+          />
+        </HoverTooltip>
       }
     >
       <div className="space-y-1.5">

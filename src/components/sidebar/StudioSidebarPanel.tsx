@@ -17,6 +17,7 @@ import {
 } from '@/components/Icons';
 import { useStudioWorkspace } from '@/components/studio/StudioWorkspaceContext';
 import { StudioLibrary } from '@/components/studio/StudioLibrary';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 
 /**
@@ -94,7 +95,7 @@ export function StudioSidebarPanel() {
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
           className={cn(
-            'flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors',
+            'ds-raw-button flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors',
             open ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50',
           )}
         >
@@ -117,7 +118,7 @@ export function StudioSidebarPanel() {
               type="button"
               aria-label="Close view menu"
               onClick={() => setOpen(false)}
-              className="fixed inset-0 z-panelPopover cursor-default"
+              className="ds-raw-button fixed inset-0 z-panelPopover cursor-default"
             />
             <div
               role="menu"
@@ -200,16 +201,15 @@ function Row({
   disabledHint?: string;
   onClick: () => void;
 }) {
-  return (
+  const el = (
     <button
       type="button"
       role="menuitemradio"
       aria-checked={active}
       disabled={disabled}
-      title={disabledHint}
       onClick={onClick}
       className={cn(
-        'flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors',
+        'ds-raw-button flex w-full items-start gap-2.5 rounded-lg px-2 py-2 text-left transition-colors',
         disabled
           ? 'cursor-not-allowed opacity-40'
           : active
@@ -225,4 +225,9 @@ function Row({
       {active && <span className="mt-0.5 shrink-0 text-xs font-bold text-blue-600">✓</span>}
     </button>
   );
+  return disabledHint ? (
+    <HoverTooltip label={disabledHint} asChild>
+      {el}
+    </HoverTooltip>
+  ) : el;
 }

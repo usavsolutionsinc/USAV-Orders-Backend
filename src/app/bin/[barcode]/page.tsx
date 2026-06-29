@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuditTimeline } from '@/components/audit/AuditTimeline';
+import { Button } from '@/design-system/primitives';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -100,13 +101,9 @@ function BinPageInner() {
                 Cap {bin.location.capacity}
               </span>
             )}
-            <button
-              type="button"
-              onClick={load}
-              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-caption font-bold text-slate-700 active:bg-slate-50"
-            >
+            <Button variant="secondary" size="sm" onClick={load}>
               Refresh
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -142,7 +139,7 @@ function BinPageInner() {
                         onClick={() =>
                           router.push(`/inventory?sku=${encodeURIComponent(row.sku)}`)
                         }
-                        className="block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
+                        className="ds-raw-button block w-full text-left rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm active:bg-slate-50"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">

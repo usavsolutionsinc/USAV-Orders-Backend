@@ -9,6 +9,11 @@
  *
  * Pure reads — safe to run often. Auth: Vercel cron origin (CRON_SECRET).
  * Cadence (vercel.json): every 30 min.
+ *
+ * Tenancy: intentionally cross-org (Phase D category B). A read-only
+ * observability snapshot spanning all tenants — it emits log metrics only and
+ * writes nothing, so it stays a single global pass on the owner pool. (Convert
+ * to a per-org rollup only if per-tenant shipping dashboards are ever needed.)
  */
 
 import { NextRequest, NextResponse } from 'next/server';

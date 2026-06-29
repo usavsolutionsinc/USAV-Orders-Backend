@@ -114,7 +114,7 @@ export const MobileReceivingPhotoStrip = memo(function MobileReceivingPhotoStrip
                 key={p.id}
                 type="button"
                 onClick={() => openViewer(index)}
-                className="relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-200 shadow-sm active:opacity-90"
+                className="ds-raw-button relative h-24 w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-gray-200 shadow-sm active:opacity-90"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={p.displayUrl} alt="" className="h-full w-full object-cover" />

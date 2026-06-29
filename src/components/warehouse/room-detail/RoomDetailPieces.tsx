@@ -1,3 +1,4 @@
+import { Button } from '@/design-system/primitives';
 import { LayoutDashboard, Pencil, Plus } from '@/components/Icons';
 
 // ─── Empty state ────────────────────────────────────────────────────────────
@@ -27,14 +28,15 @@ export function EmptyState({ loading, roomCount, onCreate }: EmptyStateProps) {
         </p>
       </div>
       {!loading && (
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
+          icon={<Plus />}
           onClick={() => onCreate()}
-          className="inline-flex h-11 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-sm font-semibold text-white shadow-md shadow-blue-600/30 transition-transform active:scale-[0.98]"
+          className="h-11 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 px-4 text-white shadow-md shadow-blue-600/30"
         >
-          <Plus className="h-4 w-4" />
           {roomCount === 0 ? 'Add your first room' : 'Add a new room'}
-        </button>
+        </Button>
       )}
       {!loading && roomCount > 0 && (
         <p className="text-[10.5px] uppercase tracking-[0.18em] text-gray-400">

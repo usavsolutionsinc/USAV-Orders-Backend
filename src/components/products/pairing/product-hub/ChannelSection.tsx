@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { platformStyle } from '../platform-style';
 import type { HubCandidate, HubConfirmed } from '../types';
 import { ConfirmedRow } from './ConfirmedRow';
@@ -89,13 +90,16 @@ export function ChannelSection({
       </div>
 
       {!showAll && moreCount > 0 && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setShowAll(true)}
-          className="mt-1.5 inline-flex items-center gap-1 text-micro font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800"
+          iconRight={<ChevronDown className="h-3 w-3" />}
+          className="mt-1.5 text-micro font-semibold uppercase tracking-wider text-blue-600 hover:text-blue-800"
         >
-          See {moreCount} more <ChevronDown className="h-3 w-3" />
-        </button>
+          See {moreCount} more
+        </Button>
       )}
 
       <ChannelManualAdd platform={platform} skuCatalogId={skuCatalogId} onAdded={onAdded} />

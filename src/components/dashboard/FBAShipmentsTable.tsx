@@ -7,6 +7,8 @@ import { Loader2, Minus } from '@/components/Icons';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { formatDateTimePST } from '@/utils/date';
 import { FbaStatusBadge } from '@/components/fba/shared/FbaStatusBadge';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import {
   fbaShipmentsQuery,
   type FBAShipmentLifecycleRow,
@@ -76,16 +78,22 @@ function QtyCellWithRemove({ row }: { row: FBAShipmentLifecycleRow }) {
         <span className="text-gray-500">/{row.total_expected_qty}</span>
       </span>
       {canRemove ? (
-        <button
-          type="button"
-          onClick={() => void removeSinglePlannedItem()}
-          disabled={busy}
-          title="Remove the only line from this plan"
-          aria-label="Remove item from plan"
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
-        >
-          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Minus className="h-3 w-3" />}
-        </button>
+        <HoverTooltip label="Remove the only line from this plan" asChild>
+          <IconButton
+            type="button"
+            onClick={() => void removeSinglePlannedItem()}
+            disabled={busy}
+            ariaLabel="Remove item from plan"
+            icon={
+              busy ? (
+                <Loader2 className="h-3 w-3 animate-spin text-red-600" />
+              ) : (
+                <Minus className="h-3 w-3 text-red-600" />
+              )
+            }
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-40"
+          />
+        </HoverTooltip>
       ) : null}
     </div>
   );

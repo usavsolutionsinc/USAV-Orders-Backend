@@ -291,7 +291,7 @@ function MapSidebarBody() {
                 key={m}
                 type="button"
                 onClick={() => setView(m)}
-                className={`rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
+                className={`ds-raw-button rounded-md px-2 py-1.5 text-caption font-semibold transition-colors ${
                   active
                     ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-200'
                     : 'text-gray-600 hover:bg-gray-100'

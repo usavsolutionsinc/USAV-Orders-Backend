@@ -37,7 +37,7 @@ export function SupportTicketRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        'block w-full px-3 py-2 text-left transition',
+        'ds-raw-button block w-full px-3 py-2 text-left transition',
         selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
       )}
     >
@@ -52,7 +52,7 @@ export function SupportTicketRow({
           </span>
         ) : null}
       </div>
-      <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-[11px] text-gray-400">
+      <div className="mt-0.5 flex items-center gap-1.5 pl-4 text-caption text-gray-400">
         <span className="font-semibold uppercase tracking-wide">{sb.label}</span>
         <span>·</span>
         <span>#{ticket.id}</span>

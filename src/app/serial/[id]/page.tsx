@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { unitStatusBadgeTone } from '@/components/station/receiving-constants';
 import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
 import { safeRandomUUID } from '@/lib/safe-uuid';
+import { Button } from '@/design-system/primitives';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -197,13 +198,14 @@ function UnitPageInner() {
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           {lineHref ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => router.push(lineHref)}
-              className="text-xs font-bold text-blue-600 shrink-0"
+              className="shrink-0 text-blue-600"
             >
               ← Line
-            </button>
+            </Button>
           ) : (
             <span />
           )}
@@ -269,14 +271,15 @@ function UnitPageInner() {
                 Test status
               </p>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   disabled={!!busy || !unit.origin_receiving_line_id}
                   onClick={() => postStatus('TEST_START')}
-                  className="rounded-md bg-blue-600 px-3 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+                  className="h-full w-full"
                 >
                   Start
-                </button>
+                </Button>
+                {/* ds-raw-button: solid-emerald CTA (no green Button variant) */}
                 <button
                   type="button"
                   disabled={!!busy || !unit.origin_receiving_line_id}
@@ -285,14 +288,14 @@ function UnitPageInner() {
                 >
                   Pass
                 </button>
-                <button
-                  type="button"
+                <Button
+                  variant="danger"
                   disabled={!!busy || !unit.origin_receiving_line_id}
                   onClick={() => postStatus('TEST_FAIL')}
-                  className="rounded-md bg-rose-600 px-3 py-3 text-sm font-bold text-white active:bg-rose-700 disabled:opacity-50"
+                  className="h-full w-full"
                 >
                   Fail
-                </button>
+                </Button>
               </div>
             </section>
 
@@ -313,14 +316,13 @@ function UnitPageInner() {
                   }}
                   className="flex-1 rounded-md border border-slate-300 px-3 py-3 text-base font-mono font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="brand"
                   disabled={!binInput.trim() || !!busy || !unit.origin_receiving_line_id}
                   onClick={submitPutaway}
-                  className="rounded-md bg-slate-900 px-4 py-3 text-sm font-bold text-white active:bg-slate-800 disabled:opacity-50"
                 >
                   Stash
-                </button>
+                </Button>
               </div>
             </section>
 

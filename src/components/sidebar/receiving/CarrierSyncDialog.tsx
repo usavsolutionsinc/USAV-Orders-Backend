@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Check, Loader2, Truck, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, fieldLabel, microBadge, dataValue } from '@/design-system/tokens/typography/presets';
 import { TrackingChip, getLast4 } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { CarrierCode, NormalizedShipmentStatus } from '@/lib/shipping/types';
 import type {
   CarrierSyncResult,
@@ -67,11 +69,11 @@ const STATUS_META: Record<NormalizedShipmentStatus, { label: string; cls: string
 
 function StatusChip({ status }: { status: NormalizedShipmentStatus | null }) {
   if (!status) {
-    return <span className="font-mono text-[11px] text-gray-400">—</span>;
+    return <span className="font-mono text-caption text-gray-400">—</span>;
   }
   const meta = STATUS_META[status] ?? STATUS_META.UNKNOWN;
   return (
-    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${meta.cls}`}>
+    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold ring-1 ring-inset ${meta.cls}`}>
       {meta.label}
     </span>
   );
@@ -84,7 +86,7 @@ function kindBadge(kind: CarrierSyncShipmentDetail['kind']) {
     unchanged: 'bg-gray-50 text-gray-500 ring-gray-200',
     error: 'bg-red-50 text-red-700 ring-red-200',
   };
-  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
+  return `inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide ring-1 ring-inset ${map[kind]}`;
 }
 
 function countByKind(rows: CarrierSyncShipmentDetail[], kind: CarrierSyncShipmentDetail['kind']) {
@@ -182,7 +184,7 @@ function ShipmentTable({ rows }: { rows: CarrierSyncShipmentDetail[] }) {
     <div className="max-h-[40vh] overflow-y-auto">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50 text-left shadow-[0_1px_0_0_rgb(229_231_235)]">
-          <tr className="text-[10px] uppercase tracking-wide text-gray-500">
+          <tr className="text-micro uppercase tracking-wide text-gray-500">
             <th className="px-3 py-2 font-semibold">Tracking</th>
             <th className="px-3 py-2 font-semibold">Was</th>
             <th className="px-3 py-2 font-semibold">Now</th>
@@ -205,9 +207,11 @@ function ShipmentTable({ rows }: { rows: CarrierSyncShipmentDetail[] }) {
               </td>
               <td className="px-3 py-2 align-top">
                 {row.kind === 'error' ? (
-                  <span className="text-[11px] text-red-600" title={row.error}>
-                    {row.error ? row.error.slice(0, 40) : 'Poll failed'}
-                  </span>
+                  <HoverTooltip label={row.error ?? ''} asChild>
+                    <span className="text-caption text-red-600">
+                      {row.error ? row.error.slice(0, 40) : 'Poll failed'}
+                    </span>
+                  </HoverTooltip>
                 ) : (
                   <StatusChip status={row.newStatus} />
                 )}
@@ -304,23 +308,22 @@ export function CarrierSyncDialog({
               {(elapsedMs / 1000).toFixed(1)}s
             </motion.span>
             {isRunning && onCancel ? (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onCancel}
-                className="rounded-lg bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-200 transition hover:bg-red-100"
+                className="bg-red-50 text-red-700 ring-red-200 ring-inset hover:bg-red-100"
               >
                 Cancel
-              </button>
+              </Button>
             ) : null}
-            <button
-              type="button"
+            <IconButton
+              icon={<X className="w-4 h-4" />}
+              ariaLabel="Close"
               onClick={onClose}
               disabled={isRunning}
-              className="rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
+              className="rounded-lg p-1.5 hover:bg-gray-100"
+            />
           </div>
         </header>
 
@@ -334,18 +337,19 @@ export function CarrierSyncDialog({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
+                /* ds-raw-button: segmented tab with animated layoutId underline — not a Button shape */
+                className={`ds-raw-button relative flex items-center gap-1.5 rounded-t-lg px-3 py-2 text-sm font-semibold transition ${
                   isActive ? 'text-gray-900' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 <span>{tab.label}</span>
                 <span className="inline-flex h-4 w-4 items-center justify-center">{statusDot(meta.status)}</span>
                 {meta.count > 0 ? (
-                  <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-gray-700">
+                  <span className="ml-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-700">
                     {meta.count}
                   </span>
                 ) : total > 0 ? (
-                  <span className="ml-0.5 rounded bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-gray-400">
+                  <span className="ml-0.5 rounded bg-gray-50 px-1.5 py-0.5 text-micro font-semibold tabular-nums text-gray-400">
                     {total}
                   </span>
                 ) : null}
@@ -387,14 +391,9 @@ export function CarrierSyncDialog({
               </span>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isRunning}
-            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-400"
-          >
+          <Button variant="brand" size="sm" onClick={onClose} disabled={isRunning}>
             {isRunning ? 'Running…' : 'Close'}
-          </button>
+          </Button>
         </footer>
       </motion.div>
     </motion.div>

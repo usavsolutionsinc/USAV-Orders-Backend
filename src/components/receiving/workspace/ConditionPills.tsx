@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Pencil } from '@/components/Icons';
 import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
+import { conditionPillClass } from '@/lib/condition-tone';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 interface Props {
@@ -24,38 +25,6 @@ interface Props {
   onExpandedChange?: (next: boolean) => void;
 }
 
-// Per-grade visual tone — selected = filled, unselected = soft outline.
-const TONE: Record<string, { active: string; inactive: string }> = {
-  BRAND_NEW: {
-    active: 'bg-yellow-500 text-white shadow-sm shadow-yellow-200 ring-yellow-600',
-    inactive: 'bg-white text-yellow-800 ring-yellow-200 hover:bg-yellow-50',
-  },
-  LIKE_NEW: {
-    active: 'bg-teal-600 text-white shadow-sm shadow-teal-200 ring-teal-700',
-    inactive: 'bg-white text-teal-800 ring-teal-200 hover:bg-teal-50',
-  },
-  REFURBISHED: {
-    active: 'bg-indigo-600 text-white shadow-sm shadow-indigo-200 ring-indigo-700',
-    inactive: 'bg-white text-indigo-800 ring-indigo-200 hover:bg-indigo-50',
-  },
-  USED_A: {
-    active: 'bg-emerald-600 text-white shadow-sm shadow-emerald-200 ring-emerald-700',
-    inactive: 'bg-white text-emerald-800 ring-emerald-200 hover:bg-emerald-50',
-  },
-  USED_B: {
-    active: 'bg-blue-600 text-white shadow-sm shadow-blue-200 ring-blue-700',
-    inactive: 'bg-white text-blue-800 ring-blue-200 hover:bg-blue-50',
-  },
-  USED_C: {
-    active: 'bg-slate-700 text-white shadow-sm shadow-slate-300 ring-slate-800',
-    inactive: 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50',
-  },
-  PARTS: {
-    active: 'bg-amber-700 text-white shadow-sm shadow-amber-200 ring-amber-800',
-    inactive: 'bg-white text-amber-800 ring-amber-200 hover:bg-amber-50',
-  },
-};
-
 // Single flat row of grades, in display order. Used grades (A / B / C) are
 // shown bare; retail-ready grades + parts follow — no "USED"/"NEW+" parents.
 // Labels come from the shared `pill` variant (src/lib/conditions.ts) so the
@@ -64,13 +33,6 @@ const GRADES = CONDITION_GRADES.map((value) => ({
   value,
   label: conditionLabel(value, 'pill'),
 }));
-
-const pillClass = (gradeValue: string, isActive: boolean) => {
-  const tone = TONE[gradeValue] ?? TONE.USED_C;
-  return `inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-full px-4 text-caption font-black uppercase tracking-[0.1em] ring-1 ring-inset transition-colors active:scale-[0.98] ${
-    isActive ? tone.active : tone.inactive
-  }`;
-};
 
 /**
  * Bare, mobile-first condition picker. Renders every grade as a single
@@ -109,11 +71,12 @@ export function ConditionPills({
   if (collapsible && !expanded && selectedGrade) {
     return (
       <div role="radiogroup" aria-label="Condition grade" className="flex w-fit items-center gap-1.5">
+        {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
         <button
           type="button"
           aria-label={`Condition ${selectedGrade.label} — change`}
           onClick={() => setExpanded(true)}
-          className={pillClass(selectedGrade.value, true)}
+          className={`${conditionPillClass(selectedGrade.value, true)} ds-raw-button`}
         >
           {selectedGrade.label}
         </button>
@@ -121,7 +84,7 @@ export function ConditionPills({
           type="button"
           onClick={() => setExpanded(true)}
           aria-label="Edit condition"
-          className="rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          className="ds-raw-button rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
         >
           <Pencil className="h-3 w-3" />
         </button>
@@ -134,9 +97,10 @@ export function ConditionPills({
       ref={scrollerRef}
       role="radiogroup"
       aria-label="Condition grade"
-      className="-mx-1 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="-mx-1 flex w-full min-w-0 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
     >
       {GRADES.map((g) => (
+        // ds-raw-button: segmented condition-grade toggle — leave hand-rolled
         <button
           key={g.value}
           type="button"
@@ -146,7 +110,7 @@ export function ConditionPills({
             onChange(g.value);
             if (collapsible) setExpanded(false);
           }}
-          className={pillClass(g.value, selected === g.value)}
+          className={`${conditionPillClass(g.value, selected === g.value)} ds-raw-button`}
         >
           {g.label}
         </button>

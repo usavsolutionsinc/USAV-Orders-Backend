@@ -33,6 +33,10 @@ import {
 } from '@/lib/realtime/channels';
 
 import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
+import { dispatchSelectLine } from '@/components/station/receiving-lines-table-helpers';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import type { TrackingScanResult } from '@/components/sidebar/receiving/useTrackingScan';
 import { ReceivingReturnBanner } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
 import { ReceivingLinePicker } from '@/components/sidebar/receiving/ReceivingLinePicker';
@@ -190,6 +194,45 @@ export function ReceivingSidebarPanel() {
   const [triageQuery, setTriageQuery] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
 
+  // B4 — Triage select-on-resolve. The shared `submitTrackingScan` already opens
+  // the resolved carton in every mode, but its internal select is gated on the
+  // scan-generation stale-guard. In TRIAGE we additionally GUARANTEE the
+  // just-scanned carton drops into the detail pane by re-dispatching the same
+  // `receiving-select-line` event the rail/table use — picking the first OPEN
+  // line so it stays consistent with the scan's own pick (no carton→carton jump,
+  // re-selecting the same carton is idempotent since the workspace is keyed on
+  // receiving_id). Scoped to the triage onSubmit only; the unbox path keeps
+  // relying on the internal selection. Mirrors the deep-link select pattern in
+  // useReceivingWorkspacePane (fetch lines by receiving_id → dispatchSelectLine).
+  const selectResolvedTriageCarton = useCallback((result: TrackingScanResult) => {
+    const recvId = result.receiving_id;
+    if (recvId == null || !Number.isFinite(recvId)) return;
+    void (async () => {
+      let pick: ReceivingLineRow | null = null;
+      try {
+        const res = await fetch(
+          `/api/receiving-lines?receiving_id=${recvId}&include=serials`,
+          { cache: 'no-store' },
+        );
+        const data = res.ok ? await res.json().catch(() => null) : null;
+        const rows: ReceivingLineRow[] = Array.isArray(data?.receiving_lines)
+          ? (data.receiving_lines as ReceivingLineRow[])
+          : [];
+        const open = rows.find(
+          (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
+        );
+        pick = open ?? rows[0] ?? null;
+      } catch {
+        /* fall through to the unmatched stub so we never clear the selection */
+      }
+      // Never dispatch null (that would clear the carton the scan just opened) —
+      // a brand-new unmatched carton with no lines yet falls back to the same
+      // synthetic stub submitTrackingScan uses.
+      if (!pick) pick = buildUnmatchedStubRow(recvId, result.tracking);
+      dispatchSelectLine(pick);
+    })();
+  }, []);
+
   // External focus trigger — Quick Access chips dispatch `receiving-focus-scan`
   // after navigating so the input is hot even when the panel was already mounted.
   // Select any existing text so the operator can immediately overwrite it with
@@ -248,7 +291,10 @@ export function ReceivingSidebarPanel() {
                 value={triageQuery}
                 onChange={setTriageQuery}
                 onSubmit={() => {
-                  submitTrackingScan(triageQuery, { mode: 'tracking' });
+                  submitTrackingScan(triageQuery, {
+                    mode: 'tracking',
+                    onResult: selectResolvedTriageCarton,
+                  });
                   setTriageQuery('');
                 }}
                 inputRef={scanInputRef}

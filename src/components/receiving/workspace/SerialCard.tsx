@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X, Pencil } from '@/components/Icons';
 import { SerialChip } from '@/components/ui/CopyChip';
-import { TextField } from '@/design-system/primitives';
+import { TextField, IconButton } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
 import { ConditionBadge } from './ReceivingUnitRows';
 
@@ -258,19 +258,18 @@ export function SerialCard({
             }}
             trailing={
               scan || editing ? (
-                <button
-                  type="button"
+                <IconButton
                   onClick={() => (editing ? cancelEdit() : setScan(''))}
-                  aria-label={editing ? 'Cancel edit' : 'Clear input'}
-                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                  ariaLabel={editing ? 'Cancel edit' : 'Clear input'}
+                  className="rounded-md p-1 hover:bg-gray-100"
+                  icon={<X className="h-3.5 w-3.5" />}
+                />
               ) : undefined
             }
           />
         </div>
 
+        {/* ds-raw-button: solid-emerald scan-submit CTA with add-glyph / Saving… text-swap — no green DS Button variant */}
         <button
           type="button"
           onClick={submit}
@@ -414,6 +413,7 @@ export function SerialChipWithMenu({
               </div>
             ) : null}
             {onEdit ? (
+              // ds-raw-button: role=menuitem text-left dropdown action row, not a standalone DS Button
               <button
                 type="button"
                 role="menuitem"
@@ -425,6 +425,7 @@ export function SerialChipWithMenu({
               </button>
             ) : null}
             {onDelete ? (
+              // ds-raw-button: role=menuitem text-left dropdown action row, not a standalone DS Button
               <button
                 type="button"
                 role="menuitem"

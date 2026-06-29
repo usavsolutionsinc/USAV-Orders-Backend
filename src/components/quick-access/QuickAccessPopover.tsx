@@ -13,6 +13,8 @@ import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
 import { useAuth } from '@/contexts/AuthContext';
 import { getStaffColorHex } from '@/utils/staff-colors';
 import { useStaffColorVersion } from '@/contexts/StaffColorsProvider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? '').join('');
@@ -146,21 +148,21 @@ export function QuickAccessPopover({ onClose, onOpenHistoryPopover, onOpenInboxP
           >
             <Settings className="h-3.5 w-3.5" />
           </Link>
-          <button
-            type="button"
-            onClick={() => { void signOut(); }}
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition hover:bg-white hover:text-gray-900"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          </button>
+          <HoverTooltip label="Sign out" asChild>
+            <IconButton
+              onClick={() => { void signOut(); }}
+              ariaLabel="Sign out"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-white hover:text-gray-900"
+              icon={<svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+            />
+          </HoverTooltip>
         </div>
       ) : (
         <button
           type="button"
           onClick={() => { onClose(); router.push('/signin'); }}
-          className="flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/60 px-4 py-3 text-left transition hover:bg-gray-100"
+          /* ds-raw-button — full-width text-left identity row, not a Button/IconButton shape. */
+          className="ds-raw-button flex shrink-0 items-center justify-between border-t border-gray-100 bg-gray-50/60 px-4 py-3 text-left transition hover:bg-gray-100"
         >
           <span className="text-sm font-semibold text-gray-900">Sign in</span>
           <span className="text-caption text-gray-500">Pick a staff →</span>
@@ -190,44 +192,46 @@ function SelfColorWheel({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => inputRef.current?.click()}
-      aria-label={`Change my color (current ${value})`}
-      title="Tap to change your color"
-      className="group relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full p-[5px] shadow-lg shadow-gray-900/15 transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
-      style={{
-        background:
-          'conic-gradient(from 90deg, #ef4444, #f59e0b, #eab308, #22c55e, #10b981, #06b6d4, #3b82f6, #6366f1, #a855f7, #ec4899, #ef4444)',
-      }}
-    >
-      {/* Inner avatar — white ring separates it from the conic hue ring */}
-      <span
-        className="relative flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-white"
-        style={{ backgroundColor: value }}
-      >
-        {initials}
-        {/* Tiny pencil hint in the corner — appears on hover, hints "editable" */}
-        <span
-          className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-gray-700 shadow ring-1 ring-gray-200 transition group-hover:scale-110"
-          aria-hidden
-        >
-          <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
-          </svg>
-        </span>
-      </span>
-      <input
-        ref={inputRef}
-        type="color"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+    <HoverTooltip label="Tap to change your color" asChild>
+      <button
+        type="button"
         disabled={disabled}
-        className="absolute inset-0 cursor-pointer opacity-0"
-        aria-hidden
-      />
-    </button>
+        onClick={() => inputRef.current?.click()}
+        aria-label={`Change my color (current ${value})`}
+        /* ds-raw-button — conic-gradient avatar/color-wheel tile wrapping a color input; bespoke. */
+        className="ds-raw-button group relative flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full p-[5px] shadow-lg shadow-gray-900/15 transition hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-gray-900/40 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{
+          background:
+            'conic-gradient(from 90deg, #ef4444, #f59e0b, #eab308, #22c55e, #10b981, #06b6d4, #3b82f6, #6366f1, #a855f7, #ec4899, #ef4444)',
+        }}
+      >
+        {/* Inner avatar — white ring separates it from the conic hue ring */}
+        <span
+          className="relative flex h-full w-full items-center justify-center rounded-full text-sm font-bold text-white ring-2 ring-white"
+          style={{ backgroundColor: value }}
+        >
+          {initials}
+          {/* Tiny pencil hint in the corner — appears on hover, hints "editable" */}
+          <span
+            className="absolute -right-0.5 -bottom-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-gray-700 shadow ring-1 ring-gray-200 transition group-hover:scale-110"
+            aria-hidden
+          >
+            <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </span>
+        </span>
+        <input
+          ref={inputRef}
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          aria-hidden
+        />
+      </button>
+    </HoverTooltip>
   );
 }

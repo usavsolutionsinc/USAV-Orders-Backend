@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-26T23:03:58Z",
-  "totalRoutes": 691,
+  "generatedAt": "2026-06-29T08:00:30Z",
+  "totalRoutes": 712,
   "summary": {
-    "permissionGated": 592,
-    "authenticatedNoPermission": 34,
-    "anonymousIntentional": 63,
+    "permissionGated": 610,
+    "authenticatedNoPermission": 35,
+    "anonymousIntentional": 65,
     "serviceToService": 2,
     "ungatedRead": 0,
     "ungatedWrite": 0
@@ -923,7 +923,7 @@
       "methods": [
         "POST"
       ],
-      "gate": "NONE",
+      "gate": "getCurrentUser (ad-hoc)",
       "permission": null,
       "exemptReason": "auth-flow (sign-in / passkey / pin)"
     },
@@ -1034,6 +1034,33 @@
       "gate": "NONE",
       "permission": null,
       "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/auth/verify-email/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
+      "exemptReason": "auth-flow (sign-in / passkey / pin)"
+    },
+    {
+      "path": "/api/beta/spots/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "public marketing capture (CORS + IP-throttled; no session/tenant data)"
+    },
+    {
+      "path": "/api/beta/waitlist/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "public marketing capture (CORS + IP-throttled; no session/tenant data)"
     },
     {
       "path": "/api/billing/checkout/route.ts",
@@ -2253,6 +2280,51 @@
       "exemptReason": null
     },
     {
+      "path": "/api/inventory/items/search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/parts-graph/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/parts/links/[id]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/parts/links/not-a-part/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inventory/parts/links/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.manage",
+      "exemptReason": null
+    },
+    {
       "path": "/api/inventory/sku-search/route.ts",
       "methods": [
         "GET"
@@ -2277,6 +2349,17 @@
       ],
       "gate": "withAuth",
       "permission": "print.label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/labels/route.ts",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PUT"
+      ],
+      "gate": "withAuth",
+      "permission": "studio.view",
       "exemptReason": null
     },
     {
@@ -2584,6 +2667,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/operations/roi/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/operations/saved-views/[id]/route.ts",
       "methods": [
         "DELETE",
@@ -2601,6 +2693,15 @@
       ],
       "gate": "withAuth",
       "permission": "operations.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/order-amendments/[id]/decision/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.approve_amendment",
       "exemptReason": null
     },
     {
@@ -2642,6 +2743,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/orders/[id]/amendments/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/orders/[id]/pick-tasks/route.ts",
       "methods": [
         "GET"
@@ -2668,6 +2778,15 @@
       ],
       "gate": "requireRoutePerm",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/substitute/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "packing.substitute_unit",
       "exemptReason": null
     },
     {
@@ -2751,6 +2870,15 @@
       ],
       "gate": "withAuth",
       "permission": "orders.void",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/import-csv/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "orders.import",
       "exemptReason": null
     },
     {
@@ -2841,6 +2969,15 @@
       ],
       "gate": "withAuth",
       "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/org/accounts/merge/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "admin.manage_staff",
       "exemptReason": null
     },
     {
@@ -2985,6 +3122,16 @@
       ],
       "gate": "withAuth",
       "permission": "admin.manage_staff",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/pending-skus/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "sku_stock.view",
       "exemptReason": null
     },
     {
@@ -3686,6 +3833,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/[id]/unpair/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/[id]/zoho-sync/route.ts",
       "methods": [
         "POST"
@@ -3710,6 +3866,16 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.mark_received",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/email-po/route.ts",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
       "exemptReason": null
     },
     {
@@ -3858,6 +4024,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/po-search/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/po/[poId]/attach-box/route.ts",
       "methods": [
         "GET",
@@ -3883,6 +4058,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/relink/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
       "exemptReason": null
     },
     {
@@ -4483,6 +4667,15 @@
       ],
       "gate": "withAuth",
       "permission": "tech.qc_pass",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/serial-units/[id]/data-wipe/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "tech.data_wipe",
       "exemptReason": null
     },
     {

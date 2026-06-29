@@ -78,6 +78,7 @@ export function TechTable({ testedBy }: TechTableProps) {
       emptyMessage="No tech records found"
       scrollRef={scrollRef}
       renderRow={renderRow}
+      tableId="tech"
     />
   );
 }

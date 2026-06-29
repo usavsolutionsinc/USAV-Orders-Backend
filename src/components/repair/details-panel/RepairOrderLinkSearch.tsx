@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Loader2, Check, X, ExternalLink } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 
@@ -160,6 +161,7 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
           <OrderIdChip value={value} display={getLast4(value)} dense />
         </span>
         <div className="flex shrink-0 items-center gap-1">
+          {/* ds-raw-button: minimal inline microBadge text link (no chrome) — a DS Button would add height/padding */}
           <button
             type="button"
             onClick={startEditing}
@@ -169,15 +171,14 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
             Change
           </button>
           <HoverTooltip label="Clear order link" focusable={false}>
-            <button
+            <IconButton
               type="button"
               onClick={() => onChange('')}
               disabled={disabled}
-              aria-label="Clear order link"
-              className="flex h-5 w-5 items-center justify-center rounded text-emerald-600 hover:bg-emerald-100 disabled:opacity-40"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              ariaLabel="Clear order link"
+              icon={<X className="h-3.5 w-3.5 text-emerald-600" />}
+              className="flex h-5 w-5 items-center justify-center rounded hover:bg-emerald-100 disabled:opacity-40"
+            />
           </HoverTooltip>
         </div>
       </div>
@@ -211,17 +212,16 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
           <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-gray-400" />
         ) : value ? (
           <HoverTooltip label="Cancel" focusable={false}>
-            <button
+            <IconButton
               type="button"
               onClick={() => {
                 setEditing(false);
                 setOpen(false);
               }}
-              aria-label="Cancel order search"
-              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+              ariaLabel="Cancel order search"
+              icon={<X className="h-3.5 w-3.5 text-gray-400" />}
+              className="absolute right-1.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded hover:bg-gray-100"
+            />
           </HoverTooltip>
         ) : null}
       </div>
@@ -244,6 +244,7 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
             const date = formatDate(o.date);
             const active = i === highlight;
             return (
+              // ds-raw-button: multi-line text-left combobox option row (order # + customer/item) — not a Button shape
               <button
                 key={o.ecwidOrderId}
                 type="button"
@@ -274,6 +275,7 @@ export function RepairOrderLinkSearch({ value, onChange, disabled }: RepairOrder
           })}
 
           {showFreeText ? (
+            // ds-raw-button: text-left combobox "use as entered" option row (role=option) — not a Button shape
             <button
               type="button"
               role="option"

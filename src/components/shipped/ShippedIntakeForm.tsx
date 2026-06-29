@@ -4,6 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2, Lock, Check, AlertCircle } from '../Icons';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { Button } from '@/design-system/primitives';
 
 const INTAKE_MODE_ITEMS: HorizontalSliderItem[] = [
   { id: 'replacement', label: 'Replacement' },
@@ -185,23 +186,15 @@ export function ShippedIntakeForm({ onClose, onSubmit }: ShippedIntakeFormProps)
         />
       }
       footer={
-        <button
+        <Button
           type="button"
           onClick={handleSubmit}
-          disabled={(activeTab === 'replacement' ? !canSubmitReplacement : !canSubmitAddOrder) || isSubmitting}
-          className={SIDEBAR_INTAKE_SUBMIT_BUTTON_CLASS}
+          loading={isSubmitting}
+          disabled={activeTab === 'replacement' ? !canSubmitReplacement : !canSubmitAddOrder}
+          className={`${SIDEBAR_INTAKE_SUBMIT_BUTTON_CLASS} h-auto`}
         >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Submitting...
-            </span>
-          ) : activeTab === 'replacement' ? (
-            'Submit Order'
-          ) : (
-            'Add Order'
-          )}
-        </button>
+          {isSubmitting ? 'Submitting...' : activeTab === 'replacement' ? 'Submit Order' : 'Add Order'}
+        </Button>
       }
     >
       {activeTab === 'replacement' ? (

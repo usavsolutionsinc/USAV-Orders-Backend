@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Search, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { safeRandomUUID } from '@/lib/safe-uuid';
 
@@ -207,14 +209,12 @@ export function BinAddSkuSheet({
       className="fixed inset-0 z-panel flex flex-col bg-white"
     >
       <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
-        <button
-          type="button"
+        <IconButton
+          icon={selected ? '←' : <X className="mx-auto h-4 w-4" />}
           onClick={() => (selected ? setSelected(null) : onClose())}
-          aria-label="Back"
+          ariaLabel="Back"
           className="h-10 w-10 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          {selected ? '←' : <X className="mx-auto h-4 w-4" />}
-        </button>
+        />
         <div className="min-w-0 flex-1">
           <p className="text-micro font-black uppercase tracking-[0.16em] text-slate-500">
             Add to bin
@@ -274,7 +274,7 @@ export function BinAddSkuSheet({
                           sku,
                         })
                       }
-                      className="flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
+                      className="ds-raw-button flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-left shadow-sm active:bg-slate-50"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-sm font-black text-slate-900">
@@ -291,12 +291,11 @@ export function BinAddSkuSheet({
                           {row.stock ?? 0} on hand
                         </span>
                       ) : (
-                        <span
-                          className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-micro font-bold text-blue-700"
-                          title="Not yet in stock — will create the entry on first put"
-                        >
-                          Ecwid only
-                        </span>
+                        <HoverTooltip label="Not yet in stock — will create the entry on first put" asChild>
+                          <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-micro font-bold text-blue-700">
+                            Ecwid only
+                          </span>
+                        </HoverTooltip>
                       )}
                     </button>
                   </li>
@@ -341,26 +340,23 @@ export function BinAddSkuSheet({
           )}
 
           <div className="mt-6 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSelected(null)}
+            <Button
+              variant="secondary"
               disabled={busy}
-              className="rounded-md border border-slate-300 bg-white px-3 py-3 text-sm font-bold text-slate-700 active:bg-slate-50 disabled:opacity-40"
+              onClick={() => setSelected(null)}
+              className="h-11 w-full"
             >
               Back
-            </button>
-            <button
-              type="button"
-              disabled={busy || !qtyDraft.trim()}
+            </Button>
+            <Button
+              variant="primary"
+              loading={busy}
+              disabled={!qtyDraft.trim()}
               onClick={applyPut}
-              className="rounded-md bg-blue-600 px-3 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-40"
+              className="h-11 w-full"
             >
-              {busy ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : (
-                'Add'
-              )}
-            </button>
+              Add
+            </Button>
           </div>
         </main>
       )}

@@ -3,18 +3,20 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Search, X, PrinterAlt, DollarSign } from '../Icons';
 import { SourceOrderChip, TicketChip } from '../ui/CopyChip';
 import { RSRecord, type RepairTab } from '@/lib/neon/repair-service-queries';
 import { RepairDetailsPanel } from './RepairDetailsPanel';
-import WeekHeader from '@/components/ui/WeekHeader';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import { DateGroupHeader } from '@/components/ui/DateGroupHeader';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { useRepairsTable } from '@/hooks/useRepairs';
 import { formatPhoneNumber } from '@/utils/phone';
 import { toPSTDateKey } from '@/utils/date';
 import { mobileIconSize } from '@/design-system/tokens/touch';
+import { Button } from '@/design-system/primitives';
 
 interface RepairTableProps {
   filter: RepairTab;
@@ -182,7 +184,7 @@ export function RepairTable({ filter }: RepairTableProps) {
   return (
     <div className="flex h-full w-full bg-white relative">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <WeekHeader
+        <DateRangeHeader
           count={filteredRepairs.length}
           rightSlot={
             <div className="flex items-center gap-2">
@@ -190,6 +192,7 @@ export function RepairTable({ filter }: RepairTableProps) {
                 <div className="flex items-center gap-2 px-2 py-0.5 bg-orange-50 text-orange-700 rounded-lg border border-orange-100">
                   <Search className="w-3 h-3" />
                   <span className="text-eyebrow font-black uppercase tracking-widest">{search}</span>
+                  {/* ds-raw-button: dismiss embedded inside an orange filter chip; inherits the chip hue, not a DS variant */}
                   <button
                     onClick={clearSearch}
                     className="hover:text-orange-900 transition-colors"
@@ -200,12 +203,9 @@ export function RepairTable({ filter }: RepairTableProps) {
                 </div>
               )}
               {selectedRepair && (
-                <button
-                  onClick={() => setSelectedRepair(null)}
-                  className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg text-eyebrow font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20"
-                >
+                <Button variant="primary" size="sm" onClick={() => setSelectedRepair(null)}>
                   Close Panel
-                </button>
+                </Button>
               )}
             </div>
           }
@@ -314,29 +314,45 @@ export function RepairTable({ filter }: RepairTableProps) {
                               display={getLast4(repair.ticket_number)}
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
-                            className={`${rowActionButtonClass} hover:bg-blue-50 hover:text-blue-600`}
-                            title="View Repair Document"
-                          >
-                            <PrinterAlt className={mobileIconSize.inline} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void openSquarePayment(repair)}
-                            disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
-                            className={`${rowActionButtonClass} hover:bg-emerald-50 hover:text-emerald-600`}
-                            title={
+                          <HoverTooltip label="View Repair Document" focusable={false} asChild>
+                            {/* ds-raw-button: table row-action icon button — fixed h-8 w-8 keeps the trailing-column alignment */}
+                            <button
+                              type="button"
+                              onClick={() => window.open(`/api/repair-service/print/${repair.id}`, '_blank', 'noopener,noreferrer')}
+                              className={`${rowActionButtonClass} hover:bg-blue-50 hover:text-blue-600`}
+                              aria-label="View Repair Document"
+                            >
+                              <PrinterAlt className={mobileIconSize.inline} />
+                            </button>
+                          </HoverTooltip>
+                          <HoverTooltip
+                            label={
                               !canCreateSquarePayment(repair)
                                 ? 'Set source SKU or valid price to enable Square payment'
                                 : getRepairSourceSku(repair)
                                   ? 'Create Square payment link from matching catalog SKU'
-                                : 'Create Square payment link (price fallback)'
+                                  : 'Create Square payment link (price fallback)'
                             }
+                            focusable={false}
+                            asChild
                           >
-                            <DollarSign className={`${mobileIconSize.inline} ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
-                          </button>
+                            {/* ds-raw-button: table row-action icon button — fixed h-8 w-8 keeps the trailing-column alignment */}
+                            <button
+                              type="button"
+                              onClick={() => void openSquarePayment(repair)}
+                              disabled={!canCreateSquarePayment(repair) || payingRepairId === repair.id}
+                              className={`${rowActionButtonClass} hover:bg-emerald-50 hover:text-emerald-600`}
+                              aria-label={
+                                !canCreateSquarePayment(repair)
+                                  ? 'Set source SKU or valid price to enable Square payment'
+                                  : getRepairSourceSku(repair)
+                                    ? 'Create Square payment link from matching catalog SKU'
+                                    : 'Create Square payment link (price fallback)'
+                              }
+                            >
+                              <DollarSign className={`${mobileIconSize.inline} ${payingRepairId === repair.id ? 'animate-pulse' : ''}`} />
+                            </button>
+                          </HoverTooltip>
                         </div>
                       </motion.div>
                     ))}

@@ -1,5 +1,7 @@
 import { Check, Loader2, Trash2 } from '@/components/Icons';
-import { sectionLabel, tableHeader } from '@/design-system/tokens/typography/presets';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { tableHeader } from '@/design-system/tokens/typography/presets';
 import { matchesSkuSuffix } from './favorites-search';
 import type { FavoritesWorkspaceController } from './useFavoritesWorkspace';
 
@@ -35,7 +37,8 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
                     setSelectedProduct(product);
                     if (!draft.label.trim()) setDraft((prev) => ({ ...prev, label: product.name }));
                   }}
-                  className={`flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                  /* ds-raw-button: multi-line text-left product result row (name + price + sku, selection bg) — not a Button shape */
+                  className={`ds-raw-button flex w-full items-start gap-2 px-3 py-2 text-left transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
                 >
                   {isSelected && <Check className="mt-0.5 h-3 w-3 shrink-0 text-blue-600" />}
                   <div className="min-w-0 flex-1">
@@ -103,27 +106,24 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-2 pt-1">
-        <button
-          type="button"
-          onClick={f.resetDraft}
-          className={`inline-flex items-center justify-center rounded-2xl border border-gray-200 bg-white px-3 py-2 ${sectionLabel} transition-colors hover:bg-gray-100`}
-        >
+        <Button variant="secondary" size="md" onClick={f.resetDraft}>
           Cancel
-        </button>
+        </Button>
         <div className="flex items-center gap-2">
           {editingFavoriteId !== null && (
-            <button
-              type="button"
-              onClick={() => void f.handleDelete(editingFavoriteId)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-100 bg-red-50 text-red-400 transition-colors hover:border-red-300 hover:bg-red-100 hover:text-red-600"
-              aria-label="Delete favorite"
-              title="Delete favorite"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <HoverTooltip label="Delete favorite" asChild>
+              <IconButton
+                icon={<Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-600" />}
+                ariaLabel="Delete favorite"
+                onClick={() => void f.handleDelete(editingFavoriteId)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-100 bg-red-50 hover:border-red-300 hover:bg-red-100"
+              />
+            </HoverTooltip>
           )}
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Check className="h-4 w-4" />}
             onClick={f.handleSave}
             disabled={
               isSaving
@@ -132,11 +132,9 @@ export function FavoriteForm({ f }: { f: FavoritesWorkspaceController }) {
               || !draft.label.trim()
               || (searchSkuSuffixFilter ? !matchesSkuSuffix(selectedProduct.sku, searchSkuSuffixFilter) : false)
             }
-            className={`inline-flex items-center justify-center gap-1.5 rounded-2xl bg-blue-600 px-3 py-2 ${sectionLabel} text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500`}
           >
-            <Check className="h-4 w-4" />
             {isSaving ? 'Saving…' : editingFavoriteId !== null ? 'Update' : 'Save Favorite'}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

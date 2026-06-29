@@ -14,7 +14,9 @@ import {
 import { workflowStageBadge } from '@/lib/receiving/workflow-stages';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { ReceivingIdentityChips } from '@/components/receiving/ReceivingIdentityChips';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { ScanAgainBar } from '@/components/mobile/receiving/ScanAgainBar';
+import { Button } from '@/design-system/primitives';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -263,13 +265,14 @@ function LinePageInner() {
       <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           {cartonHref ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => router.push(cartonHref)}
-              className="text-xs font-bold text-blue-600 shrink-0"
+              className="shrink-0 text-blue-600 hover:text-blue-700"
             >
               ← Package
-            </button>
+            </Button>
           ) : (
             <span />
           )}
@@ -279,10 +282,14 @@ function LinePageInner() {
         {/* Slim identity row — mirrors the desktop ReceivingLineOrderRow:
             status dot + title, then a color-coded status/condition/qty line. */}
         <div className="mt-2 flex min-w-0 items-center gap-2">
-          <span
-            className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line?.workflow_status, received, expected)}`}
-            title={workflowStatusTableLabel(line?.workflow_status ?? 'EXPECTED')}
-          />
+          <HoverTooltip
+            label={workflowStatusTableLabel(line?.workflow_status ?? 'EXPECTED')}
+            asChild
+          >
+            <span
+              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(line?.workflow_status, received, expected)}`}
+            />
+          </HoverTooltip>
           <h1 className="truncate text-sm font-bold text-slate-900">
             {line?.item_name || line?.sku || `Line #${lineId}`}
           </h1>
@@ -343,30 +350,33 @@ function LinePageInner() {
             Test status
           </p>
           <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="lg"
               disabled={!!busy}
               onClick={() => postStatus('TEST_START')}
-              className="rounded-md bg-blue-600 px-3 py-3 text-sm font-bold text-white active:bg-blue-700 disabled:opacity-50"
+              className="h-12 w-full"
             >
               Start
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
               disabled={!!busy}
               onClick={() => postStatus('TEST_PASS')}
-              className="rounded-md bg-emerald-600 px-3 py-3 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-50"
+              className="h-12 w-full bg-emerald-600 shadow-emerald-600/25 hover:bg-emerald-500 active:bg-emerald-700"
             >
               Pass
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
               disabled={!!busy}
               onClick={() => postStatus('TEST_FAIL')}
-              className="rounded-md bg-rose-600 px-3 py-3 text-sm font-bold text-white active:bg-rose-700 disabled:opacity-50"
+              className="h-12 w-full"
             >
               Fail
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -389,18 +399,20 @@ function LinePageInner() {
               }}
               className="flex-1 rounded-md border border-slate-300 px-3 py-3 text-base font-mono font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
             />
-            <button
-              type="button"
+            <Button
+              variant="brand"
+              size="lg"
               disabled={!serialInput.trim() || !!busy}
               onClick={submitSerial}
-              className="rounded-md bg-slate-900 px-4 py-3 text-sm font-bold text-white active:bg-slate-800 disabled:opacity-50"
+              className="h-12"
             >
               Add
-            </button>
+            </Button>
           </div>
           {serials.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {serials.map((s) => (
+                // ds-allow-title: non-interactive chip showing the clipped last-4 serial; title reveals the full serial.
                 <span
                   key={s.id}
                   title={s.serial_number}
@@ -433,14 +445,15 @@ function LinePageInner() {
               }}
               className="flex-1 rounded-md border border-slate-300 px-3 py-3 text-base font-mono font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
             />
-            <button
-              type="button"
+            <Button
+              variant="brand"
+              size="lg"
               disabled={!binInput.trim() || !!busy}
               onClick={submitPutaway}
-              className="rounded-md bg-slate-900 px-4 py-3 text-sm font-bold text-white active:bg-slate-800 disabled:opacity-50"
+              className="h-12"
             >
               Stash
-            </button>
+            </Button>
           </div>
         </section>
 

@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Voicemail, Link2, Clock } from '@/components/Icons';
 import { EmptyState } from '@/design-system/primitives';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { cn } from '@/utils/_cn';
 import {
   VOICEMAIL_STATUS_ITEMS,
@@ -29,7 +30,7 @@ import { isNotConfigured, useVoicemails } from './useVoiceQueries';
  * deep-linkable) and the page body renders {@link VoicemailDetail}. One-row
  * anatomy: caller → time·mailbox meta → status dot + linked-ticket chip.
  */
-export function VoicemailQueue() {
+export function VoicemailQueue({ modeToggle = null }: { modeToggle?: ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedId = Number(searchParams.get('vm')) || null;
@@ -65,18 +66,14 @@ export function VoicemailQueue() {
         />
       </div>
 
-      <div className="shrink-0 px-2 py-2">
-        <HorizontalButtonSlider
-          variant="nav"
-          dense
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {modeToggle}
+        <SidebarNavOverlaySlider
           items={VOICEMAIL_STATUS_ITEMS}
           value={status}
           onChange={(id) => setStatus(id as VoicemailStatusFilter)}
           aria-label="Voicemail follow-up status"
         />
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto">
         {isLoading ? (
           <SkeletonList count={6} />
         ) : notConfigured ? (
@@ -116,7 +113,7 @@ export function VoicemailQueue() {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 border-t border-gray-100 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+      <div className="flex shrink-0 items-center gap-1.5 border-t border-gray-100 px-3 py-2 text-micro font-bold uppercase tracking-widest text-gray-400">
         <Voicemail className="h-3 w-3" />
         {openCount > 0 ? `${openCount} open follow-up${openCount === 1 ? '' : 's'}` : 'Follow-up queue'}
       </div>
@@ -151,20 +148,21 @@ function VoicemailRow({
         type="button"
         onClick={onSelect}
         className={cn(
-          'flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors',
+          'ds-raw-button flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors',
           selected ? 'bg-blue-50 ring-1 ring-inset ring-blue-400' : 'hover:bg-gray-50',
         )}
       >
-        <span
-          className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', tone.dot)}
-          title={VOICEMAIL_STATUS_LABEL[vm.followupStatus]}
-          aria-hidden
-        />
+        <HoverTooltip label={VOICEMAIL_STATUS_LABEL[vm.followupStatus]} asChild focusable={false}>
+          <span
+            className={cn('mt-1 h-2 w-2 shrink-0 rounded-full', tone.dot)}
+            aria-hidden
+          />
+        </HoverTooltip>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span
               className={cn(
-                'min-w-0 flex-1 truncate text-[12px] font-bold text-gray-900',
+                'min-w-0 flex-1 truncate text-label font-bold text-gray-900',
                 !vm.isRead && 'after:ml-1 after:inline-block after:h-1.5 after:w-1.5 after:rounded-full after:bg-blue-500 after:align-middle',
               )}
             >
@@ -176,13 +174,13 @@ function VoicemailRow({
               </span>
             ) : null}
           </span>
-          <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+          <span className="mt-0.5 flex items-center gap-1 truncate text-micro font-semibold uppercase tracking-widest text-gray-500">
             <Clock className="h-2.5 w-2.5 shrink-0 text-gray-300" />
             {meta}
             {number ? <span className="text-gray-400">· {number}</span> : null}
           </span>
           {vm.transcriptPreview ? (
-            <span className="mt-1 block truncate text-[11px] leading-4 text-gray-500">
+            <span className="mt-1 block truncate text-caption leading-4 text-gray-500">
               “{vm.transcriptPreview}”
             </span>
           ) : null}

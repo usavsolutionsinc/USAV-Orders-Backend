@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Check, Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives/Button';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { AlertRow } from '@/hooks/useInventorySearch';
 import { InventoryDetailPanelShell } from './InventoryDetailPanelShell';
@@ -142,19 +143,18 @@ export function AlertDetailsPanel({ alertId, onClose }: AlertDetailsPanelProps) 
                                 {ackError ? (
                                     <p className={`${microBadge} text-red-600`}>{ackError}</p>
                                 ) : null}
-                                <button
+                                <Button
                                     type="button"
+                                    variant="primary"
+                                    size="md"
+                                    icon={<Check />}
+                                    loading={acking}
                                     disabled={acking}
                                     onClick={handleAck}
-                                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+                                    className="bg-emerald-600 text-white shadow-none hover:bg-emerald-700 active:bg-emerald-700"
                                 >
-                                    {acking ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Check className="h-4 w-4" />
-                                    )}
                                     {acking ? 'Acknowledging…' : 'Acknowledge'}
-                                </button>
+                                </Button>
                             </div>
                         )}
                     </section>

@@ -5,14 +5,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getOrdersChannelName, safeChannelName } from '@/lib/realtime/channels';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
-import { OrdersQueueTable } from '@/components/dashboard/OrdersQueueTable';
-import { parseOrdersQueueSort } from '@/components/dashboard/orders-queue/helpers';
 import { UnshippedShelfBoard } from '@/components/unshipped/UnshippedShelfBoard';
-import { dispatchCloseShippedDetails, dispatchOpenShippedDetails } from '@/utils/events';
+import { OrdersFirstRunEmptyState } from '@/components/dashboard/OrdersFirstRunEmptyState';
+import { dispatchOpenShippedDetails } from '@/utils/events';
 import { unshippedOrdersQuery } from '@/lib/queries/dashboard-queries';
 import { useAblyChannel } from '@/hooks/useAblyChannel';
 import { useAuth } from '@/contexts/AuthContext';
-import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
 import { deriveFulfillmentState, type FulfillmentState } from '@/lib/unshipped-state';
 
 export interface UnshippedTableProps extends DashboardSearchSectionProps {
@@ -60,8 +58,6 @@ export function UnshippedTable({
   packedBy,
   testedBy,
   strictSearchScope = false,
-  bannerTitle,
-  bannerSubtitle,
   searchEmptyTitle = 'No orders found',
   searchResultLabel = 'unshipped orders',
   clearSearchLabel = 'Show All Unshipped Orders',
@@ -90,13 +86,9 @@ export function UnshippedTable({
     stageParam === 'pending' ? 'pending'
       : stageParam === 'tested' ? 'tested'
         : 'all';
-  // Layout switch (`?layout=board`) — the shelf-board pipeline view. Default is
-  // the dense queue table; the board is the axis-flipped overview that coexists
-  // with the right details slider.
-  const layout = String(searchParams.get('layout') || '').toLowerCase() === 'board' ? 'board' : 'table';
-  // Sort order from the sidebar Sort control (`?sort`); default keeps priority.
-  // Supports priority | newest | deadline | price | staff.
-  const sortOrder = parseOrdersQueueSort(searchParams.get('sort'));
+  // The Unshipped queue is board-only: a status-lane pipeline (PENDING / TESTED /
+  // BLOCKED) that coexists with the right details slider. Per-lane sort lives in
+  // the board (persisted per staffer), so there is no page-level sort/layout fork.
   // Click-to-filter from the status legend (`?ustatus`) — exact derived pre-dock
   // state. Composes on top of the coarse `?stage` facet.
   const statusFilter = String(searchParams.get('ustatus') || '').trim().toUpperCase() as FulfillmentState | '';
@@ -262,46 +254,38 @@ export function UnshippedTable({
       })
     : stageRecords;
 
-  if (layout === 'board') {
+  // First-run teaching state: a brand-new org with zero unshipped orders and no
+  // active search/filter sees the "connect a sales channel" CTA instead of three
+  // empty lanes that read as broken. Any active search/status/staff filter falls
+  // through to the board, which owns its own typed "no matches" empty per lane.
+  const isFirstRunEmpty =
+    !query.isLoading &&
+    allRecords.length === 0 &&
+    !searchQuery &&
+    !statusFilter &&
+    staffId === undefined;
+
+  if (isFirstRunEmpty) {
     return (
-      <UnshippedShelfBoard
-        records={records}
-        loading={query.isLoading}
-        searchValue={searchQuery}
-        onOpenRecord={(record) => {
-          dispatchOpenShippedDetails(record, 'queue');
-        }}
-        onClearSearch={clearSearch}
-        searchEmptyTitle={searchEmptyTitle}
-        searchResultLabel={searchResultLabel}
-        clearSearchLabel={clearSearchLabel}
-      />
+      <div className="flex h-full w-full items-center justify-center bg-white p-6">
+        <OrdersFirstRunEmptyState />
+      </div>
     );
   }
 
   return (
-    <OrdersQueueTable
+    <UnshippedShelfBoard
       records={records}
-      queueMode="fulfillment"
-      sort={sortOrder}
-      selectMode={selectMode}
-      selectionScope={DASHBOARD_ORDERS_SELECTION_SCOPE}
       loading={query.isLoading}
-      isRefreshing={query.isFetching && !query.isLoading}
       searchValue={searchQuery}
-      onClearSearch={clearSearch}
-      emptyMessage="No unshipped orders"
-      searchEmptyTitle={searchEmptyTitle}
-      searchResultLabel={searchResultLabel}
-      clearSearchLabel={clearSearchLabel}
-      bannerTitle={bannerTitle}
-      bannerSubtitle={bannerSubtitle}
+      selectMode={selectMode}
       onOpenRecord={(record) => {
         dispatchOpenShippedDetails(record, 'queue');
       }}
-      onCloseRecord={() => {
-        dispatchCloseShippedDetails();
-      }}
+      onClearSearch={clearSearch}
+      searchEmptyTitle={searchEmptyTitle}
+      searchResultLabel={searchResultLabel}
+      clearSearchLabel={clearSearchLabel}
     />
   );
 }

@@ -398,11 +398,12 @@ function QcSidebarPicker({ query }: { query: string }) {
             const isSelected = selectedSkuId === String(item.id);
             return (
               <li key={item.id}>
+                {/* ds-raw-button: catalog picker list-row (image + title/sku + selected check), one-row anatomy — not the Button primitive shape */}
                 <button
                   type="button"
                   onClick={() => handleSelect(item)}
                   aria-current={isSelected}
-                  className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors ${
+                  className={`ds-raw-button flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors ${
                     isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
                   }`}
                 >
@@ -494,11 +495,12 @@ function KitPartsPicker({ query }: { query: string }) {
             const isSelected = selectedSkuId === String(item.id);
             return (
               <li key={item.id}>
+                {/* ds-raw-button: catalog picker list-row (image + title/sku + selected check), one-row anatomy — not the Button primitive shape */}
                 <button
                   type="button"
                   onClick={() => handleSelect(item)}
                   aria-current={isSelected}
-                  className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors ${
+                  className={`ds-raw-button flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors ${
                     isSelected ? 'bg-blue-50' : 'hover:bg-blue-50'
                   }`}
                 >
@@ -623,10 +625,11 @@ interface ProductRowProps {
 function ProductRow({ item, onPick }: ProductRowProps) {
   return (
     <li>
+      {/* ds-raw-button: catalog picker list-row (image + title/sku), one-row anatomy — not the Button primitive shape */}
       <button
         type="button"
         onClick={() => onPick(item.sku)}
-        className={`flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
+        className={`ds-raw-button flex w-full items-center gap-3 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-gray-50 ring-1 ring-gray-200">
           {item.image_url ? (

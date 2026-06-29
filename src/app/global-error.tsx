@@ -78,6 +78,7 @@ export default function GlobalError({
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button
               type="button"
+              className="ds-raw-button"
               onClick={() => reset()}
               style={{
                 height: '2.75rem',
@@ -97,6 +98,7 @@ export default function GlobalError({
             </button>
             <button
               type="button"
+              className="ds-raw-button"
               onClick={() => {
                 window.location.href = '/';
               }}

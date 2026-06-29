@@ -94,26 +94,26 @@ export function ScanResultRow({
           )}
           <div className="mt-0.5 flex items-center gap-2">
             {item.serial && (
-              <span className="max-w-[44%] truncate font-mono text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+              <span className="max-w-[44%] truncate font-mono text-micro font-bold uppercase tracking-wide text-emerald-600">
                 {item.serial}
               </span>
             )}
             {item.subtitle && (
-              <span className="truncate font-mono text-[10px] font-bold uppercase tracking-wide text-blue-400">
+              <span className="truncate font-mono text-micro font-bold uppercase tracking-wide text-blue-400">
                 {item.subtitle}
               </span>
             )}
             <span
-              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${STATE_PILL[item.state]}`}
+              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ${STATE_PILL[item.state]}`}
             >
               {item.state === 'ok' ? <Check className="mr-1 h-2.5 w-2.5" /> : null}
               {item.state === 'urgent' ? <Zap className="mr-1 h-2.5 w-2.5" /> : null}
               {item.statusLabel}
             </span>
             {item.meta && (
-              <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-blue-300">{item.meta}</span>
+              <span className="shrink-0 text-eyebrow font-bold uppercase tracking-wider text-blue-300">{item.meta}</span>
             )}
-            <span className="shrink-0 text-[9px] font-bold uppercase text-blue-200">
+            <span className="shrink-0 text-eyebrow font-bold uppercase text-blue-200">
               {item.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
@@ -130,7 +130,7 @@ export function ScanResultRow({
           {inner}
         </Link>
       ) : onClick ? (
-        <button type="button" onClick={onClick} className="pointer-events-auto block w-full text-left">
+        <button type="button" onClick={onClick} className="ds-raw-button pointer-events-auto block w-full text-left">
           {inner}
         </button>
       ) : (

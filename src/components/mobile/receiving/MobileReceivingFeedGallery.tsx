@@ -118,7 +118,7 @@ export function MobileReceivingFeedGallery({
         <button
           type="button"
           onClick={onClose}
-          className="absolute inset-0"
+          className="ds-raw-button absolute inset-0"
           aria-label="Dismiss"
         />
       </div>,

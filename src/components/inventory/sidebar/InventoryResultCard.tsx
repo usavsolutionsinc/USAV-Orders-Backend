@@ -1,6 +1,8 @@
 'use client';
 
 import { Check, Copy } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import type { InventoryResultRow } from '@/hooks/useInventorySearch';
 
@@ -144,11 +146,12 @@ export function InventoryResultCard({
 
     return (
         <div className="relative group/card">
+            {/* ds-raw-button: text-left master-detail picker row, not a DS Button */}
             <button
                 type="button"
                 onClick={onClick}
                 className={[
-                    'w-full text-left p-3 rounded-xl border transition-all group',
+                    'ds-raw-button w-full text-left p-3 rounded-xl border transition-all group',
                     isActive
                         ? 'border-blue-400 bg-blue-50'
                         : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50',
@@ -169,23 +172,23 @@ export function InventoryResultCard({
                     <p className={`${microBadge} font-mono text-gray-500 truncate`}>{body.meta}</p>
                 </div>
             </button>
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onCopy(body.copyText);
-                }}
-                className={[
-                    'absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10',
-                    copied
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                        : 'bg-white border-gray-100 text-gray-400 hover:text-blue-600 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm',
-                ].join(' ')}
-                title="Copy identifier"
-                aria-label="Copy identifier"
-            >
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            </button>
+            <HoverTooltip label="Copy identifier" asChild>
+                <IconButton
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCopy(body.copyText);
+                    }}
+                    ariaLabel="Copy identifier"
+                    tone="accent"
+                    icon={copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    className={[
+                        'absolute top-2 left-2 p-1.5 rounded-lg border transition-all z-10 flex items-center justify-center',
+                        copied
+                            ? 'bg-emerald-50 border-emerald-200'
+                            : 'bg-white border-gray-100 hover:border-blue-200 opacity-0 group-hover/card:opacity-100 shadow-sm',
+                    ].join(' ')}
+                />
+            </HoverTooltip>
         </div>
     );
 }

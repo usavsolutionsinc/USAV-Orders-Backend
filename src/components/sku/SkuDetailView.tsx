@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { Loader2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { SlideOverBackdrop } from '@/components/ui/SlideOverBackdrop';
 import DeleteButton from '@/components/ui/DeleteButton';
 import { useSkuDetailView } from './sku-detail/useSkuDetailView';
@@ -54,9 +55,9 @@ export default function SkuDetailView({ sku, variant = 'page', onClose }: SkuDet
     return wrapPanel(
       <div className="flex h-full flex-col items-center justify-center bg-gray-50 px-6">
         <p className="mb-4 text-sm font-bold text-red-600">{c.error}</p>
-        <button onClick={c.handleClose} className="text-sm font-bold text-blue-600 underline">
+        <Button variant="ghost" onClick={c.handleClose} className="text-sm font-bold text-blue-600 underline">
           Back to SKU Stock
-        </button>
+        </Button>
       </div>,
     );
   }

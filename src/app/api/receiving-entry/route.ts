@@ -115,7 +115,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
         const valuesByColumn: Record<string, any> = {
             [dateColumn]: now,
-            receiving_tracking_number: trackingNumber,
+            // Legacy receiving_tracking_number dropped — tracking lives in STN
+            // (registered into shipment_id just below).
             shipment_id: shipment?.id ?? null,
             carrier: detectedCarrier,
             source,
@@ -362,14 +363,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
         const result = await tenantQuery(
             orgId,
             `SELECT
-                id,
-                to_char(${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
-                receiving_tracking_number AS tracking,
-                carrier,
-                ${countExpr} AS quantity
-             FROM receiving
-             WHERE receiving_tracking_number IS NOT NULL AND receiving_tracking_number != ''
-             ORDER BY id DESC
+                r.id,
+                to_char(r.${dateColumn}::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS timestamp,
+                stn.tracking_number_raw AS tracking,
+                r.carrier,
+                ${countExpr.replace(/\bquantity\b/g, 'r.quantity')} AS quantity
+             FROM receiving r
+             LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+             WHERE r.shipment_id IS NOT NULL
+             ORDER BY r.id DESC
              LIMIT $1 OFFSET $2`,
             [limit, offset]
         );

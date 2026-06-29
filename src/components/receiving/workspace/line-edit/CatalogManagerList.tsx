@@ -20,6 +20,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Check, ChevronDown, ChevronUp, Loader2, Pencil, Plus, Settings, Trash2, X } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { platformsQuery, typesQuery } from '@/lib/queries/catalog-queries';
 import type { PlatformRow, TypeRow } from '@/lib/neon/catalog-queries';
 import { useInvalidateCatalog } from '@/hooks/useCatalog';
@@ -166,24 +168,22 @@ export function CatalogManagerList({
               <li key={e.id} className="rounded-lg border border-gray-200 bg-white">
               <div className="flex items-center gap-2 px-2.5 py-1.5">
                 <div className="flex flex-col">
-                  <button
+                  <IconButton
                     type="button"
                     disabled={i === 0 || busyId != null}
                     onClick={() => void move(i, -1)}
-                    aria-label="Move up"
+                    ariaLabel="Move up"
+                    icon={<ChevronUp className="h-3.5 w-3.5" />}
                     className="text-gray-300 hover:text-gray-600 disabled:opacity-30"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
+                  />
+                  <IconButton
                     type="button"
                     disabled={i === active.length - 1 || busyId != null}
                     onClick={() => void move(i, 1)}
-                    aria-label="Move down"
+                    ariaLabel="Move down"
+                    icon={<ChevronDown className="h-3.5 w-3.5" />}
                     className="text-gray-300 hover:text-gray-600 disabled:opacity-30"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
+                  />
                 </div>
 
                 {isEditing ? (
@@ -212,57 +212,54 @@ export function CatalogManagerList({
                   <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                 ) : isEditing ? (
                   <>
-                    <button
+                    <IconButton
                       type="button"
                       onClick={() => void saveRename(e.id)}
-                      aria-label="Save"
+                      ariaLabel="Save"
+                      icon={<Check className="h-4 w-4" />}
                       className="rounded p-1 text-emerald-600 hover:bg-emerald-50"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
+                    />
+                    <IconButton
                       type="button"
                       onClick={() => setEditingId(null)}
-                      aria-label="Cancel"
+                      ariaLabel="Cancel"
+                      icon={<X className="h-4 w-4" />}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    />
                   </>
                 ) : (
                   <>
                     {bindingsOn ? (
-                      <button
-                        type="button"
-                        onClick={() => setExpandedId(expanded ? null : e.id)}
-                        aria-label={`${expanded ? 'Hide' : 'Edit'} bindings for ${e.label}`}
-                        aria-expanded={expanded}
-                        title="Account & workflow bindings"
-                        className={`rounded p-1 hover:bg-gray-100 ${expanded ? 'text-blue-600' : 'text-gray-400 hover:text-gray-700'}`}
-                      >
-                        <Settings className="h-3.5 w-3.5" />
-                      </button>
+                      <HoverTooltip label="Account & workflow bindings" asChild>
+                        <IconButton
+                          type="button"
+                          onClick={() => setExpandedId(expanded ? null : e.id)}
+                          ariaLabel={`${expanded ? 'Hide' : 'Edit'} bindings for ${e.label}`}
+                          aria-expanded={expanded}
+                          icon={<Settings className="h-3.5 w-3.5" />}
+                          className={`rounded p-1 hover:bg-gray-100 ${expanded ? 'text-blue-600' : 'text-gray-400 hover:text-gray-700'}`}
+                        />
+                      </HoverTooltip>
                     ) : null}
-                    <button
+                    <IconButton
                       type="button"
                       onClick={() => {
                         setEditingId(e.id);
                         setEditLabel(e.label);
                       }}
-                      aria-label={`Rename ${e.label}`}
+                      ariaLabel={`Rename ${e.label}`}
+                      icon={<Pencil className="h-3.5 w-3.5" />}
                       className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void setActive(e, false)}
-                      aria-label={`${e.isSystem ? 'Hide' : 'Remove'} ${e.label}`}
-                      title={e.isSystem ? 'Hide (restorable below)' : 'Remove'}
-                      className="rounded p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    />
+                    <HoverTooltip label={e.isSystem ? 'Hide (restorable below)' : 'Remove'} asChild>
+                      <IconButton
+                        type="button"
+                        onClick={() => void setActive(e, false)}
+                        ariaLabel={`${e.isSystem ? 'Hide' : 'Remove'} ${e.label}`}
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        className="rounded p-1 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                      />
+                    </HoverTooltip>
                   </>
                 )}
               </div>
@@ -290,13 +287,15 @@ export function CatalogManagerList({
                 {busyId === e.id ? (
                   <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
                 ) : (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => void setActive(e, true)}
-                    className="rounded px-2 py-0.5 text-mini font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
+                    className="h-auto rounded px-2 py-0.5 text-mini font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50"
                   >
                     Restore
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
@@ -316,15 +315,18 @@ export function CatalogManagerList({
           placeholder={editable ? `New ${kind}…` : 'Apply the migration to add'}
           className={`${TEXT_INPUT} flex-1 disabled:cursor-not-allowed disabled:opacity-60`}
         />
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={() => void add()}
           disabled={!editable || !adding.trim() || busyId != null}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-mini font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          loading={busyId === 'new'}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          className="text-mini font-bold uppercase tracking-wider"
         >
-          {busyId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
           Add
-        </button>
+        </Button>
       </div>
     </div>
   );

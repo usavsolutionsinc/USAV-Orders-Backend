@@ -23,7 +23,7 @@
 import { useRef, useState } from 'react';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { SkeletonList } from '@/design-system/components/Skeletons';
-import WeekHeader from '@/components/ui/WeekHeader';
+import DateRangeHeader from '@/components/ui/DateRangeHeader';
 import { IncomingPaneHeader } from '@/components/sidebar/receiving/IncomingPaneHeader';
 import { computeWeekRange } from '@/utils/date';
 
@@ -35,6 +35,8 @@ import { useReceivingTableNavigation } from '@/components/station/useReceivingTa
 import { useReceivingDeepLink } from '@/components/station/useReceivingDeepLink';
 import { useReceivingAutoWeek } from '@/components/station/useReceivingAutoWeek';
 import { ReceivingGroupedList } from '@/components/station/ReceivingGroupedList';
+import { TableColumnConfigProvider } from '@/components/ui/table-column-config/TableColumnConfig';
+import { ColumnConfigButton } from '@/components/ui/table-column-config/ColumnConfigButton';
 
 // ── Public re-exports (preserve the historical import surface) ──────────────
 export type { ReceivingView } from '@/lib/receiving/receiving-views';
@@ -110,6 +112,7 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
   const emptyMessage = mode.emptyMessage(modeContext);
 
   return (
+    <TableColumnConfigProvider tableId="receiving">
     <div className="flex h-full min-w-0 overflow-hidden bg-white">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {isIncomingMode ? (
@@ -123,15 +126,16 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
             page={incomingPage}
           />
         ) : (
-          <WeekHeader
+          <DateRangeHeader
             count={getWeekCount()}
+            columns={<ColumnConfigButton iconOnly />}
             weekRange={weekRange}
             weekOffset={weekOffset}
             onPrevWeek={() => setWeekOffset(weekOffset + 1)}
             onNextWeek={() => setWeekOffset(Math.max(0, weekOffset - 1))}
           />
         )}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
+        <div ref={scrollRef} data-testid="column-table-body" className="min-h-0 flex-1 overflow-auto">
           {isLoading && localRows.length === 0 ? (
             <div className="p-3">
               <SkeletonList count={12} type="row" />
@@ -156,5 +160,6 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
         </div>
       </div>
     </div>
+    </TableColumnConfigProvider>
   );
 }

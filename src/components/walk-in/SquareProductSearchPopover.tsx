@@ -17,6 +17,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Package, X } from '@/components/Icons';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { Button, IconButton } from '@/design-system/primitives';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { formatCentsToDollars, parsePriceToMinorUnits } from '@/lib/square/client';
 import type { SquareCatalogItem } from '@/hooks/useSquareCatalog';
@@ -179,28 +181,27 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
           {/* Header: manual toggle + close */}
           <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
             {manualMode ? (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
                   setManualMode(false);
                   setManualTitle('');
                   setManualPrice('');
                 }}
-                className={`${microBadge} rounded px-2 py-1 text-emerald-700 transition-colors hover:bg-emerald-50`}
+                className={`${microBadge} rounded px-2 py-1 text-emerald-700 hover:bg-emerald-50`}
               >
                 ← Back to catalog search
-              </button>
+              </Button>
             ) : (
               <span className={`${microBadge} text-gray-700`}>Search Square catalog</span>
             )}
-            <button
-              type="button"
+            <IconButton
               onClick={onClose}
-              aria-label="Close search"
-              className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
+              ariaLabel="Close search"
+              icon={<X className="h-4 w-4" />}
+              className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            />
           </div>
 
           {/* Search input — catalog flow */}
@@ -216,23 +217,25 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
                 size="compact"
                 hideUnderline
                 trailingPrefix={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualMode(true);
-                      setManualTitle('');
-                      setManualPrice('');
-                      setQuery('');
-                      setItems([]);
-                      setError(null);
-                      abortRef.current?.abort();
-                      setIsLoading(false);
-                    }}
-                    className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-emerald-200 bg-emerald-50/80 px-1.5 py-0.5 text-left text-[10px] font-semibold text-emerald-800 hover:bg-emerald-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
-                    title="Product not added yet?"
-                  >
-                    Product not added yet?
-                  </button>
+                  <HoverTooltip label="Product not added yet?" asChild>
+                    {/* ds-raw-button: text-left truncating constrained-width chip (max-w + truncate) — Button is justify-center and can't truncate its label the same way */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setManualMode(true);
+                        setManualTitle('');
+                        setManualPrice('');
+                        setQuery('');
+                        setItems([]);
+                        setError(null);
+                        abortRef.current?.abort();
+                        setIsLoading(false);
+                      }}
+                      className="max-w-[min(11rem,calc(100vw-200px))] shrink-0 truncate rounded-md border border-emerald-200 bg-emerald-50/80 px-1.5 py-0.5 text-left text-micro font-semibold text-emerald-800 hover:bg-emerald-100 sm:max-w-[14rem] sm:text-caption sm:leading-tight"
+                    >
+                      Product not added yet?
+                    </button>
+                  </HoverTooltip>
                 }
               />
             </div>
@@ -267,6 +270,7 @@ export function SquareProductSearchPopover({ onSelect, onClose }: SquareProductS
                   />
                 </div>
               </div>
+              {/* ds-raw-button: solid emerald CTA — no green Button variant (primary=blue, brand=navy); className bg override is unreliable vs the variant's own bg */}
               <button
                 type="button"
                 disabled={manualSubmitting || submittingId != null || !manualTitle.trim()}
@@ -333,6 +337,7 @@ interface SalesResultRowProps {
 function SalesResultRow({ name, sku, price, isSubmitting, disabled, onSelect }: SalesResultRowProps) {
   return (
     <li role="option" aria-selected={false}>
+      {/* ds-raw-button: composite text-left result row (thumbnail + multi-line name/sku + price), not a standard action button */}
       <button
         type="button"
         disabled={disabled || isSubmitting}

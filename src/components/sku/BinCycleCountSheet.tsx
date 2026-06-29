@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, Loader2 } from '@/components/Icons';
+import { Check } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { useAuth } from '@/contexts/AuthContext';
 import { safeRandomUUID } from '@/lib/safe-uuid';
 
@@ -147,14 +148,12 @@ export function BinCycleCountSheet({
       className="fixed inset-0 z-panelOverlay flex flex-col bg-slate-50"
     >
       <header className="border-b border-slate-200 bg-white px-4 py-3 flex items-center gap-2">
-        <button
-          type="button"
+        <IconButton
+          icon={<span className="text-sm font-bold text-slate-700">←</span>}
+          ariaLabel="Back"
           onClick={onClose}
-          aria-label="Back"
-          className="h-11 w-11 rounded-md border border-slate-300 bg-white text-sm font-bold text-slate-700 active:bg-slate-50"
-        >
-          ←
-        </button>
+          className="flex h-11 w-11 items-center justify-center rounded-md border border-slate-300 bg-white active:bg-slate-50"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-micro font-black uppercase tracking-[0.18em] text-slate-500">
             Cycle count
@@ -218,18 +217,16 @@ export function BinCycleCountSheet({
                     }
                     className="flex-1 rounded-md border border-slate-300 px-3 py-2.5 text-center font-mono text-base font-bold text-slate-900 focus:border-blue-500 focus:outline-none"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    loading={busyLineId === line.id}
                     disabled={busyLineId != null}
                     onClick={() => submit(line)}
-                    className="rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-40"
+                    className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700"
                   >
-                    {busyLineId === line.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'Submit'
-                    )}
-                  </button>
+                    Submit
+                  </Button>
                 </div>
               ) : (
                 <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-micro font-bold text-emerald-700">

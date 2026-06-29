@@ -22,7 +22,14 @@ export interface Entitlements {
   features: {
     fba: boolean;
     repair: boolean;
+    // Walk-in / point-of-sale (Square-backed). Growth+.
     walkIn: boolean;
+    // Sourcing / acquisition engine (saved searches, candidates, alerts). Growth+.
+    sourcing: boolean;
+    // Support console (Zendesk overview tile + console). Growth+.
+    support: boolean;
+    // AI chat / copilot assistant surface (/ai-chat + /api/ai/*). Growth+.
+    aiChat: boolean;
     aiCopilot: boolean;
     advancedRoles: boolean;          // editable roles + per-staff overrides
     automations: boolean;            // workflow builder (future)
@@ -63,7 +70,12 @@ export interface Entitlements {
 const STARTER_FEATURES: Entitlements['features'] = {
   fba: false,
   repair: false,
-  walkIn: true,
+  // Trial + Starter share this set. Walk-in / sourcing / support / AI chat are
+  // paid features unlocked at Growth+ (see GROWTH_FEATURES).
+  walkIn: false,
+  sourcing: false,
+  support: false,
+  aiChat: false,
   aiCopilot: false,
   advancedRoles: false,
   automations: false,
@@ -88,6 +100,11 @@ const GROWTH_FEATURES: Entitlements['features'] = {
   advancedRoles: true,
   aiCopilot: true,
   customBranding: true,
+  // Growth+ unlocks the paid feature set gated out of trial/starter.
+  walkIn: true,
+  sourcing: true,
+  support: true,
+  aiChat: true,
   // Growth unlocks NAS direct-write (the background mirror is free on all plans).
   nasArchive: true,
 };

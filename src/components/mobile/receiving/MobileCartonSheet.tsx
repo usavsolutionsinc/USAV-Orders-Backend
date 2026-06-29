@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Camera } from '@/components/Icons';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { MobileReceivingPhotoStrip } from '@/components/mobile/receiving/MobileReceivingPhotoStrip';
 import {
   OrderIdChip,
@@ -93,10 +94,11 @@ export function MobileCartonSheet({ row, staffId, open, onClose }: MobileCartonS
         {/* Header — mirrors MobileReceivingRow: title + meta on the left, chips on the right. */}
         <div className="flex flex-col gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span
-              className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
-              title={workflowLabel}
-            />
+            <HoverTooltip label={workflowLabel} asChild>
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${getStatusDotBg(row.workflow_status, qtyReceived, row.quantity_expected)}`}
+              />
+            </HoverTooltip>
             <div className="line-clamp-2 text-sm font-bold text-gray-900">
               {productTitle}
             </div>

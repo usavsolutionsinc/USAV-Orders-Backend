@@ -1,6 +1,8 @@
 'use client';
 
 import { FileText } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 /**
  * Paperwork toggle for the repair intake flow.
@@ -24,19 +26,18 @@ interface RepairPaperworkSheetProps {
 
 export function RepairPaperworkSheet({ active, onToggle }: RepairPaperworkSheetProps) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={active}
-      aria-label={active ? 'Hide repair paperwork' : 'View repair paperwork'}
-      title={active ? 'Hide repair paperwork' : 'View repair paperwork'}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
-        active
-          ? 'border-gray-900 bg-gray-900 text-white'
-          : 'border-gray-200 text-gray-500 hover:border-gray-900 hover:text-gray-900'
-      }`}
-    >
-      <FileText className="h-4 w-4" />
-    </button>
+    <HoverTooltip label={active ? 'Hide repair paperwork' : 'View repair paperwork'} asChild>
+      <IconButton
+        icon={<FileText className="h-4 w-4" />}
+        onClick={onToggle}
+        aria-pressed={active}
+        ariaLabel={active ? 'Hide repair paperwork' : 'View repair paperwork'}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+          active
+            ? 'border-gray-900 bg-gray-900 text-white'
+            : 'border-gray-200 text-gray-500 hover:border-gray-900 hover:text-gray-900'
+        }`}
+      />
+    </HoverTooltip>
   );
 }

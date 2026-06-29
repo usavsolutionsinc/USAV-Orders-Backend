@@ -14,7 +14,7 @@ import { Link2 } from '@/components/Icons';
 
 // Mirrors IncomingAttachTrackingButton's real face (chain icon + size="chip").
 const addTrkFace = (
-  <button type="button" className="inline-flex shrink-0 items-center px-1.5 transition-colors">
+  <button type="button" className="ds-raw-button inline-flex shrink-0 items-center px-1.5 transition-colors">
     <AddValueChipFace label="+ TRK#" icon={<Link2 className="h-3.5 w-3.5 shrink-0" />} size="chip" />
   </button>
 );

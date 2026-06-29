@@ -1,6 +1,7 @@
 'use client';
 
 import { Trash2 } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { ShippedOrder } from '@/lib/neon/orders-queries';
 import { DashboardDetailsStack } from '@/components/shipped/stacks/DashboardDetailsStack';
@@ -159,19 +160,21 @@ export function ShippedDetailsBody({
             </section>
           ) : context === 'shipped' ? (
             <section className="mx-8 pt-2">
-              <button
+              <Button
                 type="button"
+                variant="danger"
+                size="lg"
                 onClick={onDeleteOrder}
                 disabled={isDeletingOrder}
-                className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+                className={`w-full rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
               >
-                <Trash2 className="w-3.5 h-3.5" />
                 {isDeletingOrder
                   ? 'Deleting...'
                   : isDeleteArmed
                     ? 'Click Again To Confirm'
                     : 'Delete'}
-              </button>
+              </Button>
             </section>
           ) : null}
         </div>
@@ -283,19 +286,21 @@ export function ShippedDetailsBody({
 
           {context === 'shipped' && (
             <section className="mx-8 pt-2">
-              <button
+              <Button
                 type="button"
+                variant="danger"
+                size="lg"
                 onClick={onDeleteOrder}
                 disabled={isDeletingOrder}
-                className={`w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+                className={`w-full rounded-xl bg-red-600 hover:bg-red-700 ${sectionLabel} text-white tracking-wider disabled:opacity-50`}
               >
-                <Trash2 className="w-3.5 h-3.5" />
                 {isDeletingOrder
                   ? 'Deleting...'
                   : isDeleteArmed
                     ? 'Click Again To Confirm'
                     : 'Delete'}
-              </button>
+              </Button>
             </section>
           )}
         </div>

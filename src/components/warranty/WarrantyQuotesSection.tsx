@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/utils/_cn';
+import { Button } from '@/design-system/primitives';
 import { useWarrantyMutations } from '@/hooks/useWarrantyMutations';
 import type { WarrantyQuoteRow } from '@/lib/warranty/types';
 import { warrantyQuoteToneClass } from '@/lib/warranty-quote-status';
@@ -22,8 +23,8 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
       {quotes.map((q) => (
         <li key={q.id} className="rounded-lg border border-gray-100 p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-[12px] text-gray-700">{q.quoteNumber}</span>
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', warrantyQuoteToneClass(q.status))}>
+            <span className="font-mono text-label text-gray-700">{q.quoteNumber}</span>
+            <span className={cn('rounded-full px-2 py-0.5 text-caption font-medium', warrantyQuoteToneClass(q.status))}>
               {q.status}
             </span>
           </div>
@@ -31,7 +32,7 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
           {q.lineItems.length > 0 && (
             <ul className="mt-1 space-y-0.5">
               {q.lineItems.map((li, i) => (
-                <li key={i} className="flex justify-between text-[11px] text-gray-500">
+                <li key={i} className="flex justify-between text-caption text-gray-500">
                   <span className="truncate">{li.label} × {li.qty}</span>
                   <span className="tabular-nums">${(Number(li.unitPrice) || 0).toFixed(2)}</span>
                 </li>
@@ -40,28 +41,26 @@ export function WarrantyQuotesSection({ claimId, quotes }: { claimId: number; qu
           )}
           <div className="mt-2 flex gap-2">
             {q.status === 'DRAFT' && (
-              <button type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'SENT')}
-                className="rounded-md border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <Button variant="secondary" size="sm" type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'SENT')}>
                 Mark sent
-              </button>
+              </Button>
             )}
             {q.status === 'SENT' && (
               <>
-                <button type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'ACCEPTED')}
-                  className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                <Button variant="primary" size="sm" type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'ACCEPTED')}
+                  className="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-700 shadow-emerald-600/25">
                   Accepted
-                </button>
-                <button type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'DECLINED')}
-                  className="rounded-md border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                </Button>
+                <Button variant="secondary" size="sm" type="button" disabled={quoteStatus.isPending} onClick={() => act(q.id, 'DECLINED')}>
                   Declined
-                </button>
+                </Button>
               </>
             )}
           </div>
         </li>
       ))}
       {quoteStatus.error && (
-        <li className="text-[11px] text-rose-600">
+        <li className="text-caption text-rose-600">
           {quoteStatus.error instanceof Error ? quoteStatus.error.message : 'Quote update failed.'}
         </li>
       )}

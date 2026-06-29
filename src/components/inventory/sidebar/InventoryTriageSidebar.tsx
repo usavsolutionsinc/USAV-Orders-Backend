@@ -150,14 +150,14 @@ export function InventoryTriageSidebar() {
                                 type="button"
                                 onClick={() => select(row.id)}
                                 className={cn(
-                                    'flex w-full flex-col items-start gap-1 rounded-lg px-2.5 py-2 text-left transition-colors',
+                                    'ds-raw-button flex w-full flex-col items-start gap-1 rounded-lg px-2.5 py-2 text-left transition-colors',
                                     active ? 'bg-blue-50 ring-1 ring-inset ring-blue-200' : 'hover:bg-gray-50',
                                 )}
                             >
                                 <div className="flex w-full items-center justify-between gap-2">
                                     <span
                                         className={cn(
-                                            'truncate font-mono text-[12px] font-semibold',
+                                            'truncate font-mono text-label font-semibold',
                                             active ? 'text-blue-900' : 'text-gray-900',
                                         )}
                                     >
@@ -165,14 +165,14 @@ export function InventoryTriageSidebar() {
                                     </span>
                                     <span
                                         className={cn(
-                                            'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ring-inset',
+                                            'shrink-0 rounded px-1.5 py-0.5 text-eyebrow font-bold uppercase tracking-wide ring-1 ring-inset',
                                             triageStatusChipClass(row.status),
                                         )}
                                     >
                                         {row.status}
                                     </span>
                                 </div>
-                                <div className="flex w-full items-center justify-between gap-2 text-[11px] text-gray-500">
+                                <div className="flex w-full items-center justify-between gap-2 text-caption text-gray-500">
                                     <span className="truncate">
                                         {row.exception_reason || 'Exception'}
                                         {row.source_station ? ` · ${row.source_station}` : ''}

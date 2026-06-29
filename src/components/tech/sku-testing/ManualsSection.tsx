@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ExternalLink, FileText, Plus, Printer, Unlink } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { toast } from '@/lib/toast';
 import { unpairManual } from './sku-testing-api';
 import { EYEBROW, SECTION, type Bundle } from './sku-testing-types';
@@ -10,10 +12,13 @@ export function ManualsSection({
   receivingLineId,
   bundle,
   onChanged,
+  embedded = false,
 }: {
   receivingLineId: number;
   bundle: Bundle;
   onChanged: () => Promise<void>;
+  /** Bare body for tab panels — drops the card chrome + section eyebrow. */
+  embedded?: boolean;
 }) {
   const [pairing, setPairing] = useState(false);
   const manuals = bundle.manuals;
@@ -30,17 +35,21 @@ export function ManualsSection({
     [receivingLineId, onChanged],
   );
 
+  const Wrapper = embedded ? 'div' : 'section';
+
   return (
-    <section className={SECTION}>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className={EYEBROW}>Manuals</h3>
-        <button
-          type="button"
+    <Wrapper className={embedded ? undefined : SECTION}>
+      <div className={`mb-3 flex items-center ${embedded ? 'justify-end' : 'justify-between'}`}>
+        {!embedded ? <h3 className={EYEBROW}>Manuals</h3> : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Plus />}
           onClick={() => setPairing((v) => !v)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-micro font-bold uppercase tracking-wider text-blue-600 transition-colors duration-150 hover:bg-blue-50"
+          className="text-blue-600 hover:bg-blue-50 hover:text-blue-700"
         >
-          <Plus className="h-3.5 w-3.5" /> Pair
-        </button>
+          Pair
+        </Button>
       </div>
 
       {pairing ? (
@@ -77,41 +86,45 @@ export function ManualsSection({
                 </div>
                 <div className="flex shrink-0 items-center gap-0.5">
                   {m.source_url ? (
-                    <a
-                      href={m.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-md p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
-                      title="Open / print manual"
-                    >
-                      <Printer className="h-4 w-4" />
-                    </a>
+                    <HoverTooltip label="Open / print manual" asChild>
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open / print manual"
+                        className="rounded-md p-1.5 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </a>
+                    </HoverTooltip>
                   ) : null}
                   {m.source_url ? (
-                    <a
-                      href={m.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                      title="Open in new tab"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
+                    <HoverTooltip label="Open in new tab" asChild>
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="Open in new tab"
+                        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </HoverTooltip>
                   ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void unpair(m.id)}
-                    className="rounded-md p-1.5 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
-                    title="Unpair manual"
-                  >
-                    <Unlink className="h-4 w-4" />
-                  </button>
+                  <HoverTooltip label="Unpair manual" asChild>
+                    <IconButton
+                      icon={<Unlink className="h-4 w-4" />}
+                      onClick={() => void unpair(m.id)}
+                      ariaLabel="Unpair manual"
+                      className="rounded-md p-1.5 text-gray-400 hover:bg-rose-50 hover:text-rose-600"
+                    />
+                  </HoverTooltip>
                 </div>
               </li>
             );
           })}
         </ul>
       )}
-    </section>
+    </Wrapper>
   );
 }

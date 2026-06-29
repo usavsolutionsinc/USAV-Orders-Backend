@@ -13,6 +13,7 @@
 import type { PoolClient } from 'pg';
 import { withTenantConnection } from '@/lib/tenancy/db';
 import { resolveSkuCatalogId, resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
+import { queuePendingSku } from '@/lib/inventory/pending-skus';
 import type { AmazonCredentials } from '@/lib/integrations/credentials';
 import {
   getOrdersGenerator,
@@ -174,10 +175,24 @@ async function processOrder(
     skuCatalogId = await resolveOrCreateSkuCatalogId({
       sku: sku || null, itemNumber: asin, productTitle: item?.Title || null,
       accountSource: account.accountName, orderId,
-    });
+    }, account.organizationId);
   } else {
     skuCatalogId = await resolveSkuCatalogId(sku || null, asin);
-    if (skuCatalogId == null) { result.skippedUntracked++; return; }
+    if (skuCatalogId == null) {
+      // Additive (§6 / Step D): an untracked or unmapped Amazon SKU (incl. the
+      // literal 'No data' channel junk) is a "create in Zoho" to-do. Queue it
+      // best-effort, then keep the existing skip behavior exactly — the order is
+      // still NOT imported when not importing all.
+      if (sku) {
+        try {
+          await queuePendingSku({ rawSku: sku, source: 'orders', suggestedTitle: item?.Title || null });
+        } catch (err) {
+          console.warn('amazon order-sync: queuePendingSku failed (non-fatal)', err);
+        }
+      }
+      result.skippedUntracked++;
+      return;
+    }
   }
 
   const fba = isFbaOrder(order);

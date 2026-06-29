@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { platformStyle } from './platform-style';
 import { usePairingQueue } from './usePairingQueue';
@@ -104,7 +105,7 @@ function PairingQueueRow({
       <button
         type="button"
         onClick={() => onSelect(item)}
-        className={`flex w-full items-start gap-2.5 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors ${
+        className={`ds-raw-button flex w-full items-start gap-2.5 ${SIDEBAR_GUTTER} py-2.5 text-left transition-colors ${
           selected ? 'bg-blue-50 border-l-2 border-l-blue-600' : 'hover:bg-gray-50'
         }`}
       >
@@ -120,21 +121,23 @@ function PairingQueueRow({
           <div className="flex items-center gap-1.5">
             <span className="truncate font-mono text-xs font-bold text-gray-900">{item.sku}</span>
             {item.isActive === false && (
-              <span
-                className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1 text-eyebrow font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200"
-                title="This canonical SKU is inactive in the catalog"
-              >
-                inactive
-              </span>
+              <HoverTooltip label="This canonical SKU is inactive in the catalog" asChild focusable={false}>
+                <span className="inline-flex shrink-0 items-center rounded bg-gray-100 px-1 text-eyebrow font-bold uppercase tracking-wider text-gray-500 ring-1 ring-gray-200">
+                  inactive
+                </span>
+              </HoverTooltip>
             )}
             <ConfidenceDot value={item.topConfidence} />
             {item.orderCount > 0 && (
-              <span
-                className="inline-flex items-center rounded bg-amber-50 px-1 text-eyebrow font-bold uppercase tracking-wider text-amber-700 ring-1 ring-amber-200"
-                title={`${item.orderCount} order line${item.orderCount === 1 ? '' : 's'} reference this SKU`}
+              <HoverTooltip
+                label={`${item.orderCount} order line${item.orderCount === 1 ? '' : 's'} reference this SKU`}
+                asChild
+                focusable={false}
               >
-                {formatVolume(item.orderCount)} ord
-              </span>
+                <span className="inline-flex items-center rounded bg-amber-50 px-1 text-eyebrow font-bold uppercase tracking-wider text-amber-700 ring-1 ring-amber-200">
+                  {formatVolume(item.orderCount)} ord
+                </span>
+              </HoverTooltip>
             )}
             <span className="text-micro font-semibold text-gray-400">
               {item.suggestionCount} suggested
@@ -184,11 +187,12 @@ function ConfidenceDot({ value }: { value: number }) {
     : value >= 60 ? 'bg-amber-500'
     : 'bg-slate-400';
   return (
-    <span
-      className={`inline-flex h-2 w-2 shrink-0 rounded-full ${color}`}
-      title={`Top confidence: ${value}`}
-      aria-label={`Top confidence ${value}`}
-    />
+    <HoverTooltip label={`Top confidence: ${value}`} asChild focusable={false}>
+      <span
+        className={`inline-flex h-2 w-2 shrink-0 rounded-full ${color}`}
+        aria-label={`Top confidence ${value}`}
+      />
+    </HoverTooltip>
   );
 }
 

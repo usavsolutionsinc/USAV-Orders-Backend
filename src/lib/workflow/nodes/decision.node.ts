@@ -9,13 +9,15 @@
  *
  * Thin-adapter law (workflow-node §"the one law"): this node does NO domain
  * work, NO DB, NO side effects. It ONLY routes — evaluate the table, emit one
- * port. Placement (moving the unit to a bin / channel / disposition) is the
- * DEFERRED Stage 1.x follow-up; that money/inventory-adjacent strangle stays in
- * applyTransition + the 22 hardcoded placement sites until then.
+ * port. When the matched rule carries a `then` PLACEMENT directive (a symbolic
+ * bin / lane / target-table), the node surfaces it on `NodeResult.data` so it
+ * flows into the run context for the ACTION layer to consume — but the node
+ * itself never resolves a bin or moves a unit. Resolving the symbol to a real
+ * `bin_id` and handing it to `applyTransition({ binId })` is `placement.ts`'s
+ * job; strangling the 22 hardcoded sites onto it is the per-site follow-up.
  *
- * TODO(decision-layer Stage 1.x): placement output — once the placement
- * strangle lands, the chosen rule may also carry a placement directive (bin /
- * channel) threaded through applyTransition. For now the node is route-only.
+ * A route-only rule (no `then`) emits NO `data` key, so a route-only decision
+ * table behaves byte-identically to the pre-placement node.
  * See docs/operations-studio/ — Track 1 decision/placement layer roadmap.
  *
  * Outputs come from `config.outputs` (per-instance ports the canvas draws), so a
@@ -25,8 +27,13 @@
  */
 
 import type { NodeContext, NodeDefinition, NodeOutputPort, NodeResult } from '../contract';
-import { evaluateDecision, type DecisionFacts, type DecisionRule } from '../decision-eval';
+import {
+  parseDecisionRules,
+  resolveDecision,
+  type DecisionFacts,
+} from '../decision-eval';
 import { registerNode } from '../registry';
+import { isDecisionEngineZen } from '@/lib/feature-flags';
 
 /** Default ports for a freshly dropped, not-yet-configured decision node. */
 const DEFAULT_OUTPUTS: NodeOutputPort[] = [
@@ -75,25 +82,9 @@ function configOutputs(config: Record<string, unknown>): NodeOutputPort[] {
     .filter((o) => o.id);
 }
 
-/** Read the rule table from config (defensively — config is operator JSON). */
-function configRules(config: Record<string, unknown>): DecisionRule[] {
-  const raw = config.rules;
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((r) => {
-      const row = (r ?? {}) as Record<string, unknown>;
-      const when = (row.when ?? {}) as Record<string, unknown>;
-      return {
-        id: String(row.id ?? ''),
-        when: {
-          grade: when.grade != null ? String(when.grade) : undefined,
-          channel: when.channel != null ? String(when.channel) : undefined,
-          disposition: when.disposition != null ? String(when.disposition) : undefined,
-        },
-        thenPort: String(row.thenPort ?? ''),
-      };
-    })
-    .filter((r) => r.thenPort);
+/** Read the rule table from config via the shared SoT parser (incl. `then`). */
+function configRules(config: Record<string, unknown>) {
+  return parseDecisionRules(config.rules);
 }
 
 /**
@@ -126,11 +117,28 @@ registerNode({
         ? ctx.config.defaultPort
         : null;
 
-    const port = evaluateDecision(rules, defaultPort, gatherFacts(ctx));
+    // In-house resolve always runs: it yields the matched rule's PLACEMENT
+    // directive (the port half may be overridden by ZEN below). Placement is not
+    // part of ZEN's expression compilation yet (Stage 2 follow-up); since the ZEN
+    // port is parity-tested byte-identical to the in-house port, the matched rule
+    // — and therefore its placement — is the same either way.
+    const facts = gatherFacts(ctx);
+    const outcome = resolveDecision(rules, defaultPort, facts);
+
+    // Stage 2 (§1.6): behind DECISION_ENGINE_ZEN, route through the GoRules ZEN
+    // expression engine; default OFF keeps the byte-identical in-house path. The
+    // ZEN evaluator self-guards (falls back to in-house on any WASM failure).
+    const port = isDecisionEngineZen()
+      ? await (await import('../decision-eval-zen')).evaluateDecisionZen(rules, defaultPort, facts)
+      : outcome.port;
     if (!port) {
       // No rule matched and no default — park rather than silently drop.
       return { output: 'awaiting', await: true };
     }
-    return { output: port };
+    // Surface the placement directive to the action layer via the run context.
+    // Route-only rule → no placement → no `data` key (byte-identical to before).
+    return outcome.placement
+      ? { output: port, data: { placement: outcome.placement } }
+      : { output: port };
   },
 });

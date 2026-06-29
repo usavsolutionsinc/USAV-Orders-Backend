@@ -23,7 +23,7 @@ import { getOrderPlatformColor, getOrderPlatformBorderColor } from '@/utils/orde
  */
 
 export interface StationChipColumnsOpts {
-  /** Platform label (already resolved via getOrderPlatformLabel). */
+  /** Platform label (already resolved via the catalog-aware useOrderChannelLabel). */
   plat: string;
   /** External product URL; gates the platform chip's click + color. */
   productUrl: string | null | undefined;

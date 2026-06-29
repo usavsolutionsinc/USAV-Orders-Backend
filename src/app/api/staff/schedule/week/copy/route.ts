@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { isTransientDbError, queryWithRetry } from '@/lib/db-retry';
 import { isMondayDateKey } from '@/lib/staff-availability';
@@ -84,7 +84,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                 ELSE true
               END AS is_allowed
           ) sar ON true
-          ${includeInactive ? '' : 'WHERE s.active = true'}
+          WHERE s.organization_id = $5${includeInactive ? '' : ' AND s.active = true'}
         )
         INSERT INTO staff_week_plans (
           staff_id, week_start_date, day_of_week, is_scheduled, source, created_by_staff_id, updated_at
@@ -139,7 +139,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
                 ELSE true
               END AS is_allowed
           ) sar ON true
-          ${includeInactive ? '' : 'WHERE s.active = true'}
+          WHERE s.organization_id = $5${includeInactive ? '' : ' AND s.active = true'}
         )
         INSERT INTO staff_week_plans (
           staff_id, week_start_date, day_of_week, is_scheduled, source, created_by_staff_id, updated_at
@@ -156,7 +156,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       `;
 
     const result = await queryWithRetry(
-      () => pool.query(sql, [fromWeekStartDate, toWeekStartDate, sourceLabel, createdByStaffId]),
+      () => tenantQuery(ctx.organizationId, sql, [fromWeekStartDate, toWeekStartDate, sourceLabel, createdByStaffId, ctx.organizationId]),
       { retries: 3, delayMs: 1000 }
     );
 

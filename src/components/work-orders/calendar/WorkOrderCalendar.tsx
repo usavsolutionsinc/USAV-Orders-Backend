@@ -74,7 +74,7 @@ export function WorkOrderCalendar() {
       </header>
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-medium text-red-700">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-label font-medium text-red-700">
           {error}
         </div>
       ) : null}
@@ -83,7 +83,7 @@ export function WorkOrderCalendar() {
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
-            className="bg-slate-50 px-2 py-1.5 text-center text-[10px] font-black uppercase tracking-wider text-slate-400"
+            className="bg-slate-50 px-2 py-1.5 text-center text-micro font-black uppercase tracking-wider text-slate-400"
           >
             {label}
           </div>
@@ -105,7 +105,7 @@ export function WorkOrderCalendar() {
             >
               <div className="mb-1 flex items-center justify-between">
                 <span
-                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-caption font-bold ${
                     isToday
                       ? 'bg-blue-600 text-white'
                       : inMonth
@@ -116,7 +116,7 @@ export function WorkOrderCalendar() {
                   {day.getDate()}
                 </span>
                 {dayRows.length > 0 ? (
-                  <span className="text-[9px] font-semibold text-slate-400">{dayRows.length}</span>
+                  <span className="text-eyebrow font-semibold text-slate-400">{dayRows.length}</span>
                 ) : null}
               </div>
 
@@ -125,7 +125,7 @@ export function WorkOrderCalendar() {
                   <WorkOrderCalendarChip key={row.id} row={row} onAssigned={refetch} />
                 ))}
                 {overflow > 0 ? (
-                  <span className="px-1 text-[9px] font-semibold text-slate-400">
+                  <span className="px-1 text-eyebrow font-semibold text-slate-400">
                     +{overflow} more
                   </span>
                 ) : null}
@@ -135,7 +135,7 @@ export function WorkOrderCalendar() {
         })}
       </div>
 
-      <p className="text-[11px] text-slate-400">
+      <p className="text-caption text-slate-400">
         Assignments are placed on their deadline day. Click any item to view or reassign — changes
         save to the work-order queue.
       </p>

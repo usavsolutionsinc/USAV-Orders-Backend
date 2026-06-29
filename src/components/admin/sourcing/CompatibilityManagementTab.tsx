@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { qk } from '@/queries/keys';
 import { AdminEmptyDetail } from '../shared';
 import { Layers } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 
 interface EdgeRow {
   id: number;
@@ -103,19 +104,21 @@ export function CompatibilityManagementTab() {
                   </td>
                   <td className="px-4 py-2 text-gray-700">{r.part_role}</td>
                   <td className="px-4 py-2">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-micro font-semibold text-slate-600">
                       {r.is_oem ? 'OEM ' : ''}{r.fit}
                     </span>
                   </td>
                   <td className="px-4 py-2 text-caption text-gray-500">{r.source}</td>
                   <td className="px-4 py-2 text-right">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       type="button"
                       onClick={() => remove.mutate(r.id)}
-                      className="rounded-md px-2 py-1 text-caption font-semibold text-red-600 hover:bg-red-50"
+                      className="text-rose-600 hover:text-rose-700"
                     >
                       Remove
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

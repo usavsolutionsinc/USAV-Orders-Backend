@@ -1,4 +1,5 @@
 import { FbaSelectedLineRow } from '@/components/fba/sidebar/FbaSelectedLineRow';
+import { Button } from '@/design-system/primitives';
 import { emitOpenQuickAddFnsku } from '@/components/fba/FbaQuickAddFnskuModal';
 import { PLAN_QTY_MAX, type BulkScanCandidate } from '@/lib/fba/plan-helpers';
 import type { StationTheme } from '@/utils/staff-colors';
@@ -69,15 +70,17 @@ export function FbaPendingPlanQueue({
         })}
       </div>
       <div className="flex w-full min-w-0 items-center justify-between gap-3 bg-white px-3 py-2.5">
-        <button
+        <Button
+          variant="ghost"
           type="button"
           disabled={isLoading}
           onClick={() => onCancel()}
-          className="shrink-0 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500 transition-colors hover:text-gray-900 disabled:opacity-50"
+          className="h-auto shrink-0 rounded-none px-0 text-eyebrow font-black uppercase tracking-[0.12em] text-gray-500 hover:bg-transparent hover:text-gray-900"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="primary"
           type="button"
           disabled={isLoading}
           onClick={() => {
@@ -90,10 +93,10 @@ export function FbaPendingPlanQueue({
             onCancel();
             onSubmit(submitRows);
           }}
-          className="shrink-0 rounded-md bg-purple-600 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+          className="h-auto shrink-0 rounded-md bg-purple-600 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.12em] text-white shadow-none hover:bg-purple-700"
         >
           {touchesExistingLine ? 'Update plan' : 'Add to plan'}
-        </button>
+        </Button>
       </div>
     </>
   );

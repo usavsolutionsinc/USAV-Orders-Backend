@@ -7,6 +7,8 @@ import { FbaUnallocatedBucket } from '@/components/fba/sidebar/FbaUnallocatedBuc
 import { FbaTrackingBucket } from '@/components/fba/sidebar/FbaTrackingBucket';
 import { FbaQtySplitPopover } from '@/components/fba/sidebar/FbaQtySplitPopover';
 import { microBadge } from '@/design-system/tokens/typography/presets';
+import { Button, IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { StationTheme } from '@/utils/staff-colors';
 import type { PairedReviewController } from './usePairedReview';
 
@@ -27,15 +29,15 @@ export function PairedReviewPanelLayout({
       {onToggleExpanded ? (
         <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
           <p className="text-micro font-black uppercase tracking-widest text-gray-500">Combine review</p>
-          <button
-            type="button"
-            onClick={onToggleExpanded}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Collapse combine review"
-            title="Collapse"
-          >
-            <ChevronUp className="h-4 w-4" />
-          </button>
+          <HoverTooltip label="Collapse" asChild>
+            <IconButton
+              type="button"
+              onClick={onToggleExpanded}
+              ariaLabel="Collapse combine review"
+              icon={<ChevronUp className="h-4 w-4" />}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md hover:bg-gray-100"
+            />
+          </HoverTooltip>
         </div>
       ) : null}
 
@@ -45,15 +47,15 @@ export function PairedReviewPanelLayout({
           <div className="flex items-center justify-between mb-1">
             <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">FBA Shipment ID</p>
             {c.lockedFbaId && (
-              <button
-                type="button"
-                onClick={c.handleDismissFbaId}
-                className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 transition-colors hover:bg-emerald-200"
-                aria-label="Done — clear FBA Shipment ID"
-                title="Done with this FBA Shipment ID"
-              >
-                <Check className="h-3 w-3" />
-              </button>
+              <HoverTooltip label="Done with this FBA Shipment ID" asChild>
+                <IconButton
+                  type="button"
+                  onClick={c.handleDismissFbaId}
+                  ariaLabel="Done — clear FBA Shipment ID"
+                  icon={<Check className="h-3 w-3" />}
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                />
+              </HoverTooltip>
             )}
           </div>
           <input
@@ -144,15 +146,17 @@ export function PairedReviewPanelLayout({
 
         {/* Add UPS Tracking bucket button */}
         {c.hasItems ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={c.addBucket}
             disabled={c.saving}
-            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 text-micro font-bold uppercase tracking-wider text-gray-500 transition-colors hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
+            icon={<Plus />}
+            className="w-full border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:bg-blue-50/50 hover:text-blue-600 disabled:opacity-40"
           >
-            <Plus className="h-3 w-3" />
             Add UPS Tracking Box
-          </button>
+          </Button>
         ) : null}
 
         {/* Error / success messages */}
@@ -161,6 +165,7 @@ export function PairedReviewPanelLayout({
 
         {/* Save button */}
         {c.hasAllocatedItems ? (
+          /* ds-raw-button: themed gradient solid CTA (blue→sky / emerald→teal) via chrome.primaryButton */
           <button
             type="button"
             onClick={() => void c.handleSaveAll()}

@@ -42,14 +42,15 @@ export function PhotoDateBreadcrumb({
   return (
     <nav
       aria-label="Date path"
-      className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-[12px] scrollbar-hide"
+      className="flex min-w-0 items-center gap-0.5 overflow-x-auto text-label scrollbar-hide"
     >
       <button
         type="button"
         disabled={!hasDate}
         onClick={() => onNavigate({ dateFrom: undefined, dateTo: undefined })}
         className={cn(
-          'flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-bold transition',
+          // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
+          'ds-raw-button flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-bold transition',
           hasDate ? 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' : 'text-gray-900',
         )}
       >
@@ -66,7 +67,8 @@ export function PhotoDateBreadcrumb({
               disabled={crumb.current}
               onClick={() => onNavigate(crumb.range)}
               className={cn(
-                'shrink-0 truncate rounded-md px-1.5 py-1 transition',
+                // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
+                'ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 transition',
                 crumb.current
                   ? 'font-bold text-gray-900'
                   : 'font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900',
@@ -98,10 +100,11 @@ function DateQuickChip({ label, onClick }: { label: string; onClick: () => void 
   return (
     <>
       <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+      {/* ds-raw-button: breadcrumb quick-jump nav crumb — not a DS Button */}
       <button
         type="button"
         onClick={onClick}
-        className="shrink-0 truncate rounded-md px-1.5 py-1 font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
+        className="ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 font-semibold text-gray-500 transition hover:bg-gray-50 hover:text-gray-900"
       >
         {label}
       </button>

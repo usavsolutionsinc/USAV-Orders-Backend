@@ -23,6 +23,10 @@ export const STATION_SCAN_BAR_INPUT_CLASS =
 export const STATION_SCAN_BAR_RIGHT_SLOT_CLASS =
   'absolute right-3 top-1/2 z-dropdown isolate flex -translate-y-1/2 items-center gap-1.5';
 
+/** Frosted-glass chip rail — floats over the input with no solid fill. */
+export const STATION_SCAN_BAR_FLOAT_RAIL_CLASS =
+  'rounded-lg border border-white/60 bg-white/40 px-1 py-0.5 shadow-[0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-md backdrop-saturate-150';
+
 /** Narrower right inset when mode rails / spinners sit inside the bar. */
 export const STATION_SCAN_BAR_RIGHT_CONTENT_CLASS = 'right-1.5 gap-0.5';
 
@@ -32,12 +36,13 @@ export const STATION_SCAN_BAR_MODE_BTN =
 export const STATION_SCAN_BAR_MODE_BTN_COMPACT =
   'flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60';
 
+/** Idle mode icon — no solid chip; the glass rail carries the surface. */
 export const STATION_SCAN_BAR_MODE_BTN_INACTIVE =
-  'relative z-base text-gray-400 hover:text-gray-600 hover:bg-gray-100';
+  'relative z-base text-gray-500 hover:text-gray-700';
 
-/** Armed mode — outer ring + z-dropdown so the tint reads above the input stroke. */
+/** Armed mode — translucent tint + ring; stays glassy rather than a flat fill. */
 export const STATION_SCAN_BAR_MODE_BTN_ARMED =
-  'relative z-dropdown ring-2 ring-current/40';
+  'relative z-dropdown backdrop-blur-sm ring-2 ring-current/35';
 
 export function stationScanBarFocusInputClass(theme: StationTheme): string {
   // Inset ring + box-border keep the entire focus affordance INSIDE the input's

@@ -8,6 +8,7 @@ import {
   framerTransitionMobile,
 } from '@/design-system/foundations/motion-framer';
 import { conditionBadgeTone, conditionGradeTableLabel } from '@/components/station/receiving-constants';
+import { Button } from '@/design-system/primitives';
 import type { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import type { PickTask } from './picker-shared';
 
@@ -67,14 +68,14 @@ export function PickerTaskCard({
         </div>
 
         {/* Progressive disclosure */}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={onToggleDetails}
-          className="mt-4 flex items-center gap-1 text-xs font-semibold text-slate-500 active:text-slate-700"
+          iconRight={<span aria-hidden="true">{detailsExpanded ? '▴' : '▾'}</span>}
+          className="mt-4 h-auto gap-1 px-0 text-xs text-slate-500"
         >
-          <span>{detailsExpanded ? 'Hide details' : 'Show details'}</span>
-          <span aria-hidden="true">{detailsExpanded ? '▴' : '▾'}</span>
-        </button>
+          {detailsExpanded ? 'Hide details' : 'Show details'}
+        </Button>
         <AnimatePresence initial={false}>
           {detailsExpanded && (
             <motion.dl

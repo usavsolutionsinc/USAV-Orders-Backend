@@ -1,4 +1,5 @@
 import { fmtTime } from './audit-receiving-format';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { KV } from './AuditPrimitives';
 import type { Carton } from './audit-receiving-types';
 
@@ -43,13 +44,14 @@ export function CartonsList({ cartons }: { cartons: Carton[] }) {
               <div className="mt-1 flex flex-wrap gap-2">
                 {c.photos.map((p) => (
                   <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="group">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.url}
-                      alt={p.photo_type ?? 'photo'}
-                      title={`${p.taken_by_name ?? 'Unknown'} · ${fmtTime(p.taken_at)}`}
-                      className="h-16 w-16 rounded-md border border-slate-200 object-cover transition group-hover:ring-2 group-hover:ring-emerald-300"
-                    />
+                    <HoverTooltip label={`${p.taken_by_name ?? 'Unknown'} · ${fmtTime(p.taken_at)}`} asChild focusable={false}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.url}
+                        alt={p.photo_type ?? 'photo'}
+                        className="h-16 w-16 rounded-md border border-slate-200 object-cover transition group-hover:ring-2 group-hover:ring-emerald-300"
+                      />
+                    </HoverTooltip>
                   </a>
                 ))}
               </div>

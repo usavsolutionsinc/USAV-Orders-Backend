@@ -2,6 +2,7 @@ import { requirePermission } from '@/lib/auth/page-guard';
 import { queryRaw } from '@/lib/neon-client';
 import Link from 'next/link';
 import { PageHeader } from '@/components/ui/pane-header';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 export const dynamic = 'force-dynamic';
 
@@ -243,13 +244,14 @@ export default async function ThroughputPage({
                         const intensity = count === 0 ? 0 : Math.max(0.1, count / maxHourly);
                         return (
                           <td key={iso} className="p-0.5">
-                            <div
-                              className="h-6 w-6 rounded"
-                              style={{
-                                backgroundColor: count === 0 ? '#f1f5f9' : `rgba(37, 99, 235, ${intensity.toFixed(2)})`,
-                              }}
-                              title={`${station} @ ${new Date(iso).toLocaleString()}: ${count}`}
-                            />
+                            <HoverTooltip label={`${station} @ ${new Date(iso).toLocaleString()}: ${count}`} asChild>
+                              <div
+                                className="h-6 w-6 rounded"
+                                style={{
+                                  backgroundColor: count === 0 ? '#f1f5f9' : `rgba(37, 99, 235, ${intensity.toFixed(2)})`,
+                                }}
+                              />
+                            </HoverTooltip>
                           </td>
                         );
                       })}

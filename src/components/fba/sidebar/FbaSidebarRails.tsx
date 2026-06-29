@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { Button } from '@/design-system/primitives';
 import { SidebarRailShell } from '@/components/sidebar/SidebarRailShell';
 import { FbaActiveShipments } from '@/components/fba/sidebar/FbaActiveShipments';
 import { useFbaBoardSelection } from '@/components/fba/hooks/useFbaBoardSelection';
@@ -55,6 +56,7 @@ function FbaItemRail({ statuses, eyebrowTitle }: { statuses: string[]; eyebrowTi
       onSelect={(r) => window.dispatchEvent(new CustomEvent(FBA_BOARD_SELECT_BY_FNSKU, { detail: r.fnsku }))}
       renderRowMain={(r) => (
         <>
+          {/* ds-allow-title: truncation-only fallback on a non-interactive clipped <p> */}
           <p className="truncate text-caption font-bold text-gray-900" title={r.display_title}>
             {r.display_title || r.fnsku}
           </p>
@@ -78,9 +80,9 @@ function FbaItemRail({ statuses, eyebrowTitle }: { statuses: string[]; eyebrowTi
             <div className="flex justify-between gap-3"><dt className="font-semibold text-gray-500">FNSKU</dt><dd className="font-mono font-black text-gray-800">{r.fnsku}</dd></div>
             {r.shipment_ref ? <div className="flex justify-between gap-3"><dt className="font-semibold text-gray-500">Plan</dt><dd className="font-black text-gray-800">{r.shipment_ref}</dd></div> : null}
           </dl>
-          <button type="button" onClick={openWorkspace} className="w-full rounded-md bg-blue-600 px-2.5 py-1 text-micro font-black uppercase tracking-widest text-white transition-colors hover:bg-blue-700">
+          <Button variant="primary" size="sm" onClick={openWorkspace} className="w-full">
             Find on board →
-          </button>
+          </Button>
         </div>
       )}
     />

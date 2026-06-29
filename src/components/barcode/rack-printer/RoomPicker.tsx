@@ -32,7 +32,7 @@ export function RoomPicker({ rooms, zoneMap, loading, selectedRoom, onSelect }: 
             key={room}
             type="button"
             onClick={() => onSelect(room)}
-            className={`flex items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all active:scale-[0.99] ${
+            className={`ds-raw-button flex items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all active:scale-[0.99] ${
               isSelected
                 ? 'border-blue-300 bg-blue-50/50 ring-2 ring-blue-200'
                 : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50/30'

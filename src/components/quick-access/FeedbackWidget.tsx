@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Check, X } from '@/components/Icons';
-import { Button } from '@/design-system/primitives/Button';
+import { Button, IconButton } from '@/design-system/primitives';
 import { framerPresence, framerTransition } from '@/design-system/foundations/motion-framer';
 import { cn } from '@/utils/_cn';
 
@@ -78,7 +78,7 @@ export function FeedbackForm({ onSuccess }: FormProps) {
             type="button"
             onClick={() => setType(opt.value)}
             className={cn(
-              'flex-1 rounded-lg border py-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-100',
+              'ds-raw-button flex-1 rounded-lg border py-1.5 text-xs font-bold uppercase tracking-wider transition-colors duration-100',
               type === opt.value
                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                 : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700',
@@ -90,7 +90,7 @@ export function FeedbackForm({ onSuccess }: FormProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+        <label className="text-micro font-black uppercase tracking-widest text-gray-400">
           Title <span className="text-rose-500">*</span>
         </label>
         <input
@@ -109,7 +109,7 @@ export function FeedbackForm({ onSuccess }: FormProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+        <label className="text-micro font-black uppercase tracking-widest text-gray-400">
           Details <span className="text-rose-500">*</span>
         </label>
         <textarea
@@ -127,7 +127,7 @@ export function FeedbackForm({ onSuccess }: FormProps) {
       </div>
 
       {typeof window !== 'undefined' && (
-        <p className="text-[10px] text-gray-400">
+        <p className="text-micro text-gray-400">
           Page: <span className="font-mono">{window.location.pathname}</span>
         </p>
       )}
@@ -172,14 +172,13 @@ export function FeedbackPopover({ onClose }: FeedbackPopoverProps) {
           <p className="text-sm font-black text-gray-900">Report an issue</p>
           <p className="text-caption text-gray-500">Bug, suggestion, or question</p>
         </div>
-        <button
+        <IconButton
           type="button"
           onClick={onClose}
-          aria-label="Close"
+          ariaLabel="Close"
+          icon={<X className="h-3.5 w-3.5" />}
           className="text-gray-400 hover:text-gray-700"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        />
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
         <FeedbackForm onSuccess={onClose} />

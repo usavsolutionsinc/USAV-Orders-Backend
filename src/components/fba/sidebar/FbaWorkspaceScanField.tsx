@@ -18,6 +18,7 @@ import { useStationTheme } from '@/hooks/useStationTheme';
 import { FBA_SCAN_STATUS, FBA_ACTIVE_SHIPMENTS_REFRESH, USAV_REFRESH_DATA } from '@/lib/fba/events';
 import { SIDEBAR_INTAKE_LABEL_CLASS } from '@/design-system/components/sidebar-intake/intakeFormClasses';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { Button } from '@/design-system/primitives';
 
 const fieldBaseClass =
   'mt-1 w-full rounded-xl border-2 border-gray-400 bg-white px-3 py-2.5 text-sm font-bold text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-transparent focus:ring-2 disabled:opacity-50';
@@ -268,18 +269,19 @@ export function FbaWorkspaceScanField({
                 />
               </label>
 
-              <button
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => void onSaveTracking()}
                 disabled={saving || !trackingReady}
-                className={`w-full rounded-xl border-2 px-3 py-2.5 text-caption font-black uppercase tracking-[0.12em] transition-colors ${
+                className={`h-auto w-full rounded-xl border-2 px-3 py-2.5 text-caption font-black uppercase tracking-[0.12em] ring-0 ${
                   trackingReady && !saving
                     ? `${themeColors.border} ${themeColors.light} text-gray-900 hover:opacity-95`
                     : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400'
                 }`}
               >
                 {trackingReady ? 'Save tracking' : 'Enter valid FBA ID and UPS to save'}
-              </button>
+              </Button>
             </div>
 
             {saveError && (
@@ -293,13 +295,14 @@ export function FbaWorkspaceScanField({
               <span className="text-micro font-black uppercase tracking-[0.14em] text-gray-500">
                 {selectedCount} item{selectedCount !== 1 ? 's' : ''} selected
               </span>
-              <button
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => clearSelection()}
-                className="rounded-full border border-gray-200 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+                className="h-auto rounded-full border border-gray-200 px-2.5 py-1 text-eyebrow font-black uppercase tracking-[0.14em] text-gray-500 ring-0 hover:bg-gray-50 hover:text-gray-800"
               >
                 Clear
-              </button>
+              </Button>
             </div>
           </motion.div>
         ) : null}

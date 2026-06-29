@@ -30,6 +30,7 @@ import type { ActiveStationOrder } from '@/hooks/useStationTestingController';
 import { getOrderIdLast4 } from '@/hooks/useStationTestingController';
 import { looksLikeFnsku } from '@/lib/scan-resolver';
 import { normalizeTrackingCanonical } from '@/lib/tracking-format';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 type Variant = 'order' | 'fba' | 'repair' | 'exception';
 
@@ -263,13 +264,15 @@ function FeedbackBody({
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <Icon className={`h-3.5 w-3.5 shrink-0 ${tint}`} />
             <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">{label}</span>
-            <span className="truncate text-caption font-black tracking-tight text-gray-900" title={activeOrder.tracking}>
-              {variant === 'exception' ? (
-                <span className="font-mono tabular-nums">{identifier}</span>
-              ) : (
-                <span>#{identifier}</span>
-              )}
-            </span>
+            <HoverTooltip label={activeOrder.tracking ?? ''} asChild>
+              <span className="truncate text-caption font-black tracking-tight text-gray-900">
+                {variant === 'exception' ? (
+                  <span className="font-mono tabular-nums">{identifier}</span>
+                ) : (
+                  <span>#{identifier}</span>
+                )}
+              </span>
+            </HoverTooltip>
           </div>
           <motion.span
             layout

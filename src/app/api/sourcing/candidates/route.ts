@@ -43,7 +43,7 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.view' });
+}, { permission: 'sourcing.view', feature: 'sourcing' });
 
 /**
  * POST /api/sourcing/candidates — Save a candidate to the watchlist.
@@ -119,4 +119,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 500 },
     );
   }
-}, { permission: 'sourcing.manage' });
+}, { permission: 'sourcing.manage', feature: 'sourcing' });

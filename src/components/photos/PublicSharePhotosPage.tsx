@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'react-qr-code';
+import { Button } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
 
 interface SharePhoto {
@@ -86,9 +87,10 @@ export default function PublicSharePhotosPage({ token }: { token: string }) {
             >
               Download all (ZIP)
             </a>
-            <button
+            <Button
               type="button"
-              className="inline-flex rounded-md border border-border px-4 py-2 text-sm hover:bg-muted"
+              variant="secondary"
+              size="md"
               onClick={() => {
                 if (!pageUrl) return;
                 void navigator.clipboard.writeText(pageUrl).then(
@@ -98,7 +100,7 @@ export default function PublicSharePhotosPage({ token }: { token: string }) {
               }}
             >
               Copy link
-            </button>
+            </Button>
           </div>
           {pageUrl ? (
             <div className="rounded-lg border border-border bg-white p-3">

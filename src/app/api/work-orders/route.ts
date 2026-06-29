@@ -133,7 +133,7 @@ async function getReceiving(orgId: string): Promise<WorkOrderRow[]> {
   const result = await tenantQuery(orgId,
     `SELECT
        r.id,
-       COALESCE(stn.tracking_number_raw, r.receiving_tracking_number) AS receiving_tracking_number,
+       stn.tracking_number_raw AS receiving_tracking_number,
        COALESCE(NULLIF(stn.carrier, 'UNKNOWN'), r.carrier)             AS carrier,
        r.is_return,
        r.target_channel,

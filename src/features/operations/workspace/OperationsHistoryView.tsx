@@ -12,13 +12,16 @@
  * one shared `EventTimeline` primitive.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Download, FileText, History, Loader2, X } from '@/components/Icons';
 import { OrderIdChip, SerialChip, TrackingChip, getLast4 } from '@/components/ui/CopyChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
+import { Button, IconButton } from '@/design-system/primitives';
 import { IdentifierToggle } from '@/components/ui/IdentifierToggle';
+import { SerialProvenanceHeader } from '@/components/operations/SerialProvenanceHeader';
 import type { TimelineGroupMode } from '@/components/ui/EventTimeline';
+import type { SerialProvenance } from '@/lib/queries/operations-journey-queries';
 import { journeyKeyOf, type JourneyDimension } from '@/lib/timeline/journey';
 import { downloadJourneyCsv, printJourney } from '@/lib/serial/serial-journey';
 import { useOperationsTimelineUrlState } from '@/components/sidebar/operations/useOperationsTimelineUrlState';
@@ -52,7 +55,21 @@ export function OperationsHistoryView() {
   const { focused, items, groupOf, entity } = journey;
   const dimLabel = DIM_LABEL[url.dim];
   const eventCount = items.length;
-  const showUnitToggle = (entity?.serials.length ?? 0) > 1;
+  const totalSerials = entity?.serials.length ?? 0;
+  const showUnitToggle = totalSerials > 1;
+  const inUnitView = focusedMode === 'serial';
+
+  // Per-serial provenance (SKU · grade · status · PO) keyed by serial, feeding the
+  // By-unit band header card. Absent on older payloads ⇒ headers degrade to the
+  // serial chip + count.
+  const provBySerial = useMemo(() => {
+    const m = new Map<string, SerialProvenance>();
+    for (const p of entity?.serialProvenance ?? []) {
+      const s = p.serial?.trim();
+      if (s) m.set(s, p);
+    }
+    return m;
+  }, [entity]);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-gray-50 text-gray-900">
@@ -70,14 +87,16 @@ export function OperationsHistoryView() {
                 {focused ? (
                   <>
                     <RecordChip dim={url.dim} value={url.entityValue} />
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<X />}
                       onClick={() => url.setEntity('')}
-                      className="inline-flex items-center gap-0.5 text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600"
-                      aria-label="Clear record"
+                      ariaLabel="Clear record"
+                      className="text-eyebrow font-bold uppercase tracking-widest text-gray-400 hover:text-gray-600"
                     >
-                      <X className="h-3 w-3" /> Clear
-                    </button>
+                      Clear
+                    </Button>
                   </>
                 ) : (
                   <p className="text-eyebrow font-bold uppercase tracking-widest text-gray-500">
@@ -106,13 +125,15 @@ export function OperationsHistoryView() {
               <p className="text-caption font-semibold text-rose-600">
                 No record found for this {url.dim} number.
               </p>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Loader2 />}
                 onClick={() => journey.refetch()}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-caption font-semibold text-rose-600 hover:bg-rose-50"
+                className="mt-2 border border-rose-200 text-rose-600 hover:bg-rose-50"
               >
-                <Loader2 className="h-3.5 w-3.5" /> Retry
-              </button>
+                Retry
+              </Button>
             </div>
           ) : (
             <TimelineSection
@@ -120,7 +141,19 @@ export function OperationsHistoryView() {
               loading={journey.isLoading}
               items={items}
               groupMode={focusedMode}
-              groupKeyOf={focusedMode === 'serial' ? journeyKeyOf('serial', groupOf) : undefined}
+              groupKeyOf={inUnitView ? journeyKeyOf('serial', groupOf) : undefined}
+              collapsibleGroups={inUnitView}
+              renderGroupHeader={
+                inUnitView
+                  ? (g) => (
+                      <SerialProvenanceHeader
+                        group={g}
+                        provenance={provBySerial.get((g.ref?.value ?? g.label ?? '').trim())}
+                        siblingCount={Math.max(0, totalSerials - 1)}
+                      />
+                    )
+                  : undefined
+              }
               richTime
               emptyMessage="No events recorded for this record yet."
               className=""
@@ -136,24 +169,20 @@ export function OperationsHistoryView() {
                       />
                     ) : null}
                     <HoverTooltip label="Export CSV">
-                      <button
-                        type="button"
+                      <IconButton
                         onClick={() => downloadJourneyCsv(url.entityValue, items)}
-                        aria-label="Export CSV"
-                        className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
+                        ariaLabel="Export CSV"
+                        icon={<Download className="h-3.5 w-3.5" />}
+                        className="-my-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      />
                     </HoverTooltip>
                     <HoverTooltip label="Print / Save as PDF">
-                      <button
-                        type="button"
+                      <IconButton
                         onClick={() => printJourney(url.entityValue, items)}
-                        aria-label="Print or save as PDF"
-                        className="-my-0.5 inline-flex items-center rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                      </button>
+                        ariaLabel="Print or save as PDF"
+                        icon={<FileText className="h-3.5 w-3.5" />}
+                        className="-my-0.5 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                      />
                     </HoverTooltip>
                     <span className="ml-1 tabular-nums">
                       {eventCount.toLocaleString()} event{eventCount === 1 ? '' : 's'}

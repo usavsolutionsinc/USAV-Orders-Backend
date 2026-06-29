@@ -5,6 +5,7 @@ import {
   DEBOUNCE_MS,
   MAX_RESULTS,
   type CatalogSearchField,
+  type EcwidOrderScope,
   type EcwidProductSearchPopoverProps,
   type SearchItem,
   type SearchResponse,
@@ -13,17 +14,23 @@ import {
 /**
  * Owns the Ecwid product-search popover's state: catalog search (debounced +
  * aborted), recent repair-service order load + client filter, the manual
- * title-only and manual repair-order entry flows, Escape-to-close, and the
- * select handlers that converge on `onSelect` → add-unmatched-line. Returns a
- * controller bag the thin popover shell + presentational pieces render from.
+ * title-only entry flow, Escape-to-close, and select handlers that converge on
+ * `onSelect` → add-unmatched-line. Returns a controller bag the thin popover
+ * shell + presentational pieces render from.
  */
 export function useEcwidProductSearch({
   popoverMode,
   initialQuery = '',
   searchFieldOverride,
   relaxRepairToAllOrders = false,
+  initialOrderScope,
   onSelect,
 }: EcwidProductSearchPopoverProps) {
+  const defaultOrderScope = useMemo<EcwidOrderScope>(
+    () => initialOrderScope ?? 'all',
+    [initialOrderScope],
+  );
+
   const [query, setQuery] = useState(initialQuery);
   const [searchField, setSearchField] = useState<CatalogSearchField>('title');
   const [items, setItems] = useState<SearchItem[]>([]);
@@ -34,13 +41,9 @@ export function useEcwidProductSearch({
   const [manualTitleMode, setManualTitleMode] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
   const [manualSubmitting, setManualSubmitting] = useState(false);
-  // repair_service mode: client filter over the loaded recent list + a manual
-  // order#-entry path for orders NOT in the recent list (the "custom manual
-  // input" fallback). Both converge on the SAME onSelect → add-unmatched-line
-  // persistence as picking a recent row, so manual == list-pick downstream.
+  // repair_service mode: server scope chip + client text filter over loaded list.
   const [repairFilter, setRepairFilter] = useState('');
-  const [repairManualMode, setRepairManualMode] = useState(false);
-  const [manualOrderId, setManualOrderId] = useState('');
+  const [orderScope, setOrderScope] = useState<EcwidOrderScope>(defaultOrderScope);
 
   const listboxId = useId();
   const abortRef = useRef<AbortController | null>(null);
@@ -55,11 +58,10 @@ export function useEcwidProductSearch({
     setManualSubmitting(false);
     manualSubmitLockRef.current = false;
     setRepairFilter('');
-    setRepairManualMode(false);
-    setManualOrderId('');
-  }, [popoverMode]);
+    setOrderScope(defaultOrderScope);
+  }, [popoverMode, defaultOrderScope]);
 
-  // ─── Recent repair-service orders (Ecwid `-RS` SKUs) ─────────────────────────
+  // ─── Recent Ecwid orders (scope: -RS repair vs all) ─────────────────────────
   useEffect(() => {
     if (popoverMode !== 'repair_service') return;
     let cancelled = false;
@@ -68,11 +70,10 @@ export function useEcwidProductSearch({
     setIsLoading(true);
     abortRef.current?.abort();
 
-    fetch(
-      `/api/ecwid/recent-repair-orders?limit=30${
-        relaxRepairToAllOrders ? '&include_normal=1' : ''
-      }`,
-    )
+    const params = new URLSearchParams({ limit: '30' });
+    if (orderScope === 'all') params.set('include_normal', '1');
+
+    fetch(`/api/ecwid/recent-repair-orders?${params.toString()}`)
       .then(async (res) => {
         const body = (await res.json()) as SearchResponse;
         if (!res.ok || !body.success) {
@@ -92,7 +93,7 @@ export function useEcwidProductSearch({
     return () => {
       cancelled = true;
     };
-  }, [popoverMode, relaxRepairToAllOrders]);
+  }, [popoverMode, orderScope]);
 
   // ─── Catalog search with debounce + abort ───────────────────────────────────
   useEffect(() => {
@@ -173,7 +174,7 @@ export function useEcwidProductSearch({
           image_url: item.image_url,
           ...(popoverMode === 'repair_service'
             ? {
-                is_repair_service: true,
+                is_repair_service: item.is_repair_service ?? false,
                 ecwid_order_id: item.order_id ?? '',
                 ecwid_product_url: item.product_url ?? null,
               }
@@ -218,33 +219,6 @@ export function useEcwidProductSearch({
     );
   }, [items, popoverMode, repairFilter]);
 
-  // Manual repair-order link — for an Ecwid order NOT in the recent list. Same
-  // onSelect path as a list pick, so the carton link + per-line persistence are
-  // identical; only the order# (and optional description) are operator-typed.
-  const handleManualRepairSubmit = useCallback(async () => {
-    const orderId = manualOrderId.trim().replace(/^#/, '');
-    if (!orderId) return;
-    if (manualSubmitLockRef.current) return;
-    const title = manualTitle.trim() || `Repair service · order #${orderId}`;
-    manualSubmitLockRef.current = true;
-    setManualSubmitting(true);
-    try {
-      await onSelect({
-        sku_platform_id_row: null,
-        sku_catalog_id: null,
-        sku: '',
-        item_name: title,
-        image_url: null,
-        is_repair_service: true,
-        ecwid_order_id: orderId,
-        ecwid_product_url: null,
-      });
-    } finally {
-      manualSubmitLockRef.current = false;
-      setManualSubmitting(false);
-    }
-  }, [manualOrderId, manualTitle, onSelect]);
-
   const placeholder = useMemo(
     () =>
       searchFieldOverride
@@ -257,7 +231,9 @@ export function useEcwidProductSearch({
 
   const dialogAria =
     popoverMode === 'repair_service'
-      ? 'Recent Ecwid repair-service orders'
+      ? orderScope === 'all'
+        ? 'Recent Ecwid orders'
+        : 'Recent Ecwid repair-service orders'
       : manualTitleMode
         ? 'Enter product title manually'
         : 'Search Ecwid products';
@@ -274,8 +250,7 @@ export function useEcwidProductSearch({
     manualTitle, setManualTitle,
     manualSubmitting,
     repairFilter, setRepairFilter,
-    repairManualMode, setRepairManualMode,
-    manualOrderId, setManualOrderId,
+    orderScope, setOrderScope,
     // refs + ids
     listboxId,
     abortRef,
@@ -286,7 +261,6 @@ export function useEcwidProductSearch({
     // handlers
     handleSelect,
     handleManualTitleSubmit,
-    handleManualRepairSubmit,
     // passthrough
     popoverMode,
     searchFieldOverride,

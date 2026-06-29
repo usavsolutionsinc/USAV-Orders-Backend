@@ -29,6 +29,7 @@ import { getOrganization } from '@/lib/tenancy/organizations';
 import { getNasStorageTarget } from '@/lib/tenancy/settings';
 import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
 import pool from '@/lib/db';
+import { tenantQuery } from '@/lib/tenancy/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,7 +90,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       claimType,
       reason: body.reason,
       poReceivingLink: poReceivingLink(req, receivingId),
-    });
+    }, ctx.organizationId);
     const subject = editedSubject || template.subject;
     const description = editedDescription || template.description;
 
@@ -288,9 +289,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // the line (or carton for package-level claims). Best-effort.
         try {
           if (lineId != null) {
-            await pool.query(`UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, lineId, ctx.organizationId]);
+            await tenantQuery(ctx.organizationId, `UPDATE receiving_lines SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, lineId, ctx.organizationId]);
           } else {
-            await pool.query(`UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, receivingId, ctx.organizationId]);
+            await tenantQuery(ctx.organizationId, `UPDATE receiving SET zendesk_ticket = $1 WHERE id = $2 AND organization_id = $3`, [ticketNumber, receivingId, ctx.organizationId]);
           }
         } catch (colErr) {
           console.warn('[POST /api/receiving/zendesk-claim] zendesk_ticket column update failed', colErr);

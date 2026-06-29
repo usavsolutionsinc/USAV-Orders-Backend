@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { microBadge } from '@/design-system/tokens/typography/presets';
 import { AnchoredLayer } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 import { SlidersHorizontal, ChevronDown } from '@/components/Icons';
 import {
     INVENTORY_BUCKETS,
@@ -54,20 +55,16 @@ export function InventoryFilterDropdown({
                         const active = field === f.id;
                         const Icon = FIELD_ICON[f.id];
                         return (
-                            <button
+                            <Button
                                 key={f.id}
-                                type="button"
+                                variant={active ? 'primary' : 'secondary'}
+                                size="md"
                                 onClick={() => onFieldChange(f.id as AnyInventorySearchField)}
-                                className={[
-                                    'flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left text-caption font-bold transition-all',
-                                    active
-                                        ? 'border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/20'
-                                        : 'border-gray-100 bg-gray-50/50 text-gray-600 hover:border-gray-200 hover:bg-white hover:shadow-sm',
-                                ].join(' ')}
+                                icon={Icon ? <Icon className={active ? 'text-white' : 'text-gray-400'} /> : undefined}
+                                className="w-full justify-start gap-3 text-left"
                             >
-                                {Icon && <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-white' : 'text-gray-400'}`} />}
                                 <span className="truncate">{f.label}</span>
-                            </button>
+                            </Button>
                         );
                     })}
                 </div>
@@ -79,13 +76,14 @@ export function InventoryFilterDropdown({
                     <div className="mb-3 flex items-center justify-between pt-4 border-t border-gray-100">
                         <p className={`${microBadge} text-gray-400 font-black uppercase tracking-[0.2em]`}>Status Filters</p>
                         {buckets.length > 0 ? (
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => onBucketsChange([])}
-                                className="text-[10px] font-black uppercase tracking-wider text-blue-600 hover:text-blue-700"
+                                className="text-blue-600 hover:text-blue-700"
                             >
                                 Clear
-                            </button>
+                            </Button>
                         ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -93,16 +91,12 @@ export function InventoryFilterDropdown({
                             const active = selectedBuckets.has(b.id);
                             const count = counts?.[b.id];
                             return (
-                                <button
+                                <Button
                                     key={b.id}
-                                    type="button"
+                                    variant={active ? 'primary' : 'secondary'}
+                                    size="sm"
                                     onClick={() => toggleBucket(b.id)}
-                                    className={[
-                                        'rounded-full border px-3.5 py-1.5 text-caption font-bold transition-all',
-                                        active
-                                            ? 'border-blue-500 bg-blue-500 text-white shadow-md shadow-blue-500/20'
-                                            : 'border-gray-100 bg-gray-50/50 text-gray-600 hover:border-gray-200 hover:bg-white hover:shadow-sm',
-                                    ].join(' ')}
+                                    className="rounded-full"
                                     aria-pressed={active}
                                 >
                                     <span>{b.label}</span>
@@ -111,7 +105,7 @@ export function InventoryFilterDropdown({
                                             {count}
                                         </span>
                                     ) : null}
-                                </button>
+                                </Button>
                             );
                         })}
                     </div>
@@ -119,12 +113,14 @@ export function InventoryFilterDropdown({
             )}
 
             <div className="pt-2">
-                <button
+                <Button
+                    variant="brand"
+                    size="lg"
                     onClick={onClose}
-                    className="w-full rounded-2xl bg-gray-900 py-3.5 text-sm font-black uppercase tracking-widest text-white transition-all hover:bg-black"
+                    className="w-full"
                 >
                     Apply Filters
-                </button>
+                </Button>
             </div>
         </div>
     );
@@ -156,6 +152,7 @@ export function InventorySidebarFilters({
 
     return (
         <div ref={rootRef} className="relative w-full">
+            {/* ds-raw-button: anchored-popover trigger with active/badge/chevron state, not a DS Button */}
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
@@ -203,20 +200,16 @@ export function InventorySidebarFilters({
                                     const active = field === f.id;
                                     const Icon = FIELD_ICON[f.id];
                                     return (
-                                        <button
+                                        <Button
                                             key={f.id}
-                                            type="button"
+                                            variant={active ? 'primary' : 'secondary'}
+                                            size="sm"
                                             onClick={() => onFieldChange(f.id as AnyInventorySearchField)}
-                                            className={[
-                                                'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-left text-micro font-bold uppercase tracking-wider transition-colors',
-                                                active
-                                                    ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                                    : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200 hover:text-gray-900',
-                                            ].join(' ')}
+                                            icon={Icon ? <Icon /> : undefined}
+                                            className="w-full justify-start gap-2 text-left"
                                         >
-                                            {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
                                             <span className="truncate">{f.label}</span>
-                                        </button>
+                                        </Button>
                                     );
                                 })}
                             </div>
@@ -228,13 +221,14 @@ export function InventorySidebarFilters({
                                 <div className="mb-2 flex items-center justify-between pt-1 border-t border-gray-100 mt-1">
                                     <p className={`${microBadge} text-gray-500 uppercase tracking-[0.1em] pt-3`}>Status Filters</p>
                                     {activeBucketCount > 0 ? (
-                                        <button
-                                            type="button"
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
                                             onClick={() => onBucketsChange([])}
                                             className={`${microBadge} text-blue-600 hover:underline pt-3`}
                                         >
                                             Clear
-                                        </button>
+                                        </Button>
                                     ) : null}
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 pt-1">
@@ -242,23 +236,19 @@ export function InventorySidebarFilters({
                                         const active = selectedBuckets.has(b.id);
                                         const count = counts?.[b.id];
                                         return (
-                                            <button
+                                            <Button
                                                 key={b.id}
-                                                type="button"
+                                                variant={active ? 'primary' : 'secondary'}
+                                                size="sm"
                                                 onClick={() => toggleBucket(b.id)}
-                                                className={[
-                                                    'rounded-full border px-2.5 py-1 text-eyebrow font-semibold uppercase tracking-wide transition-colors',
-                                                    active
-                                                        ? 'border-blue-300 bg-blue-50 text-blue-700'
-                                                        : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-blue-200 hover:text-blue-600',
-                                                ].join(' ')}
+                                                className="rounded-full"
                                                 aria-pressed={active}
                                             >
                                                 <span>{b.label}</span>
                                                 {typeof count === 'number' ? (
                                                     <span className="ml-1 text-gray-400">({count})</span>
                                                 ) : null}
-                                            </button>
+                                            </Button>
                                         );
                                     })}
                                 </div>

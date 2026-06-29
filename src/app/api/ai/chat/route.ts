@@ -224,4 +224,4 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       { status: 503 },
     );
   }
-}, { permission: 'dashboard.view' });
+}, { permission: 'dashboard.view', feature: 'aiChat' });

@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { Database, MessageSquare, PackageCheck, RefreshCw, Sparkles, Wrench } from '@/components/Icons';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { emitAiChatNew, emitAiChatPrompt } from '@/components/ai/ai-chat-events';
 
 const CAPABILITIES = [
@@ -41,15 +43,14 @@ export function AiChatSidebarPanel() {
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className={`flex shrink-0 items-center justify-between border-b border-gray-100 ${SIDEBAR_GUTTER} py-2.5`}>
         <p className={`${sectionLabel} text-blue-600`}>AI Chat</p>
-        <button
-          type="button"
-          onClick={() => emitAiChatNew()}
-          aria-label="New chat"
-          title="New chat"
-          className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <HoverTooltip label="New chat" asChild>
+          <IconButton
+            onClick={() => emitAiChatNew()}
+            ariaLabel="New chat"
+            icon={<RefreshCw className="h-4 w-4" />}
+            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          />
+        </HoverTooltip>
       </div>
 
       <div className={`min-h-0 flex-1 overflow-y-auto ${SIDEBAR_GUTTER} py-4`}>
@@ -85,7 +86,7 @@ export function AiChatSidebarPanel() {
                 key={e}
                 type="button"
                 onClick={() => emitAiChatPrompt(e)}
-                className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
+                className="ds-raw-button rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-caption leading-5 text-gray-700 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-gray-900"
               >
                 {e}
               </button>

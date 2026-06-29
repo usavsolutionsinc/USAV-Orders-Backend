@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from '@/lib/toast';
 import { Barcode, ClipboardList, Hash, MapPin, Package } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { sectionLabel } from '@/design-system/tokens/typography/presets';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { TestingScanBar } from '@/components/sidebar/receiving/TestingScanBar';
@@ -230,6 +231,7 @@ export function TestingSidebarPanel({
                 <meta.Icon className="h-3 w-3 shrink-0" />
                 {meta.label}
               </span>
+              {/* ds-allow-title: truncation overflow on a non-interactive readout */}
               <span className="min-w-0 truncate font-mono text-micro font-bold text-gray-600" title={lastAck.value}>
                 {lastAck.value}
               </span>
@@ -258,7 +260,7 @@ export function TestingSidebarPanel({
                     setPicker(null);
                     setScanValue('');
                   }}
-                  className="w-full rounded-md bg-white px-2 py-1.5 text-left text-caption font-bold text-gray-800 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
+                  className="ds-raw-button w-full rounded-md bg-white px-2 py-1.5 text-left text-caption font-bold text-gray-800 ring-1 ring-amber-200 transition-colors hover:bg-amber-100"
                 >
                   <span className="block truncate">{row.item_name || row.sku || `Line #${row.id}`}</span>
                   <span className="block text-eyebrow font-semibold uppercase tracking-widest text-gray-500">
@@ -269,13 +271,14 @@ export function TestingSidebarPanel({
               </li>
             ))}
           </ul>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setPicker(null)}
-            className="mt-1.5 text-eyebrow font-black uppercase tracking-widest text-amber-600 hover:text-amber-800"
+            className="mt-1.5 h-auto px-0 text-eyebrow font-black uppercase tracking-widest text-amber-600 hover:bg-transparent hover:text-amber-800"
           >
             Cancel
-          </button>
+          </Button>
         </div>
       ) : null}
 

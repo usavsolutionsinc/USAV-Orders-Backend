@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Loader2, Plus, Check, Search, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 
 /**
  * Folder navigator for picking (or creating) a manual's `folder_path`.
@@ -222,14 +223,13 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
           className="w-full rounded-md border border-zinc-200 bg-zinc-50 py-1.5 pl-8 pr-7 text-caption text-zinc-900 placeholder:text-zinc-400 focus:border-blue-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
         {search && (
-          <button
+          <IconButton
             type="button"
             onClick={() => setSearch('')}
             className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
-            aria-label="Clear folder search"
-          >
-            <X className="h-3 w-3" />
-          </button>
+            ariaLabel="Clear folder search"
+            icon={<X className="h-3 w-3" />}
+          />
         )}
       </div>
 
@@ -269,13 +269,14 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
             <ul className="divide-y divide-zinc-50">
               {searchResults.map(({ node, fullPath }) => (
                 <li key={fullPath}>
+                  {/* ds-raw-button: multi-line text-left master-detail folder result row (glyph + name + path + count), not a Button shape */}
                   <button
                     type="button"
                     onClick={() => {
                       onChange(fullPath);
                       setSearch('');
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-blue-50/40"
+                    className="ds-raw-button flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-blue-50/40"
                   >
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500 ring-1 ring-inset ring-indigo-100">
                       <FolderGlyph className="h-3 w-3" />
@@ -308,10 +309,11 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
           <ul className="divide-y divide-zinc-50">
             {subfolders.map((node) => (
               <li key={node.name}>
+                {/* ds-raw-button: text-left list/drill row (glyph + name + count + chevron), not a Button shape */}
                 <button
                   type="button"
                   onClick={() => handleDrill(node.name)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-blue-50/40"
+                  className="ds-raw-button flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-blue-50/40"
                 >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-500 ring-1 ring-inset ring-indigo-100">
                     <FolderGlyph className="h-3 w-3" />
@@ -349,15 +351,17 @@ export function FolderPathPicker({ value, onChange }: FolderPathPickerProps) {
             placeholder="New folder at this level"
             className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-caption text-zinc-800 placeholder:text-zinc-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
           />
-          <button
+          <Button
             type="button"
+            variant="brand"
+            size="sm"
             onClick={handleCreate}
             disabled={!newSeg.trim()}
-            className="inline-flex items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-micro font-black uppercase tracking-wider text-white transition-colors hover:bg-zinc-800 disabled:opacity-40"
+            icon={<Check className="h-3 w-3" />}
+            className="h-7 gap-1 rounded-md px-2 text-micro font-black uppercase tracking-wider"
           >
-            <Check className="h-3 w-3" />
             Add
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -378,10 +382,11 @@ function CrumbPill({
       ? 'border-zinc-900 bg-zinc-900 text-white'
       : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900';
   return (
+    // ds-raw-button: breadcrumb crumb pill with bespoke tri-state (active/pending/default) hue, not a Button variant
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-micro font-black uppercase tracking-wider transition-colors ${tone}`}
+      className={`ds-raw-button inline-flex items-center rounded-full border px-2 py-0.5 text-micro font-black uppercase tracking-wider transition-colors ${tone}`}
     >
       {label}
     </button>

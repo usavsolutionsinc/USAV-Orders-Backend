@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import PackerDashboard from '@/components/PackerDashboard';
 import { MobilePackingList } from '@/components/mobile/packer/MobilePackingList';
 import { Menu } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { QuickAccessButton } from '@/components/layout/QuickAccessButton';
 import { useRealtimeToasts } from '@/hooks/useRealtimeToasts';
 
@@ -40,14 +41,12 @@ export function PackerPageContent({ packerId }: PackerPageContentProps) {
         className="flex h-full w-full flex-col overflow-hidden bg-white md:hidden"
       >
         <header className="sticky top-0 z-header flex min-h-14 items-center gap-3 border-b border-gray-100 bg-white px-3 pt-[env(safe-area-inset-top)]">
-          <button
-            type="button"
+          <IconButton
+            icon={<Menu className="h-6 w-6" />}
+            ariaLabel="Open navigation"
             onClick={openDrawer}
-            aria-label="Open navigation"
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100 transition-colors outline-none"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-gray-700 active:bg-gray-100"
+          />
 
           <h1 className="flex-1 text-lg font-black tracking-tight text-gray-900">
             Packing

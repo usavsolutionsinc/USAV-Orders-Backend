@@ -111,7 +111,7 @@ export function ReceivingAssignmentCard({ item }: ReceivingAssignmentCardProps) 
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); openReceiving(); }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-micro font-black uppercase tracking-widest transition-all ml-auto"
+          className="ds-raw-button flex items-center gap-1 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-micro font-black uppercase tracking-widest transition-all ml-auto"
         >
           <ExternalLink className="w-3 h-3" />
           Open

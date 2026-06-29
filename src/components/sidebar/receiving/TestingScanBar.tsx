@@ -22,28 +22,28 @@ export const TESTING_SCAN_MODES: readonly TestingScanModeMeta[] = [
     mode: 'tracking',
     label: 'Tracking',
     Icon: MapPin,
-    armedClass: 'text-blue-700 bg-blue-50',
+    armedClass: 'text-blue-700 bg-blue-500/10',
     iconClass: 'text-blue-600',
   },
   {
     mode: 'po',
     label: 'PO#',
     Icon: ClipboardList,
-    armedClass: 'text-indigo-700 bg-indigo-50',
+    armedClass: 'text-indigo-700 bg-indigo-500/10',
     iconClass: 'text-indigo-600',
   },
   {
     mode: 'serial',
     label: 'Serial',
     Icon: Barcode,
-    armedClass: 'text-emerald-700 bg-emerald-50',
+    armedClass: 'text-emerald-700 bg-emerald-500/10',
     iconClass: 'text-emerald-600',
   },
   {
     mode: 'sku',
     label: 'SKU',
     Icon: Hash,
-    armedClass: 'text-purple-700 bg-purple-50',
+    armedClass: 'text-purple-700 bg-purple-500/10',
     iconClass: 'text-purple-600',
   },
 ] as const;
@@ -89,9 +89,7 @@ export function TestingScanBar({
         onSubmit={handleSubmit}
         inputRef={inputRef}
         staffId={staffId}
-        placeholder={
-          armedMode ? `Scan ${active?.label}…` : 'Scan or pick a route → Tracking · PO# · Serial'
-        }
+        placeholder={armedMode ? `Scan ${active?.label}…` : 'Scan or pick a route →'}
         autoFocus
         rightPadClass="pr-36"
         isResolving={isResolving}
@@ -112,6 +110,7 @@ export function TestingScanBar({
             modes={TESTING_SCAN_MODES}
             armedMode={armedMode}
             onToggleMode={onToggleMode}
+            size="compact"
           />
         }
       />

@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import {
   WARRANTY_STATUS_LABEL,
   WARRANTY_STATUS_TONE,
@@ -25,7 +26,7 @@ export function WarrantyStatusBadge({ status, className }: { status: WarrantyCla
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+        'inline-flex items-center rounded-full px-2 py-0.5 text-caption font-medium ring-1 ring-inset',
         TONE_CLASSES[tone] ?? TONE_CLASSES.slate,
         className,
       )}
@@ -70,28 +71,32 @@ export function WarrantyClockChip({
     <span className={cn('inline-flex items-center gap-1', className)}>
       <span
         className={cn(
-          'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset tabular-nums',
+          'inline-flex items-center rounded-full px-2 py-0.5 text-caption font-semibold ring-1 ring-inset tabular-nums',
           TONE_CLASSES[tone],
         )}
       >
         {clockLabel(daysRemaining)}
       </span>
       {basis && (
-        <span
-          className={cn(
-            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
-            provisional
-              ? 'border border-dashed border-amber-300 text-amber-700'
-              : 'bg-emerald-50 text-emerald-700',
-          )}
-          title={
+        <HoverTooltip
+          label={
             provisional
               ? 'Provisional — based on packed date + 4-day estimate; recomputed when a carrier delivered date lands'
               : 'Based on the carrier delivered date'
           }
+          asChild
         >
-          {provisional ? 'Est.' : 'Delivered'}
-        </span>
+          <span
+            className={cn(
+              'inline-flex items-center rounded px-1.5 py-0.5 text-micro font-medium uppercase tracking-wide',
+              provisional
+                ? 'border border-dashed border-amber-300 text-amber-700'
+                : 'bg-emerald-50 text-emerald-700',
+            )}
+          >
+            {provisional ? 'Est.' : 'Delivered'}
+          </span>
+        </HoverTooltip>
       )}
     </span>
   );

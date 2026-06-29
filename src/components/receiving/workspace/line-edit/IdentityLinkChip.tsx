@@ -8,7 +8,9 @@
 
 import { useState } from 'react';
 import { Copy, ExternalLink, Pencil } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { CopyChip, type ChipTone } from '@/components/ui/CopyChip';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { RECEIVING_CHIP_EDIT_BTN_CLASS } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { normalizeCopyText } from '@/lib/copy-chip-format';
 import { recordCopy } from '@/lib/clipboard-history';
@@ -86,16 +88,16 @@ export function IdentityLinkChip({
       onMouseLeave={() => setMenuHover(false)}
     >
       {!actionsInMenu ? (
-        <button
-          type="button"
-          disabled={!openHref}
-          onClick={openExternal}
-          aria-label={openTitle}
-          title={openHref ? openTitle : 'No link available'}
-          className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
-        >
-          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        </button>
+        <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
+          <IconButton
+            icon={<ExternalLink className="h-3.5 w-3.5 shrink-0" />}
+            ariaLabel={openTitle}
+            disabled={!openHref}
+            onClick={openExternal}
+            tone="accent"
+            className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:text-slate-300 disabled:opacity-60"
+          />
+        </HoverTooltip>
       ) : null}
       <CopyChip
         value={value}
@@ -121,16 +123,15 @@ export function IdentityLinkChip({
         activationDisabled={chipAction === 'open' && !openHref && !onEdit}
       />
       {!actionsInMenu && onEdit ? (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-expanded={editOpen}
-          aria-label={editLabel}
-          title={editOpen ? 'Done editing' : editLabel}
-          className={RECEIVING_CHIP_EDIT_BTN_CLASS}
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
+        <HoverTooltip label={editOpen ? 'Done editing' : (editLabel ?? '')} asChild>
+          <IconButton
+            icon={<Pencil className="h-3 w-3" />}
+            ariaLabel={editLabel ?? ''}
+            onClick={onEdit}
+            aria-expanded={editOpen}
+            className={RECEIVING_CHIP_EDIT_BTN_CLASS}
+          />
+        </HoverTooltip>
       ) : null}
       {showActionMenu ? (
         <div
@@ -152,19 +153,22 @@ export function IdentityLinkChip({
             className="min-w-[128px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
           >
             {menuFirstAction === 'open' ? (
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!openHref}
-                onClick={openExternal}
-                aria-label={openTitle}
-                title={openHref ? openTitle : 'No link available'}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-40"
-              >
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
-                Open
-              </button>
+              <HoverTooltip label={openHref ? openTitle : 'No link available'} asChild>
+                {/* ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!openHref}
+                  onClick={openExternal}
+                  aria-label={openTitle}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-caption font-bold uppercase tracking-widest text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-40"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+                  Open
+                </button>
+              </HoverTooltip>
             ) : (
+              // ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button
               <button
                 type="button"
                 role="menuitem"
@@ -178,6 +182,7 @@ export function IdentityLinkChip({
               </button>
             )}
             {onEdit ? (
+              // ds-raw-button: text-left dropdown menuitem row (icon + label), not a standard action button
               <button
                 type="button"
                 role="menuitem"

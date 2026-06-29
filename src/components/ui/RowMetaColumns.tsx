@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/utils/_cn';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { useIsColumnHidden } from '@/components/ui/table-column-config/TableColumnConfig';
 
 /**
  * Dashboard / queue / receiving order-row title + meta subrow.
@@ -34,6 +35,9 @@ import { HoverTooltip } from '@/components/ui/HoverTooltip';
  *   • A wide qty count ("0/1"…"100/100", receiving) needs the wider `qtyCol`
  *     (`qtyColWide`) so it doesn't clip — pair it with `indentWide`/`dotTrackWide`.
  *   Keep META_COL the single source for these paired widths.
+ *
+ * (Meta fields are low visual weight; chips + title width are the main source
+ * of perceived flicker on config changes, addressed in ChipColumns.)
  */
 export const META_COL = {
   /** Default dot-track width AND meta indent — single-token counts (orders/shipped/tech/packer). */
@@ -92,7 +96,7 @@ export function RowTitle({
       <div
         className={cn(
           'truncate font-bold text-gray-900',
-          small ? 'text-[12px]' : 'text-[13px]',
+          small ? 'text-label' : 'text-[13px]',
           titleClassName,
         )}
       >
@@ -123,22 +127,34 @@ export function RowMetaColumns({
   condCol?: string;
   className?: string;
 }) {
+  // Per-staff hidden slots (no-op outside a TableColumnConfigProvider). A hidden
+  // slot drops its grid track + cell. (Chip side reserves to keep title/chip
+  // positions stable; meta slide is minor.)
+  const isHidden = useIsColumnHidden();
+  const showQty = !isHidden('qty');
+  const showCondition = !isHidden('condition');
+  const showRest = rest != null && !isHidden('rest');
+
+  // Build the virtual-column template from only the visible slots.
+  const tracks: string[] = [];
+  if (showQty) tracks.push(qtyCol);
+  if (showCondition) tracks.push(condCol);
+  if (showRest) tracks.push('minmax(0,auto)');
+
+  if (tracks.length === 0) return null;
+
   return (
     <div
       className={cn(
-        'mt-0.5 grid min-w-0 items-center gap-x-1 text-[9px] font-bold uppercase tracking-widest text-gray-500',
+        'mt-0.5 grid min-w-0 items-center gap-x-1 text-eyebrow font-bold uppercase tracking-widest text-gray-500',
         className,
       )}
-      // Fixed virtual columns: qty | condition | rest(auto). The qty/condition
-      // tracks are a known width, so condition (and the rest slot after it) starts
-      // at the same x on every row — the columns lock instead of drifting with the
-      // qty value's width.
-      style={{ paddingLeft: indent, gridTemplateColumns: `${qtyCol} ${condCol} minmax(0,auto)` }}
+      style={{ paddingLeft: indent, gridTemplateColumns: tracks.join(' ') }}
     >
-      <span className="truncate">{qty}</span>
-      <span className="truncate">{condition}</span>
-      {rest != null ? (
-        <span className="flex min-w-0 items-center gap-2 truncate">{rest}</span>
+      {showQty ? <span data-col="qty" className="truncate">{qty}</span> : null}
+      {showCondition ? <span data-col="condition" className="truncate">{condition}</span> : null}
+      {showRest ? (
+        <span data-col="rest" className="flex min-w-0 items-center gap-2 truncate">{rest}</span>
       ) : null}
     </div>
   );

@@ -15,7 +15,8 @@ import { ChipColumns, CHIP_COL } from '@/components/ui/ChipColumns';
 import { RowTitle, RowMetaColumns, META_COL } from '@/components/ui/RowMetaColumns';
 import { CarrierStatusIcon } from '@/components/shipping/ShipmentStatusBadge';
 import { getOrderDisplayValues } from '@/utils/order-display';
-import { getOrderPlatformLabel, getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { getOrderPlatformColor, getOrderPlatformBorderColor, isFbaOrder } from '@/utils/order-platform';
+import { useOrderChannelLabel } from '@/hooks/useCatalog';
 import { getExternalUrlByItemNumber, skuScanPrefixBeforeColon } from '@/hooks/useExternalItemUrl';
 import { isSkuSourceRecord } from '@/utils/source-dot';
 import { getStaffName } from '@/utils/staff';
@@ -62,13 +63,14 @@ export function ShippedRecordRow({
   onRowClick,
   onToggle,
 }: ShippedRecordRowProps) {
+  const orderChannelLabel = useOrderChannelLabel();
   const displayValues = getOrderDisplayValues({ sku: record.sku, condition: record.condition, trackingNumber: record.shipping_tracking_number });
   const rowIsFba = isFbaPackerRecord(record);
   const techStaffId = (record as any).tested_by ?? (record as any).tester_id ?? null;
   const packerStaffId = (record as any).packed_by ?? (record as any).packer_id ?? null;
   const techDisplay = normalizePersonName(String((record as any).tested_by_name || (record as any).tester_name || getStaffName(techStaffId)));
   const packerDisplay = normalizePersonName(String((record as any).packed_by_name || (record as any).packer_name || getStaffName(packerStaffId)));
-  const platformLabel = getOrderPlatformLabel(record.order_id || '', record.account_source);
+  const platformLabel = orderChannelLabel(record.order_id || '', record.account_source);
   const orderIsFbaMeta = isFbaOrder(record.order_id, record.account_source);
   const productPageUrl = getExternalUrlByItemNumber(String(record.item_number || '').trim() || skuScanPrefixBeforeColon(String(record.scan_ref || record.shipping_tracking_number || '').trim()));
   const hideOrderIdChip = isSkuSourceRecord({ orderId: record.order_id, accountSource: record.account_source, trackingType: record.tracking_type, scanRef: String(record.scan_ref || record.shipping_tracking_number || '').trim() });
@@ -83,7 +85,7 @@ export function ShippedRecordRow({
       tabIndex={0}
       aria-checked={selectMode ? checked : undefined}
       aria-pressed={selectMode ? undefined : selected}
-      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-3 py-1.5 transition-colors cursor-pointer hover:bg-blue-50/50 ${
+      className={`${dashboardOrderRowShellClass(isMobile)} border-b border-gray-100 px-4 py-2 transition-colors cursor-pointer hover:bg-blue-50/50 ${
         (selectMode ? checked : selected) ? 'bg-blue-50/80' : index % 2 === 1 ? 'bg-gray-50/40' : 'bg-white'
       }`}
     >
@@ -103,7 +105,11 @@ export function ShippedRecordRow({
           dot={OUTBOUND_STATE_META[record.outboundState].dot}
           dotTitle={`${OUTBOUND_STATE_META[record.outboundState].label} — ${OUTBOUND_STATE_META[record.outboundState].description}`}
           dotTooltip
-          title={record.product_title || record.item_number || record.sku || 'Unknown Product'}
+          title={
+            <HoverTooltip label={record.product_title || record.item_number || record.sku || 'Unknown Product'}>
+              <span>{record.product_title || record.item_number || record.sku || 'Unknown Product'}</span>
+            </HoverTooltip>
+          }
         />
         <RowMetaColumns
           indent={selectMode ? `calc(${META_COL.indent} + 1.5rem)` : undefined}

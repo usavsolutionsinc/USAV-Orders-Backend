@@ -6,7 +6,9 @@ import { createPortal } from 'react-dom';
 import { Check, Loader2, Plus, Tool } from '@/components/Icons';
 import { safeRandomUUID } from '@/lib/safe-uuid';
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { IconButton } from '@/design-system/primitives';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { useMasterNavEnabled } from '@/components/sidebar/master-nav';
 import { useBodyScrollLock } from '@/design-system/hooks';
@@ -202,7 +204,8 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
         placeholder: 'Search repairs, tickets, SKU…',
         variant: 'orange',
         rightElement: (
-          <button
+          <HoverTooltip label="New repair" asChild>
+          <IconButton
             type="button"
             onClick={() => {
               setIntakeDraft(undefined);
@@ -210,12 +213,11 @@ export function RepairSidebarPanel({ embedded = false, hideSectionHeader = false
               setShowIntakeForm(true);
             }}
             disabled={isSubmitting}
+            ariaLabel="Open new repair order form"
+            icon={<Plus className="h-5 w-5 text-white" />}
             className="rounded-xl bg-orange-500 p-2.5 text-white transition-colors hover:bg-orange-600 disabled:bg-gray-400"
-            title="New repair"
-            aria-label="Open new repair order form"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+          />
+          </HoverTooltip>
         ),
       }}
       headerRows={[

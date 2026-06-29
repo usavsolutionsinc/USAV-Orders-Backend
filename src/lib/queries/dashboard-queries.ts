@@ -27,6 +27,7 @@ import {
   fetchDashboardPackedRecords,
 } from '@/lib/dashboard-table-data';
 import { fetchWarrantyClaims, fetchWarrantyCoverage, type FetchWarrantyClaimsParams } from '@/lib/warranty/client';
+import { isPastWeekStart } from '@/lib/dashboard-week-range';
 
 export interface OrderQueryParams {
   searchQuery?: string;
@@ -98,6 +99,42 @@ export function dashboardShippedQuery({
       fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+  });
+}
+
+export interface ShippedWeekQueryParams {
+  /** Canonical Monday (YYYY-MM-DD) — the stable per-week cache unit. */
+  weekStart: string;
+  /** Canonical Sunday (YYYY-MM-DD). */
+  weekEnd: string;
+  packedBy?: number;
+  testedBy?: number;
+  staffId?: number;
+  shippedFilter?: string;
+}
+
+/**
+ * One canonical Mon–Sun week of shipped records — the SoT for both the bucketed
+ * `useQueries` in `useShippedWeekBuckets` AND the warm-up prefetch, so their keys
+ * never drift. Past weeks are immutable (`staleTime: Infinity`) so they're
+ * fetched once then served from cache forever; the current week stays live and
+ * is refreshed by the dashboard refresh/Ably invalidations.
+ */
+export function dashboardShippedWeekQuery({
+  weekStart,
+  weekEnd,
+  packedBy,
+  testedBy,
+  staffId,
+  shippedFilter,
+}: ShippedWeekQueryParams) {
+  const past = isPastWeekStart(weekStart);
+  return queryOptions({
+    queryKey: ['dashboard-table', 'shipped', 'week', weekStart, { packedBy, testedBy, staffId, shippedFilter }],
+    queryFn: () =>
+      fetchDashboardPackedRecords({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter }),
+    staleTime: past ? Infinity : 5 * 60 * 1000,
+    gcTime: past ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000,
   });
 }
 

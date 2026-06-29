@@ -12,12 +12,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Barcode, Clipboard, ClipboardList, Pencil } from '@/components/Icons';
 import { ScanHotkeyControl } from '@/components/scan/ScanHotkeyControl';
+import { IconButton } from '@/design-system/primitives/IconButton';
 import { useRegisterScanTarget } from '@/lib/scan-hotkey/useScanHotkey';
+import { cn } from '@/utils/_cn';
 import {
-  STATION_SCAN_BAR_MODE_BTN_ARMED,
   STATION_SCAN_BAR_DEFAULT_ICON_CLASS,
+  STATION_SCAN_BAR_FLOAT_RAIL_CLASS,
   STATION_SCAN_BAR_ICON_SLOT_CLASS,
   STATION_SCAN_BAR_INPUT_CLASS,
+  STATION_SCAN_BAR_MODE_BTN,
+  STATION_SCAN_BAR_MODE_BTN_ARMED,
+  STATION_SCAN_BAR_MODE_BTN_COMPACT,
+  STATION_SCAN_BAR_MODE_BTN_INACTIVE,
   STATION_SCAN_BAR_PAD_LEFT_CLASS,
   STATION_SCAN_BAR_PAD_LEFT_NONE_ICON_CLASS,
   STATION_SCAN_BAR_RIGHT_SLOT_CLASS,
@@ -135,6 +141,7 @@ export function StationScanBar({
 
   const padLeft = leadingIcon ? STATION_SCAN_BAR_PAD_LEFT_CLASS : STATION_SCAN_BAR_PAD_LEFT_NONE_ICON_CLASS;
   const padRight = showRight ? (modeButtonCount >= 2 ? 'pr-40' : 'pr-28') : 'pr-4';
+  const modeBtnShell = modeButtonCount >= 2 ? STATION_SCAN_BAR_MODE_BTN_COMPACT : STATION_SCAN_BAR_MODE_BTN;
 
   return (
     <motion.form
@@ -147,7 +154,7 @@ export function StationScanBar({
         opacity: { duration: 0.2 },
       }}
       onSubmit={handleInternalSubmit}
-      className={`relative group ${className}`.trim()}
+      className={cn('group relative', className)}
     >
       <div className="relative isolate rounded-xl">
         <div className="pointer-events-none absolute inset-0 z-raised overflow-hidden rounded-xl">
@@ -179,7 +186,7 @@ export function StationScanBar({
         </div>
 
         {leadingIcon ? (
-          <div className={`${STATION_SCAN_BAR_ICON_SLOT_CLASS} ${iconClassName}`}>
+          <div className={cn(STATION_SCAN_BAR_ICON_SLOT_CLASS, iconClassName)}>
             {showHotkeyGear ? (
               <ScanHotkeyControl>{icon ?? <Barcode className={STATION_SCAN_BAR_DEFAULT_ICON_CLASS} />}</ScanHotkeyControl>
             ) : (
@@ -196,21 +203,24 @@ export function StationScanBar({
           placeholder={placeholder}
           autoFocus={autoFocus}
           disabled={disabled}
-          className={[
+          className={cn(
             STATION_SCAN_BAR_INPUT_CLASS,
             'relative z-base',
             padLeft,
             padRight,
-            // On hover the hotkey chip slides in from the left; shift the
-            // placeholder/value right (rather than hiding it) so the gear + key
-            // have room. `transition-all` on the input animates the pad change.
             showHotkeyGear ? 'group-hover:pl-16' : '',
             inputBorderClassName ?? 'border border-gray-100',
             inputClassName,
-          ].join(' ').trim()}
+          )}
         />
         {showRight ? (
-          <div className={`${STATION_SCAN_BAR_RIGHT_SLOT_CLASS} ${rightContentClassName}`.trim()}>
+          <div
+            className={cn(
+              STATION_SCAN_BAR_RIGHT_SLOT_CLASS,
+              STATION_SCAN_BAR_FLOAT_RAIL_CLASS,
+              rightContentClassName,
+            )}
+          >
             {modeButtonCount > 0 ? (
               <div className="flex items-center gap-0">
                 {visibleModes.includes('plan') ? (
@@ -220,11 +230,13 @@ export function StationScanBar({
                     aria-pressed={activeMode === 'plan'}
                     title="Plan mode"
                     aria-label={activeMode === 'plan' ? 'Plan mode active' : 'Switch to plan mode'}
-                    className={`relative flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
+                    className={cn(
+                      'ds-raw-button',
+                      modeBtnShell,
                       activeMode === 'plan'
-                        ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} bg-purple-50 text-purple-700 hover:bg-purple-100`
-                        : 'z-base text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                    }`}
+                        ? cn(STATION_SCAN_BAR_MODE_BTN_ARMED, 'bg-purple-500/10 text-purple-700')
+                        : STATION_SCAN_BAR_MODE_BTN_INACTIVE,
+                    )}
                   >
                     <ClipboardList className="h-3.5 w-3.5" />
                   </button>
@@ -236,29 +248,29 @@ export function StationScanBar({
                     aria-pressed={activeMode === 'select'}
                     title="Select mode"
                     aria-label={activeMode === 'select' ? 'Select mode active' : 'Switch to select mode'}
-                    className={`relative flex h-6 w-6 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60 ${
+                    className={cn(
+                      'ds-raw-button',
+                      modeBtnShell,
                       activeMode === 'select'
-                        ? `${STATION_SCAN_BAR_MODE_BTN_ARMED} bg-blue-50 text-blue-700 hover:bg-blue-100`
-                        : 'z-base text-gray-500 hover:bg-gray-100 hover:text-gray-700'
-                    }`}
+                        ? cn(STATION_SCAN_BAR_MODE_BTN_ARMED, 'bg-blue-500/10 text-blue-700')
+                        : STATION_SCAN_BAR_MODE_BTN_INACTIVE,
+                    )}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                 ) : null}
               </div>
             ) : null}
-            {hasRightContent && rightContent}
-            {showPaste && (
-              <button
-                type="button"
+            {hasActiveRightContent && rightContent}
+            {showPaste ? (
+              <IconButton
                 onClick={() => void handlePasteClick()}
-                className="flex h-6 w-6 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400/60"
+                className={cn(STATION_SCAN_BAR_MODE_BTN_COMPACT, STATION_SCAN_BAR_MODE_BTN_INACTIVE)}
                 title="Paste from clipboard"
-                aria-label="Paste from clipboard"
-              >
-                <Clipboard className="h-3.5 w-3.5" />
-              </button>
-            )}
+                ariaLabel="Paste from clipboard"
+                icon={<Clipboard className="h-3.5 w-3.5" />}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>

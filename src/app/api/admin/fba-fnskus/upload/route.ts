@@ -123,7 +123,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         await client.query(
           `INSERT INTO fba_fnskus (fnsku, product_title, asin, sku, organization_id, is_active, last_seen_at, updated_at)
            VALUES ($4, $1, $2, $3, $5, TRUE, NOW(), NOW())
-           ON CONFLICT (fnsku) DO UPDATE
+           ON CONFLICT (organization_id, fnsku) DO UPDATE
              SET product_title = EXCLUDED.product_title,
                  asin = EXCLUDED.asin,
                  sku = EXCLUDED.sku,

@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
 import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/design-system/primitives';
 
 export function SecuritySection() {
   const { user } = useAuth();
@@ -168,10 +169,9 @@ export function SecuritySection() {
           </label>
         </div>
         <div className="flex justify-end">
-          <button type="button" disabled={savingPin || newPin.length < 4} onClick={savePin}
-            className="rounded-lg bg-gray-900 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+          <Button variant="brand" size="sm" disabled={savingPin || newPin.length < 4} onClick={savePin}>
             {savingPin ? 'Saving…' : 'Save PIN'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -180,10 +180,9 @@ export function SecuritySection() {
           <h2 className="text-sm font-semibold text-gray-900">Passkeys</h2>
           <p className="text-xs text-gray-500">One-tap sign-in via Touch ID, Face ID, Windows Hello, or your device PIN.</p>
         </div>
-        <button type="button" disabled={addingPasskey} onClick={addPasskey}
-          className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+        <Button variant="primary" size="sm" disabled={addingPasskey} onClick={addPasskey}>
           {addingPasskey ? 'Adding…' : 'Add a passkey on this device'}
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
@@ -194,10 +193,9 @@ export function SecuritySection() {
             workspace (switch from Settings if you belong to more than one).
           </p>
         </div>
-        <button type="button" disabled={addingAcctPasskey} onClick={addAccountPasskey}
-          className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+        <Button variant="primary" size="sm" disabled={addingAcctPasskey} onClick={addAccountPasskey}>
           {addingAcctPasskey ? 'Adding…' : 'Add an account passkey'}
-        </button>
+        </Button>
 
         {acctPasskeys.length > 0 && (
           <div className="divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
@@ -210,10 +208,10 @@ export function SecuritySection() {
                     {p.lastUsedAt ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}` : ' · never used'}
                   </div>
                 </div>
-                <button type="button" disabled={removingId === p.id} onClick={() => void removeAcctPasskey(p.id)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                <Button variant="ghost" size="sm" disabled={removingId === p.id} onClick={() => void removeAcctPasskey(p.id)}
+                  className="shrink-0 text-rose-600 hover:text-rose-700">
                   {removingId === p.id ? 'Removing…' : 'Remove'}
-                </button>
+                </Button>
               </div>
             ))}
           </div>

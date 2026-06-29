@@ -28,6 +28,7 @@ import {
   type JourneyEvent,
   type JourneyFilters,
   type JourneySource,
+  type SerialProvenance,
 } from './journey-helpers';
 
 // Re-export the pure helpers + types so callers import a single module.
@@ -200,6 +201,50 @@ export async function resolveEntity(
   if (res.rows.length === 0) return null;
   const anchors = await resolveOrderAnchors(client, orgId, res.rows[0]);
   return { ...anchors, kind: 'tracking' };
+}
+
+/**
+ * Per-serial provenance (SKU · grade · status · originating PO) for the By-unit
+ * band headers. Org-scoped on `serial_units`; the PO joins via the unit's
+ * `origin_receiving_line_id` (org-matched), so a unit received off-PO simply
+ * yields `poNumber: null`. Empty input → empty result (no query).
+ */
+export async function readSerialProvenance(
+  client: PoolClient,
+  orgId: OrgId,
+  serialUnitIds: number[],
+): Promise<SerialProvenance[]> {
+  if (serialUnitIds.length === 0) return [];
+  const res = await client.query<{
+    serial_unit_id: number;
+    serial_number: string | null;
+    sku: string | null;
+    condition_grade: string | null;
+    current_status: string | null;
+    po_number: string | null;
+  }>(
+    `SELECT su.id AS serial_unit_id,
+            su.serial_number,
+            su.sku,
+            su.condition_grade,
+            su.current_status,
+            rl.zoho_purchaseorder_number AS po_number
+       FROM serial_units su
+       LEFT JOIN receiving_lines rl
+         ON rl.id = su.origin_receiving_line_id
+        AND rl.organization_id = su.organization_id
+      WHERE su.organization_id = $1
+        AND su.id = ANY($2::int[])`,
+    [orgId, serialUnitIds],
+  );
+  return res.rows.map((r) => ({
+    serialUnitId: Number(r.serial_unit_id),
+    serial: (r.serial_number || '').trim(),
+    sku: r.sku,
+    grade: r.condition_grade,
+    status: r.current_status,
+    poNumber: (r.po_number || '').trim() || null,
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { EventRow } from './EventRow';
 import type { PulseEventRow, PulseEventsResponse } from './types';
 
@@ -78,15 +79,15 @@ export function PulseView() {
                         Last {events?.length ?? 0} inventory events · auto-refresh 30s
                     </p>
                 </div>
-                <button
-                    type="button"
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<RefreshCw />}
+                    loading={fetching}
                     onClick={fetchEvents}
-                    disabled={fetching}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                 >
-                    <RefreshCw className={`h-3.5 w-3.5 ${fetching ? 'animate-spin' : ''}`} />
                     Refresh
-                </button>
+                </Button>
             </header>
 
             {events && events.length === 0 ? (

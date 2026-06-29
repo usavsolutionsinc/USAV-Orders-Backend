@@ -9,6 +9,7 @@
 
 import { useMemo } from 'react';
 import { SkeletonCardGrid } from '@/components/ui/SkeletonCard';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useRoomFinder } from '@/components/warehouse/roomFinderContext';
 
 interface LabelRoomSidebarProps {
@@ -75,7 +76,7 @@ export function LabelRoomSidebar({
                   key={room}
                   type="button"
                   onClick={() => onSelect(room)}
-                  className={`flex items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all active:scale-[0.99] ${
+                  className={`ds-raw-button flex items-center gap-3 rounded-2xl border bg-white p-3 text-left transition-all active:scale-[0.99] ${
                     isSelected
                       ? 'border-blue-300 bg-blue-50/50 ring-2 ring-blue-200'
                       : 'border-gray-200 hover:border-blue-200 hover:bg-blue-50/30'
@@ -141,11 +142,10 @@ function ZoneLetterTile({ letter, active }: { letter: string | undefined; active
     );
   }
   return (
-    <div
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200"
-      title="No zone letter assigned yet — go to the Rooms tab"
-    >
-      ?
-    </div>
+    <HoverTooltip label="No zone letter assigned yet — go to the Rooms tab" asChild focusable={false}>
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 font-mono text-lg font-semibold text-amber-700 ring-1 ring-amber-200">
+        ?
+      </div>
+    </HoverTooltip>
   );
 }

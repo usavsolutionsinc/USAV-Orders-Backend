@@ -54,6 +54,7 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                     const isActive = mode === id;
                     const accent = MODE_ACCENT[id];
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"
@@ -98,6 +99,7 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                 {MODES.map(({ id, label, description, Icon }) => {
                     const isActive = mode === id;
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"
@@ -151,6 +153,7 @@ export function ModeSelector({ mode, onModeChange, orientation = 'horizontal' }:
                 {MODES.map(({ id, label, Icon }) => {
                     const isActive = mode === id;
                     return (
+                        // ds-raw-button: segmented mode toggle (role=tab)
                         <button
                             key={id}
                             role="tab"

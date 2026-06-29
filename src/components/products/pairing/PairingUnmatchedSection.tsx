@@ -91,7 +91,7 @@ export function PairingUnmatchedSection({ query, onPairIdentifier, onAddSku }: P
                 <button
                   type="button"
                   onClick={() => onPairIdentifier(id)}
-                  className={`flex w-full items-center gap-2 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
+                  className={`ds-raw-button flex w-full items-center gap-2 ${SIDEBAR_GUTTER} py-2 text-left transition-colors hover:bg-blue-50`}
                 >
                   <span className={`inline-flex shrink-0 items-center rounded border px-1.5 py-0 text-eyebrow font-semibold uppercase tracking-wider ${style.chip}`}>
                     {style.label}
@@ -123,7 +123,7 @@ export function PairingUnmatchedSection({ query, onPairIdentifier, onAddSku }: P
           <button
             type="button"
             onClick={onAddSku}
-            className="flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/60 px-2.5 py-2 text-left transition-colors hover:bg-blue-50"
+            className="ds-raw-button flex w-full items-center gap-2 rounded-lg border border-dashed border-blue-300 bg-blue-50/60 px-2.5 py-2 text-left transition-colors hover:bg-blue-50"
           >
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white">
               <Plus className="h-3.5 w-3.5" />

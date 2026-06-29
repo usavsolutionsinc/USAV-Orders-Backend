@@ -80,7 +80,7 @@ export function SidebarSectionList<TId extends string = string>({
             type="button"
             onClick={() => onSelect(s.id)}
             aria-current={isActive ? 'page' : undefined}
-            className={`group flex w-full items-start gap-3 border-b border-gray-100 ${gutterClassName} py-3 text-left transition ${
+            className={`ds-raw-button group flex w-full items-start gap-3 border-b border-gray-100 ${gutterClassName} py-3 text-left transition ${
               isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-900 hover:bg-gray-50'
             }`}
           >

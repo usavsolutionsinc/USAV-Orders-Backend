@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { RefreshCw } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { sectionLabel, dataValue, fieldLabel } from '@/design-system/tokens/typography/presets';
 
@@ -20,7 +22,7 @@ export function SidebarSection({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between border-b border-gray-200 px-0 py-0 text-left hover:bg-gray-50"
+        className="ds-raw-button flex w-full items-center justify-between border-b border-gray-200 px-0 py-0 text-left hover:bg-gray-50"
       >
         <span className={`px-4 py-3 ${sectionLabel}`}>{title}</span>
         <span className="inline-flex h-full w-12 items-center justify-center border-l border-gray-200 text-gray-600">
@@ -73,25 +75,32 @@ export function ActionButton({
   tone?: 'default' | 'blue' | 'green' | 'indigo';
   disabled?: boolean;
 }) {
-  const toneClass =
+  const bgToneClass =
     tone === 'blue'
-      ? 'border-blue-300 bg-blue-50 text-blue-700'
+      ? 'border-blue-300 bg-blue-50'
       : tone === 'green'
-        ? 'border-green-300 bg-green-50 text-green-700'
+        ? 'border-green-300 bg-green-50'
         : tone === 'indigo'
-          ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-100';
+          ? 'border-indigo-300 bg-indigo-50'
+          : 'border-gray-200 bg-white hover:bg-gray-100';
+  const iconToneClass =
+    tone === 'blue'
+      ? 'text-blue-700'
+      : tone === 'green'
+        ? 'text-green-700'
+        : tone === 'indigo'
+          ? 'text-indigo-700'
+          : 'text-gray-600';
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={`inline-flex h-full w-12 items-center justify-center border-l transition-colors disabled:opacity-50 ${toneClass}`}
-      title={title}
-      aria-label={title}
-    >
-      <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
-    </button>
+    <HoverTooltip label={title} focusable={false} asChild>
+      <IconButton
+        ariaLabel={title}
+        onClick={onClick}
+        disabled={disabled || loading}
+        className={`inline-flex h-full w-12 items-center justify-center border-l transition-colors disabled:opacity-50 ${bgToneClass}`}
+        icon={<RefreshCw className={`h-3.5 w-3.5 ${iconToneClass} ${loading ? 'animate-spin' : ''}`} />}
+      />
+    </HoverTooltip>
   );
 }

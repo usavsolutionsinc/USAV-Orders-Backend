@@ -4,6 +4,8 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, Trash2, Loader2, ExternalLink } from '@/components/Icons';
 import { buildNasLabelUrl, putNasPhoto, deleteNasPhoto } from '@/lib/nas-photos';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 
 interface LabelRow {
   id: number;
@@ -153,15 +155,16 @@ export function OrderLabelsSection({ orderId, orderRef }: { orderId: number; ord
                 <span className="truncate">{decodeURIComponent(label.url.split('/').pop() || 'label')}</span>
                 <ExternalLink className="h-3 w-3 shrink-0 text-gray-300" />
               </a>
-              <button
-                type="button"
-                onClick={() => deleteMutation.mutate(label)}
-                disabled={deleteMutation.isPending}
-                className="shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
-                title="Delete label"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              <HoverTooltip label="Delete label" asChild>
+                <IconButton
+                  type="button"
+                  onClick={() => deleteMutation.mutate(label)}
+                  disabled={deleteMutation.isPending}
+                  className="shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                  ariaLabel="Delete label"
+                  icon={<Trash2 className="h-3.5 w-3.5" />}
+                />
+              </HoverTooltip>
             </div>
           ))
         )}

@@ -5,12 +5,21 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Barcode, ExternalLink, Plus, X } from '@/components/Icons';
 import { getLast4 } from '@/components/ui/CopyChip';
 import { SearchBar } from '@/components/ui/SearchBar';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { WorkspaceCard } from '@/design-system/components';
+import { Button, IconButton } from '@/design-system/primitives';
 import {
   FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   TRACKING_ADD_BTN_CLASS,
+  RECEIVING_VARIANT_THEME,
+  receivingVariantFromType,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import {
+  classificationLabel,
+  classificationToColumns,
+  columnsToClassification,
+} from '@/lib/receiving/intake-classification';
 import { ReceivingPhotoButton } from './ReceivingPhotoButton';
 import { IdentityLinkChip } from './IdentityLinkChip';
 import { ReceivingTicketChip } from './ReceivingTicketChip';
@@ -152,6 +161,27 @@ export function CartonContextCard({
   const resolvePlatformMeta = usePlatformMeta();
   const platformMeta = resolvePlatformMeta(platformValue);
 
+  // A4 door-classification banner — a single read-only label that unifies the
+  // carton's return flag + platform + type into one glanceable "what is this".
+  // Derived from the same intake-classification SoT the door selector writes
+  // (the carton has no separate is_return prop here, so RETURN is inferred from
+  // the type + the source platform picks the return platform). Shown only for
+  // the non-default classes (returns / trade-in / pickup) and only in the unbox
+  // / testing carton context (`showStaffPhotoRow`) — triage edits it via the
+  // pill row instead. Themed via RECEIVING_VARIANT_THEME.
+  const intakeClassification = columnsToClassification({
+    is_return: receivingType.trim().toUpperCase() === 'RETURN',
+    return_platform: null,
+    source_platform: platformValue,
+    receiving_type: receivingType,
+  });
+  const intakeTheme =
+    RECEIVING_VARIANT_THEME[
+      receivingVariantFromType(classificationToColumns(intakeClassification).receiving_type)
+    ];
+  const showIntakeBanner =
+    showStaffPhotoRow && intakeClassification !== 'PO' && intakeClassification !== 'UNKNOWN';
+
   // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
   // shows the *effective* tier — the manual override when set, else the
   // platform-derived rank (so a no-override carton still reads its auto urgency
@@ -226,6 +256,28 @@ export function CartonContextCard({
   return (
     <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
       <div className="space-y-2 px-4 pt-2 pb-3">
+        {/* A4: read-only door-classification banner — "This is <FBA Return>" etc.
+            One glanceable label so the unboxer handles returns/trade-ins
+            differently without re-reading the platform + type pills. */}
+        {showIntakeBanner ? (
+          <HoverTooltip
+            label="How this package was classified at the receiving door"
+            focusable={false}
+            asChild
+          >
+            <div className="flex w-fit items-center gap-2">
+              <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
+                This is
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ${intakeTheme.chip}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${intakeTheme.iconBg}`} aria-hidden />
+                {classificationLabel(intakeClassification)}
+              </span>
+            </div>
+          </HoverTooltip>
+        ) : null}
         <div className="flex min-w-0 flex-col gap-y-1">
           {/* Condensed identity row — Priority · Platform · Type · listing ·
               PO# · tracking# · Claim · Photos. Platform/Type collapse to the
@@ -288,9 +340,12 @@ export function CartonContextCard({
               grow
               openHref={listingOpenHref}
               openTitle="Open listing in new tab"
-              value={listingLink}
+              // An explicit pasted URL wins; otherwise fall back to the derived
+              // storefront href (listingOpenHref) so the chip reads as a real,
+              // copyable/openable Listing instead of "----".
+              value={listingLink || listingOpenHref || ''}
               display={
-                listingLink
+                listingLink || listingOpenHref
                   ? platformValue
                     ? platformMeta.label
                     : isUnmatched
@@ -300,7 +355,7 @@ export function CartonContextCard({
               }
               underlineClass={platformValue ? platformMeta.border : 'border-slate-300'}
               iconClass={platformValue ? platformMeta.text : 'text-slate-400'}
-              disableCopy={!listingLink.trim()}
+              disableCopy={!(listingLink.trim() || listingOpenHref)}
               onEdit={() => {
                 setListingEditorOpen((v) => {
                   const next = !v;
@@ -382,15 +437,18 @@ export function CartonContextCard({
                   />
                 </div>
               ) : onMakeClaim ? (
-                <button
-                  type="button"
-                  onClick={onMakeClaim}
-                  className="inline-flex h-8 w-[50.32px] shrink-0 items-center justify-center self-center rounded-full bg-orange-500 px-0 text-[10px] font-black uppercase leading-none tracking-wide text-white shadow-sm transition-colors hover:bg-orange-600"
-                  title="File a damage / wrong-item / missing claim for this package"
-                  aria-label="File claim"
-                >
-                  Claim
-                </button>
+                <HoverTooltip label="File a damage / wrong-item / missing claim for this package" asChild>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={onMakeClaim}
+                    ariaLabel="File claim"
+                    className="h-8 w-[50.32px] shrink-0 self-center rounded-full bg-orange-500 px-0 text-micro font-black uppercase leading-none tracking-wide text-white shadow-sm hover:bg-orange-600 active:bg-orange-600"
+                  >
+                    Claim
+                  </Button>
+                </HoverTooltip>
               ) : null
             ) : null}
 
@@ -453,15 +511,15 @@ export function CartonContextCard({
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>PO number</span>
-                    <button
-                      type="button"
-                      onClick={() => setPoEditorOpen(false)}
-                      aria-label="Close PO# editor"
-                      title="Close editor"
-                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <HoverTooltip label="Close editor" asChild>
+                      <IconButton
+                        type="button"
+                        onClick={() => setPoEditorOpen(false)}
+                        ariaLabel="Close PO# editor"
+                        className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        icon={<X className="h-3.5 w-3.5" />}
+                      />
+                    </HoverTooltip>
                   </div>
                   <div className="group">
                     <SearchBar
@@ -485,25 +543,28 @@ export function CartonContextCard({
                   <div className="flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Tracking number</span>
                     <span className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))}
-                        disabled={extraTrackings.length >= 1}
-                        aria-label="Add second tracking number row"
-                        title={extraTrackings.length >= 1 ? 'Only one extra tracking row' : 'Add tracking number'}
-                        className={TRACKING_ADD_BTN_CLASS}
+                      <HoverTooltip
+                        label={extraTrackings.length >= 1 ? 'Only one extra tracking row' : 'Add tracking number'}
+                        asChild
                       >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={onToggleTrackingEditors}
-                        aria-label="Close tracking editor"
-                        title="Close editor"
-                        className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                        <IconButton
+                          type="button"
+                          onClick={() => setExtraTrackings((xs) => (xs.length >= 1 ? xs : [...xs, '']))}
+                          disabled={extraTrackings.length >= 1}
+                          ariaLabel="Add second tracking number row"
+                          className={TRACKING_ADD_BTN_CLASS}
+                          icon={<Plus className="h-3 w-3" />}
+                        />
+                      </HoverTooltip>
+                      <HoverTooltip label="Close editor" asChild>
+                        <IconButton
+                          type="button"
+                          onClick={onToggleTrackingEditors}
+                          ariaLabel="Close tracking editor"
+                          className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                          icon={<X className="h-3.5 w-3.5" />}
+                        />
+                      </HoverTooltip>
                     </span>
                   </div>
                   <div className="group min-w-0">
@@ -545,15 +606,15 @@ export function CartonContextCard({
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>Listing URL</span>
-                    <button
-                      type="button"
-                      onClick={() => setListingEditorOpen(false)}
-                      aria-label="Close listing editor"
-                      title="Close editor"
-                      className="rounded p-0.5 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <HoverTooltip label="Close editor" asChild>
+                      <IconButton
+                        type="button"
+                        onClick={() => setListingEditorOpen(false)}
+                        ariaLabel="Close listing editor"
+                        className="rounded p-0.5 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        icon={<X className="h-3.5 w-3.5" />}
+                      />
+                    </HoverTooltip>
                   </div>
                   <div className="group">
                     <SearchBar
@@ -566,21 +627,22 @@ export function CartonContextCard({
                       size="compact"
                       hideUnderline
                       leadingIcon={
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            if (listingOpenHref) {
-                              window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
-                            }
-                          }}
-                          disabled={listingOpenHref == null}
-                          aria-label="Open listing URL in new tab"
-                          title={listingOpenHref ? 'Open link' : 'Enter a valid URL'}
-                          className="-m-0.5 rounded p-0.5 text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
-                        >
-                          <ExternalLink className="h-[14px] w-[14px]" />
-                        </button>
+                        <HoverTooltip label={listingOpenHref ? 'Open link' : 'Enter a valid URL'} asChild>
+                          <IconButton
+                            type="button"
+                            tone="accent"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (listingOpenHref) {
+                                window.open(listingOpenHref, '_blank', 'noopener,noreferrer');
+                              }
+                            }}
+                            disabled={listingOpenHref == null}
+                            ariaLabel="Open listing URL in new tab"
+                            className="-m-0.5 rounded p-0.5 text-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-slate-300 disabled:opacity-60"
+                            icon={<ExternalLink className="h-[14px] w-[14px]" />}
+                          />
+                        </HoverTooltip>
                       }
                       className="w-full"
                     />

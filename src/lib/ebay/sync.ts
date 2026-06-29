@@ -3,7 +3,6 @@ import pool from '@/lib/db';
 import { normalizeTrackingKey18 } from '@/lib/tracking-format';
 import { formatApiInstant, normalizePSTTimestamp } from '@/utils/date';
 import { resolveOrCreateSkuCatalogId } from '@/lib/neon/sku-catalog-queries';
-import { transitionalUsavOrgId } from '@/lib/tenancy/db';
 
 export interface SyncResult {
   accountName: string;
@@ -50,11 +49,15 @@ function extractTrackingFromFulfillments(fulfillments: any[]): string[] {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-async function loadExceptionTrackingMap(): Promise<Map<string, ExceptionTrackingEntry>> {
+async function loadExceptionTrackingMap(orgId: string): Promise<Map<string, ExceptionTrackingEntry>> {
+  // Org-scoped work-list: only THIS org's open exceptions drive the sync, so an
+  // account's sync can never resolve/delete another tenant's exception rows.
   const result = await pool.query(
     `SELECT id, shipping_tracking_number
      FROM orders_exceptions
-     ORDER BY id ASC`
+     WHERE organization_id = $1
+     ORDER BY id ASC`,
+    [orgId],
   );
 
   const map = new Map<string, ExceptionTrackingEntry>();
@@ -81,6 +84,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
   accountName: string;
   ebayOrder: any;
   trackingNumber: string;
+  organizationId: string;
 }): Promise<'created' | 'updated'> {
   const orderId = String(params.ebayOrder?.orderId || '').trim() || null;
   const lineItems = Array.isArray(params.ebayOrder?.lineItems) ? params.ebayOrder.lineItems : [];
@@ -108,17 +112,18 @@ async function createOrUpdateOrderFromEbayTracking(params: {
      FROM orders o
      JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
      WHERE RIGHT(regexp_replace(UPPER(stn.tracking_number_normalized), '[^A-Z0-9]', '', 'g'), 18) = $1
+       AND o.organization_id = $2
      ORDER BY o.id DESC
      LIMIT 1`,
-    [trackingKey18]
+    [trackingKey18, params.organizationId]
   );
 
   // Also check by (account_source, order_id) to avoid idx_orders_unique_account_order violations
   let existingId: number | null = existingByTracking.rows[0]?.id ?? null;
   if (!existingId && orderId && params.accountName) {
     const existingByOrderId = await pool.query(
-      `SELECT id FROM orders WHERE account_source = $1 AND order_id = $2 LIMIT 1`,
-      [params.accountName, orderId]
+      `SELECT id FROM orders WHERE account_source = $1 AND order_id = $2 AND organization_id = $3 LIMIT 1`,
+      [params.accountName, orderId, params.organizationId]
     );
     existingId = existingByOrderId.rows[0]?.id ?? null;
   }
@@ -131,7 +136,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
     productTitle,
     accountSource: params.accountName,
     orderId,
-  });
+  }, params.organizationId);
 
   if (existingId) {
     await pool.query(
@@ -148,7 +153,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
              WHEN status IS NULL OR status = '' OR status = 'unassigned' THEN 'shipped'
              ELSE status
            END
-       WHERE id = $9`,
+       WHERE id = $9 AND organization_id = $10`,
       [
         orderId,
         productTitle,
@@ -159,6 +164,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
         orderDate,
         skuCatalogId,
         existingId,
+        params.organizationId,
       ]
     );
 
@@ -197,7 +203,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
             ELSE orders.status
           END`,
     [
-      transitionalUsavOrgId(),
+      params.organizationId,
       orderId,
       productTitle,
       condition,
@@ -226,7 +232,7 @@ async function createOrUpdateOrderFromEbayTracking(params: {
  * 4) Stop paging as soon as all exceptions are resolved
  * 5) Create/update orders rows and delete matched exceptions
  */
-export async function syncAccountOrders(accountName: string): Promise<SyncResult> {
+export async function syncAccountOrders(accountName: string, orgId: string): Promise<SyncResult> {
   console.log(`[${accountName}] Starting exceptions-first eBay sync`);
 
   const errors: string[] = [];
@@ -247,7 +253,7 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
     const lastSyncDate = lastSyncResult.rows[0]?.last_sync_date;
 
     // Load all exception tracking numbers first — this is our work list
-    const exceptionMap = await loadExceptionTrackingMap();
+    const exceptionMap = await loadExceptionTrackingMap(orgId);
     if (exceptionMap.size === 0) {
       await pool.query(
         'UPDATE ebay_accounts SET last_sync_date = NOW(), updated_at = NOW() WHERE account_name = $1',
@@ -337,6 +343,7 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
               accountName,
               ebayOrder,
               trackingNumber,
+              organizationId: orgId,
             });
 
             if (upsertResult === 'created') {
@@ -347,8 +354,10 @@ export async function syncAccountOrders(accountName: string): Promise<SyncResult
 
             const placeholders = exceptionEntry.ids.map((_, i) => `$${i + 1}`).join(', ');
             const deleted = await pool.query(
-              `DELETE FROM orders_exceptions WHERE id IN (${placeholders})`,
-              exceptionEntry.ids
+              `DELETE FROM orders_exceptions
+                WHERE id IN (${placeholders})
+                  AND organization_id = $${exceptionEntry.ids.length + 1}`,
+              [...exceptionEntry.ids, orgId]
             );
 
             matchedExceptions += exceptionEntry.ids.length;
@@ -401,23 +410,27 @@ export async function syncAllAccounts(): Promise<Array<{
   data: SyncResult | null;
   error: string | null;
 }>> {
-  const accountsResult = await pool.query(
-    'SELECT account_name FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
+  // Enumerate (account_name, organization_id) so each account's sync stamps
+  // orders/exceptions with the account's OWNER org — not a hardcoded USAV.
+  const accountsResult = await pool.query<{ account_name: string; organization_id: string }>(
+    'SELECT account_name, organization_id FROM ebay_accounts WHERE is_active = true ORDER BY account_name'
   );
 
-  const accounts = accountsResult.rows.map((row) => row.account_name);
+  const accounts = accountsResult.rows;
 
   if (accounts.length === 0) {
     console.log('No active eBay accounts found');
     return [];
   }
 
-  console.log(`Syncing ${accounts.length} accounts: ${accounts.join(', ')}`);
+  console.log(`Syncing ${accounts.length} accounts: ${accounts.map((a) => a.account_name).join(', ')}`);
 
-  const results = await Promise.allSettled(accounts.map((account) => syncAccountOrders(account)));
+  const results = await Promise.allSettled(
+    accounts.map((a) => syncAccountOrders(a.account_name, a.organization_id)),
+  );
 
   return results.map((result, i) => ({
-    account: accounts[i],
+    account: accounts[i].account_name,
     status: result.status,
     data: result.status === 'fulfilled' ? result.value : null,
     error: result.status === 'rejected' ? result.reason.message : null,
@@ -427,7 +440,7 @@ export async function syncAllAccounts(): Promise<Array<{
 /**
  * Get sync status for all accounts
  */
-export async function getSyncStatus() {
+export async function getSyncStatus(orgId: string) {
   const result = await pool.query(
     `SELECT
       account_name,
@@ -436,7 +449,9 @@ export async function getSyncStatus() {
       token_expires_at,
       created_at
     FROM ebay_accounts
-    ORDER BY account_name`
+    WHERE organization_id = $1
+    ORDER BY account_name`,
+    [orgId]
   );
 
   return result.rows.map((row) => ({

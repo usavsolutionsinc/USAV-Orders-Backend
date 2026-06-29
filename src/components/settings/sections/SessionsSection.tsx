@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/design-system/primitives';
 
 interface SessionRow {
   sid: string;
@@ -94,10 +95,15 @@ export function SessionsSection() {
                 <td className="px-3 py-2 text-xs text-gray-500">{row.ip || '—'}</td>
                 <td className="px-3 py-2 text-xs text-gray-500">{fmtRelative(row.last_seen_at)}</td>
                 <td className="px-3 py-2 text-right">
-                  <button type="button" onClick={() => void revoke(row.sid)}
-                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    onClick={() => void revoke(row.sid)}
+                    className="border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  >
                     Revoke
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}

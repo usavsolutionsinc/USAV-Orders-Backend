@@ -15,6 +15,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Package, ShoppingCart } from '@/components/Icons';
 import { getSidebarIntakeSubmitButtonClass } from '@/design-system/components';
+import { Button } from '@/design-system/primitives';
 import {
   conditionLabel,
   formatMoney,
@@ -80,8 +81,7 @@ export function LocalPickupSidebarList() {
               </span>
             </div>
           ) : null}
-          <button
-            type="button"
+          <Button
             onClick={() => openReview()}
             disabled={!canSubmit}
             className={`flex w-full items-center justify-center gap-2 ${submitClass}`}
@@ -98,7 +98,7 @@ export function LocalPickupSidebarList() {
                   : 'Add Products'}
               </>
             )}
-          </button>
+          </Button>
           {submitError ? (
             <p className="text-center text-eyebrow font-bold text-red-600">
               {submitError}
@@ -127,7 +127,7 @@ function PickupListRow({ line, active, onSelect }: PickupListRowProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={{ duration: 0.18 }}
-      className={`w-full rounded-xl border p-2 text-left transition-colors ${
+      className={`ds-raw-button w-full rounded-xl border p-2 text-left transition-colors ${
         active
           ? 'border-emerald-300 bg-emerald-50/70 ring-1 ring-emerald-200'
           : 'border-gray-200 bg-white hover:bg-gray-50'

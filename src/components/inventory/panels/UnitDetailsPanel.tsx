@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ByUnitView } from '@/components/inventory/ByUnitView';
 import { Check, Loader2, ShieldCheck } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { microBadge, sectionLabel } from '@/design-system/tokens/typography/presets';
 import { CONDITION_GRADE_VALUES } from '@/components/inventory/types';
 import { toast } from '@/lib/toast';
@@ -143,6 +144,7 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
                     {CONDITION_GRADE_VALUES.map((g) => {
                         const active = g === newGrade;
                         return (
+                            // ds-raw-button — segmented grade toggle
                             <button
                                 key={g}
                                 type="button"
@@ -172,15 +174,16 @@ function GradeActionCard({ unitId, currentGrade, onMutated }: GradeActionCardPro
                     className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
                 />
                 {error ? <p className={`${microBadge} text-red-600`}>{error}</p> : null}
-                <button
-                    type="button"
+                <Button
+                    variant="primary"
+                    size="md"
+                    icon={<Check className="h-4 w-4" />}
+                    loading={busy}
                     disabled={disabled}
                     onClick={submit}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                 >
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     {busy ? 'Saving…' : 'Save grade'}
-                </button>
+                </Button>
             </div>
         </section>
     );
@@ -245,6 +248,7 @@ function HoldActionCard({ unitId, currentStatus, onMutated }: HoldActionCardProp
                     className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm focus:border-blue-400 focus:bg-white focus:outline-none"
                 />
                 {error ? <p className={`${microBadge} text-red-600`}>{error}</p> : null}
+                {/* ds-raw-button — solid-emerald/red conditional hold CTA */}
                 <button
                     type="button"
                     disabled={busy}

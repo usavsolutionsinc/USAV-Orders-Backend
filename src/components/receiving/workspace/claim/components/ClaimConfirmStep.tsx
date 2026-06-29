@@ -15,7 +15,7 @@ export function ClaimConfirmStep({ c }: { c: ReceivingClaimController }) {
   return (
     <div className="space-y-3">
       {isDryRun ? (
-        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-amber-800">
+        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 px-3 py-2 text-micro font-black uppercase tracking-[0.14em] text-amber-800">
           Dry run — no Zendesk ticket, local backup, or DB rows were created. Counts below are simulated.
         </div>
       ) : null}
@@ -25,14 +25,14 @@ export function ClaimConfirmStep({ c }: { c: ReceivingClaimController }) {
         <div className="flex items-start gap-2.5">
           <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-800">
+            <p className="text-micro font-black uppercase tracking-[0.14em] text-emerald-800">
               {isDryRun ? 'Ticket draft (simulated)' : 'Internal ticket filed'}
             </p>
             <p className="mt-0.5 text-label font-bold text-emerald-900">
               {filedTicket?.number ?? '—'}
             </p>
             {subject ? (
-              <p className="mt-1 flex items-center gap-1.5 truncate text-[11px] font-medium text-emerald-800/80">
+              <p className="mt-1 flex items-center gap-1.5 truncate text-caption font-medium text-emerald-800/80">
                 <FileText className="h-3 w-3 shrink-0" />
                 <span className="truncate">{subject}</span>
               </p>
@@ -54,7 +54,7 @@ export function ClaimConfirmStep({ c }: { c: ReceivingClaimController }) {
       {/* ── Local backup result (re-archive suppressed during a dry run) ─── */}
       <ClaimNasBackupCard c={c} canArchive={!isDryRun} />
 
-      <p className="text-[11px] font-semibold leading-5 text-gray-500">
+      <p className="text-caption font-semibold leading-5 text-gray-500">
         Continue to draft the seller-facing message — it references this case # for full context.
       </p>
     </div>

@@ -99,34 +99,41 @@ export function ShipmentStatusBadge({
 
   return (
     <div className={`inline-flex flex-wrap items-center gap-1.5 ${className ?? ''}`}>
-      <span
-        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}
-        title={description ?? style.label}
-      >
-        <Icon className="h-3 w-3" />
-        {carrierLabel ? `${carrierLabel} · ` : ''}
-        {style.label}
-      </span>
+      <HoverTooltip label={description ?? style.label} asChild>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style.cls}`}
+        >
+          <Icon className="h-3 w-3" />
+          {carrierLabel ? `${carrierLabel} · ` : ''}
+          {style.label}
+        </span>
+      </HoverTooltip>
 
       {(exceptionShown || stalled) && (
-        <span
-          className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
-          title={
+        <HoverTooltip
+          label={
             exceptionShown
               ? description || 'Carrier reported an exception'
               : `No carrier scan in ${stallHours}h+`
           }
+          asChild
         >
-          <AlertTriangle className="h-3 w-3" />
-          {exceptionShown ? 'Exception' : 'Stalled'}
-        </span>
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-white"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            {exceptionShown ? 'Exception' : 'Stalled'}
+          </span>
+        </HoverTooltip>
       )}
 
       {relative && (
-        <span className="whitespace-nowrap text-[11px] text-gray-500" title={latestEventAt ?? undefined}>
-          {relative}
-          {loc ? ` · ${loc}` : ''}
-        </span>
+        <HoverTooltip label={latestEventAt ?? ''} asChild>
+          <span className="whitespace-nowrap text-caption text-gray-500">
+            {relative}
+            {loc ? ` · ${loc}` : ''}
+          </span>
+        </HoverTooltip>
       )}
     </div>
   );

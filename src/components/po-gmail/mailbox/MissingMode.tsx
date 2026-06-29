@@ -1,4 +1,5 @@
 import { Loader2, Search } from '@/components/Icons';
+import { Button } from '@/design-system/primitives';
 import { MISSING_STATUS_TABS, type MissingResponse, type MissingStatus } from './po-mailbox-types';
 import { StatusChip } from './mailbox-shared';
 
@@ -46,18 +47,24 @@ export function MissingMode({
             className="mt-1 w-20 rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
         </label>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={onRunReconcile}
           disabled={scanLoading}
-          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          icon={scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
         >
-          {scanLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           Scan + reconcile
-        </button>
-        <button type="button" onClick={onRefresh} disabled={loading} className="text-label text-gray-500 underline hover:text-gray-900 disabled:opacity-50">
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onRefresh}
+          disabled={loading}
+          className="text-gray-500 underline hover:text-gray-900"
+        >
           Refresh list
-        </button>
+        </Button>
       </div>
 
       {/* Status filter pills */}
@@ -66,6 +73,7 @@ export function MissingMode({
           const n = missing?.counts[t.id] ?? 0;
           const active = statusFilter === t.id;
           return (
+            // ds-raw-button: segmented status-filter pill (conditional active fill + inline count), not a single-variant Button
             <button
               key={t.id}
               type="button"
@@ -126,14 +134,14 @@ export function MissingMode({
                       </a>
                     )}
                     {row.status !== 'ignored' && (
-                      <button type="button" onClick={() => onAct(row.id, 'ignored')} disabled={acting} className="rounded-md border border-gray-200 px-2 py-1 text-[11.5px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      <Button variant="secondary" size="sm" onClick={() => onAct(row.id, 'ignored')} disabled={acting}>
                         Ignore
-                      </button>
+                      </Button>
                     )}
                     {row.status === 'ignored' && (
-                      <button type="button" onClick={() => onAct(row.id, 'pending')} disabled={acting} className="rounded-md border border-gray-200 px-2 py-1 text-[11.5px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      <Button variant="secondary" size="sm" onClick={() => onAct(row.id, 'pending')} disabled={acting}>
                         Restore
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>

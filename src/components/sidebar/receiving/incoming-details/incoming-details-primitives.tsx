@@ -1,4 +1,6 @@
 import { Copy as CopyIcon } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { IconButton } from '@/design-system/primitives';
 import { copyValue } from './incoming-details-shared';
 
 // ── Tab subcomponents ──────────────────────────────────────────────────────
@@ -12,14 +14,14 @@ export function Row({ label, value, copyValue: cv }: { label: string; value: Rea
         {value}
       </div>
       {cv ? (
-        <button
-          type="button"
-          onClick={() => copyValue(cv, label)}
-          className="shrink-0 text-gray-400 hover:text-gray-700"
-          title={`Copy ${label}`}
-        >
-          <CopyIcon className="h-3 w-3" />
-        </button>
+        <HoverTooltip label={`Copy ${label}`} asChild>
+          <IconButton
+            onClick={() => copyValue(cv, label)}
+            className="shrink-0"
+            ariaLabel={`Copy ${label}`}
+            icon={<CopyIcon className="h-3 w-3" />}
+          />
+        </HoverTooltip>
       ) : null}
     </div>
   );

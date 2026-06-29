@@ -2,7 +2,9 @@
 
 import { useState } from 'react';
 import { Loader2, Plus, Tag, X } from '@/components/Icons';
+import { Button, IconButton } from '@/design-system/primitives';
 import { cn } from '@/utils/_cn';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useLabels } from '@/hooks/useLabels';
 import { labelChipClasses } from '@/lib/photos/label-colors';
 import { toast } from '@/lib/toast';
@@ -48,24 +50,25 @@ export function PhotoLabelsSection({
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Labels</p>
         <div className="flex items-center gap-1">
           {activeLabel ? (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onSelect(undefined)}
-              className="-my-1 inline-flex h-7 items-center gap-1 rounded-lg px-2 text-micro font-bold uppercase tracking-wider text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+              icon={<X className="h-3.5 w-3.5" />}
+              className="-my-1 h-7 gap-1 px-2 text-micro font-bold uppercase tracking-wider text-gray-400 hover:text-gray-700"
             >
-              <X className="h-3.5 w-3.5" /> Clear
-            </button>
+              Clear
+            </Button>
           ) : null}
-          <button
-            type="button"
-            onClick={addLabel}
-            disabled={adding}
-            title="Add label"
-            aria-label="Add label"
-            className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
-          >
-            {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          </button>
+          <HoverTooltip label="Add label" asChild>
+            <IconButton
+              onClick={addLabel}
+              disabled={adding}
+              ariaLabel="Add label"
+              icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40"
+            />
+          </HoverTooltip>
         </div>
       </div>
 
@@ -86,7 +89,8 @@ export function PhotoLabelsSection({
                 onClick={() => onSelect(active ? undefined : lbl.key)}
                 aria-pressed={active}
                 className={cn(
-                  'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-black uppercase tracking-widest transition',
+                  // ds-raw-button — filter toggle chip with dynamic per-label color; not expressible via Button/IconButton.
+                  'ds-raw-button inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-micro font-black uppercase tracking-widest transition',
                   labelChipClasses(lbl.color),
                   active ? 'ring-2 ring-offset-1 ring-blue-500' : 'hover:opacity-80',
                 )}
