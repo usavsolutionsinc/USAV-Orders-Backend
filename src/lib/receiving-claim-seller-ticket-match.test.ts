@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import {
   parseZendeskTicketId,
   sellerDraftMatchesTicket,
@@ -6,32 +7,32 @@ import {
 
 describe('parseZendeskTicketId', () => {
   it('parses hash-prefixed and bare numeric refs', () => {
-    expect(parseZendeskTicketId('#9266')).toBe(9266);
-    expect(parseZendeskTicketId('9266')).toBe(9266);
-    expect(parseZendeskTicketId('https://usav.zendesk.com/agent/tickets/9266')).toBe(9266);
+    assert.equal(parseZendeskTicketId('#9266'), 9266);
+    assert.equal(parseZendeskTicketId('9266'), 9266);
+    assert.equal(parseZendeskTicketId('https://usav.zendesk.com/agent/tickets/9266'), 9266);
   });
 
   it('returns null for empty or invalid input', () => {
-    expect(parseZendeskTicketId('')).toBeNull();
-    expect(parseZendeskTicketId('pending')).toBeNull();
+    assert.equal(parseZendeskTicketId(''), null);
+    assert.equal(parseZendeskTicketId('pending'), null);
   });
 });
 
 describe('sellerDraftMatchesTicket', () => {
   it('matches when saved and current ticket ids are equal', () => {
-    expect(sellerDraftMatchesTicket(9266, 9266, '#9266')).toBe(true);
+    assert.equal(sellerDraftMatchesTicket(9266, 9266, '#9266'), true);
   });
 
   it('rejects a draft saved for a different ticket on the same line', () => {
-    expect(sellerDraftMatchesTicket(5637, 9266, '#9266')).toBe(false);
+    assert.equal(sellerDraftMatchesTicket(5637, 9266, '#9266'), false);
   });
 
   it('matches via parsed ticket number when ids are partially known', () => {
-    expect(sellerDraftMatchesTicket(9266, null, '#9266')).toBe(true);
+    assert.equal(sellerDraftMatchesTicket(9266, null, '#9266'), true);
   });
 
   it('rejects when neither id nor number can be correlated', () => {
-    expect(sellerDraftMatchesTicket(null, null, 'pending')).toBe(false);
-    expect(sellerDraftMatchesTicket(5637, null, 'pending')).toBe(false);
+    assert.equal(sellerDraftMatchesTicket(null, null, 'pending'), false);
+    assert.equal(sellerDraftMatchesTicket(5637, null, 'pending'), false);
   });
 });

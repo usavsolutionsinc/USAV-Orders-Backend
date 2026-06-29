@@ -412,14 +412,17 @@ export const framerTransitionMobile = {
 
   /**
    * Fullscreen photo viewer paging / dismiss settle — crisp spring with no
-   * overshoot (bounce reads as tacky on a photo). Slightly stiffer than
-   * sheetSlide so a swipe-to-next snaps confidently.
+   * overshoot (bounce reads as tacky on a photo). Duration-based (visualDuration
+   * + bounce) rather than stiffness/damping so the snap lands in the SAME visual
+   * time whether the finger barely nudged or hard-flicked — physics springs vary
+   * their perceived duration with distance + release velocity, which is what made
+   * paging feel uneven and left a slow overdamped tail crawling into the frame.
+   * Inherited flick `velocity` (passed at the call site) is still respected.
    */
   viewerPaging: {
     type: 'spring' as const,
-    damping: 38,
-    stiffness: 420,
-    mass: 0.6,
+    visualDuration: 0.32,
+    bounce: 0,
   } satisfies Transition,
 
   /** Camera fullscreen enter — opacity + scale */

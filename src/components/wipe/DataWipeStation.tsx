@@ -205,6 +205,8 @@ function ActiveUnitCard({
             const selected = method === wipeMethod;
             return (
               <HoverTooltip key={method} label={WIPE_METHOD_META[method].blurb} focusable={false} asChild>
+                {/* ds-raw-button: segmented toggle pill (rounded-full + aria-pressed) cloned by the
+                    tooltip's asChild Slot — a bespoke control the Button primitive can't express. */}
                 <button
                   type="button"
                   aria-pressed={selected}
@@ -329,14 +331,15 @@ function ResolveErrorState({ message, onRetry }: { message: string; onRetry: () 
     <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50 px-4 py-8 text-center">
       <AlertTriangle className="mx-auto h-6 w-6 text-rose-400" />
       <p className="mt-3 text-caption font-bold text-rose-700">{message}</p>
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<RotateCcw />}
         onClick={onRetry}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-eyebrow font-black uppercase tracking-widest text-rose-700 ring-1 ring-inset ring-rose-200 transition-colors hover:bg-rose-50"
+        className="mt-3 bg-white text-rose-700 ring-inset ring-rose-200 hover:bg-rose-50 hover:text-rose-700 text-eyebrow font-black uppercase tracking-widest"
       >
-        <RotateCcw className="h-3.5 w-3.5" />
         Scan again
-      </button>
+      </Button>
     </div>
   );
 }

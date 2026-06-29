@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
 import { buildDeterministicSellerMessage } from './receiving-claim-seller-assist';
 
 describe('buildDeterministicSellerMessage', () => {
@@ -13,9 +14,9 @@ describe('buildDeterministicSellerMessage', () => {
       ].join('\n'),
       zendeskTicketNumber: '#5637',
     });
-    expect(msg).toContain('Our case reference: #5637');
-    expect(msg).toContain('PO-1015');
-    expect(msg).not.toContain('Severity:');
-    expect(msg).not.toMatch(/https?:\/\//);
+    assert.ok(msg.includes('Our case reference: #5637'));
+    assert.ok(msg.includes('PO-1015'));
+    assert.ok(!msg.includes('Severity:'));
+    assert.doesNotMatch(msg, /https?:\/\//);
   });
 });

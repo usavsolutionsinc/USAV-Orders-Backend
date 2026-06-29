@@ -64,7 +64,7 @@ export function MobileRowPhotoActions({
           ariaLabel={hasPhotos ? `View ${safeCount} photos` : 'Open photo gallery'}
           className={galleryClass}
         >
-          {hasPhotos ? <span className="text-caption font-black tabular-nums">x{safeCount}</span> : undefined}
+          {hasPhotos ? <span className="text-caption font-black tabular-nums">{safeCount}</span> : undefined}
         </Button>
       ) : (
         <Link
@@ -75,7 +75,7 @@ export function MobileRowPhotoActions({
           className={galleryClass}
         >
           <ImageIcon className="h-3.5 w-3.5" />
-          {hasPhotos ? <span className="text-caption font-black tabular-nums">x{safeCount}</span> : null}
+          {hasPhotos ? <span className="text-caption font-black tabular-nums">{safeCount}</span> : null}
         </Link>
       )}
       <Link

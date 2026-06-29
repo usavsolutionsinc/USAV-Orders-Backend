@@ -6,6 +6,7 @@ import { type ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
 import { parseStaffParam } from '@/hooks/useStaffFilter';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
+import { toStubRow, matchesQuery, type UnfoundQueueRow } from './unfound-stub';
 
 /**
  * Color logic for the left status dot in Receiving view. Colors come from the
@@ -98,6 +99,16 @@ export function getReceivingStatusDotLabel(row: ReceivingLineRow): string {
  */
 export function renderReceivingRailQuantity(row: ReceivingLineRow): ReactNode {
   const expected = row.quantity_expected;
+  // Unfound/unmatched carton not yet unboxed: nothing received, expected unknown
+  // → "0/?". Without this it would borrow the Scanned branch below and read
+  // "1/?", implying a unit is already in hand when the PO isn't even matched.
+  if (row.receiving_source === 'unmatched' && !row.unboxed_at) {
+    return (
+      <span className="text-gray-600">
+        {row.quantity_received}/{expected ?? '?'}
+      </span>
+    );
+  }
   if (getReceivingStatusDotLabel(row) === 'Scanned') {
     return (
       <span className="text-gray-600">
@@ -125,6 +136,24 @@ interface Props {
 }
 
 /**
+ * Status dot for THIS rail (the Unboxed/Recent view). Overrides the shared
+ * helper for unfound stubs only: an unmatched carton sitting in the Unboxed rail
+ * is physically in hand, so it reads as Received (green) here — never the
+ * blue/Scanned state, which belongs to the Queue tab. Matched rows keep the
+ * shared lifecycle color unchanged.
+ */
+function getUnboxRecentStatusDot(row: ReceivingLineRow): string {
+  if (row.receiving_source === 'unmatched') return 'bg-emerald-500';
+  return getReceivingStatusDot(row);
+}
+
+/** Dot tooltip mirror of getUnboxRecentStatusDot — unfound reads "Received". */
+function getUnboxRecentStatusDotLabel(row: ReceivingLineRow): string {
+  if (row.receiving_source === 'unmatched') return 'Received';
+  return getReceivingStatusDotLabel(row);
+}
+
+/**
  * Time label for this rail's rows — MUST mirror the server's
  * `sort=unboxed_newest` axis (receiving.unboxed_at DESC) so relative times
  * read monotonically down the rail. Never fall back to last_activity_at /
@@ -133,7 +162,15 @@ interface Props {
  * identity (the shell wires it into a listener effect).
  */
 function getUnboxActivityAt(r: ReceivingLineRow): string | null {
-  return r.unboxed_at ?? null;
+  if (r.unboxed_at) return r.unboxed_at;
+  // Unfound POs have no unbox stamp (nothing's been unboxed — the carton isn't
+  // matched yet). Order them by arrival (created_at) so they surface in the
+  // unbox rail alongside recently-unboxed cartons instead of being buried at
+  // the bottom by the NULLS-last sort. The rail's relative-time + "unboxed by"
+  // readout then shows their created-at date, which is the only time axis an
+  // unmatched carton has.
+  if (r.receiving_source === 'unmatched') return r.created_at ?? r.last_activity_at ?? null;
+  return null;
 }
 
 /**
@@ -161,24 +198,58 @@ export function ReceivingRecentRail({
   );
 
   const fetchFn = async (): Promise<ApiResponse> => {
-    const params = new URLSearchParams({ limit: '500', offset: '0' });
-    params.set('include', 'serials');
-    if (staffId != null) params.set('staff', String(staffId));
-    // 'activity' = the UNBOXING pipeline only: lines that have been unboxed /
-    // received (qty > 0, workflow past MATCHED, or an unbox timestamp). Cartons
-    // merely scanned at the door (phone /m/receive or desktop "mark scanned")
-    // are excluded — they live in History, not this rail, which drives the
-    // unboxing workspace (LineEditPanel).
-    params.set('view', 'activity');
-    // Order by when the carton was UNBOXED (unboxed_at DESC), so this reads as
-    // a "recently unboxed" feed. NOT GREATEST(unboxed_at, updated_at): that let
-    // a later line edit (qty bump, note, condition) re-bump a carton unboxed
-    // days ago to the top. Cartons with no unbox stamp yet sort last (NULLS
-    // LAST) — they belong in History, not the unboxing rail.
-    params.set('sort', 'unboxed_newest');
-    const res = await fetch(`/api/receiving-lines?${params.toString()}`);
-    if (!res.ok) throw new Error('fetch failed');
-    return res.json();
+    // Source A — the unboxing pipeline (recently-unboxed cartons).
+    const fetchActivity = async (): Promise<ReceivingLineRow[]> => {
+      const params = new URLSearchParams({ limit: '500', offset: '0' });
+      params.set('include', 'serials');
+      if (staffId != null) params.set('staff', String(staffId));
+      // 'activity' = the UNBOXING pipeline only: lines that have been unboxed /
+      // received (qty > 0, workflow past MATCHED, or an unbox timestamp). Cartons
+      // merely scanned at the door (phone /m/receive or desktop "mark scanned")
+      // are excluded — they live in History, not this rail, which drives the
+      // unboxing workspace (LineEditPanel).
+      params.set('view', 'activity');
+      // Order by when the carton was UNBOXED (unboxed_at DESC), so this reads as
+      // a "recently unboxed" feed. NOT GREATEST(unboxed_at, updated_at): that let
+      // a later line edit (qty bump, note, condition) re-bump a carton unboxed
+      // days ago to the top. Cartons with no unbox stamp yet sort last (NULLS
+      // LAST) — they belong in History, not the unboxing rail.
+      params.set('sort', 'unboxed_newest');
+      const res = await fetch(`/api/receiving-lines?${params.toString()}`);
+      if (!res.ok) throw new Error('activity fetch failed');
+      const data = (await res.json()) as ApiResponse;
+      return data.receiving_lines ?? [];
+    };
+
+    // Source B — unfound POs (cartons at the dock Zoho can't match to a PO yet).
+    // These have NO unbox stamp, so getUnboxActivityAt orders them by created_at
+    // and they interleave by arrival with the unboxed cartons above. Mirror
+    // TriageUnfoundList's fetch + stub mapping (shared SoT). Only merged on the
+    // ALL-staff view: an unmatched carton has no unboxer, so a `?staff=` filter
+    // (one operator's unboxed work) shouldn't surface unassigned cartons.
+    const fetchUnfound = async (): Promise<ReceivingLineRow[]> => {
+      if (staffId != null) return [];
+      const res = await fetch(
+        '/api/receiving/unfound-queue?kind=unmatched_receiving&checked=false&limit=200',
+        { cache: 'no-store' },
+      );
+      if (!res.ok) throw new Error('unfound queue fetch failed');
+      const data = (await res.json()) as { rows?: UnfoundQueueRow[] };
+      return (data.rows ?? [])
+        .filter((r) => Number.isFinite(Number(r.source_id)))
+        .filter((r) => matchesQuery(r, ''))
+        .map(toStubRow);
+    };
+
+    // Degrade-not-fail: a failing source resolves empty so the other still lists.
+    // The shell re-sorts the union by getUnboxActivityAt, so array order here is
+    // irrelevant — unfound stubs land by their created_at among the unboxed rows.
+    const [activity, unfound] = await Promise.all([
+      fetchActivity(),
+      fetchUnfound().catch(() => [] as ReceivingLineRow[]),
+    ]);
+    const merged = [...activity, ...unfound];
+    return { success: true, receiving_lines: merged, total: merged.length };
   };
 
   return (
@@ -195,8 +266,8 @@ export function ReceivingRecentRail({
       eyebrowTitle="Recent"
       autoSelectFirstWhenEmpty
       getActivityAt={getUnboxActivityAt}
-      getStatusDot={getReceivingStatusDot}
-      getStatusDotLabel={getReceivingStatusDotLabel}
+      getStatusDot={getUnboxRecentStatusDot}
+      getStatusDotLabel={getUnboxRecentStatusDotLabel}
       renderQuantity={renderReceivingRailQuantity}
       previewQtyLabel="Received"
       getPreviewQty={(row) => ({

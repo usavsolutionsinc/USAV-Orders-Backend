@@ -127,7 +127,8 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   { id: 'receiving',         label: 'Receiving',   href: '/receiving',          icon: ClipboardList,   kind: 'station', requires: 'receiving.view' },
   { id: 'outbound',          label: 'Outbound',    href: '/outbound',           icon: Truck,           kind: 'station', requires: 'shipping.view' },
   { id: 'tech',              label: 'Testing',     href: '/tech',               icon: Wrench,          kind: 'station', requires: 'tech.view' },
-  { id: 'wipe',              label: 'Data Wipe',   href: '/wipe',               icon: ShieldCheck,     kind: 'station', requires: 'tech.data_wipe' },
+  // Data Wipe is temporarily absent from master nav — revisit when the station
+  // UX is ready for general rollout. /wipe route + API remain live.
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'main',    requires: 'fba.view' },
   { id: 'ops-photos',        label: 'Photo library', href: '/ops/photos',       icon: Camera,          kind: 'main',    requires: 'photos.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Box,             kind: 'station', requires: 'packing.view' },
@@ -334,7 +335,6 @@ const WAREHOUSE = '/warehouse';
 const SOURCING = '/sourcing';
 const PRODUCTS = '/products';
 const TECH = '/tech';
-const WIPE = '/wipe';
 const WALK_IN = '/walk-in';
 const ADMIN = '/admin';
 const OUTBOUND = '/outbound';
@@ -542,20 +542,8 @@ export const SIDEBAR_PAGE_NAV: SidebarPageNav[] = [
           ? 'history'
           : 'shipping',
   },
-  // ── Data Wipe ─────────────────────────────────────────────────────────────
-  // Station archetype with no sub-modes (scan a unit serial → record a secure
-  // wipe / factory-reset before grading). It carries a single canonical mode so
-  // the master-nav config invariant (every SIDEBAR_PAGE_NAV page declares modes
-  // + a resolver) holds; it is intentionally absent from MASTER_NAV_RAIL_PAGES,
-  // so no redundant one-pill L2 rail renders (same as Admin). Gated by the same
-  // `tech.data_wipe` permission the POST route enforces server-side.
-  {
-    id: 'wipe', label: 'Data Wipe', href: WIPE, icon: ShieldCheck, kind: 'station', requires: 'tech.data_wipe',
-    modes: [
-      { id: 'wipe', label: 'Data Wipe', icon: ShieldCheck, to: () => ({ pathname: WIPE }) },
-    ],
-    resolveMode: () => 'wipe',
-  },
+  // Data Wipe (`/wipe`) is temporarily absent from master nav — revisit when the
+  // station UX is ready for general rollout. Route + `tech.data_wipe` gate remain.
   // ── Walk-In (Repair queue tabs + Sales) ───────────────────────────────────
   // `?tab=active|done` drives the repair-queue status (default `active`);
   // `?mode=sales` flips the panel to the Sales surface. The status tabs clear

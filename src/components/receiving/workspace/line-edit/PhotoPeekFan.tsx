@@ -235,7 +235,7 @@ export function PhotoPeekFan({
                 {/* Count badge rides the FRONT card's visible corner. */}
                 {i === 0 && count > 1 ? (
                   <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-micro font-black leading-none text-white tabular-nums backdrop-blur-sm">
-                    ×{count}
+                    {count}
                   </span>
                 ) : null}
               </motion.div>

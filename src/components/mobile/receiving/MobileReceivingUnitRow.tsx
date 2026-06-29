@@ -199,16 +199,14 @@ export function MobileReceivingUnitRow({
               aria-label={hasPhotos ? `View ${photoCount} photos` : 'No photos yet'}
               className={
                 hasPhotos
-                  ? 'ds-raw-button relative inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
-                  : 'ds-raw-button relative inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
+                  ? 'ds-raw-button inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
+                  : 'ds-raw-button inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
               }
             >
-              <ImageIcon className="h-6 w-6" />
-              {hasPhotos ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-micro font-black tabular-nums text-white">
-                  {photoCount}
-                </span>
-              ) : null}
+              <span className="inline-flex items-center gap-1.5 leading-none">
+                <ImageIcon className="h-7 w-7" />
+                <span className="text-xl font-black tabular-nums">{photoCount}</span>
+              </span>
             </button>
           ) : (
             <Link
@@ -217,16 +215,14 @@ export function MobileReceivingUnitRow({
               aria-label={hasPhotos ? `View ${photoCount} photos` : 'No photos yet'}
               className={
                 hasPhotos
-                  ? 'relative inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
-                  : 'relative inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
+                  ? 'inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 active:bg-blue-100'
+                  : 'inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-300'
               }
             >
-              <ImageIcon className="h-6 w-6" />
-              {hasPhotos ? (
-                <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-micro font-black tabular-nums text-white">
-                  {photoCount}
-                </span>
-              ) : null}
+              <span className="inline-flex items-center gap-1.5 leading-none">
+                <ImageIcon className="h-7 w-7" />
+                <span className="text-xl font-black tabular-nums">{photoCount}</span>
+              </span>
             </Link>
           )}
           <Link

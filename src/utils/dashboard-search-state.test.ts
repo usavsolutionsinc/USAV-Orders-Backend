@@ -14,12 +14,13 @@ import {
 test('getDashboardOrderViewFromSearch prefers explicit view params', () => {
   assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('shipped=')), 'shipped');
   assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('unshipped=')), 'unshipped');
-  assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('pending=')), 'pending');
+  // Legacy ?pending resolves to the merged 'unshipped' mode (Awaiting+Pending merge).
+  assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('pending=')), 'unshipped');
   assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('fba=')), 'fba');
 });
 
-test('getDashboardOrderViewFromSearch falls back to pending', () => {
-  assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('search=abc')), 'pending');
+test('getDashboardOrderViewFromSearch falls back to unshipped', () => {
+  assert.equal(getDashboardOrderViewFromSearch(new URLSearchParams('search=abc')), 'unshipped');
 });
 
 test('normalizeDashboardOrderViewParams clears competing view params', () => {

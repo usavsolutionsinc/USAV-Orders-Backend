@@ -66,6 +66,11 @@ export function MobileReceivingList({ limit = 8 }: { limit?: number } = {}) {
 
   const { data, isLoading, refetch } = useMobileFeedQuery<ReceivingLineRow>({
     queryKey: QUERY_KEY,
+    // Capture navigates to a fullscreen (immersive) route and back, so the
+    // realtime photo push fires while this list is unmounted (no rewind). Always
+    // refetch on return so the camera ×N badge reconciles past the staleTime
+    // window — the optimistic bump in notifyReceivingPhotoChanged covers the gap.
+    refetchOnMount: 'always',
     queryFn: async () => {
       // Mirror ReceivingRecentRail (the unbox-mode "Unboxed" rail): the UNBOXING
       // pipeline (view=activity) with serials, sorted by unboxed_at DESC, so this

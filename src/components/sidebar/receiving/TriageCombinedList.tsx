@@ -25,11 +25,7 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { parseStaffParam } from '@/hooks/useStaffFilter';
 import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
 import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
-import {
-  toStubRow,
-  matchesQuery as matchesUnfound,
-  type UnfoundQueueRow,
-} from './TriageUnfoundList';
+import { toStubRow, matchesQuery as matchesUnfound, type UnfoundQueueRow } from './unfound-stub';
 import { matchesQuery as matchesScanned } from './ReceivingScannedRail';
 
 /** Best-available recency for the combined sort (newest scanned first). */

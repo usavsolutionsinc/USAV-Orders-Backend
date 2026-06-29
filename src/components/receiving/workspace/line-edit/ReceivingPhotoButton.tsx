@@ -146,7 +146,7 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
           iconRight={<Plus className="h-3 w-3" />}
           className={btnClass}
         >
-          {count > 0 ? <>×{count}</> : null}
+          {count > 0 ? <>{count}</> : null}
         </Button>
       </HoverTooltip>
 

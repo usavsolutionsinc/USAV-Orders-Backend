@@ -196,6 +196,23 @@ export function MobileSwipePhotoViewer({
   // Disarm delete when paging.
   useEffect(() => setDeleteArmed(false), [index]);
 
+  // Warm the HTTP + decode cache for the active photo and its neighbours so a
+  // settle never lands on an undecoded image — that late paint is the flash you
+  // see "select" the photo on finger-release. Decoding the same URL primes the
+  // browser cache the in-DOM <img> then reads from, so the swipe lands painted.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const NEIGHBOURS = 2;
+    for (let i = index - NEIGHBOURS; i <= index + NEIGHBOURS; i += 1) {
+      const slide = slides[i];
+      if (!slide) continue;
+      const img = new window.Image();
+      img.decoding = 'async';
+      img.src = slide.previewUrl;
+      void img.decode?.().catch(() => {});
+    }
+  }, [index, slides]);
+
   // Close when the last photo is removed; clamp a now-out-of-range index.
   useEffect(() => {
     if (open && slides.length === 0) onClose();
@@ -374,7 +391,7 @@ export function MobileSwipePhotoViewer({
           animate={rootPresence?.animate ?? undefined}
           exit={rootPresence?.exit}
           transition={isSheet ? undefined : framerTransitionMobile.cameraEnter}
-          className="fixed inset-0 select-none"
+          className="fixed inset-0 select-none overflow-hidden"
           style={{ zIndex: zLayer.modal + 1 }}
           data-testid="mobile-swipe-photo-viewer"
           data-presentation={presentation}
@@ -409,6 +426,9 @@ export function MobileSwipePhotoViewer({
                     src={slide.previewUrl}
                     alt={`Photo ${i + 1}`}
                     draggable={false}
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority={Math.abs(i - index) <= 1 ? 'high' : 'low'}
                     className="pointer-events-none max-h-full max-w-full object-contain"
                   />
                 </div>

@@ -47,6 +47,80 @@ export function invalidateReceivingFeeds(queryClient: QueryClient): void {
   }
 }
 
+/**
+ * Query-key roots whose cached payloads carry receiving-line rows with a
+ * `photo_count` field (the camera ×N badge). Used by the optimistic bump below
+ * so the badge moves the instant an upload commits — before the reconciling
+ * refetch lands. Kept narrow (only feeds that actually hold rows) so we don't
+ * walk unrelated caches.
+ */
+const RECEIVING_PHOTO_COUNT_ROOTS: ReadonlyArray<ReadonlyArray<string>> = [
+  ['receiving-lines-table'],
+  ['receiving-lines'],
+  ['receiving-lines-with-serials'],
+];
+
+interface PhotoCountRow {
+  receiving_id?: number | null;
+  photo_count?: number | null;
+}
+
+/**
+ * Adjust `photo_count` on every row matching `receivingId` inside one cached
+ * payload, returning a new reference only when something changed (so React
+ * Query skips a no-op notify). Handles both feed shapes: a plain `row[]`
+ * (mobile feeds) and the `{ receiving_lines: row[] }` envelope (desktop rails).
+ */
+function adjustRowsPhotoCount<T>(data: T, receivingId: number, delta: number): T {
+  const bumpRow = (row: PhotoCountRow): PhotoCountRow => {
+    if (!row || typeof row !== 'object') return row;
+    if (Number(row.receiving_id) !== receivingId) return row;
+    const next = Math.max(0, (Number(row.photo_count) || 0) + delta);
+    return next === (Number(row.photo_count) || 0) ? row : { ...row, photo_count: next };
+  };
+  const bumpList = (list: PhotoCountRow[]): PhotoCountRow[] => {
+    let changed = false;
+    const next = list.map((r) => {
+      const b = bumpRow(r);
+      if (b !== r) changed = true;
+      return b;
+    });
+    return changed ? next : list;
+  };
+
+  if (Array.isArray(data)) {
+    const next = bumpList(data as PhotoCountRow[]);
+    return (next === data ? data : next) as T;
+  }
+  if (data && typeof data === 'object') {
+    const envelope = data as { receiving_lines?: PhotoCountRow[] };
+    if (Array.isArray(envelope.receiving_lines)) {
+      const next = bumpList(envelope.receiving_lines);
+      return (next === envelope.receiving_lines ? data : { ...data, receiving_lines: next }) as T;
+    }
+  }
+  return data;
+}
+
+/**
+ * Optimistically move the camera ×N badge for a carton across every cached
+ * receiving feed, without waiting for the network refetch. Pair with
+ * {@link invalidateReceivingFeeds} (which {@link notifyReceivingPhotoChanged}
+ * already calls) so the optimistic value reconciles against the server count.
+ */
+export function bumpReceivingPhotoCount(
+  queryClient: QueryClient,
+  receivingId: number,
+  delta: number,
+): void {
+  if (!Number.isFinite(receivingId) || receivingId <= 0 || !delta) return;
+  for (const queryKey of RECEIVING_PHOTO_COUNT_ROOTS) {
+    queryClient.setQueriesData<unknown>({ queryKey }, (data: unknown) =>
+      data == null ? data : adjustRowsPhotoCount(data, receivingId, delta),
+    );
+  }
+}
+
 /** TanStack key for `/api/receiving-photos?receivingId=…`. */
 export function receivingPhotosQueryKey(receivingId: number) {
   return ['receiving-photos', receivingId] as const;
@@ -90,6 +164,18 @@ export function notifyReceivingPhotoChanged(
   dispatchReceivingPhotoChanged(payload);
   const receivingId = payload.receivingId;
   if (receivingId == null || !Number.isFinite(receivingId) || receivingId <= 0) return;
+
+  // Optimistically move the camera ×N badge before the refetch round-trip, so a
+  // capture on this device updates the feed the moment the upload commits. The
+  // invalidate inside refreshReceivingPhotos() reconciles against the server
+  // count. 'update' touches no photo, so it carries no delta.
+  const photoDelta = payload.photoIds?.length ?? 1;
+  if (payload.action === 'delete') {
+    bumpReceivingPhotoCount(queryClient, receivingId, -photoDelta);
+  } else if (payload.action === 'insert' || payload.action === 'upload') {
+    bumpReceivingPhotoCount(queryClient, receivingId, photoDelta);
+  }
+
   const deletedId =
     payload.action === 'delete' && payload.photoIds?.length === 1
       ? payload.photoIds[0]
