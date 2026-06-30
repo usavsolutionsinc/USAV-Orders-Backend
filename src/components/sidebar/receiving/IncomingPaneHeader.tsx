@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   PaneHeader,
   PaneHeaderTitle,
-  PaneHeaderCount,
   PaneHeaderPagination,
 } from '@/components/ui/pane-header';
 import { INCOMING_PAGE_SIZE } from '@/lib/receiving/receiving-modes';
@@ -32,8 +31,6 @@ export const INCOMING_SORT_LABELS: Record<IncomingSort, string> = {
 export { INCOMING_PAGE_SIZE };
 
 export interface IncomingPaneHeaderProps {
-  /** Visible-row count on the current page (post-filter). */
-  count: number;
   /** Total matching rows across all pages (from `total` in API response). */
   total: number;
   /** Current 1-based page index. */
@@ -48,7 +45,7 @@ export interface IncomingPaneHeaderProps {
  *
  * Uses the same 40px {@link PaneHeader} shell as {@link WeekHeader}.
  */
-export function IncomingPaneHeader({ count, total, page }: IncomingPaneHeaderProps) {
+export function IncomingPaneHeader({ total, page }: IncomingPaneHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -69,12 +66,7 @@ export function IncomingPaneHeader({ count, total, page }: IncomingPaneHeaderPro
     <PaneHeader
       className="border-b-0"
       rowClassName="border-b border-gray-300"
-      leftSlot={
-        <>
-          <PaneHeaderTitle>Incoming POs</PaneHeaderTitle>
-          <PaneHeaderCount count={count} />
-        </>
-      }
+      leftSlot={<PaneHeaderTitle>Incoming POs</PaneHeaderTitle>}
       rightSlot={
         <PaneHeaderPagination
           page={safePage}

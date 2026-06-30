@@ -27,6 +27,7 @@ import { WorkspaceCard } from '@/design-system/components';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
 import { LabelIdentifyButton } from '@/components/receiving/label-identify/LabelIdentifyButton';
 import { SerialCard } from '@/components/receiving/workspace/SerialCard';
+import { NoSerialControl } from '@/components/receiving/workspace/line-edit/NoSerialControl';
 import {
   INTAKE_CLASSIFICATION_OPTS,
   type IntakeClassification,
@@ -110,6 +111,10 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
     receivingTypeHint = 'PO',
     onFileReturnClaim,
     onActiveConditionChange,
+    serialAbsent,
+    serialAbsentReason,
+    requireSerialConfirmation,
+    onSerialAbsentChange,
     renderLineActions,
     showSerialScan = true,
     onOpenInUnbox,
@@ -187,6 +192,27 @@ export function UnmatchedItemsSection(props: UnmatchedItemsSectionProps) {
               onActiveConditionChange?.(next);
             }}
             onAdd={(sn) => c.handleReturnSerialScan(sn)}
+            noSerialActive={serialAbsent ?? false}
+            onMarkNoSerial={
+              onSerialAbsentChange
+                ? () =>
+                    onSerialAbsentChange(
+                      serialAbsent
+                        ? { absent: false, reason: null }
+                        : { absent: true, reason: serialAbsentReason ?? 'NOT_SERIALIZED' },
+                    )
+                : undefined
+            }
+            noSerialSlot={
+              onSerialAbsentChange ? (
+                <NoSerialControl
+                  absent
+                  reason={serialAbsentReason ?? null}
+                  required={requireSerialConfirmation ?? false}
+                  onChange={onSerialAbsentChange}
+                />
+              ) : undefined
+            }
             resultSlot={
               // Importing loader — the only feedback surface for the scan.
               // On success the imported line row below (and the bound PO# /

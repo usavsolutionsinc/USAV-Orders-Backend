@@ -15,7 +15,7 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
  * surfaced field stays a data change. See the migration plan §4 / §8.
  */
 
-export interface ReceivingFeedField {
+interface ReceivingFeedField {
   k: string;
   v: string;
 }
@@ -50,7 +50,7 @@ export function unitTitle(row: ReceivingLineRow): string {
   );
 }
 
-export function unitPo(row: ReceivingLineRow): string {
+function unitPo(row: ReceivingLineRow): string {
   return (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').toString().trim();
 }
 

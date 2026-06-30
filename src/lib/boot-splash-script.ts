@@ -22,8 +22,6 @@
  *   - z-index 2000              must match `tokens/z-index.ts` (splash)
  * Keep them in sync.
  */
-export const BOOT_SPLASH_PRE_ID = '__boot_splash_pre';
-
 export const BOOT_SPLASH_SCRIPT = `(function(){
   try {
     if (sessionStorage.getItem('usav:boot-splash') !== '1') return;

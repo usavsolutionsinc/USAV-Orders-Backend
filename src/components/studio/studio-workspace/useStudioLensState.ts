@@ -18,7 +18,7 @@ const FLOW_PING_TTL_MS = 1500;
 /** Stable empty set so the canvas's flowEdges prop is referentially stable when idle. */
 const EMPTY_FLOW: ReadonlySet<string> = new Set();
 
-export interface StudioLensStateParams {
+interface StudioLensStateParams {
   active: boolean;
   v: string | null;
   lens: StudioLens;

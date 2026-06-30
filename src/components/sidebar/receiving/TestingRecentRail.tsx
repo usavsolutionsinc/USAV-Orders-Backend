@@ -18,7 +18,12 @@ export function getTestingStatusDot(row: ReceivingLineRow): string {
 
 function getTestingStatusDotLabel(row: ReceivingLineRow): string {
   const stage = workflowStage(row.workflow_status);
-  return `${stage.label} — ${stage.description}`;
+  // Short lifecycle label only — the old `${label} — ${description}` form wrapped
+  // into a full-width banner in the hover popover badge. DONE is the terminal
+  // "finalized" stage, but operator-facing it reads as "Received" (matching the
+  // receiving rails + workflowStatusTableLabel's DONE → RECEIVED), never "Done".
+  if (stage.status === 'DONE') return 'Received';
+  return stage.label;
 }
 
 /** Full invalidation triggers — module-scope so the shell's refresh-listener

@@ -16,6 +16,7 @@ import {
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { isReceivingUnifiedInbound } from '@/lib/feature-flags';
 import { recordReceivingScan } from '@/lib/receiving/record-scan';
+import { recordUnboxScanOpened } from '@/lib/receiving/unbox-scan-opened';
 import { resolveShipmentForScan } from '@/lib/receiving/resolve-shipment-for-scan';
 import type { ReceivingExceptionCode } from '@/lib/receiving/exception-codes';
 import {
@@ -668,6 +669,15 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       : null;
     // Server-trusted actor from the verified session cookie.
     const staffId = ctx.staffId;
+    const intakeSurface = body?.intakeSurface === 'unbox' ? 'unbox' : 'triage';
+    const stampUnboxOpened = async (
+      receivingId: number,
+      scanId: number | null,
+      tracking: string,
+    ) => {
+      if (intakeSurface !== 'unbox') return;
+      await recordUnboxScanOpened(ctx.organizationId, receivingId, staffId, scanId, tracking);
+    };
 
     if (!trackingNumber) {
       return NextResponse.json(
@@ -722,12 +732,10 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           resolvedVia = 'local';
         }
       }
-      if (!poId && localOnly) {
-        // Instant local phase: the value isn't in local data yet (cron may not
-        // have imported it). Report a clean not-found WITHOUT touching Zoho so
-        // the scan stays loader-free; the client re-calls without localOnly (the
-        // only loader-bearing phase), which runs the exact Zoho lookup below and
-        // re-pings in case the cron just imported the PO. No carton is created.
+      if (!poId && localOnly && mode === 'order') {
+        // Instant local phase for an EXPLICIT order# scan only. `auto` must fall
+        // through to the carrier-tracking path — returning zoho_pending here
+        // forced every tracking scan through synchronous Zoho + the loader.
         return NextResponse.json({
           success: true,
           matched: false,
@@ -788,7 +796,8 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           }
         });
       }
-      await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
+      const orderScanId = await recordScan(receivingId, trackingNumber, carrier, staffId, 'zoho_po');
+      await stampUnboxOpened(receivingId, orderScanId, trackingNumber);
       await applyIntakeClassification(receivingId, classification, ctx.organizationId);
 
       const [lines, receiving_package] = await Promise.all([
@@ -880,13 +889,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
           [existingScan.receiving_id, ctx.organizationId],
         );
         const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
-        await recordReceivingScan(
+        const dedupScanId = await recordReceivingScan(
           existingScan.receiving_id,
           trackingNumber,
           carrier,
           staffId,
           recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
         );
+        await stampUnboxOpened(existingScan.receiving_id, dedupScanId, trackingNumber);
         const poIdsSet = new Set<string>();
         for (const l of lines) {
           if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
@@ -949,6 +959,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         ctx.organizationId,
       );
       await applyIntakeClassification(receivingId, classification, ctx.organizationId);
+      await stampUnboxOpened(receivingId, scanId, trackingNumber);
       const [lines, receiving_package] = await Promise.all([
         fetchLines(receivingId, ctx.organizationId),
         fetchReceivingPackage(receivingId, ctx.organizationId),
@@ -1143,6 +1154,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
         staffId,
         'zoho_po',
       );
+      await stampUnboxOpened(primaryReceivingId, scanId, trackingNumber);
       // If the scan was attached to a different receiving row (rare race
       // between promote and upsert fallback), re-parent it now. Failure here
       // leaves an orphan scan pointing at the stale receiving row — log it
@@ -1390,6 +1402,7 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       staffId,
       'unmatched',
     );
+    await stampUnboxOpened(unmatchedReceivingId, unmatchedScanId, trackingNumber);
 
     const exceptionReason = zohoReachable ? 'not_found' : 'zoho_unreachable';
     const exception = await upsertOpenTrackingException({

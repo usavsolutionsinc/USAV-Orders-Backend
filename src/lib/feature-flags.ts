@@ -162,6 +162,22 @@ export function isReceivingUnifiedInbound(): boolean {
 }
 
 /**
+ * Auto-link a returned serial to its originating order on the normal unbox
+ * serial scan (the shipped↔returned loop). When ON, scanning a serial whose
+ * unit was previously SHIPPED resolves the prior sales order, flips its open
+ * SHIPPED allocation → RETURNED, persists the per-line source order + listing
+ * link, and promotes an unfound carton to a found RETURN — all in one request,
+ * so the workspace can display + pre-fill instantly (see
+ * src/lib/receiving/returned-serial-link.ts). Default ON: the resolve is
+ * skipped unless the scan is a return, the writes are idempotent + reversible
+ * (detach the serial), and a real Zoho-PO carton is never reclassified. Set
+ * RECEIVING_RETURN_AUTOLINK=false to fall back to detect-and-display only.
+ */
+export function isReceivingReturnAutolink(): boolean {
+  return readBoolEnv('RECEIVING_RETURN_AUTOLINK', true);
+}
+
+/**
  * Unified-engine chokepoint cutover (UNIFIED-ENGINE-MASTER-PLAN §1.1). When ON,
  * domain handlers route their serial-unit status change + inventory event +
  * engine tap through the single guarded applyTransition() chokepoint instead of
@@ -185,6 +201,21 @@ export function isUnifiedEngineApplyTransition(): boolean {
  */
 export function isUnifiedEngineVerdictConfig(): boolean {
   return readBoolEnv('UNIFIED_ENGINE_VERDICT_CONFIG');
+}
+
+/**
+ * Shipped-table read model. When ON, the /api/packerlogs week query reads the
+ * precomputed `packer_log_enrichment` projection (catalog title / v_sku lookup /
+ * order match / tracking json) via a 1:1 join instead of re-running the ~6
+ * non-indexable LATERAL subqueries per row. Volatile carrier status stays a live
+ * join either way. Default OFF — the off branch is the byte-identical legacy
+ * query, so this is a no-op until the table is backfilled and the flag flipped.
+ * Set PACKER_LOG_ENRICHMENT_READ=true once
+ * scripts/backfill-packer-log-enrichment.mjs has run. See
+ * src/lib/neon/packer-log-enrichment.ts.
+ */
+export function isPackerLogEnrichmentRead(): boolean {
+  return readBoolEnv('PACKER_LOG_ENRICHMENT_READ');
 }
 
 /**

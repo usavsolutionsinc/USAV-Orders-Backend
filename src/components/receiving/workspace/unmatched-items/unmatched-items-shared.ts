@@ -44,6 +44,15 @@ export interface UnmatchedItemsSectionProps {
    */
   onActiveConditionChange?: (condition: string) => void;
   /**
+   * No-serial waiver state, owned by the unbox controller (whose receive runs the
+   * carton commit). Threaded so an unfound carton can be received with an explicit
+   * "no serial" reason instead of a blank serial.
+   */
+  serialAbsent?: boolean;
+  serialAbsentReason?: string | null;
+  requireSerialConfirmation?: boolean;
+  onSerialAbsentChange?: (next: { absent: boolean; reason: string | null }) => void;
+  /**
    * Optional render override for the per-line action area (replaces the
    * default `ConditionPills` + serial card). Use this from the testing
    * workspace to drop in `TestingStatusPills` + `InlineSerialAdder` per line so

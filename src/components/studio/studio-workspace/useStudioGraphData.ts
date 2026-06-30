@@ -15,7 +15,7 @@ import type { Busy } from './types';
 
 const STATION_KEYS = new Set(STATIONS.map((s) => s.key));
 
-export interface StudioGraphDataParams {
+interface StudioGraphDataParams {
   active: boolean;
   v: string | null;
   canManage: boolean;

@@ -37,7 +37,7 @@ export function TagInput({
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-2.5 py-2 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+    <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3 py-1.5 transition focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
       {tags.map((t) => (
         <span
           key={t}

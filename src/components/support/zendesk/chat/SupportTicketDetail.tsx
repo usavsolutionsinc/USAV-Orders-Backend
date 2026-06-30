@@ -57,7 +57,7 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
     return Array.from(new Set(urls));
   }, [commentsData, photosData]);
 
-  const gallery = usePhotoGallery({ photos: photoUrls, showCopyLinks: false });
+  const gallery = usePhotoGallery({ photos: photoUrls });
   const { openViewer } = gallery;
 
   const onOpenPhoto = useCallback(

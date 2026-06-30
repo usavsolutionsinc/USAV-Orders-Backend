@@ -36,6 +36,7 @@ import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
 import { dispatchSelectLine } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { safeRandomUUID } from '@/lib/safe-uuid';
 import type { TrackingScanResult } from '@/components/sidebar/receiving/useTrackingScan';
 import { ReceivingReturnBanner } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
@@ -46,6 +47,7 @@ import { LocalPickupSidebarList } from '@/components/work-orders/LocalPickupSide
 import { ReceivingModeSwitcher } from '@/components/sidebar/receiving/ReceivingModeSwitcher';
 import { TriageScanBand, UnboxScanBand } from '@/components/sidebar/receiving/ReceivingScanBands';
 import { UnboxViewToggle } from '@/components/sidebar/receiving/UnboxViewToggle';
+import { TriageViewToggle } from '@/components/sidebar/receiving/TriageViewToggle';
 import { ReceivingRailBody } from '@/components/sidebar/receiving/ReceivingRailBody';
 import { ReceivingBulkActionBar } from '@/components/sidebar/receiving/ReceivingBulkActionBar';
 
@@ -86,7 +88,7 @@ export function ReceivingSidebarPanel() {
   });
 
   // ── Mode / sub-view (URL-backed) ─────────────────────────────────────────
-  const { mode, unboxView, triageView, isScanSurface, updateMode, updateUnboxView } =
+  const { mode, unboxView, triageView, isScanSurface, updateMode, updateUnboxView, updateTriageView } =
     useReceivingMode();
 
   // ── Unbox session: PO context + serial scan ──────────────────────────────
@@ -160,6 +162,7 @@ export function ReceivingSidebarPanel() {
     setPoContext,
     setArmedLineId,
     setPendingCandidates,
+    receivingMode: mode,
   });
 
   usePhoneScanBridge({
@@ -190,7 +193,12 @@ export function ReceivingSidebarPanel() {
     handleRailBulkDelete,
   } = useRailEditMode({ isScanSurface, mode, unboxView, triageView });
 
-  // ── Triage scan/filter input (doubles as the Found/Unfound rail filter) ──
+  // ── Triage scan input (scan-only — NOT a list filter) ──
+  // The station scan bar only scans; it never filters the triage list. Feeding
+  // its value into the list churned the queryKey per-keystroke and briefly
+  // collapsed the list to "found only" mid-scan. Searching scanned orders lives
+  // in the dedicated History mode, so the triage list always shows the full
+  // Found ∪ Unfound set and the bar just resolves + clears.
   const [triageQuery, setTriageQuery] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
 
@@ -210,11 +218,21 @@ export function ReceivingSidebarPanel() {
     void (async () => {
       let pick: ReceivingLineRow | null = null;
       try {
-        const res = await fetch(
-          `/api/receiving-lines?receiving_id=${recvId}&include=serials`,
-          { cache: 'no-store' },
-        );
-        const data = res.ok ? await res.json().catch(() => null) : null;
+        // Reuse the SAME hydration fetch openMatchedCarton issues: both go
+        // through queryClient.fetchQuery on the ['receiving-siblings', recvId]
+        // key, so the two concurrent identical requests dedupe into a single
+        // /api/receiving-lines round-trip instead of double-fetching on every
+        // matched triage scan. retry:false keeps the prior one-shot behavior.
+        const data = await queryClient.fetchQuery({
+          queryKey: ['receiving-siblings', recvId],
+          queryFn: async () => {
+            const r = await fetch(
+              `/api/receiving-lines?receiving_id=${recvId}&include=serials`,
+            );
+            return r.json();
+          },
+          retry: false,
+        });
         const rows: ReceivingLineRow[] = Array.isArray(data?.receiving_lines)
           ? (data.receiving_lines as ReceivingLineRow[])
           : [];
@@ -231,7 +249,7 @@ export function ReceivingSidebarPanel() {
       if (!pick) pick = buildUnmatchedStubRow(recvId, result.tracking);
       dispatchSelectLine(pick);
     })();
-  }, []);
+  }, [queryClient]);
 
   // External focus trigger — Quick Access chips dispatch `receiving-focus-scan`
   // after navigating so the input is hot even when the panel was already mounted.
@@ -257,7 +275,7 @@ export function ReceivingSidebarPanel() {
 
   return (
     // `relative` anchors the edit-mode SelectionActionBar pinned at the bottom.
-    <div className="relative h-full flex flex-col overflow-hidden">
+    <div className="relative flex h-full min-w-0 flex-col overflow-hidden">
       <RailEditModeProvider
         active={railEditMode && isScanSurface}
         selectedIds={railSelectedIds}
@@ -282,15 +300,28 @@ export function ReceivingSidebarPanel() {
             {mode === 'history' ? (
               <ReceivingHistorySearchSection onSwitchToReceiving={() => updateMode('receive')} />
             ) : mode === 'triage' ? (
-              // Triage is a scan surface too: a tracking-only entry wired to the
-              // same submitTrackingScan → lookup-po flow. The input doubles as
-              // the live Found/Unfound filter; submit clears it so the resolved
-              // line is visible instead of filtered out.
+              // Triage is a scan surface: a tracking-only entry wired to the same
+              // submitTrackingScan → lookup-po flow. Scan-only — the input never
+              // filters the list (that's History mode); it just resolves + clears.
               <TriageScanBand
                 themeColor={themeColor}
                 value={triageQuery}
                 onChange={setTriageQuery}
                 onSubmit={() => {
+                  const tracking = triageQuery.trim();
+                  // Optimistic "importing" skeleton: announce the scan so the
+                  // triage list shows a placeholder row INSTANTLY (no right-pane
+                  // takeover loader); TriageSidebarBody reconciles it in place on
+                  // resolve. The clientEventId is the row's DURABLE identity — the
+                  // stub and the resolved row key by it, so the swap is an in-place
+                  // update (no disappear-then-reappear flicker), not a remount.
+                  if (tracking) {
+                    window.dispatchEvent(
+                      new CustomEvent('receiving-scan-importing', {
+                        detail: { tracking, clientEventId: safeRandomUUID() },
+                      }),
+                    );
+                  }
                   submitTrackingScan(triageQuery, {
                     mode: 'tracking',
                     onResult: selectResolvedTriageCarton,
@@ -307,10 +338,9 @@ export function ReceivingSidebarPanel() {
                 value={bulkTracking}
                 onChange={setBulkTracking}
                 onSubmit={(m) => {
-                  // A scan's result lands in the Recent feed — flip the rail off
-                  // Queue first so the scanned carton is visible the moment it
-                  // selects (the selection pin surfaces it at the top).
-                  if (unboxView === 'queue') updateUnboxView('recent');
+                  // Unbox: one cache upsert on resolve (final title). No importing
+                  // stub — that caused tracking# → Unfound PO flicker.
+                  if (unboxView === 'queue') updateUnboxView('recent', { clearLine: false });
                   submitTrackingScan(undefined, { mode: m });
                 }}
                 inputRef={scanInputRef}
@@ -323,40 +353,43 @@ export function ReceivingSidebarPanel() {
 
             <ReceivingReturnBanner returns={returns} onDismiss={dismissReturn} />
 
-            {/* Scrollable body — sub-view toggle + multi-match picker + rail.
-                The editor lives in the right pane. */}
-            <div className="min-h-0 flex-1 overflow-auto">
-              {mode === 'receive' && (
-                <UnboxViewToggle value={unboxView} onChange={updateUnboxView} />
-              )}
+            {/* Pinned sub-view toggles — outside the rail scroll body so pill
+                shadows and row entrance motion are not clipped by overflow. */}
+            {isScanSurface && mode === 'receive' ? (
+              <UnboxViewToggle value={unboxView} onChange={updateUnboxView} />
+            ) : null}
+            {isScanSurface && mode === 'triage' ? (
+              <TriageViewToggle value={triageView} onChange={updateTriageView} />
+            ) : null}
 
-              {/* Per-staff / per-SKU narrowing now lives on the History page
-                  (cleaner there); the live unbox / triage rails stay all-staff. */}
-
-              {/* Multi-match picker — shown when a tracking scan resolves to >1
-                  open lines and the user hasn't picked one. */}
-              {scanDriven && !selectedLine && scanMatchedRows.length > 1 && (
-                <ReceivingLinePicker
-                  rows={scanMatchedRows}
-                  onPick={(line) => {
-                    setLineAccordionBootstrap('default');
-                    setSelectedLine(line);
-                  }}
-                  onCancel={() => {
-                    setScanDriven(false);
-                    setScanMatchedRows([]);
-                    clearScanSession();
-                  }}
-                />
-              )}
-
-              <ReceivingRailBody
-                mode={mode}
-                unboxView={unboxView}
-                selectedLine={selectedLine}
-                triageFilterText={triageQuery}
+            {/* Multi-match picker — pinned above the rail so it stays visible. */}
+            {scanDriven && !selectedLine && scanMatchedRows.length > 1 ? (
+              <ReceivingLinePicker
+                rows={scanMatchedRows}
+                onPick={(line) => {
+                  setLineAccordionBootstrap('default');
+                  setSelectedLine(line);
+                }}
+                onCancel={() => {
+                  setScanDriven(false);
+                  setScanMatchedRows([]);
+                  clearScanSession();
+                }}
               />
-            </div>
+            ) : null}
+
+            {/* Rail only — matches TestingSidebarPanel: vertical scroll, no
+                horizontal clip from overflow-auto. */}
+            {isScanSurface ? (
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
+                <ReceivingRailBody
+                  mode={mode}
+                  unboxView={unboxView}
+                  selectedLine={selectedLine}
+                  triageFilterText=""
+                />
+              </div>
+            ) : null}
           </>
         )}
 

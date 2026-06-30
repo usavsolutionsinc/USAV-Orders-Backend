@@ -78,18 +78,20 @@ export function ClaimComposer({ c }: { c: ZendeskClaimController }) {
             />
           </div>
 
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,9.5rem)_minmax(0,1fr)]">
             <div className="space-y-1.5">
               <label className={labelCls}>Priority</label>
               <ZendeskSelect
                 value={c.priority}
                 options={PRIORITY_OPTIONS}
                 onChange={(v) => c.setPriority(v as typeof c.priority)}
+                size="field"
+                className="w-full"
               />
             </div>
-            <div className="min-w-[180px] flex-1 space-y-1.5">
+            <div className="space-y-1.5">
               <label className={labelCls}>Tags</label>
-              <TagInput tags={c.tags} onChange={c.setTags} />
+              <TagInput tags={c.tags} onChange={c.setTags} placeholder="Add tags…" />
             </div>
           </div>
 
@@ -131,10 +133,7 @@ export function ClaimComposer({ c }: { c: ZendeskClaimController }) {
         </>
       ) : (
         <>
-          <div className="space-y-1.5">
-            <label className={labelCls}>Ticket</label>
-            <ClaimTicketPicker ticket={c.ticket} onPick={c.setTicket} />
-          </div>
+          <ClaimTicketPicker ticket={c.ticket} onPick={c.setTicket} />
           {c.ticket ? (
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">

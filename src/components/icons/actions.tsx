@@ -160,14 +160,6 @@ export const Reply = ({ className = "w-6 h-6" }: { className?: string }) => (
     </svg>
 );
 
-export const MoreHorizontal = ({ className = "w-6 h-6" }: { className?: string }) => (
-    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
-        <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-        <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
-    </svg>
-);
-
 export const Upload = ({ className = "w-6 h-6" }: { className?: string }) => (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

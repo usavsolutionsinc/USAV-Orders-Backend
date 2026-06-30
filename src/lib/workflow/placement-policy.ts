@@ -34,7 +34,7 @@ import {
   type ResolvedPlacement,
 } from './placement';
 
-export interface PlacementPolicyDeps {
+interface PlacementPolicyDeps {
   /** Configs of every `decision` node in the org's ACTIVE workflow definition. */
   loadActiveDecisionConfigs: (orgId: OrgId) => Promise<Array<Record<string, unknown>>>;
 }
@@ -91,7 +91,7 @@ export async function loadOrgPlacementRules(
 }
 
 /** A resolved site placement + which policy layer it came from (for logging). */
-export interface SitePlacementResult {
+interface SitePlacementResult {
   bin: ResolvedPlacement;
   source: 'org' | 'system';
 }

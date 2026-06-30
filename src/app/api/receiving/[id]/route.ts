@@ -96,8 +96,10 @@ export async function GET(
          r.zoho_warehouse_id,
          r.support_notes,
          r.listing_url,
-         to_char(r.received_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')  AS received_at,
-         r.received_by,
+         -- Operator "received" in the Unbox sense = unboxed event (not door scan).
+         -- Door scan is surfaced separately as tracking_scanned_*.
+         to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS received_at,
+         r.unboxed_by                                               AS received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
          r.unboxed_by,
          -- Tracking-scan provenance. Prefer the earliest receiving_scans row
@@ -110,6 +112,9 @@ export async function GET(
          ) AS tracking_scanned_at,
          COALESCE(rs_first.scanned_by, r.received_by) AS tracking_scanned_by,
          staff_scan.name AS tracking_scanned_by_name,
+         to_char(r.unbox_opened_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS unbox_opened_at,
+         r.unbox_opened_by,
+         staff_unbox_open.name AS unbox_opened_by_name,
          staff_unbox.name AS unboxed_by_name,
          staff_recv.name AS received_by_name,
          to_char(r.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS created_at,
@@ -129,8 +134,9 @@ export async function GET(
          LIMIT 1
        ) rs_first ON TRUE
        LEFT JOIN staff staff_scan ON staff_scan.id = COALESCE(rs_first.scanned_by, r.received_by)
+       LEFT JOIN staff staff_unbox_open ON staff_unbox_open.id = r.unbox_opened_by
        LEFT JOIN staff staff_unbox ON staff_unbox.id = r.unboxed_by
-       LEFT JOIN staff staff_recv ON staff_recv.id = r.received_by
+       LEFT JOIN staff staff_recv ON staff_recv.id = r.unboxed_by
        WHERE r.id = $1 AND r.organization_id = $2
        LIMIT 1`,
       [id, orgId],
@@ -152,9 +158,9 @@ export async function GET(
          rl.item_name,
          rl.quantity_expected,
          rl.quantity_received,
-         rl.qa_status,
-         rl.disposition_code,
-         rl.condition_grade,
+         rlt.qa_status,
+         rlt.disposition_code,
+         rlt.condition_grade,
          rl.workflow_status::text                          AS workflow_status,
          rl.zoho_purchaseorder_id,
          rl.zoho_purchaseorder_number,
@@ -169,6 +175,9 @@ export async function GET(
          to_char(rl.created_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS created_at,
          to_char(rl.updated_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS updated_at
        FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt
+         ON rlt.receiving_line_id = rl.id
+        AND rlt.organization_id = rl.organization_id
        LEFT JOIN receiving r_cart ON r_cart.id = rl.receiving_id
        LEFT JOIN shipping_tracking_numbers stn_line ON stn_line.id = r_cart.shipment_id
        WHERE rl.receiving_id = $1 AND rl.organization_id = $2

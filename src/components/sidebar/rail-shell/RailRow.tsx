@@ -1,21 +1,18 @@
 'use client';
 
-import {
-  useRef,
-  type MouseEvent as ReactMouseEvent, type ReactNode,
-} from 'react';
+import { useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import type { Variants } from 'framer-motion';
 import { motion, AnimatePresence } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { Check, ChevronDown } from '@/components/Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
-import { staggerRevealItem } from '@/design-system/primitives/StaggerReveal';
 import { railRelativeTime, type SidebarRailRowContext } from './sidebar-rail-shared';
 import { RailPopover } from './RailPopover';
 import { useRailHoverPreview } from './useRailHoverPreview';
 
 export function RailRow<TRow>({
-  row, index, isSelected, isFocused, editActive, isChecked, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
-  staggerReveal, onToggleGroup, getStatusDot, getStatusDotLabel, getActivityAt, renderRowMain, renderPopover, onClick,
+  row, index, isSelected, isFocused, editActive, isChecked, isDisabled, groupSize, groupIndex, isCollapsed, showInlinePkgChip,
+  staggerCascade, staggerItemVariants, onToggleGroup, getStatusDot, getStatusDotLabel, getActivityAt, renderRowMain, renderPopover, onClick,
 }: {
   row: TRow;
   index: number;
@@ -23,11 +20,15 @@ export function RailRow<TRow>({
   isFocused: boolean;
   editActive: boolean;
   isChecked: boolean;
+  isDisabled?: boolean;
   groupSize: number;
   groupIndex: number;
   isCollapsed: boolean;
   showInlinePkgChip: boolean;
-  staggerReveal: boolean;
+  /** True when this row is part of the first-load stagger cascade. */
+  staggerCascade: boolean;
+  /** When set, rows enter with these variants (cascade or individually). */
+  staggerItemVariants?: Variants;
   onToggleGroup?: () => void;
   getStatusDot: (row: TRow) => string;
   getStatusDotLabel?: (row: TRow) => string;
@@ -47,7 +48,7 @@ export function RailRow<TRow>({
   // Shared hover-preview engine. Disabled in edit mode — that surface is for
   // picking rows, and the popover's "Open →" CTA contradicts click-to-check.
   const { isOpen: previewOpen, scheduleOpen, scheduleClose, dismiss } = useRailHoverPreview({
-    enabled: Boolean(renderPopover) && !editActive,
+    enabled: Boolean(renderPopover) && !editActive && !isDisabled,
   });
 
   const pkgChip = showInlinePkgChip ? (
@@ -73,12 +74,14 @@ export function RailRow<TRow>({
 
   const activityAt = getActivityAt?.(row);
 
-  // Stagger mode: inherit the parent <ul>'s hidden→show timeline via variants
-  // (exit lives in the variant too). Default mode: opacity-only enter/exit with
-  // no initial mount animation, as before.
-  const motionProps = staggerReveal
-    ? { variants: staggerRevealItem }
-    : { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.12, ease: motionBezier.easeOut } };
+  // Stagger mode: inherit the parent <ul>'s hidden→show timeline when part of the
+  // first-load cascade; otherwise play the same variants individually (e.g. a
+  // freshly-scanned row arriving after the cascade). Default: opacity-only.
+  const motionProps = staggerItemVariants
+    ? staggerCascade
+      ? { variants: staggerItemVariants }
+      : { initial: 'hidden' as const, animate: 'show' as const, variants: staggerItemVariants }
+    : { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 0, pointerEvents: 'none' as const }, transition: { duration: 0.12, ease: motionBezier.easeOut } };
 
   return (
     <motion.li
@@ -105,11 +108,15 @@ export function RailRow<TRow>({
         data-rail-row
         data-rail-index={index}
         tabIndex={-1}
+        disabled={isDisabled}
+        aria-disabled={isDisabled || undefined}
         onClick={onClick}
         // Shift-click range select: stop the browser's native shift-click text
         // selection from highlighting row labels across the range.
         onMouseDown={(e) => { if (editActive && e.shiftKey) e.preventDefault(); }}
         className={`ds-raw-button relative flex w-full gap-2.5 text-left transition-colors ${isGrouped ? 'pl-3 pr-2' : 'px-2'} ${
+          isDisabled ? 'cursor-wait opacity-80' : ''
+        } ${
           (editActive ? isChecked : isSelected)
             ? 'items-center rounded-md bg-blue-50 ring-1 ring-inset ring-blue-400 py-1.5'
             : `items-center rounded-md py-1.5 ${isFocused ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : 'hover:bg-gray-50'}`
@@ -126,9 +133,9 @@ export function RailRow<TRow>({
           </span>
         ) : null}
         {getStatusDotLabel ? (
-          <HoverTooltip label={getStatusDotLabel(row)} focusable={false} className="shrink-0">
+          <HoverTooltip label={getStatusDotLabel(row)} focusable={false} asChild>
             <span
-              className={`block h-2 w-2 rounded-full ${getStatusDot(row)}`}
+              className={`block h-2 w-2 shrink-0 rounded-full ${getStatusDot(row)}`}
               aria-label={getStatusDotLabel(row)}
             />
           </HoverTooltip>

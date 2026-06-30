@@ -65,7 +65,7 @@ export function resolveKind(kind: LabelKind, ctx?: LabelResolveContext): Resolve
 }
 
 /** Presentation shape the legacy `*_STATE_META` maps expose. */
-export interface StateMetaEntry {
+interface StateMetaEntry {
   label: string;
   description: string;
   pill: string;

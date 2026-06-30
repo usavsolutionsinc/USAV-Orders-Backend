@@ -42,14 +42,17 @@ export function PhotoCard({
     <div
       onContextMenu={onContextMenu ? (e) => onContextMenu(photo, e) : undefined}
       className={cn(
+        // Selection is an INSET ring so the box never grows on select/deselect —
+        // a non-inset ring paints 2px outside the tile and reads as the photo
+        // jumping/toggling size in the grid.
         'group relative overflow-hidden rounded-lg border bg-white text-left transition-colors',
-        selected ? 'border-primary ring-2 ring-primary' : 'border-border hover:border-gray-300',
+        selected ? 'border-primary ring-2 ring-inset ring-primary' : 'border-border hover:border-gray-300',
       )}
     >
       <SelectionMark
         checked={selected}
         active={selectionActive}
-        onToggle={() => onSelect({ shift: false })}
+        onToggle={(mods) => onSelect(mods)}
       />
       <button
         type="button"

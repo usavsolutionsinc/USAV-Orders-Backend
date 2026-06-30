@@ -20,14 +20,12 @@ export {
   paneHeaderLabelEyebrowClass,
   paneHeaderLabelValueClass,
   PaneHeaderTitle,
-  paneHeaderHighContrastTitleClass,
   PaneHeaderCount,
   PaneHeaderIconBadge,
   PaneHeaderCloseButton,
   PaneHeaderStatusPill,
   PaneHeaderTabs,
   PaneHeaderActionBar,
-  PaneHeaderWeekNav,
   PaneHeaderPagination,
 } from './blocks';
 export type { PaneHeaderActionBarAction } from './blocks';

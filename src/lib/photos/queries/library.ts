@@ -318,7 +318,34 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
                FROM photo_label_assignments la
                JOIN photo_labels lb ON lb.id = la.label_id
               WHERE la.photo_id = p.id
-                AND la.organization_id = p.organization_id) AS labels
+                AND la.organization_id = p.organization_id) AS labels,
+            -- Derived source scope (mirrors entityTypeForSourceScope + the
+            -- receiving.source split) so the sidebar can highlight the image-type
+            -- a folder's photos belong to even under the "All photos" scope.
+            -- Precedence keeps a receiving capture as unboxing/pickup even when the
+            -- unit it created is also linked (RECEIVING before SERIAL_UNIT).
+            (CASE
+               WHEN EXISTS (SELECT 1 FROM photo_entity_links l
+                             WHERE l.photo_id = p.id AND l.organization_id = p.organization_id
+                               AND l.entity_type = 'ZENDESK_TICKET') THEN 'claims'
+               WHEN EXISTS (SELECT 1 FROM photo_entity_links l
+                             WHERE l.photo_id = p.id AND l.organization_id = p.organization_id
+                               AND l.entity_type = 'PACKER_LOG') THEN 'packing'
+               WHEN EXISTS (SELECT 1 FROM photo_entity_links l
+                              JOIN receiving r ON r.organization_id = p.organization_id AND (
+                                    (l.entity_type = 'RECEIVING' AND r.id = l.entity_id)
+                                 OR (l.entity_type = 'RECEIVING_LINE' AND r.id = (
+                                       SELECT rl.receiving_id FROM receiving_lines rl WHERE rl.id = l.entity_id)))
+                             WHERE l.photo_id = p.id AND l.organization_id = p.organization_id
+                               AND r.source = 'local_pickup') THEN 'local_pickup'
+               WHEN EXISTS (SELECT 1 FROM photo_entity_links l
+                             WHERE l.photo_id = p.id AND l.organization_id = p.organization_id
+                               AND l.entity_type IN ('RECEIVING', 'RECEIVING_LINE')) THEN 'unboxing'
+               WHEN EXISTS (SELECT 1 FROM photo_entity_links l
+                             WHERE l.photo_id = p.id AND l.organization_id = p.organization_id
+                               AND l.entity_type = 'SERIAL_UNIT') THEN 'repair'
+               ELSE NULL
+             END) AS source_scope
        FROM photos p
       WHERE ${clauses.join(' AND ')}
       ORDER BY p.created_at ${sortDir}, p.id ${sortDir}
@@ -334,6 +361,7 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
     const labels = Array.isArray(labelsRaw)
       ? (labelsRaw as Array<{ id: number; key: string; label: string; color: string | null; icon: string | null }>)
       : [];
+    const sourceScope = (row as { source_scope?: string | null }).source_scope ?? null;
     return {
       ...mapPhotoRow(row as Parameters<typeof mapPhotoRow>[0]),
       takenByStaffName: staffName ?? null,
@@ -341,6 +369,7 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
       damageDetected: (row as { damage_detected?: boolean | null }).damage_detected ?? null,
       ticketId: ticketId != null && Number.isFinite(ticketId) ? ticketId : null,
       labels,
+      sourceScope,
     };
   });
   const hasMore = rows.length > limit;

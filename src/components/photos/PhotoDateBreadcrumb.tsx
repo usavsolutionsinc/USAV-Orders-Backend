@@ -27,6 +27,10 @@ function dayChipLabel(ymd: string): string {
  * no date it surfaces two quick jumps — **Today** and the **most recent** capture
  * day (both keyed off `created_at`, never the most-recent PO or photo type). The
  * root "All dates" crumb clears the filter; each path crumb widens to its span.
+ *
+ * When a PO folder is open (`filters.poRef`) the PO# is appended as the active
+ * leaf, and every date crumb above it stays clickable — widening a date also
+ * clears the PO (the parent's `onNavigate` resets `poRef`).
  */
 export function PhotoDateBreadcrumb({
   filters,
@@ -34,8 +38,18 @@ export function PhotoDateBreadcrumb({
   today,
   mostRecentDay,
 }: PhotoDateBreadcrumbProps) {
-  const crumbs = describePhotoDatePath(filters);
-  const hasDate = crumbs.length > 0;
+  const dateCrumbs = describePhotoDatePath(filters);
+  const poRef = filters.poRef?.trim() || null;
+  const hasDate = dateCrumbs.length > 0;
+  // "All dates" can reset whenever there's a date OR a PO drill to clear.
+  const canReset = hasDate || poRef !== null;
+  // With a PO folder open, the PO# is the active leaf — so the date crumbs above it
+  // are no longer the current depth and become clickable widen-targets again.
+  const dateCrumbsRendered = poRef
+    ? dateCrumbs.map((crumb) => ({ ...crumb, current: false }))
+    : dateCrumbs;
+  // Today / most-recent quick jumps only when there's nothing to path through.
+  const showQuickChips = !hasDate && !poRef;
   // The most-recent chip is redundant when it equals today.
   const showRecent = Boolean(mostRecentDay && mostRecentDay !== today);
 
@@ -46,39 +60,49 @@ export function PhotoDateBreadcrumb({
     >
       <button
         type="button"
-        disabled={!hasDate}
+        disabled={!canReset}
         onClick={() => onNavigate({ dateFrom: undefined, dateTo: undefined })}
         className={cn(
           // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
           'ds-raw-button flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-bold transition',
-          hasDate ? 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' : 'text-gray-900',
+          canReset ? 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' : 'text-gray-900',
         )}
       >
         <Calendar className="h-3.5 w-3.5 text-gray-400" />
         <span>All dates</span>
       </button>
 
-      {hasDate ? (
-        crumbs.map((crumb) => (
-          <Fragment key={crumb.key}>
-            <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
-            <button
-              type="button"
-              disabled={crumb.current}
-              onClick={() => onNavigate(crumb.range)}
-              className={cn(
-                // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
-                'ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 transition',
-                crumb.current
-                  ? 'font-bold text-gray-900'
-                  : 'font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900',
-              )}
-            >
-              {crumb.label}
-            </button>
-          </Fragment>
-        ))
-      ) : (
+      {dateCrumbsRendered.map((crumb) => (
+        <Fragment key={crumb.key}>
+          <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+          <button
+            type="button"
+            disabled={crumb.current}
+            onClick={() => onNavigate(crumb.range)}
+            className={cn(
+              // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
+              'ds-raw-button shrink-0 truncate rounded-md px-1.5 py-1 transition',
+              crumb.current
+                ? 'font-bold text-gray-900'
+                : 'font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+            )}
+          >
+            {crumb.label}
+          </button>
+        </Fragment>
+      ))}
+
+      {poRef ? (
+        <Fragment key="po">
+          <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
+          {/* The open PO is the active leaf — bold, non-interactive (you're here). */}
+          <span className="shrink-0 truncate rounded-md px-1.5 py-1 font-bold text-gray-900">
+            PO {poRef}
+          </span>
+        </Fragment>
+      ) : null}
+
+      {showQuickChips ? (
         <>
           {today ? (
             <DateQuickChip label="Today" onClick={() => onNavigate({ dateFrom: today, dateTo: today })} />
@@ -90,7 +114,7 @@ export function PhotoDateBreadcrumb({
             />
           ) : null}
         </>
-      )}
+      ) : null}
     </nav>
   );
 }

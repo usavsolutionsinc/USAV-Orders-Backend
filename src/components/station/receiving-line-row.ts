@@ -12,6 +12,14 @@
 export interface ReceivingLineRow {
   id: number;
   receiving_id: number | null;
+  /**
+   * Client-minted identity for an OPTIMISTIC scan row (the triage "importing"
+   * stub). Carries across the stub → resolved-row reconcile so the sidebar rail
+   * keys both renders by the same value (see SidebarRailShell `getReconcileId`)
+   * and updates the row IN PLACE instead of unmount+remount. Absent on every
+   * server-fetched row — those fall back to keying by `id`.
+   */
+  client_event_id?: string;
   tracking_number: string | null;
   tracking_source?: 'shipment' | 'receiving' | 'zoho_reference' | null;
   carrier: string | null;

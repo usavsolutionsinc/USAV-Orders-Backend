@@ -44,7 +44,6 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
 
   const g = usePhotoGallery({
     photos: list.map((p) => p.url),
-    showCopyLinks: false,
     launcherTitle: 'Claim photos',
   });
 

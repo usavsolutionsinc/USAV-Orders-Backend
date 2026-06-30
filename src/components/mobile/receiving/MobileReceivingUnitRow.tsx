@@ -18,7 +18,7 @@ import { buildUnitFields, unitTitle } from '@/components/mobile/receiving/receiv
  */
 const CHIP_SCALE = '[&_span]:text-base';
 
-export interface MobileReceivingUnitRowProps {
+interface MobileReceivingUnitRowProps {
   row: ReceivingLineRow;
   /** One-shot tint when the line just landed in the feed. */
   fresh?: boolean;

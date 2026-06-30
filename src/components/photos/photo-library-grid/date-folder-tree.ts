@@ -1,6 +1,6 @@
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
-import { isoWeekNumber, weekRange } from '@/lib/photos/date-hierarchy';
+import { describePhotoDatePath, isoWeekNumber, weekRange } from '@/lib/photos/date-hierarchy';
 import type { PhotoDateNav } from './types';
 
 // ── Folders view (date drill) ───────────────────────────────────────────────
@@ -126,4 +126,211 @@ export function weekRangeOf(ymd: string): PhotoDateNav {
 export function dayTileLabel(ymd: string): string {
   const [, m, d] = ymd.split('-');
   return `${MONTH_NAMES[Number(m) - 1]?.slice(0, 3) ?? m} ${Number(d)}`;
+}
+
+export type FolderBrowseLevel = 'root' | 'year' | 'month' | 'week' | 'day' | 'custom';
+
+export interface FolderBrowseState {
+  eyebrow: string;
+  tiles: FolderTileData[];
+  isLeaf: boolean;
+  leafTitle?: string;
+  level: FolderBrowseLevel;
+}
+
+export interface FolderBrowseHeaderContext {
+  /** Level eyebrow (POs, Days, …) or leaf title (PO PO_6818). */
+  title: string;
+  /** Folder count at this level, or photo count at a leaf. */
+  count: number;
+  isLeaf: boolean;
+}
+
+interface ResolveFolderBrowseArgs {
+  photos: LibraryPhoto[];
+  scope: PhotoLibrarySourceScope;
+  dateFrom?: string;
+  dateTo?: string;
+  poRef?: string;
+}
+
+function groupDayByPo(dayPhotos: LibraryPhoto[]) {
+  const order: string[] = [];
+  const map = new Map<string, LibraryPhoto[]>();
+  for (const p of dayPhotos) {
+    const ref = p.poRef?.trim();
+    const key = ref ? `po:${ref}` : UNLINKED_PO_KEY;
+    const list = map.get(key) ?? [];
+    if (list.length === 0) order.push(key);
+    list.push(p);
+    map.set(key, list);
+  }
+  for (const list of map.values()) list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return { order, map };
+}
+
+function leafTitleFor(
+  scope: PhotoLibrarySourceScope,
+  poRef: string | undefined,
+  level: FolderBrowseLevel,
+  poGroups: ReturnType<typeof groupDayByPo>,
+  customLabel: string | undefined,
+): string | undefined {
+  if (poRef?.trim()) return poLabel(poRef.trim(), scope);
+  if (level === 'custom' && customLabel) return customLabel;
+  if (level === 'day' && poGroups.order.length === 1) {
+    const key = poGroups.order[0]!;
+    if (key === UNLINKED_PO_KEY) return 'Unlinked';
+    return poLabel(key.replace(/^po:/, ''), scope);
+  }
+  return undefined;
+}
+
+/**
+ * Resolve the folders-view drill level: eyebrow, child tiles, and whether the
+ * operator is at a photo contact-sheet leaf. Shared by the grid hook and the
+ * page header so both stay in sync with the URL date filter.
+ */
+export function resolveFolderBrowseState({
+  photos,
+  scope,
+  dateFrom,
+  dateTo,
+  poRef,
+}: ResolveFolderBrowseArgs): FolderBrowseState {
+  const tree = buildDateFolderTree(photos);
+  const datePath = describePhotoDatePath({ dateFrom, dateTo });
+  const level: FolderBrowseLevel =
+    datePath.length === 0 ? 'root' : datePath[datePath.length - 1]!.key;
+  const anchor = dateFrom;
+  const yKey = anchor?.slice(0, 4);
+  const mKey = anchor?.slice(0, 7);
+
+  const year = yKey ? tree.get(yKey) : undefined;
+  const month = year && mKey ? year.months.get(mKey) : undefined;
+  const week = month && anchor ? month.weeks.get(`${yKey}-W${isoWeekForYmd(anchor)}`) : undefined;
+  const day = week && anchor ? week.days.get(anchor) : undefined;
+
+  const dayPhotos = day?.photos ?? [];
+  const poGroups = groupDayByPo(dayPhotos);
+  const customLabel =
+    level === 'custom' ? datePath[datePath.length - 1]?.label : undefined;
+
+  const isLeaf =
+    Boolean(poRef?.trim()) ||
+    level === 'custom' ||
+    (level === 'day' && poGroups.order.length <= 1);
+
+  const leafTitle = isLeaf
+    ? leafTitleFor(scope, poRef, level, poGroups, customLabel)
+    : undefined;
+
+  let eyebrow = 'Years';
+  let tiles: FolderTileData[] = [];
+
+  if (level === 'day' && day) {
+    eyebrow = 'POs';
+    tiles = poGroups.order.map((key) => {
+      const list = poGroups.map.get(key)!;
+      const ref = key === UNLINKED_PO_KEY ? null : key.replace(/^po:/, '');
+      return tileMeta(key, ref ? poLabel(ref, scope) : 'Unlinked', list);
+    });
+  } else if (level === 'week' && week) {
+    eyebrow = 'Days';
+    tiles = [...week.days.values()]
+      .sort((a, b) => b.ymd.localeCompare(a.ymd))
+      .map((d) => tileMeta(d.ymd, dayTileLabel(d.ymd), d.photos));
+  } else if (level === 'month' && month) {
+    eyebrow = 'Weeks';
+    tiles = [...month.weeks.values()]
+      .sort((a, b) => b.week - a.week)
+      .map((w) => tileMeta(w.key, `Week ${w.week}`, [...w.days.values()].flatMap((d) => d.photos)));
+  } else if (level === 'year' && year) {
+    eyebrow = 'Months';
+    tiles = [...year.months.values()]
+      .sort((a, b) => b.month - a.month)
+      .map((m) =>
+        tileMeta(
+          m.key,
+          MONTH_NAMES[m.month] ?? m.key,
+          [...m.weeks.values()].flatMap((w) => [...w.days.values()].flatMap((d) => d.photos)),
+        ),
+      );
+  } else {
+    eyebrow = 'Years';
+    tiles = [...tree.values()]
+      .sort((a, b) => Number(b.year) - Number(a.year))
+      .map((y) =>
+        tileMeta(
+          y.year,
+          y.year,
+          [...y.months.values()].flatMap((m) =>
+            [...m.weeks.values()].flatMap((w) => [...w.days.values()].flatMap((d) => d.photos)),
+          ),
+        ),
+      );
+  }
+
+  return { eyebrow, tiles, isLeaf, leafTitle, level };
+}
+
+/** Header copy for the folders view — level eyebrow + count, or leaf title + photo count. */
+export function describeFolderBrowseHeader(
+  args: ResolveFolderBrowseArgs,
+): FolderBrowseHeaderContext {
+  const state = resolveFolderBrowseState(args);
+  if (state.isLeaf) {
+    return {
+      title: state.leafTitle ?? 'Photos',
+      count: args.photos.length,
+      isLeaf: true,
+    };
+  }
+  return {
+    title: state.eyebrow,
+    count: state.tiles.length,
+    isLeaf: false,
+  };
+}
+
+/** Navigate one folder level deeper when a tile is clicked. */
+export function buildFolderTileOpenHandler(
+  args: ResolveFolderBrowseArgs,
+  onNavigate: (nav: PhotoDateNav) => void,
+): (tile: FolderTileData) => void {
+  const { photos, dateFrom, dateTo } = args;
+  const state = resolveFolderBrowseState(args);
+  const tree = buildDateFolderTree(photos);
+  const anchor = dateFrom;
+  const yKey = anchor?.slice(0, 4);
+  const mKey = anchor?.slice(0, 7);
+  const year = yKey ? tree.get(yKey) : undefined;
+  const month = year && mKey ? year.months.get(mKey) : undefined;
+
+  return (tile) => {
+    switch (state.level) {
+      case 'day':
+        onNavigate({
+          dateFrom,
+          dateTo,
+          poRef: tile.key === UNLINKED_PO_KEY ? undefined : tile.key.replace(/^po:/, ''),
+        });
+        break;
+      case 'week':
+        onNavigate({ dateFrom: tile.key, dateTo: tile.key });
+        break;
+      case 'month': {
+        const wk = month?.weeks.get(tile.key);
+        const firstDay = wk ? [...wk.days.keys()].sort()[0] : undefined;
+        if (firstDay) onNavigate(weekRangeOf(firstDay));
+        break;
+      }
+      case 'year':
+        onNavigate(monthRangeOf(tile.key));
+        break;
+      default:
+        onNavigate(yearRangeOf(tile.key));
+        break;
+    }
+  };
 }

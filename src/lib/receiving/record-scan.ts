@@ -1,5 +1,6 @@
 import pool from '@/lib/db';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
+import { recordOpsEvent } from '@/lib/ops-events';
 
 export type ReceivingScanSource = 'zoho_po' | 'unmatched';
 
@@ -67,6 +68,36 @@ export async function recordReceivingScan(
     [receivingId, trackingNumber, carrier || null, staffId, source],
   );
   const scanId = Number(result.rows[0].id);
+
+  // Emit a stable, append-only scan event. Uses a scanId-derived client_event_id
+  // so retries/upserts remain idempotent across the ops event spine.
+  try {
+    const orgRow = await pool.query<{ organization_id: string }>(
+      'SELECT organization_id FROM receiving WHERE id = $1 LIMIT 1',
+      [receivingId],
+    );
+    const orgId = orgRow.rows[0]?.organization_id ?? null;
+    if (orgId) {
+      await recordOpsEvent({
+        organizationId: orgId,
+        entityType: 'receiving',
+        entityId: receivingId,
+        eventType: 'TRACKING_SCANNED',
+        actorStaffId: staffId,
+        clientEventId: `receiving-scan:${scanId}`,
+        payload: {
+          trackingNumber,
+          carrier: carrier || null,
+          source,
+          receivingId,
+          scanId,
+        },
+      });
+    }
+  } catch (err) {
+    // Fail-open: a missing ops_events table or transient DB error must not block scans.
+    console.warn('[recordReceivingScan] ops_events write skipped:', err);
+  }
 
   // Register the scan's tracking into the STN master — the canonical (and now
   // sole) home for the tracking string. Linked via receiving.shipment_id; the

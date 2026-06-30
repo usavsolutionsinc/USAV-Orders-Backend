@@ -160,10 +160,7 @@ function TriageMatchingCard({
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
-  const t = useTriagePanel({ row });
-  const pairingCollapse = useMotionPresence(framerPresence.collapseHeight);
-  const pairingCollapseTransition = useMotionTransition(framerTransition.sidebarExpand);
-  const { pkg } = t;
+  const pkg = toTriagePackage(row);
   // 'ecwid' (Ecwid Search) is the default — the recent-orders search (by order #,
   // title, or SKU) is the primary add/pair surface; Link-a-Zoho-PO / Zendesk /
   // Email-PO sit alongside it.
@@ -185,6 +182,14 @@ function TriageMatchingCard({
   // Picker is hidden only when an order/PO is linked and the operator hasn't
   // re-opened it to change/add.
   const pickerCollapsed = orderLinked && !forcePicker;
+  const zendeskQueriesActive = !collapsed && !pickerCollapsed && tab === 'zendesk';
+  const t = useTriagePanel({
+    row,
+    loadCandidates: zendeskQueriesActive,
+    loadDeliveredEmails: zendeskQueriesActive,
+  });
+  const pairingCollapse = useMotionPresence(framerPresence.collapseHeight);
+  const pairingCollapseTransition = useMotionTransition(framerTransition.sidebarExpand);
 
   // Unlink the ORDER/PO — full revert to Unfound (clears the carton + line
   // linkage; leaves any Zendesk ticket intact). Patches the open row so the

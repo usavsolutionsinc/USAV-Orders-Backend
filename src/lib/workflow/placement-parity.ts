@@ -25,7 +25,7 @@ import {
   type ResolvePlacementResult,
 } from './placement';
 
-export interface PlacementParityInput {
+interface PlacementParityInput {
   /** Stable site key for the log line, e.g. 'parts-sort'. */
   site: string;
   /** The org whose decision policy this is (and the scope of the bin lookup). */

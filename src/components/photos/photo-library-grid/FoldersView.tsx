@@ -3,9 +3,8 @@
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
-import { Folder } from '@/components/Icons';
-import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { formatDateTimePST } from '@/utils/date';
+import { Folder } from '@/components/Icons';
 import { PhotoThumb } from '../PhotoThumb';
 import { PhotoCard } from './PhotoCard';
 import { PhotoEmptyState } from './PhotoGridStates';
@@ -22,6 +21,7 @@ import type { PhotoDateNav, TileSelectMods } from './types';
  *
  * The drill model and tile data come from {@link useDateFolders}; this component
  * is the render half (leaf contact sheet or the current level's folder grid).
+ * The browse level label (POs, Days, …) lives in the page header.
  */
 export function FoldersView({
   photos,
@@ -48,7 +48,7 @@ export function FoldersView({
   onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
-  const { isLeaf, leafInputs, openIndex, setOpenIndex, eyebrow, tiles, onOpen } = useDateFolders({
+  const { isLeaf, leafInputs, openIndex, setOpenIndex, tiles, onOpen } = useDateFolders({
     photos,
     scope,
     dateFrom,
@@ -93,55 +93,25 @@ export function FoldersView({
   if (tiles.length === 0) return <PhotoEmptyState />;
 
   return (
-    <div className="space-y-3">
-      <SectionEyebrow icon={Folder} label={eyebrow} count={tiles.length} />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-        {tiles.map((t) => (
-          <DateFolderTile key={t.key} tile={t} onOpen={() => onOpen(t)} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Eyebrow section header with a count chip (Runway/Squarespace asset library). */
-function SectionEyebrow({
-  icon: Icon,
-  label,
-  count,
-}: {
-  icon: typeof Folder;
-  label: string;
-  count: number;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <Icon className="h-3.5 w-3.5 text-gray-400" />
-      <span
-        data-testid="folder-level"
-        className="text-eyebrow font-black uppercase tracking-widest text-gray-500"
-      >
-        {label}
-      </span>
-      <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-500">
-        {count}
-      </span>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
+      {tiles.map((t) => (
+        <DateFolderTile key={t.key} tile={t} onOpen={() => onOpen(t)} />
+      ))}
     </div>
   );
 }
 
 /** A single folder tile — folder-tab cover + count + latest-capture meta. */
 function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => void }) {
-  const tooltip = `${tile.label} · ${tile.count} photo${tile.count === 1 ? '' : 's'}`;
+  const ariaLabel = `${tile.label} · ${tile.count} photo${tile.count === 1 ? '' : 's'}`;
   return (
-    <HoverTooltip label={tooltip} asChild>
-      <button
-        type="button"
-        data-testid="photo-folder"
-        onClick={onOpen}
-        aria-label={tooltip}
-        className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
-      >
+    <button
+      type="button"
+      data-testid="photo-folder"
+      onClick={onOpen}
+      aria-label={ariaLabel}
+      className="ds-raw-button group flex flex-col overflow-hidden rounded-lg border border-border bg-white text-left transition-colors hover:border-primary/70 hover:bg-slate-50"
+    >
       <div className="relative h-32 w-full p-1.5">
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
         <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
@@ -163,7 +133,6 @@ function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => 
           </span>
         ) : null}
       </div>
-      </button>
-    </HoverTooltip>
+    </button>
   );
 }

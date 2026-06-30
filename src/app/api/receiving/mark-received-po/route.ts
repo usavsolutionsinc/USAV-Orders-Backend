@@ -33,6 +33,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { conditionLabel } from '@/lib/conditions';
 import { mergeSerialNoteIntoLineDescription } from '@/lib/zoho';
+import { recordOpsEvent } from '@/lib/ops-events';
 
 function normalizeSkuKey(s: string | null | undefined): string {
   return String(s ?? '').trim().toLowerCase();
@@ -161,6 +162,12 @@ export const POST = withAuth(async (request, ctx) => {
     const dispositionCode = String(body?.disposition_code || 'ACCEPT').trim();
     const conditionGrade = String(body?.condition_grade || 'USED_A').trim();
     const serialNumber = String(body?.serial_number || '').trim() || null;
+    // Explicit "no serial number" waiver: an audited reason code (the
+    // serial_absent_reason vocabulary) instead of a silent blank serial.
+    const serialAbsent = body?.serial_absent === true;
+    const serialAbsentReason = serialAbsent
+      ? String(body?.serial_absent_reason || '').trim() || null
+      : null;
     const zendeskTicket = String(body?.zendesk_ticket || '').trim() || null;
     const notes = String(body?.notes || '').trim() || null;
     // Server-trusted actor from the verified session cookie. The wrapper
@@ -351,6 +358,22 @@ export const POST = withAuth(async (request, ctx) => {
               [now, staffId, receivingId, ctx.organizationId],
             ),
           ).catch(() => {});
+          // Append-only ops spine event. Fail-open: receiving must proceed even if
+          // ops_events is not yet present.
+          try {
+            await recordOpsEvent({
+              organizationId: ctx.organizationId,
+              entityType: 'receiving',
+              entityId: receivingId,
+              eventType: 'UNBOX_CONFIRMED',
+              actorStaffId: staffId,
+              clientEventId: clientEventId ? `${clientEventId}:unbox` : `receiving:${receivingId}:unbox:${now}`,
+              occurredAt: now,
+              payload: { receivingId, kind: 'unfound_no_po' },
+            });
+          } catch (err) {
+            console.warn('[mark-received-po] ops_events unbox skipped:', err);
+          }
           return respond({
             success: true,
             updated_count: 0,
@@ -500,6 +523,23 @@ export const POST = withAuth(async (request, ctx) => {
           zoho_line_item_id: r.zoho_line_item_id,
         });
       }
+    }
+
+    // Carton-level unbox confirmation event: the act of receiving/unboxing this
+    // carton (regardless of Zoho reconciliation) is a durable operator event.
+    try {
+      await recordOpsEvent({
+        organizationId: ctx.organizationId,
+        entityType: 'receiving',
+        entityId: receivingId,
+        eventType: 'UNBOX_CONFIRMED',
+        actorStaffId: staffId,
+        clientEventId: clientEventId ? `${clientEventId}:unbox` : `receiving:${receivingId}:unbox:${now}`,
+        occurredAt: now,
+        payload: { receivingId },
+      });
+    } catch (err) {
+      console.warn('[mark-received-po] ops_events unbox skipped:', err);
     }
 
     // Aggregate every serial attached to any of the updated lines so the Zoho
@@ -1078,6 +1118,9 @@ export const POST = withAuth(async (request, ctx) => {
           condition_grade: conditionGrade,
           station,
           ...(zendeskTicket ? { zendesk_ticket: zendeskTicket } : {}),
+          ...(serialAbsent
+            ? { serial_absent: true, serial_absent_reason: serialAbsentReason }
+            : {}),
         },
       });
     }

@@ -36,6 +36,9 @@
  *                workspace, newest-opened first. Per-staff, backed by
  *                receiving_line_views (upserted on open). Powers the unbox
  *                sidebar's "Viewed" pill.
+ * - `unbox_opened` — cartons scanned on the Unbox surface (ops_events
+ *                    UNBOX_SCAN_OPENED). Found + unfound, unboxed or not.
+ *                    Powers the Unbox sidebar's "Unboxed" pill.
  */
 export const RECEIVING_VIEWS = [
   'all',
@@ -44,6 +47,7 @@ export const RECEIVING_VIEWS = [
   'incoming',
   'activity',
   'scanned',
+  'unbox_opened',
   'testing',
   'needs-test',
   'viewed',

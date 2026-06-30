@@ -33,7 +33,7 @@ const parseKey = (k?: string | null): Date | undefined => {
 const fmtKey = (d?: Date): string =>
   d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
 
-export interface DateRangePickerPillProps {
+interface DateRangePickerPillProps {
   /** Text shown on the pill (e.g. "JUN 23rd – 27th"). */
   label: ReactNode;
   /** Right-detail count appended after a dot ("… • 29"). */
@@ -230,7 +230,7 @@ export function DateRangePickerPill({
   );
 }
 
-export interface DateRangeHeaderProps {
+interface DateRangeHeaderProps {
   /** Period total — rendered as the pill's right-detail ("… • {count}"). */
   count: number;
   /** Optional left title (e.g. "Today"). */

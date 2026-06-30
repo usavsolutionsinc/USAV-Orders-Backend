@@ -19,7 +19,7 @@
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import type { TxClient } from './relink-po';
 
-export interface UnpairCartonResult {
+interface UnpairCartonResult {
   ok: boolean;
   status: number;
   error?: string;

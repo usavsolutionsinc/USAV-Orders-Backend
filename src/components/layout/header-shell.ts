@@ -35,7 +35,7 @@ export const sidebarHeaderPillRowClass = cn(receivingIdentityBandClass, SIDEBAR_
  * Pair with `HorizontalButtonSlider variant="nav" dense overlay`.
  */
 export const sidebarNavOverlayBandClass = cn(
-  'sticky top-0 z-10 flex shrink-0 items-center overflow-visible pt-1 pb-2.5',
+  'sticky top-0 z-10 flex h-[40px] shrink-0 items-center overflow-visible',
   SIDEBAR_GUTTER,
 );
 export const sidebarHeaderRowClass = `flex min-h-[44px] items-center ${SIDEBAR_GUTTER} py-1`;

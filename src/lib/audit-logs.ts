@@ -152,6 +152,13 @@ export const AUDIT_ACTION = {
   RECEIVING_RELINK:          'receiving.relink',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
+  /**
+   * A scanned serial was auto-resolved to a previously-shipped order during
+   * receiving (the shipped↔returned loop), flipping the carton to a return and
+   * its open allocation SHIPPED→RETURNED. Distinct from a manual returns-dock
+   * intake — this fires on the normal unbox serial scan.
+   */
+  RETURN_LINK:               'return.link',
   // Bin / location
   BIN_CREATE: 'bin.create',
   BIN_UPDATE: 'bin.update',

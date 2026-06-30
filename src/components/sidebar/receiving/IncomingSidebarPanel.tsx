@@ -1,6 +1,8 @@
 'use client';
 
 import { SidebarShell } from '@/components/layout/SidebarShell';
+import { sidebarHeaderPillRowClass } from '@/components/layout/header-shell';
+import { cn } from '@/utils/_cn';
 import { CarrierSyncDialog } from '@/components/sidebar/receiving/CarrierSyncDialog';
 import { IncomingSyncDialog } from '@/components/sidebar/receiving/IncomingSyncDialog';
 import { IncomingAttachTrackingPopover } from '@/components/sidebar/receiving/IncomingAttachTrackingPopover';
@@ -42,21 +44,18 @@ export function IncomingSidebarPanel() {
           onClearAll: filters.activeFilterCount > 0 ? filters.clearFilters : undefined,
           renderDropdown: () => <IncomingFilterDropdown filters={filters} summary={summary} />,
         }}
-        headerRows={[
-          // View toggle pills, one row beneath the search bar — same nav-slider
-          // pattern as every other page's sub-tabs (cf. Products / Repair). They
-          // switch the RIGHT pane between the Incoming POS table and the Email
-          // Triage worklist via `?incview=`; the email list itself lives only in
-          // the right pane now (no longer pinned in this sidebar).
-          <IncomingViewBand key="incview" />,
-        ]}
         headerBelow={
-          <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2">
-            <IncomingSyncButtons sync={sync} />
-            <div className="flex flex-col">
-              <IncomingAttachTrackingPopover />
+          <>
+            <div className={cn(sidebarHeaderPillRowClass, 'h-auto min-h-[40px] items-start pt-1 pb-2.5')}>
+              <IncomingViewBand />
             </div>
-          </div>
+            <div className="shrink-0 space-y-2 border-b border-gray-200 bg-white pb-2 pt-2.5">
+              <IncomingSyncButtons sync={sync} />
+              <div className="flex flex-col">
+                <IncomingAttachTrackingPopover />
+              </div>
+            </div>
+          </>
         }
       />
       <CarrierSyncDialog

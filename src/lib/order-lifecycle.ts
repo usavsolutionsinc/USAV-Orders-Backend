@@ -62,7 +62,7 @@ export function hasLabel(s: OrderLifecycleSignals): boolean {
  * (the stock question is moot once it is physically staged), then exception‑
  * first within the not‑yet‑packed stages.
  */
-export interface OrderLifecycleRule {
+interface OrderLifecycleRule {
   id: string;
   stage: OrderLifecycleStage;
   test: (s: OrderLifecycleSignals) => boolean;
@@ -103,7 +103,7 @@ export function resolveFulfillmentLane(signals: OrderLifecycleSignals): Fulfillm
 /** Icon binding key; the board maps this to a concrete icon component. */
 export type FulfillmentLaneIconKey = 'clock' | 'check' | 'alert';
 
-export interface FulfillmentLaneDescriptor {
+interface FulfillmentLaneDescriptor {
   id: FulfillmentLane;
   /** Which structural icon sits next to the lane title. */
   iconKey: FulfillmentLaneIconKey;
@@ -174,8 +174,6 @@ export const SHIPMENT_STATUS_CATEGORIES = [
   'UNKNOWN',
 ] as const;
 
-export type ShipmentStatusCategory = (typeof SHIPMENT_STATUS_CATEGORIES)[number];
-
 /**
  * Carrier status categories that mean the carrier physically has the package.
  * Single SoT for "is the carrier holding it" — the one vocabulary every
@@ -241,7 +239,7 @@ export type OutboundLaneIconKey =
   | 'process_gap'
   | 'orphan';
 
-export interface OutboundLaneDescriptor {
+interface OutboundLaneDescriptor {
   id: OutboundStage;
   iconKey: OutboundLaneIconKey;
 }

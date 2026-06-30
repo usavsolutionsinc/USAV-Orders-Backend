@@ -89,15 +89,27 @@ export function ReceivingRightPane({
   onCloseWorkspace,
 }: ReceivingRightPaneProps) {
   const showWorkspace = !!workspace && !isTableOnlyMode;
-  // Scan loader covers the gap between scan and PO/line mounting. It shows on
-  // EVERY tracking scan (a workspace is almost always already mounted), rendered
-  // above the workspace (z-20) so it overlays the previously-open line.
-  const showScanLoader = !!scanInFlight && !isTableOnlyMode;
+  // Scan loader covers the gap between scan and PO/line mounting, rendered above
+  // the workspace (z-20) so it overlays the previously-open line. TRIAGE shows no
+  // takeover: the sidebar's optimistic "importing" row (a leadingRow stub titled
+  // with the scanned tracking #) is the only loading affordance there, and the
+  // unfound workspace opens optimistically from a stub. Unbox keeps it (covers the
+  // gap before the matched workspace crossfades in).
+  const showScanLoader = !!scanInFlight && !isTableOnlyMode && !isTriageMode;
   const emptyState = RECEIVING_EMPTY_STATE[mode];
-  // Canonical workbench right-pane crossfade; the hook collapses it to
-  // opacity-only under prefers-reduced-motion (no local branching).
-  const workspacePane = useMotionPresence(framerPresence.workbenchPane);
-  const workspaceTransition = useMotionTransition(framerTransition.workbenchPaneMount);
+  // Heavy line-workspace overlay crossfade. Uses the slower, opacity-led
+  // `workbenchPaneSettle` (not the snappy `workbenchPane`): a carton→carton swap
+  // dissolves — the incoming pane rises + fades in over a static, fading-out
+  // outgoing pane, so two full-bleed panes never slide in opposite directions
+  // (the old double-image jitter). The hook collapses it to opacity-only under
+  // prefers-reduced-motion (no local branching).
+  const workspacePane = useMotionPresence(framerPresence.workbenchPaneSettle);
+  const workspaceTransition = useMotionTransition(framerTransition.workbenchPaneSettle);
+  // Incoming Email-Triage sub-view swap keeps the snappy canonical crossfade —
+  // it fades in over the (display:none) table, so there is no second pane to
+  // ghost against and no need for the slower settle.
+  const emailPane = useMotionPresence(framerPresence.workbenchPane);
+  const emailTransition = useMotionTransition(framerTransition.workbenchPaneMount);
 
   // Incoming hosts two right-pane sub-views toggled by the band (`?incview=`):
   // the POS table (default) and the Email Triage worklist. The table stays
@@ -128,10 +140,10 @@ export function ReceivingRightPane({
         {showEmailTriage ? (
           <motion.div
             key="incoming-email-triage"
-            initial={workspacePane.initial}
-            animate={workspacePane.animate}
-            exit={workspacePane.exit}
-            transition={workspaceTransition}
+            initial={emailPane.initial}
+            animate={emailPane.animate}
+            exit={emailPane.exit}
+            transition={emailTransition}
             className="absolute inset-0 z-10 overflow-hidden"
           >
             <EmailTriagePanel />

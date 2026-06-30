@@ -1,17 +1,17 @@
 'use client';
 
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
+import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
-import { AlertCircle, MessageSquare, Paperclip, Send, X } from '@/components/Icons';
+import { AlertCircle, MessageSquare, Paperclip, Plus, Reply, Send, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { ClaimComposer } from './ClaimComposer';
 import { ClaimSuccessView } from './ClaimSuccessView';
 import { useZendeskClaimController } from './useZendeskClaimController';
 import type { ZendeskClaimModalProps } from './claim-types';
 
-const MODE_ITEMS = [
-  { id: 'create', label: 'New ticket' },
-  { id: 'update', label: 'Update existing' },
+const MODE_ITEMS: HorizontalSliderItem[] = [
+  { id: 'update', label: 'Update existing', icon: Reply },
+  { id: 'create', label: 'New ticket', icon: Plus },
 ];
 
 /**
@@ -62,17 +62,20 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
         <ClaimSuccessView result={c.result} onClose={c.onClose} />
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {!lockedToTicket ? (
+          {!lockedToTicket ? (
+            <div className="shrink-0 overflow-visible border-b border-gray-100 px-5 pb-3 pt-3">
               <HorizontalButtonSlider
                 items={MODE_ITEMS}
                 value={c.mode}
                 onChange={(v) => c.setMode(v as typeof c.mode)}
-                variant="segmented"
-                className="mb-5"
+                variant="nav"
+                dense
+                overlay
                 aria-label="Ticket mode"
               />
-            ) : null}
+            </div>
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             <ClaimComposer c={c} />
           </div>
 

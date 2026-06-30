@@ -1,409 +1,609 @@
-# Polymorphic Tables Database Refactor — Monolithic → Extensible Plan
+# Receiving → Polymorphic Streets — Deep Refactor Plan (receiving / receiving_line)
 
-> Status: PLAN (2026-06-28; **deep code+migration scan folded in 2026-06-29**). This is a proposal for architectural cleanup and future-proofing. No implementation has started. Belongs with the multi-tenancy hardening, inventory v2, Studio/Operations, and receiving redesign initiatives.
+> **Status:** PLAN (2026-06-29). Receiving-only deep-dive. No implementation started.
 >
-> The 2026-06-29 scan (5 parallel passes over `src/lib/drizzle/schema.ts` (3,129 lines), all 305 files in `src/lib/migrations/`, and `src/lib/workflow/` / `src/lib/integrations/`) produced the concrete appendices at the end of this doc: **Appendix A** (exact contract of every existing polymorphic surface + 10 cross-surface inconsistencies), **Appendix B** (Tier-1 monolith before-snapshots), **Appendix C** (all 48 jsonb columns + variant-config-vs-junk-drawer taxonomy), **Appendix D** (discriminator/status-column inventory: ~70 status columns, only ~10 real enums), and a **Data-integrity findings** section of bugs/drift to fix *regardless* of the refactor. Tiered findings and target shapes below were expanded with what the scan found.
-
-## Context — why this work
-
-The codebase has evolved rapidly through inventory v2, workflow engine, platform catalog, receiving line extraction, unified shipment links, and heavy multi-tenancy (GUC + RLS) work. Many core tables started as relatively simple records and grew into **monolithic "god tables"**:
-
-- Wide column sets with many nullable "variant" fields.
-- Repeated source/platform/intake/type denorm columns (`source_platform`, `account_source`, `intake_type`, `receiving_type`, `return_platform`, etc.).
-- Heavy `jsonb` (`metadata`, `payload`, `platform_metadata`, `config`, `status_history`, `line_items`, `parts_used`...) used both for true variant config and for business facts that should be structured.
-- One table handling multiple conceptual "kinds" (different receiving flows, different listing origins, mixed order vs FBA vs repair provenance, event types with wildly different shapes).
-- Legacy columns kept for back-compat (sku table retirement, old shipment link tables, drift columns).
-
-This pattern is expensive for a **SaaS**:
-- Hard to add org-specific behaviors or new channels without widening tables.
-- Workflow/Studio (node graphs + station definitions) want to compose over typed entities.
-- Tenant isolation and per-org catalogs become harder when logic is scattered across denorms.
-- Query performance, indexes, and audit timelines suffer.
-- Domain logic (state machines, transitions, allocations) fights against implicit subtypes.
-
-A full codebase + migration + domain scan (Drizzle schema, 300+ migrations, `src/lib/inventory/*`, `src/lib/receiving/*`, `src/lib/workflow/*`, `src/lib/orders/*`, integrations, etc.) produced the list below.
-
-## Existing strong polymorphic patterns (build on these)
-
-> Corrected against the live schema 2026-06-29. **There is no single established contract yet** — these surfaces diverge on column naming, id type, discriminator-constraint mechanism, integrity triggers, and org-scoping. Appendix A documents the exact shape of each + the 10 inconsistencies to standardize. The two cleanest references to codify are **`part_links`** (tenant-from-birth) and **`photo_entity_links`** (normalized polymorphic hub).
-
-- `photo_entity_links` — **the live polymorphic photo hub** (`entity_type` TEXT + `entity_id` BIGINT + a *second* axis `link_role`, named CHECKs, cascade FK → `photos`). Born `2026-06-18`; the legacy `photos.entity_type/entity_id/url` columns were **dropped** `2026-06-21` (Phase E). ⚠️ The old plan said "`photos` — entity_type + entity_id" — that is now stale; `photos` is a plain table and the link was *extracted*. (Not yet modeled in Drizzle.)
-- `work_assignments` — the **only enum-backed** discriminator: `entity_type` (pg enum `work_entity_type_enum`) + `entity_id` INT + `work_type` (pg enum) + partial unique `WHERE status IN ('ASSIGNED','IN_PROGRESS')` + BEFORE-DELETE **cancel** triggers (only for `ORDER`+`RECEIVING`, not its 3 other enum values).
-- `shipment_links` — unified `owner_type` TEXT + `owner_id` INT + `direction` + `role` (replaced `receiving_shipments` + `order_shipment_links`, dropped `2026-06-28q`). Org-led partial unique `WHERE is_primary`. **No owner-side delete trigger** — an owner delete orphans link rows (the planned Phase-4 cleanup trigger was never created).
-- `documents` — `entity_type` TEXT + `entity_id` INT, **free-text, no CHECK, no trigger, no unique** (a parent delete orphans rows). The weakest surface.
-- `entity_notes` — `entity_type` TEXT + `entity_id` **UUID** (the only UUID id-type), free-text, no trigger.
-- `receiving_exceptions` — status-discriminated (`exception_code` + `status`), **not** owner-polymorphic (both parents are real FK `ON DELETE CASCADE`). Extracted from the receiving god-table `2026-06-24`.
-- `part_links` (`2026-06-28g`) — **the cleanest tenant-from-birth example**: org `NOT NULL` no-default + `enforce_tenant_isolation('part_links')` *in the same migration*, named CHECKs encoding a discriminated-union shape (`status='confirmed'`⇒parent NOT NULL; `status='not_a_part'`⇒parent NULL), org-led partial uniques. (Not modeled in Drizzle.)
-- Platform catalog (`platforms`, `platform_accounts`, `types`) — replaces hard-coded `SOURCE_PLATFORMS` / `RECEIVING_TYPE_OPTS` (see `docs/todo/platform-account-type-catalog-plan.md`). Note: only `platform_accounts.platform_id` is a real FK; `platforms.provider`, `platform_accounts.integration_scope`, `types.workflow_node_id` are **soft "agree-by-string" links**, not FKs.
-- `serial_units` + `inventory_events` + `sku_stock_ledger` — the authoritative spine (status only via `transition()` / `applyTransition()`).
-- `reason_codes` — `flow_context`-discriminated multi-vocabulary store (named CHECK, org-led unique `(organization_id, flow_context, code)`). ⚠️ a live CHECK regression — see Data-integrity findings.
-
-**The contract to codify (from `part_links` + `photo_entity_links`):** typed discriminator (prefer **named CHECK** over free text; pg-enum only for small, stable, rarely-extended sets) + id column + **org-led** partial/unique indexes + integrity trigger (cascade *or* cancel) on every parent OR a real FK on the non-polymorphic side + `organization_id UUID NOT NULL` with `enforce_tenant_isolation()` **in the birth migration** + a Drizzle model that matches the DB + audit via `recordAudit`. Appendix A is the gap analysis against this contract.
-
-## Scan findings — monolithic tables (prioritized)
-
-### Tier 1 (highest value / core domain)
-
-1. **`receiving` + `receiving_lines`** (the largest current monolith)
-   - receiving: carrier, qa/disposition/grade, source/source_platform/intake_type, zoho* mirrors, support notes, zendesk, lpn, priority_tier, many timestamps, type_id (new), exception_code, etc.
-   - receiving_lines: even wider (Zoho line mirrors + workflow_status + qa + disposition + condition + receiving_type + source_* + unit_price + line-level timestamps + sku_catalog_id + exception + `disposition_audit` jsonb).
-   - Multiple "kinds": PO | RETURN | TRADE_IN | PICKUP | sourcing_import | local_pickup. Per-line vs carton-level facts mixed.
-   - Recent good work: `receiving_exceptions` extracted; many line-level facts added in 2026-06 redesign.
-
-2. **`serial_units`**
-   - Central unit root. Identity + current_status (growing enum) + condition + location + multiple `origin_*` + legacy columns + `metadata` jsonb.
-   - Different origins and "flavors" (standard inventory, repair candidates, parts, FBA units) crammed together.
-
-3. **`orders`**
-   - Fulfillment line + channel facts + sale price + statusHistory jsonb + account_source/fulfillmentChannel + type_id + sku links.
-   - Overlaps with FBA, local pickup, walk-in, warranty claims.
-
-4. **`inventory_events`**
-   - Already the right direction (unified append-only spine). Still has many optional FKs + free-form `event_type` + large `payload` jsonb.
-
-5. **`station_activity_logs`**
-   - Cross-station fact ledger with many optional FKs to heterogeneous entities + `metadata` jsonb.
-   - **Scan detail (Appendix B):** 17 cols, **7 mutually-exclusive sparse FK anchors** (`shipment_id`, `fnsku`, `orders_exception_id`, `fba_shipment_id`, `fba_shipment_item_id`, `tech_serial_number_id`, `packer_log_id`) + `scan_ref` — a "one ledger, many entity types" denorm that should be a single typed `entity_type`/`entity_id` pair (per the Appendix A contract) or folded onto the event spine.
-
-6. **`warranty_claims` + repair cluster** *(NEW — scan 2026-06-29)*
-   - `warranty_claims` is a ~30-col god-table that **denormalizes the spine**: `serial_unit_id` FK *and* free-text `serial_number`/`sku`/`product_title`; `order_id` *and* `source_order_id`/`source_tracking_number`; the delivered/packed warranty clock (`delivered_at`, `packed_scanned_at`, `clock_basis`) that `shipping_tracking_numbers` + the order-lifecycle spine already own. Status is free-text (`LOGGED|SUBMITTED|APPROVED|DENIED|IN_REPAIR|REPAIRED|CLOSED|EXPIRED`).
-   - **Repair is modeled three times**: `repair_service` (legacy ticket intake — has **no `serial_unit_id` FK at all**, re-stores `serial_number`/`source_sku` as text, embeds a `status_history` jsonb event log), `unit_repairs` (serial-anchored — *the good model*, cross-links `start_event_id`/`done_event_id` into `inventory_events`), and `warranty_repair_attempts` (claim-anchored). All three carry parts/cost/labor independently, bridged only by loose integer pointers. Consolidate onto `unit_repairs`' pattern.
-
-7. **FBA family — a self-contained parallel spine** *(NEW — scan 2026-06-29)*
-   - The FBA subtree re-implements three spine concerns instead of reusing them: **`fba_fnsku_logs` ≈ `inventory_events`** (its own lifecycle event stream, even carrying bridge FKs back to `station_activity_logs`/`tech_serial_numbers`); **`fba_shipment_item_units` ≈ `order_unit_allocations`** (unit→destination reservation — two allocation tables for two destinations); **`fba_shipment_tracking` ≈ `shipment_links`** (its own shipment↔tracking junction, when `shipment_links.owner_type` could simply be `'FBA_SHIPMENT'`, `direction='OUTBOUND'`).
-   - Stacked denorm: `fba_shipment_items` repeats `productTitle/asin/sku` off `fba_fnskus`, which repeats them off `sku_catalog`; `fba_fnskus.condition` duplicates `serial_units.condition_grade`. `fba_shipment_items` also flattens a state machine into a per-stage staff+timestamp quadruplet (`ready/verified/labeled/shipped` × `ByStaffId/At`).
-   - **Target:** fold FBA onto the spine — `owner_type='FBA_SHIPMENT'` shipment links, `order_unit_allocations` for FBA destinations (or a shared `unit_allocations` with a destination discriminator), and `inventory_events` instead of `fba_fnsku_logs`.
-
-### Tier 2 (high leverage)
-
-- `platform_listings` — `platform`/`account_name` **free text (not FK)** + `platform_metadata` jsonb + sync state. ⚠️ Does **not** join the platform catalog at all (agree-by-string). `platform_metadata` is the clearest **junk-drawer jsonb** in the schema: nullable, no comment, no discriminator, sitting *alongside* already-structured `listing_price_cents`/`listing_quantity`/`listing_condition`/`upc` columns. Should FK `platform_accounts` and type its extension per platform (Appendix C).
-- `sku_platform_ids` vs `platform_listings` — **two per-channel SKU→external-id mapping tables** (the `platform_listings` doc-comment itself calls `sku_platform_ids` "a thin id mapping"); `sku_platform_ids` has **no `organization_id`**. Pick one mapping home.
-- `organization_integrations` — provider + scope + encrypted payload. **No Drizzle model at all** (raw `pool.query` only, in `src/lib/integrations/credentials.ts`); the in-code `IntegrationProvider` union has **drifted to 15 providers** vs the migration comment's 12. *Good* discipline to emulate: queryable status (`display_label`/`status`/`last_used_at`/`scope`/`webhook_token`) is in real columns, secrets stay in the opaque `payload_encrypted` blob. Needs a Drizzle model + formal per-provider shapes.
-- Workflow / Studio cluster: `workflow_definitions` (jsonb `annotations`) + `workflow_nodes` (`type` text + `config` jsonb) + `workflow_edges` + `item_workflow_state` (`context` jsonb) + `workflow_runs` + `workflow_node_stats` + `station_definitions` (`config` jsonb) + `workflow_templates` (`graph` jsonb, **no `organization_id` — deliberately global blueprints**). Node `type` is a **free-text key validated by an in-code registry** (`src/lib/workflow/registry.ts`, 11 types: `receiving|inspection|repair|data_wipe|kit_verify|list_ebay|list|pack|ship|returns|decision`); `decision` is the one genuinely-polymorphic node (rule table in `config`). This jsonb is *legitimate variant config* (shape keyed by a known discriminator) — keep it, but govern with a per-`type` schema registry; see Appendix C.
-- `tech_verifications` *(NEW — scan 2026-06-29)* — carries **two untyped polymorphic pairs in one row**: `source_kind`+`source_row_id` and `step_type`+`step_id` (integer FK whose target table is chosen by a sibling string, no referential integrity). Overlaps `testing_results` (two per-test record tables, different anchoring). The textbook anti-pattern vs `shipment_links.owner_type/owner_id`.
-- Fragmented SKU identity *(NEW — scan 2026-06-29)* — SKU identity lives in **4 homes**: `sku_catalog` (SoT), `sku` (retired — INSERTs trigger-blocked, kept as FK target/archive), `sku_stock` (now a trigger-maintained projection of `sku_stock_ledger`, not SoT), `items` (Zoho, the known collision per `items-vs-sku_catalog`). `sku_catalog` itself accretes 3 domains (identity + sourcing + packing). Document the homes + their authority; don't widen `sku_catalog` further.
-- `tech_serial_numbers` *(NEW — scan 2026-06-29)* — the **legacy serial spine being strangled by `serial_units`** (~25 cols, `serialType`/`stationSource` discriminators, FKs to fnsku/fba/receiving/exception/sku). Central to the FBA/testing duplication above; track its retirement alongside the FBA fold.
-- Zoho mirror tables (`customers`, `sales_orders`, `items`, `packages`, `invoices`, `credit_notes`, `item_adjustments`) — the **jsonb-densest cluster** (addresses/line_items/custom_fields/channel_refs). `customers` **double-stores address** (flat `shipping_address_1/2/...` columns *and* a `shipping_address` jsonb) and has its own untyped `entity_type`/`entity_id` pair. Largely acceptable as external sync mirrors (Tier 2/3), but the jsonb + double-store belong in the inventory (Appendix C).
-
-### Tier 3 (watch / incremental)
-
-- SKU hub sprawl (`sku_catalog`, legacy `sku`, `skuPlatformIds`, `pendingSkus`, bose tables).
-- Testing/quality tables (`testing_results`, `unit_failure_tags`, `unit_quality_scores`, `failure_modes`).
-- Various sync/outbox tables and narrow domain tables that may accumulate variant columns.
-- **AI / RAG / sourcing cluster** (`ai_chat_*`, `rag_documents`, `rag_document_chunks`, `suppliers`, `sourcing_*`, `part_acquisitions`) — the scan found this the **cleanest cluster: no god-tables, no mis-modeled polymorphism, proper FKs + org-scoping throughout** (`part_acquisitions` correctly bridges the spine via `serial_unit_id` + `receiving_id`). Fine as-is; recorded so it isn't re-scanned.
-
-Legacy retired-but-present tables (e.g. `sku`) are out of scope except for cleanup waves.
-
-## Data-integrity findings surfaced by the scan (fix regardless of the refactor)
-
-The scan turned up concrete defects and model drift that are independent of the larger refactor — small, mostly-safe fixes worth landing first because they otherwise *lie to readers* (Drizzle types) or *silently reject valid writes* (CHECK regression). These are Phase-0 work.
-
-1. **`reason_codes` CHECK regression — latent write rejection.** `2026-06-28d_reason_codes_label_presentation.sql` added `'lifecycle_unshipped'`/`'lifecycle_outbound'` to `reason_codes_flow_context_chk`; the later-applied `2026-06-28e_reason_codes_sku_stock_adjust.sql` **redefined the constraint and dropped both**. The live CHECK is `('inventory_event','substitution','short_pick','receiving_exception','repair_failure','verdict_detail','warranty_denial','inventory_adjust')` — so any write with `flow_context='lifecycle_*'` violates it. Reconcile with the label-vocabulary layer (`label-vocabulary-layer`, migration `2026-06-28d` authored-not-applied) before that layer goes live. *Fix: a follow-up migration that re-adds the lifecycle contexts to the final CHECK (or confirm the label layer doesn't use them).*
-
-2. **Drizzle models that contradict the live DB (type-level lies).** Several `pgTable` defs have drifted from the SQL-migration source of truth:
-   - `photos` (`schema.ts:~1001`) still declares the **dropped** columns `entityType`/`entityId`/`url` and omits `organizationId`.
-   - `reason_codes` (`~2225`) omits 5 live columns (`organization_id`, `flow_context`, `applies_to`, `tone`, `icon`) and still asserts a **global** `code` UNIQUE + non-null `category` that the DB no longer has.
-   - `serial_units` (`~2110`) omits `organization_id` (it lives only in SQL migrations, with the org-scoped unique indexes `ux_serial_units_org_normalized_serial` / `ux_serial_units_org_unit_uid`).
-   - `work_assignments` / `documents` omit `organizationId`.
-   - `receiving_lines` omits the GENERATED `zoho_purchaseorder_number_norm`.
-   - `photo_entity_links` and `part_links` are **not modeled in Drizzle at all** (managed via raw SQL + their lib modules).
-   *Fix: reconcile each model to the live schema (or annotate "SQL-migration is SoT; model intentionally partial" where that's the deliberate choice, as `serial_units` already comments).* This is a pre-req for any reader-migration phase that trusts Drizzle types.
-
-3. **Orphan-on-parent-delete (missing polymorphic integrity).** `documents`, `entity_notes`, and the **owner side of `shipment_links`** have no delete trigger and no FK on the polymorphic id — deleting the parent (`order`/`receiving`/etc.) orphans their rows. `shipment_links`' own header promised a Phase-4 cleanup trigger that was never created. `work_assignments`' cancel-trigger covers only `ORDER`+`RECEIVING`, not its other 3 enum entity types. *Fix: add the missing BEFORE-DELETE cascade/cancel triggers (or accept + document the orphan, e.g. for an append-only audit note).*
-
-4. **No entity-existence validation anywhere.** The only surface that ever validated that a polymorphic `entity_id` referenced a live row was `photos` (`fn_validate_photo_entity_ref`), and it was **removed** in Phase E (`2026-06-21`, "validation moves to application + `photo_entity_links` inserts"). Decide whether the contract requires a validation trigger or explicitly delegates to the writing lib function.
-
-5. **`organization_id` retrofit gaps.** `sku_platform_ids` has no `organization_id` (cross-tenant-leak risk on a SKU→external-id map). Confirm it's covered by a parent-scoped read path or add the column + enforce.
-
-## Guiding principles & invariants (non-negotiable)
-
-- **Status only via the state machine** (`src/lib/inventory/state-machine.ts` `transition()` / `applyTransition()`). Never raw `UPDATE ... current_status`.
-- **Audit only via `recordAudit()`** with `AUDIT_ACTION` / `AUDIT_ENTITY` constants.
-- **Tenant scope via `withTenantTransaction(orgId, ...)`** (GUC) for writes; columns default from `app.current_org`.
-- **Idempotency via `clientEventId`** on `inventory_events`.
-- **Polymorphic reference contract**: discriminator column (typed enum or constrained text) + id column. Partial unique indexes + BEFORE DELETE triggers for integrity (see work_assignments, shipment_links).
-- **Additive first**: new columns/tables/FKs/views. Dual-write + cache columns. Readers migrate later. Cleanup only after verification gates.
-- **Source of truth** (see `.claude/rules/source-of-truth.md`): conditions, platforms, etc. live in one place.
-- **Compose, don't fork**: use `SidebarRailShell`, event timelines, etc. The same rule applies to data modeling.
-- **Degrade-not-fail** and teaching empty states remain mandatory.
-- Workflow nodes and station blocks are code registries; the DB tables hold instance data/config.
-
-## The reference contract — canonical DDL template
-
-Codified from the two cleanest live examples (`part_links` `2026-06-28g`, `photo_entity_links` `2026-06-18`). Every new or refactored polymorphic/typed-fact table should match this skeleton. This is the concrete form of the "contract to codify" bullet above.
-
-```sql
-BEGIN;
-
-CREATE TABLE IF NOT EXISTS <table> (
-  id              BIGSERIAL PRIMARY KEY,
-  organization_id UUID NOT NULL,                 -- NO default; enforce_tenant_isolation() installs the loud-fail GUC default
-  -- ── polymorphic anchor (choose ONE naming convention; see Appendix A inconsistency #1) ──
-  entity_type     TEXT NOT NULL,                 -- discriminator
-  entity_id       BIGINT NOT NULL,               -- pick ONE id width project-wide (Appendix A #2: today INT/BIGINT/UUID all coexist)
-  link_role       TEXT NOT NULL DEFAULT 'primary',-- optional 2nd axis (only photo_entity_links has this today)
-  -- ... typed fact columns (promote queryable business facts to real columns; keep only true variant config in jsonb) ...
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Discriminator domain: NAMED CHECK (preferred) — not free text, not an inline unnamed CHECK.
--- Use a pg ENUM only for a small, stable, rarely-extended set (cf. work_assignments).
-DO $$ BEGIN
-  ALTER TABLE <table> ADD CONSTRAINT <table>_entity_type_chk
-    CHECK (entity_type IN ('RECEIVING','ORDER',/* ... */));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
--- Discriminated-union shape constraint (cf. part_links_parent_shape_chk): make illegal combinations unrepresentable.
-
--- Org-LED indexes (every unique/partial leads with organization_id — Appendix A #6).
-CREATE UNIQUE INDEX IF NOT EXISTS ux_<table>_natural
-  ON <table> (organization_id, entity_type, entity_id, link_role);
-CREATE INDEX IF NOT EXISTS idx_<table>_entity
-  ON <table> (organization_id, entity_type, entity_id);
-
--- Integrity: EITHER a real FK ON DELETE CASCADE on the non-polymorphic side (cf. receiving_exceptions, part_links),
--- OR a BEFORE-DELETE cascade/cancel trigger on EVERY parent the discriminator can name (cf. photos' 6-trigger family).
--- Do not ship a polymorphic id with neither (Appendix A #3/#4 — today documents/entity_notes/shipment_links orphan).
-
--- Tenant-from-birth: FORCE RLS in THIS migration, not a later backstop wave.
-DO $$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'enforce_tenant_isolation') THEN
-    PERFORM enforce_tenant_isolation('<table>');
-  END IF;
-END $$;
-
-COMMIT;
-```
-
-And **model it in Drizzle in the same PR** (Appendix A #8: `photo_entity_links`/`part_links` were never modeled, so type-level reads can't see them). `enforce_tenant_isolation()` lives in `2026-06-14_rls_enforcement_infra.sql`.
-
-## Recommended target shapes (high-level)
-
-### 1. Receiving / Receiving Lines
-
-- `receiving` stays the **carton / LPN container** (physical package facts, dock timestamps, carton-level notes, lpn, priority, linked via `shipment_links`).
-- `receiving_lines` becomes thinner operational unit + attaches typed facts via narrow tables or a `receiving_line_facts` (or direct child tables for high-volume concerns).
-- All variant flow info routes through `type_id` (from the platform catalog) + `receiving_type` (line override).
-- Exception/claim data already moving to `receiving_exceptions`.
-
-### 2. Serial Units
-
-- Keep `serial_units` as the **aggregate root** (identity, current_status, grade, location, unit_uid, sku_catalog link).
-- Move origin provenance to `serial_unit_provenance` (polymorphic `origin_type` + `origin_id` + timestamps). Today `serial_units` carries a denormalized provenance family — `origin_source` (text) + `origin_receiving_line_id` (FK) + `origin_tsn_id`/`origin_sku_id` (integer soft-FKs, no `.references`) — i.e. the same "string + untyped int id" anti-pattern flagged in Appendix A.
-- Variant attributes and unstructured data stay in `metadata` **only** when truly unstructured; otherwise typed history tables (already started with condition history, failure tags, repairs, quality scores).
-- All lifecycle writes continue to flow through inventory_events + transition().
-
-  **Worked DDL sketch** (collapses the `origin_*` family onto the contract; additive, backfillable from the existing columns):
-
-  ```sql
-  CREATE TABLE IF NOT EXISTS serial_unit_provenance (
-    id              BIGSERIAL PRIMARY KEY,
-    organization_id UUID NOT NULL,
-    serial_unit_id  BIGINT NOT NULL REFERENCES serial_units(id) ON DELETE CASCADE,
-    origin_type     TEXT NOT NULL,        -- CHECK ('RECEIVING_LINE','TECH_SERIAL','SKU_IMPORT','RETURN','FBA','MANUAL')
-    origin_id       BIGINT,               -- the row in the origin_type's table (nullable for MANUAL)
-    occurred_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-  );
-  -- named CHECK on origin_type; ux (organization_id, serial_unit_id, origin_type, origin_id);
-  -- idx (organization_id, origin_type, origin_id) for where-used; enforce_tenant_isolation('serial_unit_provenance').
-  -- Backfill: origin_receiving_line_id -> ('RECEIVING_LINE', id); origin_tsn_id -> ('TECH_SERIAL', id);
-  --           origin_sku_id -> ('SKU_IMPORT', id); origin_source text maps to the CHECK vocabulary.
-  ```
-
-  The same shape generalizes to the **FBA fold** (Tier 1 #7): `order_unit_allocations` gains a destination discriminator (or a sibling `unit_allocations` with `dest_type IN ('ORDER','FBA_SHIPMENT')`), and `fba_shipment_tracking` collapses into `shipment_links` with `owner_type='FBA_SHIPMENT'`.
-
-### 3. Orders & Channel Data
-
-- `orders` stays relatively lean (core fulfillment facts + `type_id` + `sku_catalog_id`).
-- Channel-specific realized facts (price at sale time, fulfillment channel details) move to thin `order_channel_facts` or are derived from allocations + events + platform listings.
-- Use `platform_accounts` + `types` for account_source / fulfillment_channel normalization.
-
-### 4. Events & Activity
-
-- `inventory_events` evolves toward typed events (registry of allowed `event_type` + shape validation on payload, or narrow event subtype tables for frequent shapes).
-- `station_activity_logs` can be slimmed or become a derived/denormalized view over the primary spines for operator visibility.
-- `workflow_runs` and `warranty_claim_events` already follow append-only patterns — keep them.
-
-### 5. Listings & Integrations
-
-- `platform_listings` FKs to `platform_accounts` (or platform + account) instead of free-text `platform`/`account_name` (today they don't join the catalog at all — agree-by-string). `platform_metadata` (the junk-drawer jsonb) becomes a typed extension per platform (or small json-schema registry); the queryable fields already promoted to columns (`listing_price_cents` etc.) stay columns.
-- `organization_integrations` gets full Drizzle modeling (it has **none** today) + the in-code `IntegrationProvider` union reconciled (drifted to 15 providers vs the migration's documented 12) + tighter linkage so `platforms.provider` / `platform_accounts.integration_scope` become *real* references (or a documented soft-link with a guard), not agree-by-string. Keep the good split: secrets in `payload_encrypted`, status facts in columns.
-- **Decision to make:** turn the soft "agree-by-string" links (`platforms.provider`→`organization_integrations.provider`, `platform_accounts.integration_scope`→`...scope`, `types.workflow_node_id`/`station_definitions.workflow_node_id`→`workflow_nodes.id`) into real FKs, or formally bless them as soft-links with an app-side resolver + a consistency check. Right now they're neither enforced nor documented as intentionally-loose.
-
-### 6. Workflow / Studio Config
-
-- `workflow_nodes.config`, `station_definitions.config`, `workflow_templates.graph` remain jsonb but are governed by a registry + schema validation (node types are code; config shape is declared). The registry already exists: `src/lib/workflow/registry.ts` (`NodeDefinition` in `contract.ts`, `configSchema` per type; 11 registered types). The work is to *enforce* `config` against the type's `configSchema` at write time (and ideally a DB-side `jsonb` check or a write-path validator), so `workflow_nodes.type` + `config` is a true tagged union. This is the model jsonb pattern — replicate it for any new config blob rather than adding an untyped column.
-- `item_workflow_state.context` accumulates node outputs in a defined shape per node.
-- **Asymmetry to resolve:** live graphs are relational (`workflow_nodes` + `workflow_edges`), but `workflow_templates.graph` is a denormalized `{nodes,edges}` jsonb document. Pick one representation for blueprints, or document why the blueprint stays a blob (it's cloned, not queried).
-
-## Phased migration strategy (additive, reversible, gated)
-
-Each phase must be shippable. Follow the pattern from `platform-account-type-catalog-plan.md` and the inventory v2 / receiving redesign migrations.
-
-**Phase 0 — Audit & Foundation (no schema change)**
-- Finalize this plan + get buy-in.
-- Inventory every reader/writer of the key denorm columns and jsonb payloads. *(Appendices A–D are the starting inventory: the discriminator/jsonb/status column catalog is done; the remaining work is mapping each to its readers/writers in `src/lib` + `src/app/api`.)*
-- **Land the Data-integrity fixes first** (the section above) — they're additive/safe and unblock trusting Drizzle types in later reader phases: reconcile the drifted models, fix the `reason_codes` CHECK regression, add the missing orphan-prevention triggers, decide the validation-trigger-vs-app policy, close the `sku_platform_ids` org_id gap.
-- **Ratify the reference contract** (naming convention, id width, named-CHECK-vs-enum policy, integrity-trigger requirement) so every Phase-1 table is born conformant.
-- Add or strengthen partial indexes + integrity triggers for any new polymorphic surfaces.
-- Create or expand the catalog resolvers (mirror `getOrgTypes` etc.).
-- Model the currently-unmodeled tables in Drizzle (`photo_entity_links`, `part_links`, `organization_integrations`).
-
-**Phase 1 — New structures + catalog linkage (additive)**
-- New tables or columns for provenance, typed facts, refined listings (e.g. `serial_unit_provenance`, improvements to `platform_listings`).
-- Additive `*_type_id` or discriminator columns where missing.
-- Update Drizzle schema + seeders.
-- Idempotent backfill scripts (org-by-org via GUC).
-
-**Phase 2 — Dual write + cache columns**
-- Writers set both the old denorm/text columns **and** the new normalized/polymorphic fields.
-- Keep old columns as read-through caches.
-- Update domain helpers (`src/lib/receiving/...`, inventory state machine side effects, workflow taps) to use the new paths internally.
-
-**Phase 3 — Reader migration**
-- UI components, queries, aggregators, reports, and audit timelines read from the normalized/polymorphic side (via resolvers or views).
-- Old columns become write-only during transition.
-
-**Phase 4 — Cleanup**
-- Drop CHECK constraints, old columns, and legacy tables only after:
-  - `grep` + static analysis proves zero remaining readers.
-  - Full test suite + e2e passes.
-  - Verification reports for data parity.
-- Gated behind feature flags or explicit cleanup waves (see dead-code patterns).
-
-**Safety invariants across phases**
-- All writes go through existing domain chokepoints (never ad-hoc UPDATEs on status or core facts).
-- `clientEventId` / idempotency preserved.
-- Audit rows continue to be written via `recordAudit`.
-- RLS / org scoping never bypassed.
-- Performance regression gates (indexes on new FKs + discriminator columns).
-
-## Cross-cutting impact areas
-
-- **Inventory v2 / state machine**: any new tables must participate in `transition()` / `applyTransition()` flows and emit `inventory_events`.
-- **Workflow engine + Studio**: nodes will be able to declare required entity shapes more cleanly; item_workflow_state benefits from better typed units.
-- **Receiving redesign**: continue the direction of the 2026-06 line-level work.
-- **Platform catalog**: this plan is a natural extension — listings, orders, and receiving should all resolve through `type_id` → platform_account → integration.
-- **Zoho / external syncs**: mirrors stay, but the internal operational model becomes the source of truth.
-- **Audit / timelines / reports**: `AuditTimeline`, `EventTimeline`, and aggregators must consume the new shapes (or stay on the event spine).
-- **UI / display archetypes**: Workbench pickers, station cards, and Monitor timelines will see richer typed data.
-- **Tenancy / RLS**: every new table must be org-scoped from birth (use `orgIdCol()`).
-
-## Risks & mitigations
-
-- **Blast radius of denorm columns** (account_source, source_platform, etc.): keep caches; migrate readers last (as done for the platform catalog).
-- **Data volume on events/logs**: new indexes must be partial + selective.
-- **Drift between Drizzle and live schema**: treat migrations as the source of truth during transition; reconcile explicitly.
-- **Workflow / Studio coupling**: node config changes must remain backward-compatible for published definitions.
-- **Rollback**: every step additive or behind a feature flag + clear rollback SQL.
-- **Performance**: new joins must be covered by indexes; consider materialized views or denorm caches for hot paths.
-
-## Verification & success criteria
-
-- Every Tier 1 table has a clear "before" vs "after" shape documented in this plan + a migration that is additive.
-- Existing behavior (UI, reports, sync jobs, station scans) is unchanged until explicit reader migration phases.
-- New orgs can define custom flows/types without schema changes.
-- `npx tsc --noEmit`, build, and full test suite pass at each gate.
-- Backfill scripts produce dry-run reports with zero silent data loss.
-- Audit and timeline surfaces show the same history before and after.
-- A new channel or custom receiving type can be added with only catalog data + (optionally) a new workflow node.
-
-## Open questions
-
-- Should we introduce a small `entity_kinds` or registry table for the discriminator values, or keep them as constrained text + enums in code?
-- How far do we push typed event subtypes vs a validated `payload` registry?
-- Do `sales_orders` / Zoho mirrors need parallel polymorphic treatment, or are they acceptable as external mirrors?
-- Is there a point at which we extract a narrow `units` base + `inventory_items` / `consumables` distinction?
-- Should `platform_listings` become the single source for listed state (price/qty/condition) with `serial_units` only representing physical stock?
-- **Standardize the polymorphic column convention** — `entity_type`/`entity_id` vs `owner_type`/`owner_id` (Appendix A #1). Pick one for all new surfaces; leave existing ones or rename in a cleanup wave?
-- **Unify the polymorphic id width** — today `INTEGER` / `BIGINT` / `UUID` all coexist as `entity_id`/`owner_id` (Appendix A #2). A generic helper/contract can't assume one; settle on `BIGINT` (most common) + a documented exception list?
-- **Discriminator-constraint policy** — named CHECK as default, pg-enum only for small stable sets? (Appendix D: only ~10 of ~70 status columns are real enums today.) Where's the line, given enum `ALTER TYPE ... ADD VALUE` is awkward but CHECK redefinition caused the `reason_codes` regression?
-- **Entity-existence validation** — does the contract mandate a validation trigger (none exist now), or formally delegate to the writing lib function (the post-Phase-E `photos` choice)?
-- **FBA fold sequencing** — fold `fba_*` onto the spine vs the `tech_serial_numbers` strangle: which leads, and can they share one migration arc?
-- **One repair model** — collapse `repair_service` / `unit_repairs` / `warranty_repair_attempts` onto `unit_repairs`' serial-anchored + event-cross-linked shape; what's the back-compat path for the legacy `repair_service` (no `serial_unit_id`) rows?
-
-## References & related docs
-
-- `.claude/rules/backend-patterns.md` — transition(), audit, tenant scoping, Deps injection.
-- `.claude/rules/source-of-truth.md`
-- `context/inventory_system_upgrade_plan.md`
-- `docs/todo/platform-account-type-catalog-plan.md` *(moved from `docs/` root; root copy deleted)* + status at `docs/partial/platform-account-type-catalog-STATUS.md`.
-- `docs/pending-migrations-plan.md`
-- **Reference-contract migrations (codify these):** `2026-06-28g_part_links.sql` (tenant-from-birth template), `2026-06-18_photos_platform_side_tables.sql` (`photo_entity_links` normalized hub), `2026-06-21_photos_phase_e_drop_legacy_columns.sql` (the polymorphic-link extraction), `2026-06-14_rls_enforcement_infra.sql` (`enforce_tenant_isolation()` definition).
-- **Spine / surface migrations:** `2026-04-10_create_serial_units.sql`, `2026-05-13_create_inventory_events.sql`, `2026-06-17_platform_listings.sql`, `2026-06-24_receiving_exceptions.sql`, `2026-06-24_shipment_links.sql`, `2026-06-28q_drop_legacy_shipment_link_tables.sql`, `2026-05-22_organization_integrations.sql`, `0000_baseline_through_2026-03.sql` (work_assignments + photos triggers), and the `reason_codes` chain (`2026-06-28d`/`28e` — the CHECK regression).
-- Key modules: `src/lib/drizzle/schema.ts`, `src/lib/inventory/state-machine.ts`, `src/lib/workflow/` (`registry.ts`, `contract.ts` — node-type registry), `src/lib/receiving/`, `src/lib/integrations/credentials.ts` (the un-modeled `organization_integrations` access), `src/lib/audit-logs.ts`.
-- Existing polymorphic surfaces detailed in **Appendix A** below.
-
-## Next steps (once approved)
-
-1. Flesh out per-table detailed DDL sketches + backfill queries in a follow-up PR or sibling doc.
-2. Produce an ordered list of concrete migration filenames (additive only).
-3. Pair with ongoing receiving redesign and platform catalog rollout.
-4. Update this plan with actual migration names and status as work proceeds (move to `docs/partial/` when active).
-
-This plan turns the comprehensive scan into an actionable, safe, phased architecture improvement that makes the SaaS more extensible while protecting existing invariants.
+> **Scope:** the `receiving` (carton) + `receiving_lines` (operational unit) spine **only**, plus every "street" that
+> reads/writes it. The whole-schema view (serial_units, orders, FBA, warranty, listings, workflow config, Zoho mirrors)
+> lives in the companion doc [`schema-wide-polymorphic-refactor-plan.md`](./schema-wide-polymorphic-refactor-plan.md);
+> this doc is the detailed receiving cut that companion's "Tier-1 #1 / target-shape §1" only sketched. The reference
+> contract, the existing-polymorphic-surface matrix (Appendix A), and the jsonb/discriminator inventories (Appendices
+> C/D) in the companion apply here unchanged — read them for the cross-table rationale.
+>
+> **Two stance differences from the companion (deliberate):**
+> 1. **The codebase is NOT live.** There are no external tenants and no production data to protect, so this plan is a
+>    **clean destructive cutover** (create the target shape, one-time backfill, drop the old wide columns, cut readers
+>    over street-by-street) — *not* the companion's months-long additive / dual-write / Phase-0-4 strangler. Simplest &
+>    cleanest wins because nothing is in flight.
+> 2. **The thesis is application-architecture, not just schema.** The goal is that **each station / mode / page is its
+>    own street with its own logic**, sharing only (a) the design-system display archetypes and (b) the backend
+>    chokepoints — never the decision logic. The DB split is half the work; the query/write-lane split is the other half.
 
 ---
 
-# Appendix A — Existing polymorphic-surface contract matrix (scan 2026-06-29)
+## 0. TL;DR — the whole plan in one paragraph
 
-Exact shape of every discriminator/polymorphic surface, against the contract in "The reference contract" above. This is the gap analysis for "standardize the contract."
+The monolith tangles **three independent axes** into two wide tables and one mega-query: **intake-kind** (PO / RETURN /
+TRADE_IN / PICKUP / sourcing-import / local-pickup → different *data*), **stage/station** (door → triage → unbox → test
+→ received → history → the operator's *streets*, different *logic*), and **surface** (mobile / sidebar / workspace /
+monitor → different *display*). The fix is a **three-layer model**: (1) a **thin relational spine** — `receiving_carton`
++ `receiving_line` holding only the facts true for *every* kind and *every* stage; (2) a **polymorphic typed-facts
+layer** — narrow per-concern side-tables for the heavy kinds (`receiving_line_zoho`, `…_testing`, `…_return`,
+`…_putaway`, the existing `receiving_exceptions`) plus a `receiving_line_facts(line_id, fact_kind, payload)` registry
+for the long tail, discriminated by an **`intake_kind_id` catalog FK** so a new org or kind needs **zero schema change**;
+(3) **per-street code lanes** — `src/lib/receiving/{spine,kinds,streets,display}` and per-street read/write endpoints,
+each owning its own query and decisions, sharing only the chokepoints (`transition()`, `recordAudit`,
+`withTenantTransaction`, `clientEventId`) and the already-shared display vocabulary. Because the system isn't live, we
+ship this as a **clean per-street cutover**, not a dual-write strangler.
 
-| Surface | Discriminator | id type | Constraint mechanism | Parent-delete integrity | Org-scoped unique? | Drizzle model |
-|---|---|---|---|---|---|---|
-| `photo_entity_links` | `entity_type` + `entity_id` (+ 2nd axis `link_role`) | **BIGINT** | **named CHECK** (9 entity types, 3 roles) | cascade FK→`photos` + 6 parent-delete triggers (`fn_delete_photos_on_parent_delete`) | no (`photo_id,entity_type,entity_id,link_role`) | **not modeled** |
-| `work_assignments` | `entity_type` + `entity_id` (+ `work_type`) | INT | **pg ENUM** (`work_entity_type_enum` — the only enum) | **cancel** trigger, **ORDER+RECEIVING only** (3 enum vals uncovered) | no (global `entity_type,entity_id,work_type`) | omits `organization_id` |
-| `shipment_links` | `owner_type` + `owner_id` (+ `direction`, `role`) | INT | inline CHECK (owner_type, direction); `role` **free text** | **NONE** (owner delete orphans) | **yes** (partial `WHERE is_primary`) | modeled ✓ |
-| `documents` | `entity_type` + `entity_id` | INT | **none — free text** | **NONE** | **none** | omits `organization_id` |
-| `entity_notes` | `entity_type` + `entity_id` | **UUID** | **none — free text** | **NONE** | **none** | modeled ✓ (has org_id) |
-| `receiving_exceptions` | `exception_code` + `status` (not owner-poly) | — | none — free text (app-validated) | FK `ON DELETE CASCADE` (real parents) | **none** | modeled ✓ |
-| `part_links` | `status` (+ hard FK parent) | — | **named CHECK** + shape CHECK | FK `ON DELETE CASCADE` | **yes** (org-led partial uniques) | **not modeled** |
-| `reason_codes` | `flow_context` (multi-vocabulary) | — | **named CHECK** | none (lookup table) | **yes** (`org,flow_context,code`) | **severely stale** (5 cols missing) |
+---
 
-**The 10 cross-surface inconsistencies to normalize:**
-1. **Two naming conventions** — `entity_type`/`entity_id` (5 surfaces) vs `owner_type`/`owner_id` (`shipment_links`).
-2. **id type not uniform** — INT (`documents`, `work_assignments`, `shipment_links`) vs BIGINT (`photo_entity_links`) vs UUID (`entity_notes`). A generic helper can't assume one.
-3. **Discriminator-constraint mechanism is all over the map** — pg enum (1) / named CHECK (3) / inline unnamed CHECK (1) / no constraint, free text (the rest).
-4. **Integrity triggers inconsistent & partly absent** — `photos` has a 6-trigger cascade family; `work_assignments` cancels (2 of 5 entity types); `documents`/`entity_notes`/`shipment_links`-owner have **none** (orphan on parent delete); `receiving_exceptions`/`part_links` sidestep via real FK.
-5. **Entity-existence validation exists nowhere** — the only validator (`fn_validate_photo_entity_ref`) was removed in Phase E.
-6. **Org-scoping of the unique key is inconsistent** — org-led (`shipment_links`, `part_links`, `reason_codes`) vs global (`work_assignments`) vs none (`documents`, `entity_notes`, `receiving_exceptions`).
-7. **FORCE-RLS timing differs** — at birth (`part_links`) vs armed-then-FORCEd in a backstop wave (`shipment_links`, `receiving_exceptions`) vs bulk-retrofit (`photos`, `work_assignments`, `documents`, `entity_notes`, `reason_codes`).
-8. **Drizzle model drift (high-risk)** — see Data-integrity findings #2.
-9. **Live CHECK regression in `reason_codes`** — see Data-integrity findings #1.
-10. **Only `photo_entity_links` has a true second discriminator axis** (`link_role`); `shipment_links` approximates it with `is_primary` + free-text `role`; nothing else supports multi-role.
+## Build status — what landed 2026-06-29 (Phase 1: additive foundation)
 
-# Appendix B — Tier-1 monolith before-snapshots (scan 2026-06-29)
+The entire **additive, non-breaking foundation is built, compiling, and unit-tested** (32 DB-free tests). Nothing
+below removes or rewires a live read/write path yet — the spine + the 2,075-line route still work unchanged.
 
-Exact current shape from `src/lib/drizzle/schema.ts` (the live DB is *wider* than the model for the two starred rows — see Data-integrity #2).
+**Shipped (code, `tsc`-clean):**
+- **Layer 2 schema** — `src/lib/migrations/2026-06-29c_receiving_line_facts_tables.sql`: `receiving_line_zoho` /
+  `_testing` / `_return` / `_putaway` (1:1) + `receiving_line_facts` registry, org-scoped from birth (RLS armed-not-forced
+  per the `receiving_exceptions` precedent), org-led keys (closes the global Zoho-key cross-tenant gap). Drizzle models
+  added to `src/lib/drizzle/schema.ts`.
+- **Facts layer** — `src/lib/receiving/facts/`: `registry.ts` (code-validated `fact_kind` discriminator + Zod schemas +
+  passthrough for org-custom kinds), `store.ts` (registry read/write/upsert), `narrow.ts` (typed partial-upsert/read for
+  the four 1:1 tables), `index.ts`. Tests: registry/store/narrow.
+- **Kinds layer** — `src/lib/receiving/kinds/registry.ts`: intake-kind discriminator → fact tables/schemas + `classify`/
+  `effectiveIntakeKind` (the SoT for the duplicated `effectiveReceivingType`). Tested.
+- **Precedence SoT** — `src/lib/receiving/display/precedence.ts`: priority-rank as rules-as-data; **WIRED** — the route's
+  inline `RECEIVING_PRIORITY_RANK_SQL` and the client `receivingPriorityRank` now derive from it (3 copies → 1, proven
+  byte-equivalent by test).
+- **Spine glue** — `src/lib/receiving/spine/`: `facts-sync.ts` (one call persists a line's facts bundle) + `index.ts`
+  (barrel re-exporting the real chokepoints + Layer-2 surface as the streets' single import). Tested.
+- **Incoming `delivery_state` — extracted AND wired** — `src/lib/receiving/streets/incoming/delivery-state.ts`: the
+  buckets as rules-as-data (kills the WHERE-vs-CASE 2× duplication), with the one documented PENDING_CARRIER asymmetry.
+  **WIRED** — the route's inline CASE (33 lines) + WHERE ladder (71 lines) now derive from it; a regression test proves
+  the generated SQL is semantically identical to the originals, so it's behavior-preserving. The route shrank ~95 lines.
+- **Backfill** — `src/lib/migrations/2026-06-29d_receiving_facts_backfill.sql`: idempotent, org-explicit projection of the
+  wide columns into the facts tables, with a count report.
 
-| Table | Const | Lines | Cols | NOT NULL | jsonb | Zoho-mirror cols | Headline issue |
-|---|---|---|---|---|---|---|---|
-| `orders` | `orders` | 915–950 | 22 | 2 | `status_history` | 0 | `account_source` denorm cache; text-typed `quantity`/`out_of_stock` |
-| `station_activity_logs` | `stationActivityLogs` | 975–997 | 17 | 5 | `metadata` | 0 | **7 sparse polymorphic FK anchors** |
-| `receiving` | `receiving` | 1014–1077 | 37 | 10 | none | 5 | "Drift reconciliation (2026-06-19)" 12-col block; decomposition underway |
-| `receiving_lines` | `receivingLines` | 1151–1247 | **51** | 12 | `disposition_audit` | 11 | widest table; `receiving_line_status` derive-dup; carton/line duplication |
-| `serial_units` ★ | `serialUnits` | 2110–2146 | 24 | 7 | `metadata` | 1 | `origin_*` provenance trio; **`organization_id` only in SQL migrations** |
-| `inventory_events` | `inventoryEvents` | 2189–2218 | 20 | 5 | `payload` | 0 | cleanest; 8 sparse anchors; `client_event_id` UNIQUE idempotency |
+**APPLIED + verified 2026-06-29** — `29c` + `29d` run against the live DB via `npm run db:migrate` (backfill landed:
+1199 zoho / 1210 testing / 2 return / 0 putaway / 17 registry rows; RLS armed on all 5). Gates green: `tsc --noEmit`,
+`next build`, 103 unit tests, and a live facts-CRUD smoke test (write→read→upsert→delete round-trip). One drift caught
+mid-apply — the backfill referenced `zoho_reference_number`, which the **live `receiving_lines` no longer has** (the
+Drizzle model still declares it; a pre-existing model-vs-DB drift from the schema-wide plan's data-integrity findings) —
+dropped from the backfill and re-applied clean.
 
-# Appendix C — jsonb inventory (48 columns) + the variant-config-vs-junk-drawer taxonomy
+**Phase 2 — landed + verified 2026-06-29 (strangler: backfill → dual-write):**
+- **Backfill** (`29d`) + **dual-write** (`29e`: trigger `trg_sync_receiving_line_facts` — AFTER INSERT/UPDATE OF the
+  facts columns, exception-guarded so it can never abort a receiving write, scoped so a `workflow_status`-only
+  transition doesn't fire it). Verified live: sync ✅ / scoping ✅ / non-blocking ✅.
+- The facts tables are now **production-live at 0-drift parity** with the source columns — a full parity sweep
+  (testing/zoho/putaway) returned 0 drift rows, so the **reader cutover is provably safe**. The receiving endpoint e2e
+  (`receiving-lines-endpoints.spec.ts`) stayed green across every step.
 
-**Taxonomy (the actionable split):**
-- **Legitimate variant config / runtime state (keep; govern with a per-discriminator schema):** `workflow_nodes.config` (shape keyed by `type`), `station_definitions.config`, `workflow_templates.graph`, `item_workflow_state.context`, `workflow_definitions.annotations` (pure canvas decoration), `organizations.settings`, `cycle_count_campaigns.scope`, `qc_check_templates.value_enum`. `organization_integrations.payload_encrypted` is the model case (opaque secret blob, queryable status promoted to columns) — though it's `text`, not `jsonb`.
-- **Append-only audit/event payloads (acceptable on the event spine; type the `event_type`→`payload` shape):** `inventory_events.payload`, `station_activity_logs.metadata`, `warranty_claim_events.payload`, `fba_fnsku_logs.metadata`, `orders.status_history`, `receiving_lines.disposition_audit`, `repair_service.status_history`, `auth_audit.detail`.
-- **External-mirror blobs (by design for Zoho sync; lower priority):** `customers.{billing_address,shipping_address,custom_fields,channel_refs}`, `items.custom_fields`, `sales_orders.{line_items,billing_address,shipping_address}`, `packages.line_items`, `invoices.custom_fields`, `credit_notes.{line_items,custom_fields}`, `item_adjustments.line_items`, `zoho_fulfillment_sync.raw`, `zoho_locations.address`. ⚠️ `customers` **double-stores address** (flat columns + jsonb).
-- **Junk-drawer business facts (flag — structure these):** **`platform_listings.platform_metadata`** (nullable, no comment, no discriminator, beside already-structured price/qty/condition columns) — the clearest offender. Watch: `unit_quality_scores.risk_reasons`, `unit_repairs.parts_used`, `warranty_repair_attempts.{parts_used,photo_attachment_ids}`, `warranty_quotes.line_items`, `sourcing_candidates.raw`, `ai_chat_messages.analysis`, `documents.document_data`, `favorite_skus.metadata`, `serial_units.metadata`, `staff.mobile_display_config`, `roles.mobile_defaults`, `amazon_accounts.marketplace_ids`, `training_samples.file_paths`, `pipeline_tasks.file_paths`.
+**Phase 2 writer-cutover ATTEMPTED + REVERTED (2026-06-29) — concrete blockers found:**
+The testing-column writer cutover (6 endpoint + lib writers, via agents + by hand) was attempted to enable dropping the
+testing columns. It was **reverted** because the attempt surfaced concrete, un-verifiable-without-the-full-e2e blockers:
+1. **Reader cutover moved only filters, not displayed values** — `SELECT *`/detail selects + PATCH re-fetch still read
+   `rl.*`, so facts-only writers ⇒ **stale displayed values** immediately.
+2. **Active facts-corruption vector** — the dual-write trigger fires on watched non-testing col updates (`zoho_*`,
+   `unit_price`, `location_code`) and mirrors *all* of `rl`'s now-stale testing cols into `rlt`, **clobbering fresh facts**
+   on any mixed edit.
+3. **Non-convertible upsert** (`lookup-po` `ON CONFLICT … DO UPDATE SET needs_test`), **non-default INSERTs**
+   (`condition_grade='USED_A'`, `needs_test=false`), **embedded readers** in writer files (`beforeRow`, `match`), and
+   **atomicity gaps** (non-transactional split writes).
+Closing all of that is a large bespoke effort that **cannot be comprehensively verified** while the full-flow
+`receive-to-zoho` e2e is red (uncommitted receiving-UI WIP). Reverted to the verified-safe state (facts layer + the
+non-route reader cutover + dual-write + parity, all green). **KEEP:** migrations `29c`/`29d`/`29e` applied, facts tables
+live at 0-drift parity, the facts/kinds/precedence/delivery-state modules + 103 tests, reader cutover in
+tech-queue/work-orders/pending-unboxing/receiving-[id]/po-[poId]/zendesk. **To finish the drop:** commit the receiving
+WIP → `receive-to-zoho` green → redo the writer cutover + value-cutover + trigger rework, verified per-writer.
 
-(48 columns total across 40 tables — the four buckets above are exhaustive.)
+**Remaining — Phase 2 (invasive; needs a clean tree + the full-flow UI e2e, currently WIP-blocked):**
+- Cut readers over to the facts tables (parity proves it's safe) — start with the read-only history/incoming surfaces.
+- Extract each street's *full* read lane out of the `?view=` multiplexer (history → triage → test → unbox → door),
+  deleting its arm + its `normalizeRow` fields each PR. *(§7 Step C / §8)* — the incoming `delivery_state` slice is
+  already extracted+wired above; the rest of the incoming lane (its WHERE/JOIN/SELECT) is part of this sweep.
+- Collapse the 5 write paths onto `transitionReceivingLine()` + `receiveLineUnits()` (delete `lines/[id]/status`'s
+  inline map + `mark-received-po`'s inline UPDATEs). *(§7 Step D)*
+- Move column writers to the facts tables, then drop the moved spine columns + rename `receiving`→`receiving_carton` /
+  `receiving_lines`→`receiving_line`. *(§7 Step F / §8 steps 13-14)*
 
-# Appendix D — Discriminator & status-column inventory (scan 2026-06-29)
+These are deferred deliberately: they rewrite a live 2,075-line route + 5 write routes and must be verified against
+`tests/e2e/receive-to-zoho.spec.ts` per PR — not landed blind in one pass.
 
-**The headline:** of **~70 status/state/disposition/grade/condition columns across ~50 tables, only ~10 are real Postgres enums.** The other ~50 are free-text `TEXT`/`varchar` with the allowed set living only in a code comment or a CHECK — the implicit subtypes to consolidate.
+---
 
-- **The 10 real pg enums (exhaustive):** `serial_status_enum` (19 states), `inbound_workflow_status_enum` (11), `qa_status_enum`, `disposition_enum`, `condition_grade_enum`, `assignment_status_enum`, `replenishment_status`, `admin_feature_status_enum`, `training_sample_status`, `training_run_status`. Plus the small discriminator enums `work_entity_type_enum`, `work_type_enum`, `return_platform_enum`, `target_channel_enum`.
-- **High-value free-text status columns** (values in comments only — prime consolidation targets): `orders.status`, `sales_orders.{status,return_status}` + every Zoho-mirror `status`, `receiving_lines.receiving_line_status` (`INCOMING|SCANNED|UNBOXED|RECEIVED`, no enum yet), `receiving_lines.disposition_final`, `repair_service.status`, `unit_repairs.status`, `warranty_claims.status` (8 states), `warranty_quotes.status`, `fba_shipments.status`, `fba_shipment_items.status`, `sku_catalog.lifecycle_status`, `platform_listings.sync_status`, `pending_skus.status`, the whole `sourcing_*`/`part_acquisitions.status` chain, `item_workflow_state.status`, `order_unit_allocations.state`.
+## 1. The streets — the metaphor made literal
 
-**`entity_type` is the worst polymorphic-sprawl discriminator — 6 tables, all `entity_id`, mostly free-text:** `customers`, `entity_notes`, `documents`, `location_transfers` (`SKU_STOCK|SKU_RECORD`), `photos`→now `photo_entity_links` (`RECEIVING|RECEIVING_LINE|PACKER_LOG|SERIAL_UNIT|SKU|SKU_STOCK|BIN_ADJUSTMENT|SHARE_PACK|ZENDESK_TICKET`), and `work_assignments` (the one enum). Plus the untyped `*_kind`/`*_id` pairs: `tech_verifications.{source_kind/source_row_id, step_type/step_id}`, `customers.entity_type/entity_id`.
+A "street" = one operator job with one input model and one display archetype. Today all nine drive through the **same**
+`receiving`/`receiving_lines` tables and the **same** `/api/receiving-lines?view=` GET. Target: each owns its lane.
 
-**The channel cluster mid-migration** (denormalized text caches coexisting with the normalized `type_id`→`types`→`platform_accounts`→`platforms` catalog): `receiving.{source_platform(CHECK),intake_type,source,target_channel(enum),return_platform(enum)}`, `receiving_lines.{source_platform_pill,intake_type,receiving_type,source_system}`, `orders.{account_source,fulfillment_channel}`. Comments explicitly label `intake_type`/`account_source` as "denormalized cache." `event_type` repeats across 3 append-only tables (`inventory_events`, `fba_fnsku_logs`, `warranty_claim_events`), each free-text with its own vocabulary. `platform`/`provider`/`sso_provider` duplicate channel/integration identity across `ebay_accounts`, `sku_platform_ids`, `platform_listings`, `platforms`, `staff`, `accounts`, `account_identities` instead of FK-ing the catalog or `organization_integrations`.
+| Street | Job / input | Entry | Today's query | Display archetype (shared scaffold) | Owns (target lane) |
+|---|---|---|---|---|---|
+| **Door receive** | scan a carton in at the dock | `m/.../receive` → `Receive.tsx` | `POST /receiving/lookup-po` (1,495 LOC) | **Station** (`StationScanBar`, `OfflineBanner`) | `streets/door` — classify intake-kind, create carton, link STN |
+| **Triage** | decide what an arrived-but-unmatched carton is | `ReceivingSidebarPanel` (`?mode=triage`) | `view=scanned&sort=priority` ∪ `unfound-queue` | **Workbench** (`SidebarRailShell`, `RecentActivityRailBase`) | `streets/triage` — priority rank, unfound merge, pair/claim |
+| **Unbox** | open carton, scan items to PO lines | `ReceivingLineWorkspace` (`?mode=receive`) | `view=all`/`activity`/`scanned`/`viewed` + `mark-received-po` | **Station** (scan→crossfade→display) | `streets/unbox` — match, receive units, qty/condition |
+| **Testing** | route + verdict needs-test units | `TestingSidebarPanel` / tech bench | `view=testing`/`needs-test` + `serial-units/[id]/test` | **Station** (tech scan bench) | `streets/test` — needs-test queue, verdict, disposition |
+| **Incoming** | watch the inbound delivery stream | `IncomingSidebarPanel` (`?mode=incoming`) | `view=incoming` + `delivery_state` CASE + `zoho_po_mirror` | **Monitor** (observe) + drill | `streets/incoming` — delivery-state buckets, ETA |
+| **History (table)** | search what was received | `ReceivingHistorySearchSection` (`?mode=history`) | `view=activity` + search/sort | **Monitor** | `streets/history` — read-only activity projection |
+| **Monitor (audit)** | PO-anchored event trail | `audit-log/receiving/*` | `receiving-aggregator.ts` + `EventTimeline` | **Monitor** (reference timeline) | reads spine + `inventory_events` (already separate) |
+| **Mobile feeds** | phone mirror of unbox/triage/test | `m/.../receiving`, `ScanModeFeeds` | same `view=` params as desktop | **Station** on `MobileShell` | same endpoints as its desktop street (not a 10th street) |
+| **Studio** | model/observe the receiving graph | `/studio`, `stations/data-sources.ts` | `view=incoming&state=AWAITING_TRACKING` + `lines/[id]/advance` | **Canvas** | reads spine; advance via `transition()` (already separate) |
+
+**Anti-mix rule (from `.claude/rules/contextual-display.md`):** a page may *host* several streets (the receiving page
+is a Workbench triage sidebar + a Station unbox workspace), but each **region** is exactly one archetype. The split below
+makes that true at the data + logic layer too, not just the UI.
+
+---
+
+## 2. Precise diagnosis — what's already right vs the two real monoliths
+
+This is the most important section: **we are not rewriting the parts that already work.** The agents confirmed the lib
+and display layers are largely healthy; the rot is in two specific places.
+
+### 2a. Already correct — DO NOT touch (the legitimately-shared layer)
+
+These are the "shared display + chokepoints" the thesis says *should* be shared. They already are:
+
+- **Display / vocabulary SoT** — `workflow-stages.ts` (`workflowStage*`, `WORKFLOW_TO_LINE_STATUS`, `deriveReceivingLineStatus`),
+  `exception-codes.ts`, `intake-classification.ts`, `priority-override.ts`, `receiving-views.ts`, the
+  `receiving-modes.ts` **descriptor registry** (each mode already a self-contained descriptor with its own
+  `buildParams`/`queryKey`/`emptyMessage`), `triage-exception-context.ts`. This is exactly the "share the design
+  system, not the logic" layer — it exists and works.
+- **Backend chokepoints** — `state-machine.ts` `transitionReceivingLine()` + `INBOUND_TRANSITIONS` allow-list (the one
+  guarded `workflow_status` writer), `record-scan.ts` `recordReceivingScan()` (the one dock-scan writer),
+  `recordInventoryEvent` / `recordAudit` (the audit spine), `client_event_id` idempotency, `withTenantTransaction` org
+  scoping, `recomputeCartonSourceLink` + the PATCH upgrade-only guard.
+- **Rail / shell composition** — `RecentActivityRailBase` over `SidebarRailShell`; the six receiving rails are already
+  thin wrappers. Compose, never fork — already the norm.
+- **Already-decomposed lib writers** — `serial-attach.ts`, `attach-box.ts`, `unpair-po.ts`, `relink-po.ts`,
+  `reconcile-unmatched.ts`, `resolve-shipment-for-scan.ts`, `exceptions.ts` — single-purpose, Deps-injected, DB-free
+  testable. These are the *target* pattern; the streets just need to be organized around them.
+
+### 2b. Monolith #1 — the DB (`receiving` 37 cols + `receiving_lines` 51 cols)
+
+Evidence (schema agent): `receiving_lines` was born with **8 columns** (`0000_baseline:513`) and accreted **~40 more**
+across ~50 migrations; `receiving` predates the migration era and has **no canonical CREATE** at all (its only
+definition is the Drizzle model `schema.ts:1014-1077`). The column×surface matrix shows **most columns are used by ONE
+street**:
+
+- **Returns-only:** `return_platform`, `return_reason` (carton) — meaningful only when `is_return`.
+- **Zoho-PO-only (~12 cols on the line):** `zoho_item_id/line_item_id/purchase_receive_id/purchaseorder_id/_number/_number_norm/_reference_number/_sync_source/_last_modified_time/_synced_at/_notes`, `unit_price`.
+- **Marketplace/triage-only:** `source_platform`, `source_platform_pill`, `listing_url`, `listing_reference`, `source_system`, `source_order_id`.
+- **Testing-only:** `needs_test`, `assigned_tech_id`, `qa_status`, `disposition_code`, `disposition_final`, `disposition_audit` (the one jsonb), `condition_grade`.
+- **Putaway-only:** `location_code`. **Repair-only:** `is_repair_service`. **Dead:** `lpn` (1:1 alias of id), `quantity` (TEXT legacy).
+- **Dual-grain duplication:** `received_by`, `scanned_at`, `unboxed_at`, `received_at`, `exception_code`, `intake_type`, `source_platform` exist on **both** carton and line.
+
+Plus integrity gaps: the two `ux_receiving_lines_zoho_*` UNIQUE keys are **not org-scoped** (cross-tenant collision risk
+under sharding).
+
+### 2c. Monolith #2 — the query/write layer
+
+Evidence (consumer + logic agents):
+
+- **One 2,075-line GET** (`app/api/receiving-lines/route.ts`) branches internally on `view` (9 arms, `:552-803`),
+  a nested `delivery_state` sub-branch (`:715-782`), a per-view `ORDER BY` ladder (`:818-876`), and **six
+  conditionally-spliced SELECT fragments** + conditional JOINs. Testing / Incoming / Viewed / Scanned / History all read
+  the *same SQL text* with different toggles. `normalizeRow` (`:1947`) emits **one DTO for all** — every street receives
+  fields that are `null` on its own view (`delivery_state`, `tested_count`, `viewed_at`, `received_done_at`).
+- **Five overlapping write paths** to `workflow_status`/`qa_status`/`disposition`: `mark-received` (per-line),
+  `mark-received-po` (carton finalize), `lines/[id]/status` (testing — its **own** `WORKFLOW_FOR_EVENT` map, *bypasses*
+  the state machine), `lines/[id]/advance` (studio — *uses* `transitionReceivingLine`), `serial-units/[id]/test`.
+  `mark-received-po` even has inline `workflow_status` UPDATEs (`:675-696`) bypassing the chokepoint.
+- **Duplicated precedence vocab:** priority rank exists **three times** (`priority-override.ts` lib, `RECEIVING_PRIORITY_RANK_SQL`
+  in the route, `receiving-priority.ts` client); `delivery_state` buckets exist **twice** (route WHERE `:715` vs route
+  SELECT CASE `:930`); `effectiveReceivingType` is re-inlined in `zendesk-claim-template.ts:232`.
+
+> The diagnosis in one line: **the data model and the read/write model both multiplex N streets through 1 shape. Give
+> each street its own data lane and its own query lane; keep one shared vocabulary and one shared chokepoint.**
+
+---
+
+## 3. Guiding invariants (non-negotiable — survive the cutover unchanged)
+
+Inherited from `.claude/rules/backend-patterns.md` + the companion doc's reference contract. "Not live" relaxes the
+*migration choreography*, never these:
+
+- **Status only via the state machine** — `transitionReceivingLine()` / `transition()` / `applyTransition()`. The two
+  bypass routes (`lines/[id]/status`, inline `mark-received-po` UPDATEs) are **defects to delete**, not patterns to keep.
+- **Audit only via `recordAudit()`** with `AUDIT_ACTION`/`AUDIT_ENTITY`; lifecycle facts via `recordInventoryEvent`.
+- **Tenant scope via `withTenantTransaction(orgId, …)`**; every spine + facts table `organization_id UUID NOT NULL` with
+  `enforce_tenant_isolation()` **in the birth migration** (tenant-from-birth, per the companion's `part_links` template).
+- **Idempotency via `clientEventId`** threaded into `inventory_events` (`UNIQUE(client_event_id)`).
+- **Polymorphic reference contract** — typed discriminator (catalog FK or **named CHECK**, never free text) + id column
+  + **org-led** partial/unique indexes + integrity (real FK on the non-polymorphic side, *or* a delete trigger). Match
+  `shipment_links` / `part_links`.
+- **Compose, don't fork** — at the data layer too: reuse `shipment_links` (`owner_type='RECEIVING_CARTON'`), the
+  `types` catalog, the `reason_codes` flow-context pattern, the workflow `registry.ts` thin-adapter contract. Do not
+  invent a new polymorphic mechanism.
+- **Rules as data** — precedence (priority rank, delivery-state buckets, workflow→coarse) lives **once** as inspectable
+  data (the `order-lifecycle.ts` `UNSHIPPED_LIFECYCLE_RULES` model), consumed by both the SQL builder and the client.
+- **Degrade-not-fail** — a failing sub-resource (a kind-facts fetch) renders empty, never 500s the record (mirror
+  `get-title-by-sku`).
+
+---
+
+## 4. Target architecture — three layers
+
+### Layer 1 — The thin relational spine (shared; universal facts only)
+
+Two tables, renamed to end the "the carton *is* a `receiving` row" confusion the schema agent flagged. Both hold **only
+columns true for every intake-kind and every stage.** This is the "relate everything" backbone.
+
+```sql
+-- ── receiving_carton  (was: receiving) — the physical package event ──────────
+CREATE TABLE receiving_carton (
+  id               BIGSERIAL PRIMARY KEY,
+  organization_id  UUID NOT NULL,                       -- enforce_tenant_isolation() installs loud-fail default
+  -- intake discriminator → per-org catalog; NO CHECK enum (orgs add kinds w/o migration)
+  intake_kind_id   BIGINT NOT NULL REFERENCES types(id),-- the polymorphic axis (PO|RETURN|TRADE_IN|PICKUP|…|org-custom)
+  intake_kind_code TEXT NOT NULL,                       -- denormalized stable code for fast filter/index (mirrors catalog)
+  -- physical / dock facts (universal)
+  carrier          TEXT,
+  arrived_at       TIMESTAMPTZ,                         -- the dock-scan moment (carton grain)
+  arrived_by       INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  handling_unit_id BIGINT REFERENCES handling_units(id),-- LPN box (replaces dead receiving.lpn)
+  shipment_id      BIGINT REFERENCES shipping_tracking_numbers(id), -- primary-tracking cache; full set via shipment_links
+  -- routing facts (cross-street, promoted so indexes work)
+  priority_tier    SMALLINT CHECK (priority_tier IS NULL OR priority_tier BETWEEN 0 AND 3),
+  coarse_status    TEXT NOT NULL DEFAULT 'ARRIVED',     -- carton lifecycle (ARRIVED|TRIAGED|UNBOXING|DONE); enum at cutover
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- org-led indexes; shipment_links owner_type='RECEIVING_CARTON'; enforce_tenant_isolation('receiving_carton')
+
+-- ── receiving_line  (was: receiving_lines) — the operational unit ────────────
+CREATE TABLE receiving_line (
+  id               BIGSERIAL PRIMARY KEY,
+  organization_id  UUID NOT NULL,
+  carton_id        BIGINT REFERENCES receiving_carton(id) ON DELETE CASCADE, -- NULL until a scan matches it
+  sku_catalog_id   INTEGER REFERENCES sku_catalog(id) ON DELETE SET NULL,
+  -- intake kind: line-level override of the carton's (line override ?? carton ?? default)
+  intake_kind_id   BIGINT REFERENCES types(id),
+  -- universal operational facts
+  quantity_expected INTEGER,
+  quantity_received INTEGER NOT NULL DEFAULT 0,
+  workflow_status  inbound_workflow_status_enum NOT NULL DEFAULT 'EXPECTED', -- the 11-state spine lifecycle (KEEP)
+  coarse_status    TEXT,                                -- INCOMING|SCANNED|UNBOXED|RECEIVED, trigger-derived (KEEP trigger)
+  -- universal stage timestamps (per-item grain; distinct in meaning from carton.arrived_at)
+  scanned_at       TIMESTAMPTZ,
+  unboxed_at       TIMESTAMPTZ,
+  received_at      TIMESTAMPTZ,
+  received_by      INTEGER REFERENCES staff(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- KEEP: trg_receiving_line_coarse_status (BEFORE INSERT/UPDATE OF workflow_status → derives coarse_status + stamps timestamps)
+-- FIX: every zoho/natural UNIQUE key leads with organization_id (close the cross-tenant gap)
+-- enforce_tenant_isolation('receiving_line')
+```
+
+What **leaves** the spine (everything in §2b that is one-street): returns fields, the Zoho cluster, marketplace/triage
+fields, the testing cluster, putaway, repair flag, dead `lpn`/`quantity`, and the carton-grain duplicates of line
+facts. They go to Layer 2. `qa_status`/`disposition_code`/`condition_grade`/`exception_code` are **not carton facts** —
+they describe a *unit's* outcome, so they move to the line's testing facts (or onto `serial_units`/`receiving_exceptions`
+which already own them).
+
+### Layer 2 — Polymorphic typed-facts (the "sort into categories directly" layer)
+
+This is where "polymorphic" lives. **Two complementary mechanisms, chosen by volume** — exactly the
+narrow-table-vs-validated-jsonb split the companion's Appendix C taxonomy prescribes:
+
+**(a) Narrow per-concern side-tables** for high-volume, queryable, cross-street facts (the codebase already proved this
+pattern with `receiving_exceptions`, extracted 2026-06-24):
+
+```sql
+receiving_line_zoho     (line_id PK/FK, org, zoho_item_id, zoho_line_item_id, zoho_purchase_receive_id,
+                         zoho_purchaseorder_id, zoho_purchaseorder_number, zoho_purchaseorder_number_norm GENERATED,
+                         unit_price NUMERIC(12,2), zoho_sync_source, zoho_last_modified_time, zoho_synced_at, zoho_notes)
+                        -- only Zoho-PO-origin lines; ~12 cols leave the spine. Org-led uniques on (org, zoho_po_id, zoho_line_item_id).
+receiving_line_testing  (line_id PK/FK, org, needs_test, assigned_tech_id, qa_status qa_status_enum,
+                         disposition_code disposition_enum, disposition_final TEXT, condition_grade condition_grade_enum,
+                         disposition_audit JSONB)  -- testing-street facts (reconcile with serial_units/testing_results, which overlap)
+receiving_line_return   (line_id PK/FK, org, return_platform return_platform_enum, return_reason, source_order_id, rma_ref)
+receiving_line_putaway  (line_id PK/FK, org, location_code, bin, put_away_at)  -- or fold onto serial_units location
+receiving_exceptions    (EXISTS — keep; per-line NO_PO|CARRIER_MISMATCH|SHORT|OVER|DAMAGED|WRONG_ITEM + status)
+```
+
+Each is 1:1 with `receiving_line` (PK = FK), `ON DELETE CASCADE`, org-scoped from birth. A street that doesn't care about
+a concern simply never joins its table — the spine stays narrow, and **"give me all RETURN lines"** is a single indexed
+join, not a `WHERE` over a nullable column on a 51-wide table.
+
+**(b) A typed-facts registry** for the long tail + org-custom kinds (the `reason_codes` flow-context + workflow
+`registry.ts` pattern):
+
+```sql
+receiving_line_facts (id BIGSERIAL PK, organization_id UUID NOT NULL,
+                      line_id BIGINT NOT NULL REFERENCES receiving_line(id) ON DELETE CASCADE,
+                      fact_kind TEXT NOT NULL,           -- 'marketplace_listing' | 'sourcing_import' | 'trade_in_valuation' | org-custom
+                      payload   JSONB NOT NULL,          -- validated at write time by a per-fact_kind Zod schema in code
+                      UNIQUE (organization_id, line_id, fact_kind));
+-- enforce_tenant_isolation('receiving_line_facts')
+```
+
+`fact_kind` → schema map lives in `src/lib/receiving/facts/registry.ts` (mirrors `workflow/registry.ts`): the writer
+validates `payload` against the registered schema, so `(fact_kind, payload)` is a **true tagged union**, not a
+junk-drawer. Marketplace listing facts, sourcing-import provenance, trade-in valuation, and **any org-custom intake
+kind** route here — no migration to add one.
+
+**Why both?** Heavy, universally-queried concerns (Zoho, testing) earn a typed table with real columns + indexes; the
+long tail and org-bespoke kinds earn the registry. This is the companion's "promote queryable facts to columns; keep
+only true variant config in jsonb" rule, applied per concern.
+
+### Layer 3 — The streets (per-station code lanes + display archetypes)
+
+Reorganize `src/lib/receiving/` and the API around the streets. **Shared at the bottom, forked at the lane.**
+
+```
+src/lib/receiving/
+  spine/        ← genuinely-shared chokepoints (mostly EXISTS; just regroup)
+    carton.ts          create/find carton, intake-kind resolve, shipment_links
+    line.ts            create/find line
+    transition.ts      = state-machine.ts (the ONE workflow_status writer)
+    record-scan.ts     the ONE dock-scan writer
+    facts.ts           NEW: typed-facts read/write + registry dispatch
+    exceptions.ts      EXISTS
+  kinds/        ← polymorphic-by-intake-kind (NEW grouping)
+    registry.ts        intake_kind → { label, factTables, factSchemas, defaultWorkflow, classify() }
+    po.ts return.ts trade-in.ts local-pickup.ts sourcing-import.ts
+  streets/      ← per-station logic + its OWN query (NEW grouping; the avenues)
+    door/      classify + create carton + STN link   (was: lookup-po 1,495 LOC)
+    triage/    priority rank + unfound merge + pair    (was: view=scanned ∪ unfound-queue)
+    unbox/     match + receive units                   (was: mark-received-po + receiveLineUnits)
+    test/      needs-test queue + verdict + disposition (was: view=testing/needs-test + lines/[id]/status → fold to transition)
+    incoming/  delivery-state buckets + ETA            (was: view=incoming + delivery_state CASE)
+    history/   read-only activity projection           (was: view=activity)
+  display/      ← already-shared vocabulary SoT (MOVE here unchanged, do not rewrite)
+    workflow-stages.ts exception-codes.ts intake-classification.ts
+    priority-override.ts receiving-views.ts receiving-modes.ts triage-exception-context.ts
+    precedence.ts  NEW: the single rules-as-data SoT (priority rank + delivery_state buckets) — kills the 3×/2× copies
+```
+
+**API decomposition.** Replace the 2,075-line `view`-multiplexer with **per-street read endpoints** (or per-street
+query *builders* behind one thin dispatcher), each owning its `WHERE`/`ORDER`/`SELECT` and returning only its own
+fields. Shared: a `spineRow` projector for the universal columns + the `display/` vocab. **Collapse the 5 write paths
+onto the chokepoint:** delete `lines/[id]/status`'s inline `WORKFLOW_FOR_EVENT` and `mark-received-po`'s inline UPDATEs;
+everything that moves `workflow_status` calls `transitionReceivingLine()`; everything that receives units calls
+`receiveLineUnits()`.
+
+**Display = shared archetype, forked logic (the thesis, concretely).** Each street composes the *same* design-system
+primitives but reads its *own* lane:
+
+- Door / Unbox / Test → **Station** scaffold (`StationScanBar`, `OfflineBanner`, active-card crossfade) — different scan
+  classification + writers per street.
+- Triage → **Workbench** scaffold (`SidebarRailShell` / `RecentActivityRailBase` + right-pane crossfade) — its own
+  scanned∪unfound query.
+- Incoming / History / Monitor → **Monitor** scaffold (`EventTimeline` / facet tiles, stagger-reveal, no durable
+  selection) — its own stream query.
+- Studio → **Canvas** scaffold — reads the spine, advances via `transition()`.
+
+"Share display, not logic" = **share the four archetype scaffolds and the vocab; never share the query or the
+decision.** The `workspace-capabilities.ts` "one `LineEditPanel` branched unbox-vs-triage" stays a *shared component*,
+but each street passes its own capability set — display shared, logic owned.
+
+---
+
+## 5. Polymorphism mechanics — the two payoffs the user asked for
+
+### "All data relates, but sorts into categories directly"
+
+Because intake-kind is a catalog FK + the kinds are narrow tables, a category query is a direct indexed join, not a
+scan over nullable columns:
+
+```sql
+-- "all RETURN lines arriving today" — direct, indexed, no nullable-column archaeology
+SELECT l.* FROM receiving_line l
+  JOIN receiving_carton c ON c.id = l.carton_id
+  JOIN receiving_line_return r ON r.line_id = l.id          -- the category IS a table
+ WHERE c.organization_id = $org AND c.coarse_status <> 'DONE';
+
+-- "needs-test queue" — the test street joins only its facts table
+SELECT l.*, t.assigned_tech_id FROM receiving_line l
+  JOIN receiving_line_testing t ON t.line_id = l.id
+ WHERE l.organization_id = $org AND t.needs_test;
+```
+
+Everything still **relates** through the spine (`carton_id`, `sku_catalog_id`, `shipment_links`, `inventory_events`,
+`serial_units.origin_receiving_line_id`) — the spine is the join hub; the facts tables are the categories.
+
+### "Add an org-specific kind with zero schema change" (the SaaS / sharding payoff)
+
+A new tenant with a bespoke intake flow ("consignment intake"):
+1. Insert a `types` catalog row (`intake_kind='CONSIGNMENT'`) for that org — data, not DDL.
+2. Register `kinds/registry.ts` entry: `{ classify, factTables: ['receiving_line_facts'], factSchemas: { consignment_terms: ZodSchema } }`.
+3. Door street's `classify()` now resolves the carton to that kind; facts land in `receiving_line_facts` under
+   `fact_kind='consignment_terms'`, validated.
+
+No migration, no wider table, identical schema across every shard. That is the companion's stated SaaS goal, made real
+for receiving.
+
+---
+
+## 6. Multi-org & sharding posture
+
+- **Org-from-birth, everywhere.** Every new table (`receiving_carton`, `receiving_line`, all `receiving_line_*` facts)
+  ships `organization_id UUID NOT NULL` + `enforce_tenant_isolation()` **in its create migration** — not a later backstop
+  wave. Reuse `orgIdCol()` + the GUC default.
+- **Org-led keys.** Every UNIQUE/partial index leads with `organization_id` — including the two Zoho keys that are
+  currently global (the cross-tenant gap the schema agent found). Under sharding a tenant's receiving rows are a clean
+  vertical slice; **no query joins across orgs.**
+- **Catalog-driven kinds = schema-identical shards.** `intake_kind` is per-org catalog data, so two tenants with wildly
+  different intake flows run the *same* DDL. Sharding by `organization_id` needs no per-tenant schema.
+- **Polymorphic links stay in-org.** `shipment_links` (`owner_type='RECEIVING_CARTON'`) is already org-led partial-unique;
+  the facts registry is org-scoped. No polymorphic id ever points across a tenant boundary.
+- **RLS under `app_tenant`.** The enforcement only bites under the non-BYPASSRLS `app_tenant` role (companion's tenancy
+  pattern); these tables are born conformant so the Phase-E repoint is a no-op for receiving.
+
+---
+
+## 7. The clean cutover (because the system is NOT live)
+
+No production data, no external tenants → **skip the additive / dual-write / readers-migrate-later strangler.** Do a
+clean, destructive, **per-street** cutover. Each step is still independently shippable and gated (tsc + build + tests),
+but there is **no dual-write window** and **no read-through-cache columns**.
+
+**Step A — Build the target shape (one migration arc).** Create `receiving_carton`, `receiving_line`, the
+`receiving_line_*` facts tables, and `receiving_line_facts`, all org-scoped from birth, with the kept trigger + the
+fixed org-led keys. Model them in Drizzle **in the same PR** (the companion's #8 lesson — don't leave them unmodeled).
+
+**Step B — One-time backfill (idempotent, org-by-org via GUC).** Project the current wide tables into spine + facts:
+carton-grain → `receiving_carton`; line operational facts → `receiving_line`; Zoho cluster → `receiving_line_zoho`;
+testing cluster → `receiving_line_testing`; returns → `receiving_line_return`; the rest → `receiving_line_facts`.
+Dry-run report: row counts + zero-silent-loss assertion per facts table. *(Because not-live, the fallback is even
+simpler — drop dev cruft and re-seed PO lines from Zoho, which is SoR. Backfill is recommended to preserve dev
+continuity; reseed is the escape hatch if backfill parity is noisy.)*
+
+**Step C — Cut streets over, one PR per street.** For each street (start with the lowest-coupling: **history** read-only,
+then **incoming**, **triage**, **test**, **unbox**, **door**): point its query lane + writers at the spine + its facts
+table; delete its arm from the 2,075-line GET; delete any column that street exclusively owned **once its last reader is
+gone** (grep-proven). The mega-GET shrinks street-by-street until it's empty.
+
+**Step D — Collapse the write deviations.** Fold `lines/[id]/status` and the inline `mark-received-po` UPDATEs onto
+`transitionReceivingLine()`; converge `mark-received` + `mark-received-po` on `receiveLineUnits()`. One transition
+writer, one receive writer.
+
+**Step E — Unify the duplicated vocab.** Move priority-rank + delivery-state buckets into `display/precedence.ts` as
+rules-as-data; generate the SQL fragment and the client predicate from the same source (kills the 3× priority and 2×
+delivery-state copies). Delete `effectiveReceivingType`'s inline twin in `zendesk-claim-template.ts`.
+
+**Step F — Drop the corpses.** Once every street is cut over: drop the old wide columns, drop dead `lpn`/`quantity`,
+rename `receiving`→`receiving_carton` / `receiving_lines`→`receiving_line` (cheap, not live). Final `\d` shows two thin
+spines + N narrow facts tables.
+
+**Gates at every PR:** `npx tsc --noEmit`, `next build`, full unit suite, and the receiving e2e specs
+(`tests/e2e/receive-to-zoho.spec.ts`, `zendesk-claim.spec.ts`, `mobile-photos.spec.ts`). Invariants (transition, audit,
+tenancy, idempotency) asserted unchanged.
+
+---
+
+## 8. Concrete migration + PR sequence (ordered, additive-create → destructive-drop)
+
+> Filenames follow the repo's dated-immutable convention; author via the `db-migration-author` skill (idempotent DDL,
+> tenant-from-birth). Apply via `/db-migrate`.
+
+1. `…_receiving_carton_create.sql` — `receiving_carton` + `enforce_tenant_isolation` + shipment_links owner-type seed.
+2. `…_receiving_line_create.sql` — `receiving_line` + kept coarse-status trigger + org-led keys.
+3. `…_receiving_line_facts_tables.sql` — `receiving_line_zoho` / `_testing` / `_return` / `_putaway` + `receiving_line_facts` registry table.
+4. **PR:** Drizzle models for all of the above + `src/lib/receiving/facts/registry.ts` + per-kind Zod schemas.
+5. `…_receiving_backfill.sql` (or a guarded backfill script) — one-time projection, dry-run report.
+6. **PR:** `streets/history` lane + endpoint; remove `view=activity` arm. (lowest risk first)
+7. **PR:** `streets/incoming` lane (delivery-state from `precedence.ts`) + endpoint; remove `view=incoming` + the CASE.
+8. **PR:** `streets/triage` lane (priority rank from `precedence.ts`) + endpoint; remove `view=scanned`.
+9. **PR:** `streets/test` lane; fold `lines/[id]/status` → `transitionReceivingLine`; remove `view=testing/needs-test`.
+10. **PR:** `streets/unbox` lane; converge `mark-received*` on `receiveLineUnits`; remove remaining `view=` arms.
+11. **PR:** `streets/door` lane (decompose `lookup-po`); classify via `kinds/registry.ts`.
+12. **PR:** delete the now-empty `/api/receiving-lines` multiplexer + `normalizeRow` DTO-for-all.
+13. `…_receiving_drop_legacy_columns.sql` — drop the moved/dead columns from the (now-thin) spine.
+14. `…_receiving_rename_spine.sql` — `receiving`→`receiving_carton`, `receiving_lines`→`receiving_line` (+ view shims if any external SQL refers by name).
+
+---
+
+## 9. Risks & mitigations
+
+- **Backfill parity** (51 wide cols → spine + 5 facts tables). *Mitigation:* idempotent, org-by-org, dry-run row-count +
+  null-loss report before the drop; not-live means a reseed-from-Zoho fallback exists.
+- **Hidden readers of dropped columns.** *Mitigation:* drop a column only after grep + tsc prove zero readers; the
+  per-street PR order means each column dies with its last street.
+- **Zoho sync writes the spine.** `zoho-receiving-sync` / `po-mirror-sync` seed EXPECTED lines + mirror PO fields.
+  *Mitigation:* point them at `receiving_line` + `receiving_line_zoho` in the unbox/incoming PRs; `zoho_po_mirror` stays
+  the external mirror (joined by normalized PO#, not FK) — unchanged.
+- **Testing facts overlap `serial_units` / `testing_results`.** *Mitigation:* decide grain explicitly — line-level
+  routing facts (`needs_test`, `assigned_tech_id`) on `receiving_line_testing`; per-unit verdicts stay on
+  `serial_units`/`testing_results`. Don't duplicate the verdict.
+- **The coarse-status trigger + `workflow_status` enum** are load-bearing. *Mitigation:* keep both verbatim; the enum is
+  the spine state machine (`INBOUND_TRANSITIONS`), not a candidate for the facts split.
+- **Mobile + desktop share endpoints.** *Mitigation:* the per-street endpoints keep the same query keys; mobile is the
+  same street on `MobileShell`, so it follows its desktop street's PR for free.
+
+---
+
+## 10. Verification & success criteria
+
+- `receiving_carton` ≤ ~14 cols, `receiving_line` ≤ ~14 cols; every remaining column used by **every** street (no
+  one-street columns left on the spine).
+- "All `<KIND>` lines" and "needs-test queue" are single indexed joins; **no nullable-discriminator scans.**
+- Exactly **one** `workflow_status` writer (`transitionReceivingLine`) and **one** receive writer (`receiveLineUnits`);
+  the bypass routes are gone (grep: zero inline `UPDATE … workflow_status`).
+- The `/api/receiving-lines` `view`-multiplexer and `normalizeRow`-for-all are **deleted**; each street has its own
+  endpoint returning only its fields.
+- Priority rank + delivery-state exist **once** (`display/precedence.ts`); grep finds no second copy.
+- A new org intake kind is addable with **catalog rows + a registry entry, zero migration** (demonstrated by a test).
+- Every new table is org-scoped + FORCE-RLS from its birth migration; org-led keys throughout (Zoho cross-tenant gap
+  closed).
+- `tsc --noEmit` + `next build` + unit + receiving e2e green at every PR; audit/timeline surfaces show identical history
+  before/after.
+
+---
+
+## 11. Open questions
+
+- **Rename vs keep names.** Recommend `receiving_carton` / `receiving_line` (ends the "carton *is* a receiving row"
+  confusion; cheap because not-live). Acceptable lower-churn alternative: keep `receiving` / `receiving_lines`. Decide
+  before Step A.
+- **Testing facts home.** New `receiving_line_testing`, or push the whole testing cluster onto `serial_units` /
+  `testing_results` and keep only `needs_test` routing on the line? (Leaning: thin routing on the line, verdicts on the
+  unit.)
+- **`receiving_line_facts` vs more narrow tables.** Where's the line between "earns a typed table" and "lives in the
+  registry"? Proposed rule: a fact queried by a *whole street's* WHERE/ORDER earns a table; everything else is registry.
+- **`coarse_status` on the carton** — derive via trigger (like the line) or write explicitly per street?
+- **Exception home** — finish moving carton/line `exception_code` fully into `receiving_exceptions`, or keep a denormal
+  `exception_code` on the line for cheap filtering?
+- **Backfill vs reseed** — preserve dev rows via backfill, or take the not-live freedom to reseed PO lines from Zoho and
+  start the facts tables clean?
+
+---
+
+## 12. References
+
+- Companion (whole-schema, reference contract, Appendices A–D): [`schema-wide-polymorphic-refactor-plan.md`](./schema-wide-polymorphic-refactor-plan.md).
+- Display archetypes (the "share display not logic" backbone): `.claude/rules/contextual-display.md` +
+  `.claude/rules/display/{station,workbench,monitor-and-canvas,motion-crossfade,reference-timeline}.md`.
+- Backend invariants: `.claude/rules/backend-patterns.md`. SoT rules: `.claude/rules/source-of-truth.md`.
+- Reusable polymorphic primitives: `src/lib/shipping/shipment-links.ts` (`2026-06-24_shipment_links.sql`),
+  `src/lib/neon/reason-codes-queries.ts` (flow-context), `src/lib/workflow/registry.ts` + `contract.ts` (thin-adapter
+  registry), `src/lib/inventory/state-machine.ts` (transition chokepoint), `src/lib/tenancy/db.ts` +
+  `2026-06-14_rls_enforcement_infra.sql` (`enforce_tenant_isolation`), `2026-06-28g_part_links.sql` (tenant-from-birth
+  template), `src/lib/order-lifecycle.ts` (rules-as-data model).
+- Current-state spine: `src/lib/drizzle/schema.ts:1014` (`receiving`), `:1151` (`receiving_lines`), `:1256`
+  (`receiving_exceptions`); the query monolith `src/app/api/receiving-lines/route.ts`; the lib in `src/lib/receiving/*`;
+  the kept trigger `2026-06-25_receiving_line_coarse_status_trigger.sql`; the catalog FK `2026-06-14f_catalog_type_fk_accounts_seed.sql`.
+
+---
+
+## Appendix — current → target home for every spine column
+
+Where each column lands. **Spine** = stays (universal). **→ table** = moves to a facts table. **drop** = dead.
+
+### `receiving` (carton) → `receiving_carton`
+| Column(s) | Target |
+|---|---|
+| `carrier`, `received_at`→`arrived_at`, `received_by`→`arrived_by` | **Spine** (dock grain) |
+| `shipment_id`, `priority_tier` | **Spine** (cache + routing) |
+| `intake_type`/`type_id` | **Spine** as `intake_kind_id` (catalog FK) + `intake_kind_code` |
+| `lpn` | **drop** (dead 1:1 alias → `handling_unit_id`) |
+| `quantity` (TEXT) | **drop** (legacy; per-line qty is SoT) |
+| `is_return`, `return_platform`, `return_reason` | **→ receiving_line_return** (kind facts) |
+| `source`, `source_platform`, `listing_url` | **→ kinds** (`receiving_line_facts` marketplace) / `intake_kind` |
+| `zoho_purchase_receive_id`, `zoho_warehouse_id`, `zoho_purchaseorder_id`/`_number`, `zoho_notes` | **→ receiving_line_zoho** (or `zoho_po_mirror`) |
+| `qa_status`, `disposition_code`, `condition_grade` | **→ receiving_line_testing** (unit outcome, not carton) |
+| `needs_test`, `assigned_tech_id` | **→ receiving_line_testing** (per-line routing) |
+| `target_channel` | **→ kinds**/routing |
+| `support_notes`, `zendesk_ticket`, `exception_code` | **→ receiving_exceptions** |
+| `unboxed_at`/`unboxed_by`, `scanned_at`, `intake_type` (line dup) | **resolve dual-grain** → line owns per-item stage; carton keeps dock only |
+| `receiving_date_time` | **drop**/collapse into `arrived_at` |
+
+### `receiving_lines` → `receiving_line`
+| Column(s) | Target |
+|---|---|
+| `receiving_id`→`carton_id`, `sku_catalog_id`, `quantity_expected`/`_received` | **Spine** |
+| `workflow_status`, `receiving_line_status`→`coarse_status` | **Spine** (+ keep trigger) |
+| `scanned_at`, `unboxed_at`, `received_at`, `received_by`, `received_done_at` | **Spine** (per-item stage) |
+| `receiving_type`/`intake_type` | **Spine** as line-level `intake_kind_id` override |
+| `zoho_item_id`, `zoho_line_item_id`, `zoho_purchase_receive_id`, `zoho_purchaseorder_id`/`_number`/`_number_norm`, `zoho_reference_number`, `zoho_sync_source`, `zoho_last_modified_time`, `zoho_synced_at`, `zoho_notes`, `unit_price` | **→ receiving_line_zoho** |
+| `needs_test`, `assigned_tech_id`, `qa_status`, `disposition_code`, `disposition_final`, `condition_grade`, `disposition_audit` | **→ receiving_line_testing** |
+| `source_platform_pill`, `listing_url`, `listing_reference`, `source_system`, `source_order_id` | **→ receiving_line_facts** (marketplace/sourcing) or **receiving_line_return** |
+| `is_repair_service` | **→ receiving_line_facts** (repair) / kind |
+| `location_code` | **→ receiving_line_putaway** (or `serial_units` location) |
+| `exception_code`, `zendesk_ticket` | **→ receiving_exceptions** |
+| `notes` | **Spine** (operational) or `receiving_exceptions` |
+| `quantity` (legacy), `sku`, `item_name` | **drop**/derive (`sku_catalog_id` is SoT; `items.name` is title SoT) |
+| `sku_platform_id_row`, `manual_entry_at` | **→ receiving_line_facts** (triage provenance) |

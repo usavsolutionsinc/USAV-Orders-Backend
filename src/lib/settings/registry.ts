@@ -119,6 +119,18 @@ export const SETTINGS: readonly SettingDef[] = [
     schema: z.boolean().default(true),
     permission: 'admin.manage_features',
   },
+  {
+    key: 'receiving.requireSerialConfirmation',
+    page: 'receiving',
+    group: 'Safety',
+    scope: 'org',
+    label: 'Require serial confirmation to receive',
+    description:
+      'Block Receive until the operator either captures a serial or explicitly marks the item as having no serial number.',
+    control: 'toggle',
+    schema: z.boolean().default(false),
+    permission: 'admin.manage_features',
+  },
 
   // ─── Organization · Vision (advanced, plan-gated) ───────────────────────
   {
@@ -209,6 +221,19 @@ export const SETTINGS: readonly SettingDef[] = [
     description: 'After a serial is entered, jump to the next empty slot.',
     control: 'toggle',
     schema: z.boolean().default(true),
+  },
+
+  // ─── Organization · Feedback ────────────────────────────────────────────
+  {
+    key: 'receiving.scanSoundsEnabled',
+    page: 'receiving',
+    group: 'Feedback',
+    scope: 'org',
+    label: 'Scan sounds',
+    description: 'Master switch for scan confirmation tones across the org. Operators can still opt out individually.',
+    control: 'toggle',
+    schema: z.boolean().default(false),
+    permission: 'admin.manage_features',
   },
 
   // ─── Personal · Feedback ────────────────────────────────────────────────

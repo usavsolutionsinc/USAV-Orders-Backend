@@ -653,3 +653,76 @@ export function buildUnmatchedStubRow(
     receiving_source: 'unmatched',
   };
 }
+
+/**
+ * Final-shape row for the Unbox UNBOXED rail — title is stable from the first
+ * paint ("Unfound PO"), keyed on `carton:{receivingId}` so no tracking# →
+ * unfound title flicker or disappear/reappear on refetch.
+ */
+export function buildUnboxRailUnmatchedRow(
+  receivingId: number,
+  trackingNumber: string,
+): ReceivingLineRow {
+  const now = new Date().toISOString();
+  return {
+    ...buildUnmatchedStubRow(receivingId, trackingNumber),
+    item_name: 'Unfound PO',
+    workflow_status: 'DONE',
+    client_event_id: `carton:${receivingId}`,
+    scanned_at: now,
+    last_activity_at: now,
+    created_at: now,
+  };
+}
+
+/**
+ * Optimistic OPEN stub for a MATCHED carton — a full {@link ReceivingLineRow}
+ * seeded from a lookup-po line summary so the right-pane workspace opens the
+ * instant the PO resolves, before the `include=serials` hydration fetch lands.
+ * The workspace is keyed on receiving_id, so the real row reconciles IN PLACE
+ * (no remount), mirroring the unmatched optimistic-open in scan-apply.ts.
+ *
+ * Carries the REAL line id (positive) so the hydration reconcile targets the same
+ * line, and `receiving_source` is null (NOT 'unmatched') so the matched UI — not
+ * the unfound UI — renders during the brief pre-hydration window.
+ */
+export function buildMatchedStubRow(
+  receivingId: number,
+  trackingNumber: string,
+  line: PoLineSummary,
+): ReceivingLineRow {
+  return {
+    id: line.id,
+    receiving_id: receivingId,
+    tracking_number: trackingNumber,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: line.zoho_purchaseorder_id,
+    zoho_purchaseorder_number: line.zoho_purchaseorder_number,
+    item_name: line.item_name,
+    sku: line.sku,
+    quantity_received: line.quantity_received,
+    quantity_expected: line.quantity_expected,
+    qa_status: 'PENDING',
+    workflow_status: null,
+    disposition_code: 'HOLD',
+    // Seed the real grade from the summary so the header reads correctly the
+    // moment the pane opens; the hydration fetch reconciles it in place. Falls
+    // back to '' (don't auto-mark the Condition step) when the summary lacks one.
+    condition_grade: line.condition_grade ?? '',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: line.receiving_type,
+    notes: null,
+    created_at: null,
+    image_url: line.image_url,
+    source_platform: null,
+    receiving_source: null,
+  };
+}

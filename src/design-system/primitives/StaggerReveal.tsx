@@ -34,11 +34,38 @@ export const staggerRevealContainer = (step: number = STAGGER_REVEAL_STEP): Vari
 /**
  * Item variants — each child fades + slides in from the left, matching the
  * station scan bar's "arriving" entrance (`spring, damping 25, stiffness 120`,
- * from `x: -20`) so the rail and the scan bar feel like one motion language.
+ * from `x: -20`). **Do not use inside a vertically scrolling sidebar rail** —
+ * `overflow-y: auto` clips horizontal overflow and the status dots read as cut
+ * off on the left. Use {@link staggerRevealSidebarItem} there instead.
  */
 export const staggerRevealItem: Variants = {
   hidden: { opacity: 0, x: -20 },
   show: { opacity: 1, x: 0, transition: { type: 'spring', damping: 25, stiffness: 120 } },
+  exit: { opacity: 0, pointerEvents: 'none' as const, transition: { duration: 0.12, ease: motionBezier.easeOut } },
+};
+
+/**
+ * Sidebar-rail stagger — opacity + a short upward settle only (no `x`). Safe
+ * inside `overflow-y-auto` scroll bodies: nothing translates past the left edge.
+ * Pair with {@link staggerRevealContainer} on the list parent.
+ */
+export const staggerRevealSidebarItem: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.28, ease: motionBezier.easeOut } },
+  exit: { opacity: 0, pointerEvents: 'none' as const, transition: { duration: 0.12, ease: motionBezier.easeOut } },
+};
+
+/**
+ * Vertical "settle" reveal item — full-width stacked cards rise + fade in
+ * sequence. Use for detail / workbench panes (e.g. the receiving line workspace
+ * body) where the rail's horizontal `x:-20` slide reads wrong on full-bleed
+ * cards. Opacity + y only (GPU-composited; never animates layout). Pair with
+ * {@link staggerRevealContainer} on the parent, and collapse to opacity-only at
+ * the call site under `prefers-reduced-motion`.
+ */
+export const staggerRevealRiseItem: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: motionBezier.easeOut } },
   exit: { opacity: 0, transition: { duration: 0.12, ease: motionBezier.easeOut } },
 };
 

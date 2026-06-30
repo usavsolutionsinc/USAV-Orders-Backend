@@ -12,14 +12,7 @@ import {
   FLOW_SECTION_LABEL,
   RECEIVING_SCAN_RULE_LINE_CLASS,
   TRACKING_ADD_BTN_CLASS,
-  RECEIVING_VARIANT_THEME,
-  receivingVariantFromType,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import {
-  classificationLabel,
-  classificationToColumns,
-  columnsToClassification,
-} from '@/lib/receiving/intake-classification';
 import { ReceivingPhotoButton } from './ReceivingPhotoButton';
 import { IdentityLinkChip } from './IdentityLinkChip';
 import { ReceivingTicketChip } from './ReceivingTicketChip';
@@ -161,26 +154,24 @@ export function CartonContextCard({
   const resolvePlatformMeta = usePlatformMeta();
   const platformMeta = resolvePlatformMeta(platformValue);
 
-  // A4 door-classification banner — a single read-only label that unifies the
-  // carton's return flag + platform + type into one glanceable "what is this".
-  // Derived from the same intake-classification SoT the door selector writes
-  // (the carton has no separate is_return prop here, so RETURN is inferred from
-  // the type + the source platform picks the return platform). Shown only for
-  // the non-default classes (returns / trade-in / pickup) and only in the unbox
-  // / testing carton context (`showStaffPhotoRow`) — triage edits it via the
-  // pill row instead. Themed via RECEIVING_VARIANT_THEME.
-  const intakeClassification = columnsToClassification({
-    is_return: receivingType.trim().toUpperCase() === 'RETURN',
-    return_platform: null,
-    source_platform: platformValue,
-    receiving_type: receivingType,
-  });
-  const intakeTheme =
-    RECEIVING_VARIANT_THEME[
-      receivingVariantFromType(classificationToColumns(intakeClassification).receiving_type)
-    ];
-  const showIntakeBanner =
-    showStaffPhotoRow && intakeClassification !== 'PO' && intakeClassification !== 'UNKNOWN';
+  // An imported return shows its PLATFORM on the listing chip; its originating
+  // ORDER# stays a SEPARATE copy chip (the PO#/order# slot below), so the listing
+  // link and the order id each copy/open on their own — never glued into one
+  // "Amazon · <order#>" chip. poDisplay carries the order# (the import sets
+  // receiving.zoho_purchaseorder_number as the display representative).
+  const isReturn = receivingType.trim().toUpperCase() === 'RETURN';
+  const listingHasTarget = !!(listingLink || listingOpenHref);
+  const listingChipDisplay = isReturn
+    ? platformValue
+      ? platformMeta.label
+      : 'Return'
+    : listingHasTarget
+      ? platformValue
+        ? platformMeta.label
+        : isUnmatched
+          ? 'Unfound'
+          : 'Listing'
+      : '----';
 
   // Urgency is a tier picker: Auto + Priority/High/Medium/Low. Collapsed it
   // shows the *effective* tier — the manual override when set, else the
@@ -226,7 +217,9 @@ export function CartonContextCard({
 
   // All three identity editors now live in the below-row drawer — the condensed
   // top row is chips + pencils only.
-  const anyBelow = trackingEditorsOpen || listingEditorOpen || poEditorOpen;
+  // The PO# editor is suppressed once the carton is an imported return — a
+  // return is keyed by its order number (shown on the listing chip), not a PO.
+  const anyBelow = trackingEditorsOpen || listingEditorOpen || (poEditorOpen && !isReturn);
 
   // Platform/Type pill options come straight from the org catalog (active rows,
   // org sort order) — so renames, hides, reorders, and custom entries the org
@@ -256,28 +249,6 @@ export function CartonContextCard({
   return (
     <WorkspaceCard bodyClassName="px-0 py-0" overflow="visible">
       <div className="space-y-2 px-4 pt-2 pb-3">
-        {/* A4: read-only door-classification banner — "This is <FBA Return>" etc.
-            One glanceable label so the unboxer handles returns/trade-ins
-            differently without re-reading the platform + type pills. */}
-        {showIntakeBanner ? (
-          <HoverTooltip
-            label="How this package was classified at the receiving door"
-            focusable={false}
-            asChild
-          >
-            <div className="flex w-fit items-center gap-2">
-              <span className="text-eyebrow font-black uppercase tracking-widest text-gray-400">
-                This is
-              </span>
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-eyebrow font-black uppercase tracking-widest ${intakeTheme.chip}`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${intakeTheme.iconBg}`} aria-hidden />
-                {classificationLabel(intakeClassification)}
-              </span>
-            </div>
-          </HoverTooltip>
-        ) : null}
         <div className="flex min-w-0 flex-col gap-y-1">
           {/* Condensed identity row — Priority · Platform · Type · listing ·
               PO# · tracking# · Claim · Photos. Platform/Type collapse to the
@@ -344,17 +315,14 @@ export function CartonContextCard({
               // storefront href (listingOpenHref) so the chip reads as a real,
               // copyable/openable Listing instead of "----".
               value={listingLink || listingOpenHref || ''}
-              display={
-                listingLink || listingOpenHref
-                  ? platformValue
-                    ? platformMeta.label
-                    : isUnmatched
-                      ? 'Unfound'
-                      : 'Listing'
-                  : '----'
-              }
-              underlineClass={platformValue ? platformMeta.border : 'border-slate-300'}
-              iconClass={platformValue ? platformMeta.text : 'text-slate-400'}
+              // Imported return → the platform label; otherwise the platform /
+              // Unfound / Listing label (or "----" when nothing's bound yet).
+              display={listingChipDisplay}
+              // Platform tone ONLY when there's an actual listing to open. With
+              // no link the chip isn't a live link, so it reads gray rather than
+              // painting a platform color it can't act on.
+              underlineClass={listingHasTarget && platformValue ? platformMeta.border : 'border-slate-300'}
+              iconClass={listingHasTarget && platformValue ? platformMeta.text : 'text-slate-400'}
               disableCopy={!(listingLink.trim() || listingOpenHref)}
               onEdit={() => {
                 setListingEditorOpen((v) => {
@@ -371,24 +339,31 @@ export function CartonContextCard({
               menuFirstAction="copy"
             />
 
-            {/* PO# — chip click copies; hover menu opens Zoho or edits. */}
+            {/* PO# — or, for an imported RETURN, the originating ORDER# kept as
+                its OWN copy chip, SEPARATE from the listing link (which stays
+                just the platform). The order# isn't a Zoho PO, so it's copy-only:
+                no Zoho open, no inline editor. Normal POs keep open + edit. */}
             <IdentityLinkChip
-              openHref={poOpenHref}
-              openTitle="Open PO in Zoho"
+              openHref={isReturn ? undefined : poOpenHref}
+              openTitle={isReturn ? 'Order number' : 'Open PO in Zoho'}
               value={poDisplay}
               display={poDisplay ? getLast4(poDisplay) : '----'}
               tone="id"
               underlineClass="border-gray-500"
               disableCopy={!poDisplay}
-              onEdit={() => {
-                setPoEditorOpen((v) => {
-                  const next = !v;
-                  if (next) queueMicrotask(() => poInputRef.current?.focus());
-                  return next;
-                });
-              }}
-              editOpen={poEditorOpen}
-              editLabel="Edit PO#"
+              onEdit={
+                isReturn
+                  ? undefined
+                  : () => {
+                      setPoEditorOpen((v) => {
+                        const next = !v;
+                        if (next) queueMicrotask(() => poInputRef.current?.focus());
+                        return next;
+                      });
+                    }
+              }
+              editOpen={isReturn ? false : poEditorOpen}
+              editLabel={isReturn ? undefined : 'Edit PO#'}
               actionsInMenu
             />
 
@@ -444,7 +419,9 @@ export function CartonContextCard({
                     size="sm"
                     onClick={onMakeClaim}
                     ariaLabel="File claim"
-                    className="h-8 w-[50.32px] shrink-0 self-center rounded-full bg-orange-500 px-0 text-micro font-black uppercase leading-none tracking-wide text-white shadow-sm hover:bg-orange-600 active:bg-orange-600"
+                    // Quiet, secondary chip — Claim is an exception path, so it must
+                    // not compete with the green Receive for "the action" (analysis #4).
+                    className="h-8 w-[50.32px] shrink-0 self-center rounded-full bg-orange-50 px-0 text-micro font-black uppercase leading-none tracking-wide text-orange-700 shadow-none ring-1 ring-inset ring-orange-200 hover:bg-orange-100 active:bg-orange-100"
                   >
                     Claim
                   </Button>
@@ -507,7 +484,7 @@ export function CartonContextCard({
           {/* Below-row inline editors for PO# / tracking / listing URL. */}
           {anyBelow ? (
             <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-2">
-              {poEditorOpen ? (
+              {poEditorOpen && !isReturn ? (
                 <div className="relative">
                   <div className="mb-1 flex items-start justify-between gap-2">
                     <span className={`${FLOW_SECTION_LABEL} mb-0 leading-none`}>PO number</span>

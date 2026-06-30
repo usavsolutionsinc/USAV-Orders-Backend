@@ -134,6 +134,16 @@ export function RightPaneOverlay({
   useBodyScrollLock(open && lockScroll);
   useEscapeClose(open && closeOnEscape, onClose);
 
+  // Keep the portal mounted through exit animations, then tear it down so an
+  // invisible backdrop can't keep intercepting clicks after close.
+  const [present, setPresent] = useState(open);
+  useLayoutEffect(() => {
+    if (open) setPresent(true);
+  }, [open]);
+  const handleExitComplete = () => {
+    if (!open) setPresent(false);
+  };
+
   // Track the host pane's viewport rect so the panel can sit over it while the
   // backdrop dims the whole screen. useLayoutEffect measures before paint, so
   // the panel never flashes at the fallback (full-viewport) position first.
@@ -214,7 +224,7 @@ export function RightPaneOverlay({
   };
 
   const target = typeof document !== 'undefined' ? document.body : null;
-  if (!target) return null;
+  if (!target || !present) return null;
 
   // Positioning frame: sized to the pane rect (or the whole viewport when no
   // host). It's pointer-events-none so backdrop clicks still reach the dim
@@ -253,14 +263,14 @@ export function RightPaneOverlay({
         : undefined;
 
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={handleExitComplete}>
       {open && backdrop ? (
         <motion.div
           key="rp-overlay-backdrop"
           role="presentation"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          initial={{ opacity: 0, pointerEvents: 'auto' }}
+          animate={{ opacity: 1, pointerEvents: 'auto' }}
+          exit={{ opacity: 0, pointerEvents: 'none' }}
           transition={FADE}
           onClick={onClose}
           className="fixed inset-0 z-panelPopover bg-gray-950/35 backdrop-blur-[1px]"
@@ -280,7 +290,10 @@ export function RightPaneOverlay({
             aria-label={ariaLabel}
             aria-labelledby={ariaLabelledby}
             onClick={(e) => e.stopPropagation()}
-            {...panelMotion}
+            initial={panelMotion.initial}
+            animate={{ ...panelMotion.animate, pointerEvents: 'auto' }}
+            exit={{ ...panelMotion.exit, pointerEvents: 'none' }}
+            transition={panelMotion.transition}
             style={panelStyle}
             className={cn('relative flex flex-col overflow-hidden bg-white', panelClass, className)}
           >

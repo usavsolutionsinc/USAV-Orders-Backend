@@ -38,7 +38,17 @@ interface DeliveredEmailApiRow {
   email_from?: string | null;
 }
 
-export function useTriagePanel({ row }: { row: ReceivingLineRow }) {
+export function useTriagePanel({
+  row,
+  loadCandidates = true,
+  loadDeliveredEmails = true,
+}: {
+  row: ReceivingLineRow;
+  /** When false, Zendesk ticket candidates are not fetched until the tab opens. */
+  loadCandidates?: boolean;
+  /** When false, delivered-email corroboration is not fetched until needed. */
+  loadDeliveredEmails?: boolean;
+}) {
   const queryClient = useQueryClient();
   const pkg = useMemo(() => toTriagePackage(row), [row]);
 
@@ -55,7 +65,7 @@ export function useTriagePanel({ row }: { row: ReceivingLineRow }) {
     setDebouncedQuery('');
   }, [pkg.lineId]);
 
-  const candidatesEnabled = !!pkg.receivingId && pkg.receivingId > 0;
+  const candidatesEnabled = loadCandidates && !!pkg.receivingId && pkg.receivingId > 0;
   const candidatesQuery = useQuery<{
     success: boolean;
     tickets: TicketCandidate[];
@@ -129,7 +139,7 @@ export function useTriagePanel({ row }: { row: ReceivingLineRow }) {
           from: e.email_from ?? null,
         }));
     },
-    enabled: !!pkg.zohoPoId,
+    enabled: loadDeliveredEmails && !!pkg.zohoPoId,
     staleTime: 60_000,
   });
 

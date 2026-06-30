@@ -236,7 +236,7 @@ function useIncomingEmailTodo(search: string, enabled: boolean): IncomingEmailTo
 }
 
 /**
- * Standalone count hook for the switcher badge — reuses the same cache entry as
+ * Standalone count hook for the switcher pill — reuses the same cache entry as
  * the unfiltered list (`q=''`), so it never adds a request.
  */
 export function useIncomingEmailCount(): number {
@@ -260,7 +260,7 @@ export function useIncomingEmailCount(): number {
 interface IncomingViewSwitcherProps {
   value: IncomingView;
   onChange: (next: IncomingView) => void;
-  /** Live "Incoming POS" count (e.g. `useIncomingSummary()?.issued`). */
+  /** Live "Incoming POS" count (e.g. `useIncomingTableTotal()`). */
   posCount?: number;
   /** Live "Email Triage" count (`useIncomingEmailCount()`). */
   emailCount?: number;
@@ -268,7 +268,7 @@ interface IncomingViewSwitcherProps {
 }
 
 /**
- * The Incoming view toggle pills (label + count + status dot), rendered through
+ * The Incoming view toggle pills (label + count + icon), rendered through
  * the shared `HorizontalButtonSlider` `nav` variant — the same primitive every
  * other page's sub-view tabs use, never a hand-rolled segmented control. It is
  * bare on purpose: it lives in the sidebar's `headerRows` slot (one row right
@@ -284,13 +284,8 @@ export function IncomingViewSwitcher({
   className,
 }: IncomingViewSwitcherProps) {
   const items: HorizontalSliderItem[] = [
-    { id: 'pos', label: 'Incoming POS', count: posCount },
-    {
-      id: 'email',
-      label: 'Email Triage',
-      count: emailCount,
-      badge: emailCount && emailCount > 0 ? 'dot' : null,
-    },
+    { id: 'pos', label: 'Incoming POS', count: posCount, icon: Inbox },
+    { id: 'email', label: 'Email Triage', count: emailCount, icon: Mail },
   ];
   return (
     <HorizontalButtonSlider
@@ -310,12 +305,12 @@ export function IncomingViewSwitcher({
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Chip tone per tag — the 3-layer house chip (bg-50 / text-700 / ring-200). */
-const TAG_STYLE: Record<EmailTriageTag, { chip: string; dot: string; label: string }> = {
-  NEW: { chip: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-400', label: 'New' },
-  RETURN: { chip: 'bg-rose-50 text-rose-700 ring-rose-200', dot: 'bg-rose-400', label: 'Return' },
-  DELIVERED: { chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-400', label: 'Delivered' },
-  TRACKING: { chip: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-400', label: 'Tracking' },
-  DONE: { chip: 'bg-gray-100 text-gray-500 ring-gray-200', dot: 'bg-gray-300', label: 'Done' },
+const TAG_STYLE: Record<EmailTriageTag, { chip: string; label: string }> = {
+  NEW: { chip: 'bg-amber-50 text-amber-700 ring-amber-200', label: 'New' },
+  RETURN: { chip: 'bg-rose-50 text-rose-700 ring-rose-200', label: 'Return' },
+  DELIVERED: { chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200', label: 'Delivered' },
+  TRACKING: { chip: 'bg-blue-50 text-blue-700 ring-blue-200', label: 'Tracking' },
+  DONE: { chip: 'bg-gray-100 text-gray-500 ring-gray-200', label: 'Done' },
 };
 
 const CHIP_CLASS =
@@ -389,9 +384,6 @@ function EmailTriageItem({
       <div className="min-w-0 flex-1">
         {/* Title row: order numbers + age */}
         <div className="flex items-center gap-1.5">
-          {!email.done ? (
-            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', tag.dot)} aria-hidden />
-          ) : null}
           <span
             className={cn(
               'truncate text-caption font-black',

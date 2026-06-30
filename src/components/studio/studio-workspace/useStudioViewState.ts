@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { StudioLens, StudioZoom } from '../studio-types';
 
-export interface StudioViewState {
+interface StudioViewState {
   /** Whether the user is currently on the /studio route (provider is active). */
   active: boolean;
   v: string | null;

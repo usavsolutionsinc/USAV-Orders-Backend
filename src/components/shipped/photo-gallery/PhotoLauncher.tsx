@@ -1,5 +1,5 @@
 import {
-  ChevronRight, Image as ImageIcon, AlertCircle, Copy, Check, Download, Plus, ExternalLink,
+  ChevronRight, Image as ImageIcon, AlertCircle, Download, ExternalLink,
 } from '../../Icons';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
@@ -73,16 +73,6 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
           </button>
         </HoverTooltip>
         <div className="flex shrink-0 items-stretch self-center overflow-hidden rounded-lg border border-blue-200/90 bg-white/90 shadow-sm">
-          {g.onAddPhotos && (
-            <HoverTooltip label="Add photos" asChild>
-              <IconButton
-                onClick={(e) => { e.stopPropagation(); g.onAddPhotos!(); }}
-                className={`${toolbarIconBtnInner} border-r border-blue-200/90`}
-                ariaLabel="Add photos"
-                icon={<Plus className="h-4 w-4 text-blue-700" />}
-              />
-            </HoverTooltip>
-          )}
           <HoverTooltip label="Download all photos" asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
@@ -92,17 +82,6 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
               icon={<Download className="h-4 w-4 text-blue-700" />}
             />
           </HoverTooltip>
-          {g.showCopyLinks ? (
-            <HoverTooltip label={g.linksCopied ? 'Copied' : 'Copy all photo links'} asChild>
-              <IconButton
-                onClick={(e) => { e.stopPropagation(); void g.copyAllPhotoUrls(); }}
-                disabled={photoItems.length === 0}
-                className={`${toolbarIconBtnInner} border-l border-blue-200/90`}
-                ariaLabel="Copy all photo links"
-                icon={g.linksCopied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4 text-blue-700" />}
-              />
-            </HoverTooltip>
-          ) : null}
           {g.libraryHref ? (
             <HoverTooltip label="Open in photo library" asChild>
               <a

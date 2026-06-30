@@ -134,7 +134,7 @@ export function LineNotesTabbedCard({
   const items: HorizontalSliderItem[] = [
     { id: 'notes', label: 'Notes', icon: FileText },
     ...(showZohoTab
-      ? [{ id: 'po', label: 'Zoho notes', icon: Download } as HorizontalSliderItem]
+      ? [{ id: 'po', label: 'Sync notes', icon: Download } as HorizontalSliderItem]
       : []),
     { id: 'checklist', label: 'Checklist', icon: ClipboardList },
   ];
@@ -170,7 +170,7 @@ export function LineNotesTabbedCard({
           <textarea
             ref={poTextareaRef}
             rows={6}
-            aria-label="Zoho notes"
+            aria-label="Sync notes"
             value={overallDraft}
             onChange={(e) => {
               setOverallDraft(e.target.value);

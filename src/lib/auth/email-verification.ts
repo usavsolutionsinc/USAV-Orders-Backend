@@ -25,7 +25,7 @@ type Executor = Pool | PoolClient;
 /** Lifetime of an email-verification link, in minutes (matches F1 login tokens). */
 export const EMAIL_VERIFY_TTL_MINUTES = 15;
 
-export interface MintedVerificationToken {
+interface MintedVerificationToken {
   /** Raw token — place ONLY in the emailed URL; never persisted in the clear. */
   token: string;
   expiresAt: Date;

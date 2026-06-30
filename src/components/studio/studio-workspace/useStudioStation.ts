@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StudioStationResponse, StudioStationView, StudioZoom } from '../studio-types';
 
-export interface StudioStationParams {
+interface StudioStationParams {
   active: boolean;
   z: StudioZoom;
   focus: string | null;

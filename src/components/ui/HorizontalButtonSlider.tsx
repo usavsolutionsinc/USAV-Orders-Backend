@@ -171,7 +171,9 @@ export function HorizontalButtonSlider({
     : useScroller
       ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
       : isOverlayNav
-        ? 'overflow-visible'
+        ? dense
+          ? 'overflow-visible py-1'
+          : 'overflow-visible pt-2 pb-3'
         : 'overflow-visible py-2';
 
   return (
@@ -274,11 +276,21 @@ export function HorizontalButtonSlider({
                     <Icon className={`shrink-0 ${navIconOnly ? 'h-3 w-3' : 'h-3.5 w-3.5'}`} />
                   ) : null}
                   {navIconOnly ? null : (
-                    <span className={`inline-block whitespace-nowrap ${labelClass}`}>{item.label}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className={`inline-block whitespace-nowrap ${labelClass}`}>{item.label}</span>
+                      {item.count != null && item.count > 0 ? (
+                        <>
+                          <span
+                            className={`shrink-0 ${isActive ? 'text-white/60' : 'text-gray-300'}`}
+                            aria-hidden
+                          >
+                            •
+                          </span>
+                          <span className="shrink-0 tabular-nums">{item.count}</span>
+                        </>
+                      ) : null}
+                    </span>
                   )}
-                  {!navIconOnly && item.count != null && item.count > 0 ? (
-                    <span className={`ml-1.5 shrink-0 tabular-nums ${isActive ? 'opacity-90' : 'opacity-70'}`}>{item.count}</span>
-                  ) : null}
                   {item.badge === 'dot' ? (
                     <span
                       className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ${

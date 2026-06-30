@@ -11,7 +11,7 @@ import type {
 
 type PaletteByType = Map<string, StudioGraphResponse['palette'][number]>;
 
-export interface StudioGraphMutationsParams {
+interface StudioGraphMutationsParams {
   focus: string | null;
   paletteByType: PaletteByType;
   setDraftNodes: Dispatch<SetStateAction<StudioGraphNode[]>>;

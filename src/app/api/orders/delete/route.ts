@@ -1,9 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
+import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishOrderChanged } from '@/lib/realtime/publish';
 import { withAuth } from '@/lib/auth/withAuth';
-import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ENTITY } from '@/lib/audit-logs';
 
 /**
  * POST /api/orders/delete - Delete one or more orders
@@ -105,6 +107,14 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // not only /api/shipped, so delete must invalidate both domains.
     await invalidateCacheTags(['orders', 'shipped', 'packing-logs']);
     await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: txOutcome.idsToDelete, source: 'orders.delete' });
+    // A deleted order leaves its packed scans pointing at a stale match — refresh
+    // the shipped-table read model so they fall back correctly (best-effort). The
+    // order_row_id branch in the helper still finds them post-delete.
+    after(() =>
+      recomputeEnrichmentForOrders(pool, txOutcome.idsToDelete).catch((e) =>
+        console.warn('[orders/delete] enrichment recompute failed', e),
+      ),
+    );
 
     return NextResponse.json({ success: true, deleted: txOutcome.deleted });
   } catch (error: any) {

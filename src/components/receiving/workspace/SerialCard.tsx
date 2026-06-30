@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { X, Pencil } from '@/components/Icons';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { SerialChip } from '@/components/ui/CopyChip';
 import { TextField, IconButton } from '@/design-system/primitives';
 import { ConditionPills } from './ConditionPills';
@@ -39,6 +40,20 @@ interface Props {
   /** Optional condition picker integrated into the scan row. */
   condition?: string | null | undefined;
   onConditionChange?: (grade: string) => void;
+  /**
+   * When the serial input is empty, show a green check in place of the disabled
+   * "+" so the operator can mark the item as having no serial number. Omitted →
+   * the trailing control is the normal add-"+" button only.
+   */
+  onMarkNoSerial?: () => void;
+  /** Render the no-serial check as active (solid green) while the waiver is set. */
+  noSerialActive?: boolean;
+  /**
+   * Rendered IN the serial-input position (replacing the field) while the
+   * no-serial waiver is active — a contextual form swap on the same row, not a
+   * second row underneath.
+   */
+  noSerialSlot?: ReactNode;
   /** PO-line notes — co-located here so operators see them while scanning. */
   notes?: string;
   /** Notes change handler (controlled). */
@@ -81,6 +96,9 @@ export function SerialCard({
   onReplaceSerial,
   condition,
   onConditionChange,
+  onMarkNoSerial,
+  noSerialActive = false,
+  noSerialSlot,
   notes,
   onNotesChange,
   onNotesBlur,
@@ -235,6 +253,9 @@ export function SerialCard({
         ) : null}
 
         <div className="flex-1 min-w-0">
+          {noSerialActive && noSerialSlot ? (
+            noSerialSlot
+          ) : (
           <TextField
             ref={inputRef}
             label="Serial"
@@ -267,25 +288,49 @@ export function SerialCard({
               ) : undefined
             }
           />
+          )}
         </div>
 
-        {/* ds-raw-button: solid-emerald scan-submit CTA with add-glyph / Saving… text-swap — no green DS Button variant */}
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!scan.trim() || isSubmitting || disabled}
-          className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-4 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-        >
-          {showSavingLabel && isSubmitting ? (
-            'Saving…'
-          ) : editing ? (
-            'Save'
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
-              <path d="M12 5v14M5 12h14" strokeLinecap="round" />
-            </svg>
-          )}
-        </button>
+        {/* Trailing action. While the waiver is ACTIVE the full-width no-serial bar
+            (rendered in the field slot above) owns the row and carries its own
+            clear (✕) — so no trailing control here, no redundant confirm. When the
+            field is empty, a QUIET no-serial offer affordance (secondary, not a
+            second green CTA). Otherwise the "+" add / Save submit. */}
+        {noSerialActive ? null : !scan.trim() && !editing && onMarkNoSerial ? (
+          <HoverTooltip label="Mark this item as having no serial number" asChild>
+            {/* ds-raw-button: green-check no-serial offer toggle, not a DS Button */}
+            <button
+              type="button"
+              onClick={onMarkNoSerial}
+              aria-label="Mark this item as having no serial number"
+              className="inline-flex h-11 w-14 shrink-0 items-center justify-center rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm transition-colors hover:bg-emerald-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </HoverTooltip>
+        ) : (
+          /* ds-raw-button: solid-emerald scan-submit CTA with add-glyph / Saving… text-swap */
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!scan.trim() || isSubmitting || disabled}
+            className={`inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-label font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 ${
+              editing || (showSavingLabel && isSubmitting) ? 'px-4' : 'w-14'
+            }`}
+          >
+            {showSavingLabel && isSubmitting ? (
+              'Saving…'
+            ) : editing ? (
+              'Save'
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-5 w-5">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Inline slot directly under the scan field — the RETURN flow renders

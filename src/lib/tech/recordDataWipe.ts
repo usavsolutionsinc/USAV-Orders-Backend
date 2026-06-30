@@ -31,7 +31,7 @@ import type { TestedUnit } from './recordTestVerdict';
 export const WIPE_METHODS = ['factory_reset', 'secure_erase', 'crypto_erase'] as const;
 export type WipeMethod = (typeof WIPE_METHODS)[number];
 
-export interface RecordDataWipeArgs {
+interface RecordDataWipeArgs {
   serialUnitId: number;
   wipeSuccess: boolean;
   /** Erasure method performed; null when not captured. */
@@ -46,7 +46,7 @@ export interface RecordDataWipeArgs {
   organizationId?: string | null;
 }
 
-export interface RecordDataWipeResult {
+interface RecordDataWipeResult {
   unit: TestedUnit;
   eventId: number;
   wipeSuccess: boolean;
@@ -60,7 +60,7 @@ export interface RecordDataWipeDeps {
   tap: typeof tapWorkflow;
 }
 
-export const defaultDataWipeDeps: RecordDataWipeDeps = {
+const defaultDataWipeDeps: RecordDataWipeDeps = {
   fetchUnit: async (serialUnitId, orgId) => {
     // org-scoped read; `pool` is the BYPASSRLS owner connection so this explicit
     // predicate (not RLS) isolates tenants — mirrors recordTestVerdict.

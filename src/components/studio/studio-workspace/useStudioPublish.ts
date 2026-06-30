@@ -6,7 +6,7 @@ import { fetchWithStepUp } from '@/components/auth/StepUpModal';
 import type { Annotation, StudioGraphEdge, StudioGraphNode } from '../studio-types';
 import type { Busy } from './types';
 
-export interface StudioPublishParams {
+interface StudioPublishParams {
   definitionId: number | null;
   dirty: boolean;
   draftNodes: StudioGraphNode[];

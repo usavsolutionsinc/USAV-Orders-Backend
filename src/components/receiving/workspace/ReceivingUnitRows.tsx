@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ConditionPills } from './ConditionPills';
 import { UnitSlotList, type UnitLike } from './UnitSlotList';
 import { ConditionBadge } from './ConditionBadge';
@@ -39,6 +39,8 @@ interface Props {
   onActiveConditionChange?: (grade: string | null) => void;
   /** Header chip Edit — routes into the matching unit's scan input. */
   serialEditTarget?: UnitSerial | null;
+  /** Icon-only no-serial control, pinned to the top-right of the unit list. */
+  noSerialControl?: ReactNode;
 }
 
 /**
@@ -66,6 +68,7 @@ export function ReceivingUnitRows({
   onConditionChange,
   onActiveConditionChange,
   serialEditTarget = null,
+  noSerialControl,
 }: Props) {
   const total = Math.max(quantityExpected, saved.length, 1);
 
@@ -134,8 +137,11 @@ export function ReceivingUnitRows({
           Bare pills: the position above the unit list reads as "all" from
           context, so no chrome/label needed. `px-1` matches the unit rows'
           horizontal inset so the master + per-row pills share a left edge. */}
-      <div className="min-w-0 px-1">
-        <ConditionPills value={masterValue} onChange={setAllUnits} />
+      <div className="flex min-w-0 items-start gap-2 px-1">
+        <div className="min-w-0 flex-1">
+          <ConditionPills value={masterValue} onChange={setAllUnits} />
+        </div>
+        {noSerialControl ? <div className="shrink-0">{noSerialControl}</div> : null}
       </div>
       <UnitSlotList
         total={total}

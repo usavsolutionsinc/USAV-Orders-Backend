@@ -1273,6 +1273,100 @@ export const receivingExceptions = pgTable('receiving_exceptions', {
   orgReceivingIdx: index('idx_receiving_exceptions_org_receiving').on(table.organizationId, table.receivingId),
 }));
 
+// ─── Receiving polymorphic refactor — Layer 2 (typed facts) ─────────────────
+// Additive side-tables that the one-street columns on receiving_lines move into
+// during the per-street cutover. See docs/todo/polymorphic-tables-database-refactor-plan.md §4
+// and migration 2026-06-29c_receiving_line_facts_tables.sql (RLS armed, not forced).
+
+/** Zoho-PO-origin line facts (the Zoho cluster + unit_price). 1:1 with the line. */
+export const receivingLineZoho = pgTable('receiving_line_zoho', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  zohoItemId: text('zoho_item_id'),
+  zohoLineItemId: text('zoho_line_item_id'),
+  zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
+  zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
+  zohoPurchaseOrderNumber: text('zoho_purchaseorder_number'),
+  zohoReferenceNumber: text('zoho_reference_number'),
+  zohoSyncSource: text('zoho_sync_source'),
+  zohoLastModifiedTime: text('zoho_last_modified_time'),
+  zohoSyncedAt: timestamp('zoho_synced_at', { withTimezone: true }),
+  zohoNotes: text('zoho_notes'),
+  unitPrice: numeric('unit_price', { precision: 12, scale: 2 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgPoLineIdx: uniqueIndex('ux_receiving_line_zoho_org_po_line').on(table.organizationId, table.zohoPurchaseOrderId, table.zohoLineItemId),
+  orgPrLineIdx: uniqueIndex('ux_receiving_line_zoho_org_pr_line').on(table.organizationId, table.zohoPurchaseReceiveId, table.zohoLineItemId),
+  orgPoIdx: index('idx_receiving_line_zoho_org_po').on(table.organizationId, table.zohoPurchaseOrderId),
+}));
+
+/** Line-level testing/QA routing facts. Per-unit verdicts stay on serial_units/testing_results. 1:1. */
+export const receivingLineTesting = pgTable('receiving_line_testing', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  needsTest: boolean('needs_test').notNull().default(true),
+  assignedTechId: integer('assigned_tech_id').references(() => staff.id, { onDelete: 'set null' }),
+  qaStatus: qaStatusEnum('qa_status').notNull().default('PENDING'),
+  dispositionCode: dispositionEnum('disposition_code').notNull().default('HOLD'),
+  conditionGrade: conditionGradeEnum('condition_grade').notNull().default('BRAND_NEW'),
+  dispositionFinal: text('disposition_final'),
+  dispositionAudit: jsonb('disposition_audit').notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgNeedsTestIdx: index('idx_receiving_line_testing_org_needs_test').on(table.organizationId),
+  orgTechIdx: index('idx_receiving_line_testing_org_tech').on(table.organizationId, table.assignedTechId),
+}));
+
+/** RETURN/TRADE_IN intake facts (return_platform, return_reason, source_order_id, rma_ref). 1:1. */
+export const receivingLineReturn = pgTable('receiving_line_return', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  returnPlatform: returnPlatformEnum('return_platform'),
+  returnReason: text('return_reason'),
+  sourceOrderId: text('source_order_id'),
+  rmaRef: text('rma_ref'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgSourceOrderIdx: index('idx_receiving_line_return_org_source_order').on(table.organizationId, table.sourceOrderId),
+}));
+
+/** Putaway facts (location_code, bin, put_away_*). 1:1. */
+export const receivingLinePutaway = pgTable('receiving_line_putaway', {
+  receivingLineId: integer('receiving_line_id').primaryKey().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  locationCode: text('location_code'),
+  bin: text('bin'),
+  putAwayAt: timestamp('put_away_at', { withTimezone: true }),
+  putAwayBy: integer('put_away_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgLocationIdx: index('idx_receiving_line_putaway_org_location').on(table.organizationId, table.locationCode),
+}));
+
+/**
+ * Long-tail / org-custom receiving-line typed facts: (line_id, fact_kind, payload).
+ * fact_kind is validated by src/lib/receiving/facts/registry.ts at write time (code
+ * registry, not a DB CHECK) so a new kind needs no migration — same governance as
+ * workflow_nodes.type → configSchema.
+ */
+export const receivingLineFacts = pgTable('receiving_line_facts', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingLineId: integer('receiving_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  factKind: text('fact_kind').notNull(),
+  payload: jsonb('payload').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  lineKindIdx: uniqueIndex('ux_receiving_line_facts_line_kind').on(table.organizationId, table.receivingLineId, table.factKind),
+  orgKindIdx: index('idx_receiving_line_facts_org_kind').on(table.organizationId, table.factKind),
+  lineIdx: index('idx_receiving_line_facts_line').on(table.receivingLineId),
+}));
+
 /**
  * work_assignments — unified assignment queue for orders, receiving, repairs, FBA.
  *

@@ -42,7 +42,10 @@ export function RailPopover({
   }, [anchorEl]);
 
   useLayoutEffect(() => {
-    if (!anchorEl) return;
+    if (!anchorEl) {
+      setCoords(null);
+      return;
+    }
     const apply = () => { const next = measurePosition(); if (next) setCoords(next); };
     apply();
     window.addEventListener('resize', apply);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { receivingSiblingsQueryKey } from '@/lib/queries/receiving-queries';
 import { motion, LayoutGroup } from 'framer-motion';
 import { ChevronDown, Pencil, FileText, Check } from '@/components/Icons';
 import {
@@ -21,6 +22,7 @@ import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { qtyProgress } from '@/design-system/tokens/typography/presets';
+import { META_COL } from '@/components/ui/RowMetaColumns';
 import { cn } from '@/utils/_cn';
 import {
   CartonAddPopover,
@@ -183,10 +185,7 @@ export function PoLinesAccordion({
   headerRight,
 }: Props) {
   const queryClient = useQueryClient();
-  const queryKey = useMemo(
-    () => ['receiving-siblings', receivingId] as const,
-    [receivingId],
-  );
+  const queryKey = useMemo(() => receivingSiblingsQueryKey(receivingId), [receivingId]);
 
   // Single-line placeholder so a cold open paints the clicked line immediately
   // (the full sibling list replaces it the moment the fetch resolves). Stable
@@ -441,53 +440,99 @@ export function PoLinesAccordion({
                     dispatchSelectLine(line);
                   }
                 }}
-                className={`flex w-full min-w-0 items-start gap-2 px-3 pb-2 pt-1 text-left ${
+                className={`w-full min-w-0 px-3 pb-2 pt-1 text-left ${
                   !readOnly && !isActive ? 'cursor-pointer' : ''
                 }`}
               >
-                {!readOnly ? (
-                  isActive ? (
-                    // Active row: the chevron is a real toggle — click to
-                    // collapse/expand the row body (condition pills, unit
-                    // rows). Essential on multi-qty lines where the expanded
-                    // body is taller than the viewport.
-                    <motion.button
-                      type="button"
-                      aria-expanded={!activeCollapsed}
-                      aria-label={activeCollapsed ? 'Expand item details' : 'Collapse item details'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveCollapsed((v) => !v);
-                      }}
-                      animate={{ rotate: activeCollapsed ? -90 : 0 }}
-                      transition={chevronTransition}
-                      className="ds-raw-button mt-0.5 flex shrink-0 items-center justify-center rounded-md p-1 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                {/* RowTitle contract: disclosure chevron in a fixed track on the
+                    title row; meta chips indent under the title text (META_COL),
+                    not under the chevron — same layout as ReceivingLineOrderRow. */}
+                <div className="flex min-w-0 items-center">
+                  {!readOnly ? (
+                    <span
+                      className={cn(
+                        'flex shrink-0 items-center justify-center',
+                        META_COL.dotTrackWide,
+                      )}
                     >
-                      <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-                    </motion.button>
-                  ) : (
-                    <ChevronDown
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 -rotate-90 text-gray-400 transition-transform"
-                      aria-hidden
-                    />
-                  )
-                ) : null}
-                <div className="min-w-0 flex-1">
+                      {isActive ? (
+                        // Active row: the chevron is a real toggle — click to
+                        // collapse/expand the row body (condition pills, unit
+                        // rows). Essential on multi-qty lines where the expanded
+                        // body is taller than the viewport.
+                        <motion.button
+                          type="button"
+                          aria-expanded={!activeCollapsed}
+                          aria-label={
+                            activeCollapsed ? 'Expand item details' : 'Collapse item details'
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveCollapsed((v) => !v);
+                          }}
+                          animate={{ rotate: activeCollapsed ? -90 : 0 }}
+                          transition={chevronTransition}
+                          className="ds-raw-button flex items-center justify-center rounded-md p-0.5 text-gray-400 transition-colors hover:bg-blue-100 hover:text-gray-600"
+                        >
+                          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                        </motion.button>
+                      ) : (
+                        <ChevronDown
+                          className="h-3.5 w-3.5 -rotate-90 text-gray-400 transition-transform"
+                          aria-hidden
+                        />
+                      )}
+                    </span>
+                  ) : null}
                   {/* Title is sourced from the listing/PO line — read-only. No
                       inline edit: the operator shouldn't retype the listing title.
                       ds-allow-title: native tooltip shows full value when truncated */}
                   <p
-                    className="truncate text-label font-bold text-gray-900"
+                    className="min-w-0 flex-1 truncate text-label font-bold text-gray-900"
                     title={line.item_name ?? undefined}
                   >
                     {line.item_name || line.sku || `Line #${line.id}`}
                   </p>
-                  {/* No `truncate` here: `flex flex-wrap` already wraps the
-                      badges/chips, and `truncate`'s `overflow: hidden` would
-                      clip the SerialChipWithMenu dropdown (positioned below the
-                      row). The chip menu is not portaled, so any clipping
-                      ancestor hides it. */}
-                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                  {!readOnly ? (
+                    <HoverTooltip label="Toggle item description (Zoho)" asChild>
+                      <IconButton
+                        ariaLabel="Toggle item description"
+                        aria-pressed={descShown === line.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const opening = descShown !== line.id;
+                          const next = opening ? line.id : null;
+                          setDescShown(next);
+                          setDescEdit(
+                            next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' },
+                          );
+                          onItemDescFeedback?.(null);
+                          if (opening && isActive) setActiveCollapsed(false);
+                        }}
+                        className={`group -m-1 flex shrink-0 items-center justify-center rounded-md p-1 transition-colors hover:bg-blue-100 ${
+                          descShown === line.id ? 'bg-blue-100' : ''
+                        }`}
+                        icon={
+                          <FileText
+                            className={`h-3.5 w-3.5 ${
+                              descShown === line.id
+                                ? 'text-blue-600'
+                                : 'text-gray-400 group-hover:text-gray-600'
+                            }`}
+                            aria-hidden
+                          />
+                        }
+                      />
+                    </HoverTooltip>
+                  ) : null}
+                </div>
+                {/* Meta row — indented to title column. No `truncate` on chips:
+                    `flex flex-wrap` wraps badges; `overflow: hidden` would clip the
+                    SerialChipWithMenu dropdown (not portaled). */}
+                <div
+                  className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1"
+                  style={{ paddingLeft: readOnly ? undefined : META_COL.indentWide }}
+                >
                     {readOnly ? (
                       // Triage read-only: scanned qty (1/1, matching the sidebar)
                       // in blue. The SKU/condition copy chips still render below.
@@ -577,39 +622,7 @@ export function PoLinesAccordion({
                         })}
                       </>
                     ) : null}
-                  </div>
                 </div>
-                {!readOnly ? (
-                  <HoverTooltip label="Toggle item description (Zoho)" asChild>
-                    <IconButton
-                      ariaLabel="Toggle item description"
-                      aria-pressed={descShown === line.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Toggle the 2nd row (condition/serial entry) between the
-                        // pills + serial adder and the Zoho item-description editor.
-                        const opening = descShown !== line.id;
-                        const next = opening ? line.id : null;
-                        setDescShown(next);
-                        // Seed / clear the inline editor draft as the row toggles.
-                        setDescEdit(next == null ? null : { id: line.id, draft: line.zoho_notes ?? '' });
-                        onItemDescFeedback?.(null);
-                        if (opening && isActive) setActiveCollapsed(false);
-                      }}
-                      className={`group -m-1 ml-auto flex shrink-0 items-center justify-center self-start rounded-md p-1 transition-colors hover:bg-blue-100 ${
-                        descShown === line.id ? 'bg-blue-100' : ''
-                      }`}
-                      icon={
-                        <FileText
-                          className={`h-3.5 w-3.5 ${
-                            descShown === line.id ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'
-                          }`}
-                          aria-hidden
-                        />
-                      }
-                    />
-                  </HoverTooltip>
-                ) : null}
               </div>
               {/* Active row only — the 2nd row. By default it holds the
                   condition pills + serial adder (activeRowSlot). The notes icon
@@ -752,7 +765,7 @@ function CartonAddAction({ receivingId, unitIds }: { receivingId: number; unitId
  *  carton in, so scanned == expected (e.g. 1/1) — the same semantics the sidebar
  *  Prioritize/Triage rail renders. Distinct from {@link ProgressBadge}'s
  *  received count (which is 0 until the carton is unboxed, the "0/1" bug). */
-export function ScannedBadge({ expected }: { expected: number | null }) {
+function ScannedBadge({ expected }: { expected: number | null }) {
   return (
     <span className={cn(qtyProgress, 'normal-case tracking-normal text-blue-600')}>
       {expected ?? 1}/{expected ?? '?'}

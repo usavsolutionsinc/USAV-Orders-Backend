@@ -1,11 +1,26 @@
+import type { Variants } from 'framer-motion';
 import { motion } from 'framer-motion';
 import { motionBezier } from '@/design-system/foundations/motion-framer';
 import { ChevronDown } from '@/components/Icons';
-import { staggerRevealItem } from '@/design-system/primitives/StaggerReveal';
 
-export function PkgGroupHeader({ groupSize, isCollapsed, staggerReveal, onToggle }: { groupSize: number; isCollapsed: boolean; staggerReveal: boolean; onToggle: () => void }) {
-  const motionProps = staggerReveal
-    ? { variants: staggerRevealItem }
+export function PkgGroupHeader({
+  groupSize,
+  isCollapsed,
+  staggerCascade,
+  staggerItemVariants,
+  onToggle,
+}: {
+  groupSize: number;
+  isCollapsed: boolean;
+  /** True when this header is part of the first-load stagger cascade. */
+  staggerCascade: boolean;
+  staggerItemVariants?: Variants;
+  onToggle: () => void;
+}) {
+  const motionProps = staggerItemVariants
+    ? staggerCascade
+      ? { variants: staggerItemVariants }
+      : { initial: 'hidden' as const, animate: 'show' as const, variants: staggerItemVariants }
     : { initial: false as const, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.12, ease: motionBezier.easeOut } };
   return (
     <motion.li

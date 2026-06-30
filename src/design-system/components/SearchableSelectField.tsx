@@ -5,7 +5,7 @@ import { ChevronDown, Search, Check } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { Popover } from '../primitives/Popover';
 
-export interface SearchableSelectOption<T = unknown> {
+interface SearchableSelectOption<T = unknown> {
   value: string | number;
   /** Shown in the trigger when selected + the default search/filter target. */
   label: string;
@@ -15,7 +15,7 @@ export interface SearchableSelectOption<T = unknown> {
   data?: T;
 }
 
-export interface SearchableSelectFieldProps<T = unknown> {
+interface SearchableSelectFieldProps<T = unknown> {
   value: string | number | null;
   onChange: (value: string | number | null, option: SearchableSelectOption<T> | null) => void;
   options: ReadonlyArray<SearchableSelectOption<T>>;

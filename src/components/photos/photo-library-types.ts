@@ -4,6 +4,8 @@
  * it without importing `PhotoLibraryPage` (which imports them back, forming a
  * cycle). `PhotoLibraryPage` re-exports it for backwards compatibility.
  */
+import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
+
 /** A label chip carried on a library photo (subset of PhotoLabel for rendering). */
 export interface LibraryPhotoLabel {
   id: number;
@@ -31,4 +33,10 @@ export interface LibraryPhoto {
   damageDetected?: boolean | null;
   hasAnalysis?: boolean | null;
   caption?: string | null;
+  /**
+   * Derived source scope (`unboxing` | `local_pickup` | `packing` | `repair` |
+   * `claims`) from the photo's entity links — lets the sidebar highlight the
+   * image-type a folder's photos belong to even under the "All photos" scope.
+   */
+  sourceScope?: PhotoLibrarySourceScope | null;
 }

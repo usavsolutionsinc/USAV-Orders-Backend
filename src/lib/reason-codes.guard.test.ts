@@ -41,6 +41,7 @@ const ALLOWED = new Set([
   'lib/picking/short-pick-reasons.ts',
   'lib/repair/repair-failure-reasons.ts',
   'lib/receiving/exception-codes.ts',
+  'lib/receiving/serial-absent-reasons.ts',
   'lib/receiving-disposition-classify-llm.ts',
   'lib/sku/sku-stock-reasons.ts',
 ]);

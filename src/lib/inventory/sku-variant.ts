@@ -20,7 +20,7 @@
  */
 
 /** A decoded color value, or the explicit UNCONFIRMED placeholder. */
-export interface SkuColorSuffixEntry {
+interface SkuColorSuffixEntry {
   /** Stable color code (controlled vocabulary). `null` when unconfirmed. */
   code: string | null;
   /** Human-readable color label. `null` when unconfirmed. */
@@ -56,7 +56,7 @@ export const SKU_COLOR_SUFFIX_MAP: Record<string, SkuColorSuffixEntry> = {
 };
 
 /** The decoded color variant of a SKU string. */
-export interface DecodedSkuColor {
+interface DecodedSkuColor {
   /** The bare base SKU with the color suffix removed (`00046-B` → `00046`). */
   base: string;
   /** The matched color code (controlled vocabulary, e.g. `BLACK`). */

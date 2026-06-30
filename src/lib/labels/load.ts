@@ -33,7 +33,7 @@ function asTone(v: unknown): LabelTone | undefined {
 }
 
 type Row = { flow_context: string; code: string; label: string | null; tone: string | null };
-export interface LabelLoaderDeps {
+interface LabelLoaderDeps {
   query: (sql: string, params: unknown[]) => Promise<{ rows: Row[] }>;
 }
 

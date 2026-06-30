@@ -5,6 +5,12 @@ import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { enrichSerialUnitCatalog } from '@/lib/neon/serial-units-queries';
 import { attachSerialToLine, detachSerialFromLine } from '@/lib/receiving/serial-attach';
+import {
+  linkReturnedSerial,
+  type ReturnedSerialMatchedOrder,
+  type ReturnLinkageLinePatch,
+} from '@/lib/receiving/returned-serial-link';
+import { isReceivingReturnAutolink } from '@/lib/feature-flags';
 import { syncSerialToZohoPo } from '@/lib/receiving/zoho-serial-sync';
 import { tapWorkflow } from '@/lib/workflow/tap';
 import { withAuth } from '@/lib/auth/withAuth';
@@ -213,6 +219,37 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
 
     const serialResult = result;
 
+    // ─── Return loop (shipped↔returned) ─────────────────────────────────────
+    // When the scanned serial is a previously-shipped unit, resolve its original
+    // order, flip the open allocation SHIPPED→RETURNED, persist the per-line
+    // source order + listing link, and promote an unfound carton to a found
+    // RETURN. Awaited (not in after()) so the response carries the matched order
+    // for instant workspace auto-populate. Flag-gated (default on) + best-effort:
+    // a linkage failure must never fail the scan itself.
+    let matchedOrder: ReturnedSerialMatchedOrder | null = null;
+    let linePatch: ReturnLinkageLinePatch | null = null;
+    if (serialResult.is_return && isReceivingReturnAutolink()) {
+      try {
+        const link = await linkReturnedSerial(
+          {
+            serialUnitId: serialResult.serial_unit.id,
+            normalizedSerial: serialResult.serial_unit.normalized_serial,
+            receivingLineId,
+            receivingId: targetReceivingId,
+            staffId,
+            clientEventId,
+            priorStatus: serialResult.prior_status,
+            sku: serialResult.serial_unit.sku,
+          },
+          ctx.organizationId,
+        );
+        matchedOrder = link.matchedOrder;
+        linePatch = link.linePatch;
+      } catch (err) {
+        console.warn('scan-serial: linkReturnedSerial failed (non-fatal)', err);
+      }
+    }
+
     // ─── Background: catalog enrichment + cache/realtime ────────────────────
     const serialUnitId = serialResult.serial_unit.id;
     const skuForEnrichment = result.line_state.sku;
@@ -282,6 +319,14 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       is_new: serialResult.is_new,
       prior_status: serialResult.prior_status,
       is_return: serialResult.is_return,
+      // The shipped order this returned serial was paired back to (with its
+      // listing link), so the workspace can populate the order # + listing and
+      // light up the return match band without a second round-trip.
+      matched_order: matchedOrder,
+      // Optimistic receiving-line row patch (type→RETURN / listing / source /
+      // order# / status) the client merges via dispatchLineUpdated, so a return
+      // scan flips the workspace WITHOUT the heavy /api/receiving-lines refetch.
+      line_patch: linePatch,
       warnings: serialResult.warnings,
       line_state: result.line_state,
       inventory_event_id: result.inventory_event_id,
@@ -302,11 +347,18 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       return r?.serial_unit?.id ?? null;
     },
     extra: ({ response }) => {
-      const r = response as { line_state?: { id?: number }; is_new?: boolean; is_return?: boolean } | null;
+      const r = response as {
+        line_state?: { id?: number };
+        is_new?: boolean;
+        is_return?: boolean;
+        matched_order?: { order_id?: string | null } | null;
+      } | null;
       return {
         receiving_line_id: r?.line_state?.id ?? null,
         is_new: r?.is_new ?? null,
         is_return: r?.is_return ?? null,
+        // Set when a returned serial auto-linked to its originating order.
+        matched_order_id: r?.matched_order?.order_id ?? null,
       };
     },
   },

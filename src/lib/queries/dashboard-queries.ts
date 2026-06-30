@@ -38,6 +38,16 @@ export interface OrderQueryParams {
   strictSearchScope?: boolean;
 }
 
+/**
+ * Per-week (and all-time) fetch ceiling. The week query returns at most this
+ * many rows, newest-first; the day-banded list virtualizes them. When a week
+ * actually hits this ceiling it is TRUNCATED (more rows exist), which the table
+ * surfaces as an explicit "Load more" (never a silent cap) by re-requesting the
+ * same week at a higher multiple of this size. Past weeks cache per (week,limit)
+ * pair, so a bumped week fetches once then serves from cache forever.
+ */
+export const SHIPPED_WEEK_PAGE_SIZE = 1000;
+
 export interface ShippedQueryParams {
   weekStart?: string;
   weekEnd?: string;
@@ -46,6 +56,8 @@ export interface ShippedQueryParams {
   /** Universal staff filter (P1-WORK-02): packed_by OR tested_by this staff. */
   staffId?: number;
   shippedFilter?: string;
+  /** Row ceiling for this fetch; default {@link SHIPPED_WEEK_PAGE_SIZE}. */
+  limit?: number;
 }
 
 /** Pending queue (label-assigned, not yet packed). Matches `PendingOrdersTable`. */
@@ -92,17 +104,18 @@ export function dashboardShippedQuery({
   testedBy,
   staffId,
   shippedFilter,
+  limit = SHIPPED_WEEK_PAGE_SIZE,
 }: ShippedQueryParams = {}) {
   return queryOptions({
-    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter }],
+    queryKey: ['dashboard-table', 'shipped', { weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }],
     queryFn: () =>
-      fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter }),
+      fetchDashboardPackedRecords({ packedBy, testedBy, staffId, weekStart, weekEnd, shippedFilter, limit }),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
 }
 
-export interface ShippedWeekQueryParams {
+interface ShippedWeekQueryParams {
   /** Canonical Monday (YYYY-MM-DD) — the stable per-week cache unit. */
   weekStart: string;
   /** Canonical Sunday (YYYY-MM-DD). */
@@ -111,6 +124,9 @@ export interface ShippedWeekQueryParams {
   testedBy?: number;
   staffId?: number;
   shippedFilter?: string;
+  /** Row ceiling for this week; default {@link SHIPPED_WEEK_PAGE_SIZE}. Part of
+   *  the cache key, so a bumped ceiling is its own immutable past-week entry. */
+  limit?: number;
 }
 
 /**
@@ -127,12 +143,13 @@ export function dashboardShippedWeekQuery({
   testedBy,
   staffId,
   shippedFilter,
+  limit = SHIPPED_WEEK_PAGE_SIZE,
 }: ShippedWeekQueryParams) {
   const past = isPastWeekStart(weekStart);
   return queryOptions({
-    queryKey: ['dashboard-table', 'shipped', 'week', weekStart, { packedBy, testedBy, staffId, shippedFilter }],
+    queryKey: ['dashboard-table', 'shipped', 'week', weekStart, { packedBy, testedBy, staffId, shippedFilter, limit }],
     queryFn: () =>
-      fetchDashboardPackedRecords({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter }),
+      fetchDashboardPackedRecords({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }),
     staleTime: past ? Infinity : 5 * 60 * 1000,
     gcTime: past ? 24 * 60 * 60 * 1000 : 15 * 60 * 1000,
   });

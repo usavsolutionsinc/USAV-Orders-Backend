@@ -19,6 +19,7 @@ import { SHORT_PICK_REASONS } from '@/lib/picking/short-pick-reasons';
 import { REPAIR_FAILURE_REASONS } from '@/lib/repair/repair-failure-reasons';
 import { RECEIVING_EXCEPTION_CODES, RECEIVING_EXCEPTION_META } from '@/lib/receiving/exception-codes';
 import { SKU_STOCK_REASONS } from '@/lib/sku/sku-stock-reasons';
+import { SERIAL_ABSENT_REASONS } from '@/lib/receiving/serial-absent-reasons';
 
 export interface PlatformRow {
   id: number;
@@ -163,6 +164,20 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
          VALUES ($1, $2, $3, NULL, 'either', 'inventory_adjust', $4)
          ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
         [organizationId, r.code, r.label, ssSort],
+      );
+    }
+    // Serial-absent waiver reasons (flow_context='serial_absent_reason') — why a
+    // received unit was committed with no serial. Built-in registry SoT is
+    // serial-absent-reasons.ts; tenant-relabelable. Mirrors migration
+    // 2026-06-29e_reason_codes_serial_absent.sql.
+    let saSort = 0;
+    for (const r of SERIAL_ABSENT_REASONS) {
+      saSort += 10;
+      await client.query(
+        `INSERT INTO reason_codes (organization_id, code, label, category, direction, flow_context, sort_order)
+         VALUES ($1, $2, $3, NULL, 'either', 'serial_absent_reason', $4)
+         ON CONFLICT (organization_id, flow_context, code) DO NOTHING`,
+        [organizationId, r.code, r.label, saSort],
       );
     }
     // platform_accounts (mirrors migration 2026-06-14f): eBay storefronts from

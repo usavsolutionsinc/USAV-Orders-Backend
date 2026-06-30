@@ -60,13 +60,24 @@ export function useUnmatchedItems({
   const [classification, setClassification] = useState<IntakeClassification>('UNKNOWN');
 
   const refreshLines = useCallback(async () => {
+    // Guard: never hit the API for a non-materialized carton (optimistic open
+    // stub id, or no selection). A bad id only ever 404s "Package not found".
+    if (!Number.isFinite(receivingId) || receivingId <= 0) {
+      setLines([]);
+      return;
+    }
     try {
       const res = await fetch(`/api/receiving/${receivingId}`, {
         cache: 'no-store',
       });
-      const body = (await res.json()) as CartonResponse;
-      if (!res.ok || !body.success) {
-        throw new Error(body.error ?? `fetch failed (${res.status})`);
+      const body = (await res.json().catch(() => null)) as CartonResponse | null;
+      if (!res.ok || !body?.success) {
+        // Carton not visible yet — an optimistic/just-promoted open, a mid-create
+        // race, or a stale unfound-queue stub. Degrade silently to an empty card;
+        // the reconciling feed refresh re-runs this once the row lands. NEVER
+        // toast a raw "Package not found" at the operator (degrade-not-fail).
+        setLines([]);
+        return;
       }
       setLines(body.lines ?? []);
       if (body.receiving) {
@@ -80,8 +91,10 @@ export function useUnmatchedItems({
           }),
         );
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load lines');
+    } catch {
+      // Network/parse failure on a background auto-load — degrade to an empty
+      // card, no toast. A real refresh re-runs on the next feed event.
+      setLines([]);
     }
   }, [receivingId]);
 

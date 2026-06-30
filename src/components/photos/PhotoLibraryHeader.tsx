@@ -12,10 +12,13 @@ import { cn } from '@/utils/_cn';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { PhotoSortMenu } from './PhotoSortMenu';
 import { photoLibraryControlButtonClass, photoLibraryControlGroupClass } from './photo-library-controls';
+import type { FolderBrowseHeaderContext } from './photo-library-grid/date-folder-tree';
 
 interface PhotoLibraryHeaderProps {
   title: string;
   metaLine: string;
+  /** Folders view: level eyebrow + count, or leaf title + photo count. */
+  folderBrowse?: FolderBrowseHeaderContext | null;
   view: PhotoLibraryViewMode;
   onViewChange: (view: PhotoLibraryViewMode) => void;
   sort: PhotoLibrarySortMode;
@@ -37,6 +40,7 @@ const VIEW_OPTIONS: Array<{
 export function PhotoLibraryHeader({
   title,
   metaLine,
+  folderBrowse,
   view,
   onViewChange,
   sort,
@@ -46,8 +50,28 @@ export function PhotoLibraryHeader({
     <div className={cn(mainStickyHeaderClass, receivingHeaderHairlineClass)}>
       <div className={mainStickyHeaderCompactRowClass}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-gray-900">{title}</span>
-          <span className={`${microBadge} hidden truncate text-gray-500 sm:inline`}>{metaLine}</span>
+          {folderBrowse ? (
+            <>
+              <Folder className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              <span
+                data-testid="folder-level"
+                className="truncate text-eyebrow font-black uppercase tracking-widest text-gray-500"
+              >
+                {folderBrowse.title}
+              </span>
+              <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-500">
+                {folderBrowse.count}
+              </span>
+              {folderBrowse.isLeaf && metaLine ? (
+                <span className={`${microBadge} hidden truncate text-gray-500 sm:inline`}>{metaLine}</span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="truncate text-sm font-semibold text-gray-900">{title}</span>
+              <span className={`${microBadge} hidden truncate text-gray-500 sm:inline`}>{metaLine}</span>
+            </>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1">

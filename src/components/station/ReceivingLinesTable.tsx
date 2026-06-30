@@ -121,7 +121,6 @@ export default function ReceivingLinesTable({ selectMode = false }: { selectMode
           // chips + PO date range + Sort. `total` comes straight from the API
           // response so the "N of M" label stays in sync with the active filter.
           <IncomingPaneHeader
-            count={localRows.length}
             total={isDeliveredUnscannedFacet ? deliveredRows.length : Number(data?.total ?? 0)}
             page={incomingPage}
           />

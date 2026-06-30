@@ -1,12 +1,12 @@
 'use client';
 
 import { useQueries } from '@tanstack/react-query';
-import { dashboardShippedWeekQuery } from '@/lib/queries/dashboard-queries';
+import { dashboardShippedWeekQuery, SHIPPED_WEEK_PAGE_SIZE } from '@/lib/queries/dashboard-queries';
 import { getWeekBucketsForRange } from '@/lib/dashboard-week-range';
 import type { PackerRecord } from '@/hooks/usePackerLogs';
 import type { ShippedTypeFilter } from './useShippedTableFilters';
 
-export interface UseShippedWeekBucketsParams {
+interface UseShippedWeekBucketsParams {
   /** Effective window start (YYYY-MM-DD). */
   rangeStart: string;
   /** Effective window end (YYYY-MM-DD). */
@@ -17,12 +17,16 @@ export interface UseShippedWeekBucketsParams {
   shippedFilter: ShippedTypeFilter;
   /** False while searching / in all-time carrier-filter mode (no bucketing). */
   enabled: boolean;
+  /** Per-week row ceiling; default {@link SHIPPED_WEEK_PAGE_SIZE}. */
+  limit?: number;
 }
 
-export interface ShippedWeekBucketsResult {
+interface ShippedWeekBucketsResult {
   rows: PackerRecord[];
   isLoading: boolean;
   isFetching: boolean;
+  /** True when any fetched week filled its ceiling (more rows exist → Load more). */
+  truncated: boolean;
 }
 
 /**
@@ -44,6 +48,7 @@ export function useShippedWeekBuckets({
   staffId,
   shippedFilter,
   enabled,
+  limit = SHIPPED_WEEK_PAGE_SIZE,
 }: UseShippedWeekBucketsParams): ShippedWeekBucketsResult {
   const buckets = enabled ? getWeekBucketsForRange(rangeStart, rangeEnd) : [];
 
@@ -51,7 +56,7 @@ export function useShippedWeekBuckets({
     queries: buckets.map(({ weekStart, weekEnd }) => ({
       // Key + fetch + TTLs come from the shared factory (SoT) so the warm-up
       // prefetch and this live query can never drift apart.
-      ...dashboardShippedWeekQuery({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter }),
+      ...dashboardShippedWeekQuery({ weekStart, weekEnd, packedBy, testedBy, staffId, shippedFilter, limit }),
       placeholderData: (prev: PackerRecord[] | undefined) => prev,
       enabled,
     })),
@@ -61,6 +66,8 @@ export function useShippedWeekBuckets({
       rows: results.flatMap((r) => r.data ?? []),
       isLoading: results.some((r) => r.isLoading),
       isFetching: results.some((r) => r.isFetching),
+      // A week that returned exactly `limit` rows hit the ceiling → more exist.
+      truncated: results.some((r) => (r.data?.length ?? 0) >= limit),
     }),
   });
 }

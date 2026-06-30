@@ -6,6 +6,7 @@ import { SerialCard } from '../SerialCard';
 import { SerialMatchResult, type SerialMatchedOrder } from '../SerialMatchResult';
 import { ReceivingUnitRows, type UnitSerial } from '../ReceivingUnitRows';
 import type { ActiveRowSerial } from '../PoLinesAccordion';
+import { NoSerialControl, type SerialAbsentState } from './NoSerialControl';
 import { useSetting } from '@/hooks/useSettings';
 
 type SerialLookupView = Pick<
@@ -43,6 +44,10 @@ export function ActiveLineConditionSerial({
   onActiveConditionChange,
   onConditionChange,
   onEditingSerialChange,
+  serialAbsent,
+  serialAbsentReason,
+  onSerialAbsentChange,
+  requireSerialConfirmation,
 }: {
   serials: ActiveRowSerial[];
   lineId: number;
@@ -53,6 +58,12 @@ export function ActiveLineConditionSerial({
   serialSubmitting: boolean;
   editingSerial: ActiveRowSerial | null;
   serialLookup: SerialLookupView;
+  /** No-serial waiver state (single-qty only) + handler, from the controller. */
+  serialAbsent: boolean;
+  serialAbsentReason: string | null;
+  onSerialAbsentChange: (next: SerialAbsentState) => void;
+  /** Org enforces the serial checkpoint — surfaces the "required" hint. */
+  requireSerialConfirmation: boolean;
   /** RETURN match CTA — pair the order + open the prefilled claim. */
   onFileReturnClaim?: (matchedOrder: SerialMatchedOrder | null) => void;
   onSubmitSerial: (raw?: string, conditionGrade?: string | null) => void;
@@ -74,8 +85,11 @@ export function ActiveLineConditionSerial({
   );
   const shouldConfirmRemoval = confirmSerialRemoval ?? true;
   const isMultiQty = (quantityExpected ?? 0) > 1;
+  // Surface the serial-match band whenever a lookup is active (a return detected
+  // on ANY line) or on a pre-typed RETURN line. SerialMatchResult self-hides on
+  // idle, so this is only an allocation guard — a non-return scan shows nothing.
   const matchResult =
-    receivingType === 'RETURN' ? (
+    serialLookup.state !== 'idle' || receivingType === 'RETURN' ? (
       <SerialMatchResult
         state={serialLookup.state}
         unit={serialLookup.unit}
@@ -110,13 +124,26 @@ export function ActiveLineConditionSerial({
             onSetUnitGrade={(id, grade) => onSetUnitGrade(id, grade)}
             onConditionChange={onConditionChange}
             onActiveConditionChange={onActiveConditionChange}
+            // Icon-only no-serial toggle in the top-right of the unit list.
+            noSerialControl={
+              <NoSerialControl
+                variant="check"
+                absent={serialAbsent}
+                reason={serialAbsentReason}
+                required={requireSerialConfirmation}
+                disabled={!receivingId}
+                onChange={onSerialAbsentChange}
+              />
+            }
           />
           {/* RETURN-only: serial-match result under the unit rows. */}
           {matchResult ?? null}
         </>
       ) : (
         // Single-qty line (incl. a PARTS product carrying several part-serials
-        // under one unit): integrated condition picker + serial card.
+        // under one unit): integrated condition picker + serial card. The
+        // no-serial waiver sits directly under the input when no serial exists.
+        <>
         <SerialCard
           key={`serial-card-${lineId}`}
           saved={serials}
@@ -131,6 +158,24 @@ export function ActiveLineConditionSerial({
           condition={cond}
           onConditionChange={onConditionChange}
           onAdd={(sn) => onSubmitSerial(sn, cond)}
+          noSerialActive={serialAbsent}
+          onMarkNoSerial={() =>
+            onSerialAbsentChange(
+              serialAbsent
+                ? { absent: false, reason: null }
+                : { absent: true, reason: serialAbsentReason ?? 'NOT_SERIALIZED' },
+            )
+          }
+          noSerialSlot={
+            <NoSerialControl
+              absent
+              fullWidth
+              reason={serialAbsentReason}
+              required={requireSerialConfirmation}
+              disabled={!receivingId}
+              onChange={onSerialAbsentChange}
+            />
+          }
           onReplaceSerial={(original, nextSerial) => {
             if (original.id == null) return;
             onReplaceSerialUnit(
@@ -148,6 +193,7 @@ export function ActiveLineConditionSerial({
             onDeleteSerialUnit(s.id);
           }}
         />
+        </>
       )}
     </div>
   );

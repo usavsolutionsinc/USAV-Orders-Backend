@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { SkeletonList } from '@/design-system';
+import { Button } from '@/design-system/primitives';
 import type { DashboardSearchSectionProps } from '@/components/dashboard/DashboardSearchSectionProps';
 import { useTableSelectMode } from '@/hooks/useTableSelectMode';
 import { DASHBOARD_ORDERS_SELECTION_SCOPE } from '@/lib/selection/dashboard-scopes';
@@ -18,7 +19,7 @@ import { useShippedDetailsSelection } from '@/components/shipped/dashboard-table
 import { useShippedPeriodControls } from '@/components/shipped/dashboard-table/useShippedPeriodControls';
 import { ShippedTableHeader } from '@/components/shipped/dashboard-table/ShippedTableHeader';
 import { ShippedTableEmptyState } from '@/components/shipped/dashboard-table/ShippedTableEmptyState';
-import { ShippedDateSection } from '@/components/shipped/dashboard-table/ShippedDateSection';
+import { VirtualShippedSections } from '@/components/shipped/dashboard-table/VirtualShippedSections';
 import { ShippedLaneTable } from '@/components/shipped/dashboard-table/ShippedLaneTable';
 import { SwimlaneBoard, type SwimlaneLaneDef } from '@/components/board/SwimlaneBoard';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
@@ -86,7 +87,7 @@ export function DashboardShippedTable({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const filters = useShippedTableFilters({ packedBy, testedBy });
-  const { query, derivedRecords, searchMeta, isResolvingSearch } = useShippedTableRecords(filters);
+  const { query, derivedRecords, searchMeta, isResolvingSearch, pagination } = useShippedTableRecords(filters);
   const { daySections, orderedRecords, totalCount } = useShippedTableGrouping(derivedRecords);
   const { selectedDetailId, handleRowClick } = useShippedDetailsSelection({ orderedRecords });
 
@@ -132,6 +133,27 @@ export function DashboardShippedTable({
     />
   );
 
+  // Explicit "Load more" — shown only when a fetched week/all-time window filled
+  // its row ceiling (more rows exist on the server). Honors the no-silent-cap
+  // rule: the older tail is never dropped without telling the user. Rendered as a
+  // persistent bottom bar so it works for both the list and the board view.
+  const loadMoreFooter = pagination.isTruncated ? (
+    <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-200 bg-white px-3 py-2">
+      <span className="text-eyebrow font-semibold uppercase tracking-widest text-gray-400">
+        Showing the most recent entries · older rows in this range are truncated
+      </span>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={pagination.loadMore}
+        disabled={pagination.isLoadingMore}
+        icon={pagination.isLoadingMore ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined}
+      >
+        Load more
+      </Button>
+    </div>
+  ) : null;
+
   // Shared day-banded list body (loading → empty → grouped rows). Both the embedded
   // mobile surface and the desktop "All" lens render this identical block; only the
   // list wrapper's padding differs, so it's the one parameter.
@@ -150,19 +172,16 @@ export function DashboardShippedTable({
       />
     ) : (
       <div className={listClassName}>
-        {daySections.map(([date, records]) => (
-          <ShippedDateSection
-            key={date}
-            date={date}
-            records={records}
-            isMobile={isMobile}
-            selectMode={selectMode}
-            selectedIds={selectedIds}
-            selectedDetailId={selectedDetailId}
-            onRowClick={handleRowClick}
-            onToggle={toggle}
-          />
-        ))}
+        <VirtualShippedSections
+          daySections={daySections}
+          scrollParentRef={scrollRef}
+          isMobile={isMobile}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          selectedDetailId={selectedDetailId}
+          onRowClick={handleRowClick}
+          onToggle={toggle}
+        />
       </div>
     );
 
@@ -237,7 +256,7 @@ export function DashboardShippedTable({
 
   // Desktop dashboard is board-only; the embedded (mobile) variant keeps the
   // dense day-banded list — a drag-reorder / resize board isn't a phone surface.
-  if (embedded) return <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">{shippedTableInner}</div>;
+  if (embedded) return <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">{shippedTableInner}{loadMoreFooter}</div>;
 
   const mainContent = shippedView === 'all' ? (
     <TableColumnConfigProvider tableId="shipped">
@@ -271,6 +290,7 @@ export function DashboardShippedTable({
       <div className="flex h-full min-w-0 flex-1 bg-white relative">
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {mainContent}
+          {loadMoreFooter}
         </div>
       </div>
     </div>

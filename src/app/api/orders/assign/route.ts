@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
+import { recomputeEnrichmentForOrders } from '@/lib/neon/packer-log-enrichment';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { USAV_ORG_ID } from '@/lib/tenancy/constants';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
@@ -444,6 +445,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     } catch (cacheErr) {
       console.warn('[orders/assign] cache invalidation failed (non-critical):', cacheErr);
     }
+    // Tracking/SKU changes here can flip a packed scan's order match — refresh the
+    // shipped-table read model for affected PACK scans (deferred, best-effort).
+    after(() =>
+      recomputeEnrichmentForOrders(pool, idsToUpdate).catch((e) =>
+        console.warn('[orders/assign] enrichment recompute failed', e),
+      ),
+    );
     try {
       await publishOrderChanged({ organizationId: ctx.organizationId, orderIds: idsToUpdate, source: 'orders.assign' });
     } catch (realtimeErr) {

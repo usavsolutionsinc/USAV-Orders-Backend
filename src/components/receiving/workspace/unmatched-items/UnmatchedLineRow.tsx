@@ -143,10 +143,9 @@ export function UnmatchedLineRow({
           <div className="truncate text-label font-bold text-gray-900">
             {line.item_name ?? line.sku ?? `Line ${line.id}`}
           </div>
-          {/* Meta row — EXACTLY PoLinesAccordion's second row (qty · sku ·
-              price · condition · serial chips, shared badge components)
-              so an unfound / auto-generated-from-serial line reads the same
-              as a matched PO item. */}
+          {/* Meta row — indented under title when a leading track exists
+              (PoLinesAccordion uses META_COL.indentWide); unfound rows have
+              no chevron so meta starts flush left. */}
           <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-micro font-semibold uppercase tracking-widest text-gray-500">
             <ProgressBadge
               received={line.quantity_received ?? 0}

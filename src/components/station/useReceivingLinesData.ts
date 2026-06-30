@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { parseReceivingPrependedDetail } from '@/lib/queries/receiving-queries';
 import { INCOMING_PAGE_SIZE, type ReceivingModeContext, type ReceivingModeDescriptor } from '@/lib/receiving/receiving-modes';
 import type { ApiResponse } from '@/components/station/receiving-lines-table-helpers';
 import {
@@ -149,13 +150,9 @@ export function useReceivingLinesData({
   // URL-driven API fetch.
   useEffect(() => {
     const handler = (event: Event) => {
-      const raw = (event as CustomEvent<unknown>).detail;
-      let incoming: ReceivingLineRow[] = [];
-      if (Array.isArray(raw)) {
-        incoming = raw as ReceivingLineRow[];
-      } else if (raw && typeof raw === 'object' && Array.isArray((raw as { rows?: unknown }).rows)) {
-        incoming = (raw as { rows: ReceivingLineRow[] }).rows;
-      }
+      const parsed = parseReceivingPrependedDetail((event as CustomEvent<unknown>).detail);
+      if (parsed.intakeSurface === 'unbox') return;
+      const incoming = parsed.rows as ReceivingLineRow[];
       if (incoming.length === 0) return;
       const incomingIds = new Set(incoming.map((r) => r.id));
       setLocalRows((rows) => {

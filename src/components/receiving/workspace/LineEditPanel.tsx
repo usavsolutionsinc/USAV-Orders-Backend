@@ -15,6 +15,12 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
+import {
+  staggerRevealContainer,
+  staggerRevealRiseItem,
+  STAGGER_REVEAL_STEP,
+} from '@/design-system/primitives/StaggerReveal';
 import { toast } from '@/lib/toast';
 import { ReceiveFeedbackRegion } from './ReceiveFeedbackRegion';
 import { WorkspaceActionFeedbackSlot } from './WorkspaceActionFeedbackSlot';
@@ -87,6 +93,17 @@ export function LineEditPanel({
 
   const showReceiveFeedback = Boolean(c.receiving || c.receiveResult);
 
+  // Staggered card "settle" — the panel remounts per carton (keyed in
+  // ReceivingRightPane), so this cascade plays once per carton open: the cards
+  // rise + fade in sequence over the pane's opacity cross-dissolve. Sibling-line
+  // switches keep the same carton key (no remount), so they update in place
+  // without re-cascading. Reduced-motion collapses it to a plain instant fade.
+  const reduceMotion = useReducedMotion();
+  const revealContainer = staggerRevealContainer(reduceMotion ? 0 : STAGGER_REVEAL_STEP);
+  const revealItem: Variants = reduceMotion
+    ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.001 } } }
+    : staggerRevealRiseItem;
+
   return (
     <>
       <div className="relative flex h-full min-h-0 flex-col bg-gray-50">
@@ -108,27 +125,37 @@ export function LineEditPanel({
         {/* Scroll surface — owns the centered hero column. Padding-bottom clears
             the bottom sticky save bar so the last card never hides under it. */}
         <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6">
-            <LineCartonContextSection row={row} staffId={staffId} caps={caps} c={c} />
+          <motion.div
+            initial="hidden"
+            animate="show"
+            variants={revealContainer}
+            className="mx-auto w-full min-w-0 max-w-3xl space-y-4 px-4 py-5 pb-32 sm:px-6"
+          >
+            <motion.div variants={revealItem}>
+              <LineCartonContextSection row={row} staffId={staffId} caps={caps} c={c} />
+            </motion.div>
 
             {/* Unified Unboxing / Package-Pairing wrapper — PO Items on top,
                 Package Pairing below, pencil on the PO items eyebrow row (same
                 IconButton as the label card). Internally gates each sub-section
                 on the caps matrix (unbox shows both; triage shows pairing only),
                 so this single component covers every variant. See POUnboxingSection. */}
-            <POUnboxingSection
-              row={row}
-              staffId={staffId}
-              caps={caps}
-              c={c}
-              onItemDescFeedback={handleItemDescFeedback}
-              onItemDescSaved={handleItemDescSaved}
-            />
+            <motion.div variants={revealItem}>
+              <POUnboxingSection
+                row={row}
+                staffId={staffId}
+                caps={caps}
+                c={c}
+                onItemDescFeedback={handleItemDescFeedback}
+                onItemDescSaved={handleItemDescSaved}
+              />
+            </motion.div>
 
             {/* Notes — tabbed: operator Notes · read-only Zoho Notes · Checklist
                 (future). The Zoho-import and operator notes are separate columns
                 now, so they no longer collide. Saves on blur. Hidden in triage. */}
             {caps.notes ? (
+              <motion.div variants={revealItem}>
               <LineNotesTabbedCard
                 notes={c.notes}
                 overallZohoNotes={row.receiving_zoho_notes ?? null}
@@ -190,23 +217,29 @@ export function LineEditPanel({
                     : undefined
                 }
               />
+              </motion.div>
             ) : null}
 
             {/* Label preview — unbox-only (you print at unbox, not at triage). */}
             {caps.labelPreview ? (
-              <LineLabelPreviewCard
-                scanValue={c.scanValue}
-                labelPayload={c.labelPayload}
-                sku={row.sku}
-                itemName={row.item_name}
-                serialNumber={c.serialInput.trim()}
-                labelDraftDefaults={c.labelDraftDefaults}
-                buildLabelPayload={c.buildLabelPayload}
-                onApplyAndPrint={c.applyAndPrintLabel}
-              />
+              <motion.div variants={revealItem}>
+                <LineLabelPreviewCard
+                  scanValue={c.scanValue}
+                  labelPayload={c.labelPayload}
+                  sku={row.sku}
+                  itemName={row.item_name}
+                  serialNumber={c.serialInput.trim()}
+                  labelDraftDefaults={c.labelDraftDefaults}
+                  buildLabelPayload={c.buildLabelPayload}
+                  onApplyAndPrint={c.applyAndPrintLabel}
+                />
+              </motion.div>
             ) : null}
 
-            {/* Below label — receive feedback OR item-desc / Zoho-notes saves. */}
+            {/* Below label — receive feedback OR item-desc / Zoho-notes saves.
+                Left OUTSIDE the stagger: these regions own their own
+                AnimatePresence (workbenchPane preset), so wrapping them would
+                compound two entrances. */}
             {showReceiveFeedback ? (
               <ReceiveFeedbackRegion
                 receiving={c.receiving}
@@ -224,7 +257,7 @@ export function LineEditPanel({
                 onDismiss={() => setActionFeedback(null)}
               />
             )}
-          </div>
+          </motion.div>
         </div>
 
         {/* Receive — unbox-only; triage just identifies. A direct child of

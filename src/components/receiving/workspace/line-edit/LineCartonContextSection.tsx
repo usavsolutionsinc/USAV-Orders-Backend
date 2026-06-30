@@ -39,11 +39,10 @@ export function LineCartonContextSection({ row, staffId, caps, c }: LineCartonCo
       setPoEditorOpen={c.setPoEditorOpen}
       poNumberEdit={c.poNumberEdit}
       setPoNumberEdit={c.setPoNumberEdit}
-      onCommitPoNumber={(v) => {
-        const trimmed = v.trim();
-        const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
-        if (trimmed !== current) void c.persistPoNumber(trimmed);
-      }}
+      // Try a sales-order import first (an order# → classify the carton as a
+      // return), falling back to a plain PO# persist. The changed-check + both
+      // paths live in the controller method.
+      onCommitPoNumber={(v) => void c.commitPoNumberOrImportOrder(v)}
       lineId={row.id ?? null}
       zendeskTrimmed={c.zendeskTrimmed}
       zendeskHref={c.zendeskHref}

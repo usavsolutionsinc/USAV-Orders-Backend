@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Download, ExternalLink, Link2, Loader2, MessageSquare, Share2, Tag, Trash2 } from '@/components/Icons';
+import { Download, ExternalLink, Link2, Loader2, MessageSquare, Tag, Trash2 } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
@@ -11,6 +11,7 @@ import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
 import { buildPhotoDateTree } from '@/lib/photos/date-tree';
 import { sourceScopeFromFilters, todayFoldersDateFilter } from '@/lib/photos/library-filter-state';
+import { describeFolderBrowseHeader } from '@/components/photos/photo-library-grid/date-folder-tree';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
 import { toast } from '@/lib/toast';
@@ -19,6 +20,7 @@ import { usePackerPhotosRealtimeRefresh } from '@/hooks/usePackerPhotosRealtimeR
 import { useAuth } from '@/contexts/AuthContext';
 import { ZendeskClaimModal } from '@/components/support/zendesk/claim/ZendeskClaimModal';
 import type { ClaimPhotoInput } from '@/components/support/zendesk/claim/claim-types';
+import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import { PhotoContextMenu, type PhotoContextMenuItem } from './PhotoContextMenu';
 import { PhotoDateBreadcrumb } from './PhotoDateBreadcrumb';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
@@ -28,13 +30,6 @@ import { PhotoLabelEditor } from './PhotoLabelEditor';
 
 /** Fixed share-link lifetime (24h) for copied links + share pages. */
 const DEFAULT_SHARE_TTL_SECONDS = 24 * 60 * 60;
-
-/** Derive a human title for share pages / ZIPs from the selection. */
-function shareTitleForRows(rows: { poRef: string | null }[]): string {
-  const refs = new Set(rows.map((r) => r.poRef?.trim()).filter(Boolean));
-  if (refs.size === 1) return `PO ${[...refs][0]}`;
-  return `Photos (${rows.length})`;
-}
 
 // `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
 // without importing this page (cycle). Re-exported here for compatibility.
@@ -75,8 +70,20 @@ export function PhotoLibraryPage() {
 
   const shareLinks = usePhotoShareLinks();
   const { title, subtitle } = describePhotoLibraryContext(filters);
+  const scope = sourceScopeFromFilters(filters);
 
   const { view } = display;
+
+  const folderBrowse = useMemo(() => {
+    if (view !== 'folders') return null;
+    return describeFolderBrowseHeader({
+      photos,
+      scope,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      poRef: filters.poRef,
+    });
+  }, [view, photos, scope, filters.dateFrom, filters.dateTo, filters.poRef]);
 
   // Date breadcrumb defaults (right-panel footer): today + the most recent
   // capture day across the loaded photos — both keyed off `created_at` (PST),
@@ -141,7 +148,9 @@ export function PhotoLibraryPage() {
 
   const metaLine = query.isLoading
     ? 'Loading…'
-    : `${photos.length} photo${photos.length === 1 ? '' : 's'} in view · ${subtitle}`;
+    : folderBrowse?.isLeaf
+      ? `${folderBrowse.count} photo${folderBrowse.count === 1 ? '' : 's'}`
+      : `${photos.length} photo${photos.length === 1 ? '' : 's'} in view · ${subtitle}`;
 
   const downloadPhotoFile = useCallback(async (url: string, filename: string) => {
     const res = await fetch(url);
@@ -237,47 +246,59 @@ export function PhotoLibraryPage() {
     [canManagePhotos, canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
   );
 
+  const deleteSelectedPhotos = useCallback(
+    async (rows: LibraryPhoto[]) => {
+      if (rows.length === 0) return;
+      const results = await Promise.allSettled(
+        rows.map(async (row) => {
+          const res = await fetch(`/api/photos/${row.id}`, { method: 'DELETE' });
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          if (!res.ok) throw new Error(data?.error || `Delete failed for photo ${row.id}`);
+          return row.id;
+        }),
+      );
+      const deletedIds = results
+        .filter((result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled')
+        .map((result) => result.value);
+      const failures = results.filter((result) => result.status === 'rejected');
+      if (deletedIds.length > 0) {
+        dispatchReceivingPhotoChanged({ action: 'delete', photoIds: deletedIds });
+      }
+      await queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+      exitSelectMode();
+      if (failures.length > 0) {
+        toast.error(`Deleted ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
+      } else {
+        toast.success(`Deleted ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
+      }
+    },
+    [exitSelectMode, queryClient],
+  );
+
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
     () => [
-      {
-        // Copy time-limited signed links for the whole selection to the clipboard
-        // — the single share affordance now that drag-to-share is gone.
-        key: 'share',
-        label: 'Copy shareable links',
-        icon: <Link2 className="h-4 w-4" />,
-        tone: 'emerald',
-        primary: true,
-        run: async (rows) => {
-          await shareLinks.generateAndCopy(rows.map((row) => row.id), {
-            ttlSeconds: DEFAULT_SHARE_TTL_SECONDS,
-          });
-        },
-      },
-      {
-        // Durable group link: one tokenized /share/photos page instead of N URLs.
-        key: 'share-page',
-        label: 'Create share page',
-        icon: <Share2 className="h-4 w-4" />,
-        tone: 'violet',
-        primary: false,
-        run: async (rows) => {
-          await shareLinks.createSharePage(rows.map((row) => row.id), {
-            title: shareTitleForRows(rows),
-            expiresInDays: Math.round(DEFAULT_SHARE_TTL_SECONDS / (24 * 60 * 60)),
-          });
-        },
-      },
-      {
-        // One ZIP attachment for the whole selection (server-built).
-        key: 'zip',
-        label: 'Download as ZIP',
-        icon: <Archive className="h-4 w-4" />,
-        tone: 'blue',
-        primary: false,
-        run: (rows) => {
-          shareLinks.downloadZip(rows.map((row) => row.id), { title: shareTitleForRows(rows) });
-        },
-      },
+      ...(canZendesk
+        ? [
+            {
+              // Attach the selection to a Zendesk ticket (new or existing).
+              key: 'zendesk',
+              label: 'Add photos to a ticket',
+              icon: <MessageSquare className="h-4 w-4" />,
+              tone: 'blue' as const,
+              primary: true,
+              run: (rows: LibraryPhoto[]) => {
+                setClaimPhotos(
+                  rows.map((row) => ({
+                    id: row.id,
+                    src: row.thumbUrl,
+                    poRef: row.poRef,
+                    caption: row.caption ?? null,
+                  })),
+                );
+              },
+            } satisfies SelectionAction<LibraryPhoto>,
+          ]
+        : []),
       {
         key: 'download',
         label: 'Download selected',
@@ -315,90 +336,45 @@ export function PhotoLibraryPage() {
             } satisfies SelectionAction<LibraryPhoto>,
           ]
         : []),
-      ...(canZendesk
-        ? [
-            {
-              // Turn the selected library photos into a Zendesk ticket (or a
-              // reply on an existing one) with the photos attached. See the
-              // ZendeskClaimModal — the genuinely-new photo→ticket bridge.
-              key: 'zendesk',
-              label: 'Create Zendesk ticket',
-              icon: <MessageSquare className="h-4 w-4" />,
-              tone: 'blue' as const,
-              primary: false,
-              run: (rows: LibraryPhoto[]) => {
-                setClaimPhotos(
-                  rows.map((row) => ({
-                    id: row.id,
-                    src: row.thumbUrl,
-                    poRef: row.poRef,
-                    caption: row.caption ?? null,
-                  })),
-                );
-              },
-            } satisfies SelectionAction<LibraryPhoto>,
-          ]
-        : []),
-      {
-        key: 'delete',
-        label: 'Delete selected',
-        icon: <Trash2 className="h-4 w-4" />,
-        tone: 'red',
-        primary: false,
-        run: async (rows) => {
-          if (rows.length === 0) return;
-          const ok = window.confirm(
-            `Delete ${rows.length} selected photo${rows.length === 1 ? '' : 's'}? This cannot be undone.`,
-          );
-          if (!ok) return;
-          const results = await Promise.allSettled(
-            rows.map(async (row) => {
-              const res = await fetch(`/api/photos/${row.id}`, { method: 'DELETE' });
-              const data = (await res.json().catch(() => null)) as { error?: string } | null;
-              if (!res.ok) throw new Error(data?.error || `Delete failed for photo ${row.id}`);
-              return row.id;
-            }),
-          );
-          const deletedIds = results
-            .filter((result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled')
-            .map((result) => result.value);
-          const failures = results.filter((result) => result.status === 'rejected');
-          if (deletedIds.length > 0) {
-            dispatchReceivingPhotoChanged({ action: 'delete', photoIds: deletedIds });
-          }
-          await queryClient.invalidateQueries({ queryKey: ['photo-library'] });
-          exitSelectMode();
-          if (failures.length > 0) {
-            toast.error(`Deleted ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
-          } else {
-            toast.success(`Deleted ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
-          }
-        },
-      },
     ],
-    [canManagePhotos, canZendesk, downloadPhotoFile, exitSelectMode, queryClient, shareLinks],
+    [canManagePhotos, canZendesk, downloadPhotoFile],
   );
 
   return (
+    <RightPaneOverlayHost className="flex h-full min-h-0 flex-col">
     <div className="relative flex h-full min-h-0 flex-col bg-white">
       <PhotoLibraryHeader
         title={title}
         metaLine={metaLine}
+        folderBrowse={folderBrowse}
         view={view}
         onViewChange={handleViewChange}
         sort={filters.sort ?? 'recent'}
         onSortChange={(sort) => patch({ sort })}
       />
 
+      {/* Top context bar — folder path by default, swapped for the bulk-action bar
+          while selecting. Both share the same height so toggling selection never
+          shifts the layout (the path stays mirrored in the footer below). */}
       {selectionActive ? (
         <PhotoLibraryToolbar
           rows={selectedPhotos}
           total={photos.length}
           actions={photoBulkActions}
+          onDeleteSelected={deleteSelectedPhotos}
           onSelectAll={selectAll}
           onClear={exitSelectMode}
         />
-      ) : null}
+      ) : (
+        <div className="flex h-[40px] shrink-0 items-center border-b border-gray-200 bg-white px-4 lg:px-6">
+          <PhotoDateBreadcrumb
+            filters={filters}
+            today={today}
+            mostRecentDay={mostRecentDay}
+            onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}
+          />
+        </div>
+      )}
 
       <div className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-6 lg:p-6">
         <PhotoLibraryGrid
@@ -447,15 +423,17 @@ export function PhotoLibraryPage() {
         />
       </div>
 
-      <ZendeskClaimModal
-        open={claimPhotos !== null}
-        photos={claimPhotos ?? []}
-        onClose={() => setClaimPhotos(null)}
-        onDone={() => {
-          exitSelectMode();
-          void queryClient.invalidateQueries({ queryKey: ['photo-library'] });
-        }}
-      />
+      {claimPhotos !== null ? (
+        <ZendeskClaimModal
+          open
+          photos={claimPhotos}
+          onClose={() => setClaimPhotos(null)}
+          onDone={() => {
+            exitSelectMode();
+            void queryClient.invalidateQueries({ queryKey: ['photo-library'] });
+          }}
+        />
+      ) : null}
 
       {ctxMenu ? (
         <PhotoContextMenu
@@ -474,5 +452,6 @@ export function PhotoLibraryPage() {
         />
       ) : null}
     </div>
+    </RightPaneOverlayHost>
   );
 }

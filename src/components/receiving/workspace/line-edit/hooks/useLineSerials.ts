@@ -151,6 +151,44 @@ export function useLineSerials({
           id: data.line_state.id,
           serials: mergeSerialIntoLineSerials(row.serials, data.serial_unit),
         });
+        // Return scan: the server resolved + persisted the originating order and
+        // returns the exact row patch (type→RETURN / listing / carton source /
+        // order# / status). Apply it optimistically so the workspace flips to
+        // RETURN instantly — this is what makes the type/label flip RELIABLE
+        // without the heavy refreshLineWithSerials refetch the scan path used to
+        // fire (one of the app's most expensive queries). Null on a normal scan.
+        if (data.line_patch) {
+          dispatchUnboxRailLineUpdated(
+            data.line_patch as Partial<ReceivingLineRow> & { id: number },
+          );
+        }
+        // Light up the return match band straight from the scan response — works
+        // on ANY line (not just a pre-typed RETURN) and needs no extra round-trip,
+        // since the server resolves + persists the originating order on the scan.
+        if (data.is_return) {
+          const su = data.serial_unit;
+          serialLookup.applyResult({
+            serial,
+            found: true,
+            is_return: true,
+            unit: su
+              ? {
+                  serial_number: String(su.serial_number ?? serial),
+                  sku: su.sku ?? null,
+                  current_status: String(su.current_status ?? 'RETURNED'),
+                  condition_grade: su.condition_grade ?? null,
+                  current_location: su.current_location ?? null,
+                  updated_at: su.updated_at ?? null,
+                  is_return: true,
+                }
+              : null,
+            matchedOrder: data.matched_order ?? null,
+          });
+        } else if (receivingType === 'RETURN') {
+          // Return context, but this serial didn't resolve to a shipped order —
+          // surface "not found in the system" rather than silently attaching it.
+          serialLookup.applyResult({ serial, found: false });
+        }
         window.dispatchEvent(new CustomEvent('receiving-serial-scanned', {
           detail: {
             line_id: row.id,
@@ -159,7 +197,10 @@ export function useLineSerials({
           },
         }));
         setTimeout(() => serialInputRef.current?.focus(), 40);
-        void refreshLineWithSerials();
+        // No post-scan refetch: the optimistic serials merge above + the return
+        // line_patch carry everything the workspace needs. The mount-time
+        // reconcile (and delete/replace/grade) still pull fresh serials; the hot
+        // scan path stays a single round-trip.
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error scanning serial');
@@ -172,7 +213,6 @@ export function useLineSerials({
     row.receiving_id,
     row.id,
     staffId,
-    refreshLineWithSerials,
     row.serials,
     receivingType,
     serialLookup,

@@ -31,6 +31,12 @@ export const framerDuration = {
   tableRowMount: 0.22,
   /** Workbench right-pane / detail crossfade */
   workbenchPaneMount: 0.18,
+  /**
+   * Heavy right-pane WORKSPACE overlay settle (receiving line workspace).
+   * Slower + opacity-led than `workbenchPaneMount` — a carton→carton swap is a
+   * big subtree, so it dissolves gently rather than snapping.
+   */
+  workbenchPaneSettle: 0.3,
   /** Sidebar section expand/collapse */
   sidebarExpand: 0.26,
   /** Dropdown menu open/close */
@@ -56,6 +62,16 @@ export const framerTransition = {
   /** Workbench right-pane / detail crossfade — pair with `framerPresence.workbenchPane` */
   workbenchPaneMount: {
     duration: framerDuration.workbenchPaneMount,
+    ease: motionBezier.easeOut,
+  } satisfies Transition,
+
+  /**
+   * Heavy right-pane WORKSPACE overlay crossfade (receiving line workspace) — a
+   * slower, opacity-led settle. Pair with `framerPresence.workbenchPaneSettle`;
+   * consume through `useMotionTransition` so reduced-motion collapses it.
+   */
+  workbenchPaneSettle: {
+    duration: framerDuration.workbenchPaneSettle,
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
@@ -327,6 +343,22 @@ export const framerPresence = {
     initial: { opacity: 0, y: 6 },
     animate: { opacity: 1, y: 0 },
     exit: { opacity: 0, y: -6 },
+  },
+  /**
+   * Heavy right-pane WORKSPACE overlay crossfade (the receiving line workspace
+   * swapping carton→carton). PURE opacity — no y on enter or exit — so two
+   * full-bleed heavy panes can never slide in opposite directions (the old
+   * double-image jitter); they simply cross-dissolve. The "settle" personality
+   * lives one level in, as the panel's staggered card rise
+   * (`staggerRevealRiseItem`), so the pane fade and the card rise never compound
+   * on the same element. Opacity is GPU-composited, so a big subtree only fades
+   * (no per-frame layout). Pair with `framerTransition.workbenchPaneSettle` and
+   * consume via `useMotionPresence`. See `.claude/rules/display/motion-crossfade.md`.
+   */
+  workbenchPaneSettle: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    exit: { opacity: 0 },
   },
 } as const;
 

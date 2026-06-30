@@ -213,6 +213,10 @@ export async function findByUnitUid(
 export interface MatchedOrderForSerial {
   order_pk: number;
   order_id: string | null;
+  /** Marketplace item number (eBay item / Amazon ASIN) — feeds the listing link. */
+  item_number: string | null;
+  /** Denormalized channel/platform (ebay/amazon/fba/...) — maps to return_platform. */
+  account_source: string | null;
   product_title: string | null;
   sku: string | null;
   condition: string | null;
@@ -233,6 +237,8 @@ export async function findShippedOrderForSerialUnit(
   const effectiveOrg = orgId ?? options?.organizationId ?? null;
   const sql = `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -292,6 +298,8 @@ export async function findShippedOrderByTsnSerial(
       orgId,
       `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -319,6 +327,8 @@ export async function findShippedOrderByTsnSerial(
   const result = await executor.query<MatchedOrderForSerial & { serial_number: string }>(
     `SELECT o.id                    AS order_pk,
             o.order_id              AS order_id,
+            o.item_number           AS item_number,
+            o.account_source        AS account_source,
             o.product_title         AS product_title,
             o.sku                   AS sku,
             o.condition             AS condition,
@@ -359,6 +369,13 @@ export async function findShippedOrderByTsnSerial(
 export interface PriorOutbound {
   orderPk: number;
   orderId: string | null;
+  /** Marketplace item number → listing link (getExternalUrlByItemNumber). */
+  itemNumber: string | null;
+  /** Channel/platform of the outbound order → maps to the return platform. */
+  accountSource: string | null;
+  productTitle: string | null;
+  sku: string | null;
+  condition: string | null;
   trackingNumber: string | null;
   via: 'allocation' | 'tsn';
   allocationState: string;
@@ -380,6 +397,11 @@ export async function resolvePriorOutbound(
     return {
       orderPk: viaAlloc.order_pk,
       orderId: viaAlloc.order_id,
+      itemNumber: viaAlloc.item_number,
+      accountSource: viaAlloc.account_source,
+      productTitle: viaAlloc.product_title,
+      sku: viaAlloc.sku,
+      condition: viaAlloc.condition,
       trackingNumber: viaAlloc.tracking_number,
       via: 'allocation',
       allocationState: viaAlloc.allocation_state,
@@ -391,6 +413,11 @@ export async function resolvePriorOutbound(
     return {
       orderPk: viaTsn.order_pk,
       orderId: viaTsn.order_id,
+      itemNumber: viaTsn.item_number,
+      accountSource: viaTsn.account_source,
+      productTitle: viaTsn.product_title,
+      sku: viaTsn.sku,
+      condition: viaTsn.condition,
       trackingNumber: viaTsn.tracking_number,
       via: 'tsn',
       allocationState: viaTsn.allocation_state,

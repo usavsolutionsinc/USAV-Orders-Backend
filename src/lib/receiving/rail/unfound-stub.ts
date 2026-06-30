@@ -5,10 +5,8 @@
  * EXACT same stub shape — title "Unfound PO", negative id, qty 0/?,
  * receiving_source 'unmatched', workflow ARRIVED ("SCANNED" chip).
  *
- * Lives in its own module (not in a rail component) to keep the rails free of a
- * circular import: ReceivingRecentRail owns the status-dot helpers that
- * TriageUnfoundList imports, and the unbox Recent rail in turn needs toStubRow —
- * so the stub mapping can't live in either of them.
+ * Lives in the rail lib (not in a rail component) so the rails import pure
+ * stub/match logic from `src/lib`, never from a sibling component.
  */
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';

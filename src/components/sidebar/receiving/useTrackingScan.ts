@@ -20,7 +20,28 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
-import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
+import {
+  deferInvalidateTriageAndUnboxQueueFeeds,
+  deferInvalidateTriageReceivingFeeds,
+  deferInvalidateUnboxReceivingFeeds,
+  dispatchReceivingLinesPrepended,
+  dispatchReceivingUnboxRefresh,
+  dispatchReceivingTriageRefresh,
+  upsertReceivingRailRows,
+  upsertUnboxQueueRows,
+  receivingRailCartonKey,
+} from '@/lib/queries/receiving-queries';
+import {
+  resolveCachedCarton,
+  resolveInternalCode,
+  resolveLocalTracking,
+  resolveViaLookupPo,
+  type LocalTrackingResolution,
+  type ScanResolutionMode,
+  type ScanIntakeSurface,
+} from '@/lib/receiving/scan';
+import { applyMatchedCarton, applyUnmatchedCarton } from './scan-apply';
+import type { ScanApplyCtx, TrackingScanResult } from './scan-types';
 import { toast } from '@/lib/toast';
 import {
   fetchLinesByTracking,
@@ -29,34 +50,25 @@ import {
 } from '@/lib/testing/resolve-testing-scan';
 import { type UnboxScanMode } from '@/components/sidebar/receiving/ReceivingUnboxScanBar';
 
-/**
- * The mode threaded into a scan resolution. `'auto'` (the default for an
- * un-armed scan) tells the server to resolve the value as EITHER a PO# or a
- * tracking# before creating any carton; an armed `'order'`/`'tracking'` is
- * strict. Only `UnboxScanMode` values can be armed in the UI.
- */
-export type ScanResolutionMode = UnboxScanMode | 'auto';
-import {
-  buildUnmatchedStubRow,
-  mapApiLineToPoSummary,
-  parseReceivingPackage,
-  type PoContext,
-  type PoLineSummary,
+// `ScanResolutionMode` now lives with the scan pipeline (src/lib/receiving/scan)
+// and is re-exported here for the existing import surface. `'auto'` (the default
+// for an un-armed scan) resolves the value as EITHER a PO# or a tracking#; only
+// `UnboxScanMode` ('tracking' | 'order') values can be armed in the UI.
+export type { ScanResolutionMode };
+import type {
+  PoContext,
+  PoLineSummary,
+  ReceivingMode,
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { dispatchSelectLine } from '@/components/station/receiving-lines-table-helpers';
 import type { PhotoRequestPublisher } from '@/components/sidebar/receiving/usePhotoRequestPublisher';
 import { useSetting } from '@/hooks/useSettings';
+import { useScanFeedback } from '@/lib/scan-feedback/useScanFeedback';
 
-export interface TrackingScanResult {
-  tracking: string;
-  matched: boolean;
-  po_ids: string[];
-  receiving_id?: number;
-  exception_id?: number | null;
-  exception_reason?: string | null;
-  error?: string;
-}
+// `TrackingScanResult` now lives in `scan-types` (shared with scan-apply);
+// re-exported here for the existing import surface (ReceivingSidebarPanel, …).
+export type { TrackingScanResult };
 
 interface UseTrackingScanArgs {
   staffId: string;
@@ -73,6 +85,8 @@ interface UseTrackingScanArgs {
   setArmedLineId: React.Dispatch<React.SetStateAction<number | null>>;
   // Serial-scan cells (useSerialScan)
   setPendingCandidates: React.Dispatch<React.SetStateAction<PoLineSummary[]>>;
+  /** Active sidebar mode — drives UNBOX_SCAN_OPENED stamping when `receive`. */
+  receivingMode: ReceivingMode;
 }
 
 export interface TrackingScanState {
@@ -87,15 +101,6 @@ export interface TrackingScanState {
     rawTracking?: string,
     opts?: { mode?: ScanResolutionMode; onResult?: (result: TrackingScanResult) => void },
   ) => void;
-}
-
-/**
- * Uppercase + strip non-alphanumerics — the same normal form the PO mirror keys
- * on (`zoho_purchaseorder_number_norm`), so a scanned `po-1234` matches a stored
- * `PO-1234`. Also used for an exact tracking compare.
- */
-function normalizeScanKey(value: string): string {
-  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
 /**
@@ -134,44 +139,6 @@ function collectCachedReceivingRows(queryClient: QueryClient): ReceivingLineRow[
   return out;
 }
 
-/**
- * Phase 0 resolver — find an already-MATERIALIZED carton row (`receiving_id`
- * set) in the receiving-feed caches that matches the scanned value: PO number in
- * order mode, tracking number in tracking mode. Among multiple lines of the same
- * carton, prefer an OPEN line so the workspace lands on something actionable.
- * Returns null on no confident match (caller falls through to lookup-po).
- * EXPECTED-only incoming lines (`receiving_id` null) never match here — they
- * still need the lookup-po adopt/stamp pass.
- */
-function findCachedCartonRow(
-  queryClient: QueryClient,
-  scanned: string,
-  mode: ScanResolutionMode,
-): ReceivingLineRow | null {
-  const key = normalizeScanKey(scanned);
-  if (!key) return null;
-  // `auto` (un-armed) matches EITHER identity; an armed mode matches only its
-  // own field. This is what lets an already-in-system carton win instantly
-  // regardless of whether the operator scanned its PO# or its tracking#.
-  const matchOrder = mode === 'order' || mode === 'auto';
-  const matchTracking = mode === 'tracking' || mode === 'auto';
-  const matches = collectCachedReceivingRows(queryClient).filter((r) => {
-    if (r.receiving_id == null) return false;
-    if (matchOrder && r.zoho_purchaseorder_number && normalizeScanKey(r.zoho_purchaseorder_number) === key) {
-      return true;
-    }
-    if (matchTracking && r.tracking_number && normalizeScanKey(r.tracking_number) === key) {
-      return true;
-    }
-    return false;
-  });
-  if (matches.length === 0) return null;
-  const open = matches.find(
-    (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
-  );
-  return open ?? matches[0];
-}
-
 export function useTrackingScan({
   staffId,
   queryClient,
@@ -184,10 +151,15 @@ export function useTrackingScan({
   setPoContext,
   setArmedLineId,
   setPendingCandidates,
+  receivingMode,
 }: UseTrackingScanArgs): TrackingScanState {
   const [bulkTracking, setBulkTracking] = useState('');
   const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
   const [trackingLookupInFlight, setTrackingLookupInFlight] = useState(0);
+  const intakeSurfaceRef = useRef<ScanIntakeSurface>('triage');
+  useEffect(() => {
+    intakeSurfaceRef.current = receivingMode === 'receive' ? 'unbox' : 'triage';
+  }, [receivingMode]);
 
   // Settings Registry — gate the on-resolve auto-actions. Read into refs so the
   // submitTrackingScan callback identity stays stable (no dep churn / stale
@@ -203,6 +175,14 @@ export function useTrackingScan({
   useEffect(() => {
     accordionBootstrapRef.current = accordionExpandPref === 'all' ? 'all' : 'default';
   }, [accordionExpandPref]);
+
+  // Audio/haptic scan confirm (Station archetype §6 — the eyes-down operator needs
+  // a non-visual cue). Read into a ref so the submitTrackingScan callback identity
+  // stays stable (no dep churn). Silent by default: useScanFeedback gates sound on
+  // the org master switch + per-staff toggle, haptics on the per-staff toggle.
+  const { playScanFeedback } = useScanFeedback();
+  const playScanFeedbackRef = useRef(playScanFeedback);
+  useEffect(() => { playScanFeedbackRef.current = playScanFeedback; }, [playScanFeedback]);
 
   // Scan-race guard. Each scan captures the receiving page-mode "generation" at
   // submit; switching modes (or any `receiving-clear-line`) bumps it. A scan that
@@ -258,6 +238,17 @@ export function useTrackingScan({
         );
       };
 
+      // Fire the per-scan audio/haptic confirm alongside the caller's onResult:
+      // a clean PO match chimes success; everything else (unmatched, not-found,
+      // integration-error, network error) buzzes so the operator knows to glance.
+      // Every terminal below routes its result echo through this, and the apply
+      // layer receives it as `applyCtx.onResult`, so the cue fires exactly once
+      // per scan on every path.
+      const fireResult = (result: TrackingScanResult) => {
+        playScanFeedbackRef.current(result.matched && !result.error ? 'success' : 'reject');
+        opts?.onResult?.(result);
+      };
+
       void (async () => {
         try {
           // Serial / unit / carton-handle / receiving-id scan → jump straight to
@@ -277,57 +268,69 @@ export function useTrackingScan({
             // number returns false there and keeps its lookup-po routing. Only
             // short-circuits on a hit; tracking numbers and anything unrecognised
             // fall through to the normal lookup-po flow below untouched.
-            const runCodeResolve =
-              lookupMode !== 'order' || looksLikeReceivingCode(trackingNumber);
-            const code = runCodeResolve ? await resolveReceivingCodeToLine(trackingNumber) : null;
-            if (code && (code.kind === 'line' || code.kind === 'multi')) {
-              const rows = code.kind === 'line' ? [code.row] : code.rows;
-              if (rows.length > 0) {
-                window.dispatchEvent(
-                  new CustomEvent('receiving-lines-prepended', { detail: rows }),
-                );
-                // Refresh every receiving feed atomically. The Prioritize rail
-                // does NOT listen to `receiving-lines-prepended`, so without an
-                // explicit invalidation a freshly scanned-in carton never
-                // surfaced there until a global refresh.
-                invalidateReceivingFeeds(queryClient);
+            // Internal-handle rung (pure, src/lib/receiving/scan): serial /
+            // unit-id / carton-handle (R-/RCV-/H-/L-/U-…) → its receiving line(s),
+            // bypassing carrier-tracking intake; the hook owns the effects below.
+            const internal = await resolveInternalCode(
+              { value: trackingNumber, mode: lookupMode },
+              { looksLikeCode: looksLikeReceivingCode, resolveCode: resolveReceivingCodeToLine },
+            );
+            if (internal) {
+              if (internal.rows.length > 0) {
+                if (intakeSurfaceRef.current === 'unbox' && internal.pick && internal.receivingId != null) {
+                  upsertReceivingRailRows(queryClient, [
+                    {
+                      ...internal.pick,
+                      client_event_id: receivingRailCartonKey(internal.receivingId),
+                    },
+                  ]);
+                  deferInvalidateUnboxReceivingFeeds(queryClient);
+                  dispatchReceivingUnboxRefresh();
+                } else {
+                  dispatchReceivingLinesPrepended({
+                    segments: ['scanned', 'triage-combined'],
+                    scope: 'triage',
+                    intakeSurface: 'triage',
+                    rows: internal.rows,
+                  });
+                  const pick = internal.pick ?? internal.rows[0];
+                  if (pick && internal.receivingId != null) {
+                    upsertUnboxQueueRows(queryClient, [
+                      {
+                        ...pick,
+                        client_event_id: receivingRailCartonKey(internal.receivingId),
+                      },
+                    ]);
+                  }
+                  deferInvalidateTriageAndUnboxQueueFeeds(queryClient);
+                }
               }
               // Echo the resolution back to the caller (phone-paired scans listen
-              // for this to render their matched/unmatched result). The tracking
-              // + lookup-po branches below already call onResult; the code
-              // short-circuit must too, or a phone scan of an R-/unit handle
-              // never reports back. po_ids/receiving_id are derived from the
-              // resolved rows the same way the local-tracking branch does.
-              const codeReceivingId = rows.find((r) => r.receiving_id != null)?.receiving_id;
-              const codePoIds = [
-                ...new Set(
-                  rows
-                    .map((r) => (r.zoho_purchaseorder_id || '').trim())
-                    .filter((x) => x.length > 0),
-                ),
-              ];
-              opts?.onResult?.({
+              // for this to render their matched/unmatched result) — the code
+              // short-circuit must too, or a phone scan of an R-/unit handle never
+              // reports back.
+              fireResult({
                 tracking: trackingNumber,
                 matched: true,
-                po_ids: codePoIds,
-                receiving_id: codeReceivingId ?? undefined,
+                po_ids: internal.poIds,
+                receiving_id: internal.receivingId,
               });
-              const openRows = rows.filter(
-                (r) =>
-                  r.quantity_expected == null ||
-                  r.quantity_received < (r.quantity_expected ?? 0),
-              );
-              const pick =
-                code.kind === 'line'
-                  ? code.row
-                  : openRows.length === 1
-                    ? openRows[0]
-                    : openRows[0] ?? rows[0] ?? null;
-              setScanMatchedRows(rows);
+              if (internal.receivingId != null && intakeSurfaceRef.current === 'unbox') {
+                void fetch('/api/receiving/touch-scan', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    receiving_id: internal.receivingId,
+                    tracking_number: trackingNumber,
+                    intakeSurface: 'unbox',
+                  }),
+                }).catch(() => {});
+              }
+              setScanMatchedRows(internal.rows);
               setLineAccordionBootstrap(accordionBootstrapRef.current);
-              setSelectedLine(pick);
+              setSelectedLine(internal.pick);
               setScanDriven(true);
-              if (code.via === 'serial') {
+              if (internal.via === 'serial') {
                 toast.success('Found via serial number', {
                   description: 'Jumped to the PO that received this unit.',
                 });
@@ -348,16 +351,18 @@ export function useTrackingScan({
           // lines (receiving_id null) are intentionally skipped so they still
           // flow through the lookup-po adopt/stamp path below.
           try {
-            const cachedRow = findCachedCartonRow(queryClient, trackingNumber, lookupMode);
-            if (cachedRow && cachedRow.receiving_id != null) {
-              const poIds = cachedRow.zoho_purchaseorder_id?.trim()
-                ? [cachedRow.zoho_purchaseorder_id.trim()]
-                : [];
-              opts?.onResult?.({
+            // Phase-0 rung (pure, src/lib/receiving/scan): read the feed caches
+            // and resolve to a materialized carton; the hook owns the effects.
+            const cached = resolveCachedCarton(
+              { value: trackingNumber, mode: lookupMode },
+              { readCachedRows: () => collectCachedReceivingRows(queryClient) },
+            );
+            if (cached) {
+              fireResult({
                 tracking: trackingNumber,
                 matched: true,
-                po_ids: poIds,
-                receiving_id: cachedRow.receiving_id,
+                po_ids: cached.poIds,
+                receiving_id: cached.receivingId,
               });
               // Stamp scanned_by for the signed-in operator (same lightweight
               // touch-scan the local-tracking short-circuit uses) — no blocking
@@ -366,8 +371,9 @@ export function useTrackingScan({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  receiving_id: cachedRow.receiving_id,
-                  tracking_number: cachedRow.tracking_number ?? trackingNumber,
+                  receiving_id: cached.receivingId,
+                  tracking_number: cached.row.tracking_number ?? trackingNumber,
+                  ...(intakeSurfaceRef.current === 'unbox' ? { intakeSurface: 'unbox' } : {}),
                 }),
               }).catch(() => {});
               // Open via the rail's own select event so the sidebar selectedLine,
@@ -377,7 +383,7 @@ export function useTrackingScan({
               // mid-scan. The row is already in the feed cache either way, so a
               // stale scan simply stays visible in the queue rather than yanking
               // the current view to it.
-              if (isCurrent()) dispatchSelectLine(cachedRow);
+              if (isCurrent()) dispatchSelectLine(cached.row);
               window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
               return;
             }
@@ -398,198 +404,146 @@ export function useTrackingScan({
           // the scanned tracking is already linked to a known incoming PO.
           let lookupValueForCall = trackingNumber;
           let lookupModeForCall: ScanResolutionMode = lookupMode;
-          if (lookupMode === 'tracking' || lookupMode === 'auto') {
-            try {
-              const trackingRows = await fetchLinesByTracking(trackingNumber);
-              const localRows = trackingRows.filter((r) => r.receiving_id != null);
-              if (localRows.length > 0) {
-                const receivingId = localRows[0].receiving_id as number;
-                // Client short-circuit skips lookup-po — still stamp scanned_by
-                // for the signed-in operator via the lightweight touch-scan route.
-                void fetch('/api/receiving/touch-scan', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    receiving_id: receivingId,
-                    tracking_number: trackingNumber,
-                  }),
-                }).catch(() => {});
-                const poIds = [
-                  ...new Set(
-                    localRows
-                      .map((r) => (r.zoho_purchaseorder_id || '').trim())
-                      .filter((x) => x.length > 0),
-                  ),
-                ];
-                opts?.onResult?.({
-                  tracking: trackingNumber,
-                  matched: true,
-                  po_ids: poIds,
-                  receiving_id: receivingId,
-                });
-                // Feed refresh ALWAYS runs (carton lands in the Unbox Queue);
-                // the open/select ritual only runs if the operator is still here.
-                window.dispatchEvent(
-                  new CustomEvent('receiving-lines-prepended', { detail: localRows }),
-                );
-                invalidateReceivingFeeds(queryClient);
-                if (isCurrent()) {
-                  const openRows = localRows.filter(
-                    (r) =>
-                      r.quantity_expected == null ||
-                      r.quantity_received < (r.quantity_expected ?? 0),
-                  );
-                  const pick = openRows[0] ?? localRows[0];
-                  setScanMatchedRows(localRows);
-                  setLineAccordionBootstrap(accordionBootstrapRef.current);
-                  setSelectedLine(pick);
-                  setScanDriven(true);
-                  // Same unbox ritual as the lookup-po matched path: nudge the
-                  // paired phone's camera open and arm the serial input.
-                  if (autoPushCameraRef.current) void publishPhotoRequestFor(receivingId, trackingNumber);
-                  if (autoFocusSerialRef.current) setTimeout(() => serialInputRef.current?.focus(), 60);
-                }
-                window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-                return;
-              }
-              // No local carton yet, but the tracking is already linked to a
-              // known PO in the Incoming feed (EXPECTED lines: PO number set,
-              // receiving_id NULL). Re-target the lookup to the order-mode
-              // local-adopt path (resolvePoIdLocally → linkLocalPoLinesToReceiving):
-              // it reuses the existing incoming receiving row, adopts the local
-              // lines, and skips the Zoho tracking search entirely — so the
-              // "Opening your PO" loader never takes over for an already-known
-              // incoming carton. Only when the tracking maps to exactly one PO;
-              // a multi-PO tracking still needs the Zoho path (resolves up to 3).
-              const incomingPoNumbers = [
-                ...new Set(
-                  trackingRows
-                    .map((r) => (r.zoho_purchaseorder_number || '').trim())
-                    .filter((x) => x.length > 0),
-                ),
-              ];
-              if (incomingPoNumbers.length === 1) {
-                lookupModeForCall = 'order';
-                lookupValueForCall = incomingPoNumbers[0];
-              }
-            } catch {
-              /* local miss/error — fall through to lookup-po */
-            }
+          // Local-first tracking rung (pure, src/lib/receiving/scan): a carton
+          // already in the system resolves straight from the local feed — open it
+          // and skip lookup-po (no Zoho fallback / "Opening your PO" takeover). A
+          // miss may re-target the lookup-po call to the order-mode local-adopt
+          // path when the tracking is a single known incoming PO. The hook owns
+          // the effects; the resolver owns the resolution.
+          let local: LocalTrackingResolution | null = null;
+          try {
+            local = await resolveLocalTracking(
+              { value: trackingNumber, mode: lookupMode },
+              { fetchLinesByTracking },
+            );
+          } catch {
+            /* local miss/error — fall through to lookup-po */
           }
-
-          // Open a MATCHED carton from a lookup-po response: set PO context,
-          // hydrate full rows, open the line. Shared by the instant local-match
-          // path and the background Zoho follow-up that upgrades an unfound
-          // carton to found in place (so a late Zoho match needs no re-scan).
-          const openMatchedCarton = (d: Record<string, unknown>) => {
-            const recvId = Number(d.receiving_id);
-            const poIds = Array.isArray(d.po_ids) ? (d.po_ids as string[]) : [];
-            opts?.onResult?.({ tracking: trackingNumber, matched: true, po_ids: poIds, receiving_id: recvId });
-
-            const ctx: PoContext = {
-              receiving_id: recvId,
-              po_ids: poIds,
-              lines: ((d.lines as Record<string, unknown>[]) || []).map((l) =>
-                mapApiLineToPoSummary(l as Parameters<typeof mapApiLineToPoSummary>[0]),
-              ),
-              receiving_package: parseReceivingPackage(d.receiving_package),
-            };
-            // Arming serial-scan context + the active line only makes sense if
-            // the operator is still on this scan's mode. If they moved on, skip
-            // arming — the feed refresh below still surfaces the carton in queue.
-            if (isCurrent()) {
-              setPoContext(ctx);
-              setPendingCandidates([]);
-
-              const openLines = ctx.lines.filter(
-                (l) => l.quantity_expected == null || l.quantity_received < (l.quantity_expected ?? 0),
-              );
-              setArmedLineId(openLines.length === 1 ? openLines[0].id : null);
-            }
-
-            // Fetch full ReceivingLineRow[] so the unified LineEditPanel can open
-            // directly. Single open line → auto-select; multiple → the scan-line
-            // picker renders above LineEditPanel. Surface every matched line at
-            // the top of the History table and refresh every receiving feed
-            // (Prioritize + Recent rails, table, Unfound, Incoming) atomically.
-            void (async () => {
-              try {
-                // include=serials matches PoLinesAccordion's own query exactly,
-                // so the cache we seed below is a drop-in — the accordion mounts
-                // with full data (serials included) and never does a cold fetch.
-                const linesRes = await fetch(
-                  `/api/receiving-lines?receiving_id=${ctx.receiving_id}&include=serials`,
-                );
-                const linesData = await linesRes.json();
-                const rows = Array.isArray(linesData?.receiving_lines)
-                  ? (linesData.receiving_lines as ReceivingLineRow[])
-                  : [];
-                // Seed PoLinesAccordion's query cache so the matched workspace
-                // renders its PO lines instantly on first open — no cold-fetch
-                // gap, no empty-frame flicker. Same key + shape the accordion
-                // uses (['receiving-siblings', receivingId]).
-                queryClient.setQueryData(['receiving-siblings', ctx.receiving_id], linesData);
-                // Feed refresh ALWAYS runs so the carton appears in the Unbox
-                // Queue (view=scanned) even if the operator switched modes.
-                if (rows.length > 0) {
-                  window.dispatchEvent(new CustomEvent('receiving-lines-prepended', { detail: rows }));
-                  invalidateReceivingFeeds(queryClient);
-                }
-                // Open/select only if still on this scan's mode (stale-guard).
-                if (isCurrent()) {
-                  setScanMatchedRows(rows);
-                  const openRows = rows.filter(
-                    (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
-                  );
-                  // Fall back to the first line when all are received; only null
-                  // when the carton has no lines (avoids a blank workspace).
-                  const pick = openRows[0] ?? rows[0] ?? null;
-                  setLineAccordionBootstrap(accordionBootstrapRef.current);
-                  setSelectedLine(pick);
-                  setScanDriven(true);
-                }
-              } catch {
-                /* silent — sidebar still has poContext for serial scans */
+          if (local?.kind === 'local-matched') {
+            // Client short-circuit skips lookup-po — still stamp scanned_by for
+            // the signed-in operator via the lightweight touch-scan route.
+            void fetch('/api/receiving/touch-scan', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                receiving_id: local.receivingId,
+                tracking_number: trackingNumber,
+                ...(intakeSurfaceRef.current === 'unbox' ? { intakeSurface: 'unbox' } : {}),
+              }),
+            }).catch(() => {});
+            fireResult({
+              tracking: trackingNumber,
+              matched: true,
+              po_ids: local.poIds,
+              receiving_id: local.receivingId,
+            });
+            // Feed refresh for triage; unbox upserts the rail cache in place.
+            if (intakeSurfaceRef.current === 'unbox' && local.pick) {
+              upsertReceivingRailRows(queryClient, [
+                {
+                  ...local.pick,
+                  client_event_id: receivingRailCartonKey(local.receivingId),
+                },
+              ]);
+              deferInvalidateUnboxReceivingFeeds(queryClient);
+            } else {
+              dispatchReceivingLinesPrepended({
+                segments: ['scanned', 'triage-combined'],
+                scope: 'triage',
+                intakeSurface: 'triage',
+                rows: local.rows,
+              });
+              if (local.pick && local.receivingId != null) {
+                upsertUnboxQueueRows(queryClient, [
+                  {
+                    ...local.pick,
+                    client_event_id: receivingRailCartonKey(local.receivingId),
+                  },
+                ]);
               }
-            })();
-
+              deferInvalidateTriageAndUnboxQueueFeeds(queryClient);
+            }
             if (isCurrent()) {
-              if (autoPushCameraRef.current) void publishPhotoRequestFor(ctx.receiving_id, trackingNumber);
+              setScanMatchedRows(local.rows);
+              setLineAccordionBootstrap(accordionBootstrapRef.current);
+              setSelectedLine(local.pick);
+              setScanDriven(true);
+              // Same unbox ritual as the lookup-po matched path: nudge the paired
+              // phone's camera open and arm the serial input.
+              if (autoPushCameraRef.current) void publishPhotoRequestFor(local.receivingId, trackingNumber);
               if (autoFocusSerialRef.current) setTimeout(() => serialInputRef.current?.focus(), 60);
             }
             window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-          };
-
-          const res = await fetch('/api/receiving/lookup-po', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              trackingNumber: lookupValueForCall,
-              staffId: Number(staffId),
-              mode: lookupModeForCall,
-              // Phase 1 — resolve from LOCAL data only (mirror/incoming), never
-              // block on Zoho, so this opens with no takeover loader. A local
-              // miss returns `zoho_pending`: tracking opens an unfound carton and
-              // self-promotes in the background; order escalates to the live Zoho
-              // lookup in Phase 2 (the only loader-bearing call) just below.
-              localOnly: true,
-            }),
-          });
-          let data = await res.json();
-
-          if (!data?.success) {
-            throw new Error(data?.error || 'Lookup failed');
+            return;
+          }
+          if (local?.kind === 'retarget') {
+            lookupModeForCall = local.mode;
+            lookupValueForCall = local.value;
           }
 
+          // Build the apply context once for this scan — every cell the open /
+          // promote effects need. The effectful open logic lives in scan-apply.ts
+          // now (applyMatchedCarton / applyUnmatchedCarton); this hook resolves
+          // the rung and hands the result to the apply layer.
+          const applyCtx: ScanApplyCtx = {
+            trackingNumber,
+            staffId,
+            isCurrent,
+            onResult: fireResult,
+            queryClient,
+            publishPhotoRequestFor,
+            serialInputRef,
+            accordionBootstrapRef,
+            autoPushCameraRef,
+            autoFocusSerialRef,
+            setSelectedLine,
+            setScanMatchedRows,
+            setLineAccordionBootstrap,
+            setScanDriven,
+            setPoContext,
+            setArmedLineId,
+            setPendingCandidates,
+            intakeSurface: intakeSurfaceRef.current,
+          };
+
+          // lookup-po rung (pure fetch ladder, src/lib/receiving/scan): Phase 1
+          // resolves from LOCAL data only; an order-mode local miss escalates to
+          // the live Zoho lookup (the one loader-bearing call). The hook owns
+          // every effect below; the resolver throws on a hard failure, caught by
+          // the outer catch exactly as the inline fetch did.
+          const resolution = await resolveViaLookupPo(
+            {
+              callValue: lookupValueForCall,
+              callMode: lookupModeForCall,
+              originalMode: lookupMode,
+              staffId: Number(staffId),
+              intakeSurface: intakeSurfaceRef.current,
+            },
+            {
+              lookupPo: async (body) => {
+                const r = await fetch('/api/receiving/lookup-po', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...body,
+                    intakeSurface: intakeSurfaceRef.current,
+                  }),
+                });
+                return r.json();
+              },
+              showLoader: showZohoLoader,
+            },
+          );
+          const data = resolution.data;
+
           // The PO header matched but its line items could not import because the
-          // Zoho integration isn't connected. Without this, the carton comes back
-          // matched-but-empty and reads as a misleading "No PO found". Surface the
-          // real cause and route the operator to reconnect.
-          if (data.integration_error === 'zoho_not_connected') {
-            opts?.onResult?.({
+          // Zoho integration isn't connected — surface the real cause and route
+          // the operator to reconnect (else it reads as a misleading "No PO found").
+          if (resolution.kind === 'integration-error') {
+            fireResult({
               tracking: trackingNumber,
               matched: false,
-              po_ids: Array.isArray(data.po_ids) ? data.po_ids : [],
+              po_ids: Array.isArray(data.po_ids) ? (data.po_ids as string[]) : [],
               receiving_id: Number(data.receiving_id) || undefined,
             });
             window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
@@ -597,148 +551,26 @@ export function useTrackingScan({
             return;
           }
 
-          // Phase 2 — Zoho fallback. This is the ONLY phase that shows the
-          // takeover loader. An ORDER scan that missed LOCAL data comes back
-          // not_found + zoho_pending with NO carton created: the PO may have just
-          // been imported by the 15-min mirror cron, so re-ping the source by
-          // re-calling WITHOUT localOnly (runs the exact Zoho lookup). Tracking
-          // misses do NOT escalate here — they already created an unfound carton
-          // to show and self-promote via their own background follow-up below.
-          if (data?.not_found === true && data?.zoho_pending === true) {
-            showZohoLoader();
-            try {
-              const zohoRes = await fetch('/api/receiving/lookup-po', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  trackingNumber: lookupValueForCall,
-                  staffId: Number(staffId),
-                  mode: lookupModeForCall,
-                }),
-              });
-              const zohoData = await zohoRes.json();
-              if (zohoData?.success) data = zohoData;
-            } catch {
-              /* keep the local not_found result — the toast below reports it */
-            }
-          }
-
-          const isMatched =
-            Boolean(data.matched) && Array.isArray(data.lines) && data.lines.length > 0;
-
           // Order# lookups that resolve to nothing report a clean not-found —
           // surface a toast instead of falling into the unmatched-carton flow
           // (a mistyped PO/order number must not create a phantom box).
-          if (!isMatched && (lookupMode === 'order' || data?.not_found)) {
-            opts?.onResult?.({ tracking: trackingNumber, matched: false, po_ids: [] });
+          if (resolution.kind === 'not_found') {
+            fireResult({ tracking: trackingNumber, matched: false, po_ids: [] });
             window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-            toast.error(data?.error || `No PO found for “${trackingNumber}”`);
+            toast.error(
+              (typeof data?.error === 'string' ? data.error : '') || `No PO found for “${trackingNumber}”`,
+            );
             return;
           }
 
-          if (isMatched) {
-            openMatchedCarton(data);
+          if (resolution.kind === 'matched') {
+            applyMatchedCarton(applyCtx, data);
           } else {
-            const exceptionId = typeof data.exception_id === 'number' ? data.exception_id : null;
-            const exceptionReason =
-              typeof data.exception_reason === 'string' ? data.exception_reason : null;
-            opts?.onResult?.({
-              tracking: trackingNumber,
-              matched: false,
-              po_ids: [],
-              receiving_id: typeof data.receiving_id === 'number' ? data.receiving_id : undefined,
-              exception_id: exceptionId,
-              exception_reason: exceptionReason,
-            });
-            window.dispatchEvent(
-              new CustomEvent('receiving-entry-added', {
-                detail: { id: String(data.receiving_id), tracking: trackingNumber },
-              }),
-            );
-            // Auto-open the unfound workspace so the operator can immediately
-            // add items via the Ecwid popover — no extra click on the NO PO
-            // chip. Fetch any existing lines (a re-scan of the same tracking
-            // could have lines from a prior session); fall back to a stub row
-            // so UnfoundLineEditPanel mounts with the right receiving_id.
-            const unmatchedReceivingId =
-              typeof data.receiving_id === 'number' ? data.receiving_id : null;
-            if (unmatchedReceivingId != null) {
-              // Open the same staff's phone camera for this unmatched carton too
-              // — a tracking scan still needs unboxing photos even with no PO.
-              // Stale-guard: skip if the operator moved on mid-scan.
-              if (isCurrent() && autoPushCameraRef.current) void publishPhotoRequestFor(unmatchedReceivingId, trackingNumber);
-              void (async () => {
-                let openRow: ReceivingLineRow | null = null;
-                try {
-                  const linesRes = await fetch(
-                    `/api/receiving-lines?receiving_id=${unmatchedReceivingId}`,
-                  );
-                  const linesData = await linesRes.json();
-                  const rows = Array.isArray(linesData?.receiving_lines)
-                    ? (linesData.receiving_lines as ReceivingLineRow[])
-                    : [];
-                  openRow = rows[0] ?? null;
-                } catch {
-                  /* fall through to synthetic stub below */
-                }
-                if (!openRow) {
-                  openRow = buildUnmatchedStubRow(unmatchedReceivingId, trackingNumber);
-                }
-                // Only auto-open if still on this scan's mode; the carton is
-                // already in the feed (receiving-entry-added) regardless.
-                if (isCurrent()) {
-                  setLineAccordionBootstrap(accordionBootstrapRef.current);
-                  setSelectedLine(openRow);
-                  setScanDriven(true);
-                }
-                window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-              })();
-
-              // Instant-unfound follow-up: the first call was localOnly (no
-              // Zoho), so this carton is unfound only against LOCAL data. Run the
-              // real Zoho search in the BACKGROUND — if it resolves a PO the route
-              // promotes THIS same carton in place (findScanByTracking →
-              // preassigned), so swap the open unfound view to found with no
-              // re-scan. If Zoho also misses, the view stays unfound (the route
-              // already logged the exception for the reconcile worker).
-              if (data.zoho_pending === true) {
-                void (async () => {
-                  try {
-                    const res2 = await fetch('/api/receiving/lookup-po', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        trackingNumber,
-                        staffId: Number(staffId),
-                        mode: 'tracking',
-                      }),
-                    });
-                    const d2 = await res2.json();
-                    const upgraded =
-                      d2?.success &&
-                      Boolean(d2.matched) &&
-                      Array.isArray(d2.lines) &&
-                      d2.lines.length > 0;
-                    // Only swap when Zoho promoted THIS carton in place (same
-                    // receiving_id) — a conflict-fallback that lands a different
-                    // row shouldn't yank the operator off the carton they have
-                    // open; the feed refresh surfaces it instead.
-                    if (upgraded && Number(d2.receiving_id) === unmatchedReceivingId) {
-                      toast.success(`PO matched for “${trackingNumber}”`);
-                      openMatchedCarton(d2);
-                    }
-                  } catch {
-                    /* background best-effort — reconcile worker is the net */
-                  }
-                })();
-              }
-            } else {
-              window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
-            }
+            applyUnmatchedCarton(applyCtx, data);
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Network error';
-          opts?.onResult?.({
+          fireResult({
             tracking: trackingNumber,
             matched: false,
             po_ids: [],

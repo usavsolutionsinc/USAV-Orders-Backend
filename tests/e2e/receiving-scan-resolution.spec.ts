@@ -328,4 +328,84 @@ test.describe('Receiving unbox scan-resolution ladder', () => {
       ).toHaveCount(0);
     },
   );
+
+  test(
+    'REGRESSION — opening an unfound carton never shows a "Package not found" toast',
+    async ({ page }) => {
+      // BUG: the unmatched-items auto-loader (useUnmatchedItems.refreshLines) GETs
+      // /api/receiving/:id on carton open and used to toast the raw body.error.
+      // When that GET 404s — an optimistic open, a mid-create race, or a stale
+      // unfound-queue stub — the operator saw "Package not found". It must now
+      // degrade silently to an empty card while the workspace still opens.
+      const UNFOUND_ID = 202;
+      // Dashless so the unbox bar treats it as a tracking# (a dashed value
+      // auto-arms Order# mode, which would route a miss to the "No PO found"
+      // toast instead of creating an unfound carton).
+      const UNFOUND_TRACKING = '1Z999AA10123456784';
+
+      await routeReceivingLines(page);
+
+      // The Received rail's unfound source — keep it empty so nothing else
+      // auto-selects and competes with the scanned carton.
+      await page.route('**/api/receiving/unfound-queue**', (route: Route) =>
+        route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ rows: [] }),
+        }),
+      );
+
+      // Phase 1 localOnly creates the unfound carton and returns it as unmatched
+      // (a tracking miss does not escalate to Phase 2 / not_found).
+      await page.route('**/api/receiving/lookup-po', async (route: Route) => {
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            success: true,
+            matched: false,
+            receiving_id: UNFOUND_ID,
+            po_ids: [],
+          }),
+        });
+      });
+
+      // touch-scan is fire-and-forget — stub it so it never errors the console.
+      await page.route('**/api/receiving/touch-scan', (route: Route) =>
+        route.fulfill({ status: 200, headers: { 'content-type': 'application/json' }, body: '{}' }),
+      );
+
+      // The carton-context GET 404s — the exact race that used to toast. Flag it
+      // so the test proves the auto-loader actually ran (not a trivial pass).
+      let cartonGetCalled = false;
+      await page.route(`**/api/receiving/${UNFOUND_ID}`, async (route: Route) => {
+        cartonGetCalled = true;
+        await route.fulfill({
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ success: false, error: 'Package not found' }),
+        });
+      });
+
+      await page.goto('/receiving');
+
+      const scanInput = page.getByPlaceholder(/Tracking, PO/i);
+      await scanInput.fill(UNFOUND_TRACKING);
+      await scanInput.press('Enter');
+
+      // The unmatched workspace still opens optimistically from the stub.
+      const workspace = page.locator(
+        '[data-testid="receiving-workspace"][data-receiving-source="unmatched"]',
+      );
+      await expect(workspace).toBeVisible({ timeout: 10_000 });
+
+      // The auto-loader fired against the 404 (we genuinely exercised the path)…
+      await expect.poll(() => cartonGetCalled, { timeout: 10_000 }).toBe(true);
+
+      // …and the operator NEVER sees a raw "Package not found" / "Failed to load
+      // lines" toast from the degraded auto-load.
+      await expect(page.getByText(/Package not found/i)).toHaveCount(0);
+      await expect(page.getByText(/Failed to load lines/i)).toHaveCount(0);
+    },
+  );
 });

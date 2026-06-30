@@ -50,7 +50,7 @@ export function PaneHeaderLabel({
 // ─── PaneHeaderTitle ────────────────────────────────────────────────────────
 // Single bold title — matches the WeekHeader "today" / sticky-date display.
 
-export const paneHeaderHighContrastTitleClass =
+const paneHeaderHighContrastTitleClass =
   'text-sm font-black uppercase tracking-widest text-gray-900';
 
 interface PaneHeaderTitleProps {
@@ -430,54 +430,9 @@ export function PaneHeaderActionBar({
   return <div className={cn(shell, className)}>{content}</div>;
 }
 
-// ─── PaneHeaderWeekNav ──────────────────────────────────────────────────────
-// Range label + prev/next buttons — the original WeekHeader right-slot.
-
-interface PaneHeaderWeekNavProps {
-  rangeLabel: ReactNode;
-  onPrev: () => void;
-  onNext: () => void;
-  /** When 0 (current week), Next is disabled. */
-  weekOffset?: number;
-}
-
-export function PaneHeaderWeekNav({
-  rangeLabel,
-  onPrev,
-  onNext,
-  weekOffset = 0,
-}: PaneHeaderWeekNavProps) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-caption font-black uppercase tracking-widest text-neutral-900">
-        {rangeLabel}
-      </span>
-      <HoverTooltip label="Previous week" asChild>
-        <IconButton
-          onClick={onPrev}
-          type="button"
-          ariaLabel="Previous week"
-          className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500"
-          icon={<ChevronLeft className="h-5 w-5" />}
-        />
-      </HoverTooltip>
-      <HoverTooltip label="Next week" asChild>
-        <IconButton
-          onClick={onNext}
-          type="button"
-          disabled={weekOffset === 0}
-          ariaLabel="Next week"
-          className="rounded-lg bg-neutral-300 p-1.5 text-neutral-900 transition-colors hover:bg-neutral-400 active:bg-neutral-500 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-500 disabled:opacity-100"
-          icon={<ChevronRight className="h-5 w-5" />}
-        />
-      </HoverTooltip>
-    </div>
-  );
-}
-
 // ─── PaneHeaderPagination ─────────────────────────────────────────────────────
-// Range label + prev/next page controls — pairs with {@link PaneHeader} the
-// same way {@link PaneHeaderWeekNav} does for week-based tables.
+// Range label + prev/next page controls — pairs with {@link PaneHeader} for
+// paginated tables.
 
 interface PaneHeaderPaginationProps {
   /** Current 1-based page index. */
@@ -507,8 +462,11 @@ export function PaneHeaderPagination({
       <span className="tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
         {total > 0 ? (
           <>
-            {rangeStart}–{rangeEnd} <span className="text-gray-400">/</span>{' '}
-            <span className="text-gray-700">{total.toLocaleString()}</span>
+            <span className="text-gray-900">
+              {rangeStart}–{rangeEnd}
+            </span>{' '}
+            <span className="text-gray-400">/</span>{' '}
+            <span className="text-gray-400">{total.toLocaleString()}</span>
           </>
         ) : (
           '—'
@@ -525,8 +483,8 @@ export function PaneHeaderPagination({
             icon={<ChevronLeft className="h-3.5 w-3.5" />}
           />
         </HoverTooltip>
-        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-700">
-          {safePage}
+        <span className="px-1 tabular-nums text-eyebrow font-black uppercase tracking-wider text-gray-500">
+          <span className="text-gray-900">{safePage}</span>
           <span className="text-gray-400"> / {totalPages}</span>
         </span>
         <HoverTooltip label="Next page" asChild>

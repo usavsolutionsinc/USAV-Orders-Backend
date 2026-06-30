@@ -79,6 +79,13 @@ export function LinePoItemsSection({
           c.setCond(next);
           c.setUnitLabelCondition(next);
         }}
+        serialAbsent={c.serialAbsent}
+        serialAbsentReason={c.serialAbsentReason}
+        requireSerialConfirmation={c.requireSerialConfirmation}
+        onSerialAbsentChange={({ absent, reason }) => {
+          c.setSerialAbsent(absent);
+          c.setSerialAbsentReason(reason);
+        }}
       />
     );
   }
@@ -131,6 +138,13 @@ export function LinePoItemsSection({
             void c.patch({ condition_grade: next });
           }}
           onEditingSerialChange={c.setHeaderSerialEdit}
+          serialAbsent={c.serialAbsent}
+          serialAbsentReason={c.serialAbsentReason}
+          requireSerialConfirmation={c.requireSerialConfirmation}
+          onSerialAbsentChange={({ absent, reason }) => {
+            c.setSerialAbsent(absent);
+            c.setSerialAbsentReason(reason);
+          }}
         />
       )}
     />

@@ -12,7 +12,7 @@
 
 import pool from '@/lib/db';
 
-export type StaffAuthMethod = 'pin' | 'password';
+type StaffAuthMethod = 'pin' | 'password';
 
 /**
  * Resolve a staff member's sign-in method. Defaults to 'pin' on any error

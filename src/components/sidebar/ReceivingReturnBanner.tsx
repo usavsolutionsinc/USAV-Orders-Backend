@@ -10,6 +10,8 @@ export type ReturnEvent = {
   line_id: number | null;
   sku: string | null;
   prior_status: string | null;
+  /** Originating order # resolved from the serial (the shipped↔returned link). */
+  order_id?: string | null;
   at: number;
 };
 
@@ -59,6 +61,11 @@ export function ReceivingReturnBanner({
             </p>
             {ret.sku && (
               <p className="truncate text-eyebrow font-bold text-gray-600">{ret.sku}</p>
+            )}
+            {ret.order_id && (
+              <p className="truncate text-mini font-black uppercase tracking-wider text-emerald-600">
+                order {ret.order_id}
+              </p>
             )}
             {ret.prior_status && (
               <p className="text-mini font-black uppercase tracking-wider text-gray-400">

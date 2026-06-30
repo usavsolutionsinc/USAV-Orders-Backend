@@ -193,10 +193,14 @@ export async function buildReceivingClaimTemplate(
   let lineSummary = '';
   if (lineId) {
     const lineSql = orgId
-      ? `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-       FROM receiving_lines WHERE id = $1 AND organization_id = $2 LIMIT 1`
-      : `SELECT item_name, sku, quantity_received, quantity_expected, condition_grade
-       FROM receiving_lines WHERE id = $1 LIMIT 1`;
+      ? `SELECT rl.item_name, rl.sku, rl.quantity_received, rl.quantity_expected, rlt.condition_grade
+       FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
+       WHERE rl.id = $1 AND rl.organization_id = $2 LIMIT 1`
+      : `SELECT rl.item_name, rl.sku, rl.quantity_received, rl.quantity_expected, rlt.condition_grade
+       FROM receiving_lines rl
+       LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
+       WHERE rl.id = $1 LIMIT 1`;
     const lineResult = orgId
       ? await tenantQuery(orgId, lineSql, [lineId, orgId])
       : await pool.query(lineSql, [lineId]);

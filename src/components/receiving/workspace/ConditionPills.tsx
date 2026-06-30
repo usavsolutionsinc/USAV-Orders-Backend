@@ -2,8 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { Pencil } from '@/components/Icons';
-import { CONDITION_GRADES, conditionLabel } from '@/lib/conditions';
+import { CONDITION_GRADES, conditionLabel, conditionDescription } from '@/lib/conditions';
 import { conditionPillClass } from '@/lib/condition-tone';
+import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { useHorizontalWheelScroll } from '@/hooks/useHorizontalWheelScroll';
 
 interface Props {
@@ -71,15 +72,17 @@ export function ConditionPills({
   if (collapsible && !expanded && selectedGrade) {
     return (
       <div role="radiogroup" aria-label="Condition grade" className="flex w-fit items-center gap-1.5">
-        {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
-        <button
-          type="button"
-          aria-label={`Condition ${selectedGrade.label} — change`}
-          onClick={() => setExpanded(true)}
-          className={`${conditionPillClass(selectedGrade.value, true)} ds-raw-button`}
-        >
-          {selectedGrade.label}
-        </button>
+        <HoverTooltip label={conditionDescription(selectedGrade.value)} asChild focusable={false}>
+          {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
+          <button
+            type="button"
+            aria-label={`Condition ${selectedGrade.label} — change`}
+            onClick={() => setExpanded(true)}
+            className={`${conditionPillClass(selectedGrade.value, true)} ds-raw-button`}
+          >
+            {selectedGrade.label}
+          </button>
+        </HoverTooltip>
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -100,20 +103,21 @@ export function ConditionPills({
       className="-mx-1 flex w-full min-w-0 max-w-full items-center gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
     >
       {GRADES.map((g) => (
-        // ds-raw-button: segmented condition-grade toggle — leave hand-rolled
-        <button
-          key={g.value}
-          type="button"
-          role="radio"
-          aria-checked={selected === g.value}
-          onClick={() => {
-            onChange(g.value);
-            if (collapsible) setExpanded(false);
-          }}
-          className={`${conditionPillClass(g.value, selected === g.value)} ds-raw-button`}
-        >
-          {g.label}
-        </button>
+        <HoverTooltip key={g.value} label={conditionDescription(g.value)} asChild focusable={false}>
+          {/* ds-raw-button: segmented condition-grade toggle — leave hand-rolled */}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selected === g.value}
+            onClick={() => {
+              onChange(g.value);
+              if (collapsible) setExpanded(false);
+            }}
+            className={`${conditionPillClass(g.value, selected === g.value)} ds-raw-button`}
+          >
+            {g.label}
+          </button>
+        </HoverTooltip>
       ))}
     </div>
   );

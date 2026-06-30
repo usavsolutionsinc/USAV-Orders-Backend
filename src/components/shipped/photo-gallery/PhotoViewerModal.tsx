@@ -3,7 +3,7 @@ import { framerTransition } from '@/design-system/foundations/motion-framer';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-  AlertCircle, Check, Trash2, Link2 as LinkIcon, Plus, Info, RotateCcw, RefreshCw,
+  AlertCircle, Trash2, Info, RotateCcw, RefreshCw,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
@@ -90,17 +90,6 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
 
           <div className="mx-1 h-6 w-px bg-white/20" aria-hidden="true" />
 
-          {g.onAddPhotos && (
-            <HoverTooltip label="Add photos" asChild>
-              <IconButton
-                onClick={(e) => { e.stopPropagation(); g.addPhotosFromViewer(); }}
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110"
-                ariaLabel="Add photos"
-                icon={<Plus className="h-5 w-5 text-white" />}
-              />
-            </HoverTooltip>
-          )}
-
           <HoverTooltip label={g.downloadingAll ? 'Downloading…' : `Download all ${photoItems.length} photos`} asChild>
             <IconButton
               onClick={(e) => { e.stopPropagation(); void g.handleDownloadAll(); }}
@@ -110,18 +99,6 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
               icon={<Download className="h-5 w-5 text-white" />}
             />
           </HoverTooltip>
-
-          {g.showCopyLinks ? (
-            <HoverTooltip label={g.linksCopied ? 'Copied' : 'Copy all photo links'} asChild>
-              <IconButton
-                onClick={(e) => { e.stopPropagation(); void g.copyAllPhotoUrls(); }}
-                disabled={photoItems.length === 0}
-                className="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all text-white backdrop-blur-md border border-white/20 hover:border-white/30 hover:scale-110 disabled:opacity-50 disabled:hover:scale-100"
-                ariaLabel={g.linksCopied ? 'Links copied' : 'Copy all photo links'}
-                icon={g.linksCopied ? <Check className="h-5 w-5 text-emerald-300" /> : <LinkIcon className="h-5 w-5 text-white" />}
-              />
-            </HoverTooltip>
-          ) : null}
 
           {g.canDeleteCurrent && (
             <HoverTooltip label={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>

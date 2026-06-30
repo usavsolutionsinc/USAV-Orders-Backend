@@ -24,7 +24,7 @@ export function LightboxPortal({
   onPhotoDeleted?: (photoId: number) => void;
 }) {
   // {id,url,meta} (not bare urls) so the viewer's delete + info panel show.
-  const gallery = usePhotoGallery({ photos, showCopyLinks: false, onPhotoDeleted });
+  const gallery = usePhotoGallery({ photos, onPhotoDeleted });
   const { openViewer, viewerOpen } = gallery;
   const openedRef = useRef(false);
 

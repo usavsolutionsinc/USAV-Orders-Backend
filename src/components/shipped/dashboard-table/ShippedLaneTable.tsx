@@ -5,18 +5,20 @@
  * to its content. It is to the Shipped board what the `autoHeight` mode of
  * `OrdersQueueTable` is to the Unshipped board: given ONE lane's bucket of
  * already-derived records, it day-bands them ({@link useShippedTableGrouping})
- * and renders the same {@link ShippedDateSection} rows the dense table uses,
- * with slim `chip` date headers and vertical-only scroll capped by the lane's
- * drag-resized height. It owns no fetch, no header, no selection state — the
- * board passes those in, so every lane shares one fetch + one selection model.
+ * and renders the same windowed rows the dense table uses (via
+ * {@link VirtualShippedSections}), with slim `chip` date headers and
+ * vertical-only scroll capped by the lane's drag-resized height. It owns no
+ * fetch, no header, no selection state — the board passes those in, so every
+ * lane shares one fetch + one selection model.
  */
 
+import { useRef } from 'react';
 import { SkeletonList } from '@/design-system';
-import { ShippedDateSection } from '@/components/shipped/dashboard-table/ShippedDateSection';
+import { VirtualShippedSections } from '@/components/shipped/dashboard-table/VirtualShippedSections';
 import { useShippedTableGrouping } from '@/components/shipped/dashboard-table/useShippedTableGrouping';
 import type { DerivedPackerRecord } from '@/lib/shipped-records';
 
-export interface ShippedLaneTableProps {
+interface ShippedLaneTableProps {
   /** This lane's bucket (records whose outboundState maps to the lane). */
   records: DerivedPackerRecord[];
   loading: boolean;
@@ -52,6 +54,7 @@ export function ShippedLaneTable({
   emptyMessage,
 }: ShippedLaneTableProps) {
   const { daySections } = useShippedTableGrouping(records);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // Vertical-only, content-sized up to a cap (px wins over class) — matches the
   // `autoHeight` body of OrdersQueueTable so the two boards scroll identically.
@@ -81,21 +84,18 @@ export function ShippedLaneTable({
   }
 
   return (
-    <div className={bodyClass} style={bodyStyle}>
-      <div className="flex flex-col w-full px-2 pb-6">
-        {daySections.map(([date, dayRecords]) => (
-          <ShippedDateSection
-            key={date}
-            date={date}
-            records={dayRecords}
-            isMobile={isMobile}
-            selectMode={selectMode}
-            selectedIds={selectedIds}
-            selectedDetailId={selectedDetailId}
-            onRowClick={onRowClick}
-            onToggle={onToggle}
-          />
-        ))}
+    <div ref={bodyRef} className={bodyClass} style={bodyStyle}>
+      <div className="w-full px-2 pb-6">
+        <VirtualShippedSections
+          daySections={daySections}
+          scrollParentRef={bodyRef}
+          isMobile={isMobile}
+          selectMode={selectMode}
+          selectedIds={selectedIds}
+          selectedDetailId={selectedDetailId}
+          onRowClick={onRowClick}
+          onToggle={onToggle}
+        />
       </div>
     </div>
   );

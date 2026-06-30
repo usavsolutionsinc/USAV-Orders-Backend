@@ -7,7 +7,11 @@ import { Button } from '@/design-system/primitives';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
-import { sourceScopeFromFilters, todayFoldersDateFilter } from '@/lib/photos/library-filter-state';
+import {
+  sourceScopeFromFilters,
+  todayFoldersDateFilter,
+  type PhotoLibrarySourceScope,
+} from '@/lib/photos/library-filter-state';
 import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
@@ -21,7 +25,7 @@ import type { StaffRecipient } from '@/components/quick-access/StaffRecipientLis
 export function PhotoLibrarySidebarPanel() {
   const { filters, patch, setDatePreset, clearStructured, clearAll } =
     usePhotoLibraryUrlState();
-  const { query } = usePhotoLibrary(filters);
+  const { query, photos } = usePhotoLibrary(filters);
   const { data: staffRows = [] } = useQuery<StaffRecipient[]>({
     queryKey: ['staff-picker'],
     queryFn: async () => {
@@ -57,6 +61,26 @@ export function PhotoLibrarySidebarPanel() {
 
   const structuredCount = photoLibraryStructuredFilterCount(filters);
   const activeScope = sourceScopeFromFilters(filters);
+
+  // When inside a PO folder under "All photos" (no explicit scope), highlight the
+  // image-type row the folder's photos belong to — the dominant derived scope
+  // across the loaded contact sheet. An explicit scope drives the highlight itself.
+  const inferredScope = useMemo<PhotoLibrarySourceScope | null>(() => {
+    if (activeScope !== 'all' || !filters.poRef) return null;
+    const counts = new Map<PhotoLibrarySourceScope, number>();
+    for (const photo of photos) {
+      if (photo.sourceScope) counts.set(photo.sourceScope, (counts.get(photo.sourceScope) ?? 0) + 1);
+    }
+    let best: PhotoLibrarySourceScope | null = null;
+    let bestCount = 0;
+    for (const [scope, count] of counts) {
+      if (count > bestCount) {
+        best = scope;
+        bestCount = count;
+      }
+    }
+    return best;
+  }, [activeScope, filters.poRef, photos]);
 
   return (
     <SidebarShell
@@ -107,6 +131,7 @@ export function PhotoLibrarySidebarPanel() {
       <PhotoStationFolders
         activeScope={activeScope}
         activeImageType={filters.imageType ?? null}
+        inferredScope={inferredScope}
         onSelect={({ scope, imageType }) =>
           patch({
             sourceScope: scope,

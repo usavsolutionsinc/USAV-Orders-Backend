@@ -30,6 +30,10 @@ export interface RecentActivityRailBaseProps {
   selectedLineId: number | null;
   /** Full selected row, when available — keeps the active line always present. */
   selectedRow?: ReceivingLineRow | null;
+  /** Optimistic row pinned at the top until its real row lands (e.g. triage "importing" stub). */
+  leadingRow?: ReceivingLineRow | null;
+  /** Suppress row clicks while a row is still resolving (e.g. triage importing stub). */
+  getRowDisabled?: (row: ReceivingLineRow) => boolean;
   /** Cap on rendered rows. */
   limit?: number;
 
@@ -89,9 +93,29 @@ export interface RecentActivityRailBaseProps {
 // where a `receiving-line-updated` event could be dropped). Hoisting pins the
 // identity so the effect subscribes once.
 const getRowId = (r: ReceivingLineRow) => r.id;
+// Durable render key: an optimistic "importing" stub carries a client_event_id
+// that survives its reconcile to the resolved row, so the rail updates the row
+// in place (no flicker) instead of remounting on the stub→real id change.
+// Server-fetched rows have no client_event_id and fall back to the numeric id.
+const getRowReconcileId = (r: ReceivingLineRow): string | number => r.client_event_id ?? r.id;
 const getRowGroupId = (r: ReceivingLineRow) => r.receiving_id ?? null;
 const getRowActivityAt = (r: ReceivingLineRow) => r.last_activity_at ?? r.created_at;
 const selectRow = (r: ReceivingLineRow) => dispatchSelectLine(r);
+
+/** Popover badge tone from the feed-scoped status dot (not raw workflow_status). */
+function railStatusBadgeTone(dot: string, fallbackWorkflowStatus: string): string {
+  if (dot.includes('emerald')) return 'bg-emerald-100 text-emerald-700';
+  if (dot.includes('sky')) return 'bg-sky-100 text-sky-700';
+  if (dot.includes('blue')) return 'bg-blue-100 text-blue-700';
+  if (dot.includes('indigo')) return 'bg-indigo-100 text-indigo-700';
+  if (dot.includes('violet')) return 'bg-violet-100 text-violet-700';
+  if (dot.includes('amber')) return 'bg-amber-100 text-amber-700';
+  if (dot.includes('teal')) return 'bg-teal-100 text-teal-700';
+  if (dot.includes('rose')) return 'bg-rose-100 text-rose-700';
+  if (dot.includes('purple')) return 'bg-purple-100 text-purple-700';
+  if (dot.includes('slate')) return 'bg-slate-200 text-slate-600';
+  return WORKFLOW_BADGE[fallbackWorkflowStatus] ?? 'bg-gray-100 text-gray-600';
+}
 
 function canAutoSelectReceivingRailFirst(): boolean {
   if (typeof window === 'undefined') return false;
@@ -112,6 +136,8 @@ function canAutoSelectReceivingRailFirst(): boolean {
 export function RecentActivityRailBase({
   selectedLineId,
   selectedRow = null,
+  leadingRow = null,
+  getRowDisabled,
   limit = 25,
   queryKey,
   fetchFn,
@@ -145,6 +171,8 @@ export function RecentActivityRailBase({
       navigateEvent={navigateEvent}
       selectedId={selectedLineId}
       selectedRow={selectedRow}
+      leadingRow={leadingRow}
+      getRowDisabled={getRowDisabled}
       limit={limit}
       pinSelectedLead={pinSelectedLead}
       eyebrowTitle={eyebrowTitle}
@@ -156,6 +184,7 @@ export function RecentActivityRailBase({
       }
       staggerReveal
       getId={getRowId}
+      getReconcileId={getRowReconcileId}
       getGroupId={getRowGroupId}
       getActivityAt={getActivityAt}
       onSelect={selectRow}
@@ -169,6 +198,8 @@ export function RecentActivityRailBase({
           qtyLabel={previewQtyLabel}
           getQty={getPreviewQty}
           activityAt={getActivityAt(row) ?? null}
+          statusDot={getStatusDot(row)}
+          statusLabel={getStatusDotLabel?.(row) ?? workflowStatusTableLabel(row.workflow_status || 'EXPECTED')}
           onOpenWorkspace={() => { p.openWorkspace(); p.dismiss(); }}
           contextSlot={renderPopoverContext?.(row)}
           actionsSlot={renderPopoverActions?.(row, { dismiss: p.dismiss })}
@@ -212,7 +243,7 @@ function ReceivingRowMain({
 }
 
 function ReceivingPopoverContent({
-  row, groupSize, qtyLabel, getQty, activityAt, onOpenWorkspace, contextSlot, actionsSlot,
+  row, groupSize, qtyLabel, getQty, activityAt, statusDot, statusLabel, onOpenWorkspace, contextSlot, actionsSlot,
 }: {
   row: ReceivingLineRow;
   groupSize: number;
@@ -220,6 +251,10 @@ function ReceivingPopoverContent({
   getQty: (row: ReceivingLineRow) => { current: number; total: number | null };
   /** Same timestamp the row's relative-time label shows (the feed's sort axis). */
   activityAt: string | null;
+  /** Feed-scoped status dot class — drives the popover badge tone. */
+  statusDot: string;
+  /** Feed-scoped status label — replaces raw workflow_status in the badge. */
+  statusLabel: string;
   onOpenWorkspace: () => void;
   /** Optional read-only context (e.g. unfound exception dot) under the badges. */
   contextSlot?: ReactNode;
@@ -242,8 +277,11 @@ function ReceivingPopoverContent({
             : condGrade === 'PARTS' ? 'bg-amber-50 text-amber-700 ring-amber-200'
               : 'bg-gray-100 text-gray-500 ring-gray-200';
 
-  const workflowLabel = workflowStatusTableLabel(row.workflow_status || 'EXPECTED');
-  const workflowTone = WORKFLOW_BADGE[String(row.workflow_status || 'EXPECTED').toUpperCase()] ?? 'bg-gray-100 text-gray-600';
+  const workflowLabel = statusLabel;
+  const workflowTone = railStatusBadgeTone(
+    statusDot,
+    String(row.workflow_status || 'EXPECTED').toUpperCase(),
+  );
 
   const trackingValue = (row.tracking_number || '').trim();
   const skuValue = (row.sku || '').trim();

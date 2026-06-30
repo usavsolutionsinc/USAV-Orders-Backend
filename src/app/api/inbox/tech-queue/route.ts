@@ -55,9 +55,10 @@ export const GET = withAuth(async (_req, ctx) => {
         AND r.organization_id = $1
         AND EXISTS (
           SELECT 1 FROM receiving_lines rl
+           LEFT JOIN receiving_line_testing rlt ON rlt.receiving_line_id = rl.id AND rlt.organization_id = rl.organization_id
            WHERE rl.receiving_id = r.id
              AND rl.organization_id = $1
-             AND COALESCE(rl.needs_test, true) = true
+             AND COALESCE(rlt.needs_test, true) = true
              AND COALESCE(rl.workflow_status::text, '') NOT IN ('DONE','PASSED','FAILED','RTV','SCRAP')
         )
       ORDER BY r.unboxed_at DESC

@@ -16,7 +16,8 @@ export function SelectionMark({
 }: {
   checked: boolean;
   active: boolean;
-  onToggle: () => void;
+  /** Forwards the Shift modifier so a shift-click on the mark extends a range. */
+  onToggle: (mods: { shift: boolean }) => void;
 }) {
   return (
     <button
@@ -26,7 +27,7 @@ export function SelectionMark({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        onToggle();
+        onToggle({ shift: e.shiftKey });
       }}
       className={cn(
         'ds-raw-button absolute left-2 top-2 z-20 inline-flex h-6 w-6 items-center justify-center rounded-full border shadow-sm transition',

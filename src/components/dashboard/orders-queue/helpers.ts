@@ -33,12 +33,6 @@ export const ORDERS_QUEUE_SORT_LABEL: Record<OrdersQueueSort, string> = {
   staff: 'Staff',
 };
 
-/** Coerce a raw `?sort` value to a known sort, falling back to `priority`. */
-export function parseOrdersQueueSort(raw: string | null | undefined): OrdersQueueSort {
-  const v = String(raw || '').toLowerCase();
-  return (ORDERS_QUEUE_SORTS as string[]).includes(v) ? (v as OrdersQueueSort) : 'priority';
-}
-
 /** Best-effort numeric sale amount for sorting (NaN-safe → treated as lowest). */
 export function saleAmountValue(record: QueueRowRecord): number {
   const n = Number(record.sale_amount);

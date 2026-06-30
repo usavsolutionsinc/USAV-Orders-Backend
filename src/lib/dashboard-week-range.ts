@@ -71,7 +71,7 @@ export function getWeekBucketsForRange(
 }
 
 /** Monday (YYYY-MM-DD) of the current PST week — the immutability boundary. */
-export function getCurrentWeekStartKey(): string {
+function getCurrentWeekStartKey(): string {
   return fmtDateKey(mondayOf(getCurrentPSTDateKey()));
 }
 

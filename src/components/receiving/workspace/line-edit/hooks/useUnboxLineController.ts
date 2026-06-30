@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { toast } from '@/lib/toast';
 import {
   printReceivingLabel,
   type ReceivingLabelPayload,
@@ -16,6 +17,7 @@ import { useZohoLinePrefill } from './useZohoLinePrefill';
 import { useReceivingLineCore } from './useReceivingLineCore';
 import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unbox-rail-events';
 import { useReceivingTypeLabel, usePlatformMeta } from '@/hooks/useCatalog';
+import { useSetting } from '@/hooks/useSettings';
 import type { LabelEditDraft } from '../LabelEditPopover';
 
 /**
@@ -58,6 +60,11 @@ export function useUnboxLineController(
   const [unitLabelCondition, setUnitLabelCondition] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [serialInput, setSerialInput] = useState('');
+  // Explicit "no serial number" waiver for this line (mutually exclusive with a
+  // captured serial). Carries an auditable reason code and satisfies the optional
+  // serial-confirmation gate (receiving.requireSerialConfirmation).
+  const [serialAbsent, setSerialAbsent] = useState(false);
+  const [serialAbsentReason, setSerialAbsentReason] = useState<string | null>(null);
   // RETURN flow: on serial commit we check the serial against serial_units.
   const serialLookup = useSerialLookup();
   const [headerSerialEdit, setHeaderSerialEdit] = useState<{
@@ -94,6 +101,12 @@ export function useUnboxLineController(
       : '';
     setSerialInput(latest);
   }, [row.id, row.serials]);
+
+  // Clear the no-serial waiver whenever the active line changes (it's per-line).
+  useEffect(() => {
+    setSerialAbsent(false);
+    setSerialAbsentReason(null);
+  }, [row.id]);
 
   // Quick-return hotkey: Escape re-focuses the serial scan input from anywhere
   // in the unbox panel, so the operator can resume scanning without reaching for
@@ -175,6 +188,8 @@ export function useUnboxLineController(
     zendesk: core.zendesk,
     listingLink: core.listingLink,
     serialInput,
+    serialAbsent,
+    serialAbsentReason,
     staffId,
   });
 
@@ -380,7 +395,18 @@ export function useUnboxLineController(
   const canReceiveReview = row.receiving_id != null;
   // Zoho receive is only valid for matched cartons; unfound stays local-only.
   const canZohoReceive = canReceiveReview && !isUnfound;
-  const combinedReviewDisabled = !canReceiveReview || !canPrintReview;
+  // Optional org gate: Receive stays blocked until the operator captures a serial
+  // OR explicitly waives it (no-serial + reason). Default off — non-breaking.
+  const requireSerialConfirmation =
+    useSetting<boolean>('receiving', 'receiving.requireSerialConfirmation').value ?? false;
+  const hasCapturedSerial =
+    serialInput.trim().length > 0 ||
+    (row.serials ?? []).some(
+      (s) => String((s as { serial_number?: string | null }).serial_number ?? '').trim().length > 0,
+    );
+  const serialWaived = serialAbsent && Boolean(serialAbsentReason);
+  const serialConfirmed = !requireSerialConfirmation || hasCapturedSerial || serialWaived;
+  const combinedReviewDisabled = !canReceiveReview || !canPrintReview || !serialConfirmed;
   const isSinglePoItem = itemTotal === 1;
   const receiveMenuLabel = isSinglePoItem ? 'Receive' : 'Receive all';
   const printReceivePrimaryLabel = isUnfound ? 'Receive locally' : receiveMenuLabel;
@@ -410,17 +436,25 @@ export function useUnboxLineController(
           ? 'Print label (if available), then receive this line'
           : 'Print label (if available), then receive every open line on this PO';
 
-  // RETURN flow: pair the carton with the shipped order a scanned serial matched.
+  // Pair the carton with the shipped order a scanned serial matched. Fires for
+  // ANY line once a return is detected (not just a pre-typed RETURN) — the server
+  // has already persisted the link + carton display rep; this mirrors the order#
+  // into the PO# field instantly for the label/scan value. Guarded so it writes
+  // once and never overwrites an operator/Zoho-set PO#.
   useEffect(() => {
-    if (core.receivingType !== 'RETURN') return;
     if (serialLookup.state !== 'found') return;
     const orderNo = (serialLookup.matchedOrder?.order_id || '').trim();
     if (!orderNo) return;
-    if (core.poNumber) return; // never overwrite an operator/Zoho-set PO#
     if (autoBoundOrderRef.current === orderNo) return;
     autoBoundOrderRef.current = orderNo;
+    // Populate the listing link so the carton's listing chip opens the exact
+    // marketplace listing (the import path sets this server-side; the serial
+    // path sets it here since core.listingLink doesn't re-seed same-carton).
+    const listingUrl = (serialLookup.matchedOrder?.listing_url || '').trim();
+    if (listingUrl && !core.listingLink) core.setListingLink(listingUrl);
+    if (core.poNumber) return; // never overwrite an operator/Zoho-set PO#
     void core.persistPoNumber(orderNo);
-  }, [core.receivingType, serialLookup.state, serialLookup.matchedOrder, core.poNumber, core.persistPoNumber]);
+  }, [serialLookup.state, serialLookup.matchedOrder, core.poNumber, core.persistPoNumber, core.listingLink, core.setListingLink]);
 
   // Reset the auto-bind guard when the line changes.
   useEffect(() => {
@@ -449,6 +483,74 @@ export function useUnboxLineController(
     [serialLookup.serial, core.poNumber, core.persistPoNumber],
   );
 
+  // PO-number field commit: first try to IMPORT a sales order by this number
+  // (resolves an `orders` row → classifies the carton as a return: type RETURN,
+  // listing populated, order# as display rep, off the Unfound queue). If the
+  // value isn't a sales order, fall back to the normal PO# persist. So the one
+  // field handles both "type a PO#" and "import a return order#".
+  const commitPoNumberOrImportOrder = useCallback(
+    async (value: string) => {
+      const trimmed = value.trim();
+      const current = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
+      const fallbackPersistPo = () => {
+        if (trimmed !== current) void core.persistPoNumber(trimmed);
+      };
+      if (!trimmed || row.receiving_id == null) {
+        fallbackPersistPo();
+        return;
+      }
+      try {
+        const res = await fetch('/api/receiving/import-sales-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_number: trimmed,
+            receiving_id: row.receiving_id,
+            receiving_line_id: row.id,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.success && data.imported) {
+          // Reflect the import: type → RETURN (drives the label + listing chip),
+          // listing populated, PO editor closed. setReceivingType is the instant
+          // local flip; the row patch below carries the durable type/source/PO#/
+          // status so every surface re-seeds — listingLink doesn't re-seed from
+          // the row, so set it here.
+          core.setReceivingType('RETURN');
+          const listingUrl = data.matched_order?.listing_url as string | undefined;
+          if (listingUrl) core.setListingLink(listingUrl);
+          core.setPoEditorOpen(false);
+          autoBoundOrderRef.current = trimmed;
+          toast.success(`Imported order ${data.matched_order?.order_id ?? trimmed} as a return`);
+          // Apply the server's exact line patch optimistically — type→RETURN,
+          // listing, carton source flip, order# display rep, and received status
+          // all land in one merge. Replaces the old heavy /api/receiving-lines
+          // refetch (one of the app's most expensive queries) with a zero-fetch
+          // patch, so the workspace flips instantly and durably.
+          if (data.line_patch) {
+            dispatchUnboxRailLineUpdated(
+              data.line_patch as Partial<ReceivingLineRow> & { id: number },
+            );
+          }
+          return;
+        }
+      } catch {
+        /* fall through to a plain PO# persist */
+      }
+      fallbackPersistPo();
+    },
+    [
+      row.receiving_id,
+      row.id,
+      row.zoho_purchaseorder_number,
+      row.zoho_purchaseorder_id,
+      core.persistPoNumber,
+      core.setReceivingType,
+      core.setListingLink,
+      core.setPoEditorOpen,
+    ],
+  );
+
   return {
     ...core,
     // condition / qa / disposition
@@ -458,6 +560,7 @@ export function useUnboxLineController(
     notes, setNotes,
     // serial scanning
     serialInput, setSerialInput, serialRef,
+    serialAbsent, setSerialAbsent, serialAbsentReason, setSerialAbsentReason,
     headerSerialEdit, setHeaderSerialEdit,
     serialLookup,
     serialSubmitting, submitSerial, enqueueSerial, deleteSerialUnit, replaceSerialUnit, setUnitGrade,
@@ -467,11 +570,12 @@ export function useUnboxLineController(
     scanValue, labelPayload, runPrintLabel, handlePrintAndReceive,
     // custom label print (Edit on the label preview)
     labelDraftDefaults, buildLabelPayload, applyAndPrintLabel,
-    canPrintReview, canReceiveReview, canZohoReceive, isUnfound, combinedReviewDisabled,
+    canPrintReview, canReceiveReview, canZohoReceive, isUnfound, combinedReviewDisabled, requireSerialConfirmation,
     receiveMenuLabel, receiveMenuTitle, printReceivePrimaryLabel, splitMenuAriaLabel, splitMenuHoverTitle, printThenReceiveTitle,
     // claim / RETURN flow
     claimModalOpen, setClaimModalOpen, returnClaimPrefill, setReturnClaimPrefill,
     handleFileReturnClaim,
+    commitPoNumberOrImportOrder,
     // re-exported helper used by the active-row condition change
     markConditionSet,
   };

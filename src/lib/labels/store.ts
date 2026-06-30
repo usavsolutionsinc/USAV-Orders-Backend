@@ -13,11 +13,11 @@
 import type { LabelKind, LabelTone } from './types';
 import { labelKindToFlowContext } from './load';
 
-export interface LabelStoreDeps {
+interface LabelStoreDeps {
   query: (sql: string, params: unknown[]) => Promise<{ rows: Array<{ id: number }>; rowCount?: number | null }>;
 }
 
-export interface LabelOverrideInput {
+interface LabelOverrideInput {
   kind: LabelKind;
   code: string;
   /** Effective display text (reason_codes.label is NOT NULL). */

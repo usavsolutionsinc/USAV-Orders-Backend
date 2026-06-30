@@ -21,16 +21,12 @@ export interface PhotoGalleryProps {
    * fullscreen viewer at that photo. `default` — the shipped launcher button.
    */
   launcherLayout?: 'default' | 'toolbar' | 'thumbnails';
-  /** Toolbar + fullscreen viewer copy-links affordance. Receiving sets false. */
-  showCopyLinks?: boolean;
   /** Toolbar row label (`N photos`). Off when the parent already shows the count. */
   toolbarShowLabel?: boolean;
   /** Called after a successful DELETE /api/photos/[id] (parents invalidate cache). */
   onPhotoDeleted?: (photoId: number) => void;
   /** When set, delete broadcasts include this id so only that carton's listeners refresh. */
   receivingId?: number;
-  /** When provided, an "Add photos" button appears (parent owns the picker UI). */
-  onAddPhotos?: () => void;
   /** Opens the ops photo library filtered to this entity/receiving scope. */
   libraryHref?: string;
 }
@@ -49,11 +45,9 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     compact = false,
     launcherTitle = 'View Packing Photos',
     launcherLayout = 'default',
-    showCopyLinks = true,
     toolbarShowLabel = true,
     onPhotoDeleted,
     receivingId,
-    onAddPhotos,
     libraryHref,
   } = props;
 
@@ -67,7 +61,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
   // than overlaying photo details by default.
   const [panelOpen, setPanelOpen] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
-  const [linksCopied, setLinksCopied] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -154,18 +147,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     }
   };
 
-  const copyAllPhotoUrls = async () => {
-    const text = photoItems.map((p) => p.url).filter(Boolean).join('\n');
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setLinksCopied(true);
-      window.setTimeout(() => setLinksCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy photo links:', err);
-    }
-  };
-
   const currentPhoto = photoItems[currentIndex];
   const canDeleteCurrent = typeof currentPhoto?.id === 'number' && Number.isFinite(currentPhoto.id);
 
@@ -213,20 +194,13 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     void performDelete();
   };
 
-  // Add-from-viewer closes the viewer first so the parent's picker (lower
-  // z-index) is not hidden behind this fullscreen overlay.
-  const addPhotosFromViewer = () => {
-    closeViewer();
-    onAddPhotos?.();
-  };
-
   // The info panel is meaningful only when callers attach `meta`; otherwise the
   // toggle/panel stay hidden (legacy thumbnail strips render unchanged).
   const hasContext = photoItems.some((p) => p.meta != null);
 
   return {
     // static props
-    className, compact, launcherTitle, launcherLayout, showCopyLinks, toolbarShowLabel, libraryHref, onAddPhotos,
+    className, compact, launcherTitle, launcherLayout, toolbarShowLabel, libraryHref,
     // items
     photoItems, loadedCount, errorCount,
     // viewer
@@ -236,8 +210,8 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     // zoom
     ...zoom,
     // actions
-    downloadingAll, handleDownloadAll, linksCopied, copyAllPhotoUrls,
-    canDeleteCurrent, deleteArmed, deletingPhoto, deleteError, handleDeleteClick, addPhotosFromViewer,
+    downloadingAll, handleDownloadAll,
+    canDeleteCurrent, deleteArmed, deletingPhoto, deleteError, handleDeleteClick,
     deletePhotoDirect: performDelete,
   };
 }

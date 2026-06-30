@@ -3,23 +3,18 @@
 /**
  * The Incoming sub-view toggle: "Incoming POS (n) | Email Triage (n)" pills.
  *
- * Lives in the Incoming sidebar's `headerRows` slot (one row right beneath the
- * search bar), following the same sub-tab pattern as every other page
- * (`HorizontalButtonSlider variant="nav" dense` — cf. Products/Repair). It owns
- * the `?incview=` URL read+write itself, so the sidebar can drop it in with no
- * prop plumbing, and the right pane reads the same param to pick which sub-view
- * to render. Selection in the URL = deep-linkable + reload-safe.
- *
- * The count hooks (`useIncomingSummary`, `useIncomingEmailCount`) share the
- * sidebar's existing react-query cache keys, so the pills add no extra network
- * traffic; mounting them only in Incoming mode keeps that polling scoped.
+ * Lives in the Incoming sidebar header band (one row right beneath the search
+ * bar), following the same nav-pill pattern as every other page
+ * (`HorizontalButtonSlider variant="nav" dense`). It owns the `?incview=` URL
+ * read+write itself; the right pane reads the same param to pick which sub-view
+ * to render. Count hooks share the table's react-query cache keys.
  */
 
 import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { IncomingViewSwitcher, useIncomingEmailCount } from '@/components/receiving/EmailTriagePanel';
 import type { IncomingView } from '@/components/receiving/EmailTriagePanel';
-import { useIncomingSummary } from '@/components/sidebar/receiving/incoming/useIncomingSummary';
+import { useIncomingTableTotal } from '@/components/sidebar/receiving/incoming/useIncomingTableTotal';
 
 export function IncomingViewBand() {
   const router = useRouter();
@@ -37,9 +32,9 @@ export function IncomingViewBand() {
     [router, searchParams],
   );
 
-  // `issued` = open incoming POs Zoho says are expected but not yet received —
-  // the "Incoming POS" backlog the table shows.
-  const posCount = useIncomingSummary()?.issued;
+  // Same filtered line total the right-pane table + pagination use (not the
+  // summary tile's distinct-PO count) so the pill and header stay in sync.
+  const posCount = useIncomingTableTotal();
   const emailCount = useIncomingEmailCount();
 
   return (

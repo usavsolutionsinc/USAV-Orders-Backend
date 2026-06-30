@@ -119,7 +119,7 @@ export function parseDecisionRules(raw: unknown): DecisionRule[] {
 }
 
 /** The matched outcome: which graph lane, plus any domain placement the rule carried. */
-export interface DecisionOutcome {
+interface DecisionOutcome {
   /** Output port id (graph routing) — null when no rule matched and no default. */
   port: string | null;
   /** Domain placement directive (bin/table/queue/category), or null when the rule carried none. */

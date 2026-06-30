@@ -26,4 +26,5 @@ Audited 2026-06-28. Verify against the live codebase before starting — a doc m
 - `nango-additive-integration-plan.md`
 
 ## Database & modeling
-- `polymorphic-tables-database-refactor-plan.md` — comprehensive scan of monolithic tables best upgraded to polymorphic designs (receiving + receiving_lines, serial_units, orders, inventory_events, platform_listings, workflow/station configs, warranty/repair cluster, Zoho mirrors, etc.). Builds on shipment_links, work_assignments, receiving_exceptions, and the platform catalog.
+- `polymorphic-tables-database-refactor-plan.md` — **receiving-only deep-dive** (2026-06-29). The `receiving`/`receiving_line` spine split into a thin relational spine + polymorphic typed-facts + per-street code lanes; "share display, not logic"; clean destructive cutover (codebase not live). Builds on shipment_links, reason_codes flow-context, the workflow registry, and the `types` catalog.
+- `schema-wide-polymorphic-refactor-plan.md` — **whole-schema** scan of monolithic tables best upgraded to polymorphic designs (serial_units, orders, inventory_events, platform_listings, workflow/station configs, warranty/repair cluster, FBA family, Zoho mirrors, etc.) + the reference contract and Appendices A–D. The receiving Tier-1 deep-dive lives in the sibling above.

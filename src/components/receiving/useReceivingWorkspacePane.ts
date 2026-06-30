@@ -196,10 +196,9 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
     void (async () => {
       try {
         const res = await fetch(
-          // sort MUST match ReceivingRecentRail's axis (unboxed_newest) so this
-          // effect and the rail's auto-select resolve to the SAME "most recent"
-          // line.
-          `/api/receiving-lines?limit=1&offset=0&view=activity&include=serials&sort=unboxed_newest`,
+          // Unbox surface only — activity includes triage-unboxed lines and
+          // excludes lineless unfound cartons opened here.
+          `/api/receiving-lines?limit=1&offset=0&view=unbox_opened&include=serials`,
           { cache: 'no-store' },
         );
         const data = await res.json().catch(() => null);
@@ -241,7 +240,7 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
       void (async () => {
         try {
           const res = await fetch(
-            `/api/receiving-lines?limit=5&offset=0&view=activity&include=serials&sort=unboxed_newest`,
+            `/api/receiving-lines?limit=5&offset=0&view=unbox_opened&include=serials`,
             { cache: 'no-store' },
           );
           const data = await res.json().catch(() => null);

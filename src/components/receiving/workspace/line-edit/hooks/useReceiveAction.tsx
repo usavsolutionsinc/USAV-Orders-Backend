@@ -7,6 +7,7 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { classifyReceiveResponse } from '../../ReceiveResponsePanel';
+import { useScanFeedback } from '@/lib/scan-feedback/useScanFeedback';
 
 // 'local_receive' = unfound carton: mark RECEIVED locally, never touch Zoho.
 // Distinct from 'scan_only', which stays SCANNED.
@@ -98,6 +99,8 @@ export function useReceiveAction(
     zendesk,
     listingLink,
     serialInput,
+    serialAbsent,
+    serialAbsentReason,
     staffId,
   }: {
     qa: string;
@@ -107,6 +110,8 @@ export function useReceiveAction(
     zendesk: string;
     listingLink: string;
     serialInput: string;
+    serialAbsent: boolean;
+    serialAbsentReason: string | null;
     staffId: string;
   },
 ) {
@@ -119,6 +124,8 @@ export function useReceiveAction(
 
   // Unfound cartons receive locally (label + scan_only) — never Zoho.
   const isUnfound = row.receiving_source === 'unmatched';
+  // Multimodal confirmation cue (gated by org master switch + per-staff toggles).
+  const { playScanFeedback } = useScanFeedback();
 
   const handleReceive = useCallback(
     (receiveIntent: ReceiveIntent = 'zoho_receive') => {
@@ -182,6 +189,8 @@ export function useReceiveAction(
               disposition_code: disp,
               condition_grade: cond,
               serial_number: serialInput.trim() || undefined,
+              serial_absent: serialAbsent || undefined,
+              serial_absent_reason: serialAbsent ? serialAbsentReason || undefined : undefined,
               zendesk_ticket: zendesk.trim() || undefined,
               listing_link: listingLink.trim() || undefined,
               notes: perLineNotes || undefined,
@@ -212,6 +221,7 @@ export function useReceiveAction(
             });
             setReceiveResult({ kind: 'diagnostic', response: respRecord });
             setResponseExpanded(true);
+            playScanFeedback('reject');
           } else {
             // Reuse the panel's verdict taxonomy: emerald = a genuine success
             // (received / scanned / already-received) → animated checklist;
@@ -264,9 +274,11 @@ export function useReceiveAction(
                 reconcile: receiveIntent === 'zoho_receive' && attempted > 0 && !alreadyReceived,
                 response: respRecord,
               });
+              playScanFeedback('success');
             } else {
               setReceiveResult({ kind: 'diagnostic', response: respRecord });
               setResponseExpanded(true);
+              playScanFeedback('reject');
             }
           }
 
@@ -314,6 +326,7 @@ export function useReceiveAction(
             },
           });
           setResponseExpanded(true);
+          playScanFeedback('reject');
         } finally {
           receiveInFlightRef.current = false;
           setReceiving(null);
@@ -331,8 +344,11 @@ export function useReceiveAction(
       zendesk,
       listingLink,
       serialInput,
+      serialAbsent,
+      serialAbsentReason,
       staffId,
       queryClient,
+      playScanFeedback,
     ],
   );
 

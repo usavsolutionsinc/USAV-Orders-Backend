@@ -160,7 +160,6 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
               orderId={`RCV-${receivingId}`}
               receivingId={receivingId}
               launcherLayout="toolbar"
-              showCopyLinks={false}
               toolbarShowLabel={false}
               compact
               libraryHref={`/ops/photos?receivingId=${receivingId}`}

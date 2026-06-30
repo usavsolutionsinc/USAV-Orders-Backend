@@ -24,6 +24,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Loader2 } from '@/components/Icons';
 import { InlineNotice } from '@/design-system/components';
 import { Button } from '@/design-system/primitives';
+import { ListingUrlChip } from '@/components/ui/CopyChip';
+import { getExternalUrlByItemNumber } from '@/utils/external-item-url';
 
 export type SerialMatchState = 'idle' | 'searching' | 'found' | 'not-found';
 
@@ -45,6 +47,12 @@ export interface SerialMatchUnit {
  */
 export interface SerialMatchedOrder {
   order_id: string | null;
+  /** Marketplace item number → the listing link (opens in a new page). */
+  item_number?: string | null;
+  /** Server-built listing URL (from item_number); present on the scan response. */
+  listing_url?: string | null;
+  /** Channel/platform the unit sold on (ebay/amazon/...). */
+  account_source?: string | null;
   product_title: string | null;
   sku: string | null;
   condition: string | null;
@@ -117,16 +125,17 @@ export function SerialMatchResult({
         tone="warning"
         size="sm"
         className={className}
-        title="No match found"
+        title="Returned serial not found"
         icon={<AlertTriangle className="h-4 w-4 text-amber-500" />}
       >
         {serial ? (
           <>
-            <span className="font-mono font-semibold">{serial}</span> isn’t in our
-            records — confirm the serial or that the item is ours.
+            Returned serial number{' '}
+            <span className="font-mono font-semibold">{serial}</span> is not found in
+            the system — confirm the serial or that the item is ours.
           </>
         ) : (
-          'This serial isn’t in our records — confirm the serial or that the item is ours.'
+          'Returned serial number is not found in the system — confirm the serial or that the item is ours.'
         )}
       </InlineNotice>
     );
@@ -134,6 +143,9 @@ export function SerialMatchResult({
 
   // state === 'found'
   const isReturn = !!unit?.is_return;
+  // Listing link built from the order's item number — the exact shipped-details
+  // mechanism (getExternalUrlByItemNumber → open in a new page).
+  const listingUrl = matchedOrder ? getExternalUrlByItemNumber(matchedOrder.item_number) : null;
   return (
     <InlineNotice
       tone="success"
@@ -176,6 +188,13 @@ export function SerialMatchResult({
                   <MetaPill label="Shipped" value={matchedOrder.tracking_number.slice(-8)} />
                 ) : null}
               </div>
+              {/* Listing link — opens the marketplace listing in a new page,
+                  resolved from the order's item number (shipped-details parity). */}
+              {listingUrl ? (
+                <div className="mt-1.5 flex items-center gap-1">
+                  <ListingUrlChip rawUrl={listingUrl} openHref={listingUrl} previewDisplay="View listing" />
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-1.5">
@@ -286,8 +305,37 @@ export function useSerialLookup() {
     }
   }, []);
 
+  /**
+   * Drive the band straight from a scan-serial POST response — no second GET.
+   * Lets a return detected on ANY line (not just a pre-typed RETURN) light up
+   * the match band with the server-resolved + persisted originating order.
+   */
+  const applyResult = useCallback(
+    (payload: {
+      serial: string;
+      found?: boolean;
+      is_return?: boolean;
+      unit?: SerialMatchUnit | null;
+      matchedOrder?: SerialMatchedOrder | null;
+    }) => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      setSerial(payload.serial);
+      if (payload.found && payload.unit) {
+        setUnit({ ...payload.unit, is_return: !!payload.is_return });
+        setMatchedOrder(payload.matchedOrder ?? null);
+        setState('found');
+      } else if (payload.found === false) {
+        setUnit(null);
+        setMatchedOrder(null);
+        setState('not-found');
+      }
+    },
+    [],
+  );
+
   // Abort any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  return { state, unit, matchedOrder, serial, check, reset };
+  return { state, unit, matchedOrder, serial, check, applyResult, reset };
 }

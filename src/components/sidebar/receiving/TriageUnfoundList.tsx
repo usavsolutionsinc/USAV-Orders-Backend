@@ -7,45 +7,23 @@
  * item, link a PO#). Rows auto-drop once Zoho syncs the PO or the operator links
  * one manually.
  *
- * Renders with the EXACT same components as the Found rail — it's a thin
- * RecentActivityRailBase wrapper. The unfound-queue rows are mapped to stub
- * ReceivingLineRows (titled "Unfound PO", qty 0/?), so the rail shows the same
- * row shape + selection highlight, and the hover preview shows the order# and
- * tracking number as last-4 copy chips (CopyChip) like every other rail.
- *
- * Two additive triage affordances live in the row's hover popover (via the
- * shared rail's optional `renderPopoverContext`/`renderPopoverActions` slots):
- *   • B3 — a read-only Zoho-sync exception dot + tooltip (retry count / last
- *     check / reason) pulled from the existing `/api/tracking-exceptions` feed,
- *     so staff see "Zoho still hasn't synced this PO" without leaving triage.
- *   • B2 — a "Claim" action that opens the existing `ReceivingClaimModal`
- *     (reused, not forked) for this carton, filed at the carton level since the
- *     unfound row is a synthetic stub with no real receiving_line.
+ * Pure composition: the rail is a thin binding over {@link ReceivingFeedRail}
+ * (feed `triageUnfound`), and the two triage-specific affordances are behavior
+ * hooks wired into the rail's optional popover slots:
+ *   • B3 — read-only Zoho-sync exception dot + tooltip ({@link useTriageUnfoundExceptions}).
+ *   • B2 — a "Claim" action opening `ReceivingClaimModal` ({@link useReceivingClaimModal}),
+ *     filed at the carton level (the unfound row is a synthetic stub with no real
+ *     receiving_line).
  */
 
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Button } from '@/design-system/primitives';
 import { Flag } from '@/components/Icons';
-import { toast } from '@/lib/toast';
 import { ReceivingClaimModal } from '@/components/receiving/workspace/ReceivingClaimModal';
-import {
-  indexReceivingExceptions,
-  exceptionDotClass,
-  exceptionTooltipLabel,
-  type ReceivingExceptionRow,
-  type ReceivingExceptionContext,
-} from '@/lib/receiving/triage-exception-context';
-import { RecentActivityRailBase, type ApiResponse } from './RecentActivityRailBase';
-import { getReceivingStatusDot, getReceivingStatusDotLabel } from './ReceivingRecentRail';
-import { toStubRow, matchesQuery, type UnfoundQueueRow } from './unfound-stub';
-
-// Stub mapping (toStubRow / matchesQuery / UnfoundQueueRow) is the SoT in
-// ./unfound-stub. Re-exported here for the existing importers that pull it from
-// this module.
-export { toStubRow, matchesQuery, type UnfoundQueueRow };
+import { exceptionDotClass, exceptionTooltipLabel } from '@/lib/receiving/triage-exception-context';
+import { ReceivingFeedRail } from './ReceivingFeedRail';
+import { useTriageUnfoundExceptions } from './useTriageUnfoundExceptions';
+import { useReceivingClaimModal } from './useReceivingClaimModal';
 
 export function TriageUnfoundList({
   selectedLineId,
@@ -54,73 +32,15 @@ export function TriageUnfoundList({
   selectedLineId: number | null;
   filterText?: string;
 }) {
-  const q = filterText.trim().toLowerCase();
-  const queryKey = useMemo(() => ['receiving', 'triage', 'unfound-list', q] as const, [q]);
-
-  // B3 — read-only exception context. Reuse the EXISTING receiving tracking-
-  // exception feed (no new server view) and index it by receiving_id so each
-  // unfound carton row can show "Zoho still hasn't synced this PO" as a dot +
-  // tooltip. Degrades to no-dot on fetch failure (it's secondary context).
-  const { data: exceptionMap } = useQuery<Map<number, ReceivingExceptionContext>>({
-    queryKey: ['receiving', 'triage', 'open-exceptions'] as const,
-    staleTime: 30_000,
-    queryFn: async () => {
-      const res = await fetch(
-        '/api/tracking-exceptions?domain=receiving&status=open&limit=500',
-        { cache: 'no-store' },
-      );
-      if (!res.ok) return new Map<number, ReceivingExceptionContext>();
-      const data = (await res.json()) as { rows?: ReceivingExceptionRow[] };
-      return indexReceivingExceptions(data.rows ?? []);
-    },
-  });
-
-  // B2 — file a claim straight from the unfound row. The rail row is a synthetic
-  // stub (negative id, no real receiving_line), so the claim is filed at the
-  // CARTON level (lineIdOverride={null}); the modal auto-selects claimType
-  // 'unfound' for unmatched rows with no PO.
-  const [claimRow, setClaimRow] = useState<ReceivingLineRow | null>(null);
-
-  const fetchFn = async (): Promise<ApiResponse> => {
-    const res = await fetch(
-      '/api/receiving/unfound-queue?kind=unmatched_receiving&checked=false&limit=200',
-      { cache: 'no-store' },
-    );
-    if (!res.ok) throw new Error('unfound queue fetch failed');
-    const data = (await res.json()) as { rows?: UnfoundQueueRow[] };
-    const rows = (data.rows ?? [])
-      .filter((r) => Number.isFinite(Number(r.source_id)))
-      .filter((r) => matchesQuery(r, q))
-      .map(toStubRow);
-    return { success: true, receiving_lines: rows, total: rows.length };
-  };
+  const exceptionMap = useTriageUnfoundExceptions();
+  const { claimRow, openClaim, closeClaim, onTicketCreated } = useReceivingClaimModal();
 
   return (
     <>
-      <RecentActivityRailBase
+      <ReceivingFeedRail
+        feed="triageUnfound"
         selectedLineId={selectedLineId}
-        selectedRow={null}
-        limit={200}
-        queryKey={queryKey}
-        fetchFn={fetchFn}
-        updateEvent="receiving-line-updated"
-        deleteEvent="receiving-line-deleted"
-        deleteGroupEvent="receiving-entry-deleted"
-        refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
-        eyebrowTitle="Unfound"
-        autoSelectFirstWhenEmpty
-        getStatusDot={getReceivingStatusDot}
-        getStatusDotLabel={getReceivingStatusDotLabel}
-        renderQuantity={(row) => (
-          <span className="text-gray-600">
-            {row.quantity_received}/{row.quantity_expected ?? '?'}
-          </span>
-        )}
-        previewQtyLabel="Received"
-        getPreviewQty={(row) => ({
-          current: row.quantity_received,
-          total: row.quantity_expected,
-        })}
+        filterText={filterText}
         renderPopoverContext={(row) => {
           // B3: open Zoho-sync exception state for this carton (read-only).
           const ctx = row.receiving_id != null ? exceptionMap?.get(row.receiving_id) : undefined;
@@ -145,7 +65,7 @@ export function TriageUnfoundList({
               variant="ghost"
               size="sm"
               onClick={() => {
-                setClaimRow(row);
+                openClaim(row);
                 dismiss();
               }}
               className="h-auto gap-1 rounded-md px-2 py-1 text-micro font-black uppercase tracking-widest text-orange-600 hover:bg-orange-50"
@@ -163,14 +83,8 @@ export function TriageUnfoundList({
           row={claimRow}
           // Carton-level claim — the unfound stub has no real receiving_line.
           lineIdOverride={null}
-          onClose={() => setClaimRow(null)}
-          onTicketCreated={(tk) => {
-            toast.success(`Claim filed — ${tk}`);
-            setClaimRow(null);
-            // Nudge the rail + dashboard to refetch (the cron resolves the
-            // exception once Zoho syncs; the ticket # lands on the carton now).
-            window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-          }}
+          onClose={closeClaim}
+          onTicketCreated={onTicketCreated}
         />
       ) : null}
     </>

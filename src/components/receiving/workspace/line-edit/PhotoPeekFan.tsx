@@ -110,7 +110,6 @@ export function PhotoPeekFan({
   // instead of a bespoke lightbox.
   const gallery = usePhotoGallery({
     photos: chronoPhotos,
-    showCopyLinks: false,
     receivingId,
     onPhotoDeleted,
   });

@@ -21,7 +21,6 @@
 // importer + the color META below keep their stable path. This module keeps
 // only the presentation (the OUTBOUND_STATE_META hues + the seam contract).
 export {
-  CUSTODY_CATEGORIES,
   carrierHasCustody,
   hasLeftWarehouse,
   effectiveShipTime,

@@ -218,13 +218,11 @@ async function fetchLinesByPartial(
  * (and its Zoho fallback) behind the "Opening your PO" loader.
  */
 export async function fetchLinesByTracking(tracking: string) {
-  // `view=all` + `search` matches against tracking, PO#, serial, sku — the
-  // same dataset the receiving History table uses. Limit small so a typoed
-  // partial doesn't return hundreds of unrelated rows.
+  // Lightweight resolve — rail rows never need serials; a small limit is enough
+  // to find the carton already in the system and skip lookup-po entirely.
   const params = new URLSearchParams({
-    limit: '10',
+    limit: '5',
     offset: '0',
-    include: 'serials',
     view: 'all',
     search: tracking,
   });

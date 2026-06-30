@@ -7,7 +7,7 @@ import { Calendar as CalendarPicker } from './Calendar';
 import { Calendar as CalendarIcon } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 
-export interface DateTimePickerFieldProps {
+interface DateTimePickerFieldProps {
   /** Current value. `undefined` = nothing picked yet. */
   value: Date | undefined;
   onChange: (next: Date) => void;

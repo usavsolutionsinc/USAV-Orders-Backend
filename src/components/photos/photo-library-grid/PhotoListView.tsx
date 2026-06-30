@@ -57,7 +57,7 @@ export function PhotoListView({
             <SelectionMark
               checked={isSelected}
               active={selectionActive}
-              onToggle={() => onSelectTile(photo.id, { shift: false })}
+              onToggle={(mods) => onSelectTile(photo.id, mods)}
             />
           </li>
         );

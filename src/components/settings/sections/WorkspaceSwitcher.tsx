@@ -145,5 +145,3 @@ export function WorkspaceSwitcher() {
     </div>
   );
 }
-
-export default WorkspaceSwitcher;

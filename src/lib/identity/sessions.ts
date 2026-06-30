@@ -27,12 +27,12 @@ import type { OrgId } from '@/lib/tenancy/constants';
 
 type Executor = Pool | PoolClient;
 
-export interface SwitchActiveContextTarget {
+interface SwitchActiveContextTarget {
   orgId: OrgId;
   staffId: number;
 }
 
-export interface SwitchActiveContextResult {
+interface SwitchActiveContextResult {
   /** True when an active, non-revoked session row was re-pointed. */
   updated: boolean;
 }

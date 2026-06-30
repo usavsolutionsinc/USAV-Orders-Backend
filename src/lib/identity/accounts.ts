@@ -194,7 +194,7 @@ export interface MergeAccountSnapshot {
   mergedInto: string | null;
 }
 
-export interface MergeAccountsResult {
+interface MergeAccountsResult {
   survivorAccountId: string;
   mergedAccountId: string;
   /** True when the merge had already happened (re-run was a no-op). */

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { AnchoredLayer } from '@/design-system';
+import { cn } from '@/utils/_cn';
 
 export interface SelectOption {
   value: string;
@@ -16,6 +17,9 @@ interface Props {
   disabled?: boolean;
   placeholder?: string;
   align?: 'left' | 'right';
+  /** `field` matches form inputs (h-10, rounded-xl); `compact` is the queue/header chip. */
+  size?: 'compact' | 'field';
+  className?: string;
 }
 
 /** Small headless dropdown used for the status / priority / assignee pickers. */
@@ -26,18 +30,26 @@ export function ZendeskSelect({
   disabled,
   placeholder = 'Select',
   align = 'left',
+  size = 'compact',
+  className,
 }: Props) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value) ?? null;
+  const isField = size === 'field';
 
   return (
-    <div ref={wrapperRef} className="relative">
+    <div ref={wrapperRef} className={cn('relative', className)}>
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="ds-raw-button inline-flex max-w-[180px] items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-caption font-bold text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50"
+        className={cn(
+          'ds-raw-button flex w-full items-center justify-between gap-2 border border-gray-300 bg-white text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-50',
+          isField
+            ? 'h-10 min-h-10 rounded-xl px-3 text-[13px] font-semibold outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
+            : 'inline-flex max-w-[180px] gap-1.5 rounded-lg px-2.5 py-1.5 text-caption font-bold',
+        )}
       >
         <span className="truncate">{selected ? selected.label : placeholder}</span>
         <svg

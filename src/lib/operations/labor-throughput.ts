@@ -39,7 +39,7 @@ export interface StaffHoursRow {
   laborHours: number;
 }
 
-export interface PerStaffThroughput {
+interface PerStaffThroughput {
   staffId: number;
   staffName: string;
   unitsProcessed: number;
@@ -47,14 +47,14 @@ export interface PerStaffThroughput {
   unitsPerLaborHour: number;
 }
 
-export interface LaborThroughputResult {
+interface LaborThroughputResult {
   unitsProcessed: number;
   laborHours: number;
   unitsPerLaborHour: number;
   perStaff: PerStaffThroughput[];
 }
 
-export interface LaborThroughputWindow {
+interface LaborThroughputWindow {
   from: Date;
   to: Date;
 }

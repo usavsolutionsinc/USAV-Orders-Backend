@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEventBridge } from '@/hooks';
-import { dashboardShippedQuery, dashboardShippedWeekQuery } from '@/lib/queries/dashboard-queries';
+import { dashboardShippedQuery, dashboardShippedWeekQuery, SHIPPED_WEEK_PAGE_SIZE } from '@/lib/queries/dashboard-queries';
 import { useShippedWeekBuckets } from './useShippedWeekBuckets';
 import { getRecentWeekBuckets } from '@/lib/dashboard-week-range';
 import { toPSTDateKey } from '@/utils/date';
@@ -46,9 +46,6 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     statusFilter,
     obStatus,
     matchesOutbound,
-    hasDateRange,
-    dateFrom,
-    dateTo,
   } = filters;
 
   const queryClient = useQueryClient();
@@ -60,6 +57,16 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
   // week-bucketed, so that mode stays a single query.
   const allTimeMode = !effectiveWeekStart || !effectiveWeekEnd;
 
+  // "Load more" paging: each step raises the per-week (and all-time) row ceiling
+  // by one page. Reset to page 1 whenever the window / filters change so a new
+  // view never inherits a stale expanded ceiling.
+  const [pageMultiplier, setPageMultiplier] = useState(1);
+  const fetchLimit = pageMultiplier * SHIPPED_WEEK_PAGE_SIZE;
+  useEffect(() => {
+    setPageMultiplier(1);
+  }, [effectiveWeekStart, effectiveWeekEnd, effPackedBy, effTestedBy, effStaffId, shippedFilter, normalizedSearch]);
+  const loadMore = useCallback(() => setPageMultiplier((m) => m + 1), []);
+
   const weekBuckets = useShippedWeekBuckets({
     rangeStart: effectiveWeekStart,
     rangeEnd: effectiveWeekEnd,
@@ -68,6 +75,7 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     staffId: effStaffId ?? undefined,
     shippedFilter,
     enabled: !normalizedSearch && !allTimeMode,
+    limit: fetchLimit,
   });
 
   const allTimeQuery = useQuery({
@@ -78,6 +86,7 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
       testedBy: effTestedBy,
       staffId: effStaffId ?? undefined,
       shippedFilter,
+      limit: fetchLimit,
     }),
     enabled: !normalizedSearch && allTimeMode,
     placeholderData: (previousData) => previousData,
@@ -90,14 +99,20 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
     isFetching: allTimeMode ? allTimeQuery.isFetching : weekBuckets.isFetching,
   };
 
-  // Warm the cache on idle so the common period presets (this/last week,
-  // this/last month) resolve INSTANTLY instead of cold-fetching on click.
-  // Prefetch shares the week-query factory, so a warmed week is the exact entry
-  // the bucket query later reads — past weeks fetch at most once per session.
+  // Warm the cache on idle so the common period presets (this/last week)
+  // resolve INSTANTLY instead of cold-fetching on click. Prefetch shares the
+  // week-query factory, so a warmed week is the exact entry the bucket query
+  // later reads — past weeks fetch at most once per session.
+  //
+  // Scope: only the 2 most-recent weeks (this/last). The `/api/packerlogs`
+  // query is lateral-heavy (~12 correlated subqueries per row), so each warmed
+  // week is a real DB/Neon cost; warming 9 weeks on every dashboard mount was
+  // ~7 extra cold queries a user rarely scrolls back to. Older weeks still warm
+  // lazily on first navigation (and then cache at staleTime: Infinity).
   useEffect(() => {
     if (normalizedSearch) return undefined;
     const warm = () => {
-      for (const { weekStart, weekEnd } of getRecentWeekBuckets(9)) {
+      for (const { weekStart, weekEnd } of getRecentWeekBuckets(2)) {
         void queryClient.prefetchQuery(
           dashboardShippedWeekQuery({
             weekStart,
@@ -145,16 +160,21 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
 
   const fetchedRecords = allTimeMode ? allTimeQuery.data ?? [] : weekBuckets.rows;
 
-  // Week buckets fetch whole Mon–Sun weeks; when the user picked an explicit
-  // range, clip the merged rows to exactly [dateFrom, dateTo] by packed day.
-  // Plain week navigation shows the full week bucket (no clip).
+  // Clip the merged rows to the ACTIVE window — the selected week OR explicit
+  // calendar range (both surface as effectiveWeekStart/End). The packerlogs week
+  // query pads its scan window by ±1–2 days for timezone safety, so without this
+  // clip the previous/next day leaks into a week view (the pill says "Jun 22–26"
+  // but Jun 27–29 rows bleed in). Clipping by packed day hides everything outside
+  // the selected period. All-time / carrier-filter mode (empty window) is left
+  // unclipped on purpose — it is intentionally not date-scoped.
   const rawRecords = useMemo(() => {
-    if (!hasDateRange) return fetchedRecords;
+    if (!effectiveWeekStart || !effectiveWeekEnd) return fetchedRecords;
     return fetchedRecords.filter((r) => {
-      const key = toPSTDateKey(String((r as { created_at?: string }).created_at ?? ''));
-      return key !== '' && key >= dateFrom && key <= dateTo;
+      const src = r as { created_at?: string; effShipTime?: string };
+      const key = toPSTDateKey(String(src.created_at || src.effShipTime || ''));
+      return key !== '' && key >= effectiveWeekStart && key <= effectiveWeekEnd;
     });
-  }, [fetchedRecords, hasDateRange, dateFrom, dateTo]);
+  }, [fetchedRecords, effectiveWeekStart, effectiveWeekEnd]);
   const dedupedRecords = useMemo(() => dedupeShippedRecords(rawRecords), [rawRecords]);
 
   const typeFilteredRecords = useMemo(() =>
@@ -229,5 +249,19 @@ export function useShippedTableRecords(filters: ShippedTableFilters) {
   const searchMeta = searchResult.data?.meta ?? null;
   const isResolvingSearch = searchResult.isFetching && normalizedSearch.length > 0;
 
-  return { query, derivedRecords, searchMeta, isResolvingSearch };
+  // Truncation surfacing (non-search only): a week/all-time fetch that filled its
+  // ceiling has more rows on the server. Expose it + a loader so the table can
+  // offer an explicit "Load more" instead of silently dropping the older tail.
+  const isTruncated = normalizedSearch
+    ? false
+    : allTimeMode
+      ? (allTimeQuery.data?.length ?? 0) >= fetchLimit
+      : weekBuckets.truncated;
+  const pagination = {
+    isTruncated,
+    loadMore,
+    isLoadingMore: query.isFetching && pageMultiplier > 1,
+  };
+
+  return { query, derivedRecords, searchMeta, isResolvingSearch, pagination };
 }

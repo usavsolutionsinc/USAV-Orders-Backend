@@ -1,8 +1,15 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useReducedMotion, type Variants } from 'framer-motion';
 import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
-import { staggerRevealContainer } from '@/design-system/primitives/StaggerReveal';
+import {
+  STAGGER_REVEAL_STEP,
+  staggerRevealContainer,
+  staggerRevealItem,
+  staggerRevealRiseItem,
+  staggerRevealSidebarItem,
+} from '@/design-system/primitives/StaggerReveal';
 import { useSidebarRail } from './rail-shell/useSidebarRail';
 import { RailEditPencil } from './rail-shell/RailEditPencil';
 import { RailRow } from './rail-shell/RailRow';
@@ -27,21 +34,55 @@ export { RailPopover } from './rail-shell/RailPopover';
 
 export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
   const {
+    queryKey,
     selectedId,
     eyebrowTitle, eyebrowSuffix, eyebrowAction, emptyText = 'No recent activity yet.',
     staggerReveal = false,
-    getId, getActivityAt, onSelect, getStatusDot, getStatusDotLabel,
+    staggerRevealMotion = 'sidebar',
+    getId, getReconcileId, getActivityAt, onSelect, getStatusDot, getStatusDotLabel,
     renderRowMain, renderPopover,
   } = props;
+  // Durable render key (see SidebarRailShellProps.getReconcileId): keeps an
+  // optimistic stub and its resolved row as the SAME element so the swap is an
+  // in-place update, not a remount. Defaults to the numeric id.
+  const rowKey = (row: TRow): string | number => (getReconcileId ? getReconcileId(row) : getId(row));
 
   const {
-    editMode, isLoading, rows, topCount, grouped,
+    editMode, showSkeleton, isFetching, rows, topCount, grouped,
     collapsedGroups, toggleGroup, listRef, focusIndex, setFocusIndex,
-    handleKeyDown, handleEditClick,
+    handleKeyDown, handleEditClick, getRowDisabled,
   } = useSidebarRail(props);
 
+  const queryKeySig = JSON.stringify(queryKey);
+  const staggerEligibleRef = useRef(true);
+  useEffect(() => {
+    staggerEligibleRef.current = true;
+  }, [queryKeySig]);
+  // Stagger only on the first paint for this query key — remounting the cascade
+  // on every refetch reads as a loading↔loaded flash.
+  const staggerActive = staggerReveal && staggerEligibleRef.current && rows.length > 0 && !showSkeleton;
+  useEffect(() => {
+    if (!staggerActive) return;
+    const id = requestAnimationFrame(() => {
+      staggerEligibleRef.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [staggerActive]);
+
+  const reduceMotion = useReducedMotion();
+  const staggerItemVariants: Variants | undefined = staggerReveal
+    ? reduceMotion
+      ? { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.001 } }, exit: { opacity: 0 } }
+      : staggerRevealMotion === 'slide'
+        ? staggerRevealItem
+        : staggerRevealMotion === 'rise'
+          ? staggerRevealRiseItem
+          : staggerRevealSidebarItem
+    : undefined;
+  const staggerContainerVariants = staggerRevealContainer(reduceMotion ? 0 : STAGGER_REVEAL_STEP);
+
   return (
-    <section className="border-t border-gray-100 bg-white">
+    <section className="min-w-0 border-t border-gray-100 bg-white">
       <div className={`flex items-center justify-between ${SIDEBAR_GUTTER} py-1`}>
         <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">
           {eyebrowTitle} · {topCount}
@@ -62,7 +103,7 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
           ) : null}
         </div>
       </div>
-      {isLoading && rows.length === 0 ? (
+      {showSkeleton ? (
         <div className={`space-y-1 ${SIDEBAR_GUTTER} py-2`}>
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-9 w-full animate-pulse rounded-md bg-gray-100" />)}
         </div>
@@ -71,18 +112,19 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
       ) : (
         <motion.ul
           ref={listRef}
-          className={`${SIDEBAR_GUTTER} py-1 outline-none`}
+          className={`${SIDEBAR_GUTTER} py-1 outline-none ${isFetching ? 'opacity-90' : ''}`}
           role="listbox"
           aria-label={`${eyebrowTitle} activity`}
+          aria-busy={isFetching || undefined}
           tabIndex={0}
           onKeyDown={handleKeyDown}
-          {...(staggerReveal
-            ? { initial: 'hidden' as const, animate: 'show' as const, variants: staggerRevealContainer() }
+          {...(staggerActive
+            ? { initial: 'hidden' as const, animate: 'show' as const, variants: staggerContainerVariants }
             : {})}
         >
           {/* `initial` enabled only for the reveal so the first-load cascade plays;
               otherwise AnimatePresence suppresses the initial mount animation. */}
-          <AnimatePresence initial={staggerReveal}>
+          <AnimatePresence initial={staggerActive}>
             {rows.flatMap((row, idx) => {
               const g = grouped[idx];
               const isCollapsed = g.groupId != null && collapsedGroups.has(g.groupId);
@@ -92,15 +134,17 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
               const nodes: React.ReactElement[] = [];
               if (showExpandedHeader) {
                 nodes.push(
-                  <PkgGroupHeader key={`pkg-${g.groupId}`} groupSize={g.groupSize} isCollapsed={false} staggerReveal={staggerReveal} onToggle={() => toggleGroup(g.groupId as number)} />,
+                  <PkgGroupHeader key={`pkg-${g.groupId}`} groupSize={g.groupSize} isCollapsed={false} staggerCascade={staggerActive} staggerItemVariants={staggerItemVariants} onToggle={() => toggleGroup(g.groupId as number)} />,
                 );
               }
               nodes.push(
                 <RailRow
-                  key={getId(row)}
+                  key={rowKey(row)}
                   row={row}
                   index={idx}
-                  staggerReveal={staggerReveal}
+                  staggerCascade={staggerActive}
+                  staggerItemVariants={staggerItemVariants}
+                  isDisabled={getRowDisabled?.(row) ?? false}
                   isSelected={getId(row) === selectedId}
                   isFocused={idx === focusIndex}
                   editActive={editMode.active}
@@ -116,6 +160,7 @@ export function SidebarRailShell<TRow>(props: SidebarRailShellProps<TRow>) {
                   renderRowMain={renderRowMain}
                   renderPopover={renderPopover}
                   onClick={(e) => {
+                    if (getRowDisabled?.(row)) return;
                     setFocusIndex(idx);
                     if (editMode.active) handleEditClick(idx, e?.shiftKey ?? false);
                     else onSelect(row);

@@ -16,7 +16,7 @@ export interface ResolvedSkuCatalog {
  * SKU string (sku-reconciliation plan, Step B — color axis). Additive: the
  * resolution itself is unchanged; this just attaches a read-only variant view.
  */
-export interface ResolvedSkuCatalogWithColor extends ResolvedSkuCatalog {
+interface ResolvedSkuCatalogWithColor extends ResolvedSkuCatalog {
   /** Decoded color variant (`-B` → Black) or null when no confirmed color. */
   colorVariant: SkuColorVariant | null;
 }

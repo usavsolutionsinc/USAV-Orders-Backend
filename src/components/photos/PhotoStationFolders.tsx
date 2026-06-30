@@ -45,16 +45,31 @@ const ICONS: Record<string, IconCmp> = {
 export function PhotoStationFolders({
   activeScope,
   activeImageType,
+  inferredScope = null,
   onSelect,
 }: {
   activeScope: PhotoLibrarySourceScope;
   /** Active custom image type key, or null when a built-in scope is active. */
   activeImageType: string | null;
+  /**
+   * Scope derived from the photos currently in view (their entity links), used to
+   * highlight the matching built-in row when no scope is explicitly picked — e.g.
+   * an unboxing PO folder lights up "Unboxing" under the "All photos" scope.
+   */
+  inferredScope?: PhotoLibrarySourceScope | null;
   /** Built-in → `{ scope }`; custom → `{ imageType }`. */
   onSelect: (sel: { scope?: PhotoLibrarySourceScope; imageType?: string }) => void;
 }) {
   const { builtIn, custom, isLoading, createType } = useImageTypes();
   const [adding, setAdding] = useState(false);
+  // The row to light up: an explicitly-picked scope wins; otherwise fall back to
+  // the scope inferred from the photos in view. A custom image type being active
+  // suppresses the built-in highlight entirely.
+  const highlightScope: PhotoLibrarySourceScope | null = activeImageType
+    ? null
+    : activeScope !== 'all'
+      ? activeScope
+      : inferredScope;
 
   const addType = async () => {
     const label = window.prompt('New image type name')?.trim();
@@ -87,7 +102,7 @@ export function PhotoStationFolders({
 
       <ul className="space-y-1">
         {builtIn.map((type) => {
-          const active = activeScope === type.key && !activeImageType;
+          const active = highlightScope === type.key;
           const Icon = ICONS[type.icon] ?? Folder;
           return (
             <TypeRow

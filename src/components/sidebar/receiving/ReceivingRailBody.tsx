@@ -2,19 +2,17 @@
 
 /**
  * Rail selector for the receiving sidebar's scrollable body. Picks the right
- * rail for the active mode + Unbox sub-view:
+ * feed for the active mode + Unbox sub-view:
  *   - history → none (the right-pane table is filtered via URL params instead)
- *   - triage  → Found/Unfound triage body (scan input doubles as filter)
- *   - unbox   → Recent / Queue (priority-sorted) / Viewed (per-staff recents)
+ *   - triage  → Triage/Prioritize/Unfound body
+ *   - unbox   → Unboxed (unboxRecent) / Queue (scanned) / Viewed (per-staff)
  *
- * Incoming has its own dedicated sidebar (IncomingSidebarPanel) handled upstream.
- * Extracted from ReceivingSidebarPanel.
+ * Unbox rails paint scan results via a single cache upsert on resolve (no
+ * tracking# importing stub). Triage keeps the importing-row reconcile path.
  */
 
 import { TriageSidebarBody } from '@/components/sidebar/receiving/TriageSidebarBody';
-import { ReceivingRecentRail } from '@/components/sidebar/receiving/ReceivingRecentRail';
-import { ReceivingViewedRail } from '@/components/sidebar/receiving/ReceivingViewedRail';
-import { ReceivingScannedRail } from '@/components/sidebar/receiving/ReceivingScannedRail';
+import { ReceivingFeedRail } from '@/components/sidebar/receiving/ReceivingFeedRail';
 import type { ReceivingMode } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { UnboxView } from '@/components/sidebar/receiving/useReceivingMode';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
@@ -33,11 +31,14 @@ export function ReceivingRailBody({
   selectedLine,
   triageFilterText,
 }: ReceivingRailBodyProps) {
-  // Keep the (possibly negative) id so each rail's auto-select stays suppressed
-  // while a line/carton is open — but never hand a rail the synthetic
-  // unmatched-carton stub (negative id) as a pinnable row.
   const selectedLineId = selectedLine?.id ?? null;
-  const selectedRow = selectedLine && selectedLine.id > 0 ? selectedLine : null;
+  // Unfound cartons are lineless stubs (negative id) but still open a workspace
+  // keyed on receiving_id — pass them through so the rail highlight + pin stay
+  // in sync with the right pane (mirrors triage's resolvedLine reconcile path).
+  const selectedRow =
+    selectedLine && (selectedLine.id > 0 || selectedLine.receiving_id != null)
+      ? selectedLine
+      : null;
 
   if (mode === 'history') return null;
 
@@ -46,17 +47,17 @@ export function ReceivingRailBody({
       <TriageSidebarBody
         selectedLineId={selectedLineId}
         selectedRow={selectedRow}
+        resolvedLine={selectedLine}
         filterText={triageFilterText}
       />
     );
   }
 
   if (unboxView === 'queue') {
-    // The same priority-sorted Scanned rail the triage Prioritize tab uses
-    // (unfound/untagged first, then amazon → ebay → goodwill).
     return (
-      <ReceivingScannedRail
+      <ReceivingFeedRail
         key="rail-unbox-queue"
+        feed="unboxQueue"
         scope="unbox"
         selectedLineId={selectedLineId}
         selectedRow={selectedRow}
@@ -65,10 +66,10 @@ export function ReceivingRailBody({
   }
 
   if (unboxView === 'viewed') {
-    // The lines THIS operator recently opened (server-backed per-staff recents).
     return (
-      <ReceivingViewedRail
+      <ReceivingFeedRail
         key="rail-unbox-viewed"
+        feed="viewed"
         selectedLineId={selectedLineId}
         selectedRow={selectedRow}
       />
@@ -76,8 +77,9 @@ export function ReceivingRailBody({
   }
 
   return (
-    <ReceivingRecentRail
+    <ReceivingFeedRail
       key="rail-unbox-recent"
+      feed="unboxRecent"
       selectedLineId={selectedLineId}
       selectedRow={selectedRow}
     />

@@ -27,7 +27,7 @@ let addedSeq = 0;
 export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   const { open, onClose, photos, defaultMode, defaultTicketId, defaultTicketSubject, onDone } = props;
 
-  const [mode, setMode] = useState<ClaimMode>(defaultMode ?? 'create');
+  const [mode, setMode] = useState<ClaimMode>(defaultMode ?? 'update');
 
   // ── Create fields ──────────────────────────────────────────────────────────
   const [subject, setSubject] = useState('');
@@ -58,7 +58,7 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
   useEffect(() => {
     if (open && !booted.current) {
       booted.current = true;
-      setMode(defaultMode ?? (defaultTicketId ? 'update' : 'create'));
+      setMode(defaultMode ?? 'update');
       setTicket(
         defaultTicketId
           ? { id: defaultTicketId, subject: defaultTicketSubject ?? null, status: 'open', priority: null }
@@ -77,7 +77,7 @@ export function useZendeskClaimController(props: ZendeskClaimModalProps) {
     }
     if (!open && booted.current) {
       booted.current = false;
-      setMode(defaultMode ?? 'create');
+      setMode(defaultMode ?? 'update');
       setSubject('');
       setDescription('');
       setPriority('normal');

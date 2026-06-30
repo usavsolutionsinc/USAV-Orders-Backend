@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import pool from '@/lib/db';
 import { db } from '@/lib/drizzle/db';
 import { packerLogs } from '@/lib/drizzle/schema';
@@ -9,6 +9,7 @@ import { createStationActivityLog } from '@/lib/station-activity';
 import { createAuditLog } from '@/lib/audit-logs';
 import { withAuth } from '@/lib/auth/withAuth';
 import { fetchPackerLogRows, type PackerLogsTrackingFilter } from '@/lib/neon/packer-logs-week';
+import { computePackerLogEnrichment } from '@/lib/neon/packer-log-enrichment';
 import { attachPhotoWithLegacyUrl } from '@/lib/photos/service';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 
@@ -116,6 +117,18 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         // Bust both packerlogs and orders caches: is_packed is computed in /api/orders,
         // so creating a new packer log must clear the orders cache too.
         await invalidateCacheTags(['packing-logs', 'orders']);
+
+        // Precompute the shipped-table read model for this new PACK scan so the
+        // dashboard reads it from packer_log_enrichment instead of re-running the
+        // heavy title/order laterals. Deferred + best-effort: never blocks or
+        // fails the response (the read path degrades gracefully if it's absent).
+        if (salId != null) {
+            after(() =>
+                computePackerLogEnrichment(pool, [salId]).catch((e) =>
+                    console.warn('[packerlogs.post] enrichment compute failed', e),
+                ),
+            );
+        }
         return NextResponse.json(newLog[0]);
     } catch (error: any) {
         console.error('Error creating packer log:', error);

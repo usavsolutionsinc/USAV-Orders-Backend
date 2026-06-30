@@ -52,15 +52,18 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
               rl.item_name,
               rl.quantity_expected,
               rl.quantity_received,
-              rl.qa_status,
+              rlt.qa_status,
               rl.workflow_status,
-              rl.condition_grade,
+              rlt.condition_grade,
               rl.notes,
               rl.updated_at::text  AS updated_at,
               rl.created_at::text  AS created_at,
               sc.image_url,
               ${sqlLinePhotoCount('rl.id', 'rl.organization_id')}::int AS item_photo_count
          FROM receiving_lines rl
+         LEFT JOIN receiving_line_testing rlt
+              ON rlt.receiving_line_id = rl.id
+             AND rlt.organization_id = rl.organization_id
          LEFT JOIN receiving r ON (
               (r.id = rl.receiving_id
                AND r.organization_id = rl.organization_id)
