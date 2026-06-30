@@ -15,15 +15,19 @@ import { UnmatchedItemsSection } from '../UnmatchedItemsSection';
 import { markConditionSet } from '../ReceivingProgressStepper';
 import { ActiveLineConditionSerial } from './ActiveLineConditionSerial';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import type { WorkspaceCapabilities } from '../workspace-capabilities';
 import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
 import type { UnboxLineController } from './unbox-line-controller';
 
 interface LinePoItemsSectionProps {
   row: ReceivingLineRow;
   staffId: string;
-  caps: WorkspaceCapabilities;
   c: UnboxLineController;
+  /** Serial-number entry on the active line (unbox captures serials; triage doesn't). */
+  serialScan: boolean;
+  /** Offer the unmatched-carton "open in unbox" jump (triage hands off to unbox). */
+  openInUnbox: boolean;
+  /** PO-items accordion interactivity — false renders a flat read-only display (triage). */
+  editLines: boolean;
   onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
   /**
@@ -39,8 +43,10 @@ interface LinePoItemsSectionProps {
 export function LinePoItemsSection({
   row,
   staffId,
-  caps,
   c,
+  serialScan,
+  openInUnbox,
+  editLines,
   onItemDescFeedback,
   onItemDescSaved,
   embedded = false,
@@ -57,11 +63,11 @@ export function LinePoItemsSection({
         staffId={staffId}
         embedded={embedded}
         headerRight={headerRight}
-        showSerialScan={caps.serialScan}
+        showSerialScan={serialScan}
         // Triage identifies; unboxing (serials, photos, receive) happens in unbox
         // mode — this jumps there with the carton pre-opened via the recvId deep link.
         onOpenInUnbox={
-          caps.openInUnbox
+          openInUnbox
             ? () => {
                 const params = new URLSearchParams({ recvId: String(row.receiving_id) });
                 if (row.id > 0) params.set('lineId', String(row.id));
@@ -98,7 +104,7 @@ export function LinePoItemsSection({
       headerRight={headerRight}
       // Paint the clicked line instantly on a cold open while siblings fetch.
       placeholderActiveRow={row}
-      readOnly={!caps.editLines}
+      readOnly={!editLines}
       onItemDescFeedback={onItemDescFeedback}
       onItemDescSaved={onItemDescSaved}
       activeConditionOverride={c.isMultiQtyLine ? (c.unitLabelCondition ?? c.cond) : c.cond}
@@ -115,7 +121,7 @@ export function LinePoItemsSection({
           void c.deleteSerialUnit(s.id, lineId);
         },
       }}
-      activeRowSlot={({ serials }) => !caps.serialScan ? null : (
+      activeRowSlot={({ serials }) => !serialScan ? null : (
         <ActiveLineConditionSerial
           serials={serials}
           lineId={row.id}

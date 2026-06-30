@@ -1,5 +1,8 @@
 import pool from '@/lib/db';
 import { recordOpsEvent } from '@/lib/ops-events';
+import { withTenantTransaction } from '@/lib/tenancy/db';
+import type { OrgId } from '@/lib/tenancy/constants';
+import { transitionReceivingLine } from '@/lib/receiving/state-machine';
 
 /** Ops spine event — carton opened via a scan on the Unbox surface. */
 export const UNBOX_SCAN_OPENED_EVENT = 'UNBOX_SCAN_OPENED';
@@ -25,7 +28,19 @@ export const UNBOX_SCAN_OPENED_EXISTS_SQL = UNBOX_OPENED_PREDICATE_SQL;
 
 /**
  * Record that this carton entered the operator's Unbox work queue via a scan.
- * Dual-write: receiving.unbox_opened_at (query SoT) + ops_events (timeline).
+ *
+ * The first scan on the Unbox surface IS the operator-facing "unboxed" event
+ * (scanned → unboxed → received). So this:
+ *   1. Stamps the carton lifecycle: unbox_opened_at (rail filter SoT) AND
+ *      unboxed_at (the "Unboxed" milestone the Overview + rail display) — both
+ *      COALESCE-once, so they record the FIRST unbox scan and never move.
+ *   2. Flips the carton's still-SCANNED lines (ARRIVED/MATCHED) to UNBOXED via
+ *      the guarded chokepoint `transitionReceivingLine` (stamps line unboxed_at +
+ *      coarse status + inventory_event atomically; already-advanced/terminal
+ *      lines are skipped). Idempotent: a re-scan finds no SCANNED lines left.
+ *   3. Appends the UNBOX_SCAN_OPENED ops_event (timeline / rail filter signal).
+ *
+ * All three steps are fail-open (a down sub-step never blocks the scan).
  */
 export async function recordUnboxScanOpened(
   organizationId: string,
@@ -39,6 +54,8 @@ export async function recordUnboxScanOpened(
       `UPDATE receiving
           SET unbox_opened_at = COALESCE(unbox_opened_at, NOW()),
               unbox_opened_by = COALESCE(unbox_opened_by, $3),
+              unboxed_at      = COALESCE(unboxed_at, NOW()),
+              unboxed_by      = COALESCE(unboxed_by, $3),
               updated_at = NOW()
         WHERE id = $1
           AND organization_id = $2::uuid`,
@@ -46,6 +63,39 @@ export async function recordUnboxScanOpened(
     );
   } catch (err) {
     console.warn('[recordUnboxScanOpened] receiving.unbox_opened_at stamp skipped:', err);
+  }
+
+  // Flip this carton's still-SCANNED lines to UNBOXED. One tenant tx; each line
+  // goes through the guarded state-machine chokepoint (never a raw status UPDATE).
+  try {
+    await withTenantTransaction(organizationId as OrgId, async (client) => {
+      const lines = await client.query<{ id: number }>(
+        `SELECT id FROM receiving_lines
+          WHERE receiving_id = $1
+            AND organization_id = $2
+            AND workflow_status IN ('ARRIVED', 'MATCHED')`,
+        [receivingId, organizationId],
+      );
+      for (const { id } of lines.rows) {
+        await transitionReceivingLine(
+          {
+            receivingLineId: id,
+            to: 'UNBOXED',
+            actorStaffId,
+            station: 'RECEIVING',
+            clientEventId:
+              scanId != null
+                ? `unbox-open-transition:${organizationId}:${id}:${scanId}`
+                : `unbox-open-transition:${organizationId}:${id}:manual`,
+            payload: { via: 'unbox_scan_opened' },
+          },
+          client,
+          organizationId as OrgId,
+        );
+      }
+    });
+  } catch (err) {
+    console.warn('[recordUnboxScanOpened] UNBOXED line transition skipped:', err);
   }
 
   const clientEventId =

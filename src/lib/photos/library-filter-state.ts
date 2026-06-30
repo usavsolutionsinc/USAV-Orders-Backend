@@ -36,6 +36,61 @@ export interface PhotoLibraryFilterState {
   pickupId?: string;
   /** Returns RMA number (rma_authorizations.rma_number). */
   rma?: string;
+  /**
+   * Unified PO-photo finder value — one identifier (order#, tracking#, serial#,
+   * or PO#) resolved to its receiving carton, surfacing the whole PO's photos.
+   * Paired with `poFinderKind` (defaults to 'po'). Fed by the sidebar search's
+   * field-scope toggle. See `src/lib/photos/queries/library.ts` → poFinderExists.
+   */
+  poFinder?: string;
+  poFinderKind?: PhotoFinderKind;
+}
+
+/**
+ * Identifier kinds the unified PO-photo finder accepts. 'any' is the smart
+ * scope: resolve the value as serial OR tracking OR order OR PO → that PO's
+ * photos, with a text/OCR fallback. The four specific kinds force one path.
+ */
+export type PhotoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'any';
+
+/** Sidebar search field-scope. 'all' maps to the 'any' finder kind (smart
+ *  resolve across every identifier + text/OCR); the rest force one kind. */
+export type PhotoSearchField = 'all' | 'po' | 'order' | 'tracking' | 'serial';
+
+/** The finder kind a sidebar field-scope resolves to. */
+export function finderKindForField(field: PhotoSearchField): PhotoFinderKind {
+  return field === 'all' ? 'any' : field;
+}
+
+/** The sidebar field-scope a stored finder kind maps back to. */
+export function fieldForFinderKind(kind: PhotoFinderKind | undefined): PhotoSearchField {
+  return !kind || kind === 'any' ? 'all' : kind;
+}
+
+export const PHOTO_SEARCH_FIELDS: readonly PhotoSearchField[] = [
+  'all',
+  'po',
+  'order',
+  'tracking',
+  'serial',
+];
+
+export const PHOTO_SEARCH_FIELD_LABELS: Record<PhotoSearchField, string> = {
+  all: 'All',
+  po: 'PO #',
+  order: 'Order #',
+  tracking: 'Tracking #',
+  serial: 'Serial #',
+};
+
+export function isPhotoFinderKind(value: string | null | undefined): value is PhotoFinderKind {
+  return (
+    value === 'order' ||
+    value === 'tracking' ||
+    value === 'serial' ||
+    value === 'po' ||
+    value === 'any'
+  );
 }
 
 /** Sidebar source folders — mapped to API entity types internally. */
@@ -213,7 +268,8 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
     key:
       | 'dateFrom' | 'dateTo' | 'poRef' | 'receivingId' | 'staffId' | 'q'
       | 'damageDetected' | 'hasAnalysis' | 'imageType' | 'label'
-      | 'tracking' | 'serial' | 'sku' | 'ticketId' | 'pickupId' | 'rma',
+      | 'tracking' | 'serial' | 'sku' | 'ticketId' | 'pickupId' | 'rma'
+      | 'poFinder',
     param: string,
   ) => {
     const v = params.get(param)?.trim();
@@ -236,6 +292,9 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
   set('ticketId', 'ticketId');
   set('pickupId', 'pickupId');
   set('rma', 'rma');
+  set('poFinder', 'poFinder');
+  const finderKind = params.get('poFinderKind')?.trim();
+  if (isPhotoFinderKind(finderKind)) next.poFinderKind = finderKind;
   set('q', 'q');
   set('damageDetected', 'damageDetected');
   set('hasAnalysis', 'hasAnalysis');
@@ -270,6 +329,8 @@ export function photoLibraryFiltersToParams(
     'ticketId',
     'pickupId',
     'rma',
+    'poFinder',
+    'poFinderKind',
     'q',
     'damageDetected',
     'hasAnalysis',
@@ -315,6 +376,7 @@ export function countActivePhotoLibraryFilters(filters: PhotoLibraryFilterState)
   if (filters.ticketId) n++;
   if (filters.pickupId) n++;
   if (filters.rma) n++;
+  if (filters.poFinder) n++;
   if (filters.label) n++;
   if (filters.damageDetected) n++;
   if (filters.hasAnalysis) n++;
@@ -338,6 +400,8 @@ export function clearStructuredPhotoFilters(
     ticketId: undefined,
     pickupId: undefined,
     rma: undefined,
+    poFinder: undefined,
+    poFinderKind: undefined,
     label: undefined,
     damageDetected: undefined,
     hasAnalysis: undefined,

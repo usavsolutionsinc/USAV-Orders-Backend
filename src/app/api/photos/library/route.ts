@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
-import { listPhotoLibrary } from '@/lib/photos/queries/library';
+import { listPhotoLibrary, isPoFinderKind, type PoFinderKind } from '@/lib/photos/queries/library';
 import { searchPhotos } from '@/lib/photos/queries/search';
 import { photoContentUrl } from '@/lib/photos/display-url';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
@@ -70,6 +70,12 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       ticketId: params.get('ticketId') ? Number(params.get('ticketId')) : null,
       pickupId: params.get('pickupId') ? Number(params.get('pickupId')) : null,
       rma: params.get('rma'),
+      // Unified PO-photo finder: resolve order#/tracking#/serial#/po# → carton →
+      // all of that PO's photos. Kind defaults to 'po' in listPhotoLibrary.
+      poFinder: params.get('poFinder'),
+      poFinderKind: isPoFinderKind(params.get('poFinderKind'))
+        ? (params.get('poFinderKind') as PoFinderKind)
+        : null,
       // Split RECEIVING-linked photos by receiving.source: local pickups vs the
       // rest (unboxing). See library-filter-state.receivingSourceForScope.
       receivingSource: params.get('receivingSource'),

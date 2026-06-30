@@ -88,7 +88,11 @@ export const STATIONS: OpsStation[] = [
       'Inbound dock. Scans the incoming carton, matches it to a PO / order, unboxes it, and creates one serial unit per item.',
     activityTypes: ['WS_RECEIVING_CHANGED', 'TRACKING_SCANNED', 'SERIAL_ADDED'],
     handles: ['receivingTracking', 'serial', 'sku', 'zohoItem', 'conditionGrade', 'binLocation'],
-    states: ['EXPECTED', 'ARRIVED', 'MATCHED', 'UNBOXED', 'RECEIVED'],
+    // Operator 3-state lifecycle (Scanned → Unboxed → Received), using valid
+    // inbound_workflow_status_enum keys only — DONE renders as "Received" per the
+    // lifecycle map below. (The old 'RECEIVED' here was not an enum key and showed
+    // as a blank ⓪ in Studio.)
+    states: ['ARRIVED', 'UNBOXED', 'DONE'],
   },
   {
     key: 'TECH',
@@ -335,7 +339,7 @@ export const FLOWS: OpsFlow[] = [
       { stage: 'Incoming', key: 'EXPECTED', station: 'RECEIVING', note: 'On a PO from Zoho — not yet scanned at the dock', signal: 'Zoho PO sync' },
       { stage: 'Scanned', key: 'ARRIVED', station: 'RECEIVING', note: 'Carton scanned in, not yet matched to a PO', signal: 'TRACKING_SCANNED' },
       { stage: 'Matched', key: 'MATCHED', station: 'RECEIVING', note: 'Line linked to a PO/order (shows as “Scanned” in tables)', signal: 'WS_RECEIVING_CHANGED', by: '/api/receiving/match' },
-      { stage: 'Unboxed', key: 'UNBOXED', station: 'RECEIVING', note: 'Units counted out; qty_received ≥ qty_expected', signal: 'SERIAL_ADDED', by: 'receiveLineUnits' },
+      { stage: 'Unboxed', key: 'UNBOXED', station: 'RECEIVING', note: 'First scan on the Unbox surface — carton opened/unboxed', signal: 'UNBOX_SCAN_OPENED', by: 'recordUnboxScanOpened' },
       { stage: 'Awaiting Test', key: 'AWAITING_TEST', station: 'TECH', note: 'Queued for QA (display state; row stays UNBOXED until first verdict)' },
       { stage: 'Testing', key: 'IN_TEST', station: 'TECH', note: 'A tech is actively testing the line', signal: 'TEST_START', by: '/api/serial-units/[id]/test' },
       { stage: 'Passed', key: 'PASSED', station: 'TECH', note: 'All units TESTED, no failures → ready to finalize', signal: 'TEST_PASS' },

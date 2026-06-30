@@ -120,6 +120,12 @@ export interface ReceivingLineRow {
   /** Terminal "Received" (DONE) transition time — receiving_lines.received_done_at;
    *  null until the line is fully received. Distinct from received_at (door scan). */
   received_done_at?: string | null;
+  /** Moment the carton was first opened on the Unbox surface
+   *  (receiving.unbox_opened_at, or the UNBOX_SCAN_OPENED ops_event). This is the
+   *  unbox rail's time-label + sort axis — the SAME value the right-pane Overview
+   *  shows as "Opened for unbox". Distinct from received_at (door scan) and
+   *  scanned_at (first physical scan). Null until the carton is opened in Unbox. */
+  unbox_opened_at?: string | null;
   /** Staff who unboxed (receiving.unboxed_by → staff.name). */
   unboxed_by_name?: string | null;
   /** First tracking scan time (receiving_scans, earliest). */

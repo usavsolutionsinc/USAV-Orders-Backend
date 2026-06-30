@@ -9,24 +9,25 @@
 
 import { CartonContextCard } from './CartonContextCard';
 import { dispatchLineUpdated, type ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import type { WorkspaceCapabilities } from '../workspace-capabilities';
 import type { UnboxLineController } from './unbox-line-controller';
 
 interface LineCartonContextSectionProps {
   row: ReceivingLineRow;
   staffId: string;
-  caps: WorkspaceCapabilities;
   c: UnboxLineController;
 }
 
-export function LineCartonContextSection({ row, staffId, caps, c }: LineCartonContextSectionProps) {
+// The carton-context card (photos + claim) is identical in unbox and triage —
+// both always show the staff photo row and the Claim action — so this section
+// needs no mode/variant input.
+export function LineCartonContextSection({ row, staffId, c }: LineCartonContextSectionProps) {
   return (
     <CartonContextCard
       receivingId={row.receiving_id ?? null}
       staffId={staffId}
       isUnmatched={row.receiving_source === 'unmatched'}
-      showStaffPhotoRow={caps.photos}
-      onMakeClaim={caps.claim ? () => c.setClaimModalOpen(true) : undefined}
+      showStaffPhotoRow
+      onMakeClaim={() => c.setClaimModalOpen(true)}
       listingLink={c.listingLink}
       setListingLink={c.setListingLink}
       listingEditorOpen={c.listingEditorOpen}

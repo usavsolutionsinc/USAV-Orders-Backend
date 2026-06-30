@@ -1,0 +1,1164 @@
+# Bose Product Manual Library — Comprehensive Product Tree
+
+> Source path: `/Volumes/USAV Media/1 Manual/1 Bose Manual`  
+> Generated: 2026-06-30  
+> Scope: **13 top-level product families**, **357 folders**, **745 files**
+
+This tree mirrors the on-disk folder taxonomy exactly. Folders are product families → model lines → series/variants → individual SKUs. Five-digit codes in `SKU` tags are the internal product/SKU numbers.
+
+---
+
+## Top-level product families
+
+- **1 Templates**
+- **All Wave Music Systems**
+- **Controller**
+- **Pro Speaker**
+- **Remotes**
+- **Smart - Home : SoundBars**
+- **Solo**
+- **Sound-**
+- **Stands : Wall Mounts**
+- **Stereo : BookShelf : Environmental**
+- **Systems**
+- **Wave CD Drive**
+- **Wireless**
+
+---
+
+## Full taxonomy
+
+- **1 Templates**  _(2 files)_
+  - Label 3x10.docx
+  - QR Code Manual.docx
+- **All Wave Music Systems**  _(78 files)_
+  - **Accessories**  _(36 files)_
+    - **Multi CD Changer**  _(11 files)_
+      - **ISO Update CD Series II 00752** `SKU 00752`  _(2 files)_
+        - Manual code Multi CD Changer.docx
+        - PED_BP_FW_02.01.01_discupdate.bin
+      - **Manual PDF**  _(1 file)_
+        - og_wms_mdc.pdf
+      - **Series II 00977** `SKU 00977`  _(2 files)_
+        - Manual Code CD Changer II.docx
+        - SPECIAL NOTE FOR CD CHANGER SERIES II.docx
+      - **Series III 01674** `SKU 01674`  _(1 file)_
+        - Manual Code CD Changer III.docx
+      - **Set-up Screen Shots & Labels**  _(5 files)_
+        - CD Label + Manual.docx
+        - CD Label.docx
+        - Manual.docx
+        - Screen Shot 2019-12-17 at 9.17.51 AM.png
+        - Screen Shot 2023-05-02 at 4.44.07 PM.png
+    - **Soundlink Adapter(s)**  _(10 files)_
+      - **CD Update Order 03796** `SKU 03796`  _(1 file)_
+        - Update CD Manual.png
+      - **ISO CD Update Series II**  _(2 files)_
+        - **BAK**  _(1 file)_
+          - Wave MS System Update CD for wave Soundlink.iso
+        - Wave MS System Update CD for wave Soundlink.iso
+      - **Manual PDF**  _(2 files)_
+        - og_wave-bma_en.pdf
+        - wave_sl_adapt_og.pdf
+      - **Series II 03795** `SKU 03795`  _(3 files)_
+        - Bose QR Code Manual   .docx
+        - Connecting a Bose Wave Soundlink Adapter.docx
+        - Series II - SPECIAL NOTE FOR WAVE BLUETOOTH ADAPTER.docx
+      - **Series III & IV 01244** `SKU 01244`  _(2 files)_
+        - Bose QR Code Manual.docx
+        - Connecting a Bose Wave Bluetooth Adapter.docx
+    - **SoundTouch**  _(15 files)_
+      - **Adapter (SM-2) 01695** `SKU 01695`  _(2 files)_
+        - Manuals RESET  SoundTouch®  wireless adapter .docx
+        - NOT BRAND NEW - DO NOT OPEN.docx
+      - **Manual PDF**  _(8 files)_
+        - **Series III**  _(4 files)_
+          - Reset  Wave Soundtouch Music System III IV.pdf
+          - Sound_touch III manual.pdf
+          - Wave ST_guide.pdf
+          - wms_III_PDF_ownersguide_EN.pdf
+        - **Series IV**  _(4 files)_
+          - 785174_og_wave-soundtouch-music-system-bundle_en.pdf
+          - 785180_og_wave-soundtouch-music-system-bundle_en.pdf
+          - Bose Wave WiFi Bluetooth SoundTouch Pedestal IV.pdf
+          - qsg_wstiv_ENG_FRE_SPA_GER.pdf
+      - **Series III 01377** `SKU 01377`  _(2 files)_
+        - Bose ST III note.docx
+        - Manual code wave sound touch MS.docx
+      - **Series IV 01378** `SKU 01378`  _(3 files)_
+        - Manual code 2 pages.docx
+        - Manuals SoundTouch®  wireless adapter.docx
+        - NOT BRAND NEW - DO NOT OPEN.docx
+  - **Acoustic Wave Music System (AWMS)**  _(7 files)_
+    - **CD-3000 00008** `SKU 00008`  _(1 file)_
+      - Bose QR Code Manual Acoustics Wave CD 3000.docx
+    - **Series II**  _(5 files)_
+      - **CD Changer**  _(1 file)_
+        - Bose QR Code Manual Wave Acoustic II CD Changer.docx
+      - **Manual PDF**  _(2 files)_
+        - owg_en_awms_series2.pdf
+        - qrcode_assets.bose.com.png
+      - **Series II 04788** `SKU 04788`  _(1 file)_
+        - Bose QR Code Manual Wave Acoustic II  .docx
+      - **Soundlink Update**  _(1 file)_
+        - FABL_FW_02.01.dmg
+    - **Stock Labels**  _(1 file)_
+      - SKU - 00008 White - Bose Acoustic Wave Music System CD-3000.docx
+  - **Wave Music System (WMS)**  _(35 files)_
+    - **Manual PDF**  _(6 files)_
+      - Bose Wave Radio:CD owg_en_wrcd.pdf
+      - Bose Wave Radio:CD troubleshoot.pdf
+      - owg_en_wr_3.pdf
+      - owg_en_wr_series2.pdf
+      - Series II og_wms.pdf
+      - wms_III_PDF_ownersguide_EN.pdf
+    - **Other**  _(4 files)_
+      - Bose wave music system - CD must be pushed.docx
+      - Bose WMS  AWRCC1 AWRCC2 Motherboard Circuit Board.docx
+      - NOTE Free BT drop ship wave.docx
+      - SPECIAL NOTE FOR WAVE COVERS INSTALL.docx
+    - **Series I**  _(7 files)_
+      - **AM FM Clock Radio (AWR1-1W) 00007** `SKU 00007`  _(3 files)_
+        - Manual code.docx
+        - THIS IS BOSE RADIO ONLY.docx
+        - wrv3_guide.pdf
+      - **Radio:CD (AWRC-1P & AWRC-1G) 00968** `SKU 00968`  _(4 files)_
+        - Manual code 3 pages.docx
+        - Manual code 3- Lien updated May 19 2026.docx
+        - og_wrcd.pdf
+        - Trouble Shooting.docx
+    - **Series II**  _(5 files)_
+      - **Music System (AWRCC1 & AWRCC2) 00004** `SKU 00004`  _(1 file)_
+        - Manual code II.docx
+      - **Radio Only (AWR1B2) 01059** `SKU 01059`  _(4 files)_
+        - **Ebay**  _(1 file)_
+          - Ebay USAV Bose without CD player.docx
+        - Manual code Wave Radio II - Lien updated May 19 2026.docx
+        - Manual code.docx
+        - THIS IS BOSE RADIO ONLY.docx
+    - **Series III**  _(5 files)_
+      - **Music System 00958** `SKU 00958`  _(2 files)_
+        - Manual code wms III - Lien updated May 19 2026.docx
+        - Manual code wms III.docx
+      - **Radio Only 05040** `SKU 05040`  _(3 files)_
+        - Manual code Radio III - Lien updated May 19 2026.docx
+        - Manual code.docx
+        - THIS IS BOSE RADIO ONLY.docx
+    - **Series IV**  _(8 files)_
+      - **Music System 00106** `SKU 00106`  _(3 files)_
+        - AM745087_OG_WMSIV-SPEAKERWAVE_enUS.pdf
+        - Manual Wave MS IV - Lien updated May 19 2026.docx
+        - Manual Wave MS IV.docx
+      - **Radio Only 03773** `SKU 03773`  _(5 files)_
+        - Manual ST IV for Wave Radio IV.docx
+        - Manual ST IV for Wave Radio IV.pdf
+        - Manual Wave Radio IV - Lien update June 1st.docx
+        - Manual Wave Radio IV.docx
+        - THIS IS BOSE RADIO ONLY.docx
+- **Controller**  _(1 file)_
+  - Bose Controller SA-4.docx
+- **Pro Speaker**  _(5 files)_
+  - **302A**  _(1 file)_
+    - tds_panaray_302a_loudspeaker (1).pdf
+  - **FreeSpace**  _(3 files)_
+    - **Amplifiers**  _(1 file)_
+      - brochure_FreeSpace_amplifiers.pdf
+    - **DS16F**  _(2 files)_
+      - ig_freespace-iza-190-250_ml.pdf
+      - ig_freespace_ds16f.pdf
+  - **L1**  _(1 file)_
+    - tds_l1_model1s.pdf
+  - **S1 Pro+**  _(0 files)_
+- **Remotes**  _(24 files)_
+  - **AV18**  _(2 files)_
+    - Bose RC Manual.docx
+    - Bose remote control  RC18 ALL.docx
+  - **AV28**  _(1 file)_
+    - Bose RC Manual.docx
+  - **AV35 Control Console 01352** `SKU 01352`  _(3 files)_
+    - **Expansion RC-35S2 01857** `SKU 01857`  _(2 files)_
+      - Manual RC-35S2.docx
+      - og_rc35S2_guide_en.pdf
+    - Bose V35 Remote RC35T-L.docx
+  - **AV38 48**  _(1 file)_
+    - Bose RC Manual.docx
+  - **Personal Music Center**  _(10 files)_
+    - **Series II 01150** `SKU 01150`  _(5 files)_
+      - Bose Personal Music Center II manual.pdf
+      - Bose QR Code Manual   .docx
+      - Bose Remote control manual   RC48S2.docx
+      - og_pmcII_guide_en.pdf
+      - RC48S2-27 og_pmcII_guide_en.pdf
+    - **Series III 04783** `SKU 04783`  _(5 files)_
+      - Bose QR Code Manual   .docx
+      - Bose RC-PWSIII Remote Control Devices Code.docx
+      - Manual.docx
+      - SA3_RC18 28S RC manual.pdf
+      - User manual Bose Personal Music Center III (English - 28 pages).pdf
+  - **Solo : CineMate**  _(5 files)_
+    - Bose RC-PWS II (Cine15) Remote Control Devices Code.docx
+    - Bose RC-PWSIII Remote Control Devices Code.docx
+    - How to Program Universal Solo,Cinemate RC-PWSIII.docx
+    - Pair a Bluetooth Device  RC-PWSIII - Bose Solo 5.docx
+    - Solo TV RC Manual.docx
+  - Bose Lifestyle RC Guide.docx
+  - OEM universal RC manual.docx
+- **Smart - Home : SoundBars**  _(8 files)_
+  - **Home**  _(4 files)_
+    - **300 04669** `SKU 04669`  _(2 files)_
+      - Bose Home Speaker 300 packing list copy.docx
+      - Bose Home Speaker 300 QR Code Manual.docx
+    - **500 01928** `SKU 01928`  _(2 files)_
+      - Bose Home Speaker 500 packing list.docx
+      - Bose Home Speaker 500 QR Code Manual.docx
+  - **SoundBar**  _(4 files)_
+    - **300 00874** `SKU 00874`  _(1 file)_
+      - Bose  QR Code Manual   soundbar 300.docx
+    - **700 00871** `SKU 00871`  _(1 file)_
+      - Bose  QR Code Manual   soundbar 700.docx
+    - **900 01639** `SKU 01639`  _(1 file)_
+      - Bose QR Code Manual soundbar 900.docx
+    - **Ultra 04899** `SKU 04899`  _(1 file)_
+      - Smart SoundBar Ultra manual.docx
+- **Solo**  _(28 files)_
+  - **Series II 00875** `SKU 00875`  _(3 files)_
+    - DSP M PL Solo Series II B091BRPJY7 : .docx
+    - SSP M Solo Series II B091BRPJY7 : .docx
+    - SSP PL Solo Series II B091BRPJY7 : .docx
+  - **TV**  _(25 files)_
+    - **15 03745** `SKU 03745`  _(6 files)_
+      - **Series I**  _(2 files)_
+        - Bose  Solo TV OEM  RC Manual.docx
+        - Manual Bose Solo 15 series I Soundbar.docx
+      - **Series II**  _(4 files)_
+        - Bose Solo 15.pdf
+        - Manual Bose Solo 15 series I Soundbar.docx
+        - Manual Bose Solo 15 series II Soundbar.docx
+        - Pair a Bluetooth Device OEM RC-PWSIII - Bose Solo 5.docx
+    - **5 w OEM Universal RC 00836** `SKU 00836`  _(15 files)_
+      - **Remote Control**  _(10 files)_
+        - **RC-PWSIII Solo 5**  _(2 files)_
+          - Bose RC-PWSIII Compatible list.docx
+          - Bose RC-PWSIII Remote Control Devices Code.docx
+        - Bluetooth Label.docx
+        - If you can't turn on Bose System Solo 5, Cinemte II 15.docx
+        - OEM RC PHOTO1.jpg
+        - OEM RC PHOTO2.tif
+        - OEM RC Solo 5 - Cinemate II instruction.docx
+        - Pair a Bluetooth Device  RC-PWSIII - Bose Solo 5.docx
+        - Solo 5 - Cinemate II OEM RC  instruction.docx
+        - Solo 5 BT RC Label.pdf
+      - bose solo 5 manual.pdf
+      - DSP Manual Bose Solo 5 Soundbar.docx
+      - Pair a Bluetooth Device  RC-PWSIII - Bose Solo 5.docx
+      - Pair a Bluetooth Device  RC-PWSIII - Bose Solo 5.pdf
+      - Solo 5 TV packing list.docx
+    - **Remote Codes**  _(2 files)_
+      - Bose remote code.pdf
+      - solo_5_PDF_remote_codes.pdf
+    - **Series I 00843** `SKU 00843`  _(2 files)_
+      - **Remote Control**  _(1 file)_
+        - Solo TV RC Manual.docx
+      - Manual Bose Solo TV .docx
+- **Sound-**  _(112 files)_
+  - **Bar (Non-Smart)**  _(19 files)_
+    - **500 00868** `SKU 00868`  _(1 file)_
+      - Soundbar 500 QR Manual.docx
+    - **LifeSytle 135**  _(8 files)_
+      - **Series I**  _(4 files)_
+        - Bose  QR Code Manual LS 135.docx
+        - Lifestyle 135 packing list.docx
+        - owg_en_ls135.pdf
+        - sg_en_ls135.pdf
+      - **Series III**  _(3 files)_
+        - Bose  QR Code Manual LS 135 III.docx
+        - Lifestyle 135 SERIES 3packing list.docx
+        - owg_en_ls135.pdf
+      - Bose Lifestyle 135 Series Comparision Chart.docx
+    - **SoundTouch**  _(3 files)_
+      - **130 00867-SB** `SKU 00867`  _(1 file)_
+        - Bose Soundtouch 130 system packing list.docx
+      - **300 00825** `SKU 00825`  _(2 files)_
+        - Bose  QR Code Manual   soundtouch sound bar 300.docx
+        - soundtouch-300-soundbar-packing-list.pdf
+    - **TV Speaker 00799** `SKU 00799`  _(3 files)_
+      - 852004_og_tv-speaker_en.pdf
+      - Bose QR Code Manual   .docx
+      - packing list for TV Speaker.docx
+    - **VCS-10 01279** `SKU 01279`  _(4 files)_
+      - **VCS-30**  _(3 files)_
+        - Manual barcode VCS 30.docx
+        - Manual.docx
+        - VCS.docx
+      - Manual.docx
+  - **Dock**  _(14 files)_
+    - **10 00975** `SKU 00975`  _(3 files)_
+      - Manual code SD10 Bluetooth.docx
+      - og_sounddock10.pdf
+      - owg_en_sounddock10btdock.pdf
+    - **iPod Info**  _(2 files)_
+      - Bose Sounddock I II Portable 10 - iPod  compatible list .pdf
+      - What iPod model do you have.docx
+    - **Portable 00113** `SKU 00113`  _(2 files)_
+      - Manual code portable 30 pin.docx
+      - owg_en_sounddock_portable.pdf
+    - **Series I 00111** `SKU 00111`  _(2 files)_
+      - Manual code series 1 30 pin.docx
+      - Sound dock Series I packing list.docx
+    - **Series II 00137** `SKU 00137`  _(1 file)_
+      - Manual code series II 30 pin.docx
+    - **Series III 01394** `SKU 01394`  _(3 files)_
+      - Manual code series III Lightning.docx
+      - og_en_sounddock_series3.pdf
+      - owg_en_sounddock_III.docx
+    - **XT 00967** `SKU 00967`  _(1 file)_
+      - Manual code Sound Dock XT.docx
+  - **Link**  _(11 files)_
+    - **Color**  _(4 files)_
+      - **Series I 04915** `SKU 04915`  _(2 files)_
+        - 724379_og_soundlink-color-bluetooth-speaker_en.pdf
+        - Manual code.docx
+      - **Series II 01642** `SKU 01642`  _(2 files)_
+        - 767473_og_soundlink-color-bluetooth-speaker-ii_en.pdf
+        - Manual code Soundlink Color II.docx
+    - **Mini**  _(4 files)_
+      - **Series I 01134** `SKU 01134`  _(3 files)_
+        - Manual code SL Mini Series 1 (Update Link).docx
+        - Manual code SL Mini Series 1.docx
+        - OG_SLMIN-SPEAKERWIRELESS_enUS.pdf
+      - **Series II 01135** `SKU 01135`  _(1 file)_
+        - Manual code series II.docx
+    - **Mobile**  _(3 files)_
+      - **Series II **  _(1 file)_
+        - Manual code SL Mobile series II.docx
+      - **Series III**  _(2 files)_
+        - OG_SDIII-SPEAKERWIRELESS_enUS.pdf
+        - Soundlink Bluetooth Speaker III.docx
+  - **Touch**  _(68 files)_
+    - **10 : 20 : 30 : Portable - Music System Speakers**  _(15 files)_
+      - **10 01894** `SKU 01894`  _(2 files)_
+        - 785169_og_soundtouch-10-wireless-system_ml.pdf
+        - Bose SoundTouch 10 manual code and packing list.docx
+      - **20**  _(3 files)_
+        - **Series III 05021** `SKU 05021`  _(3 files)_
+          - 801086_og_soundtouch-20-wireless-music-system-bundle_en.pdf
+          - manual code ST 20 series III.docx
+          - manual code ST 20.docx
+      - **30**  _(6 files)_
+        - **Series I**  _(1 file)_
+          - QR Code Manual ST 30 Series I .docx
+        - **Series II 04726** `SKU 04726`  _(3 files)_
+          - Bose SoundTouch 30 Series II Wireless Music System.docx
+          - eo_us_soundtouch_30_partner_20_PDF_ownersguide_EN.pdf
+          - manual code ST 30 series II.docx
+        - **Series III 01370** `SKU 01370`  _(2 files)_
+          - 785170_og_soundtouch-30-music-system-bundle_en.pdf
+          - manual code ST 30 series III.docx
+      - **Portable 00982** `SKU 00982`  _(4 files)_
+        - Bose  QR Soundtouch portable system.dotx
+        - BOSE SOUNDTOUCH PORTABLE - wifi setup.docx
+        - Bose soundtouch portable.docx
+        - qrcode_ST Portable.png
+    - **Systems**  _(29 files)_
+      - **Adapters**  _(3 files)_
+        - **Series II (SM-2) 01695** `SKU 01695`  _(3 files)_
+          - manual code- NEED TO REDO QR CODES.docx
+          - Manuals SoundTouch® Series II wireless adapter.docx
+          - Reset Bose SoundTouch adapter  Lifestyle.docx
+      - **CineMate**  _(8 files)_
+        - **120 00862** `SKU 00862`  _(2 files)_
+          - Bose Soundtouch 120 system.docx
+          - soundtouch 120 QR code.docx
+        - **130 00867** `SKU 00867`  _(4 files)_
+          - Bose Soundtouch 130 system packing list.docx
+          - Manual barcode Cinemate 130.docx
+          - Packing list cinemate 130.docx
+          - soundtouch 130 QR code.docx
+        - **520 01775** `SKU 01775`  _(2 files)_
+          - soundtouch 520 QR code + PL.docx
+          - soundtouch 520 SoundTouch Notedocx.docx
+      - **LifeStyle**  _(18 files)_
+        - **535**  _(17 files)_
+          - **Series I 00916** `SKU 00916`  _(7 files)_
+            - AM753272_00_OP_ST LS 535 525 235 135_AST_MLvo.pdf
+            - AM753273_00_OP_ST LS 535 525 235 135_EU_MLvo.pdf
+            - Bose  QR Code Manual Soundtouch  535  .docx
+            - Bose Lifestyle 135 Series Comparision Chart.docx
+            - Bose LS ST 535  system packing list 1 Box.docx
+            - Bose LS ST 535  system packing list 2 Boxes.docx
+            - Bose LS ST 535  system packing list.docx
+          - **Series II 00792** `SKU 00792`  _(7 files)_
+            - AM753272_00_OP_ST LS 535 525 235 135_AST_MLvo.pdf
+            - AM753273_00_OP_ST LS 535 525 235 135_EU_MLvo.pdf
+            - Bose  QR Code Manual Soundtouch  535  .docx
+            - Bose Lifestyle 135 Series Comparision Chart.docx
+            - Bose LS ST 535  system packing list 1 Box.docx
+            - Bose LS ST 535  system packing list 2 Boxes.docx
+            - Bose LS ST 535  system packing list.docx
+          - **Series III 00857** `SKU 00857`  _(3 files)_
+            - Bose  QR Code Manual LS 535 III.docx
+            - Bose LS 535 III system packing list.docx
+            - og_ls_135_235_525_535_iii_ENG_DAN_GER_DUT_SPA_FIN_FRE_ITA_HUN_POL_POR_NOR.pdf
+        - **SA-4 01709** `SKU 01709`  _(1 file)_
+          - soundTouchController_SM.pdf
+    - **Update Files**  _(14 files)_
+      - **10**  _(1 file)_
+        - Update.stu
+      - **20**  _(2 files)_
+        - **I & II**  _(1 file)_
+          - Update (4).stu
+        - **III**  _(1 file)_
+          - Update (3).stu
+      - **30**  _(1 file)_
+        - Update (1).stu
+      - **520 II SM2**  _(1 file)_
+        - Update.stu
+      - **AV35**  _(6 files)_
+        - **Series I Adapter**  _(1 file)_
+          - Update.stu
+        - **ST Console Software**  _(5 files)_
+          - IMG_8039.jpg
+          - IMG_8040.jpg
+          - IMG_8041.jpg
+          - IMG_8047.jpg
+          - IMG_8049.jpg
+      - **SA-4**  _(1 file)_
+        - Update.stu
+      - **Wave**  _(2 files)_
+        - **III**  _(1 file)_
+          - Update (1).stu
+        - **IV**  _(1 file)_
+          - Update-2.stu
+    - **Wave MS**  _(10 files)_
+      - **Series III 03781** `SKU 03781`  _(6 files)_
+        - Bose ST III note.docx
+        - Manual code- NEED TO REDO QR CODES.docx
+        - Reset  Wave Soundtouch Music System III IV.pdf
+        - Sound_touch III manual.pdf
+        - Wave ST_guide.pdf
+        - wms_III_PDF_ownersguide_EN.pdf
+      - **Series IV 03782** `SKU 03782`  _(4 files)_
+        - 785174_og_wave-soundtouch-music-system-bundle_en.pdf
+        - 785180_og_wave-soundtouch-music-system-bundle_en.pdf
+        - Manual code- NEED TO REDO QR CODES.docx
+        - qsg_wstiv_ENG_FRE_SPA_GER.pdf
+- **Stands : Wall Mounts**  _(79 files)_
+  - **Stands**  _(7 files)_
+    - **650 700 Omni - Jewel**  _(2 files)_
+      - 776267_qsg_omnijewel-ceiling-bracket_ml.pdf
+      - Manual Omnijewel Stand.docx
+    - **UFS 20**  _(4 files)_
+      - ig_en_ufs20_floorstands 2 pages.docx
+      - ig_en_ufs20_floorstands P1.jpg
+      - ig_en_ufs20_floorstands P2.jpg
+      - ig_en_ufs20_floorstands.pdf
+    - **UTS 20**  _(1 file)_
+      - owg_en_uts20_tablestands.pdf
+  - **Wall Mounts**  _(72 files)_
+    - **monopricewallmountmanual photos**  _(6 files)_
+      - IMG_0829.jpg
+      - IMG_0830.jpg
+      - IMG_0831.jpg
+      - IMG_3292.JPG
+      - IMG_3296.JPG
+      - IMG_3297.JPG
+    - **WB-120 wall mount kit _ Manualzz_files**  _(49 files)_
+      - 012601760_1-3f2528e08f41800cdd9e39da3d984712-768x994.png
+      - ads(1).html
+      - ads(2).html
+      - ads(3).html
+      - ads(4).html
+      - ads(5).html
+      - ads.html
+      - analytics.js
+      - bootstrap.css
+      - bootstrap.js
+      - common.css
+      - common.js
+      - cookieconsent.min.css
+      - cookieconsent.min.js
+      - css
+      - css(1)
+      - css(2)
+      - f(1).txt
+      - f(10).txt
+      - f(2).txt
+      - f(3).txt
+      - f(4).txt
+      - f(5).txt
+      - f(6).txt
+      - f(7).txt
+      - f(8).txt
+      - f(9).txt
+      - f.txt
+      - faicons.css
+      - jquery.js
+      - js
+      - logo.svg
+      - manual.html
+      - navbar.css
+      - navbar.js
+      - osd.js
+      - osd_listener.js
+      - pdf.viewer2.js
+      - preload_manual.svg
+      - saved_resource(1).html
+      - saved_resource(2).html
+      - saved_resource(3).html
+      - saved_resource(4).html
+      - saved_resource.html
+      - shopping
+      - viewer_manual.css
+      - w3uW36kZ3iEz52fjwmSMTfWAeiBMgQCjgDc5TerGjFY.js
+      - watch.js
+      - zrt_lookup.html
+    - Bose OMNIJEWEL CEILING BRACKET Manual.docx
+    - Bose WB-120 wall mount.png
+    - bose-slideconnect-wb-50-wall-bracket-owner-s-manual.pdf
+    - IMG_1667.jpg
+    - IMG_1668.jpg
+    - IMG_2761.MOV
+    - Metal SlideConnect Wall bracket For Bose Lifestyle 600 Speaker  manual .docx
+    - monopricewallmountmanual photos.zip
+    - omnijewel-ceiling-bracket_ml.pdf
+    - owg_en_ub20_brackets.pdf
+    - UB-20 II wall mount.docx
+    - UB-20 wall mount.docx
+    - ub20ii_install.pdf
+    - WB-120 wall mount kit _ Manualzz.htm
+    - WB-135.docx
+    - wb3_instructions 1.pdf
+    - wb3_instructions.pdf
+- **Stereo : BookShelf : Environmental**  _(16 files)_
+  - **BookSelf**  _(3 files)_
+    - **141 00976** `SKU 00976`  _(1 file)_
+      - owg_en_141_series1.pdf
+    - **301**  _(2 files)_
+      - **Series V 01380** `SKU 01380`  _(2 files)_
+        - Bose  QR Code Manual 301-V & 2010V Stereo loundspeakers.docx
+        - Bose  QR Code Manual 301-V Stereo loundspeakers.docx
+  - **Environmental**  _(6 files)_
+    - **151 00840** `SKU 00840`  _(1 file)_
+      - Bose 151 Indoor-outdoor Speaker Pair.docx
+    - **151 SE 00999** `SKU 00999`  _(1 file)_
+      - Bose 151 (SE) Indoor-outdoor Speaker Pair.docx
+    - **251 04757** `SKU 04757`  _(3 files)_
+      - Bose 251 Environmental Speaker Pair - Lien updated April 24 2026.docx
+      - Bose 251 Environmental Speaker Pair Manual.pdf
+      - Bose 251 Environmental Speaker Pair.docx
+    - **302A 01753** `SKU 01753`  _(1 file)_
+      - tds_panaray_302a_loudspeaker.pdf
+  - **Stereo**  _(1 file)_
+    - **161 04902** `SKU 04902`  _(1 file)_
+      - Bose QR Code Manual.docx
+  - **Vintage**  _(6 files)_
+    - **802 01262** `SKU 01262`  _(2 files)_
+      - Bose_802.pdf
+      - Bose_802C.pdf
+    - **901 00984** `SKU 00984`  _(4 files)_
+      - **Series IV**  _(1 file)_
+        - 901 IV Equalizer Schematic  (hand drawings).pdf
+      - **Series V**  _(1 file)_
+        - 901v_guide.pdf
+      - **Series VI**  _(1 file)_
+        - 901 VI owners manual.pdf
+      - Bose 901 Connection Diagram.pdf
+- **Systems**  _(364 files)_
+  - **AM Systems 3-16 (ACOUSTIMASS)**  _(44 files)_
+    - **6 : 10 : 15-16**  _(41 files)_
+      - **10**  _(19 files)_
+        - **Series II**  _(2 files)_
+          - Bose  QR Code Manual Acoustimass 10 Series II Home System.docx
+          - BOX 1 OF 2 packing list.docx
+        - **Series III 00946** `SKU 00946`  _(6 files)_
+          - Bose QR Code Manual AM 10 III.docx
+          - BOX 1 OF 2 packing list.docx
+          - Eb AM10 SIII Sep 15 box 2.pdf
+          - Eb AM10 SIII Sep 15.pdf
+          - owg_en_am6_series3_am10_series3.pdf
+          - qsg_en_am6iii-am10iii.pdf
+        - **Series IV 00800** `SKU 00800`  _(5 files)_
+          - **Manual & PL**  _(2 files)_
+            - Bose QR Code Manual AM 10 IV.docx
+            - BOX 1 OF 2 packing list.docx
+          - BOSE Acoustimass® 10 Series IV MANUAL.docx
+          - BOSE Acoustimass® 10 Series IV Set-up.pdf
+          - owg_en_am6_series3_am10_series4.pdf
+        - **Series V 01835** `SKU 01835`  _(6 files)_
+          - 1 Box Packing List.docx
+          - am10_PDF_setupguide_ML.pdf
+          - am6_seriesV_PDF_ownersguide_MULTI.pdf
+          - As Listed on Amazon.jpg
+          - Bose QR Code Manual AM 10 V.docx
+          - BOX 1 OF 2 Packing List.docx
+      - **15 Series II 00073** `SKU 00073`  _(9 files)_
+        - Bose AM 15 what in box pics (V2).docx
+        - Bose AM 15 what in box pics.docx
+        - Bose QR Code Manual AM 15 II .docx
+        - BOX 1 OF 2 packing list.docx
+        - owg_en_am15_series3_am16_series2.pdf
+        - Screen Shot 2023-03-29 at 8.58.31 AM.png
+        - Screen Shot 2023-03-29 at 8.58.47 AM.png
+        - What in Box AM 15 II.docx
+        - What is included in AM15 II System.docx
+      - **16 Series II 00948** `SKU 00948`  _(4 files)_
+        - Am OG ENG.book.pdf
+        - BOX 1 OF 2 packing list.docx
+        - Manual barcode Acoustimass 16 SII.docx
+        - What in Box AM16 II.docx
+      - **6**  _(9 files)_
+        - **Series I**  _(2 files)_
+          - ACOUSTIMASS 6 WHAT'S IN THE BOX.docx
+          - Manual barcode Acoustimass 6.docx
+        - **Series III 00024** `SKU 00024`  _(5 files)_
+          - Bose  QR Code Manual Acoustimass 6 III.docx
+          - Bose Acoustimass 6 Series IIII Home Entertainment Speaker System.docx
+          - owg_en_am6_series3_am10_series3.pdf
+          - owg_en_am6_series3_am10_series4 copy.pdf
+          - qsg_en_am6iii-am10iii.pdf
+        - **Series V 01409** `SKU 01409`  _(2 files)_
+          - am6_seriesV_PDF_ownersguide_MULTI.pdf
+          - Bose QR Code Manual Acoustimass 6 V.docx
+    - **Vintage**  _(3 files)_
+      - **3**  _(1 file)_
+        - **Series IV**  _(1 file)_
+          - Manual barcode Acoustimass 3 Series IV.docx
+      - **7**  _(1 file)_
+        - owg_en_am7.pdf
+      - **700**  _(1 file)_
+        - owg_en_am700.pdf
+  - **Companion**  _(13 files)_
+    - **2**  _(7 files)_
+      - **Series I 05005** `SKU 05005`  _(1 file)_
+        - companion 2 I manual copy.docx
+      - **Series II 04898** `SKU 04898`  _(2 files)_
+        - companion 2 II manual copy.docx
+        - owg_en_companion2_series2.pdf
+      - **Series III 01103** `SKU 01103`  _(4 files)_
+        - BOSE_Companion2_Manual_USAV.pdf
+        - BOSE_Companion2_Manual_USAV_v2.pdf
+        - companion 2 III manual.docx
+        - QSG_C2III-SPEAKERCOMPUTR_ml.pdf
+    - **3**  _(4 files)_
+      - **Series I 00983** `SKU 00983`  _(2 files)_
+        - companion 3 I manual.docx
+        - companion 3 I packing list.jpg
+      - **Series II 01825** `SKU 01825`  _(2 files)_
+        - companion 3 II Manual & Packing list.docx
+        - Companion 3 II Packing List.docx
+    - **5 01824** `SKU 01824`  _(1 file)_
+      - companion 5 manual + Packing list.docx
+    - Bose Companion  system configuration.xlsx
+  - **SoundTouch**  _(28 files)_
+    - **Adapters**  _(3 files)_
+      - **Series II (SM-2) 01695** `SKU 01695`  _(3 files)_
+        - manual code- NEED TO REDO QR CODES.docx
+        - Manuals SoundTouch® Series II wireless adapter.docx
+        - Reset Bose SoundTouch adapter  Lifestyle.docx
+    - **CineMate**  _(7 files)_
+      - **120 00862** `SKU 00862`  _(2 files)_
+        - Bose Soundtouch 120 system.docx
+        - soundtouch 120 QR code.docx
+      - **130 00867** `SKU 00867`  _(4 files)_
+        - Bose Soundtouch 130 system packing list.docx
+        - Manual barcode Cinemate 130.docx
+        - Packing list cinemate 130.docx
+        - soundtouch 130 QR code.docx
+      - **520 01775** `SKU 01775`  _(1 file)_
+        - soundtouch 520 QR code + PL.docx
+    - **LifeStyle**  _(18 files)_
+      - **535**  _(17 files)_
+        - **Series I 00916** `SKU 00916`  _(7 files)_
+          - AM753272_00_OP_ST LS 535 525 235 135_AST_MLvo.pdf
+          - AM753273_00_OP_ST LS 535 525 235 135_EU_MLvo.pdf
+          - Bose  QR Code Manual Soundtouch  535  .docx
+          - Bose Lifestyle 135 Series Comparision Chart.docx
+          - Bose LS ST 535  system packing list 1 Box.docx
+          - Bose LS ST 535  system packing list 2 Boxes.docx
+          - Bose LS ST 535  system packing list.docx
+        - **Series II 00792** `SKU 00792`  _(7 files)_
+          - AM753272_00_OP_ST LS 535 525 235 135_AST_MLvo.pdf
+          - AM753273_00_OP_ST LS 535 525 235 135_EU_MLvo.pdf
+          - Bose  QR Code Manual Soundtouch  535  .docx
+          - Bose Lifestyle 135 Series Comparision Chart.docx
+          - Bose LS ST 535  system packing list 1 Box.docx
+          - Bose LS ST 535  system packing list 2 Boxes.docx
+          - Bose LS ST 535  system packing list.docx
+        - **Series III 00857** `SKU 00857`  _(3 files)_
+          - Bose  QR Code Manual LS 535 III.docx
+          - Bose LS 535 III system packing list.docx
+          - og_ls_135_235_525_535_iii_ENG_DAN_GER_DUT_SPA_FIN_FRE_ITA_HUN_POL_POR_NOR.pdf
+      - **SA-4 01709** `SKU 01709`  _(1 file)_
+        - soundTouchController_SM.pdf
+  - **Surround**  _(279 files)_
+    - **3.1 Speakers **  _(14 files)_
+      - **Smart SoundBar, 300 Surround, Bass 500**  _(4 files)_
+        - **Bass Module 01384** `SKU 01384`  _(1 file)_
+          - Bose Bass Module 500 manual.docx
+        - **Rear Surround 01809** `SKU 01809`  _(1 file)_
+          - Bose QR Code VIRTUALLY INVISIBLE 300.docx
+        - **SoundBar 04889** `SKU 04889`  _(1 file)_
+          - Bose QR Code Manual Smart SoundBar.docx
+        - Bose 3.1 Box Content - 2 Boxes .docx
+      - **SSB 900, 700 Surround, Bass 300**  _(5 files)_
+        - **Bass Module 01810** `SKU 01810`  _(1 file)_
+          - Bose Bass Module 700 manual.docx
+        - **Rear Surround 01638** `SKU 01638`  _(2 files)_
+          - 836462_og_surround-speakers-700_en.pdf
+          - Bose  QR Code  Surround 700.docx
+        - **SoundBar 01639** `SKU 01639`  _(1 file)_
+          - Bose QR Code Manual soundbar 900.docx
+        - Bose 3.1 Box content - 2 Boxes .docx
+      - **SSB Ultra, 700 Surround, Bass 300 04853** `SKU 04853`  _(5 files)_
+        - **Bass Module 01384** `SKU 01384`  _(1 file)_
+          - Bose Bass Module 700 manual.docx
+        - **Rear Surround 01809** `SKU 01809`  _(2 files)_
+          - 836462_og_surround-speakers-700_en.pdf
+          - Bose  QR Code  Surround 700.docx
+        - **SoundBar 04899** `SKU 04899`  _(1 file)_
+          - Smart SoundBar Ultra manual.docx
+        - PL Smart soundbar Ultra Black 3.1 system.docx
+    - **321**  _(26 files)_
+      - **Series I 00002** `SKU 00002`  _(4 files)_
+        - 321 Series I DVD HOME ENTERTAINMENT SYSTEMS.docx
+        - Bose  QR Code Manual 321 .docx
+        - og_321.pdf
+        - Operation Note for Loading and playing a DVD.docx
+      - **Series II & III Remote Control 00000-RC** `SKU 00000`  _(0 files)_
+        - **Stock Labels**  _(0 files)_
+      - **Series II 00000** `SKU 00000`  _(7 files)_
+        - **GS & Non-GS**  _(3 files)_
+          - Bose  QR Code Manual 321 II.docx
+          - BOSE 321 SERIES II SYSTEM components.docx
+          - og_en_321_series2_321gs_series2.pdf
+        - **GSX**  _(4 files)_
+          - 3.2.1 GSX  owners manual.pdf
+          - 321 GSX packing list.docx
+          - AM312518_01_321_GSX_SeriesIII_OG_ENGvo.pdf
+          - Bose  QR Code Manual Bose 321 GSX.docx
+      - **Series III 00001** `SKU 00001`  _(14 files)_
+        - **GS**  _(8 files)_
+          - 321 SERIES II.docx
+          - 321 SERIES III packing list.docx
+          - Bose  QR Code Manual 321 GS III.docx
+          - Bose 321 system configuration.xlsx
+          - owg_en_321_series3_321gs_series3.pdf
+          - Setup DVD 321 III B&W cover printing.docx
+          - Setup DVD 321 III B&W.jpg
+          - Setup DVD 321 III.jpg
+        - **GSX**  _(4 files)_
+          - 3.2.1 GSX  owners manual.pdf
+          - 321 GSX SERIES III packing list.docx
+          - AM312518_01_321_GSX_SeriesIII_OG_ENGvo.pdf
+          - Bose  QR Code Manual Bose 321 GSX.docx
+        - 321 SERIES III packing list.docx
+        - Bose  QR Code Manual 321 DVD III system.docx
+      - Bose 321 system configuration.xlsx
+    - **Cinemate**  _(44 files)_
+      - **1 SR**  _(5 files)_
+        - CineMate 1 SR  manual download.docx
+        - owg_en_cm1sr.pdf
+        - packing list.png
+        - packinglist.docx
+        - sg_en_cm1sr.pdf
+      - **10**  _(3 files)_
+        - CineMate 15 10 packing list.docx
+        - cinemate_10_15_og.pdf
+        - Manual code.docx
+      - **120 : 130 : 520**  _(16 files)_
+        - **120 00862** `SKU 00862`  _(3 files)_
+          - cinemate_120_PDF_ownersguide_MULTI.pdf
+          - Manual barcode Cinemate 120.docx
+          - NOTE  shipping 120.docx
+        - **130 00867** `SKU 00867`  _(5 files)_
+          - cinemate_130_PDF_ownersguide_MULTI.pdf
+          - CM130_qsg_ENG_SPA_FRA_DAN_GER_DUT.pdf
+          - Manual barcode Cinemate 130.docx
+          - NOTE  shipping.docx
+          - OG_ST130-SOUNDBAR_en.pdf
+        - **520 00917** `SKU 00917`  _(6 files)_
+          - cinemate_520_PDF_ownersguide_MULTI.pdf
+          - CM520_qsg_ENG_SPA_FRA_DAN_GER_DUT.pdf
+          - Manual barcode 520.docx
+          - og_st_adapter_cm_sm1_ENG_DAN_GER_DUT_SPA_FIN_FRE_ITA_HUN_POL_POR_SWE_THAI_KOR_CHI_JAP_ARA.pdf
+          - qsg_st_adapter_ii_ST120-130-220-520_ENG_FRE_SPA_GER.pdf
+          - st_adapter_non-airplay_qsg.pdf
+        - **Remote 01789** `SKU 01789`  _(1 file)_
+          - Bose Cinemate 520 120 130 Compatible list.docx
+        - Replacement Cinemate 520 130 120 console.docx
+      - **15**  _(5 files)_
+        - **Remote**  _(2 files)_
+          - Bose RC-PWS II (Cine15) Remote Control Devices Code.docx
+          - RC-PWSII_codes Cinemate 15 RC.pdf
+        - CineMate 15 packing list.docx
+        - cinemate_15_PDF_ownersguide.pdf
+        - Manual code + Packing list.docx
+      - **Series I - II & GS**  _(14 files)_
+        - **OEM Remote**  _(2 files)_
+          - How to Program Universal Solo,Cinemate RC-PWSIII.docx
+          - If you can't turn on Bose System Solo 5, Cinemte II 15.docx
+        - **Series I 00015** `SKU 00015`  _(3 files)_
+          - Manual QR Code.docx
+          - og_en_cinemate_ir_codes_v2.pdf
+          - owg_en_cinemate.pdf
+        - **Series II 01896** `SKU 01896`  _(9 files)_
+          - **GS 00746** `SKU 00746`  _(6 files)_
+            - Bose  QR Code Manual Cinemate II GS + Packing list.docx
+            - Cinemate II GS Packing list.docx
+            - cinemate_series2_og.pdf
+            - How to program RC-PWS III.docx
+            - Manual + PL GS Series II.docx
+            - OEM RC manual.docx
+          - Bose  QR Code Manual Cinemate 2.docx
+          - Cinemate II Packing list.docx
+          - OEM RC manual.docx
+      - 1 Bose Cinemate system configuration.xlsx
+    - **Lifestyle**  _(195 files)_
+      - **135 : 235**  _(10 files)_
+        - **135**  _(8 files)_
+          - **Series I 00847** `SKU 00847`  _(4 files)_
+            - Bose  QR Code Manual LS 135.docx
+            - Lifestyle 135 packing list.docx
+            - owg_en_ls135.pdf
+            - sg_en_ls135.pdf
+          - **Series III 00846** `SKU 00846`  _(3 files)_
+            - Bose  QR Code Manual LS 135 III.docx
+            - Lifestyle 135 SERIES 3packing list.docx
+            - owg_en_ls135.pdf
+          - Bose Lifestyle 135 Series Comparision Chart.docx
+        - **235 00797** `SKU 00797`  _(2 files)_
+          - 3d_p3_en.pdf
+          - owg_en_ls135.pdf
+      - **18 : 25 : 28 : 30 : 35 : 38 : 48**  _(82 files)_
+        - **18**  _(10 files)_
+          - **Series I 00789** `SKU 00789`  _(2 files)_
+            - Bose QR Code Manual LS 18.docx
+            - BOX 1 OF 2 packing list.docx
+          - **Series III 00928** `SKU 00928`  _(5 files)_
+            - Bose  QR Code Manual LS 18 III.docx
+            - Bose Lifestyle 18 Series III DVD.docx
+            - ig_en_ls 18 28 Siii.pdf
+            - ls18ii_ls28ii_ls38_ls48_install_extensions.pdf
+            - s-l1600.jpg
+          - Bose remote control  RC18 ALL.docx
+          - How to pair Bose remote control  RC18S - Shortcut.lnk
+          - Special Note RC LS18.docx
+        - **25 28 30 35**  _(23 files)_
+          - **25**  _(1 file)_
+            - **Series II 01916** `SKU 01916`  _(1 file)_
+              - owg_en_ls25_series2.pdf
+          - **28**  _(12 files)_
+            - **Series II 00926** `SKU 00926`  _(4 files)_
+              - Bose  QR Code Manual LS 28 .docx
+              - BOX 1 OF 2 packing list.docx
+              - ig_en_ls28_ls35.pdf
+              - owg_en_ls28_series1_ls35_series1.pdf
+            - **Series III 00949** `SKU 00949`  _(8 files)_
+              - Bose  QR Code Manual LS 28 III.docx
+              - Bose Lifestyle 28 S III Alaska.docx
+              - Bose Lifestyle 28 S III.docx
+              - Bose Lifestyle 28 Series III Packing list.docx
+              - Bose Lifestyle 28 SIII system parts.docx
+              - ig_en_lsiii.pdf
+              - Lifestyle 28 Series III.docx
+              - Munual LS 28 S III.png
+          - **30**  _(1 file)_
+            - **Series II**  _(1 file)_
+              - og_ls30.pdf
+          - **35**  _(7 files)_
+            - **Series I 00786** `SKU 00786`  _(3 files)_
+              - Bose  QR Code Manual LS 35 Series I.docx
+              - BOX 1 OF 2 packing list.docx
+              - owg_en_ls28_series1_ls35_series1.pdf
+            - **Series IV 00796** `SKU 00796`  _(4 files)_
+              - Bose Lifestyle 35 Series IV DVD Black Home Entertainment System.docx
+              - Bose QR Code Manual LS 35 IV.docx
+              - ig_en_ls48_series4_ls38_series4_ls35_series_4.pdf
+              - Manual code LS 35 S IV DVD .docx
+          - **Comparison Chart**  _(2 files)_
+            - Bose_Lifestyle 28 38 48 ComparisonChart.pdf
+            - Bose_LifestyleComparisonChart.pdf
+        - **38 48**  _(49 files)_
+          - **38**  _(7 files)_
+            - **Series I 00921** `SKU 00921`  _(2 files)_
+              - Bose  QR Code Manual LS 38 .docx
+              - Lifestyle 38 System Packing List.docx
+            - **Series III 00920** `SKU 00920`  _(3 files)_
+              - Bose  QR Code Manual LS 38 .docx
+              - Bose  QR Code Manual LS 38 III.docx
+              - Lifestyle 38 System Packing List.docx
+            - **Series IV 00919** `SKU 00919`  _(2 files)_
+              - 38 IV Packing list.docx
+              - Bose  QR Code Manual LS 38 IV.docx
+          - **48**  _(16 files)_
+            - **Series III 00794** `SKU 00794`  _(4 files)_
+              - Bose  QR Code Manual LS 48 III.docx
+              - Bose LS 48 III QR Code.zip
+              - BOX 1 OF 2 packing list-48 III lifestyle.docx
+              - BOX 1 OF 2 packing list.docx
+            - **Series IV 00947** `SKU 00947`  _(2 files)_
+              - Bose  QR Code Manual LS 48 IV.docx
+              - BOX 1 OF 2 packing list-48 IV.docx
+            - **Stock Labels**  _(4 files)_
+              - **Single Cube Speaker**  _(2 files)_
+                - SKU - 00156 Black - Bose Single Cube Speaker for Lifestyle 18 Series.docx
+                - SKU - 00156x5 Black - Bose Single Cube Speaker for Lifestyle 18 Series.docx
+              - SKU - 00724 Black - BOSE Jewel Cube® speakers for LIFESTYLE Single.docx
+              - SKU - 00724x4 Black - BOSE Jewel Cube® speakers for LIFESTYLE.docx
+            - Bose  QR Code Manual LS 48.docx
+            - Bose AV38 AV48 Connecting your TV to the system.docx
+            - Bose_LifestyleComparisonChart.pdf
+            - ihr_qr_code_ohne_logo.jpg
+            - Lifestyle 48  owners manual.pdf
+            - opg_en_ls48_series1_ls38_series1.pdf
+          - **uMusic**  _(1 file)_
+            - uMusic_sys_guide.pdf
+          - **VS-2**  _(25 files)_
+            - **Bose VS-2 01968** `SKU 01968`  _(2 files)_
+              - CD Update Cover.docx
+              - owg_en_vs2.pdf
+            - **Lifestyle VS-2 Update 01820** `SKU 01820`  _(19 files)_
+              - **Files**  _(16 files)_
+                - cover.jpeg
+                - cover.jpeg.jpeg
+                - FX_CON_030101_UPD.BIN
+                - FXCM_010203.bin
+                - Installer00.UPD
+                - Installer01.UPD
+                - ORDER.upd
+                - P2_CON_030101_UPD.bin
+                - S3SMRT00.UPD
+                - S3SMRT01.UPD
+                - SMRT00.UPD
+                - SMRT01.UPD
+                - XSMRT00.UPD
+                - XSMRT01.UPD
+                - xu1B21_alg.bin
+                - xu1B21_out.bin
+              - cover.jpeg
+              - HL-DT-ST DVDRW GX50N Media.dmg
+              - s-l500 (1).jpeg
+            - Bose  QR Code Manual LS VS2.docx
+            - IMG_0884.JPG
+            - owg_en_vs2.pdf
+            - s-l1600.jpeg
+      - **5 : 20 Vintage **  _(3 files)_
+        - **20**  _(1 file)_
+          - owg_en_ls20.pdf
+        - **5**  _(2 files)_
+          - FM Radio Receiver manual.docx
+          - owg_en_ls5_series1.pdf
+      - **525 : 535**  _(22 files)_
+        - **525**  _(5 files)_
+          - **Series I 00788** `SKU 00788`  _(3 files)_
+            - Bose  QR Code Manual Soundtouch 525  .docx
+            - Bose LS 525 ST system packing list 1 Box.docx
+            - Bose LS 525 ST system packing list.docx
+          - **Series II 00790** `SKU 00790`  _(2 files)_
+            - Lifestyle 525 Series II home entertainment system.docx
+            - Lifestyle 535 Series II home entertainment system.docx
+        - **535**  _(17 files)_
+          - **Series I 00916** `SKU 00916`  _(9 files)_
+            - AM753272_00_OP_ST LS 535 525 235 135_AST_MLvo.pdf
+            - AM753273_00_OP_ST LS 535 525 235 135_EU_MLvo.pdf
+            - Bose  QR Code Manual Soundtouch 535  .docx
+            - Bose LS 535 ST system packing list.docx
+            - Bose LS ST 535 system packing list 1 Box.docx
+            - Bose LS ST 535 system packing list 2 Boxes.docx
+            - Bose LS ST 535 system packing list.docx
+            - Lifestyle SoundTouch 535_525_235_135.pdf
+            - og_st_adapter_ii_LSST_LS135-235-525-535-II-III_ENG_DAN_GER_DUT_SPA_FIN_FRE_ITA_HUN_POL_POR_SWE_THAI_KOR_CHI_JAP_ARA.pdf
+          - **Series II 00857** `SKU 00857`  _(4 files)_
+            - .smbdeleteAAAce69
+            - Bose  QR Code Manual LS 535 II.docx
+            - Bose LS 535 II system packing list ver.2.docx
+            - Bose LS 535 II system packing list.docx
+          - **Series III 00792** `SKU 00792`  _(3 files)_
+            - Bose  QR Code Manual LS 535 III.docx
+            - Bose LS 535 III system packing list.docx
+            - og_ls_135_235_525_535_iii_ENG_DAN_GER_DUT_SPA_FIN_FRE_ITA_HUN_POL_POR_NOR.pdf
+          - Lifestyle 535 Comparison .docx
+      - **600 : 650**  _(10 files)_
+        - **600 01892** `SKU 01892`  _(5 files)_
+          - 799913_og_lifestyle-600-home-theater-system-bundle_en.pdf
+          - Bose  QR Code Manual LS 600.docx
+          - Bose LS 535 S III system packing list.docx
+          - Bose LS 600 system packing list NEW 26 DEC 24.docx
+          - Bose LS 600 system packing list.docx
+        - **650 00909** `SKU 00909`  _(5 files)_
+          - 799905_og_ls650_en.pdf
+          - Bose  QR Code Manual LS 650.docx
+          - Bose Lifestyle 650 Box content - 1 Box .docx
+          - Bose Lifestyle 650 Box content - 2 Boxes  V2.docx
+          - Bose Lifestyle 650 Box content - 2 Boxes .docx
+      - **AV35 Update**  _(9 files)_
+        - **Archive**  _(4 files)_
+          - config.xml
+          - DEF_CON_02.21.00.r13184.bos
+          - DEF_IR_5.3.30.1-P2.old
+          - launcher.url
+        - Archive.zip
+        - config.xml
+        - DEF_CON_02.21.00.r13184.bos
+        - DEF_IR_5.3.30.1-P2.old
+        - launcher.url
+      - **Replacement Media Center AV35 & T20 01352 01899** `SKU 01352, 01899`  _(1 file)_
+        - Bose V35 Remote RC35 & T20 media center remote pairing.docx
+      - **SA : TA : RoomMate Powered Speaker - Amplifers**  _(25 files)_
+        - **RoomMate Powered Speakers 01882** `SKU 01882`  _(2 files)_
+          - Bose QR Code Manual   .docx
+          - Lifestyle RoomMate owners manual.pdf
+        - **SA**  _(14 files)_
+          - **1**  _(1 file)_
+            - owg_en_sa1.pdf
+          - **2 : 3 00964 01369** `SKU 00964, 01369`  _(4 files)_
+            - Manual code SA 2 3.docx
+            - Manual QR code New SA3.docx
+            - owg_en_sa2_sa3.pdf
+            - SA3_Troubleshooting_Tips.pdf
+          - **4 01709** `SKU 01709`  _(4 files)_
+            - **All Manuals and Pack lists**  _(3 files)_
+              - DSP M PL SA 4 .docx
+              - SSP M SA 4.docx
+              - SSP PL SA 4.docx
+            - qsg_st_controller_ENG_SPA_FRE.pdf
+          - **5 05016** `SKU 05016`  _(4 files)_
+            - **All Manuals and Pack lists**  _(3 files)_
+              - DSP M PL SA 5 B013WQID8O : .docx
+              - SSP M SA 5 B013WQID8O : .docx
+              - SSP PL SA 5 B013WQID8O : .docx
+            - qsg_st_controller_ENG_SPA_FRE.pdf
+          - **Remote Control 1 : 2 : 3 01150** `SKU 01150`  _(1 file)_
+            - bose rc48s2-27 manual.pdf
+        - **TA**  _(9 files)_
+          - **2**  _(1 file)_
+            - Screen Shot 2023-09-20 at 12.28.20 PM.png
+          - **3 03740** `SKU 03740`  _(8 files)_
+            - 72073941343__A640FEA9-E575-48B8-BD1B-0E19B13D4625.jpeg
+            - 72073944191__DD9A3A9E-27F8-4548-ABD7-CFD84A5ECE1B.jpeg
+            - 72073950498__418B29F8-1466-4286-A985-96D97647363C.jpeg
+            - 72073955700__8FE46C88-349A-43F4-8E9E-F48C93B889F5.jpeg
+            - 72073973896__7F3A603F-21C4-4DF4-9C3D-89C4BD9A0128.jpeg
+            - 72074005770__602A60CA-AE87-46B6-91E4-933BF64F73C6.jpeg
+            - TA-3 manual.docx
+            - TA3 install guide.pdf
+      - **Service Manual**  _(2 files)_
+        - Jewel II AM35.pdf
+        - Lifestyle PS 18 28 48.pdf
+      - **T20 V25 V35**  _(19 files)_
+        - **AV35 Software 01694** `SKU 01694`  _(1 file)_
+          - Connect USB Drive to front USB Port.docx
+        - **Manual Guides**  _(2 files)_
+          - og_lsvclass_lstclass_operating_guide_en.pdf
+          - og_lsvclass_lstclass_setup_guide_en.pdf
+        - **T10 00913** `SKU 00913`  _(0 files)_
+        - **T20 00856** `SKU 00856`  _(5 files)_
+          - Bose  QR Code Manual LS T20.docx
+          - Bose LIFESTYLE packing.docx
+          - Bose T20 Pair Remote  .docx
+          - Lifestyke-T20.pdf
+          - owg_en_ls135.pdf
+        - **V25 00855** `SKU 00855`  _(5 files)_
+          - Bose LIFESTYLE V25 packing in 01 box.docx
+          - Bose LIFESTYLE V25 packing(new) copy.docx
+          - Bose QR Code Manual LS V25.docx
+          - Bose QR Code Manual LS V35 V25.docx
+          - Lifestyle  V35 V25 copy.pdf
+        - **V35 01397** `SKU 01397`  _(6 files)_
+          - Bose LIFESTYLE V35 packing(new).docx
+          - Bose LS V35 Packing - 1 BOX.docx
+          - Bose QR Code Manual + Packing LS V35 V25.docx
+          - Bose QR Code Manual LS V35.docx
+          - BOX 1 OF 2 packing list.docx
+          - Lifestyle  V35 V25.pdf
+      - **V10 V20 V30**  _(10 files)_
+        - **Manual**  _(1 file)_
+          - opg_en_v30_v20_v10.pdf
+        - **V10 01031** `SKU 01031`  _(4 files)_
+          - Bose  QR Code Manual V10.docx
+          - Bose Lifestyle V10 system packing list.docx
+          - packing list LS V10 - for 1 box.docx
+          - packing list LS V10.docx
+        - **V20 01030** `SKU 01030`  _(2 files)_
+          - Bose QR Code Manual + Pkl V20.docx
+          - packing list LS V20.docx
+        - **V30 00854** `SKU 00854`  _(3 files)_
+          - Bose  QR Code Manual V30.docx
+          - Bose Lifestyle V30 system parts w VCS-10.docx
+          - Bose Lifestyle V30 system parts.docx
+      - **Videowave**  _(1 file)_
+        - sg_en_videowaveii.pdf
+      - 1 - Lifestyle system configuration.xlsx
+- **Wave CD Drive**  _(2 files)_
+  - IMPORTANT INSTALLATION NOTICE - CD Drive.pdf
+  - Manual Installation Note - laser anti-static protection solder.png
+- **Wireless**  _(26 files)_
+  - **AL8 01812** `SKU 01812`  _(2 files)_
+    - AL8 Homewide Wireless Audio Link.docx
+    - og_al8.pdf
+  - **Bluetooth Audio Adapter 01137** `SKU 01137`  _(3 files)_
+    - 774339_og_soundtouch-adapter_en.pdf
+    - AM728051_01_OG_BT_audio_adapter_ENGvo.pdf
+    - BOSE audio bluetooth adapter.docx
+  - **SL2 00093** `SKU 00093`  _(5 files)_
+    - **Stock Labels**  _(1 file)_
+      - SKU - 00093 - (SL2) Bose Wireless surround link for Lifestyle and Acoustimass 5.1 system.docx
+    - Bose SL2 WIRELESS SURROUND LINK.docx
+    - og_sl2.pdf
+    - packing list.jpg
+    - SL2 wireless surround link owners manual.pdf
+  - **Subwoofer Bass Modules**  _(4 files)_
+    - **300 : 700 01810 01640** `SKU 01810, 01640`  _(3 files)_
+      - ACOUSTIMASS_300_MANUAL.pdf
+      - Manual QR Code + Video.docx
+      - Special Note Bass Module 300.docx
+    - **500 01384** `SKU 01384`  _(1 file)_
+      - Bose Base module 500 manual.docx
+  - **Surround**  _(7 files)_
+    - **(Surround) : 300 01809** `SKU 01809`  _(4 files)_
+      - 772083_og_surround-speakers_en.pdf
+      - Bose App QR Code Manual.docx
+      - ST 300 SoundBar Manual.docx
+      - Surround Wireless Compatible list.docx
+    - **700 01638** `SKU 01638`  _(3 files)_
+      - 836462_og_surround-speakers-700_en.pdf
+      - Bose Surround wireless 700 Compatible list.docx
+      - Manual + Packing List Bose QR Code 700 .docx
+  - **Wireless audio system Adapter Alexa**  _(4 files)_
+    - 774339_og_soundtouch-adapter_en.pdf
+    - Bose WLA Reset Manual.pdf
+    - Manual barcode ST  Pedestal.docx
+    - Manual barcode ST Link Adapter.docx
+  - og_wave-bma_en.pdf
+
+---
+
+## Asset type breakdown
+
+- `.docx` — 398
+- `.pdf` — 201
+- `.jpg` — 24
+- `.png` — 13
+- `.html` — 13
+- `.js` — 11
+- `.txt` — 11
+- `.jpeg` — 11
+- `.stu` — 9
+- `.upd` — 9
+- `.bin` — 6
+- `.css` — 6
+- `(none)` — 6
+- `.xlsx` — 5
+- `.zip` — 3
+- `.iso` — 2
+- `.dmg` — 2
+- `.svg` — 2
+- `.xml` — 2
+- `.bos` — 2
+- `.old` — 2
+- `.url` — 2
+- `.tif` — 1
+- `.dotx` — 1
+- `.mov` — 1
+- `.htm` — 1
+- `.lnk` — 1

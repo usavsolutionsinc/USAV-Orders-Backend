@@ -20,19 +20,6 @@ function resolveStaffLabel(
   return '';
 }
 
-/** Triage door scan predates the Unbox-surface open by a meaningful gap. */
-function doorScanPredatesUnboxOpen(
-  doorAt: string | null | undefined,
-  unboxOpenAt: string | null | undefined,
-): boolean {
-  if (!doorAt || !unboxOpenAt) return false;
-  const doorMs = new Date(doorAt).getTime();
-  const unboxMs = new Date(unboxOpenAt).getTime();
-  if (!Number.isFinite(doorMs) || !Number.isFinite(unboxMs)) return false;
-  // Same-session scans land within seconds; triage-then-unbox is minutes+ apart.
-  return doorMs < unboxMs - 120_000;
-}
-
 function StaffTimestampRow({
   at,
   staffName,
@@ -68,18 +55,8 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
     log.tracking_scanned_by,
     getStaffName,
   );
-  const unboxOpenName = resolveStaffLabel(
-    log.unbox_opened_by_name,
-    log.unbox_opened_by,
-    getStaffName,
-  );
   const unboxName = resolveStaffLabel(log.unboxed_by_name, log.unboxed_by, getStaffName);
   const receiveName = resolveStaffLabel(log.received_by_name, log.received_by, getStaffName);
-
-  const hasUnboxOpen = Boolean(log.unbox_opened_at && String(log.unbox_opened_at).trim());
-  const showDoorScan =
-    Boolean(log.tracking_scanned_at && String(log.tracking_scanned_at).trim()) &&
-    (!hasUnboxOpen || doorScanPredatesUnboxOpen(log.tracking_scanned_at, log.unbox_opened_at));
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-gradient-to-br from-gray-50/90 to-white p-4 space-y-5 shadow-sm shadow-gray-100/40">
@@ -92,45 +69,18 @@ export function ReceivingOverviewCard({ log }: ReceivingOverviewCardProps) {
         />
       </div>
 
+      {/* 3-stage operator lifecycle: Scanned → Unboxed → Received. */}
       <div className="space-y-4 pt-1 border-t border-gray-100">
-        {showDoorScan ? (
-          <div>
-            <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
-              Tracking scanned (door scan)
-            </p>
-            <StaffTimestampRow
-              at={log.tracking_scanned_at}
-              staffName={scanName}
-              emptyFallback="Not recorded"
-            />
-          </div>
-        ) : null}
-
-        {hasUnboxOpen ? (
-          <div>
-            <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
-              Opened for unbox
-            </p>
-            <StaffTimestampRow
-              at={log.unbox_opened_at}
-              staffName={unboxOpenName}
-              emptyFallback="—"
-            />
-          </div>
-        ) : null}
-
-        {!showDoorScan && !hasUnboxOpen ? (
-          <div>
-            <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
-              Tracking scanned
-            </p>
-            <StaffTimestampRow
-              at={log.tracking_scanned_at}
-              staffName={scanName}
-              emptyFallback="Not recorded"
-            />
-          </div>
-        ) : null}
+        <div>
+          <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">
+            Scanned
+          </p>
+          <StaffTimestampRow
+            at={log.tracking_scanned_at}
+            staffName={scanName}
+            emptyFallback="Not recorded"
+          />
+        </div>
 
         <div>
           <p className="text-eyebrow font-black uppercase tracking-[0.2em] text-gray-500 mb-1.5">

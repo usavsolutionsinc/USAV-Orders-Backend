@@ -87,6 +87,35 @@ test('business-ID filters count as structured and clear together', () => {
   assert.equal(countActivePhotoLibraryFilters(cleared), 0);
 });
 
+test('poFinder + kind round-trip, count once, and clear as structured', () => {
+  const filters = parsePhotoLibraryFilters(
+    new URLSearchParams('poFinder=SN-42&poFinderKind=serial'),
+  );
+  assert.equal(filters.poFinder, 'SN-42');
+  assert.equal(filters.poFinderKind, 'serial');
+  // The finder is one structured refinement regardless of which field it scopes.
+  assert.equal(countActivePhotoLibraryFilters(filters), 1);
+
+  // Deep-link safe: value + kind both reproduce.
+  const params = photoLibraryFiltersToParams(filters);
+  assert.equal(params.get('poFinder'), 'SN-42');
+  assert.equal(params.get('poFinderKind'), 'serial');
+
+  const cleared = clearStructuredPhotoFilters(filters);
+  assert.equal(cleared.poFinder, undefined);
+  assert.equal(cleared.poFinderKind, undefined);
+  assert.equal(countActivePhotoLibraryFilters(cleared), 0);
+});
+
+test('parsePhotoLibraryFilters rejects an unknown poFinderKind', () => {
+  const filters = parsePhotoLibraryFilters(
+    new URLSearchParams('poFinder=4421&poFinderKind=bogus'),
+  );
+  assert.equal(filters.poFinder, '4421');
+  // Invalid kind is dropped; library.ts then defaults the resolution to 'po'.
+  assert.equal(filters.poFinderKind, undefined);
+});
+
 test('label round-trips through parse + serialize and counts/clears as structured', () => {
   const filters = parsePhotoLibraryFilters(new URLSearchParams('label=defect&imageType=listing'));
   assert.equal(filters.label, 'defect');

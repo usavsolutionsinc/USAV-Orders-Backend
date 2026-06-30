@@ -21,10 +21,10 @@
  * by default on open): clicking it expands or hides the pairing tabs/body. PO Items
  * on top is unaffected. It does not open the Items tab.
  *
- * Which children show is still driven by the {@link WorkspaceCapabilities} matrix
- * (`caps.poItems` / `caps.matching`) — unbox shows both; triage shows pairing
- * only (it intentionally hides PO Items). The wrapper degrades to whichever
- * sections the mode enables, so this single component is safe in every variant.
+ * Which children show is driven by explicit booleans the calling panel passes
+ * (`poItems` / `matching`) — unbox shows both; triage shows pairing only (it
+ * intentionally hides PO Items). The wrapper degrades to whichever sections the
+ * caller enables, so this single component is safe in both panels.
  *
  * Maintainability: this is pure composition. All state/handlers live in the
  * controller (`useUnboxLineController`). Adding a sub-section = drop another
@@ -39,14 +39,22 @@ import { IconButton } from '@/design-system/primitives';
 import { LinePoItemsSection } from './LinePoItemsSection';
 import { LineMatchingSection } from './LineMatchingSection';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
-import type { WorkspaceCapabilities } from '../workspace-capabilities';
 import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
 import type { UnboxLineController } from './unbox-line-controller';
 
 interface POUnboxingSectionProps {
   row: ReceivingLineRow;
   staffId: string;
-  caps: WorkspaceCapabilities;
+  /** Show the PO-items card (unbox). Off in triage, where pairing subsumes it. */
+  poItems: boolean;
+  /** Show the Package-Pairing hub (both modes). */
+  matching: boolean;
+  /** Offer the unmatched "open in unbox" jump (triage hands off to unbox). */
+  openInUnbox: boolean;
+  /** PO-items accordion interactivity — false renders read-only (triage). */
+  editLines: boolean;
+  /** Serial entry on the active line (unbox only). */
+  serialScan: boolean;
   c: UnboxLineController;
   onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
@@ -55,7 +63,11 @@ interface POUnboxingSectionProps {
 export function POUnboxingSection({
   row,
   staffId,
-  caps,
+  poItems,
+  matching,
+  openInUnbox,
+  editLines,
+  serialScan,
   c,
   onItemDescFeedback,
   onItemDescSaved,
@@ -63,10 +75,10 @@ export function POUnboxingSection({
   // A paired/matched carton IS a normal PO, so show its PO Items accordion even
   // in modes that normally hide it (triage hides PO Items for UNFOUND cartons) —
   // once linked it reads as a normal PO with Package Pairing below it. In triage
-  // the accordion is read-only (caps.editLines=false); unbox is unchanged.
+  // the accordion is read-only (editLines=false); unbox is unchanged.
   const linked = !c.isUnfound;
-  const showPoItems = caps.poItems || (caps.matching && linked);
-  const showPairing = caps.matching;
+  const showPoItems = poItems || (matching && linked);
+  const showPairing = matching;
 
   // Collapse/expand the Package-Pairing sub-section (title + tabs + body) via a
   // pencil on the "PO items · N" row (headerRight) — same IconButton as the
@@ -74,8 +86,8 @@ export function POUnboxingSection({
   // a linked triage carton). Default open state differs by mode: unbox keeps
   // pairing collapsed (it's secondary to the PO items), triage keeps it visible
   // below the items (it's the operator's pairing surface) — the pencil toggles
-  // either way. `caps.poItems` is the static "is this the unbox display" tell.
-  const [pairingOpen, setPairingOpen] = useState(() => !caps.poItems);
+  // either way. `poItems` is the static "is this the unbox display" tell.
+  const [pairingOpen, setPairingOpen] = useState(() => !poItems);
   const canCollapsePairing = showPoItems && showPairing;
   const pairingCollapsed = canCollapsePairing ? !pairingOpen : false;
 
@@ -110,7 +122,9 @@ export function POUnboxingSection({
           <LinePoItemsSection
             row={row}
             staffId={staffId}
-            caps={caps}
+            serialScan={serialScan}
+            openInUnbox={openInUnbox}
+            editLines={editLines}
             c={c}
             embedded
             headerRight={pairingToggle}
@@ -125,7 +139,7 @@ export function POUnboxingSection({
           <LineMatchingSection
             row={row}
             staffId={staffId}
-            showOpenInUnbox={caps.openInUnbox}
+            showOpenInUnbox={openInUnbox}
             embedded
             collapsed={pairingCollapsed}
             showTopRule={showPoItems}

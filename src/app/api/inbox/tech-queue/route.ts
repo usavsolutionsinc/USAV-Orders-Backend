@@ -23,9 +23,35 @@ export const runtime = 'nodejs';
 type TechQueueItem = {
   kind: 'return_pending_test' | 'order_ready_ship';
   receivingId: number;
+  /** Representative line of the carton — lets the inbox deep-link to the exact row. */
+  lineId: number | null;
   trackingNumber: string | null;
+  /** Returns: sales order (source_order_id). Orders: matched order, else carton PO#. */
+  orderNumber: string | null;
+  /** Title SoT = items.name (never the SKU string); falls back to listing item_name / sku. */
+  productTitle: string | null;
   unboxedAt: string | null;
 };
+
+/**
+ * Representative-line LATERAL: one row per carton carrying the line id, the
+ * SoT product title (items.name via the zoho_item_id key — never the colliding
+ * SKU string), and the line's source order. `$1` = organizationId.
+ */
+const REP_LINE_LATERAL = `
+  LEFT JOIN LATERAL (
+    SELECT rl.id AS line_id,
+           rl.source_order_id,
+           rl.zoho_purchaseorder_number AS line_po,
+           COALESCE(zi.name, rl.item_name, rl.sku) AS product_title
+      FROM receiving_lines rl
+      LEFT JOIN items zi
+        ON zi.zoho_item_id = rl.zoho_item_id AND zi.status = 'active'
+       AND zi.organization_id = rl.organization_id
+     WHERE rl.receiving_id = r.id AND rl.organization_id = $1
+     ORDER BY rl.id ASC
+     LIMIT 1
+  ) rep ON true`;
 
 export const GET = withAuth(async (_req, ctx) => {
   const isTech = await isPrimaryTechStaff(ctx.staffId);
@@ -41,15 +67,22 @@ export const GET = withAuth(async (_req, ctx) => {
   // workflow state, so this bucket self-corrects without a manual dismiss.
   const returnsRes = await tenantQuery<{
     receiving_id: number;
+    line_id: number | null;
     tracking: string | null;
+    order_number: string | null;
+    product_title: string | null;
     unboxed_at: string | null;
   }>(
     ctx.organizationId,
     `SELECT r.id AS receiving_id,
+            rep.line_id,
             stn.tracking_number_raw AS tracking,
+            rep.source_order_id AS order_number,
+            rep.product_title,
             r.unboxed_at::text AS unboxed_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+       ${REP_LINE_LATERAL}
       WHERE COALESCE(r.is_return, false) = true
         AND r.unboxed_at IS NOT NULL
         AND r.organization_id = $1
@@ -71,15 +104,22 @@ export const GET = withAuth(async (_req, ctx) => {
   // hook yet, so the window keeps the bucket from growing without bound.
   const ordersRes = await tenantQuery<{
     receiving_id: number;
+    line_id: number | null;
     tracking: string | null;
+    order_number: string | null;
+    product_title: string | null;
     unboxed_at: string | null;
   }>(
     ctx.organizationId,
     `SELECT r.id AS receiving_id,
+            rep.line_id,
             stn.tracking_number_raw AS tracking,
+            COALESCE(rep.source_order_id, rep.line_po, r.zoho_purchaseorder_number) AS order_number,
+            rep.product_title,
             r.unboxed_at::text AS unboxed_at
        FROM receiving r
        LEFT JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+       ${REP_LINE_LATERAL}
       WHERE COALESCE(r.is_priority, false) = true
         AND COALESCE(r.is_return, false) = false
         AND r.unboxed_at IS NOT NULL
@@ -94,13 +134,19 @@ export const GET = withAuth(async (_req, ctx) => {
     ...returnsRes.rows.map((row) => ({
       kind: 'return_pending_test' as const,
       receivingId: Number(row.receiving_id),
+      lineId: row.line_id != null ? Number(row.line_id) : null,
       trackingNumber: row.tracking ?? null,
+      orderNumber: row.order_number ?? null,
+      productTitle: row.product_title ?? null,
       unboxedAt: row.unboxed_at ?? null,
     })),
     ...ordersRes.rows.map((row) => ({
       kind: 'order_ready_ship' as const,
       receivingId: Number(row.receiving_id),
+      lineId: row.line_id != null ? Number(row.line_id) : null,
       trackingNumber: row.tracking ?? null,
+      orderNumber: row.order_number ?? null,
+      productTitle: row.product_title ?? null,
       unboxedAt: row.unboxed_at ?? null,
     })),
   ];

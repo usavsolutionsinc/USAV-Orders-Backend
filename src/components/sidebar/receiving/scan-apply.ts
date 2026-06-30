@@ -75,6 +75,10 @@ function buildUnboxRailMatchedRow(
     ...buildMatchedStubRow(receivingId, tracking, line),
     client_event_id: receivingRailCartonKey(receivingId),
     scanned_at: now,
+    // Stamp the UNBOXED milestone the rail now sorts/labels by (first unbox scan =
+    // unboxed), so a just-scanned carton reads "just now" instead of its door scan.
+    unboxed_at: now,
+    unbox_opened_at: now,
     last_activity_at: now,
   };
 }
@@ -233,11 +237,30 @@ export function applyUnmatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
   const isUnbox = ctx.intakeSurface === 'unbox';
 
   if (unmatchedReceivingId != null && !isUnbox) {
+    const now = new Date().toISOString();
     dispatchReceivingTriageRefresh();
     dispatchReceivingLinesPrepended({
       segments: ['triage-combined'],
       intakeSurface: 'triage',
-      rows: [buildUnmatchedStubRow(unmatchedReceivingId, ctx.trackingNumber)],
+      // Reconcile-compatible optimistic row. The bare stub from
+      // buildUnmatchedStubRow has a null title (→ "Line #-id"), a null timestamp
+      // (→ sinks to the BOTTOM), and no reconcile key (→ can't dedup against the
+      // importing leadingRow or the combined-feed twin), which made the scanned
+      // carton render a second time at the bottom and then jump on refetch. Stamp
+      // it with the SAME carton key the combined feed uses (so the row updates in
+      // place, not remounts), the tracking# as the title (which the refetch swaps
+      // to "Unfound PO"), ARRIVED for the SCANNED chip, and a fresh activity time
+      // so it pins to the TOP next to the just-scanned stub.
+      rows: [
+        {
+          ...buildUnmatchedStubRow(unmatchedReceivingId, ctx.trackingNumber),
+          item_name: ctx.trackingNumber,
+          workflow_status: 'ARRIVED',
+          client_event_id: receivingRailCartonKey(unmatchedReceivingId),
+          created_at: now,
+          last_activity_at: now,
+        },
+      ],
     });
     deferInvalidateTriageReceivingFeeds(ctx.queryClient);
   }

@@ -3,8 +3,8 @@
 /**
  * LineMatchingSection — the "Package Pairing" hub.
  *
- * Rendered inside the SHARED `LineEditPanel`: in triage (gated by
- * `caps.matching`), and in unbox for UNFOUND cartons. In triage the separate
+ * Rendered by `POUnboxingSection` in both panels: always in `TriagePanel`, and
+ * in `LineEditPanel` (unbox) for UNFOUND cartons. In triage the separate
  * PO-items card is removed and its carton actions move here: Open-in-unbox + the
  * add "+" sit top-right. In unbox the Open-in-unbox jump is hidden (already
  * there) via `showOpenInUnbox`.

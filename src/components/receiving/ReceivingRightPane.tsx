@@ -200,9 +200,9 @@ export function ReceivingRightPane({
             transition={workspaceTransition}
             className="absolute inset-0 z-10"
           >
-            {/* Triage reuses the SAME workspace shell as Unbox — the variant
-                gates unbox-only sections and turns on the Smart-Matching section
-                (see workspace-capabilities + LineEditPanel). */}
+            {/* Unbox and Triage are de-coupled panels (LineEditPanel /
+                TriagePanel), selected by variant inside ReceivingLineWorkspace —
+                each declares its own sections; no shared capability matrix. */}
             <ReceivingLineWorkspace
               row={workspace!.row}
               staffId={staffId}

@@ -10,8 +10,14 @@ import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import {
   sourceScopeFromFilters,
   todayFoldersDateFilter,
+  PHOTO_SEARCH_FIELDS,
+  PHOTO_SEARCH_FIELD_LABELS,
+  finderKindForField,
+  fieldForFinderKind,
   type PhotoLibrarySourceScope,
+  type PhotoSearchField,
 } from '@/lib/photos/library-filter-state';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
@@ -21,6 +27,20 @@ import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoStationFolders } from './PhotoStationFolders';
 import { PhotoLabelsSection } from './PhotoLabelsSection';
 import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
+
+const SEARCH_FIELD_ITEMS = PHOTO_SEARCH_FIELDS.map((field) => ({
+  id: field,
+  label: PHOTO_SEARCH_FIELD_LABELS[field],
+}));
+
+/** Placeholder reflects the active field-scope so the operator knows what resolves. */
+const SEARCH_FIELD_PLACEHOLDERS: Record<PhotoSearchField, string> = {
+  all: 'PO, order, tracking, serial, or text…',
+  po: 'Find photos by PO #…',
+  order: "Order # → that PO's photos…",
+  tracking: "Tracking # → that PO's photos…",
+  serial: "Serial # → that PO's photos…",
+};
 
 export function PhotoLibrarySidebarPanel() {
   const { filters, patch, setDatePreset, clearStructured, clearAll } =
@@ -37,19 +57,35 @@ export function PhotoLibrarySidebarPanel() {
     staleTime: 10 * 60 * 1000,
   });
 
-  const [searchInput, setSearchInput] = useState(filters.q ?? '');
-  const debouncedQ = useDebounce(searchInput, 250);
+  // One search box → the unified PO-photo finder (`poFinder` + `poFinderKind`).
+  // 'All' resolves the typed value across serial/tracking/order/PO (+ text/OCR);
+  // a specific field forces that one path. Either way it surfaces the PO's photos.
+  const [searchInput, setSearchInput] = useState(filters.poFinder ?? filters.q ?? '');
+  const [searchField, setSearchField] = useState<PhotoSearchField>(
+    fieldForFinderKind(filters.poFinderKind),
+  );
+  const debouncedInput = useDebounce(searchInput, 250);
+
+  // Re-hydrate the box + scope when the URL changes out-of-band (deep link,
+  // clear-all). Our own patches land back here harmlessly (same value in → out).
+  // A legacy/deep-link `?q=` (no poFinder) hydrates the box under the 'All' scope.
+  useEffect(() => {
+    setSearchInput(filters.poFinder ?? filters.q ?? '');
+    setSearchField(fieldForFinderKind(filters.poFinderKind));
+  }, [filters.q, filters.poFinder, filters.poFinderKind]);
 
   useEffect(() => {
-    setSearchInput(filters.q ?? '');
-  }, [filters.q]);
-
-  useEffect(() => {
-    const trimmed = debouncedQ.trim();
-    if (trimmed === (filters.q ?? '')) return;
-    patch({ q: trimmed || undefined });
+    const trimmed = debouncedInput.trim();
+    const kind = finderKindForField(searchField);
+    const already = trimmed === (filters.poFinder ?? '') && kind === (filters.poFinderKind ?? 'any');
+    if (already) return;
+    patch({
+      poFinder: trimmed || undefined,
+      poFinderKind: trimmed ? kind : undefined,
+      q: undefined,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQ]);
+  }, [debouncedInput, searchField]);
 
   const refinements = useMemo(
     () =>
@@ -89,10 +125,20 @@ export function PhotoLibrarySidebarPanel() {
         value: searchInput,
         onChange: setSearchInput,
         onClear: () => setSearchInput(''),
-        placeholder: 'PO, tracking, or text in photo…',
+        placeholder: SEARCH_FIELD_PLACEHOLDERS[searchField],
         isSearching: query.isFetching && !query.isLoading,
         variant: 'blue',
       }}
+      headerRows={[
+        <HorizontalButtonSlider
+          key="photo-search-field"
+          variant="nav"
+          dense
+          items={SEARCH_FIELD_ITEMS}
+          value={searchField}
+          onChange={(id) => setSearchField(id as PhotoSearchField)}
+        />,
+      ]}
       filter={{
         label: 'Photo filters',
         refinements,
@@ -115,7 +161,7 @@ export function PhotoLibrarySidebarPanel() {
         </div>
       }
     >
-      {refinements.length > 0 || filters.q ? (
+      {refinements.length > 0 || filters.q || filters.poFinder ? (
         <div className="mb-3 px-1">
           <Button
             type="button"

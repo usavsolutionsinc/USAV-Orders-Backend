@@ -36,7 +36,6 @@ import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
 import { dispatchSelectLine } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
-import { safeRandomUUID } from '@/lib/safe-uuid';
 import type { TrackingScanResult } from '@/components/sidebar/receiving/useTrackingScan';
 import { ReceivingReturnBanner } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
@@ -308,20 +307,15 @@ export function ReceivingSidebarPanel() {
                 value={triageQuery}
                 onChange={setTriageQuery}
                 onSubmit={() => {
-                  const tracking = triageQuery.trim();
-                  // Optimistic "importing" skeleton: announce the scan so the
-                  // triage list shows a placeholder row INSTANTLY (no right-pane
-                  // takeover loader); TriageSidebarBody reconciles it in place on
-                  // resolve. The clientEventId is the row's DURABLE identity — the
-                  // stub and the resolved row key by it, so the swap is an in-place
-                  // update (no disappear-then-reappear flicker), not a remount.
-                  if (tracking) {
-                    window.dispatchEvent(
-                      new CustomEvent('receiving-scan-importing', {
-                        detail: { tracking, clientEventId: safeRandomUUID() },
-                      }),
-                    );
-                  }
+                  // No optimistic "importing" stub. It rendered a SECOND rail
+                  // element keyed by a throwaway clientEventId that raced the
+                  // resolve-time feed row (keyed by `carton:<receiving_id>`),
+                  // flickering the title between the tracking# and "Unfound PO".
+                  // The resolve-time prepend in applyUnmatchedCarton now shows the
+                  // carton in place — tracking# title, updating to "Unfound PO" /
+                  // the PO title on refetch, one transition, no remount. This
+                  // mirrors the Unbox scan band, which dropped its stub for the
+                  // same reason.
                   submitTrackingScan(triageQuery, {
                     mode: 'tracking',
                     onResult: selectResolvedTriageCarton,

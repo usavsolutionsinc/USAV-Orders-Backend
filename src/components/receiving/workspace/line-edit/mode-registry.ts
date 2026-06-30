@@ -7,12 +7,12 @@
  *   - `triage`  (/receiving?mode=triage)— fast classify pass → save for unbox
  *   - `testing` (/tech?view=testing)    — verdict pills → pass · print
  *
- * Per-mode CARD VISIBILITY for the shared unbox/triage body lives in
- * `workspace-capabilities.ts` (the `caps` matrix). This registry owns the
- * cross-mode chrome config the unified pane header needs — which toolbar
- * actions a mode shows and which rail/table navigation channel its prev/next
- * drives — so the header is one primitive configured by data, not a bespoke
- * toolbar per mode. Adding a mode = one row here.
+ * Card visibility is no longer a shared matrix — unbox and triage are separate
+ * panels (`LineEditPanel` / `TriagePanel`) that each declare their own sections.
+ * This registry owns only the cross-mode chrome config the unified pane header
+ * needs — which toolbar actions a mode shows and which rail/table navigation
+ * channel its prev/next drives — so the header is one primitive configured by
+ * data, not a bespoke toolbar per mode. Adding a mode = one row here.
  */
 
 export type WorkspaceMode = 'unbox' | 'triage' | 'testing';

@@ -21,7 +21,6 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { TriageCombinedList } from './TriageCombinedList';
 import { TriageRecentRail } from './TriageRecentRail';
 import { TriageUnfoundList } from './TriageUnfoundList';
-import { useScanImportStub } from './useScanImportStub';
 
 export type TriageView = 'triage' | 'found' | 'unfound';
 
@@ -34,33 +33,21 @@ export function resolveTriageView(raw: string | null | undefined): TriageView {
 export function TriageSidebarBody({
   selectedLineId,
   selectedRow,
-  resolvedLine = null,
   filterText = '',
 }: {
   selectedLineId: number | null;
   selectedRow: ReceivingLineRow | null;
-  /**
-   * The RAW resolved line, including synthetic negative-id unfound-carton stubs.
-   * Used ONLY to reconcile the optimistic importing row in place. Unlike
-   * `selectedRow` (filtered to positive, pinnable ids by ReceivingRailBody), this
-   * is NOT filtered, so the unfound case — whose resolved row has a negative id —
-   * reconciles too.
-   */
-  resolvedLine?: ReceivingLineRow | null;
   /** Desktop search text from the sidebar SearchBar (filters both lists). */
   filterText?: string;
 }) {
   const searchParams = useSearchParams();
   const view = resolveTriageView(searchParams.get('triview'));
-  const { importingRow, isImportingRow } = useScanImportStub(resolvedLine);
 
   return view === 'triage' ? (
     <TriageCombinedList
       key="rail-triage-combined"
       selectedLineId={selectedLineId}
       selectedRow={selectedRow}
-      leadingRow={importingRow}
-      isRowDisabled={isImportingRow}
       filterText={filterText}
     />
   ) : view === 'unfound' ? (

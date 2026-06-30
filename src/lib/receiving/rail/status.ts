@@ -15,7 +15,10 @@
  */
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages';
+import {
+  deriveReceivingLineStatus,
+  type ReceivingLineStatus,
+} from '@/lib/receiving/workflow-stages';
 
 // Zoho statuses that mean "the vendor side considers this PO received". Mirror
 // of the canonical server constant ZOHO_RECEIVED_LIKE_STATUSES in
@@ -24,62 +27,68 @@ import { workflowStage, workflowStageDot } from '@/lib/receiving/workflow-stages
 const ZOHO_RECEIVED_LIKE = new Set(['received', 'billed', 'closed']);
 
 /**
- * Operator-facing 3-state model:
- *   - Incoming  → EXPECTED
- *   - Scanned   → ARRIVED | MATCHED (door scan)
- *   - Received  → everything else (UNBOXED + testing + terminal outcomes)
- *
- * This is the single predicate all rails use to decide whether a row should
- * read as "Received" in the UI.
+ * Operator-facing 3-state model (Scanned → Unboxed → Received), the single
+ * coarse status every rail dot + label reads. Derived from the SoT
+ * (`deriveReceivingLineStatus`, workflow-stages.ts) so the rail, the table chip,
+ * and the Overview can never drift, with two row-level special cases the bare
+ * workflow_status can't express:
+ *   - Unmatched cartons have no PO/receive step → unboxed locally reads Received.
+ *   - Vendor-side already-received (Zoho) reads Received in-warehouse.
  */
-export function isOperatorReceived(row: ReceivingLineRow): boolean {
-  const ws = String(row.workflow_status ?? '').trim().toUpperCase();
-
-  // Door-scan stages are never received.
-  if (ws === 'EXPECTED' || ws === 'ARRIVED' || ws === 'MATCHED' || !ws) return false;
-
-  // Unmatched cartons become "received" once they’re unboxed locally.
+function railCoarseStatus(row: ReceivingLineRow): ReceivingLineStatus {
   if (row.receiving_source === 'unmatched') {
-    return Boolean(row.unboxed_at) || (row.quantity_received ?? 0) > 0;
+    return row.unboxed_at || (row.quantity_received ?? 0) > 0 ? 'RECEIVED' : 'SCANNED';
   }
-
-  // Vendor-side already-received still reads as received in-warehouse.
   const zohoReceived = ZOHO_RECEIVED_LIKE.has(String(row.zoho_status ?? '').trim().toLowerCase());
-  if (zohoReceived) return true;
-
-  // Any post-scan workflow stage counts as received for the simplified display.
-  return true;
+  if (zohoReceived) return 'RECEIVED';
+  return deriveReceivingLineStatus(row.workflow_status);
 }
 
+/** @deprecated A row at/after the RECEIVED coarse stage. Prefer {@link railCoarseStatus}. */
+export function isOperatorReceived(row: ReceivingLineRow): boolean {
+  return railCoarseStatus(row) === 'RECEIVED';
+}
+
+/** Coarse status → dot color. Matches `getStatusDotBg` (receiving-constants.ts). */
+const COARSE_DOT: Record<ReceivingLineStatus, string> = {
+  INCOMING: 'bg-amber-400',
+  SCANNED: 'bg-blue-500',
+  UNBOXED: 'bg-indigo-500',
+  RECEIVED: 'bg-emerald-500',
+};
+
+const COARSE_LABEL: Record<ReceivingLineStatus, string> = {
+  INCOMING: 'Incoming',
+  SCANNED: 'Scanned',
+  UNBOXED: 'Unboxed',
+  RECEIVED: 'Received',
+};
+
 export function getReceivingStatusDot(row: ReceivingLineRow): string {
-  return isOperatorReceived(row) ? 'bg-emerald-500' : workflowStageDot(row.workflow_status);
+  return COARSE_DOT[railCoarseStatus(row)];
 }
 
 /**
  * Hover tooltip for the rail status dot. Unboxed / Queue / Viewed are view
- * filters only — the label reflects the line's physical status, not which tab
- * you're on. Receiving pipeline: green → Received, blue family → Scanned.
- *
- * DONE is a terminal workflow stage (label "Done") but still renders an emerald
- * dot — in the receiving sidebar that reads as Received, not Done.
+ * filters only — the label reflects the line's physical 3-state status (Scanned
+ * / Unboxed / Received), not which tab you're on.
  */
 export function getReceivingStatusDotLabel(row: ReceivingLineRow): string {
-  return isOperatorReceived(row) ? 'Received' : 'Scanned';
+  return COARSE_LABEL[railCoarseStatus(row)];
 }
 
 /**
- * Status dot for the Unboxed rail (`unboxRecent` feed). Every row in this feed
- * was opened on the Unbox workspace — locally received/unboxed from the
- * operator's perspective — so the dot always reads Received. Door-scanned-only
- * cartons live in the Queue tab (`scanned` feed) and keep the Scanned label.
+ * Status dot for the Unboxed rail (`unboxRecent` feed). Rows here were opened on
+ * the Unbox workspace, so they read at least Unboxed; once the receive button
+ * finalizes the carton they read Received. Same 3-state SoT as every other rail.
  */
-export function getUnboxRecentStatusDot(_row: ReceivingLineRow): string {
-  return 'bg-emerald-500';
+export function getUnboxRecentStatusDot(row: ReceivingLineRow): string {
+  return COARSE_DOT[railCoarseStatus(row)];
 }
 
 /** Dot tooltip for the Unboxed rail — mirrors {@link getUnboxRecentStatusDot}. */
-export function getUnboxRecentStatusDotLabel(_row: ReceivingLineRow): string {
-  return 'Received';
+export function getUnboxRecentStatusDotLabel(row: ReceivingLineRow): string {
+  return COARSE_LABEL[railCoarseStatus(row)];
 }
 
 /**

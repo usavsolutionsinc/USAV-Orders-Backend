@@ -469,6 +469,9 @@ export const POST = withAuth(async (request, ctx) => {
         condition_grade: conditionGrade,
         notes,
         set_workflow_status: 'MATCHED',
+        // A real receive must not downgrade a line already unboxed at first scan;
+        // scan_only ("Mark as scanned") leaves this false so its revert still works.
+        advanceOnly: !skipZohoReceive,
         staff_id: staffId,
         station,
         client_event_id: lineClientEventId,

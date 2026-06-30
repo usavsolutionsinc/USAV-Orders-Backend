@@ -96,10 +96,12 @@ export async function GET(
          r.zoho_warehouse_id,
          r.support_notes,
          r.listing_url,
-         -- Operator "received" in the Unbox sense = unboxed event (not door scan).
-         -- Door scan is surfaced separately as tracking_scanned_*.
-         to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS received_at,
-         r.unboxed_by                                               AS received_by,
+         -- 3-stage operator lifecycle: Scanned (tracking_scanned_*, door scan) →
+         -- Unboxed (r.unboxed_at, first Unbox-surface scan) → Received (the terminal
+         -- DONE time = MAX(receiving_lines.received_done_at)). "Received" is NOT the
+         -- unbox event: a carton can be unboxed (9:05) yet not finished/received.
+         to_char(recv_done.received_done_at::timestamp, 'YYYY-MM-DD HH24:MI:SS') AS received_at,
+         recv_done.received_by                                       AS received_by,
          to_char(r.unboxed_at::timestamp, 'YYYY-MM-DD HH24:MI:SS')   AS unboxed_at,
          r.unboxed_by,
          -- Tracking-scan provenance. Prefer the earliest receiving_scans row
@@ -133,10 +135,21 @@ export async function GET(
          ORDER BY rs.scanned_at ASC, rs.id ASC
          LIMIT 1
        ) rs_first ON TRUE
+       -- Terminal "Received" (DONE) time + receiver, aggregated over this carton's
+       -- lines. NULL until at least one line is fully received (DONE) — so the
+       -- Overview's "Received" row stays "—" while the carton is only unboxed.
+       LEFT JOIN LATERAL (
+         SELECT MAX(rl.received_done_at) AS received_done_at,
+                (ARRAY_AGG(rl.received_by ORDER BY rl.received_done_at DESC NULLS LAST)
+                   FILTER (WHERE rl.received_by IS NOT NULL))[1] AS received_by
+         FROM receiving_lines rl
+         WHERE rl.receiving_id = r.id AND rl.organization_id = $2
+           AND rl.received_done_at IS NOT NULL
+       ) recv_done ON TRUE
        LEFT JOIN staff staff_scan ON staff_scan.id = COALESCE(rs_first.scanned_by, r.received_by)
        LEFT JOIN staff staff_unbox_open ON staff_unbox_open.id = r.unbox_opened_by
        LEFT JOIN staff staff_unbox ON staff_unbox.id = r.unboxed_by
-       LEFT JOIN staff staff_recv ON staff_recv.id = r.unboxed_by
+       LEFT JOIN staff staff_recv ON staff_recv.id = COALESCE(recv_done.received_by, r.unboxed_by)
        WHERE r.id = $1 AND r.organization_id = $2
        LIMIT 1`,
       [id, orgId],

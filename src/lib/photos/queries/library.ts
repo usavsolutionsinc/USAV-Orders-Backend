@@ -39,6 +39,25 @@ export interface LibraryFilters {
   pickupId?: number | null;
   /** Returns RMA number (rma_authorizations.rma_number via return_dispositions). */
   rma?: string | null;
+  // ── Unified PO-photo finder ──────────────────────────────────────────────
+  /**
+   * A single identifier the operator typed (order#, tracking#, serial#, or PO#).
+   * Unlike the granular `serial`/`tracking` filters above (which keep ONLY the
+   * photos directly linked to that one entity), the finder resolves the value to
+   * its receiving carton(s) and surfaces *every* photo on those cartons — i.e.
+   * "show me this PO's photos" regardless of which identifier you have in hand.
+   */
+  poFinder?: string | null;
+  /** Which identifier `poFinder` is. Defaults to 'po'. */
+  poFinderKind?: PoFinderKind | null;
+}
+
+export type PoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'any';
+
+const PO_FINDER_KINDS: readonly PoFinderKind[] = ['order', 'tracking', 'serial', 'po', 'any'];
+
+export function isPoFinderKind(value: unknown): value is PoFinderKind {
+  return typeof value === 'string' && (PO_FINDER_KINDS as readonly string[]).includes(value);
 }
 
 /**
@@ -92,6 +111,96 @@ function trackingExists(params: unknown[], tracking: string): string {
                  WHERE rl.id = l.entity_id AND stn.tracking_number_normalized ILIKE ${t}))
            )
       )`;
+}
+
+/**
+ * Unified PO-photo finder. Resolves a typed identifier of `kind` to the set of
+ * `receiving` cartons it belongs to, then matches photos linked to ANY of those
+ * cartons (directly as RECEIVING, or via RECEIVING_LINE). The end goal: typing
+ * an order#, tracking#, or serial# surfaces the whole PO's unboxing photos.
+ *
+ * Each carton-resolver subquery is standalone, so it is tenant-scoped on its own
+ * (`organization_id = $1`, the leading organizationId param) — never relying on
+ * the outer photo_entity_links scope. ILIKE substring so a partial paste/last-N
+ * still resolves. One value param, referenced across the kind's resolver.
+ *
+ * Verified join paths (see deep-scan + migrations):
+ *  - tracking → receiving.shipment_id → STN (+ shipment_links extra boxes)
+ *  - serial   → serial_units.origin_receiving_line_id → receiving_lines.receiving_id
+ *  - order    → receiving_lines.source_order_id / zoho_purchaseorder_number (returns
+ *               bind the sales-order# as the carton PO#; see returned-serial-link.ts)
+ *  - po       → receiving.zoho_purchaseorder_number (+ denormalized photos.po_ref)
+ */
+/** The carton-id resolver subquery for ONE identifier kind. References $1 (org)
+ *  and `v` (the value param). 'any' is composed from these, not handled here. */
+function cartonResolverSql(kind: Exclude<PoFinderKind, 'any'>, v: string): string {
+  switch (kind) {
+    case 'tracking':
+      return `
+        SELECT r.id FROM receiving r
+          JOIN shipping_tracking_numbers stn ON stn.id = r.shipment_id
+         WHERE r.organization_id = $1 AND stn.tracking_number_normalized ILIKE ${v}
+        UNION
+        SELECT sl.owner_id FROM shipment_links sl
+          JOIN shipping_tracking_numbers stn ON stn.id = sl.shipment_id
+         WHERE sl.owner_type = 'RECEIVING' AND sl.organization_id = $1
+           AND stn.tracking_number_normalized ILIKE ${v}`;
+    case 'serial':
+      return `
+        SELECT rl.receiving_id FROM serial_units su
+          JOIN receiving_lines rl ON rl.id = su.origin_receiving_line_id
+         WHERE su.organization_id = $1 AND su.serial_number ILIKE ${v}`;
+    case 'order':
+      return `
+        SELECT rl.receiving_id FROM receiving_lines rl
+         WHERE rl.organization_id = $1
+           AND (rl.source_order_id ILIKE ${v} OR rl.zoho_purchaseorder_number ILIKE ${v})`;
+    case 'po':
+    default:
+      return `
+        SELECT r.id FROM receiving r
+         WHERE r.organization_id = $1 AND r.zoho_purchaseorder_number ILIKE ${v}`;
+  }
+}
+
+/** Wrap a carton-id resolver in the "photos linked to any of these cartons" EXISTS. */
+function cartonExistsSql(resolver: string): string {
+  return `EXISTS (
+        SELECT 1 FROM photo_entity_links l
+         LEFT JOIN receiving_lines rlf
+                ON l.entity_type = 'RECEIVING_LINE' AND rlf.id = l.entity_id
+         WHERE l.photo_id = p.id
+           AND l.organization_id = p.organization_id
+           AND COALESCE(
+                 CASE WHEN l.entity_type = 'RECEIVING' THEN l.entity_id END,
+                 rlf.receiving_id
+               ) IN (${resolver})
+      )`;
+}
+
+function poFinderExists(params: unknown[], kind: PoFinderKind, rawValue: string): string {
+  params.push(`%${rawValue}%`);
+  const v = `$${params.length}`;
+  // A direct PO lookup also catches denormalized po_ref-only photos (stamped at
+  // upload by resolve-po-ref.ts) that may predate or lack a carton link.
+  const poRefMatch = `p.po_ref ILIKE ${v}`;
+  if (kind === 'po') {
+    return `(${poRefMatch} OR ${cartonExistsSql(cartonResolverSql('po', v))})`;
+  }
+  if (kind === 'any') {
+    // The smart "All" scope: the operator types whatever they have and we resolve
+    // it as a serial OR tracking OR order OR PO → that PO's photos, and still fall
+    // back to free-text/OCR (po_ref + photo_analysis) so a caption/printed-label
+    // hit isn't lost. ILIKE substring throughout, so a last-N paste still resolves.
+    const cartons = (['serial', 'tracking', 'order', 'po'] as const)
+      .map((k) => cartonExistsSql(cartonResolverSql(k, v)))
+      .join(' OR ');
+    const ocrMatch = `EXISTS (
+        SELECT 1 FROM photo_analysis a
+         WHERE a.photo_id = p.id AND a.metadata::text ILIKE ${v})`;
+    return `(${poRefMatch} OR ${ocrMatch} OR ${cartons})`;
+  }
+  return cartonExistsSql(cartonResolverSql(kind, v));
 }
 
 export async function listPhotoLibrary(filters: LibraryFilters) {
@@ -254,6 +363,10 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
            AND l.organization_id = p.organization_id
            AND rma.rma_number ILIKE $${params.length}
       )`);
+  }
+  if (filters.poFinder) {
+    const kind = isPoFinderKind(filters.poFinderKind) ? filters.poFinderKind : 'po';
+    clauses.push(poFinderExists(params, kind, filters.poFinder));
   }
   // Local pickups create a `receiving` row with source='local_pickup'; scope to
   // (or exclude) those to split the RECEIVING entity into the two sidebar folders.

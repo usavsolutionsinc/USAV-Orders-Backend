@@ -34,7 +34,7 @@ export function ReceivingRailBody({
   const selectedLineId = selectedLine?.id ?? null;
   // Unfound cartons are lineless stubs (negative id) but still open a workspace
   // keyed on receiving_id — pass them through so the rail highlight + pin stay
-  // in sync with the right pane (mirrors triage's resolvedLine reconcile path).
+  // in sync with the right pane.
   const selectedRow =
     selectedLine && (selectedLine.id > 0 || selectedLine.receiving_id != null)
       ? selectedLine
@@ -47,7 +47,6 @@ export function ReceivingRailBody({
       <TriageSidebarBody
         selectedLineId={selectedLineId}
         selectedRow={selectedRow}
-        resolvedLine={selectedLine}
         filterText={triageFilterText}
       />
     );

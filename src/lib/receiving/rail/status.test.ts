@@ -47,17 +47,24 @@ test('getReceivingStatusDotLabel — door-scanned matched carton reads Scanned',
   assert.ok(getReceivingStatusDot(r).includes('blue') || getReceivingStatusDot(r).includes('sky'));
 });
 
-test('getUnboxRecentStatusDot — door-scanned matched carton reads Received in Unboxed rail', () => {
+test('getUnboxRecentStatusDot — matched-but-not-unboxed carton reads Scanned', () => {
   const r = row({ workflow_status: 'MATCHED', quantity_received: 0 });
-  assert.equal(getUnboxRecentStatusDotLabel(r), 'Received');
-  assert.equal(getUnboxRecentStatusDot(r), 'bg-emerald-500');
+  assert.equal(getUnboxRecentStatusDotLabel(r), 'Scanned');
+  assert.equal(getUnboxRecentStatusDot(r), 'bg-blue-500');
 });
 
-test('getUnboxRecentStatusDot — unfound carton in Unboxed rail reads Received', () => {
+test('getUnboxRecentStatusDot — UNBOXED carton reads Unboxed (indigo), not Received', () => {
+  const r = row({ workflow_status: 'UNBOXED', quantity_received: 0 });
+  assert.equal(getUnboxRecentStatusDotLabel(r), 'Unboxed');
+  assert.equal(getUnboxRecentStatusDot(r), 'bg-indigo-500');
+});
+
+test('getUnboxRecentStatusDot — unfound carton, unboxed locally, reads Received', () => {
   const r = row({
     receiving_source: 'unmatched',
     workflow_status: 'ARRIVED',
     quantity_received: 0,
+    unboxed_at: '2026-01-02T00:00:00Z',
     zoho_purchaseorder_id: null,
   });
   assert.equal(getUnboxRecentStatusDotLabel(r), 'Received');

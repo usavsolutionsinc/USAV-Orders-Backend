@@ -28,6 +28,12 @@ function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | nu
   }
   if (filters.sort) params.set('sort', filters.sort);
   if (filters.poRef) params.set('poRef', filters.poRef);
+  // Unified PO-photo finder: one identifier → that PO's photos. The kind tells
+  // the API which join path to resolve (defaults to 'po' server-side).
+  if (filters.poFinder) {
+    params.set('poFinder', filters.poFinder);
+    if (filters.poFinderKind) params.set('poFinderKind', filters.poFinderKind);
+  }
   if (filters.receivingId) params.set('receivingId', filters.receivingId);
   if (filters.staffId) params.set('staffId', filters.staffId);
   if (filters.q) params.set('q', filters.q);

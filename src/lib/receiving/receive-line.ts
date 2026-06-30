@@ -52,6 +52,13 @@ export interface ReceiveLineUnitsInput {
   // such label; using it crashes the whole query at plan time in Postgres.)
   set_workflow_status?: 'UNBOXED' | 'DONE' | 'MATCHED' | null;
 
+  // Advance-only guard for `set_workflow_status: 'MATCHED'`. When true, a line that
+  // is already UNBOXED-or-beyond is NOT pushed back to MATCHED — the receive path
+  // passes this so a carton unboxed at first scan isn't transiently downgraded
+  // (which would also emit a spurious backward inventory_event). The `scan_only`
+  // "Mark as scanned" revert leaves it false so it can still walk a line back.
+  advanceOnly?: boolean;
+
   // Actor + provenance.
   staff_id?: number | null;
   station?: InventoryEventStation;
@@ -620,7 +627,15 @@ export async function receiveLineUnits(
            WHEN $7::text = 'UNBOXED'
              THEN 'UNBOXED'::inbound_workflow_status_enum
            WHEN $7::text = 'MATCHED'
-             THEN 'MATCHED'::inbound_workflow_status_enum
+             THEN CASE
+               -- Advance-only: never walk an already-unboxed/received line back to
+               -- MATCHED (a normal receive after a first-scan unbox). scan_only
+               -- passes advanceOnly=false so its "Mark as scanned" revert still works.
+               WHEN $8::boolean = true
+                    AND workflow_status IN ('UNBOXED','AWAITING_TEST','IN_TEST','PASSED','FAILED','RTV','SCRAP','DONE')
+                 THEN workflow_status
+               ELSE 'MATCHED'::inbound_workflow_status_enum
+             END
            WHEN quantity_expected IS NOT NULL
                 AND (quantity_received + $2) >= quantity_expected
              THEN 'UNBOXED'::inbound_workflow_status_enum
@@ -638,6 +653,7 @@ export async function receiveLineUnits(
       input.condition_grade ?? null,
       input.notes ?? null,
       explicitWorkflow,
+      input.advanceOnly ?? false,
     ],
   );
 

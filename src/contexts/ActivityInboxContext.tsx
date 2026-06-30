@@ -49,6 +49,10 @@ export interface ActivityInboxItem {
   sku?: string;
   trackingNumber?: string;
   receivingId?: number;
+  // tech-queue (return_pending_test / order_ready_ship) deep-link + detail
+  lineId?: number;
+  orderNumber?: string;
+  productTitle?: string;
   // warranty_claim
   claimId?: number;
   claimNumber?: string;
@@ -155,7 +159,10 @@ export function ActivityInboxProvider({
         items?: Array<{
           kind: ActivityInboxItemKind;
           receivingId: number;
+          lineId: number | null;
           trackingNumber: string | null;
+          orderNumber: string | null;
+          productTitle: string | null;
           unboxedAt: string | null;
         }>;
       };
@@ -174,7 +181,10 @@ export function ActivityInboxProvider({
           createdAt: Number.isFinite(ms) ? ms : Date.now(),
           undoUntil: 0, // backlog items are not reversible
           receivingId: it.receivingId,
+          lineId: it.lineId ?? undefined,
           trackingNumber: it.trackingNumber ?? undefined,
+          orderNumber: it.orderNumber ?? undefined,
+          productTitle: it.productTitle ?? undefined,
         };
       });
       setTechQueueItems(mapped);

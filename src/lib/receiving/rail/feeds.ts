@@ -177,9 +177,13 @@ export async function fetchUnboxOpenedRows(rt: RailFetchRuntime): Promise<Receiv
   return (await fetchReceivingLines(UNBOX_OPENED_SOURCE, rt)).receiving_lines;
 }
 
-/** Scan-recency for the Unboxed rail — MUST ignore receive-button updates. */
+/**
+ * Unbox-open recency for the Unboxed rail — leads with unbox_opened_at so the
+ * client sort matches both the rail's time label (getActivityAt) and the server's
+ * ORDER BY. MUST ignore receive-button updates (never updated_at).
+ */
 function scannedRecencyMs(row: ReceivingLineRow): number {
-  const at = row.scanned_at ?? row.received_at ?? row.created_at ?? null;
+  const at = row.unboxed_at ?? row.unbox_opened_at ?? row.scanned_at ?? row.received_at ?? row.created_at ?? null;
   if (!at) return 0;
   const t = Date.parse(at);
   return Number.isNaN(t) ? 0 : t;
@@ -306,8 +310,12 @@ const FEEDS = {
     qty: 'received',
     status: 'unbox-recent',
     buildFetcher: buildUnboxReceivedFetcher,
-    // Unboxed rail time axis is ALWAYS tracking scan time (never updated_at).
-    getActivityAt: (r) => r.scanned_at ?? r.received_at ?? r.created_at ?? null,
+    // Unboxed rail time axis = the UNBOXED milestone (receiving.unboxed_at), stamped
+    // on the first Unbox-surface scan — the same value the right-pane Overview shows
+    // as "Unboxed". unbox_opened_at is the legacy fallback (equals unboxed_at for new
+    // cartons); scan/door times only for rows that predate the stamp. Never updated_at.
+    getActivityAt: (r) =>
+      r.unboxed_at ?? r.unbox_opened_at ?? r.scanned_at ?? r.received_at ?? r.created_at ?? null,
     pinSelectedLead: false,
     // Match History: all staff, deep window (not the triage ?staff= filter).
     usesStaffFilter: false,

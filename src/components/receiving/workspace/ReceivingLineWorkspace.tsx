@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { LineEditPanel } from './LineEditPanel';
+import { TriagePanel } from '../triage/TriagePanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
-import type { ReceivingWorkspaceVariant } from './workspace-capabilities';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+
+/** Which de-coupled right-pane panel to render. */
+type ReceivingWorkspaceVariant = 'unbox' | 'triage';
 
 const LABEL_PRINTED_KEY = (lineId: number) => `receiving-label-printed:${lineId}`;
 
@@ -122,18 +125,17 @@ export function ReceivingLineWorkspace({
         labelPrinted={labelPrinted}
       />
 
-      {/* ── Body — LineEditPanel handles both matched (Zoho PO) and
-          unmatched (Ecwid-pick) cartons. Branches internally on
-          row.receiving_source so the chrome (header, chips, sticky bar,
-          print, audit, claim) stays identical across the two flows. */}
+      {/* ── Body — two de-coupled panels, one per archetype. Triage (the
+          identify-before-unbox pass) is its own lean composition; Unbox is the
+          full editor that handles both matched (Zoho PO) and unmatched
+          (Ecwid-pick) cartons, branching internally on row.receiving_source so
+          its chrome stays identical across those two flows. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <LineEditPanel
-          row={row}
-          staffId={staffId}
-          itemTotal={nav?.total}
-          variant={variant}
-          onClose={onClose}
-        />
+        {variant === 'triage' ? (
+          <TriagePanel row={row} staffId={staffId} onClose={onClose} />
+        ) : (
+          <LineEditPanel row={row} staffId={staffId} itemTotal={nav?.total} />
+        )}
       </div>
     </div>
   );

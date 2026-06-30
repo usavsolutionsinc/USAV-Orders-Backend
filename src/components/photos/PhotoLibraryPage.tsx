@@ -41,6 +41,38 @@ export function PhotoLibraryPage() {
   const { filters, display, setView, patch } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
   const queryClient = useQueryClient();
+
+  // A finder search (serial/tracking/order/PO) resolves to one PO when every
+  // loaded photo shares it. Mirror that PO into the breadcrumb + folder-path
+  // chrome so the right panel reads like an opened PO folder — without writing
+  // poRef to the URL (the search box stays the source of truth). An explicit PO
+  // drill (filters.poRef) always wins; a multi-PO finder result stays generic.
+  const resolvedPoRef = useMemo<string | undefined>(() => {
+    if (filters.poRef) return filters.poRef;
+    if (!filters.poFinder || photos.length === 0) return undefined;
+    const refs = new Set(photos.map((p) => p.poRef ?? '').filter(Boolean));
+    return refs.size === 1 ? [...refs][0] : undefined;
+  }, [filters.poRef, filters.poFinder, photos]);
+  // The PST capture-day span of the photos in view. Under a PO leaf this lets the
+  // breadcrumb descend to the actual day(s) instead of stopping at the week — so a
+  // single-day PO reads `… › Week 27 › Jun 30 › PO 14-…`. Tree order is newest-first.
+  const photoDaySpan = useMemo<{ from: string; to: string } | null>(() => {
+    const days: string[] = [];
+    for (const yr of buildPhotoDateTree(photos))
+      for (const mo of yr.months) for (const d of mo.days) days.push(d.ymd);
+    return days.length ? { from: days[days.length - 1], to: days[0] } : null;
+  }, [photos]);
+
+  // Filters with the resolved PO + the photos' real day span folded in, for the
+  // display chrome that reads `poRef`/dates (breadcrumbs, folder header, context
+  // label). Identity-stable when there's no PO context to enrich.
+  const displayFilters = useMemo(() => {
+    if (!resolvedPoRef) return filters;
+    const withPo = filters.poRef ? filters : { ...filters, poRef: resolvedPoRef };
+    return photoDaySpan
+      ? { ...withPo, dateFrom: photoDaySpan.from, dateTo: photoDaySpan.to }
+      : withPo;
+  }, [filters, resolvedPoRef, photoDaySpan]);
   const { has } = useAuth();
   const canZendesk = has('integrations.zendesk');
   const canManagePhotos = has('photos.manage');
@@ -69,7 +101,7 @@ export function PhotoLibraryPage() {
   const selectionActive = selectMode || isActive;
 
   const shareLinks = usePhotoShareLinks();
-  const { title, subtitle } = describePhotoLibraryContext(filters);
+  const { title, subtitle } = describePhotoLibraryContext(displayFilters);
   const scope = sourceScopeFromFilters(filters);
 
   const { view } = display;
@@ -81,9 +113,9 @@ export function PhotoLibraryPage() {
       scope,
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
-      poRef: filters.poRef,
+      poRef: resolvedPoRef,
     });
-  }, [view, photos, scope, filters.dateFrom, filters.dateTo, filters.poRef]);
+  }, [view, photos, scope, filters.dateFrom, filters.dateTo, resolvedPoRef]);
 
   // Date breadcrumb defaults (right-panel footer): today + the most recent
   // capture day across the loaded photos — both keyed off `created_at` (PST),
@@ -95,10 +127,11 @@ export function PhotoLibraryPage() {
   useEffect(() => {
     if (foldersDateInitialized.current) return;
     if (view !== 'folders') return;
-    if (filters.dateFrom || filters.dateTo || filters.poRef) return;
+    // A finder search owns the result set — don't clobber it with today's date.
+    if (filters.dateFrom || filters.dateTo || filters.poRef || filters.poFinder) return;
     foldersDateInitialized.current = true;
     patch(todayFoldersDateFilter());
-  }, [view, filters.dateFrom, filters.dateTo, filters.poRef, patch]);
+  }, [view, filters.dateFrom, filters.dateTo, filters.poRef, filters.poFinder, patch]);
 
   const handleViewChange = useCallback(
     (next: typeof view) => {
@@ -368,7 +401,7 @@ export function PhotoLibraryPage() {
       ) : (
         <div className="flex h-[40px] shrink-0 items-center border-b border-gray-200 bg-white px-4 lg:px-6">
           <PhotoDateBreadcrumb
-            filters={filters}
+            filters={displayFilters}
             today={today}
             mostRecentDay={mostRecentDay}
             onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}
@@ -383,7 +416,7 @@ export function PhotoLibraryPage() {
           sourceScope={sourceScopeFromFilters(filters)}
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
-          poRef={filters.poRef}
+          poRef={resolvedPoRef}
           onNavigate={({ dateFrom, dateTo, poRef }) => patch({ dateFrom, dateTo, poRef })}
           onPhotoDeleted={() => void query.refetch()}
           selectionActive={selectionActive}
@@ -416,7 +449,7 @@ export function PhotoLibraryPage() {
 
       <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2 lg:px-6">
         <PhotoDateBreadcrumb
-          filters={filters}
+          filters={displayFilters}
           today={today}
           mostRecentDay={mostRecentDay}
           onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}

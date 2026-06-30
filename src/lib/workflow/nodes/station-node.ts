@@ -30,8 +30,31 @@ export const STATION_CONFIG_SCHEMA: Record<string, unknown> = {
       title: 'Station',
       description: 'Operations-catalog station key this step runs at.',
     },
+    trigger: {
+      type: 'string',
+      title: 'Top bar',
+      description:
+        'How operators start work here: a focus-locked scan bar, or a recent-activity feed only (no scan entry / top banner).',
+      options: [
+        { value: 'scan', label: 'Scan bar' },
+        { value: 'feed', label: 'Feed only (no scan)' },
+      ],
+      default: 'scan',
+    },
   },
 };
+
+/** The trigger-slot modes a station node can render its top bar as. */
+export type StationTrigger = 'scan' | 'feed';
+
+/**
+ * Read the configured trigger mode off a station node's config bag, defaulting
+ * to 'scan' (today's hardcoded behavior) for any node that hasn't set it.
+ * Single source of truth so the Inspector knob and the station UI never drift.
+ */
+export function stationTrigger(config: Record<string, unknown> | null | undefined): StationTrigger {
+  return config?.trigger === 'feed' ? 'feed' : 'scan';
+}
 
 interface StationNodeOpts {
   type: string;

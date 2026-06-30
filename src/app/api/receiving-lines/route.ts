@@ -930,6 +930,12 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
               AND oe_uo.event_type = 'UNBOX_SCAN_OPENED'
          ) unbox_open ON TRUE`
       : '';
+    // First-class "opened for unbox" axis for the unbox rail (label + sort). Only
+    // joined for view=unbox_opened (see unboxOpenedJoin); the column is the query
+    // SoT, the ops_event the legacy fallback — same COALESCE the Overview uses.
+    const unboxOpenedSelect = view === 'unbox_opened'
+      ? `, COALESCE(r.unbox_opened_at, unbox_open.unbox_opened_at)::text AS unbox_opened_at`
+      : '';
 
     // Fetch extra line rows when `view=all` so merged Zoho-less placeholders
     // can displace the tail of the list after sort (Recent + History share this).
@@ -1083,6 +1089,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 ${incomingExtrasSelect}
                 ${zohoStatusSelect}
                 ${viewedAtSelect}
+                ${unboxOpenedSelect}
          FROM receiving_lines rl
          -- Soft JOIN: direct FK when set, else PO#-based fallback (see note above).
          -- D1 wrong-shipment guard: a direct receiving FK, else a PO#-based
@@ -2091,6 +2098,7 @@ function buildUnmatchedEmptyReceivingLine(pkg: Record<string, unknown>): Record<
     receiving_type: 'PO',
     created_at: pkg.created_at,
     first_scanned_at: pkg.unbox_opened_at ?? pkg.first_scanned_at,
+    unbox_opened_at: pkg.unbox_opened_at ?? null,
     last_scan_at: pkg.last_scan_at,
     image_url: null,
     photo_count: pkg.photo_count,
@@ -2290,6 +2298,10 @@ function normalizeRow(row: Record<string, unknown>) {
     unboxed_by_name:          (row.unboxed_by_name as string | null) ?? null,
     scanned_at:               (row.first_scanned_at as string | null) ?? null,
     scanned_by_name:          (row.scanned_by_name as string | null) ?? null,
+    // First-class "opened for unbox" time (receiving.unbox_opened_at / UNBOX_SCAN_OPENED).
+    // The unbox rail reads THIS for its label + sort — same axis as the Overview —
+    // instead of inferring it from the overloaded scanned_at. Null on non-unbox views.
+    unbox_opened_at:          (row.unbox_opened_at as string | null) ?? null,
     created_at:               (row.created_at as string | null) ?? null,
     // Last write to the line itself (qty bump, condition, notes, …). Drives
     // the unbox_activity sort's tiebreak in the placeholder merge.
