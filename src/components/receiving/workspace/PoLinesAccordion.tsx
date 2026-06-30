@@ -18,7 +18,6 @@ import { toast } from '@/lib/toast';
 import { ConditionGradeChip, SerialChip, SkuScanRefChip, UnitPriceChip, getLast4 } from '@/components/ui/CopyChip';
 import { SerialChipWithMenu } from '@/components/receiving/workspace/SerialCard';
 import { HandlingUnitChip } from '@/components/receiving/HandlingUnitChip';
-import { InlineEditableText } from '@/components/ui/InlineEditableText';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { qtyProgress } from '@/design-system/tokens/typography/presets';
@@ -31,7 +30,6 @@ import {
 import { setSerialEditHandoff } from '@/components/receiving/workspace/serialEditHandoff';
 import {
   dispatchSelectLine,
-  dispatchLineUpdated,
   type ReceivingLineRow,
 } from '@/components/station/ReceivingLinesTable';
 
@@ -385,33 +383,6 @@ export function PoLinesAccordion({
     }
   };
 
-  // Notion-style inline title edit (active row). Writes item_name via the house
-  // PATCH, then optimistically patches the siblings cache + the open workspace
-  // row (dispatchLineUpdated) so the new title shows everywhere at once.
-  const saveLineTitle = async (lineId: number, next: string) => {
-    const res = await fetch('/api/receiving-lines', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: lineId, item_name: next }),
-    });
-    if (!res.ok) {
-      toast.error('Could not save the item title');
-      return;
-    }
-    queryClient.setQueryData<ApiResponse>(queryKey, (prev) =>
-      prev?.receiving_lines
-        ? {
-            ...prev,
-            receiving_lines: prev.receiving_lines.map((r) =>
-              r.id === lineId ? ({ ...r, item_name: next } as ReceivingLineRow) : r,
-            ),
-          }
-        : prev,
-    );
-    dispatchLineUpdated({ id: lineId, item_name: next });
-    toast.success('Item title updated');
-  };
-
   // Always render — even for single-line POs the row layout (title, qty,
   // sku, price, condition, serial chip) is the canonical context display the
   // workspace expects above the body.
@@ -502,24 +473,15 @@ export function PoLinesAccordion({
                   )
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  {!readOnly && isActive ? (
-                    // Click-to-edit the title on the active line (Notion-style).
-                    <InlineEditableText
-                      value={line.item_name || ''}
-                      placeholder={line.sku || `Line #${line.id}`}
-                      onSave={(next) => saveLineTitle(line.id, next)}
-                      ariaLabel="Edit item title"
-                      className="text-label font-bold text-gray-900"
-                    />
-                  ) : (
-                    /* ds-allow-title: native tooltip shows full value when truncated */
-                    <p
-                      className="truncate text-label font-bold text-gray-900"
-                      title={line.item_name ?? undefined}
-                    >
-                      {line.item_name || line.sku || `Line #${line.id}`}
-                    </p>
-                  )}
+                  {/* Title is sourced from the listing/PO line — read-only. No
+                      inline edit: the operator shouldn't retype the listing title.
+                      ds-allow-title: native tooltip shows full value when truncated */}
+                  <p
+                    className="truncate text-label font-bold text-gray-900"
+                    title={line.item_name ?? undefined}
+                  >
+                    {line.item_name || line.sku || `Line #${line.id}`}
+                  </p>
                   {/* No `truncate` here: `flex flex-wrap` already wraps the
                       badges/chips, and `truncate`'s `overflow: hidden` would
                       clip the SerialChipWithMenu dropdown (positioned below the

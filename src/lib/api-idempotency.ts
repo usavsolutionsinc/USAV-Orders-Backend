@@ -132,10 +132,15 @@ async function takeOverStaleClaim(db: Pick<Pool, 'query'>, p: ClaimParams): Prom
   // Atomically reclaim a pending row whose claim is older than the stale window.
   // Two racers both run this UPDATE; only one matches the row (the other sees
   // created_at already bumped) so exactly one takes over.
+  // org-scoped ($1): a stale claim is reclaimed only for its owning tenant, and
+  // — load-bearing — $1 must be REFERENCED. Binding orgId without using it left
+  // $1 untyped and crashed the whole statement at plan time with
+  // 42P18 "could not determine data type of parameter $1" (the retry-path 500
+  // on mark-received-po). Mirrors getApiIdempotencyResponse's org filter.
   const r = await db.query(
     `UPDATE api_idempotency_responses
         SET created_at = NOW(), staff_id = $4
-      WHERE idempotency_key = $2 AND route = $3
+      WHERE organization_id = $1 AND idempotency_key = $2 AND route = $3
         AND status_code = ${IDEMPOTENCY_PENDING_STATUS}
         AND created_at < NOW() - INTERVAL '${IDEMPOTENCY_STALE_CLAIM_MS} milliseconds'
       RETURNING idempotency_key`,
@@ -151,10 +156,15 @@ export async function finalizeIdempotencyClaim(
   out: { status: number; body: Record<string, unknown> },
 ): Promise<void> {
   try {
+    // org-scoped ($1): finalize only this tenant's claim row. $1 must be
+    // REFERENCED — binding orgId without using it left $1 untyped and crashed
+    // the statement at plan time with 42P18 "could not determine data type of
+    // parameter $1" on the happy path (every successful receive that carried an
+    // Idempotency-Key). Mirrors getApiIdempotencyResponse's org filter.
     await db.query(
       `UPDATE api_idempotency_responses
           SET status_code = $5, response_body = $6::jsonb, staff_id = $4
-        WHERE idempotency_key = $2 AND route = $3`,
+        WHERE organization_id = $1 AND idempotency_key = $2 AND route = $3`,
       [p.orgId, p.idempotencyKey, p.route, p.staffId, out.status, JSON.stringify(out.body)],
     );
   } catch (err) {

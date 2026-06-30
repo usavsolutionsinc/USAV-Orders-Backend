@@ -293,10 +293,10 @@ function ExpandedRow({
         )}
         {meta ? (
           singleRow ? (
-            // Single-row mode mirrors the single-qty SerialCard: condition pills
-            // scroll inside the row instead of widening the workspace.
-            <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-              <div className="min-w-0 flex-1 overflow-hidden">{meta}</div>
+            // PO accordion multi-qty: mirror embedded SerialCard — pills and
+            // serial share one row; no overflow clip so every grade stays reachable.
+            <div className="flex min-w-0 items-center gap-2">
+              {meta}
               <div className="h-8 w-px shrink-0 bg-gray-100" />
             </div>
           ) : (

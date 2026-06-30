@@ -265,6 +265,11 @@ export function ReceivingRecentRail({
       refreshEvents={['receiving-entry-added', 'receiving-entry-deleted', 'usav-refresh-data']}
       eyebrowTitle="Recent"
       autoSelectFirstWhenEmpty
+      // Strict unboxed_at order — never hoist the selected row to the top. The
+      // pin made a just-received carton shoot up then drop back to its real
+      // unboxed_at slot; with it off the rail always reads top→bottom by
+      // unboxed_at (a freshly-unboxed carton is already at the top).
+      pinSelectedLead={false}
       getActivityAt={getUnboxActivityAt}
       getStatusDot={getUnboxRecentStatusDot}
       getStatusDotLabel={getUnboxRecentStatusDotLabel}

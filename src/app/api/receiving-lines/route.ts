@@ -331,6 +331,15 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                   r.zoho_notes                 AS receiving_zoho_notes,
                   r.listing_url                AS receiving_listing_url,
                   r.received_at::text          AS receiving_received_at,
+                  -- Carton unbox stamp — REQUIRED. normalizeRow maps row.unboxed_at
+                  -- ONLY from receiving_unboxed_at, so omitting it here returned
+                  -- unboxed_at:null for every line on this path. The post-receive
+                  -- sibling refresh (useReceiveAction) dispatches these rows into
+                  -- the unbox rail, whose {...existing, ...updated} merge then
+                  -- clobbered the good unboxed_at with null → getUnboxActivityAt
+                  -- collapsed → the just-received carton sank below the top-N and
+                  -- DISAPPEARED. Mirror the other SELECT branches (view=activity).
+                  r.unboxed_at::text           AS receiving_unboxed_at,
                   -- Scan-based "last touched" time, matching view=activity so
                   -- package-sibling refreshes merged into the rail keep the
                   -- correct timestamp (see single-row branch above).

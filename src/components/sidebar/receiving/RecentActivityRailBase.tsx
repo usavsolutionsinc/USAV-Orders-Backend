@@ -49,6 +49,12 @@ export interface RecentActivityRailBaseProps {
   /** Right-aligned eyebrow slot (e.g. a refresh button); takes precedence over suffix. */
   eyebrowAction?: ReactNode;
   autoSelectFirstWhenEmpty?: boolean;
+  /**
+   * Forwarded to the shell. False = strict sort order, no selected-row hoist
+   * (the unbox rail sets this so a receive can't bounce a row to the top and
+   * back). Defaults to true (preserve the pin) for every other rail.
+   */
+  pinSelectedLead?: boolean;
 
   /**
    * Timestamp the row's relative-time label reads. MUST match the feed's sort
@@ -118,6 +124,7 @@ export function RecentActivityRailBase({
   eyebrowSuffix,
   eyebrowAction,
   autoSelectFirstWhenEmpty = false,
+  pinSelectedLead = true,
   getActivityAt = getRowActivityAt,
   getStatusDot,
   getStatusDotLabel,
@@ -139,6 +146,7 @@ export function RecentActivityRailBase({
       selectedId={selectedLineId}
       selectedRow={selectedRow}
       limit={limit}
+      pinSelectedLead={pinSelectedLead}
       eyebrowTitle={eyebrowTitle}
       eyebrowSuffix={eyebrowSuffix}
       eyebrowAction={eyebrowAction}

@@ -17,6 +17,7 @@ export function useSidebarRail<TRow>({
   selectedId, selectedRow = null, limit = 25,
   autoSelectFirstWhenEmpty = false,
   canAutoSelectFirst,
+  pinSelectedLead = true,
   getId, getGroupId, getActivityAt, onSelect,
 }: SidebarRailShellProps<TRow>) {
   const queryClient = useQueryClient();
@@ -153,6 +154,10 @@ export function useSidebarRail<TRow>({
     const top = allRows.slice(0, limit);
     const base = { rows: top, topCount: top.length, pinnedLead: false };
     if (selectedId == null) return base;
+    // Strict-order feeds (pinSelectedLead=false) never hoist the selected row —
+    // the rail must read top→bottom by its sort axis (e.g. unbox rail by
+    // unboxed_at) with no pin bounce on receive. See SidebarRailShellProps.
+    if (!pinSelectedLead) return base;
     // Never resurrect a just-deleted line via the pin — covers both a directly
     // deleted line and the synthetic stub of a deleted carton (whose group id is
     // suppressed even though its negative stub id never hit `deletedIds`).
@@ -163,7 +168,7 @@ export function useSidebarRail<TRow>({
     if (!pin || getId(pin) !== selectedId) return base;
     if (isRowDeleted(pin)) return base;
     return { rows: [pin, ...top], topCount: top.length, pinnedLead: true };
-  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds, isRowDeleted]);
+  }, [allRows, limit, selectedId, selectedRow, getId, deletedIds, isRowDeleted, pinSelectedLead]);
 
   const grouped = useMemo(() => {
     type Info = { groupSize: number; groupIndex: number; groupId: number | null };

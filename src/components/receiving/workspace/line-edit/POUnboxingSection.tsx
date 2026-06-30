@@ -84,14 +84,22 @@ export function POUnboxingSection({
 
   const pairingToggleLabel = pairingOpen ? 'Hide package pairing' : 'Show package pairing';
   const pairingToggle = canCollapsePairing ? (
-    <IconButton
-      icon={<Pencil className="h-4 w-4" />}
-      ariaLabel={pairingToggleLabel}
-      title={pairingToggleLabel}
-      tone="accent"
-      aria-expanded={pairingOpen}
-      onClick={() => setPairingOpen((v) => !v)}
-    />
+    // "Edit PO" microcopy sits to the LEFT of the pencil (the header row is
+    // justify-between, so this group is right-aligned and the label leads the
+    // pencil). It names what the pencil does — open the PO/package-pairing editor.
+    <div className="flex items-center gap-1.5">
+      <span className="text-eyebrow font-black uppercase leading-none tracking-widest text-gray-400">
+        Edit PO
+      </span>
+      <IconButton
+        icon={<Pencil className="h-4 w-4" />}
+        ariaLabel={pairingToggleLabel}
+        title={pairingToggleLabel}
+        tone="accent"
+        aria-expanded={pairingOpen}
+        onClick={() => setPairingOpen((v) => !v)}
+      />
+    </div>
   ) : undefined;
 
   return (

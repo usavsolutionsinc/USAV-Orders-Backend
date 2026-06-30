@@ -57,6 +57,17 @@ export interface SidebarRailShellProps<TRow> {
   selectedId: number | null;
   selectedRow?: TRow | null;
   limit?: number;
+  /**
+   * When true (default), a selected row that falls outside the top-N window is
+   * hoisted to `rows[0]` (pinned lead) so the active line stays visible. Set
+   * FALSE for feeds that must hold a STRICT sort order (e.g. the unbox rail,
+   * which must always read top→bottom by `unboxed_at`): the hoist there made a
+   * just-received carton shoot to the top and then drop back down as the
+   * authoritative refetch settled it into its real `unboxed_at` slot — a
+   * jarring bounce. With the pin off, the row simply stays in its sorted
+   * position (a freshly-unboxed carton is at the top by `unboxed_at` anyway).
+   */
+  pinSelectedLead?: boolean;
 
   eyebrowTitle: string;
   eyebrowSuffix?: string;
