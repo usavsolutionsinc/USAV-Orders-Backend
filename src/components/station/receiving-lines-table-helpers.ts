@@ -31,6 +31,88 @@ export function dispatchLineUpdated(row: Partial<ReceivingLineRow> & { id: numbe
   window.dispatchEvent(new CustomEvent('receiving-line-updated', { detail: row }));
 }
 
+/** Carton-level patch broadcast — listeners merge by `receiving_id`. */
+export interface ReceivingPackageUpdatedDetail {
+  receiving_id: number;
+  zoho_purchaseorder_number?: string | null;
+  zoho_purchaseorder_id?: string | null;
+  receiving_source?: string | null;
+  source_platform?: string | null;
+  listing_url?: string | null;
+  support_notes?: string | null;
+  intake_type?: string | null;
+  is_return?: boolean;
+}
+
+/** Optimistic row shape after POST /api/receiving/:id/unpair. */
+export const RECEIVING_UNPAIR_ROW_PATCH: Partial<ReceivingLineRow> = {
+  zoho_purchaseorder_number: null,
+  zoho_purchaseorder_id: null,
+  receiving_source: 'unmatched',
+  source_platform: null,
+  source_platform_pill: null,
+  receiving_listing_url: null,
+  carton_intake_type: null,
+  intake_type: null,
+  receiving_type: 'PO',
+};
+
+export function mergeReceivingPackageMetaIntoRow(
+  row: ReceivingLineRow,
+  detail: ReceivingPackageUpdatedDetail,
+): ReceivingLineRow | null {
+  if (row.receiving_id !== detail.receiving_id) return null;
+  const next: ReceivingLineRow = { ...row };
+  if ('zoho_purchaseorder_number' in detail) {
+    next.zoho_purchaseorder_number = detail.zoho_purchaseorder_number ?? null;
+  }
+  if ('zoho_purchaseorder_id' in detail) {
+    next.zoho_purchaseorder_id = detail.zoho_purchaseorder_id ?? null;
+  }
+  if ('receiving_source' in detail) {
+    next.receiving_source = detail.receiving_source ?? null;
+  }
+  if ('source_platform' in detail) {
+    next.source_platform = detail.source_platform ?? null;
+    next.source_platform_pill = detail.source_platform ?? null;
+  }
+  if ('listing_url' in detail) {
+    next.receiving_listing_url = detail.listing_url ?? null;
+  }
+  if ('intake_type' in detail) {
+    next.carton_intake_type = detail.intake_type ?? null;
+    next.receiving_type = detail.intake_type ?? 'PO';
+  }
+  if ('support_notes' in detail) {
+    next.receiving_support_notes = detail.support_notes ?? null;
+  }
+  return next;
+}
+
+/** Broadcast a full unpair to every surface keyed on this carton. */
+export function dispatchReceivingCartonUnlinkPatch(receivingId: number, lineId?: number) {
+  const packageDetail: ReceivingPackageUpdatedDetail = {
+    receiving_id: receivingId,
+    zoho_purchaseorder_number: null,
+    zoho_purchaseorder_id: null,
+    receiving_source: 'unmatched',
+    source_platform: null,
+    listing_url: null,
+    intake_type: null,
+    is_return: false,
+  };
+  window.dispatchEvent(
+    new CustomEvent('receiving-package-updated', { detail: packageDetail }),
+  );
+  if (lineId != null) {
+    dispatchLineUpdated({
+      id: lineId,
+      receiving_id: receivingId,
+      ...RECEIVING_UNPAIR_ROW_PATCH,
+    });
+  }
+}
+
 /** Selection scope shared by the table, its header Select toggle, and the
  *  SelectionActionBar (see useTableSelection / SelectionActionBar). */
 export const RECEIVING_SELECTION_SCOPE = 'receiving' as const;

@@ -7,6 +7,7 @@ import {
 } from '../../Icons';
 import { formatDateTimePST } from '@/utils/date';
 import { useZendeskTicketSubject } from '@/hooks/useZendeskTicketSubject';
+import { claimsTicketLabel } from '@/lib/photos/display-names';
 import type { PhotoItem, PhotoMeta } from './photo-gallery-utils';
 
 /**
@@ -53,7 +54,7 @@ function describeSource(meta: PhotoMeta): SourceDescriptor {
 
 /** Reference shown under the badge (PO 123 / Order 123 / Ticket #4821). */
 function sourceRefLabel(source: SourceDescriptor, meta: PhotoMeta): string | null {
-  if (source.kind === 'claims') return meta.ticketId != null ? `Ticket #${meta.ticketId}` : null;
+  if (source.kind === 'claims') return meta.ticketId != null ? claimsTicketLabel(meta.ticketId) : null;
   if (!meta.poRef) return null;
   if (source.kind === 'packing') return `Order ${meta.poRef}`;
   if (source.kind === 'unboxing') return `PO ${meta.poRef}`;
@@ -93,16 +94,21 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
   // Hook must run unconditionally; it self-disables for null/invalid ids.
   const ticketSubject = useZendeskTicketSubject(meta?.ticketId ?? null);
 
-  if (!photo || !meta) return null;
+  if (!photo) return null;
 
-  const source = describeSource(meta);
-  const refLabel = sourceRefLabel(source, meta);
-  const href = sourceHref(source, meta);
+  const source = meta ? describeSource(meta) : {
+    kind: 'unknown' as const,
+    label: 'Photo',
+    tone: 'bg-white/10 text-gray-200 ring-white/20',
+    Icon: ImageIcon,
+  };
+  const refLabel = meta ? sourceRefLabel(source, meta) : null;
+  const href = meta ? sourceHref(source, meta) : null;
   const SourceIcon = source.Icon;
 
-  const analysisNode = meta.damageDetected
+  const analysisNode = meta?.damageDetected
     ? <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/15 px-2 py-0.5 text-xs font-bold text-rose-200 ring-1 ring-inset ring-rose-400/30"><AlertTriangle className="h-3.5 w-3.5" /> Damage detected</span>
-    : meta.hasAnalysis
+    : meta?.hasAnalysis
       ? <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-200 ring-1 ring-inset ring-emerald-400/30"><Sparkles className="h-3.5 w-3.5" /> Analyzed · clear</span>
       : <span className="text-xs text-gray-400">Not analyzed yet</span>;
 
@@ -114,22 +120,25 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
       exit={{ x: 24, opacity: 0 }}
       transition={{ type: 'spring', stiffness: 320, damping: 32 }}
       aria-label="Photo details"
-      className="relative z-20 flex h-full w-80 max-w-[85vw] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/10 bg-black/60 p-5 pt-6 backdrop-blur-xl"
+      className="relative z-20 flex h-full w-80 max-w-[85vw] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/10 bg-black/60 px-5 pb-5 pt-20 backdrop-blur-xl"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Source badge + reference */}
-      <div className="space-y-2">
+      {/* Source badge + reference — pt-20 + pr-14 keeps the header below the
+          window-pinned close (X) control in the top-right corner. */}
+      <div className="space-y-2 pr-14">
         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wider ring-1 ring-inset ${source.tone}`}>
           <SourceIcon className="h-3.5 w-3.5" />
           {source.label}
         </span>
         {source.kind === 'claims' ? (
-          <p data-testid="photo-context-ref" className="text-base font-bold leading-tight text-white">
-            {ticketSubject.data || refLabel || 'Linked claim'}
+          <div className="space-y-1">
+            <p data-testid="photo-context-ref" className="text-base font-bold leading-snug text-white">
+              {ticketSubject.data || refLabel || 'Linked claim'}
+            </p>
             {ticketSubject.data && refLabel ? (
-              <span className="ml-1.5 text-sm font-medium text-gray-400">{refLabel}</span>
+              <p className="text-sm font-semibold tabular-nums text-gray-400">{refLabel}</p>
             ) : null}
-          </p>
+          </div>
         ) : refLabel ? (
           <p data-testid="photo-context-ref" className="text-base font-bold text-white">{refLabel}</p>
         ) : (
@@ -152,13 +161,13 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
 
       {/* Metadata fields */}
       <div className="space-y-4">
-        {meta.takenByStaffName ? (
+        {meta?.takenByStaffName ? (
           <Field icon={<User className="h-3.5 w-3.5" />} label="Taken by">
             {meta.takenByStaffName}
           </Field>
         ) : null}
 
-        {meta.createdAt ? (
+        {meta?.createdAt ? (
           <Field icon={<Calendar className="h-3.5 w-3.5" />} label="Captured">
             <time dateTime={meta.createdAt} className="tabular-nums">{formatDateTimePST(meta.createdAt)}</time>
           </Field>
@@ -176,7 +185,7 @@ export function PhotoContextPanel({ photo }: { photo: PhotoItem | undefined }) {
           {analysisNode}
         </Field>
 
-        {meta.caption ? (
+        {meta?.caption ? (
           <Field icon={<FileText className="h-3.5 w-3.5" />} label="Caption">
             <p className="whitespace-pre-wrap text-sm leading-snug text-gray-200">{meta.caption}</p>
           </Field>

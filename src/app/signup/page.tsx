@@ -102,7 +102,7 @@ export default function SignUpPage() {
 
         <form onSubmit={onSubmit} className="mt-8 space-y-3">
           <Field
-            label="Company"
+            label="Workspace name"
             value={form.companyName}
             onChange={(v) => onChange('companyName', v)}
             placeholder="Acme Logistics"

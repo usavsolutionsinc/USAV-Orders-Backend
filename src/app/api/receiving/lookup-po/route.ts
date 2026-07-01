@@ -25,6 +25,12 @@ import {
 } from '@/lib/tracking-exceptions';
 import { withAuth } from '@/lib/auth/withAuth';
 import { AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import {
+  formatSupportTicketLabel,
+  looksLikeTicketScan,
+  parseTicketScanValue,
+  resolveSupportTicketToReceiving,
+} from '@/lib/support/tickets';
 
 // ── Zoho error classification ────────────────────────────────────────────────
 // Distinguishes "Zoho replied, no match" from "Zoho is unreachable." The former
@@ -84,6 +90,13 @@ async function computePendingOrderSkus(
  * floats the carton to rank-0 in the Prioritize rail AND the tester's queue
  * (RECEIVING_PRIORITY_RANK_SQL) so "urgent to unbox" carries through to test.
  * Idempotent + best-effort — a failure here never blocks the scan response.
+ *
+ * Also auto-routes `priority_lane` (Phase 4, docs/receiving-triage-redesign-plan.md
+ * §6) — the same PO_STOCKOUT/RETURN split `resolveTriageLane` computes client-side
+ * (src/lib/receiving/triage-lane-policy.ts), now actually persisted at the
+ * moment the priority signal fires instead of only ever being a UI hint.
+ * `COALESCE(priority_lane, …)` never overwrites an operator's manual pick — the
+ * same "manual always wins" rule as priority_tier vs is_priority.
  */
 async function markReceivingPriority(receivingId: number | null, orgId: string): Promise<void> {
   if (!receivingId || !Number.isFinite(receivingId)) return;
@@ -93,7 +106,11 @@ async function markReceivingPriority(receivingId: number | null, orgId: string):
       // Pending-order match = top urgency: set the manual override to tier 0
       // (Priority) and keep is_priority in lockstep. Idempotent — skip rows
       // already at the top tier.
-      `UPDATE receiving SET is_priority = true, priority_tier = 0, updated_at = NOW()
+      `UPDATE receiving
+          SET is_priority = true,
+              priority_tier = 0,
+              priority_lane = COALESCE(priority_lane, CASE WHEN is_return THEN 'RETURN' ELSE 'PO_STOCKOUT' END),
+              updated_at = NOW()
         WHERE id = $1 AND (priority_tier IS DISTINCT FROM 0 OR is_priority = false)`,
       [receivingId],
     );
@@ -628,16 +645,19 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     const body = await request.json();
     const rawTracking = String(body?.trackingNumber || '').trim();
     const providedCarrier = String(body?.carrier || '').trim();
-    // Scan route: 'order' resolves a Zoho PO / reference number (local mirror
-    // first), 'tracking' (default) resolves a carrier tracking number.
     // Scan route. 'order' = explicit PO/reference (operator armed PO# mode);
     // 'tracking' = explicit carrier tracking (operator armed Tracking mode);
-    // 'auto' (default for an un-armed scan) = resolve the value as EITHER a PO#
-    // or a tracking# — try PO#-exact (local→Zoho) and tracking (local→Zoho), and
-    // only create an unfound carton when every identity misses. 'auto' is what
-    // stops a dashless PO# from being misread as a tracking and dumped in Unfound.
-    const mode: 'tracking' | 'order' | 'auto' =
-      body?.mode === 'order' ? 'order' : body?.mode === 'auto' ? 'auto' : 'tracking';
+    // 'ticket' = explicit Zendesk ticket # (operator armed Ticket mode);
+    // 'auto' (default for an un-armed scan) = deep-scan the value as ticket#,
+    // PO#, and tracking# — try each identity before creating an unfound carton.
+    const mode: 'tracking' | 'order' | 'ticket' | 'auto' =
+      body?.mode === 'order'
+        ? 'order'
+        : body?.mode === 'ticket'
+          ? 'ticket'
+          : body?.mode === 'auto'
+            ? 'auto'
+            : 'tracking';
     // localOnly: resolve from LOCAL data only and never block on a live Zoho
     // search. The client sends this for the FIRST scan (both modes) so the
     // carton resolves instantly — matched (local mirror / incoming) or unfound —
@@ -661,7 +681,9 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
     // the raw value for the PO# phase via `poLookupValue`.
     const poLookupValue = rawTracking;
     const trackingNumber =
-      mode === 'order' ? rawTracking : extractCanonicalTracking(rawTracking) || rawTracking;
+      mode === 'order' || mode === 'ticket'
+        ? rawTracking
+        : extractCanonicalTracking(rawTracking) || rawTracking;
     // Optional door-intake classification (e.g. 'FBA_RETURN'). Maps to the
     // carton's source_platform/is_return/return_platform so the unboxer sees it.
     const classification: IntakeClassification | null = isIntakeClassification(body?.classification)
@@ -690,6 +712,106 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       providedCarrier && providedCarrier !== 'Unknown'
         ? providedCarrier
         : getCarrier(trackingNumber);
+
+    // −1. TICKET# — resolve an internal support ticket id to its receiving carton
+    //     (support_tickets + ticket_links). Runs before PO/tracking.
+    const tryTicket =
+      mode === 'ticket' || (mode === 'auto' && looksLikeTicketScan(rawTracking));
+    if (tryTicket) {
+      const ticketId = parseTicketScanValue(rawTracking);
+      if (mode === 'ticket' && ticketId == null) {
+        return NextResponse.json({
+          success: true,
+          matched: false,
+          po_matched: false,
+          not_found: true,
+          po_ids: [],
+          error: `No ticket found for "${rawTracking}"`,
+        });
+      }
+      if (ticketId != null) {
+        const hit = await resolveSupportTicketToReceiving(ctx.organizationId, rawTracking).catch(
+          () => null,
+        );
+        if (hit) {
+          await applyIntakeClassification(hit.receivingId, classification, ctx.organizationId);
+          const [lines, receiving_package] = await Promise.all([
+            fetchLines(hit.receivingId, ctx.organizationId),
+            fetchReceivingPackage(hit.receivingId, ctx.organizationId),
+          ]);
+          const recvSourceRes = await tenantQuery<{ source: string | null }>(
+            ctx.organizationId,
+            `SELECT source FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [hit.receivingId, ctx.organizationId],
+          );
+          const recvSource = String(recvSourceRes.rows[0]?.source || 'unmatched');
+          const scanId = await recordReceivingScan(
+            hit.receivingId,
+            rawTracking,
+            carrier,
+            staffId,
+            recvSource === 'zoho_po' ? 'zoho_po' : 'unmatched',
+          );
+          await stampUnboxOpened(hit.receivingId, scanId, rawTracking);
+          const poIdsSet = new Set<string>();
+          for (const l of lines) {
+            if (l.zoho_purchaseorder_id) poIdsSet.add(l.zoho_purchaseorder_id);
+          }
+          const pendingOrderSkus = await computePendingOrderSkus(ctx.organizationId, lines);
+          if (pendingOrderSkus.length > 0) {
+            await markReceivingPriority(hit.receivingId, ctx.organizationId);
+            after(async () => {
+              try {
+                await publishPriorityUnbox({
+                  organizationId: ctx.organizationId,
+                  staffId,
+                  trackingNumber: rawTracking,
+                  receivingId: hit.receivingId,
+                  skus: pendingOrderSkus,
+                  source: 'receiving.lookup-po.ticket',
+                });
+              } catch (err) {
+                console.warn('lookup-po.ticket: priority-unbox publish failed', errMessage(err));
+              }
+            });
+          }
+          return NextResponse.json({
+            success: true,
+            receiving_id: hit.receivingId,
+            scan_id: scanId,
+            preexisting: true,
+            deduped: false,
+            matched: lines.length > 0,
+            po_matched: lines.length > 0,
+            resolved_via: 'local',
+            unbox_verdict: pendingOrderSkus.length > 0 ? 'expedited' : 'normal',
+            po_ids: Array.from(poIdsSet),
+            pending_order_skus: pendingOrderSkus,
+            receiving_package,
+            lines: lines.map((l) => ({
+              id: l.id,
+              sku: l.sku,
+              item_name: l.item_name,
+              image_url: l.image_url,
+              zoho_item_id: l.zoho_item_id,
+              zoho_purchaseorder_id: l.zoho_purchaseorder_id,
+              quantity_expected: l.quantity_expected,
+              quantity_received: l.quantity_received,
+            })),
+          });
+        }
+        if (mode === 'ticket') {
+          return NextResponse.json({
+            success: true,
+            matched: false,
+            po_matched: false,
+            not_found: true,
+            po_ids: [],
+            error: `No receiving carton linked to ticket ${formatSupportTicketLabel(ticketId)}`,
+          });
+        }
+      }
+    }
 
     // 0. ORDER# mode — resolve a PO / reference number to its receiving carton.
     //    LOCAL incoming mirror first (the PO is almost always already in the

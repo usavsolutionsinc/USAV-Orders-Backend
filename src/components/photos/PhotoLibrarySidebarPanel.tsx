@@ -3,21 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SidebarShell } from '@/components/layout/SidebarShell';
-import { Button } from '@/design-system/primitives';
 import { useDebounce } from '@/hooks';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
+import { usePhotoLibraryDefaultMediaType } from '@/hooks/usePhotoLibraryDefaultMediaType';
 import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
 import {
   sourceScopeFromFilters,
   todayFoldersDateFilter,
-  PHOTO_SEARCH_FIELDS,
-  PHOTO_SEARCH_FIELD_LABELS,
-  finderKindForField,
-  fieldForFinderKind,
   type PhotoLibrarySourceScope,
-  type PhotoSearchField,
 } from '@/lib/photos/library-filter-state';
-import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import {
   buildPhotoLibraryRefinements,
   photoLibraryStructuredFilterCount,
@@ -26,25 +20,18 @@ import { PhotoLibraryFilterDropdown } from './PhotoLibraryFilterDropdown';
 import { PhotoLibraryNasBackup } from './PhotoLibraryNasBackup';
 import { PhotoStationFolders } from './PhotoStationFolders';
 import { PhotoLabelsSection } from './PhotoLabelsSection';
+import { MediaSavedViewsSection } from './MediaSavedViewsSection';
+import { useAuth } from '@/contexts/AuthContext';
 import type { StaffRecipient } from '@/components/quick-access/StaffRecipientList';
 
-const SEARCH_FIELD_ITEMS = PHOTO_SEARCH_FIELDS.map((field) => ({
-  id: field,
-  label: PHOTO_SEARCH_FIELD_LABELS[field],
-}));
-
-/** Placeholder reflects the active field-scope so the operator knows what resolves. */
-const SEARCH_FIELD_PLACEHOLDERS: Record<PhotoSearchField, string> = {
-  all: 'PO, order, tracking, serial, or text…',
-  po: 'Find photos by PO #…',
-  order: "Order # → that PO's photos…",
-  tracking: "Tracking # → that PO's photos…",
-  serial: "Serial # → that PO's photos…",
-};
+const SEARCH_PLACEHOLDER = 'PO, order, tracking, serial, ticket, or text…';
 
 export function PhotoLibrarySidebarPanel() {
-  const { filters, patch, setDatePreset, clearStructured, clearAll } =
+  const { filters, display, patch, setDatePreset, clearStructured, applyView } =
     usePhotoLibraryUrlState();
+  usePhotoLibraryDefaultMediaType(filters, patch);
+  const { has } = useAuth();
+  const canManagePhotos = has('photos.manage');
   const { query, photos } = usePhotoLibrary(filters);
   const { data: staffRows = [] } = useQuery<StaffRecipient[]>({
     queryKey: ['staff-picker'],
@@ -57,35 +44,23 @@ export function PhotoLibrarySidebarPanel() {
     staleTime: 10 * 60 * 1000,
   });
 
-  // One search box → the unified PO-photo finder (`poFinder` + `poFinderKind`).
-  // 'All' resolves the typed value across serial/tracking/order/PO (+ text/OCR);
-  // a specific field forces that one path. Either way it surfaces the PO's photos.
   const [searchInput, setSearchInput] = useState(filters.poFinder ?? filters.q ?? '');
-  const [searchField, setSearchField] = useState<PhotoSearchField>(
-    fieldForFinderKind(filters.poFinderKind),
-  );
   const debouncedInput = useDebounce(searchInput, 250);
 
-  // Re-hydrate the box + scope when the URL changes out-of-band (deep link,
-  // clear-all). Our own patches land back here harmlessly (same value in → out).
-  // A legacy/deep-link `?q=` (no poFinder) hydrates the box under the 'All' scope.
   useEffect(() => {
     setSearchInput(filters.poFinder ?? filters.q ?? '');
-    setSearchField(fieldForFinderKind(filters.poFinderKind));
-  }, [filters.q, filters.poFinder, filters.poFinderKind]);
+  }, [filters.q, filters.poFinder]);
 
   useEffect(() => {
     const trimmed = debouncedInput.trim();
-    const kind = finderKindForField(searchField);
-    const already = trimmed === (filters.poFinder ?? '') && kind === (filters.poFinderKind ?? 'any');
-    if (already) return;
+    if (trimmed === (filters.poFinder ?? '')) return;
     patch({
       poFinder: trimmed || undefined,
-      poFinderKind: trimmed ? kind : undefined,
+      poFinderKind: trimmed ? 'any' : undefined,
       q: undefined,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedInput, searchField]);
+  }, [debouncedInput]);
 
   const refinements = useMemo(
     () =>
@@ -98,9 +73,6 @@ export function PhotoLibrarySidebarPanel() {
   const structuredCount = photoLibraryStructuredFilterCount(filters);
   const activeScope = sourceScopeFromFilters(filters);
 
-  // When inside a PO folder under "All photos" (no explicit scope), highlight the
-  // image-type row the folder's photos belong to — the dominant derived scope
-  // across the loaded contact sheet. An explicit scope drives the highlight itself.
   const inferredScope = useMemo<PhotoLibrarySourceScope | null>(() => {
     if (activeScope !== 'all' || !filters.poRef) return null;
     const counts = new Map<PhotoLibrarySourceScope, number>();
@@ -125,22 +97,12 @@ export function PhotoLibrarySidebarPanel() {
         value: searchInput,
         onChange: setSearchInput,
         onClear: () => setSearchInput(''),
-        placeholder: SEARCH_FIELD_PLACEHOLDERS[searchField],
+        placeholder: SEARCH_PLACEHOLDER,
         isSearching: query.isFetching && !query.isLoading,
         variant: 'blue',
       }}
-      headerRows={[
-        <HorizontalButtonSlider
-          key="photo-search-field"
-          variant="nav"
-          dense
-          items={SEARCH_FIELD_ITEMS}
-          value={searchField}
-          onChange={(id) => setSearchField(id as PhotoSearchField)}
-        />,
-      ]}
       filter={{
-        label: 'Photo filters',
+        label: 'Media filters',
         refinements,
         activeCount: structuredCount,
         onClearAll: clearStructured,
@@ -148,7 +110,6 @@ export function PhotoLibrarySidebarPanel() {
           <PhotoLibraryFilterDropdown
             filters={filters}
             onPatch={patch}
-            onDatePreset={setDatePreset}
             onClose={onClose}
             staffOptions={staffRows}
           />
@@ -161,33 +122,40 @@ export function PhotoLibrarySidebarPanel() {
         </div>
       }
     >
-      {refinements.length > 0 || filters.q || filters.poFinder ? (
-        <div className="mb-3 px-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={clearAll}
-            className="h-auto rounded-none px-0 text-micro font-bold uppercase tracking-wider text-gray-400 hover:bg-transparent hover:text-gray-900"
-          >
-            Clear all filters
-          </Button>
-        </div>
-      ) : null}
+      <MediaSavedViewsSection
+        currentFilters={filters}
+        currentView={display.view}
+        savable={
+          structuredCount > 0 ||
+          !!filters.poFinder ||
+          !!filters.q ||
+          !!filters.imageType ||
+          !!filters.label ||
+          (!!filters.sourceScope && filters.sourceScope !== 'all') ||
+          display.view !== 'folders'
+        }
+        canManage={canManagePhotos}
+        onApply={(payload) => applyView(payload.filters, payload.view)}
+      />
       <PhotoStationFolders
         activeScope={activeScope}
         activeImageType={filters.imageType ?? null}
+        activeDocumentType={filters.documentType ?? 'all'}
+        activeOutboundMedia={filters.outboundMedia ?? 'documents'}
         inferredScope={inferredScope}
         onSelect={({ scope, imageType }) =>
           patch({
             sourceScope: scope,
             imageType,
+            documentType: scope === 'outbound' ? filters.documentType ?? 'all' : undefined,
+            outboundMedia: scope === 'outbound' ? filters.outboundMedia ?? 'documents' : undefined,
             ...todayFoldersDateFilter(),
             poRef: undefined,
-            // Selecting a different type clears a stale label refinement.
             label: undefined,
           })
         }
+        onDocumentTypeSelect={(documentType) => patch({ documentType, outboundMedia: 'documents' })}
+        onPackPhotosSelect={() => patch({ outboundMedia: 'pack_photos', documentType: undefined })}
       />
       <PhotoLabelsSection
         activeLabel={filters.label ?? null}

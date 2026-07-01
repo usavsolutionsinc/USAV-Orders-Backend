@@ -21,6 +21,7 @@ import { Button } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
 import { toast } from '@/lib/toast';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 
 interface PhotoRow {
   id: number;
@@ -89,7 +90,11 @@ export const ReceivingPhotoButton = memo(function ReceivingPhotoButton({
     () =>
       (data?.photos ?? [])
         .filter((p) => !!p.photoUrl?.trim())
-        .map((p) => ({ id: p.id, url: p.photoUrl })),
+        .map((p) => ({
+          id: p.id,
+          url: p.photoUrl,
+          meta: unboxingPhotoMeta({ caption: p.caption, createdAt: p.createdAt }),
+        })),
     [data],
   );
 

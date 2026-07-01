@@ -72,16 +72,19 @@ export function ReceivingTicketChip({
   value,
   display,
   openHref,
+  providerTicketId,
   receivingId,
   lineId,
   onUnlinked,
 }: {
-  /** Raw stored ticket ref ("#1234") — copied + parsed for the numeric id. */
+  /** Copy value — internal ticket label (#42). */
   value: string;
-  /** Short label shown in the chip (numeric id). */
+  /** Short label shown in the chip (internal ticket id). */
   display: string;
   /** Zendesk deep link for the chip's external-link button. */
   openHref: string | null | undefined;
+  /** Provider-native id (Zendesk) for thread/unlink/archive APIs. */
+  providerTicketId?: number | null;
   receivingId: number | null;
   /** Line the ticket is linked to (RECEIVING_LINE entity); null → carton. */
   lineId: number | null;
@@ -90,7 +93,7 @@ export function ReceivingTicketChip({
 }) {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef<HTMLDivElement>(null);
-  const ticketId = parseTicketId(value);
+  const zendeskTicketId = providerTicketId ?? parseTicketId(value);
 
   return (
     <div ref={anchorRef} className="flex shrink-0 items-center">
@@ -116,7 +119,8 @@ export function ReceivingTicketChip({
         gap={6}
       >
         <TicketThreadPanel
-          ticketId={ticketId}
+          ticketId={zendeskTicketId}
+          displayTicketId={display}
           open={open}
           receivingId={receivingId}
           lineId={lineId}
@@ -132,12 +136,14 @@ export function ReceivingTicketChip({
 
 function TicketThreadPanel({
   ticketId,
+  displayTicketId,
   open,
   receivingId,
   lineId,
   onUnlinked,
 }: {
   ticketId: number | null;
+  displayTicketId: string;
   open: boolean;
   receivingId: number | null;
   lineId: number | null;
@@ -207,7 +213,7 @@ function TicketThreadPanel({
           <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
           <div className="min-w-0">
             <div className="break-words text-[13px] font-semibold leading-snug text-gray-800">
-              {ticketId ? `Ticket #${ticketId}` : 'Ticket'}
+              {displayTicketId ? `Ticket ${displayTicketId.startsWith('#') ? displayTicketId : `#${displayTicketId}`}` : 'Ticket'}
             </div>
             {data?.ticket.subject ? (
               <div className="break-words text-micro leading-snug text-gray-400">{data.ticket.subject}</div>

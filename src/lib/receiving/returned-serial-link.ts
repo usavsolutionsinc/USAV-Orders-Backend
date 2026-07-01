@@ -36,6 +36,7 @@ import { upsertReceivingLineReturn } from '@/lib/receiving/facts/narrow';
 import { resolveReceivingExceptionsByReceivingId } from '@/lib/tracking-exceptions';
 import { getExternalUrlByItemNumber, getPlatformKeyByItemNumber } from '@/utils/external-item-url';
 import { columnsToClassification, classificationToColumns } from '@/lib/receiving/intake-classification';
+import { tapWorkflow } from '@/lib/workflow/tap';
 
 // ─── Shared types ────────────────────────────────────────────────────────────
 
@@ -296,6 +297,9 @@ export interface ReturnedSerialLinkDeps extends PersistLinkageDeps {
   runTransaction: <T>(orgId: OrgId, cb: (client: PoolClient) => Promise<T>) => Promise<T>;
   resolvePriorOutbound: typeof resolvePriorOutbound;
   recordInventoryEvent: typeof recordInventoryEvent;
+  /** Studio-node tap (Tap 1 — return detected, disposition unknown). Injected
+   *  for testability; fire-and-forget by its own contract, never throws. */
+  tap: typeof tapWorkflow;
 }
 
 const defaultDeps: ReturnedSerialLinkDeps = {
@@ -305,6 +309,7 @@ const defaultDeps: ReturnedSerialLinkDeps = {
   resolveReceivingExceptionsByReceivingId,
   recordInventoryEvent,
   listingUrlForItemNumber: getExternalUrlByItemNumber,
+  tap: tapWorkflow,
 };
 
 /**
@@ -319,7 +324,7 @@ export async function linkReturnedSerial(
 ): Promise<ReturnedSerialLinkResult> {
   const reason = input.reason?.trim() || 'customer return (unbox scan)';
 
-  return deps.runTransaction(orgId, async (client) => {
+  const result = await deps.runTransaction(orgId, async (client) => {
     // 1. Reverse-link: resolve the order this serial last shipped on (BEFORE the
     //    allocation flip so it still sees the open SHIPPED row).
     const prior = await deps.resolvePriorOutbound(
@@ -422,6 +427,25 @@ export async function linkReturnedSerial(
       },
     };
   });
+
+  // Studio tap (Tap 1, §7.1 of the returns-unification plan): fired after the
+  // transaction commits, never inside it — the tap opens its own connection
+  // and advances engine state, so it must only run once the RETURNED write is
+  // durably persisted, not while it could still roll back. Fires for BOTH
+  // outcomes above (linked and unmatched-order): the unit's status was
+  // already flipped to RETURNED by the attach upsert before this function
+  // ever runs (see the RETURNED-event comment above) — a physical return
+  // happened either way, only the sales-order match differs. No disposition
+  // yet, so the `returns` node parks the unit rather than routing it.
+  await deps.tap({
+    serialUnitId: input.serialUnitId,
+    event: 'return_received',
+    orgId,
+    staffId: input.staffId ?? null,
+    source: 'scan',
+  });
+
+  return result;
 }
 
 // ─── Entry 2: import a sales order by its order number ───────────────────────────

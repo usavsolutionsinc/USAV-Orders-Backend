@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import pkg from '../../../../package.json';
 import { Button, Panel, PanelFooter } from '@/design-system/primitives';
+import { PRODUCT_NAME, PLATFORM_SUPPORT_EMAIL } from '@/lib/branding/constants';
 
 interface AppInfo {
   platform: string;
@@ -55,7 +56,7 @@ export function AboutSection() {
           replacing the hand-rolled `rounded-2xl border border-gray-200 bg-white`. */}
       <Panel padding="lg">
         <div className="mb-5">
-          <div className="text-xl font-bold text-text-default">USAV Orders</div>
+          <div className="text-xl font-bold text-text-default">{PRODUCT_NAME}</div>
           <div className="text-sm text-text-muted">v{pkg.version}</div>
         </div>
 
@@ -73,7 +74,7 @@ export function AboutSection() {
             {copied ? 'Copied ✓' : 'Copy diagnostics'}
           </Button>
           <a
-            href="mailto:support@usavsolutions.com?subject=USAV%20Orders%20support"
+            href={`mailto:${PLATFORM_SUPPORT_EMAIL}?subject=${encodeURIComponent(`${PRODUCT_NAME} support`)}`}
             className="rounded-xl border border-border-soft bg-surface-card px-4 py-2 text-xs font-semibold text-text-default hover:bg-surface-canvas"
           >
             Contact support

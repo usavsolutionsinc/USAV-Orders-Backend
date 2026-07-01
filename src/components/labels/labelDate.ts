@@ -19,3 +19,15 @@ export function parseLabelDate(s: string): Date | undefined {
 export function formatLabelDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
 }
+
+/** Locale m/d/yy from an ISO timestamp; falls back to `fallback` (default: now). */
+export function formatLabelDateFromIso(
+  iso: string | null | undefined,
+  fallback: Date = new Date(),
+): string {
+  if (iso) {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return formatLabelDate(d);
+  }
+  return formatLabelDate(fallback);
+}

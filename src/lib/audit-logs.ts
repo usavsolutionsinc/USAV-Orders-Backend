@@ -128,6 +128,8 @@ export const AUDIT_ENTITY = {
   WORKFLOW_DEFINITION: 'workflow_definition',
   // Operations ▸ History — server-backed Master Journey saved views
   OPERATIONS_SAVED_VIEW: 'operations_saved_view',
+  // Media library (/ops/photos) — server-backed filter/view presets
+  MEDIA_SAVED_VIEW: 'media_saved_view',
   // Voice (Nextiva) — Support ▸ Voicemail / Calls
   VOICEMAIL: 'voicemail',
   CALL_EVENT: 'call_event',
@@ -152,6 +154,8 @@ export const AUDIT_ACTION = {
   RECEIVING_RELINK:          'receiving.relink',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
+  /** Real "Save for unbox" transition — stamps receiving.triage_complete. */
+  RECEIVING_TRIAGE_COMPLETE: 'receiving.triage.complete',
   /**
    * A scanned serial was auto-resolved to a previously-shipped order during
    * receiving (the shipped↔returned loop), flipping the carton to a return and
@@ -245,6 +249,8 @@ export const AUDIT_ACTION = {
   // Receiving (scanner-driven matching)
   PO_LOOKUP:        'po.lookup',
   RECEIVING_MATCH:  'receiving.match',
+  /** Manual "Retry pair" from the Unfound strip — re-runs the same tracking search reconcileUnmatchedReceiving does on its cron sweep. */
+  RECEIVING_RETRY_PAIR: 'receiving.retry_pair',
   // GS1 Digital Link resolver (single QR → contextual internal page)
   GS1_RESOLVE:      'gs1.resolve',
   // SKU stock
@@ -273,6 +279,7 @@ export const AUDIT_ACTION = {
   // RMA (record-level CRUD; lifecycle transitions live in verb routes)
   RMA_UPDATE: 'rma.update',
   RMA_CANCEL: 'rma.cancel',
+  RMA_DISPOSITION: 'rma.disposition',
   // Order record edit (delete uses the legacy 'orders.delete' literal)
   ORDER_UPDATE: 'orders.update',
   // Fulfillment substitution — the unit that ships deviates from what was
@@ -286,6 +293,13 @@ export const AUDIT_ACTION = {
   // timeline (EventTimeline) on the dashboard details panel.
   TRACKING_ADDED: 'orders.tracking.added',
   LABEL_PRINTED: 'orders.label.printed',
+  // Outbound documents (docs/outbound-documents-plan.md) — packing slips +
+  // shipping labels stored on `documents` + linked via `document_entity_links`.
+  // LABEL_PRINTED (above) is preserved for the timeline on an order's FIRST
+  // label attach; these cover the general CRUD lifecycle for both doc types.
+  ORDER_DOCUMENT_ATTACH: 'order.document.attach',
+  ORDER_DOCUMENT_FETCH:  'order.document.fetch',
+  ORDER_DOCUMENT_DELETE: 'order.document.delete',
   // Orders-exceptions reconciliation sweep (writes orders + orders_exceptions)
   ORDERS_EXCEPTIONS_SYNC: 'orders_exceptions.sync',
   // Repair service soft-cancel + its reverse (reopen → restore prior status)
@@ -333,6 +347,10 @@ export const AUDIT_ACTION = {
   OPERATIONS_SAVED_VIEW_CREATE: 'operations.saved_view.create',
   OPERATIONS_SAVED_VIEW_UPDATE: 'operations.saved_view.update',
   OPERATIONS_SAVED_VIEW_DELETE: 'operations.saved_view.delete',
+  // Media library (/ops/photos) — saved filter/view presets (personal/shared)
+  MEDIA_SAVED_VIEW_CREATE: 'media.saved_view.create',
+  MEDIA_SAVED_VIEW_UPDATE: 'media.saved_view.update',
+  MEDIA_SAVED_VIEW_DELETE: 'media.saved_view.delete',
   // Voice (Nextiva) — Support ▸ Voicemail / Calls
   VOICEMAIL_FOLLOWUP_RESOLVED: 'voicemail.followup.resolved',
   VOICEMAIL_LINKED:            'voicemail.linked',

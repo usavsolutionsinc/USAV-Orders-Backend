@@ -3,7 +3,7 @@ import { Suspense } from 'react';
 import { OperationsWorkspace } from '@/features/operations/workspace/OperationsWorkspace';
 
 export const metadata: Metadata = {
-  title: 'USAV Operations',
+  title: 'Operations',
 };
 
 export default function OperationsPage() {

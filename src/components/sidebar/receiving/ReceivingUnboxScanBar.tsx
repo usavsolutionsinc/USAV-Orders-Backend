@@ -1,14 +1,15 @@
 'use client';
 
 import { useRef, type FormEvent, type Ref } from 'react';
-import { MapPin, Hash } from '@/components/Icons';
+import { MapPin, Hash, ZendeskMark } from '@/components/Icons';
 import {
   StationScanLeadingIcon,
   StationScanModeRail,
   ThemedStationScanBar,
 } from '@/components/station/scan-bar';
+import { looksLikeTicketScan } from '@/lib/support/tickets';
 
-export type UnboxScanMode = 'tracking' | 'order';
+export type UnboxScanMode = 'ticket' | 'tracking' | 'order';
 
 interface UnboxScanModeMeta {
   mode: UnboxScanMode;
@@ -19,6 +20,13 @@ interface UnboxScanModeMeta {
 }
 
 export const UNBOX_SCAN_MODES: readonly UnboxScanModeMeta[] = [
+  {
+    mode: 'ticket',
+    label: 'Ticket #',
+    Icon: ZendeskMark,
+    armedClass: 'text-emerald-700 bg-emerald-500/10',
+    iconClass: 'text-emerald-600',
+  },
   {
     mode: 'tracking',
     label: 'Tracking #',
@@ -36,24 +44,23 @@ export const UNBOX_SCAN_MODES: readonly UnboxScanModeMeta[] = [
 ] as const;
 
 function modeMeta(mode: UnboxScanMode): UnboxScanModeMeta {
-  return UNBOX_SCAN_MODES.find((m) => m.mode === mode) ?? UNBOX_SCAN_MODES[0];
+  return UNBOX_SCAN_MODES.find((m) => m.mode === mode) ?? UNBOX_SCAN_MODES[1];
 }
 
 /**
  * Display-only hint for the leading icon when the operator hasn't armed a mode.
  * It does NOT decide resolution — an un-armed scan submits `'auto'` and the
- * server resolves the value as EITHER a PO# or a tracking#. (Previously this
- * heuristic *was* the resolution route, which dumped any dashless PO# into the
- * Unfound list.)
+ * server deep-scans ticket #, PO #, and tracking # before creating a carton.
  */
 export function classifyUnboxScan(value: string): UnboxScanMode {
+  if (looksLikeTicketScan(value)) return 'ticket';
   return value.includes('-') ? 'order' : 'tracking';
 }
 
 interface Props {
   value: string;
   onChange: (next: string) => void;
-  /** `'auto'` when un-armed (server resolves PO# or tracking); else the armed mode. */
+  /** `'auto'` when un-armed (server deep-scans ticket/PO/tracking); else the armed mode. */
   onSubmit: (mode: UnboxScanMode | 'auto') => void;
   inputRef?: Ref<HTMLInputElement>;
   isResolving?: boolean;
@@ -80,8 +87,8 @@ export function ReceivingUnboxScanBar({
 
   const handleSubmit = (e?: FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
-    // Armed mode is strict; un-armed submits 'auto' so the server resolves the
-    // value as either a PO# or a tracking# (the icon is just a visual hint).
+    // Armed mode is strict; un-armed submits 'auto' so the server deep-scans
+    // ticket #, PO #, and tracking # (the icon is just a visual hint).
     onSubmit(armedMode ?? 'auto');
   };
 
@@ -92,20 +99,24 @@ export function ReceivingUnboxScanBar({
       onSubmit={handleSubmit}
       inputRef={inputRef ?? fallbackRef}
       staffId={staffId}
-      placeholder={armedMode ? `Scan ${active.label}` : 'Tracking, PO #'}
+      placeholder={armedMode ? `Scan ${active.label}` : 'Ticket #, Tracking, PO #'}
       autoFocus
       className="w-full"
-      rightPadClass="pr-24"
+      rightPadClass="pr-32"
       isResolving={isResolving}
       icon={
         <StationScanLeadingIcon
           Icon={ActiveIcon}
           tintClassName={active.iconClass}
-          ariaLabel={armedMode ? `Armed: ${active.label}` : `Auto — looks up PO # and Tracking #`}
+          ariaLabel={
+            armedMode
+              ? `Armed: ${active.label}`
+              : 'Auto — looks up Ticket #, PO #, and Tracking #'
+          }
           title={
             armedMode
               ? `Next scan forced to ${active.label}. Click the icon again to auto-detect.`
-              : 'Auto — looks the scan up as both a PO # and a Tracking # before creating a carton'
+              : 'Auto — looks the scan up as a Ticket #, PO #, and Tracking # before creating a carton'
           }
         />
       }

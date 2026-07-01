@@ -52,6 +52,22 @@ test('regression: work_orders.view gates the assignments routes', () => {
   assert.ok(paths.some((p) => p.includes('assignments')), 'work_orders.view should gate some assignments route');
 });
 
+test('regression: rma.view/rma.manage gate the RMA routes (not orders.view)', () => {
+  // Returns-unification Phase 4 Stage 1 (Gap #8): RMA routes were previously
+  // gated by the generic orders.view; migrated to a dedicated rma.* pair so
+  // access can be granted independently of general order visibility.
+  const viewPaths = routesGatedBy('rma.view').map((r) => r.path);
+  const managePaths = routesGatedBy('rma.manage').map((r) => r.path);
+  const allRmaPaths = [...viewPaths, ...managePaths];
+  assert.ok(allRmaPaths.includes('/api/rma/route.ts'), 'rma.* should gate /api/rma');
+  assert.ok(allRmaPaths.includes('/api/rma/[id]/route.ts'), 'rma.* should gate /api/rma/[id]');
+  assert.ok(allRmaPaths.includes('/api/rma/by-number/[number]/route.ts'), 'rma.* should gate the by-number lookup');
+  assert.ok(managePaths.includes('/api/rma/[id]/close/route.ts'), 'rma.manage should gate close');
+  assert.ok(managePaths.includes('/api/rma/[id]/disposition/route.ts'), 'rma.manage should gate disposition');
+  assert.ok(managePaths.includes('/api/rma/[id]/mark-received/route.ts'), 'rma.manage should gate mark-received');
+  assert.ok(!routesGatedBy('orders.view').some((r) => r.path.startsWith('/api/rma/')), 'no RMA route should still be on orders.view');
+});
+
 test('regression: sourcing.view gates the Bose model + compatibility read routes', () => {
   const paths = routesGatedBy('sourcing.view').map((r) => r.path);
   // Bose Sourcing Engine Phase 1 — the manifest records the first-declared

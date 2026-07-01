@@ -6,6 +6,10 @@ import { type UnitSlotSerial } from '@/components/tech/TestingUnitSlots';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { TestingController } from './testing-panel-types';
 import { TestingLineSlot, confirmDeleteSerial } from './TestingLineSlot';
+import {
+  shouldUseUnmatchedItemsSurface,
+} from '@/lib/receiving/intake-items-routing';
+import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
 
 interface Props {
   row: ReceivingLineRow;
@@ -31,7 +35,7 @@ export function TestingPoItemsSection({
 }: Props) {
   if (row.receiving_id == null) return null;
 
-  if (row.receiving_source === 'unmatched') {
+  if (shouldUseUnmatchedItemsSurface(row)) {
     return (
       <UnmatchedItemsSection
         receivingId={row.receiving_id}
@@ -39,7 +43,7 @@ export function TestingPoItemsSection({
         embedded={embedded}
         headerRight={headerRight}
         sourcePlatformHint={c.sourcePlatform || undefined}
-        receivingTypeHint={c.receivingType}
+        receivingTypeHint={isReturnIntake(row) ? 'RETURN' : c.receivingType}
         listingUrlHint={c.listingLink || undefined}
         renderLineActions={(line) => (
           <TestingLineSlot

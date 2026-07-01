@@ -9,6 +9,7 @@ import { recordClaimZendeskEvent } from '@/lib/warranty/zendesk-link';
 import { updateTicket } from '@/lib/zendesk';
 import { claimIdFromPath, idempotentJson, warrantyFlagEnabled, warrantyFlagOff } from '@/lib/warranty/route-helpers';
 import { WarrantyVerbBody } from '@/lib/schemas/warranty';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 /**
  * POST /api/warranty/claims/[id]/close — APPROVED / DENIED / REPAIRED / EXPIRED → CLOSED.
@@ -51,8 +52,8 @@ export const POST = withAuth(async (request, ctx) => {
         try {
           await updateTicket(result.claim.zendeskTicketId, {
             status: 'solved',
-            comment: { body: `Warranty claim ${result.claim.claimNumber} closed in USAV Orders.`, public: false },
-          });
+            comment: { body: `Warranty claim ${result.claim.claimNumber} closed in ${PRODUCT_NAME}.`, public: false },
+          }, ctx.organizationId);
           await recordClaimZendeskEvent({
             claimId: id,
             eventType: 'ZENDESK_STATUS',

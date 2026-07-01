@@ -126,6 +126,7 @@ const DOMAIN_RULES: Array<{
       /\bdamage(d)?\b/i,
       /\bshare pack\b/i,
       /\bphoto library\b/i,
+      /\bmedia library\b/i,
     ],
   },
   {

@@ -41,6 +41,10 @@ export function ShippedDetailsPanel({
   // Dashboard-style contexts get the panel-action bar, the Customer tab, and the
   // shipping-label drop-zone (labels only).
   const showDashboardExtras = context === 'dashboard' || isFulfillmentPanel || isLabelsPanel;
+  // Outbound documents (label + slip) get their own tab wherever the tray used
+  // to render inline (docs/outbound-documents-plan.md §9.1/9.2) — full tray on
+  // labels, read-only on dashboard/fulfillment/staged.
+  const showDocumentsTab = showDashboardExtras || isStagedPanel;
 
   // Return tab leads with operator info ("who packed / tested / with what
   // serials") and is the default once the order is packed.
@@ -170,6 +174,7 @@ export function ShippedDetailsPanel({
           onMoveDown={stackActionBar.onMoveDown}
           hasReturnContent={hasReturnContent}
           showCustomerTab={showDashboardExtras}
+          showDocumentsTab={showDocumentsTab}
           activeSection={activeSection}
           onSectionChange={setActiveSection}
         />

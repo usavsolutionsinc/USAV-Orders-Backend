@@ -22,12 +22,13 @@ import {
 } from '@/lib/photos/queries/receiving-list';
 import { createSharePack } from '@/lib/photos/share-packs';
 import { linkPhoto } from '@/lib/photos/service';
-import { buildExternalId, linkTicket } from '@/lib/zendesk-links';
+import { buildExternalId, linkTicket, linkTicketToShipment } from '@/lib/zendesk-links';
 import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
 import { readIdempotencyKey, withIdempotentResponse } from '@/lib/api-idempotency';
 import { getOrganization } from '@/lib/tenancy/organizations';
 import { getNasStorageTarget } from '@/lib/tenancy/settings';
 import { upsertClaimSellerMessage } from '@/lib/receiving-claim-seller-message';
+import { claimTicketLinkEntity } from '@/lib/support/tickets';
 import pool from '@/lib/db';
 import { tenantQuery } from '@/lib/tenancy/db';
 
@@ -104,8 +105,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           : `RCV-${receivingId}`
     ).replace(/[^A-Za-z0-9._-]+/g, '-');
 
-    const entityType = lineId != null ? 'RECEIVING_LINE' : 'RECEIVING';
-    const entityId = lineId != null ? lineId : receivingId;
+    const { entityType, entityId } = claimTicketLinkEntity(lineId, receivingId);
 
     // Dry-run ("Test create"): we've assembled the exact subject/body that would
     // be filed; now short-circuit before any side-effect — no Zendesk ticket, no
@@ -281,6 +281,21 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             entityId,
             staffId: ctx.staffId,
           });
+          const shipmentRow = await tenantQuery<{ shipment_id: number | null }>(
+            ctx.organizationId,
+            `SELECT shipment_id FROM receiving
+              WHERE id = $1 AND organization_id = $2 LIMIT 1`,
+            [receivingId, ctx.organizationId],
+          );
+          const shipmentId = shipmentRow.rows[0]?.shipment_id;
+          if (shipmentId != null) {
+            await linkTicketToShipment({
+              orgId: ctx.organizationId,
+              zendeskTicketId: ticket.id,
+              shipmentId: Number(shipmentId),
+              staffId: ctx.staffId,
+            });
+          }
         } catch (linkErr) {
           console.warn('[POST /api/receiving/zendesk-claim] ticket link backfill failed', linkErr);
         }

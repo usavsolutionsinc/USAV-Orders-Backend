@@ -5,44 +5,80 @@ import { useMemo } from 'react';
 import type { LibraryPhoto } from '@/components/photos/photo-library-types';
 import {
   entityTypeForSourceScope,
+  PHOTO_LIBRARY_PAGE_SIZE,
+  photoLibraryFiltersToParams,
   receivingSourceExcludeForScope,
   receivingSourceForScope,
   type PhotoLibraryFilterState,
 } from '@/lib/photos/library-filter-state';
 
-function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | null): string {
-  const params = new URLSearchParams();
-  params.set('limit', '48');
-  if (cursor) params.set('cursor', String(cursor));
-  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+/**
+ * Map UI filter state → `/api/photos/library` query params. Builds on
+ * {@link photoLibraryFiltersToParams} (URL parity) then expands scope→entityType
+ * and renames keys the API expects (`photoType`, not `imageType`).
+ *
+ * Uses cursor pagination ({@link PHOTO_LIBRARY_PAGE_SIZE} per page) — the grid
+ * loads more via infinite scroll; never fetches the full library in one request.
+ */
+export function photoLibraryFilterParams(filters: PhotoLibraryFilterState): URLSearchParams {
+  const params = photoLibraryFiltersToParams(filters);
+
+  if (filters.sourceScope === 'outbound') {
+    params.set('sourceScope', 'outbound');
+    params.delete('entityType');
+    params.delete('receivingSource');
+    params.delete('receivingSourceExclude');
+    params.delete('photoType');
+    params.delete('imageType');
+    if (filters.outboundMedia === 'pack_photos') {
+      params.set('outboundMedia', 'pack_photos');
+      params.set('entityType', 'PACKER_LOG');
+      params.delete('documentType');
+    } else {
+      params.delete('outboundMedia');
+      if (filters.documentType && filters.documentType !== 'all') {
+        params.set('documentType', filters.documentType);
+      } else {
+        params.delete('documentType');
+      }
+    }
+    return params;
+  }
+
+  params.delete('sourceScope');
+  params.delete('documentType');
+  params.delete('outboundMedia');
+
   const entityType = filters.sourceScope ? entityTypeForSourceScope(filters.sourceScope) : undefined;
   if (entityType) params.set('entityType', entityType);
-  // Unboxing and local pickup share the RECEIVING entity type; the receiving
-  // `source` splits them (local pickup = source 'local_pickup', unboxing = the rest).
+  else params.delete('entityType');
+
   if (filters.sourceScope) {
     const includeSource = receivingSourceForScope(filters.sourceScope);
     if (includeSource) params.set('receivingSource', includeSource);
+    else params.delete('receivingSource');
     const excludeSource = receivingSourceExcludeForScope(filters.sourceScope);
     if (excludeSource) params.set('receivingSourceExclude', excludeSource);
+    else params.delete('receivingSourceExclude');
+  } else {
+    params.delete('receivingSource');
+    params.delete('receivingSourceExclude');
   }
-  if (filters.sort) params.set('sort', filters.sort);
-  if (filters.poRef) params.set('poRef', filters.poRef);
-  // Unified PO-photo finder: one identifier → that PO's photos. The kind tells
-  // the API which join path to resolve (defaults to 'po' server-side).
-  if (filters.poFinder) {
-    params.set('poFinder', filters.poFinder);
-    if (filters.poFinderKind) params.set('poFinderKind', filters.poFinderKind);
+
+  if (filters.imageType) {
+    params.delete('imageType');
+    params.set('photoType', filters.imageType);
+  } else {
+    params.delete('photoType');
   }
-  if (filters.receivingId) params.set('receivingId', filters.receivingId);
-  if (filters.staffId) params.set('staffId', filters.staffId);
-  if (filters.q) params.set('q', filters.q);
-  if (filters.damageDetected) params.set('damageDetected', filters.damageDetected);
-  if (filters.hasAnalysis) params.set('hasAnalysis', filters.hasAnalysis);
-  // Custom image type → filter by the photos.photo_type tag.
-  if (filters.imageType) params.set('photoType', filters.imageType);
-  // Photo label → filter by photo_label_assignments (photo_labels.key).
-  if (filters.label) params.set('label', filters.label);
+
+  return params;
+}
+
+function buildQueryString(filters: PhotoLibraryFilterState, cursor?: number | null): string {
+  const params = photoLibraryFilterParams(filters);
+  params.set('limit', String(PHOTO_LIBRARY_PAGE_SIZE));
+  if (cursor) params.set('cursor', String(cursor));
   return params.toString();
 }
 

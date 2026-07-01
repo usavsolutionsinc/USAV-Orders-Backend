@@ -1,4 +1,5 @@
 import { sanitizeSellerMessage } from '@/lib/ai/seller-message-guard';
+import { normalizeReceivingTicketEntityRefs } from '@/lib/support/tickets';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 
@@ -11,6 +12,19 @@ export interface ClaimSellerMessageRow {
   subjectSnapshot: string | null;
   model: string | null;
   updatedAt: string;
+}
+
+/** Unfound cartons use synthetic line id `-receiving_id`; seller rows are carton-scoped (line null). */
+export function normalizeClaimSellerMessageRefs(args: {
+  receivingId: number;
+  lineId?: number | null;
+}): { receivingId: number; lineId: number | null } {
+  const { receivingId, lineId } = normalizeReceivingTicketEntityRefs({
+    receivingId: args.receivingId,
+    lineId: args.lineId,
+  });
+  if (receivingId == null) throw new Error('receivingId is required');
+  return { receivingId, lineId };
 }
 
 function mapRow(row: Record<string, unknown>): ClaimSellerMessageRow {
@@ -55,8 +69,8 @@ export async function getClaimSellerMessage(opts: {
   receivingId: number;
   lineId?: number | null;
 }): Promise<ClaimSellerMessageRow | null> {
-  const lineId = opts.lineId ?? null;
-  await assertReceivingEntity(opts.orgId, opts.receivingId, lineId);
+  const { receivingId, lineId } = normalizeClaimSellerMessageRefs(opts);
+  await assertReceivingEntity(opts.orgId, receivingId, lineId);
 
   const res = await tenantQuery(
     opts.orgId,
@@ -67,7 +81,7 @@ export async function getClaimSellerMessage(opts: {
         AND receiving_id = $2
         AND receiving_line_id IS NOT DISTINCT FROM $3
       LIMIT 1`,
-    [opts.orgId, opts.receivingId, lineId],
+    [opts.orgId, receivingId, lineId],
   );
   const row = res.rows[0];
   return row ? mapRow(row as Record<string, unknown>) : null;
@@ -111,8 +125,8 @@ export async function deleteClaimSellerMessage(opts: {
   receivingId: number;
   lineId?: number | null;
 }): Promise<boolean> {
-  const lineId = opts.lineId ?? null;
-  await assertReceivingEntity(opts.orgId, opts.receivingId, lineId);
+  const { receivingId, lineId } = normalizeClaimSellerMessageRefs(opts);
+  await assertReceivingEntity(opts.orgId, receivingId, lineId);
 
   const res = await tenantQuery(
     opts.orgId,
@@ -121,7 +135,7 @@ export async function deleteClaimSellerMessage(opts: {
         AND receiving_id = $2
         AND receiving_line_id IS NOT DISTINCT FROM $3
       RETURNING id`,
-    [opts.orgId, opts.receivingId, lineId],
+    [opts.orgId, receivingId, lineId],
   );
   return res.rows.length > 0;
 }
@@ -136,11 +150,11 @@ export async function upsertClaimSellerMessage(opts: {
   zendeskTicketId?: number | null;
   staffId?: number | null;
 }): Promise<ClaimSellerMessageRow> {
-  const lineId = opts.lineId ?? null;
+  const { receivingId, lineId } = normalizeClaimSellerMessageRefs(opts);
   const { message } = sanitizeSellerMessage(opts.sellerMessage);
   if (!message) throw new Error('Seller message is empty');
 
-  await assertReceivingEntity(opts.orgId, opts.receivingId, lineId);
+  await assertReceivingEntity(opts.orgId, receivingId, lineId);
 
   const stampTicketId = 'zendeskTicketId' in opts;
   const ticketIdValue = stampTicketId ? (opts.zendeskTicketId ?? null) : null;
@@ -165,7 +179,7 @@ export async function upsertClaimSellerMessage(opts: {
                 seller_message, subject_snapshot, model, updated_at`,
     [
       opts.orgId,
-      opts.receivingId,
+      receivingId,
       lineId,
       ticketIdValue,
       message,
@@ -188,7 +202,7 @@ export async function linkClaimSellerMessageTicket(opts: {
   lineId?: number | null;
   zendeskTicketId: number;
 }): Promise<void> {
-  const lineId = opts.lineId ?? null;
+  const { receivingId, lineId } = normalizeClaimSellerMessageRefs(opts);
   try {
     await tenantQuery(
       opts.orgId,
@@ -197,7 +211,7 @@ export async function linkClaimSellerMessageTicket(opts: {
         WHERE organization_id = $1
           AND receiving_id = $2
           AND receiving_line_id IS NOT DISTINCT FROM $3`,
-      [opts.orgId, opts.receivingId, lineId, opts.zendeskTicketId],
+      [opts.orgId, receivingId, lineId, opts.zendeskTicketId],
     );
   } catch (err) {
     console.warn('[receiving-claim-seller-message] ticket link failed', err);

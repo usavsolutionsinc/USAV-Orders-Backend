@@ -35,6 +35,7 @@ interface EcwidProductSearchInlineProps extends EcwidProductSearchPopoverProps {
 export function EcwidProductSearchInline({
   showHeader = false,
   className,
+  autoFocusSearch = true,
   ...props
 }: EcwidProductSearchInlineProps) {
   const c = useEcwidProductSearch(props);
@@ -46,7 +47,7 @@ export function EcwidProductSearchInline({
       }`}
     >
       {showHeader ? <EcwidSearchHeader c={c} onClose={props.onClose} /> : null}
-      <EcwidSearchInputs c={c} />
+      <EcwidSearchInputs c={c} autoFocusSearch={autoFocusSearch} />
       <EcwidOrderScopeFilters c={c} />
       <EcwidResultsList c={c} />
     </div>

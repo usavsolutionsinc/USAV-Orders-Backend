@@ -186,6 +186,19 @@ export const framerTransition = {
     ease: motionBezier.easeOut,
   } satisfies Transition,
 
+  /**
+   * Media-library thumbnail → fullscreen viewer hero morph (`layoutId`-driven).
+   * Spring with no overshoot — same rationale as `viewerPaging`: a bounce on a
+   * photo's own edges reads as tacky. Only ever pairs a grid tile with the
+   * viewer's *first* shown image (see PhotoViewerModal) — never used for
+   * in-viewer prev/next, which stays a plain crossfade.
+   */
+  photoHeroMorph: {
+    type: 'spring' as const,
+    visualDuration: 0.45,
+    bounce: 0,
+  } satisfies Transition,
+
   /** Copy feedback flash */
   chipCopyFeedback: {
     duration: framerDuration.chipCopyFeedback,

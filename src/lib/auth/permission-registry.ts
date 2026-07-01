@@ -105,6 +105,8 @@ export const PERMISSIONS = [
   { id: 'warranty.view',            category: 'shipping', label: 'View warranty claims' },
   { id: 'warranty.manage',          category: 'shipping', label: 'Manage warranty claims (log / lifecycle / quote)' },
   { id: 'warranty.repair',          category: 'shipping', label: 'Log warranty repair attempts' },
+  { id: 'rma.view',                 category: 'shipping', label: 'View RMA authorizations' },
+  { id: 'rma.manage',               category: 'shipping', label: 'Manage RMA authorizations (issue / receive / disposition / close / cancel)' },
 
   // ─ FBA ─
   { id: 'fba.view',                 category: 'fba', label: 'View FBA' },
@@ -140,9 +142,9 @@ export const PERMISSIONS = [
   // ─ Operations & Reports ─
   { id: 'dashboard.view',           category: 'ops', label: 'View dashboard' },
   { id: 'operations.view',          category: 'ops', label: 'View operations' },
-  { id: 'photos.view',              category: 'ops', label: 'View photo library' },
-  { id: 'photos.share',             category: 'ops', label: 'Create photo share links' },
-  { id: 'photos.manage',            category: 'ops', label: 'Manage photo folders (create, organize, assign)' },
+  { id: 'photos.view',              category: 'ops', label: 'View media library' },
+  { id: 'photos.share',             category: 'ops', label: 'Create media share links' },
+  { id: 'photos.manage',            category: 'ops', label: 'Manage media library (labels, folders, organize)' },
   { id: 'work_orders.view',         category: 'ops', label: 'View work orders' },
   { id: 'work_orders.claim',        category: 'ops', label: 'Claim work order' },
   { id: 'work_orders.complete',     category: 'ops', label: 'Complete work order' },

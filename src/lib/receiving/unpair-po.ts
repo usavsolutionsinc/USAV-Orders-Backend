@@ -31,6 +31,9 @@ interface UnpairCartonResult {
     zoho_purchaseorder_number: string | null;
     source: string | null;
     source_platform: string | null;
+    intake_type: string | null;
+    is_return: boolean | null;
+    return_platform: string | null;
   } | null;
 }
 
@@ -52,7 +55,8 @@ export async function unpairReceivingCarton(
 
   return deps.runTx(orgId, async (client) => {
     const cartonRes = await client.query(
-      `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number, source, source_platform
+      `SELECT zoho_purchaseorder_id, zoho_purchaseorder_number, source, source_platform,
+              intake_type, is_return, return_platform
          FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
       [receivingId, orgId],
     );
@@ -69,14 +73,39 @@ export async function unpairReceivingCarton(
               is_repair_service = FALSE,
               source_system = NULL,
               zoho_purchaseorder_id = NULL,
-              zoho_purchaseorder_number = NULL
+              zoho_purchaseorder_number = NULL,
+              receiving_type = CASE
+                WHEN receiving_type = 'RETURN' THEN NULL
+                ELSE receiving_type
+              END,
+              listing_url = CASE
+                WHEN receiving_type = 'RETURN' THEN NULL
+                ELSE listing_url
+              END,
+              listing_reference = CASE
+                WHEN receiving_type = 'RETURN' THEN NULL
+                ELSE listing_reference
+              END
         WHERE receiving_id = $1 AND organization_id = $2`,
+      [receivingId, orgId],
+    );
+
+    // Typed return facts (serial-link / import-sales-order) — drop with the pairing.
+    await client.query(
+      `DELETE FROM receiving_line_return
+        WHERE organization_id = $2
+          AND receiving_line_id IN (
+            SELECT id FROM receiving_lines
+             WHERE receiving_id = $1 AND organization_id = $2
+          )`,
       [receivingId, orgId],
     );
 
     // ── Revert the carton header to Unfound (explicit sanctioned downgrade) ──
     // Also clears listing_url: the listing was the pairing's (the Ecwid product),
     // so a full revert resets it — the chip falls back to empty for an unfound box.
+    // Return-specific columns are cleared so a serial-unlinked box cannot stay
+    // classified as RETURN while `source` reads unmatched.
     await client.query(
       `UPDATE receiving
           SET zoho_purchaseorder_id = NULL,
@@ -84,6 +113,9 @@ export async function unpairReceivingCarton(
               source = 'unmatched',
               source_platform = NULL,
               listing_url = NULL,
+              is_return = false,
+              return_platform = NULL,
+              intake_type = NULL,
               updated_at = NOW()
         WHERE id = $1 AND organization_id = $2`,
       [receivingId, orgId],

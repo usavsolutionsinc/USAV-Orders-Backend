@@ -39,6 +39,7 @@ import {
   readIdempotencyKey,
   saveApiIdempotencyResponse,
 } from '@/lib/api-idempotency';
+import { isSalesOrderDerivedCarton } from '@/lib/receiving/intake-items-routing';
 
 const IDEMPOTENCY_ROUTE = 'receiving.add-unmatched-line';
 
@@ -279,13 +280,13 @@ export const POST = withAuth(async (request: NextRequest, ctx) => {
       );
     }
 
-    // An Ecwid-derived carton (flipped to zoho_po by a per-line return/repair
-    // link, no real Zoho PO id) must keep accepting items — a box mixing several
-    // returns/repairs adds them one at a time, and the FIRST link already flipped
-    // source to zoho_po. Treat it like an unmatched carton for additions.
-    const isEcwidDerivedCarton =
-      receiving.source_platform === 'ecwid' && !receiving.zoho_purchaseorder_id;
-    if (receiving.source !== 'unmatched' && !allowOffPo && !isEcwidDerivedCarton) {
+    // A sales-order-derived carton (flipped to zoho_po by a per-line return/repair
+    // link or an order# bind, no real Zoho PO id) must keep accepting items — a
+    // box mixing several returns/repairs adds them one at a time, and the FIRST
+    // link already flipped source to zoho_po. Includes Amazon/Ecwid/any platform
+    // (not only source_platform='ecwid'). Treat like unmatched for additions.
+    const isOrderLinkedCarton = isSalesOrderDerivedCarton(receiving);
+    if (receiving.source !== 'unmatched' && !allowOffPo && !isOrderLinkedCarton) {
       return respond(
         {
           success: false,

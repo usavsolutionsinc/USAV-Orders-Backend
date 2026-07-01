@@ -14,6 +14,8 @@
 
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { ReceivingFeedRail } from './ReceivingFeedRail';
+import { useTriageStagingMap } from './useTriageStagingMap';
+import { TriageStagingChips } from './TriageStagingChips';
 
 export function TriageRecentRail({
   selectedLineId,
@@ -25,6 +27,7 @@ export function TriageRecentRail({
   /** Desktop search text from the sidebar SearchBar (filters the list). */
   filterText?: string;
 }) {
+  const stagingMap = useTriageStagingMap();
   return (
     <ReceivingFeedRail
       feed="scanned"
@@ -32,6 +35,11 @@ export function TriageRecentRail({
       selectedLineId={selectedLineId}
       selectedRow={selectedRow}
       filterText={filterText}
+      renderPopoverContext={(row) => (
+        <TriageStagingChips
+          ctx={row.receiving_id != null ? stagingMap.get(row.receiving_id) : undefined}
+        />
+      )}
     />
   );
 }

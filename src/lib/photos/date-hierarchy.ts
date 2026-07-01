@@ -103,6 +103,19 @@ function shortLabel(ymd: string): string {
   return `${MONTHS[dt.getUTCMonth()].slice(0, 3)} ${dt.getUTCDate()}`;
 }
 
+/** `Jun 15-21` or `Jun 29 - Jul 5` when the span crosses a month boundary. */
+export function weekRangeLabel(dateFrom: string, dateTo: string): string {
+  const fromDt = ymdToUtc(dateFrom);
+  const toDt = ymdToUtc(dateTo);
+  if (!fromDt || !toDt) return `${dateFrom} – ${dateTo}`;
+  const fromMo = MONTHS[fromDt.getUTCMonth()].slice(0, 3);
+  const toMo = MONTHS[toDt.getUTCMonth()].slice(0, 3);
+  const d1 = fromDt.getUTCDate();
+  const d2 = toDt.getUTCDate();
+  if (fromMo === toMo) return `${fromMo} ${d1}-${d2}`;
+  return `${fromMo} ${d1} - ${toMo} ${d2}`;
+}
+
 function rangeEquals(a: PhotoDateRange, from: string, to: string): boolean {
   return a.dateFrom === from && a.dateTo === to;
 }
@@ -154,7 +167,7 @@ export function describePhotoDatePath(filters: {
   if (level === 'week' || level === 'day') {
     crumbs.push({
       key: 'week',
-      label: `Week ${isoWeekNumber(anchor)}`,
+      label: weekRangeLabel(week.dateFrom, week.dateTo),
       range: week,
       current: level === 'week',
     });

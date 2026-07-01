@@ -28,14 +28,14 @@ export const sidebarHeaderBandClass = `shrink-0 bg-white ${receivingHeaderHairli
 // re-gutters to SIDEBAR_GUTTER so every sidebar panel aligns on one left column.
 // The workspace keeps receivingIdentityBandClass directly (12px), so this only
 // moves sidebar chrome — the two panes stay decoupled.
-export const sidebarHeaderPillRowClass = cn(receivingIdentityBandClass, SIDEBAR_GUTTER);
+export const sidebarHeaderPillRowClass = cn(receivingIdentityBandClass, SIDEBAR_GUTTER, 'min-w-0');
 /**
  * Sticky `nav` pill band inside a scrolling sidebar body — transparent (no bg
  * fill) so the active pill's drop shadow renders over rail rows beneath.
  * Pair with `HorizontalButtonSlider variant="nav" dense overlay`.
  */
 export const sidebarNavOverlayBandClass = cn(
-  'sticky top-0 z-10 flex h-[40px] shrink-0 items-center overflow-visible',
+  'sticky top-0 z-10 flex min-h-[40px] shrink-0 items-center overflow-visible',
   SIDEBAR_GUTTER,
 );
 export const sidebarHeaderRowClass = `flex min-h-[44px] items-center ${SIDEBAR_GUTTER} py-1`;

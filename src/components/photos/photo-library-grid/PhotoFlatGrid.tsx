@@ -1,6 +1,11 @@
 'use client';
 
 import type { PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
+import {
+  photoGridLeafClass,
+  photoGridTileProps,
+  type PhotoGridDensity,
+} from '@/lib/photos/photo-grid-density';
 import { PhotoCard } from './PhotoCard';
 import type { PhotoGridViewProps } from './types';
 
@@ -13,6 +18,7 @@ import type { PhotoGridViewProps } from './types';
  */
 export function PhotoFlatGrid({
   view,
+  gridDensity,
   photos,
   scope,
   selectionActive,
@@ -20,29 +26,30 @@ export function PhotoFlatGrid({
   onSelectTile,
   onPhotoContextMenu,
   openAt,
-}: PhotoGridViewProps & { view: PhotoLibraryViewMode }) {
-  const isLarge = view === 'grid-lg';
-  const containerClass = isLarge
-    ? 'grid grid-cols-2 items-start gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5'
-    : 'grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8';
+}: PhotoGridViewProps & { view: PhotoLibraryViewMode; gridDensity: PhotoGridDensity }) {
+  const showLabel = view === 'grid-lg';
+  const containerClass = photoGridLeafClass(gridDensity);
 
   return (
     <div className={containerClass}>
-      {photos.map((photo) => (
+      {photos.map((photo) => {
+        const tile = photoGridTileProps(photo, gridDensity);
+        return (
         <PhotoCard
           key={photo.id}
           photo={photo}
-          imageUrl={photo.thumbUrl}
+          imageUrl={tile.imageUrl}
           scope={scope}
-          ratio={isLarge ? 'natural' : 'square'}
-          showLabel={isLarge}
+          ratio={tile.ratio}
+          showLabel={showLabel}
           selectionActive={selectionActive}
           selected={selected.has(photo.id)}
           onSelect={(mods) => onSelectTile(photo.id, mods)}
           onOpen={() => openAt(photo.id)}
           onContextMenu={onPhotoContextMenu}
         />
-      ))}
+        );
+      })}
     </div>
   );
 }

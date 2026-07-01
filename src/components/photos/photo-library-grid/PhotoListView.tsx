@@ -1,5 +1,6 @@
 'use client';
 
+import { photoHeroLayoutId } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 import { formatDateTimePST } from '@/utils/date';
 import { cn } from '@/utils/_cn';
 import { PhotoThumb } from '../PhotoThumb';
@@ -41,8 +42,16 @@ export function PhotoListView({
                 isSelected && 'bg-blue-50/50',
               )}
             >
-              <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border">
-                <PhotoThumb src={photo.thumbUrl} alt="" damage={Boolean(photo.damageDetected)} />
+              {/* No `overflow-hidden` here — PhotoThumb self-clips to the matching
+                  `rounded-md` so the hero-morph transform isn't cut off mid-animation. */}
+              <div className="relative h-12 w-12 shrink-0 rounded-md border border-border">
+                <PhotoThumb
+                  src={photo.thumbUrl}
+                  alt=""
+                  damage={Boolean(photo.damageDetected)}
+                  heroId={photoHeroLayoutId(photo.id)}
+                  className="rounded-md"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{fileName}</p>

@@ -97,8 +97,8 @@ export type HorizontalButtonSliderProps = {
   size?: 'md' | 'lg';
   /**
    * Tighter vertical rhythm for the `nav` variant — drops the scroller's
-   * vertical padding from `py-2` to `py-1` so the row fits a 40px band exactly
-   * (32px pill + 8px). Used by header bands that must align on a 40px grid.
+   * vertical padding to `pt-1 pb-2` so the row fits a ~44px band (32px pill +
+   * shadow bleed). Used by header bands that align on the 40px grid.
    */
   dense?: boolean;
   className?: string;
@@ -151,16 +151,27 @@ export function HorizontalButtonSlider({
   // The `nav` variant uses scale-up + shadow on the active pill. Setting
   // overflow-x-auto forces overflow-y to compute as auto too (CSS spec), so
   // drop shadows get clipped unless the scroller has extra bottom padding.
-  // Dense nav: symmetric py-1 + h-8 pills = 40px band (matches scan/mode rows).
-  // Non-dense keeps extra bottom pad so active-pill shadows aren't clipped.
+  // Dense nav: pt-1 + h-8 pills + pb-2 = 44px band — extra bottom pad so the
+  // active pill's shadow-md isn't clipped by overflow-x-auto (which forces
+  // overflow-y:auto per spec). Non-dense keeps more bottom pad for scale-up bleed.
   const scrollerPadY =
-    variant === 'nav' ? (dense ? 'py-1' : 'pt-2 pb-3') : 'pb-0.5';
+    variant === 'nav' ? (dense ? 'pt-1 pb-2' : 'pt-2 pb-3') : 'pb-0.5';
 
-  // `floating`, `overlay` nav, and `segmented` skip the scroller — floating and
-  // overlay to avoid clipping pill shadows; segmented so flex-1 children stretch.
+  // `floating` and `segmented` skip the scroller — floating so its wrapped
+  // pills can grow the sidebar naturally, segmented so flex-1 children
+  // stretch. Overlay nav USED to skip it unconditionally too (to avoid
+  // overflow-x-auto clipping the active pill's scale-up/shadow bleed), but
+  // every real consumer of `overlay` also passes `dense` — and dense pills
+  // never scale-animate (see `isActive && !isDisabled && !dense` below), so
+  // that bleed never actually happens for `overlay`+`dense`. Skipping the
+  // scroller instead just made the row `flex-wrap` once pills ran out of room
+  // (e.g. a 4th Triage/Prioritize/Unfound/Done tab wrapping to its own line).
+  // Dense overlay nav now scrolls horizontally like every other pill row; a
+  // hypothetical future non-dense overlay still gets the old overflow-visible
+  // treatment so its shadow bleed stays unclipped.
   const isSegmented = variant === 'segmented';
   const isOverlayNav = overlay && variant === 'nav';
-  const useScroller = variant !== 'floating' && !isSegmented && !isOverlayNav;
+  const useScroller = variant !== 'floating' && !isSegmented && !(isOverlayNav && !dense);
   const containerClass = isSegmented
     ? segmentedFlush
       ? // Full-bleed sidebar band: square white fill + bottom hairline (matches header bands).
@@ -169,15 +180,11 @@ export function HorizontalButtonSlider({
         // pill reads as raised. p-1 + h-8 tabs = 40px in a fixed 40px band.
         'rounded-xl bg-surface-canvas p-1 ring-1 ring-inset ring-border-soft'
     : useScroller
-      ? `-mx-1 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
-      : isOverlayNav
-        ? dense
-          ? 'overflow-visible py-1'
-          : 'overflow-visible pt-2 pb-3'
-        : 'overflow-visible py-2';
+      ? `-mx-1 min-w-0 overflow-x-auto overscroll-x-contain ${scrollerPadY} [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden`
+      : 'overflow-visible pt-2 pb-3';
 
   return (
-    <div className={className}>
+    <div className={cn(useScroller && 'min-w-0', className)}>
       {legend ? (
         <span className="mb-1.5 block text-mini font-black uppercase tracking-widest text-zinc-400">
           {legend}
@@ -244,7 +251,7 @@ export function HorizontalButtonSlider({
               const Icon = item.icon;
               const isDisabled = !!item.disabled;
               // `dense` pills lock to a flat 32px (h-8) with no active scale-up
-              // so they sit cleanly inside a 40px grid row (32 + py-1*2).
+              // so they sit cleanly inside a compact band (32 + pt-1 + pb-2).
               const navSizeCls = navIconOnly
                 ? 'h-8 w-8 min-w-8 shrink-0 justify-center p-0'
                 : dense

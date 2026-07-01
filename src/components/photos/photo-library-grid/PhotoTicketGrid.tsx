@@ -1,25 +1,27 @@
 'use client';
 
 import { Layers } from '@/components/Icons';
+import { photoGridLeafClass, photoGridTileProps, type PhotoGridDensity } from '@/lib/photos/photo-grid-density';
 import { formatDateTimePST } from '@/utils/date';
 import { PhotoCard } from './PhotoCard';
-import { groupPhotosByTicket, UNLINKED_TICKET_KEY } from './photo-grid-format';
+import { groupPhotosByTicket } from './photo-grid-format';
 import type { PhotoGridViewProps } from './types';
 
 /**
  * Group-by-ticket: stack ticket sections, each a labeled header + a tight grid
- * of its photos. The grouping key is `poRef` (the ticket number).
+ * of its photos. Claims group by Zendesk ticket#; other scopes group by `poRef`.
  */
 export function PhotoTicketGrid({
   photos,
   scope,
+  gridDensity,
   selectionActive,
   selected,
   onSelectTile,
   onPhotoContextMenu,
   openAt,
-}: PhotoGridViewProps) {
-  const groups = groupPhotosByTicket(photos);
+}: PhotoGridViewProps & { gridDensity: PhotoGridDensity }) {
+  const groups = groupPhotosByTicket(photos, scope);
   return (
     <div className="space-y-5">
       {groups.map((group) => (
@@ -27,7 +29,7 @@ export function PhotoTicketGrid({
           <header className="mb-2 flex items-center gap-2 border-b border-gray-100 pb-1.5">
             <Layers className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             <span className="truncate text-sm font-semibold text-gray-900">
-              {group.key === UNLINKED_TICKET_KEY ? group.label : `PO ${group.label}`}
+              {group.label}
             </span>
             <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-micro font-bold tabular-nums text-gray-500">
               {group.photos.length}
@@ -36,13 +38,16 @@ export function PhotoTicketGrid({
               {formatDateTimePST(group.latestAt)}
             </time>
           </header>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
-            {group.photos.map((photo) => (
+          <div className={photoGridLeafClass(gridDensity)}>
+            {group.photos.map((photo) => {
+              const tile = photoGridTileProps(photo, gridDensity);
+              return (
               <PhotoCard
                 key={photo.id}
                 photo={photo}
-                imageUrl={photo.thumbUrl}
+                imageUrl={tile.imageUrl}
                 scope={scope}
+                ratio={tile.ratio}
                 showLabel={false}
                 selectionActive={selectionActive}
                 selected={selected.has(photo.id)}
@@ -50,7 +55,8 @@ export function PhotoTicketGrid({
                 onOpen={() => openAt(photo.id)}
                 onContextMenu={onPhotoContextMenu}
               />
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}

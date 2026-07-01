@@ -16,6 +16,7 @@ import { ActivityInboxPopover } from '@/components/quick-access/ActivityInboxPop
 import { ClipboardHistoryPopover } from '@/components/quick-access/ClipboardHistoryPopover';
 import { SyncStatusPopover } from '@/components/quick-access/SyncStatusPopover';
 import { FeedbackPopover } from '@/components/quick-access/FeedbackWidget';
+import { PhoneSignInQrButton } from '@/components/quick-access/PhoneSignInQrButton';
 import { getStaffThemeById, stationThemeColors } from '@/utils/staff-colors';
 
 type OpenPopover = 'none' | 'history' | 'inbox' | 'account' | 'sync' | 'clipboard' | 'feedback';
@@ -152,6 +153,9 @@ export function GlobalHeaderActions({ variant = 'desktop' }: { variant?: 'deskto
           <ClipboardHistoryPopover onClose={() => setPopover('none')} />
         </AnchoredLayer>
       </div>
+
+      {/* Phone sign-in QR — scan to open /m/signin on your phone. */}
+      <PhoneSignInQrButton className={ctrlSize} iconClassName={iconSize} />
 
       {/* Notifications */}
       <div ref={inboxAnchorRef} className="relative">

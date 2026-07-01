@@ -43,8 +43,8 @@ export interface ResolvedAuthor {
  * Order: Zendesk agent roster → Zendesk user roster (requester / end users) →
  * the ticket requester identity → email-only → last-resort id.
  *
- * `isOurs` drives right-side placement: a comment is ours if its author is an
- * agent, OR it's a non-public internal note, OR it's our optimistic echo.
+ * `isOurs` drives bubble styling: a comment is ours if its author is an agent,
+ * OR it's a non-public internal note, OR it's our optimistic echo.
  */
 export function resolveAuthor(
   c: ZendeskComment,

@@ -30,12 +30,12 @@ import { X } from '@/components/Icons';
 import { IconButton } from '@/design-system/primitives';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
-import type { PhotoGalleryInput } from '@/components/shipped/PhotoGallery';
+import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 import SocialCards, { type CardItem } from '@/components/ui/card-fan-carousel';
 import { useUIModeOptional } from '@/design-system/providers/UIModeProvider';
 import { MobileSwipePhotoViewer, type SwipePhotoSlide } from '@/components/mobile/station/MobileSwipePhotoViewer';
 
-export type PeekCard = { id: string; imgUrl: string; alt: string };
+export type PeekCard = { id: string; imgUrl: string; alt: string; meta?: PhotoMeta };
 
 const PEEK_COUNT = 4; // cards in the corner/fan
 
@@ -101,7 +101,8 @@ export function PhotoPeekFan({
     () =>
       chronoCards.map((c) => {
         const idNum = Number(c.id);
-        return Number.isFinite(idNum) ? { id: idNum, url: c.imgUrl } : { url: c.imgUrl };
+        const base = Number.isFinite(idNum) ? { id: idNum, url: c.imgUrl } : { url: c.imgUrl };
+        return c.meta ? { ...base, meta: c.meta } : base;
       }),
     [chronoCards],
   );
@@ -111,6 +112,7 @@ export function PhotoPeekFan({
   const gallery = usePhotoGallery({
     photos: chronoPhotos,
     receivingId,
+    libraryHref: receivingId ? `/ops/photos?receivingId=${receivingId}` : undefined,
     onPhotoDeleted,
   });
   const { viewerOpen, openViewer } = gallery;

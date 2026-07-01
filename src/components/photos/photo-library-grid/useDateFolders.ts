@@ -21,11 +21,13 @@ interface UseDateFoldersArgs {
   dateFrom?: string;
   dateTo?: string;
   poRef?: string;
+  ticketId?: string;
   onNavigate: (nav: PhotoDateNav) => void;
 }
 
 interface DateFoldersState {
   isLeaf: boolean;
+  leafPhotos: LibraryPhoto[];
   leafInputs: PhotoGalleryInput[];
   openIndex: number | null;
   setOpenIndex: Dispatch<SetStateAction<number | null>>;
@@ -45,11 +47,12 @@ export function useDateFolders({
   dateFrom,
   dateTo,
   poRef,
+  ticketId,
   onNavigate,
 }: UseDateFoldersArgs): DateFoldersState {
   const browseArgs = useMemo(
-    () => ({ photos, scope, dateFrom, dateTo, poRef }),
-    [photos, scope, dateFrom, dateTo, poRef],
+    () => ({ photos, scope, dateFrom, dateTo, poRef, ticketId }),
+    [photos, scope, dateFrom, dateTo, poRef, ticketId],
   );
   const browse = useMemo(() => resolveFolderBrowseState(browseArgs), [browseArgs]);
   const onOpen = useMemo(
@@ -58,28 +61,30 @@ export function useDateFolders({
   );
 
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const leafInputs = useMemo(() => toGalleryInputs(photos, scope), [photos, scope]);
+  const leafPhotos = browse.leafPhotos;
+  const leafInputs = useMemo(() => toGalleryInputs(leafPhotos, scope), [leafPhotos, scope]);
 
   const datePath = useMemo(() => describePhotoDatePath({ dateFrom, dateTo }), [dateFrom, dateTo]);
   const level = datePath.length === 0 ? 'root' : datePath[datePath.length - 1]!.key;
   const anchor = dateFrom;
 
-  useEffect(() => setOpenIndex(null), [dateFrom, dateTo, poRef]);
+  useEffect(() => setOpenIndex(null), [dateFrom, dateTo, poRef, ticketId]);
 
   // Empty-day fallback: if a single day is selected (e.g. today on open) but it
   // has no photos, widen to that day's week so the operator lands on day folders
   // instead of a dead-empty day. Empty-week widens to the month the same way.
   useEffect(() => {
-    if (poRef || !anchor || photos.length > 0) return;
+    if (poRef || ticketId || !anchor || photos.length > 0) return;
     if (level === 'day') {
       onNavigate(weekRangeOf(anchor));
     } else if (level === 'week') {
       onNavigate(monthRangeOf(anchor.slice(0, 7)));
     }
-  }, [level, poRef, anchor, photos.length, onNavigate]);
+  }, [level, poRef, ticketId, anchor, photos.length, onNavigate]);
 
   return {
     isLeaf: browse.isLeaf,
+    leafPhotos,
     leafInputs,
     openIndex,
     setOpenIndex,

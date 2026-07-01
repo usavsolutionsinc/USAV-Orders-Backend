@@ -61,7 +61,11 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import { MatchCard } from '@/components/receiving/triage/MatchCard';
 import { relativeTime, toTriagePackage } from '@/components/receiving/triage/triage-types';
 import { useTriagePanel } from '@/components/receiving/triage/useTriagePanel';
+import { usePoSuggestions } from '@/components/receiving/triage/usePoSuggestions';
+import { PoSuggestBanner } from '@/components/receiving/triage/PoSuggestBanner';
 import { useUnmatchedItems } from '@/components/receiving/workspace/unmatched-items/useUnmatchedItems';
+import { useReceivingCartonUnlink } from '@/components/receiving/workspace/unmatched-items/useReceivingCartonUnlink';
+import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
 
 type MatchTab = 'ecwid' | 'po' | 'email' | 'zendesk';
 
@@ -177,8 +181,8 @@ function TriageMatchingCard({
   const orderLinked = !pkg.isUnmatched && Boolean(pkg.poNumber || pkg.zohoPoId);
   const hasTicket = Boolean(pkg.zendeskTicket);
   const [forcePicker, setForcePicker] = useState(false);
-  const [unlinking, setUnlinking] = useState(false);
   const [unlinkingTicket, setUnlinkingTicket] = useState(false);
+  const { unlinkCarton, unlinking } = useReceivingCartonUnlink();
   // Picker is hidden only when an order/PO is linked and the operator hasn't
   // re-opened it to change/add.
   const pickerCollapsed = orderLinked && !forcePicker;
@@ -188,6 +192,9 @@ function TriageMatchingCard({
     loadCandidates: zendeskQueriesActive,
     loadDeliveredEmails: zendeskQueriesActive,
   });
+  // PO-matching auto-suggest (§3.6) — only worth checking while the picker is
+  // actually open for an unmatched carton (not collapsed to the linked summary).
+  const poSuggestions = usePoSuggestions(row, !collapsed && !pickerCollapsed);
   const pairingCollapse = useMotionPresence(framerPresence.collapseHeight);
   const pairingCollapseTransition = useMotionTransition(framerTransition.sidebarExpand);
 
@@ -195,59 +202,23 @@ function TriageMatchingCard({
   // linkage; leaves any Zendesk ticket intact). Patches the open row so the
   // header chips re-derive immediately, then invalidates the rails/feeds.
   const unlink = async () => {
-    if (unlinking) return;
-    if (
-      !window.confirm(
-        'Unlink this package? The PO#/platform pairing is cleared and the carton goes back to the Unfound queue.',
-      )
-    )
-      return;
-    setUnlinking(true);
-    try {
-      const res = await fetch(`/api/receiving/${receivingId}/unpair`, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) {
-        toast.error(data?.error ?? `Unlink failed (${res.status})`);
-        return;
-      }
-      dispatchLineUpdated({
-        id: row.id,
-        zoho_purchaseorder_number: null,
-        zoho_purchaseorder_id: null,
-        receiving_source: 'unmatched',
-        source_platform: null,
-        source_platform_pill: null,
-        receiving_listing_url: null,
-      });
-      window.dispatchEvent(new CustomEvent('usav-refresh-data'));
-      window.dispatchEvent(
-        new CustomEvent('receiving-package-updated', {
-          // Clear the listing too — the derived storefront link is gated to a
-          // linked carton, and a pasted one is reset by the unpair revert.
-          detail: {
-            receiving_id: receivingId,
-            source_platform: null,
-            zoho_purchaseorder_number: null,
-            listing_url: null,
-          },
-        }),
-      );
-      invalidateReceivingFeeds(queryClient);
-      setForcePicker(false);
-      // Land the operator in the Unfound view — the carton just reverted to
-      // unfound. Triage only (showOpenInUnbox is the triage tell); the right pane
-      // keeps this carton open (changing the sub-view doesn't clear selection).
-      if (showOpenInUnbox) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('triview', 'unfound');
-        router.replace(`/receiving?${params.toString()}`);
-      }
-      toast.success('Unlinked — back on the Unfound queue');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unlink failed');
-    } finally {
-      setUnlinking(false);
-    }
+    const ok = await unlinkCarton({
+      receivingId,
+      lineId: row.id,
+      confirmMessage:
+        pkg.isUnmatched || isReturnIntake(row)
+          ? 'Unlink this package? The order pairing is cleared and the carton goes back to the Unfound queue.'
+          : 'Unlink this package? The PO#/platform pairing is cleared and the carton goes back to the Unfound queue.',
+      onSuccess: () => {
+        setForcePicker(false);
+        if (showOpenInUnbox) {
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('triview', 'unfound');
+          router.replace(`/receiving?${params.toString()}`);
+        }
+      },
+    });
+    if (ok) setForcePicker(false);
   };
 
   // Unlink the Zendesk TICKET (carton-grained, matching how the Zendesk tab
@@ -355,6 +326,9 @@ function TriageMatchingCard({
       }
       invalidateReceivingFeeds(queryClient);
       setForcePicker(false);
+      if (showOpenInUnbox) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('receiving-focus-scan')), 60);
+      }
     },
   });
 
@@ -417,6 +391,10 @@ function TriageMatchingCard({
     // bleeding past the right edge. `clip` (not `hidden`) avoids forcing a
     // vertical scrollbar and leaves the active pill's shadow intact.
     <div className="min-w-0 overflow-x-clip">
+      {/* Auto-suggest (§3.6) — the primary/first-shown pairing path (D1); the
+          manual "Zoho PO" tab below is unchanged as the correction tool. */}
+      <PoSuggestBanner suggestions={poSuggestions} />
+
       {/* Switchable tabs — Ecwid Search (default) · Link-a-Zoho-PO · Zendesk ·
           Email PO. All work for matched AND unmatched cartons. The overlay-nav
           slider has no scroller, so it must be width-constrained (flex-1 +
@@ -450,6 +428,7 @@ function TriageMatchingCard({
           receivingId={receivingId}
           popoverMode="repair_service"
           initialOrderScope="all"
+          autoFocusSearch={!showOpenInUnbox}
           onSelect={u.handleAddLine}
           onClose={() => setTab('po')}
         />

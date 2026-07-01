@@ -20,6 +20,6 @@ export default async function LocationPage({
   const { gln, code } = await params;
   const sid = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
-  const result = await resolveGs1(`/414/${gln}/254/${code}`, { isInternal: user !== null });
+  const result = await resolveGs1(`/414/${gln}/254/${code}`, { isInternal: user !== null, orgId: user?.organizationId });
   redirect(result.redirect);
 }

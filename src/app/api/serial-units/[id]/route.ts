@@ -4,6 +4,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { listPhotosForEntity } from '@/lib/photos/service';
+import { resolveCurrentReceivingLineIds } from '@/lib/neon/serial-units-queries';
 
 /**
  * GET /api/serial-units/:id
@@ -89,6 +90,16 @@ export async function GET(
       serial_unit_id: Number(unit.id),
       limit: 50,
     }, orgId);
+
+    // The line this unit is CURRENTLY on — origin_receiving_line_id freezes to
+    // the FIRST-ever receiving line (upsertSerialUnit COALESCEs it) and never
+    // advances when a unit ships, returns, and is re-received under a
+    // different PO/carton. Exposed alongside the raw column (never replacing
+    // it — some callers legitimately want the immutable origin) so "jump to
+    // this unit's PO" style lookups can read the field that's actually kept
+    // current.
+    const currentLineMap = await resolveCurrentReceivingLineIds([Number(unit.id)], orgId);
+    const currentReceivingLineId = currentLineMap.get(Number(unit.id)) ?? null;
 
     // Inline product title + receiver name for display.
     let productTitle: string | null = null;
@@ -255,7 +266,12 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      serial_unit: { ...unit, product_title: productTitle, received_by_name: receivedByName },
+      serial_unit: {
+        ...unit,
+        current_receiving_line_id: currentReceivingLineId,
+        product_title: productTitle,
+        received_by_name: receivedByName,
+      },
       events,
       ...(fullDetail ?? {}),
     });
@@ -412,6 +428,7 @@ async function buildPrintFallback(unitId: string, orgId: OrgId) {
     condition_grade: liveUnit?.condition_grade ?? condition,
     origin_source: 'label_print',
     origin_receiving_line_id: null,
+    current_receiving_line_id: null,
     received_at: liveUnit?.received_at ?? row.created_at,
     received_by: liveUnit?.received_by ?? row.staff_id,
     received_by_name: staffRow,

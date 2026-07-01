@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Download } from '@/components/Icons';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 type DetectedOS = 'mac' | 'win' | 'unknown';
 type DetectedArch = 'arm64' | 'x64' | 'unknown';
@@ -119,7 +120,7 @@ export function DesktopAppDownload() {
             <Download className="h-7 w-7" />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
-            Install USAV Orders desktop app
+            Install {PRODUCT_NAME} desktop app
           </h1>
           <p className="mt-3 max-w-xl text-sm text-gray-600 sm:text-base">
             Get full access — silent label printing, ring scanner support, sidecar server, and

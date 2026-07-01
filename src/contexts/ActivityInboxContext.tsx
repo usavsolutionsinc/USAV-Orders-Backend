@@ -31,6 +31,7 @@ export type ActivityInboxItemKind =
   | 'warranty_claim'
   | 'return_pending_test'
   | 'order_ready_ship'
+  | 'support_followup'
   | 'staff_message';
 
 export interface ActivityInboxItem {
@@ -62,6 +63,13 @@ export interface ActivityInboxItem {
   senderName?: string;
   /** Raw copied text — used for the "copy back" affordance in the popover. */
   body?: string;
+  // support_followup (in-website Zendesk ticket assignment)
+  ticketId?: number;
+  ticketSubject?: string;
+  assignedStaffId?: number;
+  assignedStaffName?: string;
+  assignedByStaffId?: number | null;
+  assignedByStaffName?: string | null;
 }
 
 const WARRANTY_EVENT_LABEL: Record<string, string> = {
@@ -130,6 +138,9 @@ export function ActivityInboxProvider({
   // ready to ship). Kept separate from the ephemeral push items so a refetch
   // replaces it wholesale without wiping repair/warranty/priority-unbox toasts.
   const [techQueueItems, setTechQueueItems] = useState<ActivityInboxItem[]>([]);
+  // In-website Zendesk ticket assignments (support_ticket_assignments). Seeded on
+  // mount and refetched when a support_assignment staff_message push lands.
+  const [supportFollowupItems, setSupportFollowupItems] = useState<ActivityInboxItem[]>([]);
   // Persisted staff-to-staff messages (clipboard "send to staff"). Like the
   // tech backlog, seeded from the DB on mount and refetched on each push so it
   // survives reload — these are the first inbox items with a durable source.
@@ -140,6 +151,7 @@ export function ActivityInboxProvider({
     if (!user) {
       setItems([]);
       setTechQueueItems([]);
+      setSupportFollowupItems([]);
       setStaffMessageItems([]);
     }
   }, [user]);
@@ -197,6 +209,49 @@ export function ActivityInboxProvider({
     void refreshTechQueue();
   }, [refreshTechQueue]);
 
+  const refreshSupportFollowups = useCallback(async () => {
+    if (!user?.staffId) {
+      setSupportFollowupItems([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/inbox/support');
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items?: Array<{
+          ticketId: number;
+          subject: string | null;
+          assignedStaffId: number;
+          assignedStaffName: string;
+          assignedByStaffId: number | null;
+          assignedByStaffName: string | null;
+          updatedAtMs: number;
+        }>;
+      };
+      const mapped: ActivityInboxItem[] = (data.items ?? []).map((it) => ({
+        id: `support-${it.ticketId}`,
+        kind: 'support_followup' as const,
+        title: it.subject?.trim() || `Ticket #${it.ticketId}`,
+        subtitle: `Follow up · assigned to ${it.assignedStaffName}`,
+        createdAt: Number.isFinite(it.updatedAtMs) ? it.updatedAtMs : Date.now(),
+        undoUntil: 0,
+        ticketId: it.ticketId,
+        ticketSubject: it.subject ?? undefined,
+        assignedStaffId: it.assignedStaffId,
+        assignedStaffName: it.assignedStaffName,
+        assignedByStaffId: it.assignedByStaffId,
+        assignedByStaffName: it.assignedByStaffName,
+      }));
+      setSupportFollowupItems(mapped);
+    } catch {
+      /* best-effort — next push or reload retries */
+    }
+  }, [user?.staffId]);
+
+  useEffect(() => {
+    void refreshSupportFollowups();
+  }, [refreshSupportFollowups]);
+
   // Persisted unread staff messages. Seeded on mount and refetched whenever a
   // staff_message push lands (authoritative read model, like the tech queue).
   const refreshStaffMessages = useCallback(async () => {
@@ -217,7 +272,9 @@ export function ActivityInboxProvider({
           createdAtMs: number;
         }>;
       };
-      const mapped: ActivityInboxItem[] = (data.items ?? []).map((m) => {
+      const mapped: ActivityInboxItem[] = (data.items ?? [])
+        .filter((m) => m.kind !== 'support_assignment')
+        .map((m) => {
         const ctx = m.context ?? {};
         const sellerMessageId =
           typeof ctx.sellerMessageId === 'number' ? ctx.sellerMessageId : null;
@@ -247,10 +304,11 @@ export function ActivityInboxProvider({
         };
       });
       setStaffMessageItems(mapped);
+      void refreshSupportFollowups();
     } catch {
       /* best-effort — next push or reload retries */
     }
-  }, [user?.staffId]);
+  }, [user?.staffId, refreshSupportFollowups]);
 
   useEffect(() => {
     void refreshStaffMessages();
@@ -392,10 +450,16 @@ export function ActivityInboxProvider({
   useAblyChannel(
     inboxChannel,
     'staff_message',
-    (msg: { data?: { senderName?: unknown } }) => {
+    (msg: { data?: { senderName?: unknown; kind?: unknown } }) => {
       const sender = typeof msg?.data?.senderName === 'string' ? msg.data.senderName : 'A teammate';
-      toast.success(`New message from ${sender}`);
-      void refreshStaffMessages();
+      const kind = typeof msg?.data?.kind === 'string' ? msg.data.kind : '';
+      if (kind === 'support_assignment') {
+        toast.success('Support ticket assigned to you');
+        void refreshSupportFollowups();
+      } else {
+        toast.success(`New message from ${sender}`);
+        void refreshStaffMessages();
+      }
     },
     inboxEnabled,
   );
@@ -479,6 +543,7 @@ export function ActivityInboxProvider({
       }
       setItems((prev) => prev.filter((x) => x.id !== id));
       setTechQueueItems((prev) => prev.filter((x) => x.id !== id));
+      setSupportFollowupItems((prev) => prev.filter((x) => x.id !== id));
     },
     [staffMessageItems, markStaffMessageRead],
   );
@@ -486,6 +551,7 @@ export function ActivityInboxProvider({
   const clear = useCallback(() => {
     setItems([]);
     setTechQueueItems([]);
+    setSupportFollowupItems([]);
     if (staffMessageItems.length > 0) {
       setStaffMessageItems([]);
       // Persisted messages must be marked read or they'd reappear on reload.
@@ -501,10 +567,10 @@ export function ActivityInboxProvider({
   // staff messages, newest first.
   const mergedItems = useMemo(
     () =>
-      [...items, ...techQueueItems, ...staffMessageItems]
+      [...items, ...techQueueItems, ...supportFollowupItems, ...staffMessageItems]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, MAX_ITEMS),
-    [items, techQueueItems, staffMessageItems],
+    [items, techQueueItems, supportFollowupItems, staffMessageItems],
   );
 
   const value = useMemo<ActivityInboxContextValue>(

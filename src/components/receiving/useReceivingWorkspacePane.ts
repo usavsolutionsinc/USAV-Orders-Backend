@@ -16,10 +16,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { dispatchReceivingWorkspaceClose } from '@/utils/events';
-import {
-  dispatchSelectLine,
-  type ReceivingLineRow,
-} from '@/components/station/ReceivingLinesTable';
+import { dispatchSelectLine, mergeReceivingPackageMetaIntoRow } from '@/components/station/receiving-lines-table-helpers';
+import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 export interface WorkspaceState {
   row: ReceivingLineRow;
@@ -110,15 +108,27 @@ export function useReceivingWorkspacePane(): ReceivingWorkspacePane {
       }, 500);
     };
 
+    const handlePackageMeta = (e: Event) => {
+      const detail = (e as CustomEvent<Parameters<typeof mergeReceivingPackageMetaIntoRow>[1]>).detail;
+      if (!detail || detail.receiving_id == null) return;
+      setWorkspace((prev) => {
+        if (!prev || prev.row.receiving_id !== detail.receiving_id) return prev;
+        const merged = mergeReceivingPackageMetaIntoRow(prev.row, detail);
+        return merged ? { ...prev, row: merged } : prev;
+      });
+    };
+
     window.addEventListener('receiving-workspace-open', handleOpen);
     window.addEventListener('receiving-workspace-close', handleClose);
     window.addEventListener('receiving-line-updated', handleUpdate);
+    window.addEventListener('receiving-package-updated', handlePackageMeta);
     window.addEventListener('receiving-scan-in-flight', handleInFlight);
     window.addEventListener('receiving-scan-resolved', handleResolved);
     return () => {
       window.removeEventListener('receiving-workspace-open', handleOpen);
       window.removeEventListener('receiving-workspace-close', handleClose);
       window.removeEventListener('receiving-line-updated', handleUpdate);
+      window.removeEventListener('receiving-package-updated', handlePackageMeta);
       window.removeEventListener('receiving-scan-in-flight', handleInFlight);
       window.removeEventListener('receiving-scan-resolved', handleResolved);
       if (clearTimer) clearTimeout(clearTimer);

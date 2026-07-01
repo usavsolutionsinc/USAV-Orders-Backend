@@ -8,6 +8,7 @@ import { invalidateReceivingFeeds } from '@/lib/queries/receiving-queries';
 import { randomId } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { classifyReceiveResponse } from '../../ReceiveResponsePanel';
 import { useScanFeedback } from '@/lib/scan-feedback/useScanFeedback';
+import { shouldUseLocalReceiveOnly } from '@/lib/receiving/intake-items-routing';
 
 // 'local_receive' = unfound carton: mark RECEIVED locally, never touch Zoho.
 // Distinct from 'scan_only', which stays SCANNED.
@@ -122,8 +123,8 @@ export function useReceiveAction(
   // Kept only for the diagnostic panel's raw-response expander.
   const [responseExpanded, setResponseExpanded] = useState(false);
 
-  // Unfound cartons receive locally (label + scan_only) — never Zoho.
-  const isUnfound = row.receiving_source === 'unmatched';
+  // Unfound, return, and sales-order-linked cartons receive locally — never Zoho.
+  const isUnfound = shouldUseLocalReceiveOnly(row);
   // Multimodal confirmation cue (gated by org master switch + per-staff toggles).
   const { playScanFeedback } = useScanFeedback();
 

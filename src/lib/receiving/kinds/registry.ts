@@ -113,11 +113,16 @@ export function classifyIntakeKind(columns: Parameters<typeof columnsToClassific
 }
 
 /**
- * Resolve the effective kind from a line override + carton default. SoT for the
- * rule currently duplicated as `effectiveReceivingType`
- * (components/sidebar/receiving/receiving-sidebar-shared.ts) and re-inlined in
- * lib/zendesk-claim-template.ts: the line override wins unless it is the 'PO'
- * default, else the carton default, else 'PO'.
+ * Resolve the effective kind from a line override + carton default: the line
+ * override wins unless it is the 'PO' default, else the carton default, else
+ * 'PO'. SoT for this precedence rule — `triage-intake-kind.ts`'s
+ * `isReturnIntake()` composes off this. Two call sites that look similar are
+ * deliberately NOT migrated to it: `useReceivingType.ts` seeds a carton-type
+ * EDITOR pill (correctly carton-first — it answers "what should this carton's
+ * own field show," not "what's the line's effective type"), and
+ * `zendesk-claim-template.ts`'s inline version must pass through org-custom
+ * type strings verbatim (it feeds a display label, not this kind enum) and
+ * has no carton-level default field available at its call site anyway.
  */
 export function effectiveIntakeKind(
   lineKind?: string | null,

@@ -13,6 +13,8 @@ import {
   type UnfoundLine,
   type UnmatchedItemsSectionProps,
 } from './unmatched-items-shared';
+import { useReceivingCartonUnlink } from './useReceivingCartonUnlink';
+import { isSalesOrderDerivedCarton } from '@/lib/receiving/intake-items-routing';
 import {
   classificationToColumns,
   columnsToClassification,
@@ -35,8 +37,14 @@ export function useUnmatchedItems({
   listingUrlHint,
   onActiveConditionChange,
   onLinked,
+  onUnlinked,
+  linkedOrderHint,
+  activeLineId,
 }: UnmatchedItemsSectionProps) {
   const [lines, setLines] = useState<UnfoundLine[]>([]);
+  const [cartonHeader, setCartonHeader] = useState(linkedOrderHint ?? null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const { unlinkCarton, unlinking } = useReceivingCartonUnlink();
   /** Unified add popover (Item · Web · Box). */
   const [addOpen, setAddOpen] = useState(false);
   /** Box this carton's units last landed in — shows as a chip in the header. */
@@ -81,6 +89,11 @@ export function useUnmatchedItems({
       }
       setLines(body.lines ?? []);
       if (body.receiving) {
+        setCartonHeader({
+          source: body.receiving.source ?? null,
+          zoho_purchaseorder_id: body.receiving.zoho_purchaseorder_id ?? null,
+          zoho_purchaseorder_number: body.receiving.zoho_purchaseorder_number ?? null,
+        });
         // intake_type maps onto the SoT's `receiving_type` slot.
         setClassification(
           columnsToClassification({
@@ -144,10 +157,51 @@ export function useUnmatchedItems({
     void refreshLines();
   }, [onActiveConditionChange, refreshLines]);
 
+  useEffect(() => {
+    if (linkedOrderHint) setCartonHeader(linkedOrderHint);
+  }, [
+    linkedOrderHint?.source,
+    linkedOrderHint?.zoho_purchaseorder_id,
+    linkedOrderHint?.zoho_purchaseorder_number,
+  ]);
+
   // Serial-unit ids across the carton's lines — the atoms the Box tab groups.
   const cartonUnitIds = useMemo(
     () => lines.flatMap((l) => (l.serials ?? []).map((s) => s.id)),
     [lines],
+  );
+
+  const orderLinked = useMemo(() => {
+    if (!cartonHeader) return false;
+    if (isSalesOrderDerivedCarton(cartonHeader)) return true;
+    const poNum = (cartonHeader.zoho_purchaseorder_number || '').trim();
+    return cartonHeader.source === 'zoho_po' && Boolean(poNum);
+  }, [cartonHeader]);
+
+  const linkedOrderNumber = (cartonHeader?.zoho_purchaseorder_number || '').trim() || null;
+
+  const showUnlinkPrompt =
+    orderLinked && (lines.length === 0 || Boolean(linkError));
+
+  const handleUnlinkOrder = useCallback(
+    async () => {
+      const ok = await unlinkCarton({
+        receivingId,
+        lineId: activeLineId,
+        onSuccess: () => {
+          setLinkError(null);
+          setLines([]);
+          setCartonHeader({
+            source: 'unmatched',
+            zoho_purchaseorder_id: null,
+            zoho_purchaseorder_number: null,
+          });
+          onUnlinked?.();
+        },
+      });
+      return ok;
+    },
+    [activeLineId, onUnlinked, receivingId, unlinkCarton],
   );
 
   // Scan a returned serial against the whole carton. Looks the serial up; on a
@@ -159,6 +213,7 @@ export function useUnmatchedItems({
       const serial = rawSerial.trim();
       if (!serial || returnScanBusy) return;
       setReturnScanBusy(true);
+      setLinkError(null);
       try {
         const res = await fetch(
           `/api/serial-units/lookup?serial=${encodeURIComponent(serial)}`,
@@ -174,9 +229,10 @@ export function useUnmatchedItems({
           return;
         }
 
-        // Create the return line, populated from the matched sales order.
         const itemName = matchedOrder?.product_title || `Returned serial ${serial}`;
         const clientEventId = `unfound-return-${receivingId}-${serial}`;
+        const orderNo = (matchedOrder?.order_id || '').trim();
+
         const addRes = await fetch('/api/receiving/add-unmatched-line', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Idempotency-Key': clientEventId },
@@ -185,6 +241,7 @@ export function useUnmatchedItems({
             item_name: itemName,
             sku: matchedOrder?.sku || unit?.sku || undefined,
             intake_type: 'return',
+            source_order_id: orderNo || undefined,
             // The grade the operator picked on the scan card — without it the
             // line lands on the server default instead of the selected pill.
             condition_grade: cartonScanCondition || undefined,
@@ -193,7 +250,9 @@ export function useUnmatchedItems({
         });
         const addBody = await addRes.json().catch(() => ({}));
         if (!addRes.ok || !addBody?.success || !addBody?.line?.id) {
-          toast.error(addBody?.error || 'Could not create the return line');
+          const msg = addBody?.error || 'Could not create the return line';
+          setLinkError(msg);
+          toast.error(msg);
           return;
         }
 
@@ -214,13 +273,8 @@ export function useUnmatchedItems({
           toast.error(scanBody?.error || 'Line created, but the serial scan failed');
         }
 
-        // Graduate the carton off the Unfound queue: bind the matched order #
-        // as the PO# and tag the platform inferred from the order-number
-        // shape. Same two-PATCH mechanism the repair-service link uses (the
-        // PO# write must not roll back if the platform write fails), and the
-        // same auto-flip: /api/receiving/[id] turns source 'unmatched' →
-        // 'zoho_po' once a PO#/order# is bound.
-        const orderNo = (matchedOrder?.order_id || '').trim();
+        // Graduate the carton off the Unfound queue: bind the matched order #,
+        // classify as RETURN, and tag the platform inferred from the order shape.
         const platform = orderNo ? inferPlatformFromOrderId(orderNo) : null;
         if (orderNo) {
           let poApplied = false;
@@ -228,22 +282,16 @@ export function useUnmatchedItems({
             const r1 = await fetch(`/api/receiving/${receivingId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ zoho_purchaseorder_number: orderNo }),
+              body: JSON.stringify({
+                zoho_purchaseorder_number: orderNo,
+                intake_type: 'RETURN',
+                is_return: true,
+                ...(platform ? { source_platform: platform } : {}),
+              }),
             });
             poApplied = r1.ok;
           } catch {
             /* non-fatal — carton stays unfound; operator can bind manually */
-          }
-          if (platform) {
-            try {
-              await fetch(`/api/receiving/${receivingId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source_platform: platform }),
-              });
-            } catch {
-              /* non-fatal — platform pill stays as-is */
-            }
           }
           // Mirror onto every surface holding this carton (workspace header
           // chips, rails, unfound queue) — same events the repair-service
@@ -266,6 +314,7 @@ export function useUnmatchedItems({
                 zoho_purchaseorder_number: orderNo,
                 source: 'zoho_po',
                 source_platform: platform,
+                intake_type: 'RETURN',
               },
               line: addBody.line ?? null,
             });
@@ -273,6 +322,21 @@ export function useUnmatchedItems({
         }
 
         await refreshLines();
+        window.dispatchEvent(new CustomEvent('usav-refresh-data'));
+        if (addBody.line?.id) {
+          window.dispatchEvent(
+            new CustomEvent('receiving-line-updated', {
+              detail: {
+                id: addBody.line.id,
+                receiving_type: 'RETURN',
+                carton_intake_type: 'RETURN',
+                receiving_source: orderNo ? 'zoho_po' : undefined,
+                zoho_purchaseorder_number: orderNo || null,
+                source_platform: platform,
+              },
+            }),
+          );
+        }
         toast.success(
           matchedOrder?.product_title
             ? `Matched return: ${matchedOrder.product_title}`
@@ -468,6 +532,12 @@ export function useUnmatchedItems({
     handleAddLine,
     handleRemoveLine,
     handleConditionChange,
+    orderLinked,
+    linkedOrderNumber,
+    showUnlinkPrompt,
+    linkError,
+    unlinking,
+    handleUnlinkOrder,
   };
 }
 

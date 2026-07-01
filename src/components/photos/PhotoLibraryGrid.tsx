@@ -4,6 +4,7 @@ import { type MouseEvent as ReactMouseEvent } from 'react';
 import type { LibraryPhoto } from './photo-library-types';
 import { Image as ImageIcon } from '@/components/Icons';
 import type { PhotoLibrarySourceScope, PhotoLibraryViewMode } from '@/lib/photos/library-filter-state';
+import type { PhotoGridDensity } from '@/lib/photos/photo-grid-density';
 import { PhotoEmptyState, PhotoGridSkeleton } from './photo-library-grid/PhotoGridStates';
 import { usePhotoGridLightbox } from './photo-library-grid/usePhotoGridLightbox';
 import { PhotoListView } from './photo-library-grid/PhotoListView';
@@ -17,6 +18,7 @@ export type { PhotoDateNav, TileSelectMods } from './photo-library-grid/types';
 interface PhotoLibraryGridProps {
   photos: LibraryPhoto[];
   view: PhotoLibraryViewMode;
+  gridDensity: PhotoGridDensity;
   /** Source scope drives folder labels (PO# for unboxing, Order# for packing). */
   sourceScope?: PhotoLibrarySourceScope;
   /** Active date filter (drives the folders-view drill level). */
@@ -24,6 +26,8 @@ interface PhotoLibraryGridProps {
   dateTo?: string;
   /** Active PO# filter (folders-view PO leaf). */
   poRef?: string;
+  /** Active Zendesk ticket filter (claims folders leaf). */
+  ticketId?: string;
   /** Narrow/widen the date+PO filter from a folder click or path-bar crumb. */
   onNavigate?: (nav: PhotoDateNav) => void;
   /** Whether selection UI (checkmarks, toggle-on-click) is engaged. */
@@ -43,10 +47,12 @@ interface PhotoLibraryGridProps {
 export function PhotoLibraryGrid({
   photos,
   view,
+  gridDensity,
   sourceScope = 'all',
   dateFrom,
   dateTo,
   poRef,
+  ticketId,
   onNavigate,
   selectionActive,
   selected,
@@ -99,9 +105,11 @@ export function PhotoLibraryGrid({
       <FoldersView
         photos={photos}
         scope={sourceScope}
+        gridDensity={gridDensity}
         dateFrom={dateFrom}
         dateTo={dateTo}
         poRef={poRef}
+        ticketId={ticketId}
         onNavigate={onNavigate ?? (() => {})}
         selectionActive={selectionActive}
         selected={selected}
@@ -118,6 +126,7 @@ export function PhotoLibraryGrid({
         <PhotoTicketGrid
           photos={photos}
           scope={sourceScope}
+          gridDensity={gridDensity}
           selectionActive={selectionActive}
           selected={selected}
           onSelectTile={onSelectTile}
@@ -133,6 +142,7 @@ export function PhotoLibraryGrid({
     <>
       <PhotoFlatGrid
         view={view}
+        gridDensity={gridDensity}
         photos={photos}
         scope={sourceScope}
         selectionActive={selectionActive}

@@ -8,12 +8,14 @@ import { AnchoredLayer } from '@/design-system/primitives/AnchoredLayer';
 import { Button, IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import type { ClaimType } from '@/lib/zendesk-claim-template';
-
-const sellerMessageKey = (receivingId: number, lineId: number | null) =>
-  ['receiving', 'claim-seller-message', receivingId, lineId ?? 0] as const;
-
+import { normalizeClaimSellerMessageRefs } from '@/lib/receiving-claim-seller-message';
 import { copySellerClaimMessageWithPersist } from '@/lib/receiving-claim-seller-copy';
 import { sellerDraftMatchesTicket } from '@/lib/receiving-claim-seller-ticket-match';
+
+const sellerMessageKey = (receivingId: number, lineId: number | null) => {
+  const { receivingId: rid, lineId: lid } = normalizeClaimSellerMessageRefs({ receivingId, lineId });
+  return ['receiving', 'claim-seller-message', rid, lid ?? 0] as const;
+};
 
 interface SellerMessagePayload {
   id: number;
@@ -62,11 +64,17 @@ function useSellerMessage(
   linkedTicketId: number | null,
   open: boolean,
 ) {
+  const entity =
+    receivingId != null
+      ? normalizeClaimSellerMessageRefs({ receivingId, lineId })
+      : null;
+
   return useQuery<SellerMessagePayload | null, Error>({
     queryKey: sellerMessageKey(receivingId ?? 0, lineId),
     queryFn: async () => {
-      const sp = new URLSearchParams({ receivingId: String(receivingId) });
-      if (lineId != null) sp.set('lineId', String(lineId));
+      if (!entity) return null;
+      const sp = new URLSearchParams({ receivingId: String(entity.receivingId) });
+      if (entity.lineId != null) sp.set('lineId', String(entity.lineId));
       const res = await fetch(`/api/receiving/zendesk-claim/seller-message?${sp}`, { cache: 'no-store' });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
@@ -153,6 +161,7 @@ function SellerMessagePanel({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
+  const entity = normalizeClaimSellerMessageRefs({ receivingId, lineId });
   const { data, isLoading, isError, error } = useSellerMessage(receivingId, lineId, linkedTicketId, open);
   const [draft, setDraft] = useState('');
 
@@ -170,8 +179,8 @@ function SellerMessagePanel({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          receivingId,
-          lineId,
+          receivingId: entity.receivingId,
+          lineId: entity.lineId,
           sellerMessage: text,
           subjectSnapshot: data?.subjectSnapshot ?? undefined,
         }),
@@ -219,8 +228,8 @@ function SellerMessagePanel({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          receivingId,
-          lineId,
+          receivingId: entity.receivingId,
+          lineId: entity.lineId,
           claimType,
           subject,
           description,
@@ -265,8 +274,8 @@ function SellerMessagePanel({
     const { ok, messageId } = await copySellerClaimMessageWithPersist({
       text,
       messageId: data?.id ?? null,
-      receivingId,
-      lineId,
+      receivingId: entity.receivingId,
+      lineId: entity.lineId,
       subjectSnapshot: data?.subjectSnapshot ?? undefined,
     });
     if (messageId != null && data) {

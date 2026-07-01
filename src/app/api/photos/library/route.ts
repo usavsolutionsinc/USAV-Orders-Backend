@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/withAuth';
 import { errorResponse } from '@/lib/api';
-import { listPhotoLibrary, isPoFinderKind, type PoFinderKind } from '@/lib/photos/queries/library';
+import { listPhotoLibrary, libraryFiltersFromSearchParams } from '@/lib/photos/queries/library';
+import {
+  listOutboundDocumentLibrary,
+  outboundLibraryFiltersFromSearchParams,
+} from '@/lib/documents/queries/library';
 import { searchPhotos } from '@/lib/photos/queries/search';
 import { photoContentUrl } from '@/lib/photos/display-url';
 import { normalizePhotoDisplayUrl } from '@/lib/nas-photo-url';
@@ -11,13 +15,42 @@ export const dynamic = 'force-dynamic';
 export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
     const params = new URL(req.url).searchParams;
+    const sourceScope = params.get('sourceScope');
+
+    if (sourceScope === 'outbound') {
+      const cursor = params.get('cursor') ? Number(params.get('cursor')) : null;
+      const limit = params.get('limit') ? Number(params.get('limit')) : 48;
+
+      if (params.get('outboundMedia') === 'pack_photos') {
+        const { items, nextCursor, hasMore } = await listPhotoLibrary({
+          organizationId: ctx.organizationId,
+          cursor,
+          limit,
+          entityType: 'PACKER_LOG',
+          ...libraryFiltersFromSearchParams(params),
+        });
+        const photos = items.map((p) => ({
+          ...p,
+          displayUrl: p.url?.startsWith('/api/photos/') ? p.url : photoContentUrl(p.id),
+          thumbUrl: photoContentUrl(p.id, 'thumb'),
+          hasAnalysis: p.hasAnalysis ?? false,
+          damageDetected: p.damageDetected ?? null,
+          sourceScope: 'outbound' as const,
+        }));
+        return NextResponse.json({ photos, nextCursor, hasMore });
+      }
+
+      const { items, nextCursor, hasMore } = await listOutboundDocumentLibrary({
+        organizationId: ctx.organizationId,
+        cursor,
+        limit,
+        ...outboundLibraryFiltersFromSearchParams(params),
+      });
+      return NextResponse.json({ photos: items, nextCursor, hasMore });
+    }
+
     const cursor = params.get('cursor') ? Number(params.get('cursor')) : null;
     const limit = params.get('limit') ? Number(params.get('limit')) : 48;
-    const receivingId = params.get('receivingId') ? Number(params.get('receivingId')) : null;
-    const entityId = params.get('entityId') ? Number(params.get('entityId')) : null;
-    const staffId = params.get('staffId') ? Number(params.get('staffId')) : null;
-    const sort = params.get('sort');
-    const hasAnalysisRaw = params.get('hasAnalysis');
     const q = params.get('q')?.trim() || null;
     const damageRaw = params.get('damageDetected');
 
@@ -51,42 +84,11 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       });
     }
 
-      const { items, nextCursor, hasMore } = await listPhotoLibrary({
-        organizationId: ctx.organizationId,
-        cursor,
-        limit,
-        dateFrom: params.get('dateFrom'),
-        dateTo: params.get('dateTo'),
-        sort: sort === 'oldest' ? 'oldest' : 'recent',
-        entityType: params.get('entityType'),
-        entityId,
-      linkRole: params.get('linkRole'),
-      poRef: params.get('poRef'),
-      receivingId,
-      // Business-ID filters — resolve through photo_entity_links to domain tables.
-      tracking: params.get('tracking'),
-      serial: params.get('serial'),
-      sku: params.get('sku'),
-      ticketId: params.get('ticketId') ? Number(params.get('ticketId')) : null,
-      pickupId: params.get('pickupId') ? Number(params.get('pickupId')) : null,
-      rma: params.get('rma'),
-      // Unified PO-photo finder: resolve order#/tracking#/serial#/po# → carton →
-      // all of that PO's photos. Kind defaults to 'po' in listPhotoLibrary.
-      poFinder: params.get('poFinder'),
-      poFinderKind: isPoFinderKind(params.get('poFinderKind'))
-        ? (params.get('poFinderKind') as PoFinderKind)
-        : null,
-      // Split RECEIVING-linked photos by receiving.source: local pickups vs the
-      // rest (unboxing). See library-filter-state.receivingSourceForScope.
-      receivingSource: params.get('receivingSource'),
-      receivingSourceExclude: params.get('receivingSourceExclude'),
-      staffId,
-      photoType: params.get('photoType'),
-      labelKey: params.get('label'),
-      hasAnalysis:
-        hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,
-      damageDetected:
-        damageRaw === 'true' ? true : damageRaw === 'false' ? false : null,
+    const { items, nextCursor, hasMore } = await listPhotoLibrary({
+      organizationId: ctx.organizationId,
+      cursor,
+      limit,
+      ...libraryFiltersFromSearchParams(params),
     });
 
     const photos = items.map((p) => ({

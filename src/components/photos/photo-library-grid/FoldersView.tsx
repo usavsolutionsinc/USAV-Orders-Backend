@@ -3,14 +3,15 @@
 import { type MouseEvent as ReactMouseEvent } from 'react';
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
+import { photoGridLeafClass, photoGridTileProps, type PhotoGridDensity } from '@/lib/photos/photo-grid-density';
 import { formatDateTimePST } from '@/utils/date';
 import { Folder } from '@/components/Icons';
-import { PhotoThumb } from '../PhotoThumb';
 import { PhotoCard } from './PhotoCard';
 import { PhotoEmptyState } from './PhotoGridStates';
 import { LightboxPortal } from './LightboxPortal';
 import { useDateFolders } from './useDateFolders';
 import type { FolderTileData } from './date-folder-tree';
+import { FolderTileCover } from './FolderTileCover';
 import type { PhotoDateNav, TileSelectMods } from './types';
 
 /**
@@ -26,9 +27,11 @@ import type { PhotoDateNav, TileSelectMods } from './types';
 export function FoldersView({
   photos,
   scope,
+  gridDensity,
   dateFrom,
   dateTo,
   poRef,
+  ticketId,
   onNavigate,
   selectionActive,
   selected,
@@ -38,9 +41,11 @@ export function FoldersView({
 }: {
   photos: LibraryPhoto[];
   scope: PhotoLibrarySourceScope;
+  gridDensity: PhotoGridDensity;
   dateFrom?: string;
   dateTo?: string;
   poRef?: string;
+  ticketId?: string;
   onNavigate: (nav: PhotoDateNav) => void;
   selectionActive: boolean;
   selected: Set<number>;
@@ -48,27 +53,31 @@ export function FoldersView({
   onPhotoContextMenu?: (photo: LibraryPhoto, e: ReactMouseEvent) => void;
   onPhotoDeleted?: (photoId: number) => void;
 }) {
-  const { isLeaf, leafInputs, openIndex, setOpenIndex, tiles, onOpen } = useDateFolders({
+  const { isLeaf, leafPhotos, leafInputs, openIndex, setOpenIndex, tiles, onOpen } = useDateFolders({
     photos,
     scope,
     dateFrom,
     dateTo,
     poRef,
+    ticketId,
     onNavigate,
   });
 
   // ── Leaf: a contact sheet of photos (PO# folder, single-PO day, custom) ────
   if (isLeaf) {
-    if (photos.length === 0) return <PhotoEmptyState />;
+    if (leafPhotos.length === 0) return <PhotoEmptyState />;
     return (
       <div className="space-y-3">
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-8">
-          {photos.map((photo, i) => (
+        <div className={photoGridLeafClass(gridDensity)}>
+          {leafPhotos.map((photo, i) => {
+            const tile = photoGridTileProps(photo, gridDensity);
+            return (
             <PhotoCard
               key={photo.id}
               photo={photo}
-              imageUrl={photo.thumbUrl}
+              imageUrl={tile.imageUrl}
               scope={scope}
+              ratio={tile.ratio}
               showLabel={false}
               selectionActive={selectionActive}
               selected={selected.has(photo.id)}
@@ -76,7 +85,8 @@ export function FoldersView({
               onOpen={() => setOpenIndex(i)}
               onContextMenu={onPhotoContextMenu}
             />
-          ))}
+            );
+          })}
         </div>
         {openIndex !== null ? (
           <LightboxPortal
@@ -101,7 +111,7 @@ export function FoldersView({
   );
 }
 
-/** A single folder tile — folder-tab cover + count + latest-capture meta. */
+/** A single folder tile — cover preview on PO folders, icon placeholder on date drill. */
 function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => void }) {
   const ariaLabel = `${tile.label} · ${tile.count} photo${tile.count === 1 ? '' : 's'}`;
   return (
@@ -116,7 +126,7 @@ function DateFolderTile({ tile, onOpen }: { tile: FolderTileData; onOpen: () => 
         {/* Folder-tab peek behind the cover so the tile reads as a folder. */}
         <div className="absolute left-3 right-2 top-0.5 h-3 rounded-t-md bg-gray-200" aria-hidden="true" />
         <div className="relative h-full w-full overflow-hidden rounded-md border border-gray-200">
-          {tile.cover ? <PhotoThumb src={tile.cover.thumbUrl} alt="" ratio="fill" /> : null}
+          <FolderTileCover photo={tile.previewPhoto} />
           <span className="absolute right-2 top-2 rounded-full bg-black/70 px-1.5 py-0.5 text-micro font-bold tabular-nums text-white">
             {tile.count}
           </span>

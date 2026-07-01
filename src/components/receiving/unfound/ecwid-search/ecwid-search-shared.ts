@@ -50,6 +50,11 @@ export interface EcwidProductSearchPopoverProps {
   initialOrderScope?: EcwidOrderScope;
   onSelect: (selection: EcwidProductSelection) => void | Promise<void>;
   onClose: () => void;
+  /**
+   * Focus the filter/search input on mount. Default true — triage Package Pairing
+   * passes false so the station tracking scan bar keeps keyboard focus.
+   */
+  autoFocusSearch?: boolean;
 }
 
 export interface PlatformIdRef {

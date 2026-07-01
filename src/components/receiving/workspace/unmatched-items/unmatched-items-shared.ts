@@ -95,6 +95,7 @@ export interface UnmatchedItemsSectionProps {
       zoho_purchaseorder_number: string | null;
       source: string | null;
       source_platform: string | null;
+      intake_type?: string | null;
     };
     line?: {
       id: number;
@@ -107,6 +108,20 @@ export interface UnmatchedItemsSectionProps {
       source_platform_pill: string | null;
     } | null;
   }) => void;
+  /**
+   * Fired after a full order/PO unpair — host clears header chips immediately.
+   */
+  onUnlinked?: () => void;
+  /**
+   * Seed linkage display before GET /api/receiving/:id returns (workspace row).
+   */
+  linkedOrderHint?: {
+    source: string | null;
+    zoho_purchaseorder_id: string | null;
+    zoho_purchaseorder_number: string | null;
+  };
+  /** Workspace row id for optimistic patch after unpair. */
+  activeLineId?: number;
 }
 
 export interface CartonResponse {
@@ -118,6 +133,9 @@ export interface CartonResponse {
    * intake_type column maps onto `columnsToClassification`'s `receiving_type`.
    */
   receiving?: {
+    source?: string | null;
+    zoho_purchaseorder_id?: string | null;
+    zoho_purchaseorder_number?: string | null;
     is_return?: boolean | null;
     return_platform?: string | null;
     source_platform?: string | null;

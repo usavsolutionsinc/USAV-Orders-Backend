@@ -4,6 +4,7 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { readPhotoBytesById } from '@/lib/photos/read-bytes';
+import { photoExportBaseName } from '@/lib/photos/display-names';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,10 +70,7 @@ export async function GET(request: NextRequest) {
   }
 
   const gate = await requireRoutePerm(request, 'photos.view');
-  if (gate.denied) {
-    // Keep parity with the content route: the org-scoped session still drives
-    // access, but we record the permission denial for audit visibility.
-  }
+  if (gate.denied) return gate.denied;
 
   const idsParam = request.nextUrl.searchParams.get('ids')?.trim() ?? '';
   const requestedIds = idsParam
@@ -101,6 +99,36 @@ export async function GET(request: NextRequest) {
   const foundIds = new Set(verify.rows.map((row) => Number(row.id)));
   const orderedIds = photoIds.filter((id) => foundIds.has(id));
 
+  const metaRes = await tenantQuery<{
+    id: string;
+    po_ref: string | null;
+    photo_type: string | null;
+    ticket_id: string | null;
+  }>(
+    actor.organizationId,
+    `SELECT p.id, p.po_ref, p.photo_type,
+            (SELECT lz.entity_id FROM photo_entity_links lz
+              WHERE lz.photo_id = p.id
+                AND lz.organization_id = p.organization_id
+                AND lz.entity_type = 'ZENDESK_TICKET'
+              LIMIT 1) AS ticket_id
+       FROM photos p
+      WHERE p.organization_id = $1
+        AND p.id = ANY($2::bigint[])`,
+    [actor.organizationId, orderedIds],
+  );
+  const metaById = new Map(
+    metaRes.rows.map((row) => [
+      Number(row.id),
+      {
+        id: Number(row.id),
+        poRef: row.po_ref,
+        photoType: row.photo_type,
+        ticketId: row.ticket_id != null ? Number(row.ticket_id) : null,
+      },
+    ]),
+  );
+
   const parts: Buffer[] = [];
   let offset = 0;
   const centralHeaders: Buffer[] = [];
@@ -112,8 +140,12 @@ export async function GET(request: NextRequest) {
     const bytes = await readPhotoBytesById(photoId, actor.organizationId);
     if (!bytes) continue;
 
-    const fallback = `photo_${String(i + 1).padStart(2, '0')}.jpg`;
-    const name = `${String(i + 1).padStart(2, '0')}_${safeEntryName(bytes.filename, fallback)}`;
+    const meta = metaById.get(photoId);
+    const exportBase = meta
+      ? photoExportBaseName(meta)
+      : safeEntryName(bytes.filename, `photo_${photoId}`);
+    const fallback = `${exportBase}.jpg`;
+    const name = `${String(i + 1).padStart(2, '0')}_${safeEntryName(fallback, fallback)}`;
     const data = Buffer.from(bytes.bytes);
     const entry = zipEntry(name, data);
     const localSize = 30 + Buffer.byteLength(name, 'utf8') + data.length;

@@ -86,7 +86,8 @@ async function allocateOne(formData: FormData): Promise<void> {
   const id = Number(formData.get('orderId'));
   if (!Number.isFinite(id) || id <= 0) return;
   try {
-    await allocateOrder({ orderId: id, actorStaffId: null });
+    const user = await requirePermission('admin.view', { enforce: true });
+    await allocateOrder({ orderId: id, actorStaffId: null }, user.organizationId);
   } catch (err) {
     console.error('[bulk-allocate] allocateOne failed:', err);
   }

@@ -194,10 +194,6 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     void performDelete();
   };
 
-  // The info panel is meaningful only when callers attach `meta`; otherwise the
-  // toggle/panel stay hidden (legacy thumbnail strips render unchanged).
-  const hasContext = photoItems.some((p) => p.meta != null);
-
   return {
     // static props
     className, compact, launcherTitle, launcherLayout, toolbarShowLabel, libraryHref,
@@ -206,7 +202,7 @@ export function usePhotoGallery(props: PhotoGalleryProps) {
     // viewer
     viewerOpen, currentIndex, mounted, openViewer, closeViewer, handleNext, handlePrevious, setCurrentIndex,
     // context panel
-    hasContext, panelOpen, togglePanel: () => setPanelOpen((prev) => !prev),
+    panelOpen, togglePanel: () => setPanelOpen((prev) => !prev),
     // zoom
     ...zoom,
     // actions

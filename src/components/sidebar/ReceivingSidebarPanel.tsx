@@ -33,9 +33,8 @@ import {
 } from '@/lib/realtime/channels';
 
 import { RailEditModeProvider } from '@/components/sidebar/rail-edit-mode';
-import { dispatchSelectLine } from '@/components/station/receiving-lines-table-helpers';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
-import { buildUnmatchedStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
+import { buildPendingScanStubRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { TrackingScanResult } from '@/components/sidebar/receiving/useTrackingScan';
 import { ReceivingReturnBanner } from '@/components/sidebar/ReceivingReturnBanner';
 import { ReceivingHistorySearchSection } from '@/components/sidebar/receiving/ReceivingHistorySearchSection';
@@ -47,6 +46,8 @@ import { ReceivingModeSwitcher } from '@/components/sidebar/receiving/ReceivingM
 import { TriageScanBand, UnboxScanBand } from '@/components/sidebar/receiving/ReceivingScanBands';
 import { UnboxViewToggle } from '@/components/sidebar/receiving/UnboxViewToggle';
 import { TriageViewToggle } from '@/components/sidebar/receiving/TriageViewToggle';
+import { TriageCartonSearchBar } from '@/components/sidebar/receiving/TriageCartonSearchBar';
+import { TriageMetricsStrip } from '@/components/sidebar/receiving/TriageMetricsStrip';
 import { ReceivingRailBody } from '@/components/sidebar/receiving/ReceivingRailBody';
 import { ReceivingBulkActionBar } from '@/components/sidebar/receiving/ReceivingBulkActionBar';
 
@@ -87,8 +88,17 @@ export function ReceivingSidebarPanel() {
   });
 
   // ── Mode / sub-view (URL-backed) ─────────────────────────────────────────
-  const { mode, unboxView, triageView, isScanSurface, updateMode, updateUnboxView, updateTriageView } =
-    useReceivingMode();
+  const {
+    mode,
+    unboxView,
+    triageView,
+    triageQuery: triageListQuery,
+    isScanSurface,
+    updateMode,
+    updateUnboxView,
+    updateTriageView,
+    updateTriageQuery,
+  } = useReceivingMode();
 
   // ── Unbox session: PO context + serial scan ──────────────────────────────
   const { poContext, setPoContext, armedLineId, setArmedLineId, clearPoContext } = usePoContext();
@@ -141,6 +151,24 @@ export function ReceivingSidebarPanel() {
     canNext,
   });
 
+  // ── Triage scan input (scan-only — NOT a list filter) ──
+  const [triageQuery, setTriageQuery] = useState('');
+  /** Pre-resolve row pinned at the top of the Triage list (tracking # title). */
+  const [triageLeadingRow, setTriageLeadingRow] = useState<ReceivingLineRow | null>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode !== 'triage') setTriageLeadingRow(null);
+  }, [mode]);
+
+  const onTriageScanStart = useCallback((tracking: string) => {
+    setTriageLeadingRow(buildPendingScanStubRow(tracking));
+  }, []);
+
+  const onTriageScanResult = useCallback((_result: TrackingScanResult) => {
+    setTriageLeadingRow(null);
+  }, []);
+
   // ── Tracking scan (+ phone-paired bridge) ────────────────────────────────
   const {
     bulkTracking,
@@ -162,6 +190,7 @@ export function ReceivingSidebarPanel() {
     setArmedLineId,
     setPendingCandidates,
     receivingMode: mode,
+    onTriageScanStart,
   });
 
   usePhoneScanBridge({
@@ -191,64 +220,6 @@ export function ReceivingSidebarPanel() {
     setManyRailSelected,
     handleRailBulkDelete,
   } = useRailEditMode({ isScanSurface, mode, unboxView, triageView });
-
-  // ── Triage scan input (scan-only — NOT a list filter) ──
-  // The station scan bar only scans; it never filters the triage list. Feeding
-  // its value into the list churned the queryKey per-keystroke and briefly
-  // collapsed the list to "found only" mid-scan. Searching scanned orders lives
-  // in the dedicated History mode, so the triage list always shows the full
-  // Found ∪ Unfound set and the bar just resolves + clears.
-  const [triageQuery, setTriageQuery] = useState('');
-  const scanInputRef = useRef<HTMLInputElement>(null);
-
-  // B4 — Triage select-on-resolve. The shared `submitTrackingScan` already opens
-  // the resolved carton in every mode, but its internal select is gated on the
-  // scan-generation stale-guard. In TRIAGE we additionally GUARANTEE the
-  // just-scanned carton drops into the detail pane by re-dispatching the same
-  // `receiving-select-line` event the rail/table use — picking the first OPEN
-  // line so it stays consistent with the scan's own pick (no carton→carton jump,
-  // re-selecting the same carton is idempotent since the workspace is keyed on
-  // receiving_id). Scoped to the triage onSubmit only; the unbox path keeps
-  // relying on the internal selection. Mirrors the deep-link select pattern in
-  // useReceivingWorkspacePane (fetch lines by receiving_id → dispatchSelectLine).
-  const selectResolvedTriageCarton = useCallback((result: TrackingScanResult) => {
-    const recvId = result.receiving_id;
-    if (recvId == null || !Number.isFinite(recvId)) return;
-    void (async () => {
-      let pick: ReceivingLineRow | null = null;
-      try {
-        // Reuse the SAME hydration fetch openMatchedCarton issues: both go
-        // through queryClient.fetchQuery on the ['receiving-siblings', recvId]
-        // key, so the two concurrent identical requests dedupe into a single
-        // /api/receiving-lines round-trip instead of double-fetching on every
-        // matched triage scan. retry:false keeps the prior one-shot behavior.
-        const data = await queryClient.fetchQuery({
-          queryKey: ['receiving-siblings', recvId],
-          queryFn: async () => {
-            const r = await fetch(
-              `/api/receiving-lines?receiving_id=${recvId}&include=serials`,
-            );
-            return r.json();
-          },
-          retry: false,
-        });
-        const rows: ReceivingLineRow[] = Array.isArray(data?.receiving_lines)
-          ? (data.receiving_lines as ReceivingLineRow[])
-          : [];
-        const open = rows.find(
-          (r) => r.quantity_expected == null || r.quantity_received < (r.quantity_expected ?? 0),
-        );
-        pick = open ?? rows[0] ?? null;
-      } catch {
-        /* fall through to the unmatched stub so we never clear the selection */
-      }
-      // Never dispatch null (that would clear the carton the scan just opened) —
-      // a brand-new unmatched carton with no lines yet falls back to the same
-      // synthetic stub submitTrackingScan uses.
-      if (!pick) pick = buildUnmatchedStubRow(recvId, result.tracking);
-      dispatchSelectLine(pick);
-    })();
-  }, [queryClient]);
 
   // External focus trigger — Quick Access chips dispatch `receiving-focus-scan`
   // after navigating so the input is hot even when the panel was already mounted.
@@ -307,18 +278,11 @@ export function ReceivingSidebarPanel() {
                 value={triageQuery}
                 onChange={setTriageQuery}
                 onSubmit={() => {
-                  // No optimistic "importing" stub. It rendered a SECOND rail
-                  // element keyed by a throwaway clientEventId that raced the
-                  // resolve-time feed row (keyed by `carton:<receiving_id>`),
-                  // flickering the title between the tracking# and "Unfound PO".
-                  // The resolve-time prepend in applyUnmatchedCarton now shows the
-                  // carton in place — tracking# title, updating to "Unfound PO" /
-                  // the PO title on refetch, one transition, no remount. This
-                  // mirrors the Unbox scan band, which dropped its stub for the
-                  // same reason.
-                  submitTrackingScan(triageQuery, {
+                  const tracking = triageQuery.trim();
+                  if (!tracking) return;
+                  submitTrackingScan(tracking, {
                     mode: 'tracking',
-                    onResult: selectResolvedTriageCarton,
+                    onResult: onTriageScanResult,
                   });
                   setTriageQuery('');
                 }}
@@ -353,7 +317,10 @@ export function ReceivingSidebarPanel() {
               <UnboxViewToggle value={unboxView} onChange={updateUnboxView} />
             ) : null}
             {isScanSurface && mode === 'triage' ? (
-              <TriageViewToggle value={triageView} onChange={updateTriageView} />
+              <>
+                <TriageViewToggle value={triageView} onChange={updateTriageView} />
+                <TriageMetricsStrip />
+              </>
             ) : null}
 
             {/* Multi-match picker — pinned above the rail so it stays visible. */}
@@ -380,9 +347,19 @@ export function ReceivingSidebarPanel() {
                   mode={mode}
                   unboxView={unboxView}
                   selectedLine={selectedLine}
-                  triageFilterText=""
+                  triageLeadingRow={triageLeadingRow}
+                  triageFilterText={mode === 'triage' ? triageListQuery : ''}
                 />
               </div>
+            ) : null}
+
+            {/* Bottom-anchored carton-list filter (D1) — finds a carton already
+                in the Triage/Prioritize/Unfound/Done list, distinct from the
+                scan band above and from the Zoho-PO search inside the pairing
+                hub (PoLinkTab, kept as-is). Hidden while bulk-editing so it
+                never collides with the selection action bar below. */}
+            {mode === 'triage' && !railEditMode ? (
+              <TriageCartonSearchBar value={triageListQuery} onChange={updateTriageQuery} />
             ) : null}
           </>
         )}

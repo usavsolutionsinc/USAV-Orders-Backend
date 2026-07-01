@@ -36,7 +36,7 @@ export function ClaimSuccessView({ result, onClose }: { result: ClaimResult; onC
         {result.url ? (
           <a href={result.url} target="_blank" rel="noopener noreferrer">
             <Button variant="secondary" icon={<ExternalLink className="h-4 w-4" />}>
-              Open in Zendesk
+              Open in Support
             </Button>
           </a>
         ) : null}

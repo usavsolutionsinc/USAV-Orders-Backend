@@ -18,8 +18,16 @@ export interface LibraryPhotoLabel {
 
 export interface LibraryPhoto {
   id: number;
+  /** `document` when this row is an outbound PDF/label (negative id = document table id). */
+  kind?: 'photo' | 'document';
   photoType: string | null;
   poRef: string | null;
+  /** Outbound documents — shipping_label | packing_slip. */
+  documentType?: 'shipping_label' | 'packing_slip';
+  tracking?: string | null;
+  platform?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
   /** Labels assigned to this photo (many-to-many; one type, many labels). */
   labels?: LibraryPhotoLabel[];
   /** Linked Zendesk ticket id (claims scope), surfaced for folder grouping/labels. */
@@ -39,4 +47,12 @@ export interface LibraryPhoto {
    * image-type a folder's photos belong to even under the "All photos" scope.
    */
   sourceScope?: PhotoLibrarySourceScope | null;
+}
+
+export function isLibraryDocument(photo: LibraryPhoto): boolean {
+  return photo.kind === 'document' || photo.id < 0;
+}
+
+export function libraryDocumentId(photo: LibraryPhoto): number {
+  return Math.abs(photo.id);
 }

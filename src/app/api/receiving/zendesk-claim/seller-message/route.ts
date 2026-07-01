@@ -7,6 +7,7 @@ import {
   deleteClaimSellerMessage,
   getClaimSellerMessage,
   getClaimSellerMessageById,
+  normalizeClaimSellerMessageRefs,
   upsertClaimSellerMessage,
 } from '@/lib/receiving-claim-seller-message';
 
@@ -14,7 +15,8 @@ export const dynamic = 'force-dynamic';
 
 const QueryByEntity = z.object({
   receivingId: z.coerce.number().int().positive(),
-  lineId: z.coerce.number().int().positive().optional(),
+  /** Placeholder unfound rows use `-receiving_id`; normalized before lookup. */
+  lineId: z.coerce.number().int().optional(),
 });
 
 const QueryById = z.object({
@@ -23,7 +25,7 @@ const QueryById = z.object({
 
 const PatchBody = z.object({
   receivingId: z.number().int().positive(),
-  lineId: z.number().int().positive().nullable().optional(),
+  lineId: z.number().int().nullable().optional(),
   sellerMessage: z.string().min(1),
   subjectSnapshot: z.string().optional(),
 });
@@ -51,11 +53,15 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       receivingId: req.nextUrl.searchParams.get('receivingId') ?? undefined,
       lineId: req.nextUrl.searchParams.get('lineId') ?? undefined,
     });
+    const { receivingId, lineId } = normalizeClaimSellerMessageRefs({
+      receivingId: q.receivingId,
+      lineId: q.lineId,
+    });
 
     const row = await getClaimSellerMessage({
       orgId: ctx.organizationId,
-      receivingId: q.receivingId,
-      lineId: q.lineId ?? null,
+      receivingId,
+      lineId,
     });
 
     return NextResponse.json({
@@ -80,11 +86,15 @@ export const PATCH = withAuth(async (req: NextRequest, ctx) => {
   const context = 'PATCH /api/receiving/zendesk-claim/seller-message';
   try {
     const body = PatchBody.parse(await req.json().catch(() => ({})));
+    const { receivingId, lineId } = normalizeClaimSellerMessageRefs({
+      receivingId: body.receivingId,
+      lineId: body.lineId,
+    });
 
     const row = await upsertClaimSellerMessage({
       orgId: ctx.organizationId,
-      receivingId: body.receivingId,
-      lineId: body.lineId ?? null,
+      receivingId,
+      lineId,
       sellerMessage: body.sellerMessage,
       subjectSnapshot: body.subjectSnapshot ?? null,
       staffId: ctx.staffId ?? null,
@@ -109,11 +119,15 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
       receivingId: req.nextUrl.searchParams.get('receivingId') ?? undefined,
       lineId: req.nextUrl.searchParams.get('lineId') ?? undefined,
     });
+    const { receivingId, lineId } = normalizeClaimSellerMessageRefs({
+      receivingId: q.receivingId,
+      lineId: q.lineId,
+    });
 
     const removed = await deleteClaimSellerMessage({
       orgId: ctx.organizationId,
-      receivingId: q.receivingId,
-      lineId: q.lineId ?? null,
+      receivingId,
+      lineId,
     });
 
     return NextResponse.json({ success: true, removed });

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LineEditPanel } from './LineEditPanel';
 import { TriagePanel } from '../triage/TriagePanel';
 import { ReceivingProgressStepper } from './ReceivingProgressStepper';
+import { TriageProgressStepper } from './TriageProgressStepper';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 
 /** Which de-coupled right-pane panel to render. */
@@ -113,17 +114,23 @@ export function ReceivingLineWorkspace({
       {/* Step-by-step progress stepper — first row in the workspace now that
           the PO identity hero has been removed. The global header carries the
           PO identity; this stepper + the action bar below it form the second
-          and third rows. */}
-      <ReceivingProgressStepper
-        row={row}
-        photoCount={Math.max(0, Number(row.photo_count ?? 0))}
-        serialCount={Array.isArray(row.serials) ? row.serials.length : 0}
-        isComplete={
-          String(row.workflow_status || '').toUpperCase() === 'DONE' ||
-          String(row.workflow_status || '').toUpperCase() === 'PASSED'
-        }
-        labelPrinted={labelPrinted}
-      />
+          and third rows. Triage and unbox are different stations with
+          different jobs (docs/receiving-triage-redesign-plan.md §3.2) — each
+          gets its own stepper rather than sharing the unbox one. */}
+      {variant === 'triage' ? (
+        <TriageProgressStepper row={row} />
+      ) : (
+        <ReceivingProgressStepper
+          row={row}
+          photoCount={Math.max(0, Number(row.photo_count ?? 0))}
+          serialCount={Array.isArray(row.serials) ? row.serials.length : 0}
+          isComplete={
+            String(row.workflow_status || '').toUpperCase() === 'DONE' ||
+            String(row.workflow_status || '').toUpperCase() === 'PASSED'
+          }
+          labelPrinted={labelPrinted}
+        />
+      )}
 
       {/* ── Body — two de-coupled panels, one per archetype. Triage (the
           identify-before-unbox pass) is its own lean composition; Unbox is the

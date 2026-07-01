@@ -7,4 +7,5 @@ export { stationActivityToTimeline, type StationActivityRow } from './station-ac
 export { warrantyEventsToTimeline, type WarrantyEventRow } from './warranty-events';
 export { callEventsToTimeline, type CallEventTimelineRow } from './call-events';
 export { amendmentsToTimeline, type AmendmentTimelineRow } from './amendment-events';
+export { opsEventsToTimeline, type OpsEventRow } from './ops-events';
 export { collapseTimeline } from './collapse';

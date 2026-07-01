@@ -1,7 +1,27 @@
 {
-  "generatedAt": "2026-06-30T01:14:31.063Z",
+  "generatedAt": "2026-07-01T13:50:25.667Z",
   "count": 198,
   "commits": [
+    {
+      "sha": "d5619b9af9b60957d9343b8d9d3b1d239908acf5",
+      "shortSha": "d5619b9a",
+      "date": "2026-06-30T16:57:21-07:00",
+      "author": "usavsolutionsinc",
+      "subject": "receiving rail updates and more",
+      "body": "",
+      "type": "other",
+      "title": "receiving rail updates and more"
+    },
+    {
+      "sha": "c49ef8ce1ca52d5eec237aa431afbc666aec0d02",
+      "shortSha": "c49ef8ce",
+      "date": "2026-06-30T08:53:53-07:00",
+      "author": "DENSENSE8",
+      "subject": "Receiving: facts spine, unified feed rails, and ops event log.",
+      "body": "Introduce receiving_line_facts tables with dual-write triggers and backfills,\na polymorphic ops_events spine for scan/unbox timelines, declarative ReceivingFeedRail\nfeeds replacing per-rail components, serial-absent reason codes with NoSerialControl,\npacker-log enrichment, virtual shipped sections, and sales-order import API.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+      "type": "other",
+      "title": "Receiving: facts spine, unified feed rails, and ops event log."
+    },
     {
       "sha": "3bf959dea08c6ab6098ed08fda383f71ce6eff17",
       "shortSha": "3bf959de",
@@ -1961,26 +1981,6 @@
       "body": "",
       "type": "other",
       "title": " updated the inventory, multi number of barcode data, matrix printing out, and the overall UI of the receiving and the products page"
-    },
-    {
-      "sha": "0bf84c1f9c664edde138d1ff623b086d3f1a5fb9",
-      "shortSha": "0bf84c1f",
-      "date": "2026-05-26T01:40:38-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component",
-      "body": "",
-      "type": "other",
-      "title": " updated the dashboard region import logic, and the cashing dashboard table, logic products page to be more ease of use receiving pair recent orders, exceptions, and multi serial number barcode component"
-    },
-    {
-      "sha": "7a12428b30ce0c8750dd92d6eec63f44b463122f",
-      "shortSha": "7a12428b",
-      "date": "2026-05-26T00:27:07-07:00",
-      "author": "DENSENSE8",
-      "subject": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access",
-      "body": "",
-      "type": "other",
-      "title": " updated the receiving side bar for a better display overall and manuals and staff display and sessions staff access"
     }
   ]
 }

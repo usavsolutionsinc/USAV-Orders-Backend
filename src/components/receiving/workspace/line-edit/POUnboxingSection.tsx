@@ -41,6 +41,7 @@ import { LineMatchingSection } from './LineMatchingSection';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
 import type { UnboxLineController } from './unbox-line-controller';
+import { shouldUseUnmatchedItemsSurface } from '@/lib/receiving/intake-items-routing';
 
 interface POUnboxingSectionProps {
   row: ReceivingLineRow;
@@ -72,12 +73,11 @@ export function POUnboxingSection({
   onItemDescFeedback,
   onItemDescSaved,
 }: POUnboxingSectionProps) {
-  // A paired/matched carton IS a normal PO, so show its PO Items accordion even
-  // in modes that normally hide it (triage hides PO Items for UNFOUND cartons) —
-  // once linked it reads as a normal PO with Package Pairing below it. In triage
-  // the accordion is read-only (editLines=false); unbox is unchanged.
-  const linked = !c.isUnfound;
-  const showPoItems = poItems || (matching && linked);
+  // Real Zoho PO cartons show the PO-items accordion in triage once linked.
+  // Returns and sales-order pairings use the unmatched/serial surface — not the
+  // Zoho PO accordion — even when `receiving_source` reads `zoho_po`.
+  const linkedPo = !c.isUnfound && !shouldUseUnmatchedItemsSurface(row);
+  const showPoItems = poItems || (matching && linkedPo);
   const showPairing = matching;
 
   // Collapse/expand the Package-Pairing sub-section (title + tabs + body) via a

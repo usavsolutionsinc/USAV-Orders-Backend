@@ -74,3 +74,10 @@ export const POST = withAuth(async (request, ctx) => {
 
 - Sync, env-only flag: `readBoolEnv(name, default)`. Per-tenant, staged rollout: `resolveForOrg(orgId, flag, envVar)`
   (async, ~30s cache, DB → env fallback). Use the per-org form to roll out without an env redeploy.
+
+## New polymorphic / typed-fact tables
+
+- Detail: see `.claude/rules/polymorphic-tables.md`. Discriminator via named CHECK (enum only for small stable
+  sets), BIGINT id by default, `entity_type`/`entity_id` naming, org-led unique indexes, parent-delete integrity
+  via a real FK or a shared dispatch-on-`TG_ARGV[0]` trigger family, tenant-from-birth via
+  `enforce_tenant_isolation()` in the same migration, and modeled in Drizzle in the same PR.

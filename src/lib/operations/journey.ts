@@ -205,9 +205,16 @@ export async function resolveEntity(
 
 /**
  * Per-serial provenance (SKU · grade · status · originating PO) for the By-unit
- * band headers. Org-scoped on `serial_units`; the PO joins via the unit's
- * `origin_receiving_line_id` (org-matched), so a unit received off-PO simply
+ * band headers. Org-scoped on `serial_units`; a unit received off-PO simply
  * yields `poNumber: null`. Empty input → empty result (no query).
+ *
+ * The PO joins via each unit's CURRENT receiving line — its most recent
+ * inventory_events touch, falling back to the frozen `origin_receiving_line_id`
+ * — NOT `origin_receiving_line_id` alone. That column COALESCE-freezes to the
+ * FIRST-ever receiving line on attach and never advances, so a unit that
+ * shipped, was returned, and got re-received under a different PO/carton kept
+ * showing its original (now stale) PO here forever. Mirrors
+ * `resolveCurrentReceivingLineIds` (src/lib/neon/serial-units-queries.ts).
  */
 export async function readSerialProvenance(
   client: PoolClient,
@@ -223,15 +230,25 @@ export async function readSerialProvenance(
     current_status: string | null;
     po_number: string | null;
   }>(
-    `SELECT su.id AS serial_unit_id,
+    `WITH current_line AS (
+       SELECT DISTINCT ON (ie.serial_unit_id)
+              ie.serial_unit_id, ie.receiving_line_id
+         FROM inventory_events ie
+        WHERE ie.serial_unit_id = ANY($2::int[])
+          AND ie.receiving_line_id IS NOT NULL
+          AND ie.organization_id = $1
+        ORDER BY ie.serial_unit_id, ie.occurred_at DESC, ie.id DESC
+     )
+     SELECT su.id AS serial_unit_id,
             su.serial_number,
             su.sku,
             su.condition_grade,
             su.current_status,
             rl.zoho_purchaseorder_number AS po_number
        FROM serial_units su
+       LEFT JOIN current_line cl ON cl.serial_unit_id = su.id
        LEFT JOIN receiving_lines rl
-         ON rl.id = su.origin_receiving_line_id
+         ON rl.id = COALESCE(cl.receiving_line_id, su.origin_receiving_line_id)
         AND rl.organization_id = su.organization_id
       WHERE su.organization_id = $1
         AND su.id = ANY($2::int[])`,
@@ -410,10 +427,13 @@ export async function readJourneyEntity(
       to_status: string | null;
       created_at: string | null;
       serial_number: string | null;
+      actor_name: string | null;
     }>(
-      `SELECT ev.id, ev.event_type, ev.from_status, ev.to_status, ev.created_at, wc.serial_number
+      `SELECT ev.id, ev.event_type, ev.from_status, ev.to_status, ev.created_at, wc.serial_number,
+              s.name AS actor_name
          FROM warranty_claim_events ev
          JOIN warranty_claims wc ON wc.id = ev.claim_id AND wc.organization_id = ev.organization_id AND wc.deleted_at IS NULL
+         LEFT JOIN staff s ON s.id = ev.actor_staff_id AND s.organization_id = ev.organization_id
         WHERE ev.organization_id = $1
           AND (($2::int IS NOT NULL AND wc.order_id = $2::int) OR wc.serial_unit_id = ANY($3::int[]))
           AND ev.created_at >= $4 AND ev.created_at < $5
@@ -428,6 +448,7 @@ export async function readJourneyEntity(
         fromStatus: r.from_status,
         toStatus: r.to_status,
         createdAt: r.created_at,
+        actorName: r.actor_name,
       };
       out.push({
         source: 'warranty',

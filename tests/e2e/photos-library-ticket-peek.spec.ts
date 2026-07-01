@@ -77,9 +77,12 @@ test.describe('A · Photo library group-by-ticket', () => {
     const folders = page.getByTestId('photo-folder');
     if (await folders.count()) {
       await expect(folders.first()).toBeVisible();
-      // Claims are grouped by Zendesk ticket — labels must NOT be PO/Order refs.
+      // Claims are grouped by Zendesk ticket — labels are #1234, not PO/Order refs.
       for (const label of await folders.allInnerTexts()) {
-        expect(label).not.toMatch(/\b(PO|Order)\s/);
+        expect(label).not.toMatch(/\b(PO|Order|Ticket)\s/);
+        if (!label.includes('Unlinked')) {
+          expect(label).toMatch(/#\d+/);
+        }
       }
     }
     expect(pageErrors, `Uncaught page errors: ${pageErrors.join(' | ')}`).toHaveLength(0);

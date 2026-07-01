@@ -3,7 +3,7 @@ import { tenantQuery, withTenantConnection, withTenantTransaction } from '@/lib/
 import type { OrgId } from '@/lib/tenancy/constants';
 import { publishReceivingLogChanged } from '@/lib/realtime/publish';
 import { invalidateCacheTags } from '@/lib/cache/upstash-cache';
-import type { SerialUnitRow } from '@/lib/neon/serial-units-queries';
+import { resolveCurrentReceivingLineIds, type SerialUnitRow } from '@/lib/neon/serial-units-queries';
 import { registerShipmentPermissive } from '@/lib/shipping/sync-shipment';
 import { withAuth } from '@/lib/auth/withAuth';
 import { sortSerialUnitToParts } from '@/lib/inventory/parts-sort';
@@ -21,6 +21,26 @@ import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 import { UNBOX_OPENED_PREDICATE_SQL } from '@/lib/receiving/unbox-scan-opened';
 
+/**
+ * A serial (aliased `alias`) whose CURRENT receiving line — its most recent
+ * inventory_events touch, falling back to the frozen origin — is `rl.id`.
+ * NOT a plain `alias.origin_receiving_line_id = rl.id` join: that column
+ * COALESCE-freezes to the FIRST-ever line, so a returned-then-re-received
+ * serial would only ever "find" the PO it originally shipped under, never the
+ * one it's actually on now. Mirrors `resolveCurrentReceivingLineIds`
+ * (src/lib/neon/serial-units-queries.ts) — same logic, inlined because it
+ * composes into a larger dynamic WHERE string rather than running standalone.
+ */
+function currentLineIsMatchSql(alias: string): string {
+  return `COALESCE(
+    (SELECT ie.receiving_line_id FROM inventory_events ie
+      WHERE ie.serial_unit_id = ${alias}.id AND ie.receiving_line_id IS NOT NULL
+        AND ie.organization_id = ${alias}.organization_id
+      ORDER BY ie.occurred_at DESC, ie.id DESC LIMIT 1),
+    ${alias}.origin_receiving_line_id
+  ) = rl.id`;
+}
+
 type LineSerial = {
   id: number;
   serial_number: string;
@@ -34,22 +54,41 @@ async function fetchSerialsForLines(lineIds: number[], orgId: OrgId): Promise<Ma
   const grouped = new Map<number, LineSerial[]>();
   if (lineIds.length === 0) return grouped;
 
-  // serial_units is org-owned; org-scope so a cross-tenant line id (or future
-  // RLS under app_tenant) can never surface another tenant's serials.
+  // Candidate serials: anything EVER touched by one of these lines — either
+  // its frozen origin, or a later inventory_events attach (a return re-
+  // received under a different PO moves a serial onto a NEW line without
+  // ever updating origin_receiving_line_id). serial_units is org-owned;
+  // org-scope so a cross-tenant line id can never surface another tenant's
+  // serials.
   const result = await tenantQuery<SerialUnitRow>(
     orgId,
-    `SELECT id, serial_number, current_status, sku_catalog_id, condition_grade,
-            origin_receiving_line_id, created_at
-     FROM serial_units
-     WHERE origin_receiving_line_id = ANY($1::int[])
-       AND organization_id = $2
-     ORDER BY created_at ASC, id ASC`,
+    `SELECT DISTINCT su.id, su.serial_number, su.current_status, su.sku_catalog_id,
+            su.condition_grade, su.origin_receiving_line_id, su.created_at
+       FROM serial_units su
+      WHERE su.organization_id = $2
+        AND (su.origin_receiving_line_id = ANY($1::int[])
+             OR EXISTS (
+               SELECT 1 FROM inventory_events ie
+                WHERE ie.serial_unit_id = su.id
+                  AND ie.receiving_line_id = ANY($1::int[])
+                  AND ie.organization_id = $2
+             ))
+      ORDER BY su.created_at ASC, su.id ASC`,
     [lineIds, orgId],
+  );
+  if (result.rows.length === 0) return grouped;
+
+  // Resolve each candidate's CURRENT line (most recent inventory_events touch,
+  // falling back to the frozen origin) — never group by origin_receiving_line_id
+  // directly, or a re-received serial keeps showing on its first-ever line.
+  const currentLines = await resolveCurrentReceivingLineIds(
+    result.rows.map((row) => Number(row.id)),
+    orgId,
   );
 
   for (const row of result.rows) {
-    const lineId = row.origin_receiving_line_id;
-    if (lineId == null) continue;
+    const lineId = currentLines.get(Number(row.id)) ?? row.origin_receiving_line_id;
+    if (lineId == null || !lineIds.includes(lineId)) continue;
     const slim: LineSerial = {
       id: Number(row.id),
       serial_number: row.serial_number,
@@ -94,6 +133,22 @@ const RECEIVING_PRIORITY_RANK_SQL = `
     WHEN lower(r.source_platform) = 'goodwill' THEN 4
     ELSE 9
   END)`;
+
+// Triage priority-lane tier (docs/receiving-triage-redesign-plan.md §4.2) —
+// composes with RECEIVING_PRIORITY_RANK_SQL as a SECONDARY tie-breaker, never
+// a replacement: `priority_lane` is NULL on every carton that predates Phase 2
+// (and on any carton the operator hasn't staged yet), so putting it ahead of
+// the primary rank would silently reshuffle the entire live Prioritize tab the
+// moment this shipped. Mirrors receivingTriageLanePolicy's lane values
+// (src/lib/receiving/triage-lane-policy.ts) — keep in sync if that list changes.
+const RECEIVING_LANE_RANK_SQL = `
+  CASE r.priority_lane
+    WHEN 'PO_STOCKOUT' THEN 0
+    WHEN 'RETURN'      THEN 1
+    WHEN 'PO_STANDARD' THEN 2
+    WHEN 'HOLD'        THEN 3
+    ELSE 4
+  END`;
 
 function parsePositiveTechId(value: unknown): number | null {
   const parsed = Number(value);
@@ -478,9 +533,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
           conditions.push(
             `EXISTS (
                SELECT 1 FROM serial_units su_hist
-               WHERE su_hist.origin_receiving_line_id = rl.id
-                 AND su_hist.organization_id = rl.organization_id
+               WHERE su_hist.organization_id = rl.organization_id
                  AND COALESCE(su_hist.serial_number, '') ILIKE $${idx}
+                 AND ${currentLineIsMatchSql('su_hist')}
              )`,
           );
           values.push(p);
@@ -501,9 +556,9 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
             `COALESCE(stn.tracking_number_normalized, '') ILIKE $${patternIdx}`,
             `EXISTS (
                SELECT 1 FROM serial_units su_all
-               WHERE su_all.origin_receiving_line_id = rl.id
-                 AND su_all.organization_id = rl.organization_id
+               WHERE su_all.organization_id = rl.organization_id
                  AND COALESCE(su_all.serial_number, '') ILIKE $${patternIdx}
+                 AND ${currentLineIsMatchSql('su_all')}
              )`,
           ];
           values.push(p);
@@ -909,7 +964,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     // skips both, so the SQL order is the final order. rs_agg isn't joined for
     // scanned, so the recency tiebreak uses received_at.
     if (wantsPrioritySort && view === 'scanned') {
-      orderBy = `ORDER BY ${RECEIVING_PRIORITY_RANK_SQL} ASC, r.received_at::text DESC NULLS LAST, rl.id DESC`;
+      orderBy = `ORDER BY ${RECEIVING_PRIORITY_RANK_SQL} ASC, ${RECEIVING_LANE_RANK_SQL} ASC, r.received_at::text DESC NULLS LAST, rl.id DESC`;
     }
     // The lateral aggregate is needed for view=recent and view=all so the
     // most recently paired cartons bubble up. Cheap at this scale.

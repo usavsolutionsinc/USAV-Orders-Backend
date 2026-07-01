@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchRepairs } from '@/lib/neon/repair-service-queries';
 import { withAuth } from '@/lib/auth/withAuth';
 
-export const GET = withAuth(async (req: NextRequest) => {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
     try {
         const { searchParams } = new URL(req.url);
         const query = searchParams.get('q');
@@ -11,7 +11,7 @@ export const GET = withAuth(async (req: NextRequest) => {
             return NextResponse.json({ results: [] });
         }
 
-        const result = await searchRepairs(query.trim());
+        const result = await searchRepairs(query.trim(), undefined, ctx.organizationId);
 
         return NextResponse.json({
             results: result,

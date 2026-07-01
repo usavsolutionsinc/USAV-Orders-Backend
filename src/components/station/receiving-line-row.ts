@@ -165,4 +165,14 @@ export interface ReceivingLineRow {
   photo_count?: number;
   /** Filed Zendesk ticket # for this line (receiving_lines.zendesk_ticket), stored as "#<id>". */
   zendesk_ticket?: string | null;
+  /** Triage staging shelf/lane — `receiving.staging_location_id`, FK into `locations`. Null until Phase 2's shelf picker ships. */
+  staging_location_id?: number | null;
+  /** Triage priority lane — `receiving.priority_lane` (see triage-lane-policy.ts). Null until Phase 2's lane picker ships. */
+  priority_lane?: string | null;
+  /** Triage pairing-hub outcome — `receiving.pairing_state`: UNFOUND | MATCHED | WAIVED. */
+  pairing_state?: string | null;
+  /** `receiving.triage_complete` — set by the real "Save for unbox" transition. Not threaded onto every feed yet; see TriageProgressStepper's client-tracked fallback. */
+  triage_complete?: boolean | null;
+  /** `receiving.triage_completed_at` — when the carton was staged/saved for unbox. */
+  triage_completed_at?: string | null;
 }

@@ -66,6 +66,7 @@ function makeDeps(opts: {
     upsertReturn: [] as Array<Record<string, unknown>>,
     exceptionsResolved: [] as number[],
     events: [] as Array<Record<string, unknown>>,
+    taps: [] as Array<Record<string, unknown>>,
   };
 
   const client = {
@@ -103,6 +104,9 @@ function makeDeps(opts: {
       return { id: 1 } as unknown;
     }) as unknown as ReturnedSerialLinkDeps['recordInventoryEvent'],
     listingUrlForItemNumber: (item) => getExternalUrlByItemNumber(item),
+    tap: (async (args: Record<string, unknown>) => {
+      captured.taps.push(args);
+    }) as unknown as ReturnedSerialLinkDeps['tap'],
   };
 
   return { deps, calls, captured };
@@ -152,6 +156,12 @@ test('unfound carton + resolved v2 order → full link, allocation flip, promote
   assert.deepEqual(captured.exceptionsResolved, [5]);
   // Timeline marker recorded.
   assert.equal((captured.events[0]?.payload as Record<string, unknown>)?.return_link, true);
+  // Studio tap fired once, after commit, with no disposition yet (parks at
+  // the returns node rather than routing).
+  assert.equal(captured.taps.length, 1);
+  assert.equal(captured.taps[0].event, 'return_received');
+  assert.equal(captured.taps[0].serialUnitId, 7);
+  assert.equal(captured.taps[0].input, undefined);
 });
 
 test('real Zoho-PO carton → allocation flip only, never reclassified', async () => {
@@ -190,6 +200,10 @@ test('no prior order resolved → flags is_return only, no order import', async 
   assert.equal(captured.upsertReturn.length, 0);
   assert.equal(captured.exceptionsResolved.length, 0);
   assert.equal(captured.events.length, 0);
+  // Still a genuine physical return (status was already flipped upstream by
+  // the attach upsert) even with no sales order resolved — tap fires either way.
+  assert.equal(captured.taps.length, 1);
+  assert.equal(captured.taps[0].event, 'return_received');
 });
 
 test('amazon ASIN order maps to AMZ platform + amazon listing url (tsn path)', async () => {

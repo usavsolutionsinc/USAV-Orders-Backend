@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const id = parseId(rawId);
     if (id === null) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const detail = await getBoseModelDetail(id);
+    const detail = await getBoseModelDetail(id, gate.ctx.organizationId);
     if (!detail) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ success: true, ...detail });
@@ -57,10 +57,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const parsed = parseBody(BoseModelUpdateBody, raw);
     if (parsed instanceof NextResponse) return parsed;
 
-    const before = await getBoseModelById(id);
+    const before = await getBoseModelById(id, gate.ctx.organizationId);
     if (!before) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
-    const updated = await updateBoseModel(id, parsed);
+    const updated = await updateBoseModel(id, parsed, gate.ctx.organizationId);
 
     await recordAudit(pool, gate.ctx, req, {
       source: 'bose-models-api',
@@ -93,12 +93,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const id = parseId(rawId);
     if (id === null) return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
 
-    const before = await getBoseModelById(id);
+    const before = await getBoseModelById(id, gate.ctx.organizationId);
     if (!before || !before.is_active) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
     }
 
-    const deleted = await softDeleteBoseModel(id);
+    const deleted = await softDeleteBoseModel(id, gate.ctx.organizationId);
     if (!deleted) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
 
     await recordAudit(pool, gate.ctx, req, {

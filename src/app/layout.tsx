@@ -22,6 +22,7 @@ import { ElectronDragStrip } from "../components/electron/ElectronDragStrip";
 import { getInitialAuthUser } from "@/lib/auth/server-session";
 import { Analytics } from "@vercel/analytics/next";
 import { PostHogProvider } from "../components/analytics/PostHogProvider";
+import { PRODUCT_NAME } from "@/lib/branding/constants";
 
 export default async function RootLayout({
     children,
@@ -29,19 +30,23 @@ export default async function RootLayout({
     children: React.ReactNode;
 }>) {
     const initialUser = await getInitialAuthUser();
+    // Signed-out / first paint: platform brand only. Signed-in: the workspace
+    // takes over the tab (per-page "{Page} · {org}" titles are set client-side
+    // by each route as they adopt it — see docs/cycle-forge-branding-spec.md §3).
+    const documentTitle = initialUser ? initialUser.organizationName : PRODUCT_NAME;
 
     return (
         <html lang="en" className="h-full overflow-hidden">
             <head>
-                <title>USAV Solutions</title>
-                <meta name="description" content="USAV Solutions — Station Operations" />
+                <title>{documentTitle}</title>
+                <meta name="description" content={`${PRODUCT_NAME} — Reseller Operations`} />
                 <link rel="icon" type="image/png" href="/favicon.png" />
                 {/* PWA */}
                 <link rel="manifest" href="/manifest.json" />
-                <meta name="application-name" content="USAV Solutions" />
+                <meta name="application-name" content={PRODUCT_NAME} />
                 <meta name="apple-mobile-web-app-capable" content="yes" />
                 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-                <meta name="apple-mobile-web-app-title" content="USAV" />
+                <meta name="apple-mobile-web-app-title" content={PRODUCT_NAME} />
                 <meta name="theme-color" content="#ffffff" />
                 <meta name="mobile-web-app-capable" content="yes" />
                 {/* Viewport — cover notch, prevent zoom on input focus */}

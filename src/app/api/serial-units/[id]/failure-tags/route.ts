@@ -88,7 +88,7 @@ export const POST = withAuth(async (request, ctx) => {
       extra: { failure_mode_id: parsed.failureModeId, tag_id: tag?.id ?? null, source: parsed.source ?? 'manual' },
     });
 
-    await recomputeUnitQualitySafe(serialUnitId);
+    await recomputeUnitQualitySafe(serialUnitId, orgId);
     return NextResponse.json({ ok: true, tag }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to tag failure';
@@ -150,7 +150,7 @@ export const PATCH = withAuth(async (request, ctx) => {
       extra: { tag_id: parsed.tagId, resolution_status: parsed.resolutionStatus },
     });
 
-    await recomputeUnitQualitySafe(serialUnitId);
+    await recomputeUnitQualitySafe(serialUnitId, orgId);
     return NextResponse.json({ ok: true, tag });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'failed to update failure tag';

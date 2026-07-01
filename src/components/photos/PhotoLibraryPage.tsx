@@ -4,13 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Download, ExternalLink, Link2, Loader2, MessageSquare, Tag, Trash2 } from '@/components/Icons';
 import { usePageSelection } from '@/hooks/usePageHeader';
-import { usePhotoLibrary } from '@/hooks/usePhotoLibrary';
+import { usePhotoLibrary, photoLibraryFilterParams } from '@/hooks/usePhotoLibrary';
 import { usePhotoLibraryUrlState } from '@/hooks/usePhotoLibraryUrlState';
 import { usePhotoSelection } from '@/hooks/usePhotoSelection';
 import { usePhotoShareLinks } from '@/hooks/usePhotoShareLinks';
 import { describePhotoLibraryContext } from '@/lib/photos/library-context-label';
+import { claimsTicketLabel, photoShareTitle } from '@/lib/photos/display-names';
 import { buildPhotoDateTree } from '@/lib/photos/date-tree';
-import { sourceScopeFromFilters, todayFoldersDateFilter } from '@/lib/photos/library-filter-state';
+import {
+  PHOTO_LIBRARY_VIEW_ORDER,
+  sourceScopeFromFilters,
+  todayFoldersDateFilter,
+} from '@/lib/photos/library-filter-state';
+import { useMediaLibraryShortcuts } from '@/hooks/useMediaLibraryShortcuts';
+import { usePhotoGridDensity } from '@/hooks/usePhotoGridDensity';
+import { photoLibraryShowsGridControls } from '@/lib/photos/photo-grid-density';
 import { describeFolderBrowseHeader } from '@/components/photos/photo-library-grid/date-folder-tree';
 import { getCurrentPSTDateKey } from '@/utils/date';
 import type { SelectionAction } from '@/lib/selection/selection-actions';
@@ -25,21 +33,28 @@ import { PhotoContextMenu, type PhotoContextMenuItem } from './PhotoContextMenu'
 import { PhotoDateBreadcrumb } from './PhotoDateBreadcrumb';
 import { PhotoLibraryGrid } from './PhotoLibraryGrid';
 import { PhotoLibraryHeader } from './PhotoLibraryHeader';
+import { PhotoGridDisplayControls } from './PhotoGridDisplayControls';
 import { PhotoLibraryToolbar } from './PhotoLibraryToolbar';
 import { PhotoLabelEditor } from './PhotoLabelEditor';
+import { MediaLibraryShortcutsModal } from './MediaLibraryShortcutsModal';
 
 /** Fixed share-link lifetime (24h) for copied links + share pages. */
 const DEFAULT_SHARE_TTL_SECONDS = 24 * 60 * 60;
+
+/** Server cap on ids per share / share-pack request (share-links.ts MAX_PHOTOS_PER_REQUEST). */
+const MAX_SHARE_PHOTOS = 200;
 
 // `LibraryPhoto` moved to ./photo-library-types so the grid + hook can share it
 // without importing this page (cycle). Re-exported here for compatibility.
 export type { LibraryPhoto } from './photo-library-types';
 import type { LibraryPhoto } from './photo-library-types';
+import { isLibraryDocument, libraryDocumentId } from './photo-library-types';
 
 /** Right pane: 40px header + inline bulk toolbar + photo grid. Filters in sidebar. */
 export function PhotoLibraryPage() {
   const { filters, display, setView, patch } = usePhotoLibraryUrlState();
   const { query, photos } = usePhotoLibrary(filters);
+  const { density: gridDensity, setDensity: setGridDensity } = usePhotoGridDensity();
   const queryClient = useQueryClient();
 
   // A finder search (serial/tracking/order/PO) resolves to one PO when every
@@ -53,6 +68,17 @@ export function PhotoLibraryPage() {
     const refs = new Set(photos.map((p) => p.poRef ?? '').filter(Boolean));
     return refs.size === 1 ? [...refs][0] : undefined;
   }, [filters.poRef, filters.poFinder, photos]);
+
+  const scope = sourceScopeFromFilters(filters);
+
+  const resolvedTicketId = useMemo<string | undefined>(() => {
+    if (filters.ticketId) return filters.ticketId;
+    if (scope !== 'claims' || !filters.poFinder || photos.length === 0) return undefined;
+    const tickets = new Set(
+      photos.map((p) => p.ticketId).filter((id): id is number => id != null && id > 0),
+    );
+    return tickets.size === 1 ? String([...tickets][0]) : undefined;
+  }, [filters.ticketId, filters.poFinder, photos, scope]);
   // The PST capture-day span of the photos in view. Under a PO leaf this lets the
   // breadcrumb descend to the actual day(s) instead of stopping at the week — so a
   // single-day PO reads `… › Week 27 › Jun 30 › PO 14-…`. Tree order is newest-first.
@@ -67,22 +93,33 @@ export function PhotoLibraryPage() {
   // display chrome that reads `poRef`/dates (breadcrumbs, folder header, context
   // label). Identity-stable when there's no PO context to enrich.
   const displayFilters = useMemo(() => {
-    if (!resolvedPoRef) return filters;
-    const withPo = filters.poRef ? filters : { ...filters, poRef: resolvedPoRef };
+    let next = filters;
+    if (resolvedPoRef && !filters.poRef) {
+      next = { ...next, poRef: resolvedPoRef };
+    }
+    if (resolvedTicketId && !filters.ticketId) {
+      next = { ...next, ticketId: resolvedTicketId };
+    }
+    if (!resolvedPoRef && !filters.poRef && !resolvedTicketId && !filters.ticketId) {
+      return next;
+    }
     return photoDaySpan
-      ? { ...withPo, dateFrom: photoDaySpan.from, dateTo: photoDaySpan.to }
-      : withPo;
-  }, [filters, resolvedPoRef, photoDaySpan]);
+      ? { ...next, dateFrom: photoDaySpan.from, dateTo: photoDaySpan.to }
+      : next;
+  }, [filters, resolvedPoRef, resolvedTicketId, photoDaySpan]);
   const { has } = useAuth();
   const canZendesk = has('integrations.zendesk');
   const canManagePhotos = has('photos.manage');
+  const canShare = has('photos.share');
 
-  // Photos staged for the "Create Zendesk ticket" modal (null = closed).
+  // Photos staged for the "Create support ticket" modal (null = closed).
   const [claimPhotos, setClaimPhotos] = useState<ClaimPhotoInput[] | null>(null);
   // Photos staged for the label editor (null = closed; 1 = single PUT, N = bulk).
   const [labelEditorPhotos, setLabelEditorPhotos] = useState<LibraryPhoto[] | null>(null);
   // Right-click context menu target (null = closed).
   const [ctxMenu, setCtxMenu] = useState<{ photo: LibraryPhoto; x: number; y: number } | null>(null);
+  // Keyboard-shortcut cheat sheet (toggled with `?`).
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   // Live-refresh when a packer's phone commits a GCS upload (station channel),
   // mirroring how receiving photos already propagate into the library.
@@ -96,13 +133,12 @@ export function PhotoLibraryPage() {
   const [selectMode, setSelectMode] = useState(false);
   // Selection persists across the client pages (see usePhotoSelection): a bulk
   // action carries the whole set, not just the visible page.
-  const { selected, selectedPhotos, isActive, selectTile, selectAll, clear } =
+  const { selected, selectedPhotos, isActive, selectTile, selectAll, selectIds, clear } =
     usePhotoSelection(photos);
   const selectionActive = selectMode || isActive;
 
   const shareLinks = usePhotoShareLinks();
   const { title, subtitle } = describePhotoLibraryContext(displayFilters);
-  const scope = sourceScopeFromFilters(filters);
 
   const { view } = display;
 
@@ -114,10 +150,15 @@ export function PhotoLibraryPage() {
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
       poRef: resolvedPoRef,
+      ticketId: resolvedTicketId,
     });
-  }, [view, photos, scope, filters.dateFrom, filters.dateTo, resolvedPoRef]);
+  }, [view, photos, scope, filters.dateFrom, filters.dateTo, resolvedPoRef, resolvedTicketId]);
 
-  // Date breadcrumb defaults (right-panel footer): today + the most recent
+  const folderIsLeaf = Boolean(folderBrowse?.isLeaf);
+  const showGridControls = photoLibraryShowsGridControls(view, folderIsLeaf);
+  const gridControlsInBreadcrumb = view === 'folders' && folderIsLeaf;
+
+  // Date breadcrumb quick-jump defaults: today + the most recent
   // capture day across the loaded photos — both keyed off `created_at` (PST),
   // never the most-recent PO or photo type.
   const today = useMemo(() => getCurrentPSTDateKey(), []);
@@ -128,15 +169,15 @@ export function PhotoLibraryPage() {
     if (foldersDateInitialized.current) return;
     if (view !== 'folders') return;
     // A finder search owns the result set — don't clobber it with today's date.
-    if (filters.dateFrom || filters.dateTo || filters.poRef || filters.poFinder) return;
+    if (filters.dateFrom || filters.dateTo || filters.poRef || filters.ticketId || filters.poFinder) return;
     foldersDateInitialized.current = true;
     patch(todayFoldersDateFilter());
-  }, [view, filters.dateFrom, filters.dateTo, filters.poRef, filters.poFinder, patch]);
+  }, [view, filters.dateFrom, filters.dateTo, filters.poRef, filters.ticketId, filters.poFinder, patch]);
 
   const handleViewChange = useCallback(
     (next: typeof view) => {
       if (next === 'folders') {
-        patch({ ...todayFoldersDateFilter(), poRef: undefined });
+        patch({ ...todayFoldersDateFilter(), poRef: undefined, ticketId: undefined });
       }
       setView(next);
     },
@@ -152,6 +193,29 @@ export function PhotoLibraryPage() {
     clear();
   }, [clear]);
 
+  // "Select all matching filters" — fetch every matching photo id (capped) for
+  // the current filter set and select them, so a bulk share/ZIP/delete spans the
+  // whole result, not just the loaded page.
+  const selectAllMatching = useCallback(async () => {
+    try {
+      const qs = photoLibraryFilterParams(filters).toString();
+      const res = await fetch(`/api/photos/library/ids?${qs}`);
+      if (!res.ok) throw new Error('Failed to select all');
+      const data = (await res.json()) as { ids: number[]; total: number; capped: boolean };
+      selectIds(data.ids);
+      setSelectMode(true);
+      if (data.capped) {
+        toast.success(
+          `Selected first ${data.ids.length} of ${data.total} — narrow filters to select more`,
+        );
+      } else {
+        toast.success(`Selected all ${data.ids.length} matching`);
+      }
+    } catch {
+      toast.error('Could not select all matching photos');
+    }
+  }, [filters, selectIds]);
+
   usePageSelection(
     {
       active: selectionActive,
@@ -159,6 +223,24 @@ export function PhotoLibraryPage() {
     },
     [selectionActive, exitSelectMode],
   );
+
+  // Grid keyboard shortcuts (the viewer owns its own keys). `?` help, `⌘A`
+  // select-all while selecting, `Esc` exit, `1`–`5` view switch.
+  const toggleShortcuts = useCallback(() => setShowShortcuts((v) => !v), []);
+  const selectViewByIndex = useCallback(
+    (index: number) => {
+      const next = PHOTO_LIBRARY_VIEW_ORDER[index];
+      if (next) handleViewChange(next);
+    },
+    [handleViewChange],
+  );
+  useMediaLibraryShortcuts({
+    selectionActive,
+    onToggleHelp: toggleShortcuts,
+    onSelectAll: selectAll,
+    onEscape: exitSelectMode,
+    onSelectViewIndex: selectViewByIndex,
+  });
 
   // Infinite scroll: load the next page when the sentinel near the bottom of the
   // scroll region scrolls into view. `rootMargin` pre-fetches ~600px early so the
@@ -219,7 +301,7 @@ export function PhotoLibraryPage() {
   );
 
   // Per-photo right-click actions — the "drilling" menu (view, copy link, attach
-  // to a Zendesk ticket, download, delete). Mirrors the bulk toolbar for one photo.
+  // to a support ticket, download, delete). Mirrors the bulk toolbar for one photo.
   const photoMenuItems = useCallback(
     (photo: LibraryPhoto): PhotoContextMenuItem[] => [
       {
@@ -235,15 +317,32 @@ export function PhotoLibraryPage() {
         onClick: () =>
           void shareLinks.generateAndCopy([photo.id], { ttlSeconds: DEFAULT_SHARE_TTL_SECONDS }),
       },
+      ...(canShare
+        ? [
+            {
+              key: 'share-page',
+              label: 'Create share page',
+              icon: <ExternalLink className="h-3.5 w-3.5" />,
+              onClick: () =>
+                void shareLinks.createSharePage([photo.id], { title: photoShareTitle([photo], scope) }),
+            } satisfies PhotoContextMenuItem,
+          ]
+        : []),
       ...(canZendesk
         ? [
             {
               key: 'zendesk',
-              label: 'Attach to Zendesk ticket',
+              label: 'Attach to support ticket',
               icon: <MessageSquare className="h-3.5 w-3.5" />,
               onClick: () =>
                 setClaimPhotos([
-                  { id: photo.id, src: photo.thumbUrl, poRef: photo.poRef, caption: photo.caption ?? null },
+                  {
+                    id: photo.id,
+                    src: photo.thumbUrl,
+                    displayUrl: photo.displayUrl,
+                    poRef: photo.poRef,
+                    caption: photo.caption ?? null,
+                  },
                 ]),
             } satisfies PhotoContextMenuItem,
           ]
@@ -276,18 +375,21 @@ export function PhotoLibraryPage() {
         onClick: () => void deletePhotoFromMenu(photo.id),
       },
     ],
-    [canManagePhotos, canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
+    [canManagePhotos, canShare, canZendesk, deletePhotoFromMenu, downloadPhotoFile, shareLinks],
   );
 
   const deleteSelectedPhotos = useCallback(
-    async (rows: LibraryPhoto[]) => {
-      if (rows.length === 0) return;
+    async () => {
+      // Operate on the whole selection set (may exceed the loaded rows when
+      // "select all matching" is active), not just the loaded selectedPhotos.
+      const ids = [...selected].filter((id) => id > 0);
+      if (ids.length === 0) return;
       const results = await Promise.allSettled(
-        rows.map(async (row) => {
-          const res = await fetch(`/api/photos/${row.id}`, { method: 'DELETE' });
+        ids.map(async (id) => {
+          const res = await fetch(`/api/photos/${id}`, { method: 'DELETE' });
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
-          if (!res.ok) throw new Error(data?.error || `Delete failed for photo ${row.id}`);
-          return row.id;
+          if (!res.ok) throw new Error(data?.error || `Delete failed for photo ${id}`);
+          return id;
         }),
       );
       const deletedIds = results
@@ -300,20 +402,52 @@ export function PhotoLibraryPage() {
       await queryClient.invalidateQueries({ queryKey: ['photo-library'] });
       exitSelectMode();
       if (failures.length > 0) {
-        toast.error(`Deleted ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
+        toast.error(`Deleted ${deletedIds.length} photo${deletedIds.length === 1 ? '' : 's'}; ${failures.length} failed`);
       } else {
-        toast.success(`Deleted ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
+        toast.success(`Deleted ${ids.length} photo${ids.length === 1 ? '' : 's'}`);
       }
     },
-    [exitSelectMode, queryClient],
+    [exitSelectMode, queryClient, selected],
   );
 
   const photoBulkActions = useMemo<SelectionAction<LibraryPhoto>[]>(
-    () => [
+    () => {
+      if (scope === 'outbound') {
+        return [
+          {
+            key: 'download',
+            label: 'Download selected',
+            icon: <Download className="h-4 w-4" />,
+            tone: 'blue' as const,
+            primary: true,
+            run: async (rows: LibraryPhoto[]) => {
+              const docs = rows.filter(isLibraryDocument);
+              if (docs.length === 0) return;
+              if (docs.length >= 2) {
+                const ids = docs.map((row) => libraryDocumentId(row)).join(',');
+                const title = docs[0]?.poRef ? `Order-${docs[0].poRef}-documents` : 'outbound-documents';
+                window.open(`/api/documents/download-zip?ids=${ids}&title=${encodeURIComponent(title)}`, '_blank');
+                toast.success(`Downloading ${docs.length} documents`);
+                return;
+              }
+              const row = docs[0]!;
+              const id = libraryDocumentId(row);
+              const ext = row.mimeType === 'image/png' ? 'png' : 'pdf';
+              await downloadPhotoFile(
+                `/api/documents/${id}/content?download=1`,
+                row.filename ?? `document-${id}.${ext}`,
+              );
+              toast.success('Downloaded 1 document');
+            },
+          } satisfies SelectionAction<LibraryPhoto>,
+        ];
+      }
+
+      return [
       ...(canZendesk
         ? [
             {
-              // Attach the selection to a Zendesk ticket (new or existing).
+              // Attach the selection to a support ticket (new or existing).
               key: 'zendesk',
               label: 'Add photos to a ticket',
               icon: <MessageSquare className="h-4 w-4" />,
@@ -324,6 +458,7 @@ export function PhotoLibraryPage() {
                   rows.map((row) => ({
                     id: row.id,
                     src: row.thumbUrl,
+                    displayUrl: row.displayUrl,
                     poRef: row.poRef,
                     caption: row.caption ?? null,
                   })),
@@ -332,28 +467,69 @@ export function PhotoLibraryPage() {
             } satisfies SelectionAction<LibraryPhoto>,
           ]
         : []),
+      ...(canShare
+        ? [
+            {
+              // Copy N ephemeral signed links as a formatted, paste-ready block.
+              key: 'copy-links',
+              label: 'Copy shareable links',
+              icon: <Link2 className="h-4 w-4" />,
+              tone: 'blue' as const,
+              primary: false,
+              maxSelected: MAX_SHARE_PHOTOS,
+              disabledReason: `Select ${MAX_SHARE_PHOTOS} or fewer to copy links`,
+              run: () => {
+                const ids = [...selected];
+                if (ids.length > MAX_SHARE_PHOTOS) {
+                  toast.error(`Select ${MAX_SHARE_PHOTOS} or fewer to copy links`);
+                  return;
+                }
+                void shareLinks.generateAndCopy(ids, { ttlSeconds: DEFAULT_SHARE_TTL_SECONDS });
+              },
+            } satisfies SelectionAction<LibraryPhoto>,
+            {
+              // Create one durable public /share/photos/:token page for the set.
+              key: 'share-page',
+              label: 'Create share page',
+              icon: <ExternalLink className="h-4 w-4" />,
+              tone: 'blue' as const,
+              primary: false,
+              maxSelected: MAX_SHARE_PHOTOS,
+              disabledReason: `Select ${MAX_SHARE_PHOTOS} or fewer to build a share page`,
+              run: (rows: LibraryPhoto[]) => {
+                const ids = [...selected];
+                if (ids.length > MAX_SHARE_PHOTOS) {
+                  toast.error(`Select ${MAX_SHARE_PHOTOS} or fewer to build a share page`);
+                  return;
+                }
+                void shareLinks.createSharePage(ids, { title: photoShareTitle(rows, scope, ids.length) });
+              },
+            } satisfies SelectionAction<LibraryPhoto>,
+          ]
+        : []),
       {
+        // One file → direct download; 2+ → single ZIP (GET /api/photos/download-zip).
         key: 'download',
         label: 'Download selected',
         icon: <Download className="h-4 w-4" />,
         tone: 'blue',
         primary: false,
         run: async (rows) => {
-          if (rows.length === 0) return;
-          const results = await Promise.allSettled(
-            rows.map((row, index) =>
-              downloadPhotoFile(
-                `/api/photos/${row.id}/content?download=1`,
-                rows.length === 1 ? `photo-${row.id}.jpg` : `photo-${index + 1}-${row.id}.jpg`,
-              ),
-            ),
-          );
-          const failures = results.filter((result) => result.status === 'rejected');
-          if (failures.length > 0) {
-            toast.error(`Downloaded ${rows.length - failures.length} photo${rows.length - failures.length === 1 ? '' : 's'}; ${failures.length} failed`);
-          } else {
-            toast.success(`Downloaded ${rows.length} photo${rows.length === 1 ? '' : 's'}`);
+          const ids = [...selected];
+          if (ids.length === 0) return;
+          if (ids.length >= 2) {
+            shareLinks.downloadZip(ids, { title: photoShareTitle(rows, scope, ids.length) });
+            return;
           }
+          const row = rows[0];
+          if (!row) return;
+          await downloadPhotoFile(
+            `/api/photos/${row.id}/content?download=1`,
+            `photo-${row.id}.jpg`,
+          ).then(
+            () => toast.success('Downloaded 1 photo'),
+            () => toast.error('Download failed'),
+          );
         },
       },
       ...(canManagePhotos
@@ -369,8 +545,9 @@ export function PhotoLibraryPage() {
             } satisfies SelectionAction<LibraryPhoto>,
           ]
         : []),
-    ],
-    [canManagePhotos, canZendesk, downloadPhotoFile],
+    ];
+    },
+    [canManagePhotos, canShare, canZendesk, downloadPhotoFile, scope, selected, shareLinks],
   );
 
   return (
@@ -384,28 +561,48 @@ export function PhotoLibraryPage() {
         onViewChange={handleViewChange}
         sort={filters.sort ?? 'recent'}
         onSortChange={(sort) => patch({ sort })}
+        gridDensity={gridDensity}
+        onGridDensityChange={setGridDensity}
+        onRefreshPhotos={() => void query.refetch()}
+        isRefreshingPhotos={query.isFetching && !query.isLoading}
+        showGridControls={showGridControls}
+        gridControlsInBreadcrumb={gridControlsInBreadcrumb}
       />
 
       {/* Top context bar — folder path by default, swapped for the bulk-action bar
           while selecting. Both share the same height so toggling selection never
-          shifts the layout (the path stays mirrored in the footer below). */}
+          shifts the layout. */}
       {selectionActive ? (
         <PhotoLibraryToolbar
           rows={selectedPhotos}
           total={photos.length}
+          selectedCount={selected.size}
+          hasMore={query.hasNextPage}
+          onSelectAllMatching={() => void selectAllMatching()}
           actions={photoBulkActions}
           onDeleteSelected={deleteSelectedPhotos}
           onSelectAll={selectAll}
           onClear={exitSelectMode}
         />
       ) : (
-        <div className="flex h-[40px] shrink-0 items-center border-b border-gray-200 bg-white px-4 lg:px-6">
+        <div className="flex h-[40px] shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-white px-4">
           <PhotoDateBreadcrumb
             filters={displayFilters}
             today={today}
             mostRecentDay={mostRecentDay}
-            onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}
+            folderLeafLabel={folderIsLeaf ? folderBrowse?.title : undefined}
+            onNavigate={({ dateFrom, dateTo }) =>
+              patch({ dateFrom, dateTo, poRef: undefined, ticketId: undefined })
+            }
           />
+          {gridControlsInBreadcrumb ? (
+            <PhotoGridDisplayControls
+              density={gridDensity}
+              onDensityChange={setGridDensity}
+              onRefresh={() => void query.refetch()}
+              isRefreshing={query.isFetching && !query.isLoading}
+            />
+          ) : null}
         </div>
       )}
 
@@ -413,11 +610,15 @@ export function PhotoLibraryPage() {
         <PhotoLibraryGrid
           photos={photos}
           view={view}
+          gridDensity={gridDensity}
           sourceScope={sourceScopeFromFilters(filters)}
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
           poRef={resolvedPoRef}
-          onNavigate={({ dateFrom, dateTo, poRef }) => patch({ dateFrom, dateTo, poRef })}
+          ticketId={resolvedTicketId}
+          onNavigate={({ dateFrom, dateTo, poRef, ticketId }) =>
+            patch({ dateFrom, dateTo, poRef, ticketId })
+          }
           onPhotoDeleted={() => void query.refetch()}
           selectionActive={selectionActive}
           selected={selected}
@@ -445,15 +646,6 @@ export function PhotoLibraryPage() {
             {`Showing all ${photos.length} photo${photos.length === 1 ? '' : 's'}`}
           </p>
         ) : null}
-      </div>
-
-      <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2 lg:px-6">
-        <PhotoDateBreadcrumb
-          filters={displayFilters}
-          today={today}
-          mostRecentDay={mostRecentDay}
-          onNavigate={({ dateFrom, dateTo }) => patch({ dateFrom, dateTo, poRef: undefined })}
-        />
       </div>
 
       {claimPhotos !== null ? (
@@ -484,6 +676,8 @@ export function PhotoLibraryPage() {
           onClose={() => setLabelEditorPhotos(null)}
         />
       ) : null}
+
+      <MediaLibraryShortcutsModal open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
     </RightPaneOverlayHost>
   );

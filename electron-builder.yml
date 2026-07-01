@@ -1,5 +1,5 @@
 appId: com.usav.orders.desktop
-productName: USAV Orders
+productName: Cycle Forge
 
 asar: true
 
@@ -62,7 +62,7 @@ mac:
         - arm64
 
 dmg:
-  title: USAV Orders ${version}
+  title: Cycle Forge ${version}
   contents:
     - x: 410
       y: 150

@@ -12,6 +12,7 @@ import { useTicketPhotoStaging } from '@/hooks/useTicketPhotoStaging';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import type { ZendeskComment } from '@/lib/zendesk';
 import { EmptyState, Spinner } from '@/design-system/primitives';
+import { RightPaneOverlayHost } from '@/components/ui/RightPaneOverlay';
 import { Upload } from '@/components/Icons';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
@@ -99,7 +100,8 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
   const requester = requesterFrom(ticket);
 
   return (
-    <div {...dz.rootProps} className="relative flex h-full min-h-0 flex-col bg-gray-50/40">
+    <RightPaneOverlayHost className="relative flex h-full min-h-0 flex-col bg-gray-50/40">
+    <div {...dz.rootProps} className="relative flex h-full min-h-0 flex-col">
       <SupportChatHeader ticket={ticket} onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         <SupportChatThread
@@ -139,5 +141,6 @@ export function SupportTicketDetail({ ticketId, onBack }: { ticketId: number; on
         ) : null}
       </AnimatePresence>
     </div>
+    </RightPaneOverlayHost>
   );
 }

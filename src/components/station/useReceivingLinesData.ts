@@ -19,6 +19,7 @@ import {
   deliveredUnscannedToRow,
   type DeliveredUnscannedResponse,
 } from '@/components/station/receiving-delivered-unscanned';
+import { mergeReceivingPackageMetaIntoRow } from './receiving-lines-table-helpers';
 import type { ReceivingLineRow } from './receiving-line-row';
 
 interface UseReceivingLinesDataArgs {
@@ -143,6 +144,18 @@ export function useReceivingLinesData({
     };
     window.addEventListener('receiving-line-updated', handler);
     return () => window.removeEventListener('receiving-line-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<Parameters<typeof mergeReceivingPackageMetaIntoRow>[1]>).detail;
+      if (!detail || detail.receiving_id == null) return;
+      setLocalRows((rows) =>
+        rows.map((row) => mergeReceivingPackageMetaIntoRow(row, detail) ?? row),
+      );
+    };
+    window.addEventListener('receiving-package-updated', handler);
+    return () => window.removeEventListener('receiving-package-updated', handler);
   }, []);
 
   // Tracking scan/search match → prepend matched lines at the top (dedupe by id).

@@ -20,6 +20,6 @@ export default async function GtinSerialPage({
   const { gtin, serial } = await params;
   const sid = (await cookies()).get(SESSION_COOKIE_NAME)?.value ?? null;
   const user = await getCurrentUserBySid(sid);
-  const result = await resolveGs1(`/01/${gtin}/21/${serial}`, { isInternal: user !== null });
+  const result = await resolveGs1(`/01/${gtin}/21/${serial}`, { isInternal: user !== null, orgId: user?.organizationId });
   redirect(result.redirect);
 }

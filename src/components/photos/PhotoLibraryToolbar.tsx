@@ -11,10 +11,20 @@ import { cn } from '@/utils/_cn';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 
 interface PhotoLibraryToolbarProps<T> {
-  /** Currently-selected rows (the full cross-page selection). */
+  /** Currently-selected rows (the loaded subset of the cross-page selection). */
   rows: T[];
   /** Total selectable (loaded) count, for the "Select all N" affordance. */
   total: number;
+  /**
+   * True selection size — may exceed `rows.length` when "select all matching" has
+   * pulled in ids that aren't loaded into the grid. Drives the "{n} selected"
+   * label. Defaults to `rows.length`.
+   */
+  selectedCount?: number;
+  /** Whether more pages match the current filters (enables "select all matching"). */
+  hasMore?: boolean;
+  /** Select every photo matching the current filters (server-resolved, capped). */
+  onSelectAllMatching?: () => void;
   /** Bulk actions — same {@link SelectionAction} set the bottom bar used. */
   actions: SelectionAction<T>[];
   /** Optional control rendered before the action buttons (e.g. "Add to folder"). */
@@ -37,6 +47,9 @@ interface PhotoLibraryToolbarProps<T> {
 export function PhotoLibraryToolbar<T>({
   rows,
   total,
+  selectedCount,
+  hasMore,
+  onSelectAllMatching,
   actions,
   leading,
   onDeleteSelected,
@@ -44,6 +57,7 @@ export function PhotoLibraryToolbar<T>({
   onClear,
 }: PhotoLibraryToolbarProps<T>) {
   const count = rows.length;
+  const shownCount = selectedCount ?? count;
   const allSelected = total > 0 && count >= total;
   const visible = actions.filter((a) => !resolveSelectionAction(a, rows).disabled);
 
@@ -73,7 +87,7 @@ export function PhotoLibraryToolbar<T>({
   return (
     <div className="flex h-[40px] shrink-0 items-center gap-2 border-b border-gray-200 bg-gray-50/80 px-4 backdrop-blur-sm lg:px-6">
       <span className="shrink-0 text-xs font-bold tabular-nums text-gray-700">
-        {count} selected
+        {shownCount} selected
       </span>
       <Button
         variant="ghost"
@@ -83,6 +97,18 @@ export function PhotoLibraryToolbar<T>({
       >
         {allSelected ? 'Clear' : `Select all ${total}`}
       </Button>
+      {hasMore && onSelectAllMatching ? (
+        <HoverTooltip label="Select every photo matching the current filters" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSelectAllMatching}
+            className="h-7 shrink-0 rounded-md px-1.5 py-0.5 text-caption font-bold uppercase tracking-wider text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+          >
+            Select all matching
+          </Button>
+        </HoverTooltip>
+      ) : null}
 
       <div className="ml-auto flex items-center gap-1">
         {leading}
@@ -111,7 +137,7 @@ export function PhotoLibraryToolbar<T>({
         )}
         {onDeleteSelected && count > 0 ? (
           <HoverTooltip
-            label={deleteArmed ? 'Click again to confirm' : `Delete ${count} selected photo${count === 1 ? '' : 's'}`}
+            label={deleteArmed ? 'Click again to confirm' : `Delete ${shownCount} selected photo${shownCount === 1 ? '' : 's'}`}
             asChild
           >
             {/* ds-raw-button: morphs icon-only ↔ icon+label on arm — same as PhotoViewerModal */}

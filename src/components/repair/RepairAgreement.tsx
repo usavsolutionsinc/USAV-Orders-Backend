@@ -3,6 +3,7 @@
 import React from 'react';
 import { SignaturePad, type SignatureData } from './SignaturePad';
 import type { RepairFormData } from './RepairIntakeForm';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface RepairAgreementProps {
   formData: RepairFormData;
@@ -11,6 +12,10 @@ interface RepairAgreementProps {
 }
 
 export function RepairAgreement({ formData, signatureData, onSignatureChange }: RepairAgreementProps) {
+  // On-screen preview only — the printed/signed form (/api/repair-service/print/[id])
+  // is the source of truth and pulls the full letterhead from org settings.
+  const { user } = useAuth();
+  const orgName = user?.organizationName || 'Workspace';
   const today = new Date().toLocaleDateString('en-US', {
     month: '2-digit',
     day: '2-digit',
@@ -39,7 +44,7 @@ export function RepairAgreement({ formData, signatureData, onSignatureChange }: 
           </p>
         </div>
         <div className="text-right">
-          <p className="text-micro font-black text-gray-900 uppercase tracking-tight">USAV Solutions</p>
+          <p className="text-micro font-black text-gray-900 uppercase tracking-tight">{orgName}</p>
           <p className="text-eyebrow text-gray-400">16161 Gothard St. Suite A</p>
           <p className="text-eyebrow text-gray-400">Huntington Beach, CA 92647</p>
           <p className="text-eyebrow text-gray-400">(714) 596-6888</p>

@@ -5,19 +5,25 @@ import {
   Folder,
   Image as ImageIcon,
   Loader2,
-  MessageSquare,
   Package,
   PackageOpen,
   Plus,
   ShoppingCart,
   Tag,
   Wrench,
+  ZendeskMark,
+  Truck,
 } from '@/components/Icons';
 import { cn } from '@/utils/_cn';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { useImageTypes } from '@/hooks/useImageTypes';
-import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
+import type {
+  OutboundDocumentTypeFilter,
+  OutboundMediaFilter,
+  PhotoLibrarySourceScope,
+} from '@/lib/photos/library-filter-state';
+import { OutboundDocumentTypeFilters } from './OutboundDocumentTypeFilters';
 import { toast } from '@/lib/toast';
 
 /** A paired icon component (mirrors the Icons.tsx glyph signature). */
@@ -36,21 +42,37 @@ const ICONS: Record<string, IconCmp> = {
   ShoppingCart,
   Package,
   Wrench,
-  MessageSquare,
+  ZendeskMark,
   Tag,
   Folder,
   Image: ImageIcon,
+  Truck,
+};
+
+/** Sidebar-only glyph overrides — preview Zendesk ticket mark for Claims without
+ *  changing the `image-types` string key used elsewhere yet. */
+const BUILTIN_ICON_OVERRIDE: Partial<Record<string, IconCmp>> = {
+  claims:   ZendeskMark,
+  Truck,
+  FileText: ImageIcon,
 };
 
 export function PhotoStationFolders({
   activeScope,
   activeImageType,
+  activeDocumentType = 'all',
+  activeOutboundMedia = 'documents',
   inferredScope = null,
   onSelect,
+  onDocumentTypeSelect,
+  onPackPhotosSelect,
 }: {
   activeScope: PhotoLibrarySourceScope;
   /** Active custom image type key, or null when a built-in scope is active. */
   activeImageType: string | null;
+  /** Outbound scope — document kind chip filter. */
+  activeDocumentType?: OutboundDocumentTypeFilter;
+  activeOutboundMedia?: OutboundMediaFilter;
   /**
    * Scope derived from the photos currently in view (their entity links), used to
    * highlight the matching built-in row when no scope is explicitly picked — e.g.
@@ -59,6 +81,8 @@ export function PhotoStationFolders({
   inferredScope?: PhotoLibrarySourceScope | null;
   /** Built-in → `{ scope }`; custom → `{ imageType }`. */
   onSelect: (sel: { scope?: PhotoLibrarySourceScope; imageType?: string }) => void;
+  onDocumentTypeSelect?: (documentType: OutboundDocumentTypeFilter) => void;
+  onPackPhotosSelect?: () => void;
 }) {
   const { builtIn, custom, isLoading, createType } = useImageTypes();
   const [adding, setAdding] = useState(false);
@@ -72,14 +96,14 @@ export function PhotoStationFolders({
       : inferredScope;
 
   const addType = async () => {
-    const label = window.prompt('New image type name')?.trim();
+    const label = window.prompt('New media type name')?.trim();
     if (!label) return;
     setAdding(true);
     try {
       const created = await createType.mutateAsync({ label });
       onSelect({ imageType: created.key });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create image type');
+      toast.error(err instanceof Error ? err.message : 'Failed to create media type');
     } finally {
       setAdding(false);
     }
@@ -88,11 +112,11 @@ export function PhotoStationFolders({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Image type</p>
-        <HoverTooltip label="Add image type" asChild>
+        <p className="text-eyebrow font-black uppercase tracking-widest text-gray-500">Media type</p>
+        <HoverTooltip label="Add media type" asChild>
           <IconButton
             icon={adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            ariaLabel="Add image type"
+            ariaLabel="Add media type"
             onClick={addType}
             disabled={adding}
             className="-my-1 inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-gray-100 disabled:opacity-40"
@@ -103,7 +127,7 @@ export function PhotoStationFolders({
       <ul className="space-y-1">
         {builtIn.map((type) => {
           const active = highlightScope === type.key;
-          const Icon = ICONS[type.icon] ?? Folder;
+          const Icon = BUILTIN_ICON_OVERRIDE[type.key] ?? ICONS[type.icon] ?? Folder;
           return (
             <TypeRow
               key={type.key}
@@ -135,6 +159,15 @@ export function PhotoStationFolders({
           </li>
         ) : null}
       </ul>
+
+      {activeScope === 'outbound' && onDocumentTypeSelect && onPackPhotosSelect ? (
+        <OutboundDocumentTypeFilters
+          documentType={activeDocumentType}
+          outboundMedia={activeOutboundMedia}
+          onSelectDocumentType={onDocumentTypeSelect}
+          onSelectPackPhotos={onPackPhotosSelect}
+        />
+      ) : null}
     </div>
   );
 }

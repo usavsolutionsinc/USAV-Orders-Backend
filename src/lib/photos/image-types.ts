@@ -51,6 +51,7 @@ export const BUILTIN_IMAGE_TYPES: BuiltInImageType[] = [
   { kind: 'builtin', key: 'packing', label: 'Packing', icon: 'Package' },
   { kind: 'builtin', key: 'repair', label: 'Repair', icon: 'Wrench' },
   { kind: 'builtin', key: 'claims', label: 'Claims', icon: 'MessageSquare' },
+  { kind: 'builtin', key: 'outbound', label: 'Outbound', icon: 'Truck' },
 ];
 
 const BUILTIN_KEYS = new Set<string>(BUILTIN_IMAGE_TYPES.map((t) => t.key));

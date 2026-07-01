@@ -84,3 +84,38 @@ ${platformWhens}
     ELSE ${PRIORITY_RANK_OTHER}
   END)`;
 }
+
+/**
+ * Triage priority-lane rank (docs/receiving-triage-redesign-plan.md §4.2) — a
+ * SECONDARY tie-breaker layered on top of {@link priorityRankSql}, never a
+ * replacement. `priority_lane` values mirror
+ * `src/lib/receiving/triage-lane-policy.ts`'s `TRIAGE_LANE_OPTS`; keep the two
+ * in sync if that list changes. An unassigned lane (NULL — every carton that
+ * predates staging, or hasn't been staged yet) ranks last among the lane tier
+ * so it never outranks a staged carton, but still sorts purely by the primary
+ * rank relative to other unassigned cartons (this tier only ever breaks ties).
+ */
+export const LANE_RANK_ORDER: ReadonlyArray<string> = [
+  'PO_STOCKOUT',
+  'RETURN',
+  'PO_STANDARD',
+  'HOLD',
+];
+
+export function laneRank(lane: string | null | undefined): number {
+  if (!lane) return LANE_RANK_ORDER.length;
+  const idx = LANE_RANK_ORDER.indexOf(lane);
+  return idx === -1 ? LANE_RANK_ORDER.length : idx;
+}
+
+/** SQL CASE fragment for {@link laneRank}, keyed by the given `priority_lane` column/alias. */
+export function laneRankSql(laneCol: string): string {
+  const whens = LANE_RANK_ORDER
+    .map((lane, i) => `    WHEN '${lane}' THEN ${i}`)
+    .join('\n');
+  return `
+  CASE ${laneCol}
+${whens}
+    ELSE ${LANE_RANK_ORDER.length}
+  END`;
+}

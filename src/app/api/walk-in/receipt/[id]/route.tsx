@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 import { getSquareTransactionById } from '@/lib/neon/square-transaction-queries';
 import pool from '@/lib/db';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getOrgLetterhead } from '@/lib/branding/letterhead';
+import { parseOrgSettings } from '@/lib/tenancy/settings';
 
 function fmt(cents: number | null | undefined): string {
   if (cents == null || !Number.isFinite(cents)) return '$0.00';
@@ -36,17 +40,26 @@ async function findPickupSignature(squareOrderId: string): Promise<string | null
 
 /**
  * GET /api/walk-in/receipt/[id] — Printable sales receipt (Repair Service HTML style).
+ *
+ * withAuth's wrapped handler only receives (req, ctx) — it discards Next's
+ * typed `{ params }` route arg — so the `[id]` segment is parsed from the
+ * pathname instead (mirrors /api/repair-service/print/[id]).
  */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const { id } = await params;
-    const sale = await getSquareTransactionById(id);
+    const segments = req.nextUrl.pathname.split('/').filter(Boolean);
+    const id = segments[segments.length - 1] ?? '';
+    const [sale, org] = await Promise.all([
+      getSquareTransactionById(id),
+      getOrganization(ctx.organizationId),
+    ]);
     if (!sale) {
       return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
+    const letterhead = getOrgLetterhead({
+      name: org?.name ?? '',
+      settings: org?.settings ?? parseOrgSettings(undefined),
+    });
 
     const lineItems = Array.isArray(sale.line_items) ? sale.line_items : [];
     const hasDiscount = (sale.discount ?? 0) > 0;
@@ -256,11 +269,10 @@ export async function GET(
 
   <!-- Company Footer -->
   <div class="footer-co">
-    USAV Solutions<br>
-    16161 Gothard St. Suite A<br>
-    Huntington Beach, CA 92647, United States<br>
-    Tel: (714) 596-6888<br>
-    Email: info@usavsolutions.com
+    ${esc(letterhead.name)}<br>
+    ${[letterhead.addressLine1, letterhead.addressLine2].filter(Boolean).map(esc).join('<br>\n    ')}${letterhead.addressLine1 || letterhead.addressLine2 ? '<br>' : ''}
+    ${letterhead.phone ? `Tel: ${esc(letterhead.phone)}<br>` : ''}
+    ${letterhead.email ? `Email: ${esc(letterhead.email)}` : ''}
   </div>
 
   <script>
@@ -285,4 +297,4 @@ export async function GET(
       { status: 500 },
     );
   }
-}
+}, { permission: 'walk_in.view' });

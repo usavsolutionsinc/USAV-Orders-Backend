@@ -1,7 +1,7 @@
 'use client';
 
 import { useTicketPhotos } from '@/hooks/useZendeskQueries';
-import { Image as ImageIcon, Link2 } from '@/components/Icons';
+import { ExternalLink, Image as ImageIcon, Link2 } from '@/components/Icons';
 
 /**
  * The ticket's linked internal record (Receiving / Repair / Packing / …) + its
@@ -29,14 +29,30 @@ export function SupportLinkedContext({
   const { data } = useTicketPhotos(ticketId);
   const entity = (data?.entity ?? null) as { type?: string; id?: number; source?: string } | null;
   const photos = data?.photos ?? [];
-  if (!entity?.type && photos.length === 0) return null;
+  const libraryHref = `/ops/photos?sourceScope=claims&entityType=ZENDESK_TICKET&entityId=${ticketId}`;
 
   return (
     <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-4">
-      <div className="flex items-center gap-1.5">
-        <Link2 className="h-3.5 w-3.5 text-gray-400" />
-        <p className="text-micro font-black uppercase tracking-widest text-gray-500">Linked context</p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <Link2 className="h-3.5 w-3.5 text-gray-400" />
+          <p className="text-micro font-black uppercase tracking-widest text-gray-500">Linked context</p>
+        </div>
+        <a
+          href={libraryHref}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-caption font-semibold text-blue-600 hover:text-blue-800"
+        >
+          Media library <ExternalLink className="h-3 w-3" />
+        </a>
       </div>
+
+      {!entity?.type && photos.length === 0 ? (
+        <p className="mt-2 text-caption text-gray-400">
+          No internal record linked — use Library in the composer to attach media from the library.
+        </p>
+      ) : null}
 
       {entity?.type ? (
         <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">

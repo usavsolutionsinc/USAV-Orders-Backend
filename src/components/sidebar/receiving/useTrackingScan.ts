@@ -40,7 +40,7 @@ import {
   type ScanResolutionMode,
   type ScanIntakeSurface,
 } from '@/lib/receiving/scan';
-import { applyMatchedCarton, applyUnmatchedCarton } from './scan-apply';
+import { applyMatchedCarton, applyUnmatchedCarton, refocusScanInput } from './scan-apply';
 import type { ScanApplyCtx, TrackingScanResult } from './scan-types';
 import { toast } from '@/lib/toast';
 import {
@@ -52,8 +52,8 @@ import { type UnboxScanMode } from '@/components/sidebar/receiving/ReceivingUnbo
 
 // `ScanResolutionMode` now lives with the scan pipeline (src/lib/receiving/scan)
 // and is re-exported here for the existing import surface. `'auto'` (the default
-// for an un-armed scan) resolves the value as EITHER a PO# or a tracking#; only
-// `UnboxScanMode` ('tracking' | 'order') values can be armed in the UI.
+// for an un-armed scan) resolves the value as ticket#, PO#, or tracking#; only
+// `UnboxScanMode` ('tracking' | 'order' | 'ticket') values can be armed in the UI.
 export type { ScanResolutionMode };
 import type {
   PoContext,
@@ -87,6 +87,8 @@ interface UseTrackingScanArgs {
   setPendingCandidates: React.Dispatch<React.SetStateAction<PoLineSummary[]>>;
   /** Active sidebar mode — drives UNBOX_SCAN_OPENED stamping when `receive`. */
   receivingMode: ReceivingMode;
+  /** Triage only: paint the pre-resolve leading row the moment a scan starts. */
+  onTriageScanStart?: (trackingNumber: string) => void;
 }
 
 export interface TrackingScanState {
@@ -152,6 +154,7 @@ export function useTrackingScan({
   setArmedLineId,
   setPendingCandidates,
   receivingMode,
+  onTriageScanStart,
 }: UseTrackingScanArgs): TrackingScanState {
   const [bulkTracking, setBulkTracking] = useState('');
   const [unboxScanMode, setUnboxScanMode] = useState<UnboxScanMode | null>(null);
@@ -210,8 +213,8 @@ export function useTrackingScan({
       if (!trackingNumber) return;
 
       // Resolve the scan route: an explicit armed mode wins; otherwise `'auto'`
-      // lets the server resolve the value as EITHER a PO# or a tracking# before
-      // creating any carton (no more dash-heuristic misrouting a PO# to Unfound).
+      // lets the server deep-scan ticket#, PO#, and tracking# before creating
+      // any carton (no more dash-heuristic misrouting a PO# to Unfound).
       const lookupMode: ScanResolutionMode = opts?.mode ?? 'auto';
 
       // Capture the page-mode generation at submit. `isCurrent()` is checked at
@@ -223,6 +226,9 @@ export function useTrackingScan({
       setBulkTracking('');
       const scanStartedAt = Date.now();
       setTrackingLookupInFlight((n) => n + 1);
+      if (intakeSurfaceRef.current === 'triage') {
+        onTriageScanStart?.(trackingNumber);
+      }
 
       // The right-pane "Opening your PO" takeover loader is NO LONGER shown on
       // every scan. It is reserved for the single slow phase — a live Zoho
@@ -469,9 +475,13 @@ export function useTrackingScan({
               setSelectedLine(local.pick);
               setScanDriven(true);
               // Same unbox ritual as the lookup-po matched path: nudge the paired
-              // phone's camera open and arm the serial input.
+              // phone's camera open; triage keeps the tracking scan bar armed.
               if (autoPushCameraRef.current) void publishPhotoRequestFor(local.receivingId, trackingNumber);
-              if (autoFocusSerialRef.current) setTimeout(() => serialInputRef.current?.focus(), 60);
+              refocusScanInput({
+                intakeSurface: intakeSurfaceRef.current,
+                autoFocusSerialRef,
+                serialInputRef,
+              });
             }
             window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
             return;
@@ -596,6 +606,7 @@ export function useTrackingScan({
       setPoContext,
       setArmedLineId,
       setPendingCandidates,
+      onTriageScanStart,
     ],
   );
 

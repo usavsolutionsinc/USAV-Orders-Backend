@@ -4,6 +4,7 @@ import {
   describePhotoDatePath,
   isoWeekNumber,
   weekRange,
+  weekRangeLabel,
 } from '@/lib/photos/date-hierarchy';
 
 // 2026-06-17 is the spec's worked example: ISO Week 25, Wed.
@@ -15,11 +16,16 @@ test('isoWeekNumber matches the calendar (2026-06-17 → 25)', () => {
   assert.equal(wk.dateTo, '2026-06-21'); // Sunday
 });
 
+test('weekRangeLabel formats month day span', () => {
+  assert.equal(weekRangeLabel('2026-06-15', '2026-06-21'), 'Jun 15-21');
+  assert.equal(weekRangeLabel('2026-06-29', '2026-07-05'), 'Jun 29 - Jul 5');
+});
+
 test('a single day yields the full Year → Month → Week → Day path', () => {
   const crumbs = describePhotoDatePath({ dateFrom: '2026-06-17', dateTo: '2026-06-17' });
   assert.deepEqual(
     crumbs.map((c) => c.label),
-    ['2026', 'June', 'Week 25', 'Jun 17'],
+    ['2026', 'June', 'Jun 15-21', 'Jun 17'],
   );
   // Only the leaf is current.
   assert.deepEqual(crumbs.map((c) => c.current), [false, false, false, true]);
@@ -32,7 +38,7 @@ test('a single day yields the full Year → Month → Week → Day path', () => 
 
 test('a week span stops at the Week crumb', () => {
   const crumbs = describePhotoDatePath({ dateFrom: '2026-06-15', dateTo: '2026-06-21' });
-  assert.deepEqual(crumbs.map((c) => c.label), ['2026', 'June', 'Week 25']);
+  assert.deepEqual(crumbs.map((c) => c.label), ['2026', 'June', 'Jun 15-21']);
   assert.equal(crumbs[crumbs.length - 1].current, true);
 });
 

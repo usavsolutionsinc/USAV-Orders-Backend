@@ -90,11 +90,10 @@ function Attachments({
 }
 
 /**
- * Chat-style timeline. OUR messages (agent public replies AND internal notes)
- * sit on the right with identical geometry — public is blue, internal is an
- * amber-tinted variant carrying an "Internal" chip — so the conversation reads
- * as one stream. The requester sits on the left. Bodies render inline markdown;
- * authors resolve to a name/email (never "User #<id>").
+ * Chat-style timeline. Avatars always sit on the left; OUR messages (agent
+ * public replies AND internal notes) use blue / amber bubbles, the requester
+ * uses white. Bodies render inline markdown; authors resolve to a name/email
+ * (never "User #<id>").
  */
 export function SupportChatThread({
   ticketId,
@@ -161,15 +160,10 @@ export function SupportChatThread({
         const onDark = a.isOurs && !internal; // only the blue public bubble is dark
 
         return (
-          <div key={c.id} className={cn('flex items-end gap-2.5', a.isOurs ? 'flex-row-reverse' : 'flex-row')}>
+          <div key={c.id} className="flex items-end gap-2.5">
             <Avatar name={a.name} photo={a.photo} ours={a.isOurs} />
-            <div className={cn('min-w-0 max-w-[78%]', a.isOurs ? 'items-end' : 'items-start')}>
-              <div
-                className={cn(
-                  'mb-1 flex items-center gap-2 text-caption',
-                  a.isOurs ? 'justify-end' : 'justify-start',
-                )}
-              >
+            <div className="min-w-0 max-w-[78%] items-start">
+              <div className="mb-1 flex items-center gap-2 text-caption justify-start">
                 {internal ? (
                   <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-eyebrow font-black uppercase tracking-widest text-amber-700">
                     <Lock className="h-2.5 w-2.5" /> Internal
@@ -192,8 +186,8 @@ export function SupportChatThread({
                   'rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm',
                   a.isOurs
                     ? internal
-                      ? 'rounded-br-md border border-amber-200 bg-amber-50 text-amber-900'
-                      : 'rounded-br-md bg-blue-600 text-white'
+                      ? 'rounded-bl-md border border-amber-200 bg-amber-50 text-amber-900'
+                      : 'rounded-bl-md bg-blue-600 text-white'
                     : 'rounded-bl-md border border-gray-200 bg-white text-gray-800',
                 )}
               >

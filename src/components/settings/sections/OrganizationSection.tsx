@@ -142,6 +142,12 @@ interface OrgProfileResponse {
     logoUrl?: string;
     primaryColor?: string;
   };
+  letterhead: {
+    addressLine1: string;
+    addressLine2: string;
+    phone: string;
+    email: string;
+  };
 }
 
 const FIELD_CLS =
@@ -553,7 +559,7 @@ export function OrganizationSection() {
             value={draft.brand.name ?? ''}
             onChange={(e) => setDraft({ ...draft, brand: { ...draft.brand, name: e.target.value } })}
             className={FIELD_CLS}
-            placeholder="USAV"
+            placeholder="Defaults to your workspace name"
           />
         </label>
         <label className="block">
@@ -576,6 +582,58 @@ export function OrganizationSection() {
             placeholder="#2563EB"
           />
         </label>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Letterhead</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Printed on repair paper and walk-in receipts for this workspace. The platform itself is always
+            branded Cycle Forge — this is your company&rsquo;s own letterhead, not the platform name.
+          </p>
+        </div>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-gray-700">Address line 1</span>
+          <input
+            type="text"
+            value={draft.letterhead.addressLine1}
+            onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, addressLine1: e.target.value } })}
+            className={FIELD_CLS}
+            placeholder="123 Main St. Suite A"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-gray-700">Address line 2</span>
+          <input
+            type="text"
+            value={draft.letterhead.addressLine2}
+            onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, addressLine2: e.target.value } })}
+            className={FIELD_CLS}
+            placeholder="City, State ZIP, Country"
+          />
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-700">Phone</span>
+            <input
+              type="text"
+              value={draft.letterhead.phone}
+              onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, phone: e.target.value } })}
+              className={FIELD_CLS}
+              placeholder="(555) 555-5555"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-gray-700">Email</span>
+            <input
+              type="email"
+              value={draft.letterhead.email}
+              onChange={(e) => setDraft({ ...draft, letterhead: { ...draft.letterhead, email: e.target.value } })}
+              className={FIELD_CLS}
+              placeholder="info@example.com"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="flex justify-end">

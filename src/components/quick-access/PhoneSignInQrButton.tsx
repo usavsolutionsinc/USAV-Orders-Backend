@@ -3,17 +3,23 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import QRCode from 'react-qr-code';
-import { QrCode, X } from '@/components/Icons';
-import { Button, IconButton } from '@/design-system/primitives';
+import { Smartphone, X } from '@/components/Icons';
+import { IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
+import { cn } from '@/utils/_cn';
 
 /**
- * Compact QR trigger + centered scan overlay. Encodes the mobile sign-in URL
+ * Header phone icon + centered scan overlay. Encodes the mobile sign-in URL
  * (`<origin>/m/signin`) so staff can point their phone camera at it and open
- * the site on their phone without typing anything. Lives in the "Phone history"
- * action row's trailing slot — its click is isolated from the row's navigation.
+ * the site on their phone without typing anything.
  */
-export function PhoneSignInQrButton({ className }: { className?: string }) {
+export function PhoneSignInQrButton({
+  className,
+  iconClassName = 'h-4 w-4',
+}: {
+  className?: string;
+  iconClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
 
@@ -35,20 +41,16 @@ export function PhoneSignInQrButton({ className }: { className?: string }) {
   return (
     <>
       <HoverTooltip label="Scan to open on your phone" asChild>
-        <Button
-          variant="secondary"
-          size="sm"
+        <IconButton
           type="button"
-          icon={<QrCode className="h-3.5 w-3.5" />}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
+          onClick={() => setOpen(true)}
           ariaLabel="Show sign-in QR code"
-          className={className}
-        >
-          QR
-        </Button>
+          className={cn(
+            'flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 active:scale-95',
+            className,
+          )}
+          icon={<Smartphone className={iconClassName} />}
+        />
       </HoverTooltip>
 
       {open && typeof document !== 'undefined' &&

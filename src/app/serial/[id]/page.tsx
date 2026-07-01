@@ -19,6 +19,13 @@ interface SerialUnit {
   current_location: string | null;
   condition_grade: string | null;
   origin_receiving_line_id: number | null;
+  /**
+   * The line this unit is CURRENTLY on (most recent inventory_events touch) —
+   * use this for navigation/actions, never origin_receiving_line_id, which
+   * freezes to the first-ever line and would target/link to a stale PO once
+   * the unit has been returned and re-received elsewhere.
+   */
+  current_receiving_line_id: number | null;
   received_at: string | null;
   received_by: number | null;
   received_by_name: string | null;
@@ -121,11 +128,11 @@ function UnitPageInner() {
 
   const postStatus = useCallback(
     async (eventType: string) => {
-      if (busy || !unit?.origin_receiving_line_id) return;
+      if (busy || !unit?.current_receiving_line_id) return;
       setBusy(eventType);
       try {
         const res = await fetch(
-          `/api/receiving/lines/${unit.origin_receiving_line_id}/status`,
+          `/api/receiving/lines/${unit.current_receiving_line_id}/status`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -156,11 +163,11 @@ function UnitPageInner() {
 
   const submitPutaway = useCallback(async () => {
     const bin = binInput.trim();
-    if (!bin || busy || !unit?.origin_receiving_line_id) return;
+    if (!bin || busy || !unit?.current_receiving_line_id) return;
     setBusy('putaway');
     try {
       const res = await fetch(
-        `/api/receiving/lines/${unit.origin_receiving_line_id}/putaway`,
+        `/api/receiving/lines/${unit.current_receiving_line_id}/putaway`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -189,8 +196,8 @@ function UnitPageInner() {
     }
   }, [binInput, busy, unit, staffId, noteInput, load]);
 
-  const lineHref = unit?.origin_receiving_line_id
-    ? `/m/l/${unit.origin_receiving_line_id}`
+  const lineHref = unit?.current_receiving_line_id
+    ? `/m/l/${unit.current_receiving_line_id}`
     : null;
 
   return (
@@ -273,7 +280,7 @@ function UnitPageInner() {
               <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant="primary"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_START')}
                   className="h-full w-full"
                 >
@@ -282,7 +289,7 @@ function UnitPageInner() {
                 {/* ds-raw-button: solid-emerald CTA (no green Button variant) */}
                 <button
                   type="button"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_PASS')}
                   className="rounded-md bg-emerald-600 px-3 py-3 text-sm font-bold text-white active:bg-emerald-700 disabled:opacity-50"
                 >
@@ -290,7 +297,7 @@ function UnitPageInner() {
                 </button>
                 <Button
                   variant="danger"
-                  disabled={!!busy || !unit.origin_receiving_line_id}
+                  disabled={!!busy || !unit.current_receiving_line_id}
                   onClick={() => postStatus('TEST_FAIL')}
                   className="h-full w-full"
                 >
@@ -318,7 +325,7 @@ function UnitPageInner() {
                 />
                 <Button
                   variant="brand"
-                  disabled={!binInput.trim() || !!busy || !unit.origin_receiving_line_id}
+                  disabled={!binInput.trim() || !!busy || !unit.current_receiving_line_id}
                   onClick={submitPutaway}
                 >
                   Stash

@@ -27,9 +27,9 @@ export async function POST(
     }
 
     const reason = req.nextUrl.searchParams.get('reason')?.trim() || null;
-    const before = await getRepairById(repairId);
+    const before = await getRepairById(repairId, gate.ctx.organizationId);
 
-    const result = await unopenRepair(repairId, reason);
+    const result = await unopenRepair(repairId, reason, gate.ctx.organizationId);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }

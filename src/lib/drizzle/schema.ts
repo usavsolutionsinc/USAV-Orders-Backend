@@ -688,6 +688,40 @@ export const itemLocationStock = pgTable('item_location_stock', {
   itemLocationUnique: uniqueIndex('ux_item_location_stock_item_location').on(table.itemId, table.locationId),
 }));
 
+/**
+ * part_links — SaaS-owned part→parent pairing for the inventory parts graph
+ * (2026-06-28g). Keyed on the logical part (base+color+condition, from
+ * parsePartSku().logicalKey) and the Zoho `items` scheme (parent_item_id FK),
+ * never the sku string (items/sku_catalog are independent numbering schemes
+ * that collide on the same string — see .claude/rules/source-of-truth.md).
+ * status='confirmed' → parent_item_id NOT NULL (many parents allowed).
+ * status='not_a_part' → parent_item_id NULL (at most one row per child).
+ */
+export const partLinks = pgTable('part_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** parsePartSku().logicalKey — stable across the trailing stock-index churn. */
+  childLogicalKey: text('child_logical_key').notNull(),
+  /** Denormalized base code for grouping/display. */
+  childBase: text('child_base').notNull(),
+  /** confirmed | not_a_part */
+  status: text('status').notNull().default('confirmed'),
+  parentItemId: uuid('parent_item_id').references(() => items.id, { onDelete: 'cascade' }),
+  /** Denormalized for resilience across Zoho re-sync (items rows can be re-keyed). */
+  parentZohoItemId: text('parent_zoho_item_id'),
+  qty: integer('qty').notNull().default(1),
+  notes: text('notes'),
+  createdByStaffId: integer('created_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  childParentUx: uniqueIndex('ux_part_links_child_parent').on(table.organizationId, table.childLogicalKey, table.parentItemId),
+  childNotAPartUx: uniqueIndex('ux_part_links_child_not_a_part').on(table.organizationId, table.childLogicalKey).where(sql`status = 'not_a_part'`),
+  orgBaseIdx: index('idx_part_links_org_base').on(table.organizationId, table.childBase),
+  orgChildIdx: index('idx_part_links_org_child').on(table.organizationId, table.childLogicalKey),
+  parentIdx: index('idx_part_links_parent').on(table.organizationId, table.parentItemId),
+}));
+
 export const replenishmentRequests = pgTable('replenishment_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   itemId: uuid('item_id').notNull().references(() => items.id),
@@ -996,18 +1030,43 @@ export const stationActivityLogs = pgTable('station_activity_logs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
 
-// Unified photos table — polymorphic: entity_type IN ('PACKER_LOG','RECEIVING')
-// Cascade delete via DB triggers (trg_delete_photos_on_packer_log_delete / _receiving_delete)
+// Photo bytes/metadata row. The polymorphic entity_type/entity_id/url columns
+// that used to live here were dropped 2026-06-21 (Phase E) once
+// photo_entity_links took over as the polymorphic hub — see photoEntityLinks
+// below. Cascade delete on parent-delete now runs through that table's rows,
+// not these columns.
 export const photos = pgTable('photos', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
-  entityType: text('entity_type').notNull(),
-  entityId: integer('entity_id').notNull(),
-  url: text('url').notNull(),
+  organizationId: orgIdCol(),
   takenByStaffId: integer('taken_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
   photoType: text('photo_type'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  deletedFromBlobAt: timestamp('deleted_from_blob_at', { withTimezone: true }),
+  poRef: text('po_ref'),
 });
+
+/**
+ * photo_entity_links — the polymorphic hub for every photo↔entity relationship
+ * (2026-06-18). Superseded photos.entity_type/entity_id/url (dropped 2026-06-21,
+ * Phase E). link_role is a second discriminator axis: 'primary' | 'claim_evidence'
+ * | 'insurance_share'. Cascade delete on the entity side runs through
+ * fn_delete_photos_on_parent_delete(), which now reads this table instead of
+ * the old photos columns.
+ */
+export const photoEntityLinks = pgTable('photo_entity_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  photoId: bigint('photo_id', { mode: 'number' }).notNull().references(() => photos.id, { onDelete: 'cascade' }),
+  organizationId: orgIdCol(),
+  /** RECEIVING | RECEIVING_LINE | PACKER_LOG | SERIAL_UNIT | SKU | SKU_STOCK | BIN_ADJUSTMENT | SHARE_PACK | ZENDESK_TICKET */
+  entityType: text('entity_type').notNull(),
+  entityId: bigint('entity_id', { mode: 'number' }).notNull(),
+  /** primary | claim_evidence | insurance_share */
+  linkRole: text('link_role').notNull().default('primary'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueLink: uniqueIndex('ux_photo_entity_links_unique').on(table.photoId, table.entityType, table.entityId, table.linkRole),
+}));
 
 // Receiving table - work_assignments linked via entity_type='RECEIVING', entity_id=receiving.id
 // BEFORE DELETE trigger trg_cancel_wa_on_receiving_delete auto-cancels related work_assignments
@@ -1383,6 +1442,7 @@ export const receivingLineFacts = pgTable('receiving_line_facts', {
  */
 export const workAssignments = pgTable('work_assignments', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   entityType: workEntityTypeEnum('entity_type').notNull(),
   /** id of the referenced orders, receiving, repair_service, etc. row */
   entityId: integer('entity_id').notNull(),
@@ -1477,6 +1537,7 @@ export const repairService = pgTable('repair_service', {
 // Generic documents table for storing signed agreements, forms, etc.
 export const documents = pgTable('documents', {
   id: serial('id').primaryKey(),
+  organizationId: orgIdCol(),
   entityType: text('entity_type').notNull(),
   entityId: integer('entity_id').notNull(),
   documentType: text('document_type').notNull().default('intake_agreement'),
@@ -2234,6 +2295,8 @@ export const serialUnits = pgTable('serial_units', {
   legacyDateTime: timestamp('legacy_date_time'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Handling-unit (H-#### testing tote) this unit currently sits in, if any. */
+  handlingUnitId: bigint('handling_unit_id', { mode: 'number' }),
   // NOTE: the org-scoped partial unique index ux_serial_units_org_unit_uid
   // and the organization_id column (added 2026-05-23) live in SQL migrations,
   // which are the source of truth for this table — not expressed here.
@@ -2318,10 +2381,13 @@ export const inventoryEvents = pgTable('inventory_events', {
  */
 export const reasonCodes = pgTable('reason_codes', {
   id: serial('id').primaryKey(),
-  code: text('code').notNull().unique(),
+  // NOT globally unique — superseded by the org-led composite
+  // reason_codes_org_flow_code_key (organization_id, flow_context, code), so
+  // the same code string may legitimately repeat across orgs/flow_contexts.
+  code: text('code').notNull(),
   label: text('label').notNull(),
-  /** shrinkage | adjustment | sale | return | movement | initial */
-  category: text('category').notNull(),
+  /** shrinkage | adjustment | sale | return | movement | initial | warranty_denial | NULL */
+  category: text('category'),
   /** in | out | either */
   direction: text('direction').notNull(),
   requiresNote: boolean('requires_note').notNull().default(false),
@@ -2329,7 +2395,24 @@ export const reasonCodes = pgTable('reason_codes', {
   isActive: boolean('is_active').notNull().default(true),
   sortOrder: integer('sort_order').notNull().default(100),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+  organizationId: orgIdCol(),
+  /**
+   * Multi-vocabulary discriminator (2026-06-28): which subsystem this row's
+   * `code` vocabulary belongs to — inventory_event | substitution | short_pick |
+   * receiving_exception | repair_failure | verdict_detail | warranty_denial |
+   * inventory_adjust | lifecycle_unshipped | lifecycle_outbound |
+   * serial_absent_reason. See reason_codes_flow_context_chk for the live list.
+   */
+  flowContext: text('flow_context').notNull().default('inventory_event'),
+  /** Which UI surfaces may offer this code; label-vocabulary-layer (2026-06-28d). */
+  appliesTo: jsonb('applies_to'),
+  /** Presentation tone for the label-vocabulary layer (2026-06-28d). */
+  tone: text('tone'),
+  /** Presentation icon key for the label-vocabulary layer (2026-06-28d). */
+  icon: text('icon'),
+}, (table) => ({
+  orgFlowCodeUx: uniqueIndex('reason_codes_org_flow_code_key').on(table.organizationId, table.flowContext, table.code),
+}));
 
 /**
  * printer_profiles — targets for /api/print/dispatch (2026-05-14).
@@ -2719,6 +2802,36 @@ export const organizations = pgTable('organizations', {
 
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
+
+/**
+ * organization_integrations — per-tenant OAuth/API credential store (2026-05-22).
+ * Accessed today only via raw pool.query in src/lib/integrations/credentials.ts
+ * (this model exists so type-level readers/reviewers aren't blind to the live
+ * shape; it is not wired into that module's queries). `provider` is validated
+ * at the app layer only (the `IntegrationProvider` union in credentials.ts,
+ * currently 15 values) — there is no DB CHECK/enum. Secrets stay opaque in
+ * `payloadEncrypted`; queryable status lives in real columns.
+ */
+export const organizationIntegrations = pgTable('organization_integrations', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  /** IntegrationProvider union (src/lib/integrations/credentials.ts) — app-validated only. */
+  provider: text('provider').notNull(),
+  payloadEncrypted: text('payload_encrypted').notNull(),
+  displayLabel: text('display_label'),
+  status: text('status').notNull().default('active'),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  scope: text('scope'),
+  createdBy: integer('created_by').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  /** Added 2026-06-20_zoho_webhook_org_resolution.sql — resolves inbound webhooks to an org. */
+  webhookToken: text('webhook_token'),
+}, (table) => ({
+  providerScopeUx: uniqueIndex('uq_org_integrations_provider_scope').on(table.organizationId, table.provider, sql`COALESCE(${table.scope}, '')`),
+  webhookTokenUx: uniqueIndex('ux_org_integrations_webhook_token').on(table.webhookToken).where(sql`webhook_token IS NOT NULL`),
+}));
 
 // ─── Identity layer (2026-06-20e_identity_layer_phase1.sql) ──────────────────
 // GLOBAL, tenant-agnostic tables. They are read at login, before any

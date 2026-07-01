@@ -554,7 +554,7 @@ async function syncPackerSheets(params: {
                         packerLogId: insertedPlId,
                         shipmentId: plShipmentId ?? null,
                         actorStaffId: packedBy ?? null,
-                    });
+                    }, organizationId);
                 }
 
                 inserted++;

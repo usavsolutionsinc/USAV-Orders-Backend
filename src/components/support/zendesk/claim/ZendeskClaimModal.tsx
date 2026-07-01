@@ -1,8 +1,9 @@
 'use client';
 
+import { AlertCircle, ExternalLink, Image as ImageIcon, MessageSquare, Paperclip, Plus, Reply, Send, X } from '@/components/Icons';
+import { MediaLibraryPickerContent } from '@/components/photos/MediaLibraryPickerContent';
 import { HorizontalButtonSlider, type HorizontalSliderItem } from '@/components/ui/HorizontalButtonSlider';
 import { RightPaneOverlay } from '@/components/ui/RightPaneOverlay';
-import { AlertCircle, MessageSquare, Paperclip, Plus, Reply, Send, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { ClaimComposer } from './ClaimComposer';
 import { ClaimSuccessView } from './ClaimSuccessView';
@@ -15,15 +16,15 @@ const MODE_ITEMS: HorizontalSliderItem[] = [
 ];
 
 /**
- * Reusable Zendesk claim modal. Turns a selection of library photos into a new
- * ticket or a reply on an existing one, attaching them as real Zendesk
- * attachments. Reuses the `RightPaneOverlay` shell (drag-to-resize + persisted
- * size) — the same primitive the receiving claim modal uses.
+ * Reusable Zendesk claim modal. Step 1 selects library photos; step 2 turns them
+ * into a new ticket or a reply on an existing one. Uses the same
+ * {@link RightPaneOverlay} shell as the receiving claim modal.
  */
 export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
   const c = useZendeskClaimController(props);
   const submitLabel = c.mode === 'create' ? 'Create ticket' : c.replyPublic ? 'Send reply' : 'Add note';
   const lockedToTicket = Boolean(props.defaultTicketId);
+  const onPickStep = c.wizardStep === 'pick';
 
   return (
     <RightPaneOverlay
@@ -34,19 +35,26 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
       storageKey="zendesk-claim-modal-size"
       minWidth={480}
       minHeight={520}
-      className="h-[min(88vh,46rem)] w-[min(94vw,40rem)] -mt-6"
-      aria-label="Create or update a Zendesk ticket"
+      className="flex h-[min(88vh,46rem)] w-[min(94vw,40rem)] -mt-6 flex-col"
+      aria-label="Create or update a support ticket"
     >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-100">
-            <MessageSquare className="h-5 w-5" />
+            {onPickStep ? <ImageIcon className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
           </span>
           <div>
-            <p className="text-micro font-black uppercase tracking-widest text-rose-500">Zendesk</p>
+            <p className="text-micro font-black uppercase tracking-widest text-rose-500">
+              {onPickStep ? 'Step 1 · Photos' : 'Support'}
+            </p>
             <h2 className="text-[15px] font-bold tracking-tight text-gray-900">
-              {c.result ? 'Done' : c.mode === 'create' ? 'New support ticket' : 'Update ticket'}
+              {c.result
+                ? 'Done'
+                : onPickStep
+                  ? 'Select photos to attach'
+                  : c.mode === 'create'
+                    ? 'New support ticket'
+                    : 'Update ticket'}
             </h2>
           </div>
         </div>
@@ -60,6 +68,34 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
 
       {c.result ? (
         <ClaimSuccessView result={c.result} onClose={c.onClose} />
+      ) : onPickStep ? (
+        <>
+          <MediaLibraryPickerContent
+            ticketId={props.defaultTicketId ?? undefined}
+            selected={c.libraryPhotos}
+            onSelectedChange={c.setLibraryPhotos}
+            showScopeToggle={Boolean(props.defaultTicketId)}
+          />
+          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-gray-100 px-5 py-3.5">
+            <a
+              href="/ops/photos"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-caption font-semibold text-blue-600 hover:text-blue-800"
+            >
+              Open full library <ExternalLink className="h-3 w-3" />
+            </a>
+            <div className="flex items-center gap-2">
+              <span className="text-caption text-gray-500">{c.libraryPhotos.length} selected</span>
+              <Button variant="ghost" onClick={c.onClose}>
+                Cancel
+              </Button>
+              <Button variant="primary" disabled={!c.canContinuePick} onClick={c.continueFromPick}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           {!lockedToTicket ? (
@@ -79,8 +115,7 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
             <ClaimComposer c={c} />
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between gap-3 border-t border-gray-100 px-5 py-3.5">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 px-5 py-3.5">
             <div className="flex items-center gap-1.5 text-caption font-semibold text-gray-400">
               <Paperclip className="h-3.5 w-3.5" />
               {c.totalAttach} attachment{c.totalAttach === 1 ? '' : 's'}
@@ -91,6 +126,9 @@ export function ZendeskClaimModal(props: ZendeskClaimModalProps) {
                   <AlertCircle className="h-3.5 w-3.5" /> {c.error}
                 </span>
               ) : null}
+              <Button variant="ghost" onClick={() => c.setWizardStep('pick')}>
+                Back
+              </Button>
               <Button variant="ghost" onClick={c.onClose}>
                 Cancel
               </Button>

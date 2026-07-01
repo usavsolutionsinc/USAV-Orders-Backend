@@ -241,13 +241,16 @@ export async function fetchLinesByTracking(tracking: string) {
 async function fetchLineByUnitId(unitId: string): Promise<ReceivingLineRow | null> {
   // /api/serial-units/[id] accepts either the numeric id or a serial_number
   // string (the unit-id printed under the DataMatrix is stored as the
-  // serial_number for label-minted units). Returns origin_receiving_line_id
-  // which is the back-reference to the receiving scan that minted this unit.
+  // serial_number for label-minted units). Reads current_receiving_line_id —
+  // the unit's CURRENT line (most recent inventory_events touch) — never
+  // origin_receiving_line_id, which freezes to the FIRST-ever receiving line
+  // and would jump to a stale PO once the unit has been returned and
+  // re-received under a different one.
   const res = await fetch(`/api/serial-units/${encodeURIComponent(unitId)}`);
   if (!res.ok) return null;
   const data = await res.json();
   const unit = data?.unit ?? data?.serial_unit ?? data;
-  const receivingLineId = unit?.origin_receiving_line_id;
+  const receivingLineId = unit?.current_receiving_line_id ?? unit?.origin_receiving_line_id;
   if (!receivingLineId) return null;
   return fetchLineById(receivingLineId);
 }

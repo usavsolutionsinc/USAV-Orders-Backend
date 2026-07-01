@@ -35,9 +35,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           reason: trimmedReason,
           changedBy: 'staff',
           forceFullQuantity: true,
-        });
+        }, ctx.organizationId);
       } else {
-        await clearReplenishmentForOrder(Number(orderId), 'staff');
+        await clearReplenishmentForOrder(Number(orderId), 'staff', ctx.organizationId);
       }
     }
 

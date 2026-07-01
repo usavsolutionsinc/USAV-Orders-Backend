@@ -16,6 +16,7 @@ import type { PoolClient } from 'pg';
 import pool from '@/lib/db';
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import { USAV_ORG_ID, type OrgId } from '@/lib/tenancy/constants';
+import { findByNormalizedSerial } from '@/lib/neon/serial-units-queries';
 import { computeWarranty } from './clock';
 import { resolveWarrantyDays } from './term';
 import { getClaim } from './claims';
@@ -200,6 +201,20 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
   const clock = computeWarranty({ deliveredAt, packedScannedAt, warrantyDays });
 
   const orgId: OrgId = input.organizationId;
+
+  // Resolve a free-text serial to its serial_units row so the claim carries a
+  // real FK (warranty_claims.serial_unit_id is a real column that historically
+  // no writer ever populated — see the returns-unification plan §6/§7.2). This
+  // is what lets a later "Issue RMA" step check whether the physical unit has
+  // already come back through receiving instead of operating as pure paperwork.
+  // Best-effort: an unresolved serial (not yet in our system, or a typo) still
+  // logs the claim on the string alone, same as before this fix.
+  let resolvedSerialUnitId = input.serialUnitId ?? null;
+  if (resolvedSerialUnitId == null && input.serialNumber) {
+    const unit = await findByNormalizedSerial(input.serialNumber, orgId);
+    resolvedSerialUnitId = unit?.id ?? null;
+  }
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       const id = await withTenantTransaction(orgId, async (client) => {
@@ -221,7 +236,7 @@ export async function createClaim(input: CreateClaimInput): Promise<CreateClaimR
            RETURNING id`,
           [
             claimNumber,
-            input.serialUnitId ?? null,
+            resolvedSerialUnitId,
             input.serialNumber ?? null,
             input.orderId ?? null,
             sku,

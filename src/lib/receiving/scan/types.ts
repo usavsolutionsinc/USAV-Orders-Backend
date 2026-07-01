@@ -18,13 +18,13 @@ import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
 import type { ResolvedTestingScan, ResolvedVia } from '@/lib/testing/resolve-testing-scan';
 
 /**
- * How a scanned value is routed. `auto` (un-armed) lets EITHER a PO# or a
- * tracking# match; an armed mode restricts to that one identity. Defined here
+ * How a scanned value is routed. `auto` (un-armed) deep-scans PO#, tracking#,
+ * and ticket#; an armed mode restricts to that one identity. Defined here
  * (not derived from the UI scan-bar's `UnboxScanMode`) so the pipeline carries
- * no dependency on a component — `UnboxScanMode` (`'tracking' | 'order'`) is the
+ * no dependency on a component — `UnboxScanMode` (`'tracking' | 'order' | 'ticket'`) is the
  * armed subset of this type.
  */
-export type ScanResolutionMode = 'tracking' | 'order' | 'auto';
+export type ScanResolutionMode = 'tracking' | 'order' | 'ticket' | 'auto';
 
 /** A classified scan ready to run through the ladder. */
 export interface ScanInput {

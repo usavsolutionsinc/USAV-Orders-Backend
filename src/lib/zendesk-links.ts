@@ -7,6 +7,7 @@
  */
 import { tenantQuery } from '@/lib/tenancy/db';
 import { getTicket, updateTicket } from './zendesk';
+import { upsertSupportTicket } from '@/lib/support/tickets';
 import { photoContentUrl } from '@/lib/photos/display-url';
 import { listPhotosForEntity } from '@/lib/photos/service';
 import type { PhotoEntityType } from '@/lib/photos/types';
@@ -40,18 +41,67 @@ export async function linkTicket(args: {
   entityType: string;
   entityId: number;
   staffId?: number | null;
-}): Promise<void> {
+}): Promise<{ supportTicketId: number }> {
+  const supportTicket = await upsertSupportTicket({
+    orgId: args.orgId,
+    provider: 'zendesk',
+    externalTicketId: String(args.zendeskTicketId),
+    staffId: args.staffId ?? null,
+  });
   await tenantQuery(
     args.orgId,
     `INSERT INTO ticket_links
-       (organization_id, zendesk_ticket_id, entity_type, entity_id, created_by)
-     VALUES ($1, $2, $3, $4, $5)
+       (organization_id, support_ticket_id, zendesk_ticket_id, entity_type, entity_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (organization_id, zendesk_ticket_id) DO UPDATE
-       SET entity_type = EXCLUDED.entity_type,
+       SET support_ticket_id = EXCLUDED.support_ticket_id,
+           entity_type = EXCLUDED.entity_type,
            entity_id   = EXCLUDED.entity_id,
            updated_at  = NOW()`,
-    [args.orgId, args.zendeskTicketId, args.entityType, args.entityId, args.staffId ?? null],
+    [
+      args.orgId,
+      supportTicket.id,
+      args.zendeskTicketId,
+      args.entityType,
+      args.entityId,
+      args.staffId ?? null,
+    ],
   );
+  return { supportTicketId: supportTicket.id };
+}
+
+/**
+ * Link a ticket to a shipment (STN id) so cartons anchored to that tracking
+ * number resolve the ticket via receiving.shipment_id. Skips when the ticket
+ * already has a ticket_links row (one primary entity per ticket).
+ */
+export async function linkTicketToShipment(args: {
+  orgId: string;
+  zendeskTicketId: number;
+  shipmentId: number;
+  staffId?: number | null;
+}): Promise<{ linked: boolean; supportTicketId: number }> {
+  const supportTicket = await upsertSupportTicket({
+    orgId: args.orgId,
+    provider: 'zendesk',
+    externalTicketId: String(args.zendeskTicketId),
+    staffId: args.staffId ?? null,
+  });
+  const res = await tenantQuery(
+    args.orgId,
+    `INSERT INTO ticket_links
+       (organization_id, support_ticket_id, zendesk_ticket_id, entity_type, entity_id, created_by)
+     VALUES ($1, $2, $3, 'SHIPMENT', $4, $5)
+     ON CONFLICT (organization_id, zendesk_ticket_id) DO NOTHING`,
+    [
+      args.orgId,
+      supportTicket.id,
+      args.zendeskTicketId,
+      args.shipmentId,
+      args.staffId ?? null,
+    ],
+  );
+  return { linked: (res.rowCount ?? 0) > 0, supportTicketId: supportTicket.id };
 }
 
 /**

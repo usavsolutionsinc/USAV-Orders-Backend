@@ -38,6 +38,19 @@ import {
 } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import type { ScanApplyCtx } from './scan-types';
 
+/** After a scan opens a carton: unbox arms the serial field; triage keeps the tracking scan bar hot. */
+export function refocusScanInput(
+  ctx: Pick<ScanApplyCtx, 'intakeSurface' | 'autoFocusSerialRef' | 'serialInputRef'>,
+): void {
+  if (ctx.intakeSurface === 'unbox') {
+    if (ctx.autoFocusSerialRef.current) {
+      setTimeout(() => ctx.serialInputRef.current?.focus(), 60);
+    }
+    return;
+  }
+  setTimeout(() => window.dispatchEvent(new CustomEvent('receiving-focus-scan')), 60);
+}
+
 function dispatchTriageMatchedFeedRows(
   ctx: ScanApplyCtx,
   rows: ReceivingLineRow[],
@@ -145,11 +158,24 @@ export function applyMatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
     ]);
     deferInvalidateUnboxReceivingFeeds(ctx.queryClient);
     dispatchReceivingUnboxRefresh();
+  } else if (unboxRailLine) {
+    const now = new Date().toISOString();
+    dispatchTriageMatchedFeedRows(ctx, [
+      {
+        ...buildMatchedStubRow(poCtx.receiving_id, ctx.trackingNumber, unboxRailLine),
+        item_name: ctx.trackingNumber,
+        workflow_status: 'ARRIVED',
+        client_event_id: receivingRailCartonKey(poCtx.receiving_id),
+        last_activity_at: now,
+        created_at: now,
+        scanned_at: now,
+      },
+    ]);
   }
 
   if (ctx.isCurrent()) {
     if (ctx.autoPushCameraRef.current) void ctx.publishPhotoRequestFor(poCtx.receiving_id, ctx.trackingNumber);
-    if (ctx.autoFocusSerialRef.current) setTimeout(() => ctx.serialInputRef.current?.focus(), 60);
+    refocusScanInput(ctx);
   }
   // Clear the takeover loader immediately — the optimistic stub + seeded siblings
   // cache are enough to paint the workspace; hydration reconciles in the background.
@@ -164,10 +190,9 @@ export function applyMatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
       // include=serials matches PoLinesAccordion's own query exactly, so the cache
       // this seeds is a drop-in — the accordion mounts with full data (serials
       // included) and never does a cold fetch. Routed through queryClient.fetchQuery
-      // on the SAME ['receiving-siblings', receivingId] key the triage
-      // select-on-resolve path uses, so the two concurrent identical requests on a
-      // matched triage scan DEDUPE into one round-trip. retry:false keeps the old
-      // one-shot behavior.
+      // on the SAME ['receiving-siblings', receivingId] key PoLinesAccordion uses,
+      // so concurrent identical requests dedupe into one round-trip. retry:false
+      // keeps the one-shot behavior.
       const linesData = await ctx.queryClient.fetchQuery({
         queryKey: receivingSiblingsQueryKey(poCtx.receiving_id),
         queryFn: async () => {
@@ -239,28 +264,18 @@ export function applyUnmatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
   if (unmatchedReceivingId != null && !isUnbox) {
     const now = new Date().toISOString();
     dispatchReceivingTriageRefresh();
+    const triageStubRow: ReceivingLineRow = {
+      ...buildUnmatchedStubRow(unmatchedReceivingId, ctx.trackingNumber),
+      item_name: ctx.trackingNumber,
+      workflow_status: 'ARRIVED',
+      client_event_id: receivingRailCartonKey(unmatchedReceivingId),
+      created_at: now,
+      last_activity_at: now,
+    };
     dispatchReceivingLinesPrepended({
       segments: ['triage-combined'],
       intakeSurface: 'triage',
-      // Reconcile-compatible optimistic row. The bare stub from
-      // buildUnmatchedStubRow has a null title (→ "Line #-id"), a null timestamp
-      // (→ sinks to the BOTTOM), and no reconcile key (→ can't dedup against the
-      // importing leadingRow or the combined-feed twin), which made the scanned
-      // carton render a second time at the bottom and then jump on refetch. Stamp
-      // it with the SAME carton key the combined feed uses (so the row updates in
-      // place, not remounts), the tracking# as the title (which the refetch swaps
-      // to "Unfound PO"), ARRIVED for the SCANNED chip, and a fresh activity time
-      // so it pins to the TOP next to the just-scanned stub.
-      rows: [
-        {
-          ...buildUnmatchedStubRow(unmatchedReceivingId, ctx.trackingNumber),
-          item_name: ctx.trackingNumber,
-          workflow_status: 'ARRIVED',
-          client_event_id: receivingRailCartonKey(unmatchedReceivingId),
-          created_at: now,
-          last_activity_at: now,
-        },
-      ],
+      rows: [triageStubRow],
     });
     deferInvalidateTriageReceivingFeeds(ctx.queryClient);
   }
@@ -292,6 +307,7 @@ export function applyUnmatchedCarton(ctx: ScanApplyCtx, d: LookupPoData): void {
           : buildUnmatchedStubRow(unmatchedReceivingId, ctx.trackingNumber),
       );
       ctx.setScanDriven(true);
+      refocusScanInput(ctx);
     }
     window.dispatchEvent(new CustomEvent('receiving-scan-resolved'));
 

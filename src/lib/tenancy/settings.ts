@@ -17,6 +17,16 @@ const BrandSchema = z.object({
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
+// Tenant letterhead — drives the company block on printed repair paper and
+// walk-in receipts (src/lib/branding/letterhead.ts), distinct from the
+// platform-fixed Cycle Forge branding in src/lib/branding/constants.ts.
+const LetterheadSchema = z.object({
+  addressLine1: z.string().max(120).default(''),
+  addressLine2: z.string().max(120).default(''),
+  phone: z.string().max(40).default(''),
+  email: z.string().email().or(z.literal('')).default(''),
+});
+
 const NasStorageTargetSchema = z.object({
   root: z.string().default(''),
   folder: z.string().default(''),
@@ -42,6 +52,7 @@ export const OrgSettingsSchema = z.object({
   currency: z.string().length(3).default('USD'),
   locale: z.string().default('en-US'),
   brand: BrandSchema.default({}),
+  letterhead: LetterheadSchema.default({ addressLine1: '', addressLine2: '', phone: '', email: '' }),
   // Toggle to require email-then-PIN signin instead of tap-your-name. Off
   // by default to preserve the existing USAV station UX.
   emailFirstSignin: z.boolean().default(false),

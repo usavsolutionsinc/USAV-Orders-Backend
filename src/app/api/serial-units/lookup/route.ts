@@ -45,7 +45,7 @@ export const GET = withAuth(async (request, ctx) => {
   }
 
   try {
-    const row = await findByNormalizedSerial(trimmed);
+    const row = await findByNormalizedSerial(trimmed, ctx.organizationId);
 
     // Resolve the originating sales order two ways:
     //   1. inventory-v2: serial_units → order_unit_allocations → orders, when

@@ -12,6 +12,8 @@ export interface PhotoDateNav {
   dateFrom?: string;
   dateTo?: string;
   poRef?: string;
+  /** Zendesk ticket drill (claims folders). */
+  ticketId?: string;
 }
 
 /**

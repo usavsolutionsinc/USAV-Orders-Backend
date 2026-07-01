@@ -10,6 +10,7 @@ import AiOrderList from '@/components/ai/AiOrderList';
 import { linkifyOrderRefs, inferDestination, countOrderRefs, extractOrderRefs } from '@/components/ai/ai-answer-enrich';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Button, IconButton } from '@/design-system/primitives';
+import { PRODUCT_NAME_AI } from '@/lib/branding/constants';
 
 function ArrowRightGlyph({ className = 'h-3.5 w-3.5' }: { className?: string }) {
   return (
@@ -194,7 +195,7 @@ export default function AiChatConversation({ variant = 'panel', chat }: AiChatCo
           <div className={`${colWidth} flex h-full flex-col justify-center`}>
             <div className="flex items-center gap-2 text-gray-700">
               <Sparkles className="h-5 w-5 text-blue-500" />
-              <p className="text-base font-semibold tracking-tight text-gray-900">USAV Assistant</p>
+              <p className="text-base font-semibold tracking-tight text-gray-900">{PRODUCT_NAME_AI}</p>
             </div>
             <p className="mt-2 text-sm leading-6 text-gray-600">
               Ask about orders, shipping, staff pace, FBA, repairs, inventory, or Bose service manuals.

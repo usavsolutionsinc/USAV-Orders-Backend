@@ -6,6 +6,7 @@ import {
   printReceivingLabel,
   type ReceivingLabelPayload,
 } from '../../receiving-label-helpers';
+import { labelCornerTicketDigits } from '@/lib/print/printReceivingLabel';
 import { markConditionSet } from '../../ReceivingProgressStepper';
 import { useSerialLookup, type SerialMatchedOrder } from '../../SerialMatchResult';
 import { takeSerialEditHandoff } from '../../serialEditHandoff';
@@ -19,6 +20,8 @@ import { dispatchUnboxRailLineUpdated } from '@/components/sidebar/receiving/unb
 import { useReceivingTypeLabel, usePlatformMeta } from '@/hooks/useCatalog';
 import { useSetting } from '@/hooks/useSettings';
 import type { LabelEditDraft } from '../LabelEditPopover';
+import { formatLabelDateFromIso } from '@/components/labels/labelDate';
+import { shouldUseLocalReceiveOnly } from '@/lib/receiving/intake-items-routing';
 
 /**
  * Controller for the UNBOX + TRIAGE workspace display. Composes the mode-agnostic
@@ -59,6 +62,8 @@ export function useUnboxLineController(
   // from ReceivingUnitRows). Null on single-qty lines.
   const [unitLabelCondition, setUnitLabelCondition] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  /** Label-face composer — ephemeral per line; NOT hydrated from `row.notes`. */
+  const [labelNotes, setLabelNotes] = useState('');
   const [serialInput, setSerialInput] = useState('');
   // Explicit "no serial number" waiver for this line (mutually exclusive with a
   // captured serial). Carries an auditable reason code and satisfies the optional
@@ -91,6 +96,24 @@ export function useUnboxLineController(
   useLayoutEffect(() => {
     setNotes(row.notes ?? '');
   }, [row.id, row.notes]);
+
+  useLayoutEffect(() => {
+    setLabelNotes('');
+  }, [row.id]);
+
+  // Track the previous line's label notes so the Label composer can offer a
+  // "repeat previous" prefill on multi-line cartons. The workspace stays
+  // mounted across sibling-line switches within the same carton (see
+  // ReceivingRightPane's carton-keyed remount), so a ref-captured value
+  // naturally survives from one line to the next.
+  const labelNotesLiveRef = useRef(labelNotes);
+  useEffect(() => {
+    labelNotesLiveRef.current = labelNotes;
+  }, [labelNotes]);
+  const [prevLineNotes, setPrevLineNotes] = useState('');
+  useEffect(() => {
+    return () => setPrevLineNotes(labelNotesLiveRef.current);
+  }, [row.id]);
 
   // Serial is per line; prefill from the row's recorded serials (most recent
   // wins) so the panel reflects what the table chip shows.
@@ -203,7 +226,8 @@ export function useUnboxLineController(
       : row.receiving_source === 'unmatched'
         ? 'Unfound'
         : 'Unknown';
-  const derivedDate = new Date().toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
+  // Top-right label date = when the carton was unboxed, not the print day.
+  const derivedDate = formatLabelDateFromIso(row.unboxed_at ?? row.unbox_opened_at ?? null);
   const isMultiQtyLine = (row.quantity_expected ?? 0) > 1;
   const labelConditionCode = isMultiQtyLine && unitLabelCondition ? unitLabelCondition : cond;
 
@@ -224,9 +248,12 @@ export function useUnboxLineController(
     setLabelOverride({});
   }, [row.id]);
 
-  // Numeric ticket parsed from the carton's Zendesk field (same rule the label
-  // corner uses): plain #digits only — URLs / free text don't count.
-  const derivedTicket = (/^#?(\d+)$/.exec(core.zendesk.replace(/\s+/g, ''))?.[1]) ?? '';
+  // Zendesk ticket # for the label corner (provider id #9395, not registry id #3).
+  const derivedTicket = labelCornerTicketDigits({
+    providerTicketId: core.providerTicketId,
+    externalTicketId: core.supportTicket?.externalTicketId ?? null,
+    zendeskField: core.zendeskTrimmed || core.zendesk,
+  });
 
   const labelPlatform = labelOverride.platform ?? derivedPlatform;
   const labelDate = labelOverride.date ?? derivedDate;
@@ -287,7 +314,7 @@ export function useUnboxLineController(
   const labelDraftDefaults: LabelEditDraft = {
     platform: labelPlatform,
     receivingType: (core.receivingType || '').toUpperCase(),
-    notes,
+    notes: labelNotes,
     conditionCode: labelConditionCode,
     cornerMode,
     reference: core.poNumber,
@@ -330,27 +357,23 @@ export function useUnboxLineController(
     if (didPrint) markLabelPrinted();
   }, [scanValue, labelPayload, row.sku, row.item_name, serialInput, markLabelPrinted]);
 
-  // Custom print (Edit label → Save & print): persist what has a home (notes /
-  // condition / reference / type), keep the label-only bits (platform / date /
-  // corner choice) as an override, then print the EXACT previewed payload built
-  // from the draft (not stale state, which wouldn't have the just-set values
-  // yet this tick).
+  // Custom print (Edit label → Save & print): persist condition / reference /
+  // type where they have a home; label-face notes stay in the ephemeral
+  // labelNotes buffer only (receiving_lines.notes = Internal tab).
   const applyAndPrintLabel = useCallback(
     (draft: LabelEditDraft) => {
-      const nextNotes = draft.notes;
+      const nextLabelNotes = draft.notes;
       const nextCond = draft.conditionCode;
       const nextRef = draft.reference.trim();
       const nextType = (draft.receivingType || '').toUpperCase();
-      const notesChanged = nextNotes !== notes;
+      const labelNotesChanged = nextLabelNotes !== labelNotes;
       const condChanged = nextCond !== cond;
 
-      if (notesChanged) setNotes(nextNotes);
+      if (labelNotesChanged) setLabelNotes(nextLabelNotes);
       if (condChanged) {
         setCond(nextCond);
         markConditionSet(row.id);
-      }
-      if (notesChanged || condChanged) {
-        void core.patch({ notes: nextNotes, condition_grade: nextCond });
+        void core.patch({ condition_grade: nextCond });
       }
       if (nextRef && nextRef !== core.poNumber) {
         void core.persistPoNumber(nextRef);
@@ -373,18 +396,14 @@ export function useUnboxLineController(
       markLabelPrinted();
     },
     [
-      notes, cond, row.id,
+      labelNotes, cond, row.id,
       core.patch, core.poNumber, core.persistPoNumber, core.receivingType, core.setReceivingType, core.saveType,
       buildLabelPayload, markLabelPrinted,
     ],
   );
 
-  // Unfound cartons have no Zoho PO to receive against — never fire a Zoho
-  // purchase-receive for them. The primary CTA becomes "Receive locally"
-  // (print + local_receive): lines advance to RECEIVED locally (NOT just
-  // SCANNED), and Zoho is left untouched. The Zoho-receive menu option is
-  // disabled. ("Mark as scanned" stays available as the explicit scan_only path.)
-  const isUnfound = row.receiving_source === 'unmatched';
+  // Unfound, return, and sales-order-linked cartons have no Zoho PO to receive against.
+  const isUnfound = shouldUseLocalReceiveOnly(row);
 
   const handlePrintAndReceive = useCallback(() => {
     runPrintLabel();
@@ -556,8 +575,8 @@ export function useUnboxLineController(
     // condition / qa / disposition
     qa, setQa, disp, setDisp,
     cond, setCond, unitLabelCondition, setUnitLabelCondition, isMultiQtyLine,
-    // notes
-    notes, setNotes,
+    // notes — internal (`receiving_lines.notes`) vs label-face composer
+    notes, setNotes, labelNotes, setLabelNotes, prevLineNotes,
     // serial scanning
     serialInput, setSerialInput, serialRef,
     serialAbsent, setSerialAbsent, serialAbsentReason, setSerialAbsentReason,

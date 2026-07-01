@@ -75,6 +75,7 @@ export async function upsertOpenTrackingException(
       WHERE status = 'open'
         AND domain = $2
         AND source_station = $3
+        AND organization_id = $5
         AND (
           RIGHT(regexp_replace(UPPER(COALESCE(tracking_number, '')), '[^A-Z0-9]', '', 'g'), 18) = $1
           OR (
@@ -84,7 +85,7 @@ export async function upsertOpenTrackingException(
         )
       ORDER BY id DESC
       LIMIT 1`,
-    [key18, params.domain, params.sourceStation, normalizedLast8],
+    [key18, params.domain, params.sourceStation, normalizedLast8, effectiveOrgId],
   );
 
   if (existing.rows.length > 0) {

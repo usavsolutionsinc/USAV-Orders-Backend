@@ -20,7 +20,6 @@ import { SellerMessageChip } from './SellerMessageChip';
 import { InlinePillPicker, type InlinePillOption } from './InlinePillPicker';
 import { receivingPriorityRank, receivingPriorityTone } from './receiving-priority';
 import { PRIORITY_OVERRIDE_TIERS, priorityOverrideTier } from '@/lib/receiving/priority-override';
-import { parseZendeskTicketId } from '@/lib/receiving-claim-seller-ticket-match';
 import { usePlatformCatalog, useReceivingTypeCatalog, usePlatformMeta } from '@/hooks/useCatalog';
 
 
@@ -61,6 +60,8 @@ export function CartonContextCard({
   zendeskTrimmed,
   zendeskHref,
   zendeskChipDisplay,
+  providerTicketId = null,
+  ticketLookupPending = false,
   onTicketUnlinked,
   primaryTrackingTrimmed,
   filledExtraTrackingsCount,
@@ -108,6 +109,9 @@ export function CartonContextCard({
   zendeskTrimmed: string;
   zendeskHref: string | null | undefined;
   zendeskChipDisplay: string;
+  providerTicketId?: number | null;
+  /** True while the support-ticket lookup is in flight — suppresses the Claim CTA. */
+  ticketLookupPending?: boolean;
   /** Called after the ticket chip's popover unlinks the ticket — clears it. */
   onTicketUnlinked?: () => void;
   primaryTrackingTrimmed: string;
@@ -401,6 +405,7 @@ export function CartonContextCard({
                     value={zendeskTrimmed}
                     display={zendeskChipDisplay}
                     openHref={zendeskHref}
+                    providerTicketId={providerTicketId}
                     receivingId={receivingId}
                     lineId={lineId}
                     onUnlinked={() => onTicketUnlinked?.()}
@@ -408,10 +413,10 @@ export function CartonContextCard({
                   <SellerMessageChip
                     receivingId={receivingId}
                     lineId={lineId}
-                    linkedTicketId={parseZendeskTicketId(zendeskTrimmed)}
+                    linkedTicketId={providerTicketId}
                   />
                 </div>
-              ) : onMakeClaim ? (
+              ) : ticketLookupPending ? null : onMakeClaim ? (
                 <HoverTooltip label="File a damage / wrong-item / missing claim for this package" asChild>
                   <Button
                     type="button"

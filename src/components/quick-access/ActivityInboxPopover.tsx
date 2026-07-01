@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ComponentType } from 'react';
+import { useMemo, useState, type ComponentType } from 'react';
 import { formatDistanceToNowStrict } from 'date-fns';
 import {
     Copy,
@@ -14,6 +14,7 @@ import {
     RotateCcw,
     Truck,
     MessageSquare,
+    Phone,
     ChevronRight,
     Loader2,
 } from '@/components/Icons';
@@ -26,6 +27,7 @@ import {
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TrackingChip, OrderIdChip, getLast4 } from '@/components/ui/CopyChip';
 import { Button, IconButton } from '@/design-system/primitives';
+import { cn } from '@/utils/_cn';
 
 interface ActivityInboxPopoverProps {
     onClose: () => void;
@@ -63,10 +65,56 @@ const KIND_META: Record<ActivityInboxItemKind, { label: string; Icon: Glyph; ton
     repair_status: { label: 'Repair', Icon: Wrench, tone: 'amber' },
     priority_unbox: { label: 'Priority', Icon: Zap, tone: 'violet' },
     warranty_claim: { label: 'Warranty', Icon: ShieldCheck, tone: 'emerald' },
-    return_pending_test: { label: 'Tech queue', Icon: RotateCcw, tone: 'rose' },
-    order_ready_ship: { label: 'Tech queue', Icon: Truck, tone: 'blue' },
+    return_pending_test: { label: 'Tech', Icon: RotateCcw, tone: 'rose' },
+    order_ready_ship: { label: 'Tech', Icon: Truck, tone: 'blue' },
+    support_followup: { label: 'Support', Icon: Phone, tone: 'violet' },
     staff_message: { label: 'Message', Icon: MessageSquare, tone: 'blue' },
 };
+
+type InboxTabId = 'all' | 'tech_queue' | 'repair' | 'support' | 'warranty' | 'priority' | 'messages';
+
+const INBOX_TAB_FOR_KIND: Record<ActivityInboxItemKind, InboxTabId> = {
+    return_pending_test: 'tech_queue',
+    order_ready_ship: 'tech_queue',
+    repair_status: 'repair',
+    warranty_claim: 'warranty',
+    priority_unbox: 'priority',
+    support_followup: 'support',
+    staff_message: 'messages',
+};
+
+const INBOX_TAB_LABEL: Record<InboxTabId, string> = {
+    all: 'All',
+    tech_queue: 'Tech',
+    repair: 'Repair',
+    support: 'Support',
+    warranty: 'Warranty',
+    priority: 'Priority',
+    messages: 'Messages',
+};
+
+const TAB_EMPTY_COPY: Partial<Record<InboxTabId, string>> = {
+    tech_queue: 'No tech items',
+    repair: 'No repair updates',
+    support: 'No support follow-ups',
+    messages: 'No messages',
+};
+
+/** Primary tabs — always shown (matches goal-chip segmented row). */
+const PRIMARY_INBOX_TABS: InboxTabId[] = ['all', 'tech_queue', 'repair', 'support', 'messages'];
+
+function inboxTabFor(it: ActivityInboxItem): InboxTabId {
+    return INBOX_TAB_FOR_KIND[it.kind];
+}
+
+/** Compact relative time — "16 hrs ago" instead of "16 hours ago". */
+function inboxRelativeTime(ms: number): string {
+    return formatDistanceToNowStrict(new Date(ms), { addSuffix: true })
+        .replace(/\bhours ago\b/, 'hrs ago')
+        .replace(/\bhour ago\b/, 'hr ago')
+        .replace(/\bminutes ago\b/, 'mins ago')
+        .replace(/\bminute ago\b/, 'min ago');
+}
 
 /** Text after the first " · " divider (drops the kind prefix from a title). */
 function afterSep(title: string): string {
@@ -81,6 +129,8 @@ function primaryFor(it: ActivityInboxItem): string {
             return it.productTitle?.trim() || 'Ready to ship';
         case 'return_pending_test':
             return it.productTitle?.trim() || 'Needs testing';
+        case 'support_followup':
+            return it.ticketSubject?.trim() || (it.ticketId ? `Ticket #${it.ticketId}` : 'Support follow-up');
         case 'priority_unbox':
             return 'Unbox this first';
         case 'warranty_claim':
@@ -103,6 +153,9 @@ function statusTone(status: string): Tone {
 
 /** Deep-link map — resolve each item to the most precise record view available. */
 function hrefFor(it: ActivityInboxItem): string | null {
+    if (it.kind === 'support_followup' && it.ticketId) {
+        return `/support?ticket=${it.ticketId}`;
+    }
     if (it.kind === 'warranty_claim' && it.claimId) return `/dashboard?warranty=&open=${it.claimId}`;
     // Receiving-carton kinds carry a `receiving.id`. Route straight to the exact
     // carton/line workspace — `useReceivingDeepLink` reads `?recvId=` and opens
@@ -144,6 +197,40 @@ function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
     const { items, dismissItem, clear, undoItem, pendingUndoId } = useActivityInbox();
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<InboxTabId>('all');
+
+    const tabCounts = useMemo(() => {
+        const counts: Record<InboxTabId, number> = {
+            all: items.length,
+            tech_queue: 0,
+            repair: 0,
+            support: 0,
+            warranty: 0,
+            priority: 0,
+            messages: 0,
+        };
+        for (const it of items) {
+            counts[inboxTabFor(it)] += 1;
+        }
+        return counts;
+    }, [items]);
+
+    const tabItems = useMemo((): InboxTabId[] => {
+        const tabs: InboxTabId[] = [...PRIMARY_INBOX_TABS];
+        if (tabCounts.warranty > 0) tabs.push('warranty');
+        if (tabCounts.priority > 0) tabs.push('priority');
+        return tabs;
+    }, [tabCounts.warranty, tabCounts.priority]);
+
+    const visibleItems = useMemo(
+        () =>
+            activeTab === 'all'
+                ? items
+                : items.filter((it) => inboxTabFor(it) === activeTab),
+        [items, activeTab],
+    );
+
+    const tabEmpty = activeTab !== 'all' && visibleItems.length === 0;
 
     const handleCopyBack = async (body: string, id: string) => {
         const ok = await copyToClipboard(body);
@@ -184,20 +271,67 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                 </div>
             </header>
 
+            {/* Segmented type filter — same pill track as GoalPopover (header goal chip). */}
+            <div className="shrink-0 border-b border-gray-100 px-3 py-2">
+                <div
+                    role="tablist"
+                    aria-label="Inbox type"
+                    className="flex w-full items-center gap-0.5 rounded-xl bg-gray-100 p-0.5 ring-1 ring-gray-200"
+                >
+                    {tabItems.map((tabId) => {
+                        const active = activeTab === tabId;
+                        const count = tabId === 'all' ? tabCounts.all : tabCounts[tabId];
+                        return (
+                            <button
+                                key={tabId}
+                                type="button"
+                                role="tab"
+                                aria-selected={active}
+                                onClick={() => setActiveTab(tabId)}
+                                className={cn(
+                                    'relative flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-micro font-bold transition-colors',
+                                    active
+                                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200'
+                                        : 'text-gray-500 hover:text-gray-900',
+                                )}
+                            >
+                                <span className="truncate">{INBOX_TAB_LABEL[tabId]}</span>
+                                {count > 0 ? (
+                                    <span
+                                        className={cn(
+                                            'shrink-0 tabular-nums',
+                                            active ? 'text-gray-500' : 'text-gray-400',
+                                        )}
+                                    >
+                                        {count}
+                                    </span>
+                                ) : null}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
             <div className="min-h-0 flex-1 overflow-y-auto">
-                {items.length === 0 ? (
+                {tabEmpty ? (
+                    <div className="flex flex-col items-center px-6 py-10 text-center">
+                        <p className="text-mini font-medium text-gray-400">
+                            {TAB_EMPTY_COPY[activeTab] ?? `No ${INBOX_TAB_LABEL[activeTab].toLowerCase()} items`}
+                        </p>
+                    </div>
+                ) : items.length === 0 ? (
                     <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
                         <span className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-50 text-gray-300 ring-1 ring-inset ring-gray-100">
                             <Inbox className="h-5 w-5" />
                         </span>
                         <p className="text-caption font-bold text-gray-700">You&apos;re all caught up</p>
                         <p className="max-w-[14rem] text-mini font-medium leading-snug text-gray-400">
-                            New tech-queue items, repair updates, and messages will land here.
+                            New tech items, repair updates, and messages will land here.
                         </p>
                     </div>
                 ) : (
                     <ul className="divide-y divide-gray-50">
-                        {items.map((it) => {
+                        {visibleItems.map((it) => {
                             const meta = KIND_META[it.kind];
                             const Icon = meta.Icon;
                             const href = hrefFor(it);
@@ -234,22 +368,10 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                             <Icon className="h-3.5 w-3.5" />
                                         </span>
 
-                                        {/* Body */}
+                                        {/* Body — row 1: title only; row 2: time + chips */}
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5 text-eyebrow font-bold uppercase tracking-widest text-gray-400">
-                                                <span className="truncate">{meta.label}</span>
-                                                <span aria-hidden className="text-gray-300">
-                                                    ·
-                                                </span>
-                                                <span className="shrink-0 whitespace-nowrap normal-case tracking-wide">
-                                                    {formatDistanceToNowStrict(new Date(it.createdAt), {
-                                                        addSuffix: true,
-                                                    })}
-                                                </span>
-                                            </div>
-
                                             <p
-                                                className={`mt-0.5 truncate text-caption font-black ${
+                                                className={`truncate text-caption font-black ${
                                                     navigable
                                                         ? 'text-gray-900 group-hover:text-blue-700'
                                                         : 'text-gray-900'
@@ -258,8 +380,61 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
                                                 {primary}
                                             </p>
 
-                                            {/* Structured chips */}
-                                            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                                                <span className="shrink-0 whitespace-nowrap text-mini font-semibold text-gray-400">
+                                                    {inboxRelativeTime(it.createdAt)}
+                                                </span>
+
+                                                {(it.kind === 'order_ready_ship' ||
+                                                    it.kind === 'return_pending_test') && (
+                                                    <Pill
+                                                        tone={
+                                                            it.kind === 'order_ready_ship'
+                                                                ? 'emerald'
+                                                                : 'rose'
+                                                        }
+                                                    >
+                                                        {it.kind === 'order_ready_ship'
+                                                            ? 'Ready to ship'
+                                                            : 'Needs testing'}
+                                                    </Pill>
+                                                )}
+
+                                                {it.kind === 'support_followup' && (
+                                                    <>
+                                                        <Pill tone="violet">Follow up</Pill>
+                                                        {it.ticketId ? (
+                                                            <Pill tone="gray">#{it.ticketId}</Pill>
+                                                        ) : null}
+                                                        {it.assignedStaffId != null ? (
+                                                            <Pill tone="blue">
+                                                                {it.assignedStaffName ?? 'Staff'} ·{' '}
+                                                                {it.assignedStaffId}
+                                                            </Pill>
+                                                        ) : null}
+                                                    </>
+                                                )}
+
+                                                {it.orderNumber && (
+                                                    <span className="pointer-events-auto relative z-10 inline-flex max-w-full">
+                                                        <OrderIdChip
+                                                            value={it.orderNumber}
+                                                            display={getLast4(it.orderNumber)}
+                                                            dense
+                                                        />
+                                                    </span>
+                                                )}
+
+                                                {it.trackingNumber && (
+                                                    <span className="pointer-events-auto relative z-10 inline-flex max-w-full">
+                                                        <TrackingChip
+                                                            value={it.trackingNumber}
+                                                            display={getLast4(it.trackingNumber)}
+                                                            dense
+                                                        />
+                                                    </span>
+                                                )}
+
                                                 {it.kind === 'repair_status' &&
                                                     (it.previousStatus || it.nextStatus) && (
                                                         <>
@@ -281,41 +456,6 @@ export function ActivityInboxPopover({ onClose }: ActivityInboxPopoverProps) {
 
                                                 {it.kind === 'priority_unbox' && it.sku && (
                                                     <Pill tone="violet">{it.sku}</Pill>
-                                                )}
-
-                                                {(it.kind === 'order_ready_ship' ||
-                                                    it.kind === 'return_pending_test') && (
-                                                    <Pill
-                                                        tone={
-                                                            it.kind === 'order_ready_ship'
-                                                                ? 'emerald'
-                                                                : 'rose'
-                                                        }
-                                                    >
-                                                        {it.kind === 'order_ready_ship'
-                                                            ? 'Ready to ship'
-                                                            : 'Needs testing'}
-                                                    </Pill>
-                                                )}
-
-                                                {it.orderNumber && (
-                                                    <span className="pointer-events-auto relative z-10 inline-flex max-w-full">
-                                                        <OrderIdChip
-                                                            value={it.orderNumber}
-                                                            display={it.orderNumber}
-                                                            dense
-                                                        />
-                                                    </span>
-                                                )}
-
-                                                {it.trackingNumber && (
-                                                    <span className="pointer-events-auto relative z-10 inline-flex max-w-full">
-                                                        <TrackingChip
-                                                            value={it.trackingNumber}
-                                                            display={getLast4(it.trackingNumber)}
-                                                            dense
-                                                        />
-                                                    </span>
                                                 )}
                                             </div>
 

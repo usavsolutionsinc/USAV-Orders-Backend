@@ -163,22 +163,6 @@ export const RECEIVING_TYPE_OPTS = [
 /** Carton-level default types the carton pill can set (PICKUP is a carton source, not a pill type). */
 export const CARTON_INTAKE_TYPES = ['PO', 'RETURN', 'TRADE_IN'] as const;
 
-/**
- * Effective receiving type for a line: the per-line override wins, else the
- * carton-level default, else 'PO'. One resolver so every surface (pill, label,
- * copy-all) reads type the same way. See migration 2026-06-13b.
- */
-export function effectiveReceivingType(
-  lineOverride: string | null | undefined,
-  cartonDefault: string | null | undefined,
-): string {
-  const ov = (lineOverride || '').trim().toUpperCase();
-  if (ov && ov !== 'PO') return ov;
-  const def = (cartonDefault || '').trim().toUpperCase();
-  if (def) return def;
-  return ov || 'PO';
-}
-
 // Pill options + printed-label map both derive from the platform SoT so a
 // platform never reads two ways across surfaces. Add a platform in
 // src/lib/source-platform.ts, not here. The leading '' (Unknown) entry is
@@ -601,6 +585,77 @@ export const CLAIM_SEVERITY_OPTIONS: ReadonlyArray<{
   { value: 'medium', label: 'Medium', active: 'bg-amber-600 text-white',   inactive: 'bg-amber-50 text-amber-700' },
   { value: 'high',   label: 'High',   active: 'bg-rose-600 text-white',    inactive: 'bg-rose-50 text-rose-700' },
 ];
+
+import { normalizeScanKey } from '@/lib/receiving/scan/normalize';
+
+/** Stable rail reconcile key for a scan still in flight (no receiving_id yet). */
+export function pendingScanReconcileKey(trackingNumber: string): string {
+  return `scan:${normalizeScanKey(trackingNumber)}`;
+}
+
+/** Negative line id for a pre-resolve pending scan — cannot collide with DB ids. */
+function pendingScanLineId(trackingNumber: string): number {
+  const key = normalizeScanKey(trackingNumber);
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) {
+    h = ((h << 5) + h) ^ key.charCodeAt(i);
+  }
+  return -(Math.abs(h) || 1);
+}
+
+/**
+ * Instant triage-rail row shown the moment a tracking # is scanned, before
+ * lookup-po returns. Title = the tracking #; reconciles in place once the
+ * resolved carton prepends under `carton:{receiving_id}` and this leading row
+ * clears.
+ */
+export function buildPendingScanStubRow(trackingNumber: string): ReceivingLineRow {
+  const trimmed = trackingNumber.trim();
+  const now = new Date().toISOString();
+  return {
+    id: pendingScanLineId(trimmed),
+    receiving_id: null,
+    client_event_id: pendingScanReconcileKey(trimmed),
+    tracking_number: trimmed,
+    carrier: null,
+    zoho_item_id: null,
+    zoho_line_item_id: null,
+    zoho_purchase_receive_id: null,
+    zoho_purchaseorder_id: null,
+    zoho_purchaseorder_number: null,
+    item_name: trimmed,
+    sku: null,
+    quantity_received: 0,
+    quantity_expected: null,
+    qa_status: 'PENDING',
+    workflow_status: 'ARRIVED',
+    disposition_code: 'HOLD',
+    condition_grade: '',
+    disposition_audit: [],
+    needs_test: true,
+    assigned_tech_id: null,
+    zoho_sync_source: null,
+    zoho_last_modified_time: null,
+    zoho_synced_at: null,
+    receiving_type: 'PO',
+    notes: null,
+    created_at: now,
+    last_activity_at: now,
+    scanned_at: now,
+    image_url: null,
+    source_platform: null,
+    receiving_source: null,
+  };
+}
+
+/** True while a row is the pre-resolve triage leading stub (not yet clickable). */
+export function isPendingTriageScanRow(row: ReceivingLineRow): boolean {
+  return (
+    row.receiving_id == null
+    && typeof row.client_event_id === 'string'
+    && row.client_event_id.startsWith('scan:')
+  );
+}
 
 /**
  * Synthesize a ReceivingLineRow for an unmatched carton that has no

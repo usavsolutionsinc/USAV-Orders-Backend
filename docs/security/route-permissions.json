@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "generatedAt": "2026-06-29T08:00:30Z",
-  "totalRoutes": 712,
+  "generatedAt": "2026-07-01T15:33:24Z",
+  "totalRoutes": 730,
   "summary": {
-    "permissionGated": 610,
-    "authenticatedNoPermission": 35,
+    "permissionGated": 627,
+    "authenticatedNoPermission": 36,
     "anonymousIntentional": 65,
     "serviceToService": 2,
     "ungatedRead": 0,
@@ -1546,6 +1546,33 @@
       "exemptReason": "public desktop release feed (polled pre-auth by the updater)"
     },
     {
+      "path": "/api/documents/[id]/content/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/documents/[id]/route.ts",
+      "methods": [
+        "DELETE"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/documents/download-zip/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/ebay/accounts/route.ts",
       "methods": [
         "DELETE",
@@ -2133,6 +2160,15 @@
       ],
       "gate": "withAuth",
       "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/inbox/support/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth (no permission)",
+      "permission": null,
       "exemptReason": null
     },
     {
@@ -2752,6 +2788,25 @@
       "exemptReason": null
     },
     {
+      "path": "/api/orders/[id]/documents/fetch/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.create",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/orders/[id]/documents/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "orders.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/orders/[id]/pick-tasks/route.ts",
       "methods": [
         "GET"
@@ -3230,6 +3285,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/photos/library/ids/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/photos/library/route.ts",
       "methods": [
         "GET"
@@ -3261,6 +3325,26 @@
     },
     {
       "path": "/api/photos/nas-backup/route.ts",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/saved-views/[id]/route.ts",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "photos.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/photos/saved-views/route.ts",
       "methods": [
         "GET",
         "POST"
@@ -3888,6 +3972,15 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/import-sales-order/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/lines/[id]/advance/route.ts",
       "methods": [
         "POST"
@@ -4100,6 +4193,42 @@
       "exemptReason": null
     },
     {
+      "path": "/api/receiving/triage/complete/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/triage/done/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/triage/metrics/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/triage/staging-map/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
       "path": "/api/receiving/unfound-queue/[kind]/[id]/push-to-zendesk/draft/route.ts",
       "methods": [
         "POST"
@@ -4125,6 +4254,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/unfound-queue/retry-pair/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.scan_po",
       "exemptReason": null
     },
     {
@@ -4533,7 +4671,7 @@
         "POST"
       ],
       "gate": "withAuth",
-      "permission": "orders.view",
+      "permission": "rma.manage",
       "exemptReason": null
     },
     {
@@ -4542,7 +4680,7 @@
         "POST"
       ],
       "gate": "withAuth",
-      "permission": "orders.view",
+      "permission": "rma.manage",
       "exemptReason": null
     },
     {
@@ -4551,7 +4689,7 @@
         "POST"
       ],
       "gate": "withAuth",
-      "permission": "orders.view",
+      "permission": "rma.manage",
       "exemptReason": null
     },
     {
@@ -4562,7 +4700,16 @@
         "PATCH"
       ],
       "gate": "requireRoutePerm",
-      "permission": "orders.view",
+      "permission": "rma.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/backlog/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "rma.view",
       "exemptReason": null
     },
     {
@@ -4571,7 +4718,16 @@
         "GET"
       ],
       "gate": "withAuth",
-      "permission": "orders.view",
+      "permission": "rma.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/rma/disposition/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "rma.manage",
       "exemptReason": null
     },
     {
@@ -4581,7 +4737,7 @@
         "POST"
       ],
       "gate": "withAuth",
-      "permission": "orders.view",
+      "permission": "rma.view",
       "exemptReason": null
     },
     {
@@ -4825,6 +4981,15 @@
       ],
       "gate": "withAuth",
       "permission": "admin.view",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/shipments/[id]/documents/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "requireRoutePerm",
+      "permission": "shipping.view",
       "exemptReason": null
     },
     {
@@ -5701,6 +5866,15 @@
       ],
       "gate": "withAuth (no permission)",
       "permission": null,
+      "exemptReason": null
+    },
+    {
+      "path": "/api/support/tickets/by-entity/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "withAuth",
+      "permission": "receiving.view",
       "exemptReason": null
     },
     {

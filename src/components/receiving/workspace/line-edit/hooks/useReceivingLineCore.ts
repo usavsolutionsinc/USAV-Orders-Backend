@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { safeChannelName, getStaffStationBridgeChannelName } from '@/lib/realtime/channels';
 import { copyToClipboard } from '@/utils/_dom';
 import { buildReceivingCopyInfo } from '@/utils/copy-all-receiving';
-import { zendeskTicketUrl } from '@/lib/zendesk-ticket-url';
+import { useEntitySupportTicket } from '@/hooks/useEntitySupportTicket';
 import { getTrackingUrl, getTrackingUrlByCarrier } from '@/lib/tracking-format';
 import { getExternalUrlByItemNumber } from '@/hooks/useExternalItemUrl';
 import {
@@ -53,6 +53,11 @@ export function useReceivingLineCore(
 ) {
   const dispatchLine = opts.dispatchLine ?? dispatchLineUpdated;
   const [zendesk, setZendesk] = useState('');
+  const supportTicketQuery = useEntitySupportTicket({
+    lineId: row.id ?? null,
+    receivingId: row.receiving_id ?? null,
+  });
+  const supportTicket = supportTicketQuery.data ?? null;
   const [listingLink, setListingLink] = useState('');
   const [trackingEdit, setTrackingEdit] = useState(row.tracking_number || '');
   const [extraTrackings, setExtraTrackings] = useState<string[]>([]);
@@ -137,9 +142,8 @@ export function useReceivingLineCore(
       return;
     }
     const d = readReceivingLineDetailsScratch(row.receiving_id);
-    // DB-persisted ticket # (receiving_lines.zendesk_ticket) wins over the
-    // per-browser scratch; scratch remains the fallback for older rows.
-    setZendesk((row.zendesk_ticket || '').trim() || d.zendesk);
+    // Ticket display comes from support_tickets + ticket_links (not receiving columns).
+    setZendesk(d.zendesk);
     // DB-persisted listing URL wins over the per-browser scratch when present.
     setListingLink((row.receiving_listing_url || '').trim() || d.listing);
     const extras = d.extra_trackings.length > 0 ? d.extra_trackings : [];
@@ -381,6 +385,18 @@ export function useReceivingLineCore(
     }
   }, [row.receiving_id, row.zoho_purchaseorder_number, row.tracking_number, staffId, orgId, getAblyClient]);
 
+  const ticketLabel = supportTicket?.label ?? '';
+  const ticketChipDisplay =
+    supportTicket?.providerTicketId != null
+      ? String(supportTicket.providerTicketId)
+      : supportTicket
+        ? String(supportTicket.id)
+        : '';
+  const ticketHref = supportTicket?.openUrl ?? null;
+  const providerTicketId = supportTicket?.providerTicketId ?? null;
+  const ticketLookupPending =
+    supportTicketQuery.isLoading || supportTicketQuery.isFetching;
+
   const handleCopyAll = useCallback(async () => {
     if (!row.receiving_id) {
       toast.error('No receiving package linked yet');
@@ -396,7 +412,7 @@ export function useReceivingLineCore(
         carton: data?.success ? data.receiving : null,
         lines,
         scratch: {
-          zendesk,
+          zendesk: ticketLabel || zendesk,
           listing: listingLink,
           extraTrackings: extraTrackings.filter((t) => t.trim().length > 0),
         },
@@ -411,7 +427,7 @@ export function useReceivingLineCore(
     } finally {
       setCopyingAll(false);
     }
-  }, [row, zendesk, listingLink, extraTrackings]);
+  }, [row, zendesk, ticketLabel, listingLink, extraTrackings]);
 
   // ── Derived identity values shared by the carton chip row ──────────────────
   const poNumber = (row.zoho_purchaseorder_number || row.zoho_purchaseorder_id || '').trim();
@@ -430,14 +446,9 @@ export function useReceivingLineCore(
     if (poNumber) return `https://inventory.zoho.com/app#/purchaseorders?search_text=${encodeURIComponent(poNumber)}`;
     return null;
   })();
-  const zendeskTrimmed = zendesk.trim();
-  const zendeskHref = zendeskTicketUrl(zendeskTrimmed);
-  const zendeskChipDisplay = (() => {
-    const raw = zendeskTrimmed.replace(/^#/, '').trim();
-    const fromUrl = raw.match(/tickets\/(\d+)/);
-    if (fromUrl) return fromUrl[1];
-    return raw.length > 12 ? raw.slice(0, 12) : raw;
-  })();
+  const zendeskTrimmed = ticketLabel;
+  const zendeskHref = ticketHref;
+  const zendeskChipDisplay = ticketChipDisplay;
   const primaryTrackingTrimmed = trackingEdit.trim();
   const filledExtraTrackingsCount = extraTrackings.filter((t) => t.trim().length > 0).length;
   const trackingOpenHref = primaryTrackingTrimmed
@@ -472,6 +483,8 @@ export function useReceivingLineCore(
     // derived
     poNumber, listingOpenHref, poOpenHref,
     zendeskTrimmed, zendeskHref, zendeskChipDisplay,
+    supportTicket, providerTicketId, ticketLookupPending,
+    invalidateSupportTicket: () => void supportTicketQuery.refetch(),
     primaryTrackingTrimmed, filledExtraTrackingsCount, trackingOpenHref,
   };
 }

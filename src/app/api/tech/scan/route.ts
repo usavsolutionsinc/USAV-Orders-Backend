@@ -37,6 +37,7 @@ async function findOrderByShipment(
   shipmentId: number | null,
   key18: string | null,
   last8: string | null,
+  orgId: string,
 ) {
   if (!shipmentId && !key18 && !last8) return null;
   const r = await db.query(
@@ -67,11 +68,14 @@ async function findOrderByShipment(
        WHERE entity_type = 'ORDER' AND entity_id = o.id AND work_type = 'PACK' AND status NOT IN ('CANCELED','DONE')
        ORDER BY id DESC LIMIT 1
      ) wa_p ON TRUE
-     WHERE ($1::bigint IS NOT NULL AND o.shipment_id = $1)
-        OR (stn.id IS NOT NULL AND $2::text IS NOT NULL
-            AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized,'')), '[^A-Z0-9]', '', 'g'), 18) = $2)
-        OR (stn.id IS NOT NULL AND $3::text IS NOT NULL
-            AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized,''), '[^0-9]', '', 'g'), 8) = $3)
+     WHERE o.organization_id = $4
+       AND (
+         ($1::bigint IS NOT NULL AND o.shipment_id = $1)
+          OR (stn.id IS NOT NULL AND $2::text IS NOT NULL
+              AND RIGHT(regexp_replace(UPPER(COALESCE(stn.tracking_number_normalized,'')), '[^A-Z0-9]', '', 'g'), 18) = $2)
+          OR (stn.id IS NOT NULL AND $3::text IS NOT NULL
+              AND RIGHT(regexp_replace(COALESCE(stn.tracking_number_normalized,''), '[^0-9]', '', 'g'), 8) = $3)
+       )
      ORDER BY
        CASE
          WHEN $1::bigint IS NOT NULL AND o.shipment_id = $1 THEN 0
@@ -83,7 +87,7 @@ async function findOrderByShipment(
        END,
        o.id DESC
      LIMIT 1`,
-    [shipmentId, key18, last8],
+    [shipmentId, key18, last8, orgId],
   );
   return r.rows[0] ?? null;
 }
@@ -425,11 +429,11 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       }
 
       // ── TRACKING path ──────────────────────────────────────────────────
-      const resolved = await resolveShipmentId(value);
+      const resolved = await resolveShipmentId(value, ctx.organizationId);
       const key18 = normalizeTrackingKey18(value);
       const last8Raw = normalizeTrackingLast8(value);
       const last8 = /^\d{8}$/.test(last8Raw) && !looksLikeFnsku(value) ? last8Raw : null;
-      const order = await findOrderByShipment(client as any, resolved.shipmentId, key18, last8);
+      const order = await findOrderByShipment(client as any, resolved.shipmentId, key18, last8, ctx.organizationId);
 
       if (!order) {
         // No order found — create exception + SAL
@@ -442,7 +446,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
           staffName: staff.name,
           reason: 'not_found',
           notes: isFbaSource ? 'FBA scan: tracking not found in orders' : 'Tech scan: tracking not found in orders',
-        }, client);
+        }, client, ctx.organizationId);
         ordersExceptionId = upsertResult.exception?.id ?? null;
 
         const testDateTime = formatPSTTimestamp();

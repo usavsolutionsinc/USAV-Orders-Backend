@@ -3,12 +3,14 @@
 import { Loader2 } from '@/components/Icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PhotoGallery } from '@/components/shipped/PhotoGallery';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 
 interface ReceivingPhoto {
   id: number;
   receivingId: number;
   photoUrl: string;
   caption: string | null;
+  createdAt?: string;
 }
 
 interface ReceivingPhotosSectionProps {
@@ -55,7 +57,11 @@ export function ReceivingPhotosSection({
   const photosArr: ReceivingPhoto[] = Array.isArray(photos) ? photos : [];
   const galleryPhotos = photosArr
     .filter((p) => !!p.photoUrl)
-    .map((p) => ({ id: p.id, url: p.photoUrl }));
+    .map((p) => ({
+      id: p.id,
+      url: p.photoUrl,
+      meta: unboxingPhotoMeta({ caption: p.caption, createdAt: p.createdAt }),
+    }));
   const loadingEmpty = isFetching && galleryPhotos.length === 0;
 
   return (

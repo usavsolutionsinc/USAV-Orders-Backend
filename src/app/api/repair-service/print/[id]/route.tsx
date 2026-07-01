@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth/withAuth';
 import { getRepairById } from '@/lib/neon/repair-service-queries';
 import { formatRepairPaperTicketNumber } from '@/lib/repair/repair-paper-ticket';
 import {
@@ -8,16 +9,23 @@ import {
 } from '@/lib/repair/repair-paper-html';
 import { formatPhoneNumber } from '@/utils/phone';
 import pool from '@/lib/db';
+import { getOrganization } from '@/lib/tenancy/organizations';
+import { getOrgLetterhead } from '@/lib/branding/letterhead';
+import { parseOrgSettings } from '@/lib/tenancy/settings';
+import type { OrgId } from '@/lib/tenancy/constants';
 
 /**
  * GET /api/repair-service/print/[id] - Render printable repair service form
+ *
+ * withAuth's wrapped handler only receives (req, ctx) — it discards Next's
+ * typed `{ params }` route arg (see withAuth.ts's RouteHandler comment) — so
+ * the `[id]` segment is parsed from the pathname instead, same as other
+ * dynamic routes wrapped in withAuth (e.g. warranty's `claimIdFromPath`).
  */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (req: NextRequest, ctx) => {
   try {
-    const { id } = await params;
+    const segments = req.nextUrl.pathname.split('/').filter(Boolean);
+    const id = segments[segments.length - 1] ?? '';
     const repairId = parseInt(id);
 
     if (isNaN(repairId)) {
@@ -27,7 +35,15 @@ export async function GET(
       );
     }
 
-    const repair = await getRepairById(repairId);
+    const orgId = ctx.organizationId as OrgId;
+    const [repair, org] = await Promise.all([
+      getRepairById(repairId, orgId),
+      getOrganization(orgId),
+    ]);
+    const letterhead = getOrgLetterhead({
+      name: org?.name ?? '',
+      settings: org?.settings ?? parseOrgSettings(undefined),
+    });
 
     if (!repair) {
       return NextResponse.json(
@@ -247,7 +263,7 @@ export async function GET(
     const formHtml = `
       <div class="bg-white text-gray-900 font-sans p-6">
 
-        ${repairPaperLetterheadHtml()}
+        ${repairPaperLetterheadHtml(letterhead)}
 
         ${repairPaperTicketHeadingHtml(displayTicket, escapeHtml)}
 
@@ -387,4 +403,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+}, { permission: 'repair.view' });

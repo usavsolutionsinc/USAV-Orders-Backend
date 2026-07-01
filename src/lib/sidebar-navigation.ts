@@ -6,7 +6,7 @@ import {
   Barcode,
   BarChart3,
   Boxes,
-  Camera,
+  Images,
   DoorOpen,
   Check,
   Clipboard,
@@ -130,7 +130,7 @@ export const APP_SIDEBAR_NAV: SidebarNavItem[] = [
   // Data Wipe is temporarily absent from master nav — revisit when the station
   // UX is ready for general rollout. /wipe route + API remain live.
   { id: 'fba',               label: 'Amazon FBA',  href: '/fba',                icon: Boxes,           kind: 'main',    requires: 'fba.view' },
-  { id: 'ops-photos',        label: 'Photo library', href: '/ops/photos',       icon: Camera,          kind: 'main',    requires: 'photos.view' },
+  { id: 'ops-photos',        label: 'Media library', href: '/ops/photos',       icon: Images,          kind: 'main',    requires: 'photos.view' },
   { id: 'packer',            label: 'Packing',     href: '/packer',             icon: Box,             kind: 'station', requires: 'packing.view' },
   { id: 'support',           label: 'Support',     href: '/support',            icon: AlertCircle,     kind: 'bottom', requires: 'integrations.zendesk' },
   { id: 'studio',            label: 'Studio',      href: '/studio',             icon: Layers,          kind: 'bottom',  requires: 'studio.view' },

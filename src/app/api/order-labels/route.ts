@@ -1,34 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import { tenantQuery, withTenantTransaction } from '@/lib/tenancy/db';
 import { ApiError, errorResponse } from '@/lib/api';
 import { withAuth } from '@/lib/auth/withAuth';
-import { getOrganization } from '@/lib/tenancy/organizations';
-import { getActiveNasBaseUrl, getAllNasBaseUrls, getNasStorageTarget } from '@/lib/tenancy/settings';
 import type { OrgId } from '@/lib/tenancy/constants';
-import { resolveOperatorNasFolder } from '@/lib/nas-photos-server';
-import { createAuditLog } from '@/lib/audit-logs';
+import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
+import {
+  attachOutboundDocument,
+  deleteOutboundDocument,
+  listDocumentsForOrder,
+  OutboundDocumentConflictError,
+  OutboundDocumentNotFoundError,
+  OutboundDocumentValidationError,
+} from '@/lib/documents/outbound-documents';
+import { resolveOutboundNasTarget } from '@/lib/documents/resolve-nas-target';
+import type { OutboundDocument } from '@/lib/documents/types';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Outbound shipping LABELS for an order.
+ * DEPRECATED — thin wrapper over src/lib/documents/outbound-documents.ts
+ * (docs/outbound-documents-plan.md §8.2). Kept only so existing NAS
+ * browser-PUT label callers keep working; new code should call
+ * `/api/orders/[id]/documents` (documentType='shipping_label') directly,
+ * which also returns packing slips and dual-links ORDER + SHIPMENT.
  *
- * Labels are externally produced (ShipStation / carrier site), printed, then
- * dropped onto the order. The file lives on the office NAS — the BROWSER PUTs it
- * straight over WebDAV (same path as receiving photos; the Vercel server can't
- * reach the LAN), then POSTs the resulting URL here to link it. This route only
- * ever stores a URL, never bytes.
- *
- * Stored polymorphically on `documents`:
- *   entity_type='SHIPPING_LABEL', entity_id=orders.id,
- *   document_type='shipping_label',
- *   document_data={ url, carrier?, tracking?, uploadedBy }
- *
- * The first label attached to an order records an `orders.label.printed` audit
- * event (feeds the order timeline). Full CRUD: GET (list) / POST (attach) /
- * DELETE (unlink).
+ * Response shape is unchanged from the pre-migration route so no client
+ * update is required for this release. URL allowlist / order-ownership /
+ * dupe checks now live once in the domain layer instead of being
+ * hand-rolled per caller (see outbound-documents.ts).
  */
+
+const DEPRECATION_HEADERS = {
+  Deprecation: 'true',
+  Link: '</api/orders>; rel="successor-version"',
+} as const;
 
 interface LabelRow {
   id: number;
@@ -40,23 +45,15 @@ interface LabelRow {
   createdAt: string;
 }
 
-interface DbRow {
-  id: number;
-  entity_id: number;
-  document_data: Record<string, unknown>;
-  created_at: string;
-}
-
-function mapRow(row: DbRow): LabelRow {
-  const data = row.document_data || {};
+function toLabelRow(doc: OutboundDocument, orderId: number): LabelRow {
   return {
-    id: Number(row.id),
-    orderId: Number(row.entity_id),
-    url: String(data.url ?? ''),
-    carrier: (data.carrier as string | undefined) ?? null,
-    tracking: (data.tracking as string | undefined) ?? null,
-    uploadedBy: data.uploadedBy != null ? Number(data.uploadedBy) : null,
-    createdAt: row.created_at,
+    id: doc.id,
+    orderId,
+    url: doc.data.url,
+    carrier: doc.data.carrier ?? null,
+    tracking: doc.data.tracking ?? null,
+    uploadedBy: doc.data.uploadedBy ?? null,
+    createdAt: doc.createdAt,
   };
 }
 
@@ -67,48 +64,16 @@ export const GET = withAuth(async (req: NextRequest, ctx) => {
       throw ApiError.badRequest('Valid orderId is required');
     }
 
-    // `documents` has no organization_id; gate tenant access on the owning
-    // order instead. 404 (not 403) on a cross-org / missing order.
-    const owner = await tenantQuery(
-      ctx.organizationId as OrgId,
-      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-      [orderId, ctx.organizationId],
-    );
-    if (owner.rowCount === 0) throw ApiError.notFound('order', orderId);
+    // listDocumentsForOrder already scopes by organization_id, so a foreign
+    // orderId just returns an empty list — no separate ownership round trip.
+    const documents = await listDocumentsForOrder(ctx.organizationId as OrgId, orderId);
+    const labels = documents
+      .filter((d) => d.documentType === 'shipping_label')
+      .map((d) => toLabelRow(d, orderId));
 
-    const result = await pool.query<DbRow>(
-      `SELECT id, entity_id, document_data, created_at
-         FROM documents
-        WHERE entity_type = 'SHIPPING_LABEL' AND entity_id = $1
-        ORDER BY created_at DESC`,
-      [orderId],
-    );
+    const { nasBaseUrl, nasFolder } = await resolveOutboundNasTarget(ctx.organizationId as OrgId, ctx.staffId);
 
-    // Surface the NAS base + outbound label folder so the client can build the
-    // PUT URL. Falls back to the operator's station folder for older settings.
-    let nasBaseUrl = '';
-    let nasFolder = '';
-    try {
-      const orgId = ctx.organizationId as OrgId;
-      const [org, folder] = await Promise.all([
-        getOrganization(orgId),
-        resolveOperatorNasFolder(orgId, ctx.staffId),
-      ]);
-      nasFolder = org ? getNasStorageTarget(org.settings, 'shipping').folder || folder : folder;
-      nasBaseUrl = process.env.NAS_AGENT_URL
-        ? '/api/nas-target/shipping'
-        : org ? getActiveNasBaseUrl(org.settings) : '';
-    } catch {
-      nasBaseUrl = '';
-      nasFolder = '';
-    }
-    // Dev/test fallback so the NAS round-trip works without org settings.
-    if (!nasBaseUrl) {
-      const envBase = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
-      if (envBase && !envBase.startsWith('/')) nasBaseUrl = envBase;
-    }
-
-    return NextResponse.json({ labels: result.rows.map(mapRow), nasBaseUrl, nasFolder });
+    return NextResponse.json({ labels, nasBaseUrl, nasFolder }, { headers: DEPRECATION_HEADERS });
   } catch (error) {
     return errorResponse(error, 'GET /api/order-labels');
   }
@@ -123,85 +88,53 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     const labelUrl = String(body?.labelUrl || '').trim();
     const carrier = String(body?.carrier || '').trim() || null;
     const tracking = String(body?.tracking || '').trim() || null;
-    const uploadedBy = ctx.staffId; // server-trusted actor
+    const uploadedBy = ctx.staffId;
 
     if (!Number.isFinite(orderId) || orderId <= 0) {
       throw ApiError.badRequest('Valid orderId is required');
     }
     if (!labelUrl) throw ApiError.badRequest('labelUrl is required');
 
-    // `documents` has no organization_id; gate tenant access on the owning
-    // order before attaching a label. 404 (not 403) on a cross-org / missing order.
-    const owner = await tenantQuery(
-      ctx.organizationId as OrgId,
-      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-      [orderId, ctx.organizationId],
-    );
-    if (owner.rowCount === 0) throw ApiError.notFound('order', orderId);
-
-    // Origin allowlist — identical boundary to receiving photos: once a NAS base
-    // is known, the URL must point at it (or the same-origin dev proxy). Stays
-    // permissive only when nothing is configured.
-    const org = await getOrganization(ctx.organizationId as OrgId);
-    const allowedBases = org ? getAllNasBaseUrls(org.settings) : [];
-    const envBase = (process.env.NEXT_PUBLIC_NAS_PHOTOS_BASE_URL || '').replace(/\/+$/, '');
-    if (envBase && !envBase.startsWith('/')) allowedBases.push(envBase);
-    const isSameOrigin = labelUrl.startsWith('/');
-    const isAllowed =
-      allowedBases.length === 0 ||
-      isSameOrigin ||
-      allowedBases.some((base) => labelUrl === base || labelUrl.startsWith(`${base}/`));
-    if (!isAllowed) {
-      throw ApiError.badRequest('labelUrl must point at the configured NAS address');
-    }
-
-    // Idempotency: re-dropping the same label file is a no-op conflict (no unique
-    // index across JSONB, so check explicitly).
-    const dupe = await pool.query(
-      `SELECT 1 FROM documents
-        WHERE entity_type = 'SHIPPING_LABEL' AND entity_id = $1
-          AND document_data->>'url' = $2 LIMIT 1`,
-      [orderId, labelUrl],
-    );
-    if ((dupe.rowCount ?? 0) > 0) throw ApiError.conflict('Label already attached');
-
-    // First label on this order → record the governing "label printed" event.
-    const prior = await pool.query(
-      `SELECT 1 FROM documents
-        WHERE entity_type = 'SHIPPING_LABEL' AND entity_id = $1 LIMIT 1`,
-      [orderId],
-    );
-    const isFirstLabel = (prior.rowCount ?? 0) === 0;
-
-    const inserted = await pool.query<DbRow>(
-      `INSERT INTO documents (entity_type, entity_id, document_type, document_data, organization_id)
-       VALUES ('SHIPPING_LABEL', $1, 'shipping_label', $2::jsonb, $3::uuid)
-       RETURNING id, entity_id, document_data, created_at`,
-      [orderId, JSON.stringify({ url: labelUrl, carrier, tracking, uploadedBy }), ctx.organizationId],
-    );
-
-    if (isFirstLabel) {
-      await createAuditLog(pool, {
-        actorStaffId: uploadedBy,
-        source: 'api.order-labels',
-        action: 'orders.label.printed',
-        entityType: 'ORDER',
-        entityId: String(orderId),
-        afterData: { labelUrl, carrier, tracking },
-        metadata: { orderId },
+    let attached;
+    try {
+      attached = await attachOutboundDocument(ctx.organizationId as OrgId, {
+        orderId,
+        documentType: 'shipping_label',
+        url: labelUrl,
+        source: 'manual_upload',
+        carrier,
+        tracking,
+        uploadedBy,
       });
-      // First-time stamp (fast read projection; audit_logs is the SoT).
-      // `orders` is tenant-owned → run on the GUC path with an explicit org filter.
-      await withTenantTransaction(ctx.organizationId as OrgId, (client) =>
-        client.query(
-          `UPDATE orders SET label_printed_at = NOW(), label_printed_by = $1
-             WHERE id = $2 AND label_printed_at IS NULL AND organization_id = $3`,
-          [uploadedBy ?? null, orderId, ctx.organizationId],
-        ),
-      );
+    } catch (error) {
+      if (error instanceof OutboundDocumentNotFoundError) throw ApiError.notFound('order', orderId);
+      if (error instanceof OutboundDocumentConflictError) throw ApiError.conflict('Label already attached');
+      if (error instanceof OutboundDocumentValidationError) throw ApiError.badRequest(error.message);
+      throw error;
     }
 
-    return NextResponse.json({ success: true, label: mapRow(inserted.rows[0]) });
+    await recordAudit(pool, ctx, req, {
+      source: 'api.order-labels',
+      action: AUDIT_ACTION.ORDER_DOCUMENT_ATTACH,
+      entityType: AUDIT_ENTITY.ORDER,
+      entityId: orderId,
+      after: { documentId: attached.document.id, url: labelUrl, carrier, tracking },
+    });
+
+    if (attached.isFirstLabel) {
+      await recordAudit(pool, ctx, req, {
+        source: 'api.order-labels',
+        action: AUDIT_ACTION.LABEL_PRINTED,
+        entityType: AUDIT_ENTITY.ORDER,
+        entityId: orderId,
+        after: { labelUrl, carrier, tracking },
+      });
+    }
+
+    return NextResponse.json(
+      { success: true, label: toLabelRow(attached.document, orderId) },
+      { headers: DEPRECATION_HEADERS },
+    );
   } catch (error) {
     return errorResponse(error, 'POST /api/order-labels');
   }
@@ -212,27 +145,26 @@ export const DELETE = withAuth(async (req: NextRequest, ctx) => {
     const id = Number(new URL(req.url).searchParams.get('id'));
     if (!Number.isFinite(id) || id <= 0) throw ApiError.badRequest('Valid id is required');
 
-    const existing = await pool.query<{ entity_id: number }>(
-      `SELECT entity_id FROM documents WHERE id = $1 AND entity_type = 'SHIPPING_LABEL'`,
-      [id],
-    );
-    if (existing.rowCount === 0) throw ApiError.notFound('label', id);
+    let deleted;
+    try {
+      // This endpoint only ever unlinks labels — expectedDocumentType checks
+      // that inside the same transaction as the existence check, so a slip id
+      // (caller bug) 404s instead of a separate pre-check round trip.
+      deleted = await deleteOutboundDocument(ctx.organizationId as OrgId, id, { expectedDocumentType: 'shipping_label' });
+    } catch (error) {
+      if (error instanceof OutboundDocumentNotFoundError) throw ApiError.notFound('label', id);
+      throw error;
+    }
 
-    // `documents` has no organization_id; gate tenant access on the owning order
-    // (entity_id). 404 (not 403) on a cross-org label so existence stays opaque.
-    const orderId = Number(existing.rows[0].entity_id);
-    const owner = await tenantQuery(
-      ctx.organizationId as OrgId,
-      `SELECT 1 FROM orders WHERE id = $1 AND organization_id = $2 LIMIT 1`,
-      [orderId, ctx.organizationId],
-    );
-    if (owner.rowCount === 0) throw ApiError.notFound('label', id);
+    await recordAudit(pool, ctx, req, {
+      source: 'api.order-labels',
+      action: AUDIT_ACTION.ORDER_DOCUMENT_DELETE,
+      entityType: AUDIT_ENTITY.ORDER,
+      entityId: deleted.orderId ?? id,
+      before: { documentId: deleted.id },
+    });
 
-    // Unlink the DB row; the NAS file is removed browser-direct (deleteNasPhoto),
-    // mirroring how receiving photo deletes work.
-    await pool.query(`DELETE FROM documents WHERE id = $1`, [id]);
-
-    return NextResponse.json({ success: true, id });
+    return NextResponse.json({ success: true, id }, { headers: DEPRECATION_HEADERS });
   } catch (error) {
     return errorResponse(error, 'DELETE /api/order-labels');
   }

@@ -27,7 +27,7 @@ import { Download, ExternalLink, FileText } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TimelineSection } from '@/components/ui/TimelineSection';
-import { mergeJourney } from '@/lib/timeline/journey';
+import { mergeJourney, countRoundTrips } from '@/lib/timeline/journey';
 import { operationsJourneyFocusedQuery } from '@/lib/queries/operations-journey-queries';
 import {
   buildSerialJourneyHref,
@@ -94,6 +94,11 @@ export function SerialJourneySection({
   const loading = serial.length > 0 && query.isLoading;
   const hasItems = !loading && count > 0;
 
+  // Round-trip counts (§1 success metric) — see countRoundTrips' own doc for
+  // why this is two counts, not one combined "trips" figure.
+  const { shippedCount, returnedCount } = useMemo(() => countRoundTrips(items), [items]);
+  const hasRoundTrips = shippedCount > 0 || returnedCount > 0;
+
   // A sub-resource must degrade, not crash the host pane (Workbench rule): a
   // failed journey fetch renders a quiet inline error, never throws upward.
   if (serial.length > 0 && query.isError) {
@@ -138,6 +143,22 @@ export function SerialJourneySection({
           >
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
+        </HoverTooltip>
+      ) : null}
+      {hasRoundTrips ? (
+        <HoverTooltip label="Ship/return round trips for this serial">
+          <span className="flex items-center gap-1">
+            {shippedCount > 0 ? (
+              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                {shippedCount} shipped
+              </span>
+            ) : null}
+            {returnedCount > 0 ? (
+              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700 ring-1 ring-inset ring-amber-200">
+                {returnedCount} returned
+              </span>
+            ) : null}
+          </span>
         </HoverTooltip>
       ) : null}
       {hasItems ? (

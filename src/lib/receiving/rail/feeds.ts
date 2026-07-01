@@ -29,6 +29,11 @@ import {
   matchesQuery as matchesUnfoundQueue,
   type UnfoundQueueRow,
 } from './unfound-stub';
+import {
+  toDoneStubRow,
+  matchesDoneQuery,
+  type TriageDoneRow,
+} from './done-stub';
 import { RECEIVING_TABLE_LIMIT } from '@/lib/receiving/receiving-modes';
 
 export type ReceivingLinesView = 'activity' | 'scanned' | 'viewed' | 'unbox_opened';
@@ -299,6 +304,25 @@ export function buildUnfoundFetcher(rt: RailFetchRuntime): () => Promise<ApiResp
   };
 }
 
+/** Done-tab rows (`receiving.triage_complete = true`) mapped to stub lines. */
+export async function fetchDoneStubs(rt: RailFetchRuntime): Promise<ReceivingLineRow[]> {
+  const params = new URLSearchParams({ limit: '200' });
+  if (rt.query) params.set('q', rt.query);
+  const res = await fetch(`/api/receiving/triage/done?${params.toString()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('triage done fetch failed');
+  const data = (await res.json()) as { rows?: TriageDoneRow[] };
+  const q = (rt.query ?? '').trim().toLowerCase();
+  return (data.rows ?? []).filter((r) => matchesDoneQuery(r, q)).map(toDoneStubRow);
+}
+
+/** Done feed — cartons staged + saved for unbox, newest-completed first. */
+export function buildDoneFetcher(rt: RailFetchRuntime): () => Promise<ApiResponse> {
+  return async () => {
+    const rows = await fetchDoneStubs(rt);
+    return { success: true, receiving_lines: rows, total: rows.length };
+  };
+}
+
 const FEEDS = {
   /**
    * Unbox "Unboxed" rail — cartons scanned on the Unbox surface only
@@ -387,6 +411,17 @@ const FEEDS = {
     autoSelectFirstWhenEmpty: true,
     limit: 200,
     refreshEvents: TRIAGE_REFRESH,
+  },
+  /** Triage "Done" — cartons staged + saved for unbox (triage_complete = true). */
+  triageDone: {
+    segment: 'done',
+    eyebrowTitle: 'Done',
+    qty: 'unfound',
+    status: 'receiving',
+    buildFetcher: buildDoneFetcher,
+    autoSelectFirstWhenEmpty: true,
+    limit: 200,
+    refreshEvents: [...TRIAGE_REFRESH, 'receiving-triage-completed'],
   },
 } satisfies Record<string, ReceivingRailFeed>;
 

@@ -19,6 +19,7 @@ import { PhotoPeekFan, type PeekCard } from './PhotoPeekFan';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
 import { useAuth } from '@/contexts/AuthContext';
 import { receivingPhotosQueryKey, refreshReceivingPhotos } from '@/lib/queries/receiving-queries';
+import { unboxingPhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
 
 interface PhotoRow {
   id: number;
@@ -45,9 +46,12 @@ const DEMO_CARDS: PeekCard[] = [
 export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
   receivingId,
   staffId,
+  poRef,
 }: {
   receivingId: number;
   staffId: number;
+  /** PO# for the info panel source ref + library deep link. */
+  poRef?: string | null;
 }) {
   const { user } = useAuth();
   const orgId = user?.organizationId;
@@ -84,8 +88,13 @@ export const ReceivingPhotoPeek = memo(function ReceivingPhotoPeek({
         .filter((p) => !!p.photoUrl?.trim())
         .slice()
         .sort((a, b) => (Date.parse(b.createdAt) || b.id) - (Date.parse(a.createdAt) || a.id))
-        .map((p) => ({ id: String(p.id), imgUrl: p.photoUrl, alt: p.caption || `Carton photo ${p.id}` })),
-    [data],
+        .map((p) => ({
+          id: String(p.id),
+          imgUrl: p.photoUrl,
+          alt: p.caption || `Carton photo ${p.id}`,
+          meta: unboxingPhotoMeta({ poRef, caption: p.caption, createdAt: p.createdAt }),
+        })),
+    [data, poRef],
   );
 
   const [demoShown, setDemoShown] = useState(2);

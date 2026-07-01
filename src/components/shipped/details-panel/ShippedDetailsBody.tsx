@@ -11,7 +11,7 @@ import type { DetailsStackDurationData, ShippedActiveInput } from '@/components/
 import { ShippedDetailsPanelContent, type ShippedActiveSection } from '@/components/shipped/ShippedDetailsPanelContent';
 import { OrderTimelineSection } from '@/components/shipped/OrderTimelineSection';
 import { SerialJourneySection } from '@/components/serial/SerialJourneySection';
-import { OrderLabelsSection } from '@/components/shipped/OrderLabelsSection';
+import { OrderDocumentsSection } from '@/components/shipped/OrderDocumentsSection';
 import { ShippedNotesComposer } from './ShippedNotesComposer';
 import { DeleteOrderControl } from '@/components/shipped/stacks/DeleteOrderControl';
 
@@ -113,7 +113,17 @@ export function ShippedDetailsBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
-      {activeSection === 'timeline' && shipped?.id ? (
+      {activeSection === 'documents' && shipped?.id ? (
+        // Documents tab — shipping label + packing slip tray, own tab on
+        // labels/fulfillment/dashboard/staged (docs/outbound-documents-plan.md §9.1/9.2).
+        <div className="flex min-h-full flex-col pb-8 pt-4">
+          <OrderDocumentsSection
+            orderId={Number(shipped.id)}
+            orderRef={shipped.order_id || `order-${shipped.id}`}
+            readOnly={!isLabelsPanel}
+          />
+        </div>
+      ) : activeSection === 'timeline' && shipped?.id ? (
         // Timeline tab — swaps the stack body to the order activity trail
         // (label → tech verdict → packed → scanned out), same pattern as the
         // Customer tab. Only reachable in contexts where the tab is shown.
@@ -305,13 +315,6 @@ export function ShippedDetailsBody({
           )}
         </div>
       )}
-
-      {/* Shipping-label drop-zone is UNSHIPPED-only (`queue`): a shipped order
-          has already left with its label printed, so the shipped/dashboard
-          stacks don't repeat it (the label still lives under its own tab). */}
-      {isLabelsPanel && shipped?.id && activeSection !== 'timeline' ? (
-        <OrderLabelsSection orderId={Number(shipped.id)} orderRef={shipped.order_id || `order-${shipped.id}`} />
-      ) : null}
     </div>
   );
 }

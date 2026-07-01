@@ -32,6 +32,8 @@ export interface ShippedDetailsHeaderProps {
   onMoveDown: () => void;
   hasReturnContent: boolean;
   showCustomerTab: boolean;
+  /** Outbound documents (label + slip) get their own tab on labels/fulfillment/staged contexts. */
+  showDocumentsTab: boolean;
   activeSection: ShippedActiveSection;
   onSectionChange: (section: ShippedActiveSection) => void;
 }
@@ -55,6 +57,7 @@ export function ShippedDetailsHeader({
   onMoveDown,
   hasReturnContent,
   showCustomerTab,
+  showDocumentsTab,
   activeSection,
   onSectionChange,
 }: ShippedDetailsHeaderProps) {
@@ -115,6 +118,7 @@ export function ShippedDetailsHeader({
               ...(hasReturnContent ? [{ value: 'return' as const, label: 'Return' }] : []),
               { value: 'shipping' as const, label: 'Shipping' },
               { value: 'product' as const, label: 'Product' },
+              ...(showDocumentsTab ? [{ value: 'documents' as const, label: 'Documents' }] : []),
               { value: 'timeline' as const, label: 'Timeline' },
               ...(showCustomerTab ? [{ value: 'customer' as const, label: 'Customer' }] : []),
             ]}

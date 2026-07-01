@@ -7,6 +7,7 @@ import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
 import { emitAiChatNew, emitAiChatPrompt } from '@/components/ai/ai-chat-events';
+import { PRODUCT_NAME_AI } from '@/lib/branding/constants';
 
 const CAPABILITIES = [
   { icon: PackageCheck, title: 'Orders & Shipping', detail: 'Shipped counts, tracking status, packer/tester attribution' },
@@ -58,7 +59,7 @@ export function AiChatSidebarPanel() {
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
             <Sparkles className="h-4 w-4" />
           </div>
-          <p className="text-base font-semibold tracking-tight text-gray-900">USAV Assistant</p>
+          <p className="text-base font-semibold tracking-tight text-gray-900">{PRODUCT_NAME_AI}</p>
         </div>
         <p className="mt-2 text-caption leading-5 text-gray-600">
           Ask about the warehouse in plain English. The assistant streams its reply in the

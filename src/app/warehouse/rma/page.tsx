@@ -7,14 +7,19 @@
  * authorization (customer return or vendor RTV), and moves each one through
  * AUTHORIZED → RECEIVED → DISPOSITIONED → CLOSED.
  *
- * Per-unit dispositions live on a future detail page; this index covers the
- * lifecycle transitions a supervisor needs at-a-glance.
+ * Per-unit dispositions live on the disposition station (/warehouse/rma/
+ * disposition, linked below) — a scan-driven bench, not a row action here:
+ * this index covers the lifecycle transitions a supervisor needs at-a-glance.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { NetworkChip } from '@/components/mobile/NetworkChip';
 import { Button } from '@/design-system/primitives';
+import { Barcode, ChevronRight, Clock } from '@/components/Icons';
 import { rmaStatusBadgeClass } from '@/lib/rma-status';
+import { conditionLabel } from '@/lib/conditions';
 
 type RmaDirection = 'INBOUND_FROM_CUSTOMER' | 'OUTBOUND_TO_VENDOR';
 type RmaStatus =
@@ -45,12 +50,22 @@ const DIRECTION_LABEL: Record<RmaDirection, string> = {
 
 type DirectionFilter = 'all' | RmaDirection;
 
+interface DispositionBacklogRow {
+  serialUnitId: number;
+  serialNumber: string;
+  sku: string | null;
+  conditionGrade: string | null;
+  currentStatus: string;
+  updatedAt: string;
+}
+
 export default function RmaPage() {
   const [rmas, setRmas] = useState<RmaRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [filter, setFilter] = useState<DirectionFilter>('all');
+  const [backlog, setBacklog] = useState<DispositionBacklogRow[] | null>(null);
 
   const fetchRmas = useCallback(async () => {
     setError(null);
@@ -65,9 +80,22 @@ export default function RmaPage() {
     }
   }, []);
 
+  const fetchBacklog = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rma/backlog?limit=25', { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setBacklog(data.backlog);
+    } catch {
+      // Non-critical sub-resource — degrade to hidden, never fail the whole page.
+      setBacklog(null);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchRmas();
-  }, [fetchRmas]);
+    void fetchBacklog();
+  }, [fetchRmas, fetchBacklog]);
 
   const filtered = useMemo(() => {
     if (!rmas) return [];
@@ -115,6 +143,12 @@ export default function RmaPage() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <NetworkChip />
+          <Link href="/warehouse/rma/disposition">
+            <Button variant="secondary" size="sm">
+              <Barcode className="h-3.5 w-3.5" />
+              Disposition station
+            </Button>
+          </Link>
           <Button variant="secondary" size="sm" onClick={() => void fetchRmas()}>
             Refresh
           </Button>
@@ -131,6 +165,8 @@ export default function RmaPage() {
           {error}
         </div>
       )}
+
+      {backlog != null && backlog.length > 0 && <DispositionBacklogSection rows={backlog} />}
 
       <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-white p-1 text-xs font-semibold">
         {(['all', 'INBOUND_FROM_CUSTOMER', 'OUTBOUND_TO_VENDOR'] as const).map((opt) => (
@@ -322,6 +358,57 @@ function CreateRmaForm({ onCreated, onError }: CreateFormProps) {
         </Button>
       </div>
     </form>
+  );
+}
+
+// ─── Disposition backlog ─────────────────────────────────────────────────────
+
+/**
+ * Worklist of RETURNED units that have never received a disposition — the
+ * Workbench half of the returns-unification Stage 4 pairing: this list is
+ * pointer-driven (browse, pick), each row deep-links into the scan-driven
+ * Disposition Station (`?serial=`) rather than growing an edit affordance
+ * here, so the two archetypes stay split per region instead of blending.
+ */
+function DispositionBacklogSection({ rows }: { rows: DispositionBacklogRow[] }) {
+  return (
+    <section className="mb-4 overflow-hidden rounded-3xl border border-amber-200 bg-amber-50/60">
+      <div className="flex items-center justify-between gap-2 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Clock className="h-3.5 w-3.5 text-amber-700" />
+          <p className="text-xs font-black uppercase tracking-widest text-amber-800">
+            Disposition backlog · {rows.length}
+          </p>
+        </div>
+        <p className="text-xs text-amber-700/80">Returned, never dispositioned — oldest first</p>
+      </div>
+      <ul className="divide-y divide-amber-100 bg-white">
+        {rows.map((row) => (
+          <li key={row.serialUnitId}>
+            <Link
+              href={`/warehouse/rma/disposition?serial=${encodeURIComponent(row.serialNumber)}`}
+              className="flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-amber-50/50"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate font-mono text-sm font-bold text-slate-900">{row.serialNumber}</span>
+                  {row.conditionGrade && (
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest text-slate-600">
+                      {conditionLabel(row.conditionGrade, 'compact')}
+                    </span>
+                  )}
+                </div>
+                {row.sku && <p className="truncate font-mono text-xs text-slate-400">{row.sku}</p>}
+              </div>
+              <div className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+                <span>{formatDistanceToNowStrict(new Date(row.updatedAt), { addSuffix: true })}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

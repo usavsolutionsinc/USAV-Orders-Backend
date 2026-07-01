@@ -87,6 +87,28 @@ function zendeskTicketNumberForLabel(raw: string | null | undefined): string | n
 }
 
 /**
+ * Ticket digits for the label bottom-right (corner mode "ticket"). Uses the
+ * Zendesk/provider id (#9395), not the internal support_tickets registry id.
+ */
+export function labelCornerTicketDigits(args: {
+  providerTicketId?: number | null;
+  externalTicketId?: string | null;
+  zendeskField?: string | null;
+}): string {
+  if (
+    args.providerTicketId != null &&
+    Number.isFinite(args.providerTicketId) &&
+    args.providerTicketId > 0
+  ) {
+    return String(args.providerTicketId);
+  }
+  const fromRegistry = zendeskTicketNumberForLabel(args.externalTicketId);
+  if (fromRegistry) return fromRegistry;
+  const fromField = zendeskTicketNumberForLabel(args.zendeskField);
+  return fromField ?? '';
+}
+
+/**
  * Bottom‑right carton label preference order:
  *   1. `#ticket` for a numeric Zendesk id
  *   2. Last‑4 of the PO# / scanValue (matched cartons)

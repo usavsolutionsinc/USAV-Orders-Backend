@@ -5,6 +5,7 @@ import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
 import { LightboxPortal } from './LightboxPortal';
 import { toGalleryInputs } from './photo-grid-format';
+import { photoGroupKey, UNLINKED_PHOTO_GROUP_KEY } from '@/lib/photos/display-names';
 
 /**
  * The folders view owns its own per-folder viewer; the flat views (list, grid,
@@ -27,8 +28,11 @@ export function usePhotoGridLightbox({
     if (openPhotoId == null) return null;
     const clicked = photos.find((p) => p.id === openPhotoId);
     if (!clicked) return null;
-    const ref = clicked.poRef?.trim();
-    const group = ref ? photos.filter((p) => p.poRef?.trim() === ref) : [clicked];
+    const groupKey = photoGroupKey(clicked, sourceScope);
+    const group =
+      groupKey === UNLINKED_PHOTO_GROUP_KEY
+        ? [clicked]
+        : photos.filter((p) => photoGroupKey(p, sourceScope) === groupKey);
     const sorted = [...group].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return {
       inputs: toGalleryInputs(sorted, sourceScope),

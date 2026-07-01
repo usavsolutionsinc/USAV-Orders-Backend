@@ -36,13 +36,25 @@ interface WorkspaceNotesCardProps {
 export function WorkspaceNotesCard({ row, c, onActionFeedback }: WorkspaceNotesCardProps) {
   return (
     <LineNotesTabbedCard
-      notes={c.notes}
+      internalNotes={c.notes}
+      labelNotes={c.labelNotes}
       overallZohoNotes={row.receiving_zoho_notes ?? null}
       lineId={row.id}
       sku={row.sku}
-      onChange={c.setNotes}
-      onBlur={() => {
+      skuTitle={row.zoho_item_title || row.item_name || null}
+      unitPrice={row.unit_price ?? null}
+      zendeskTicket={c.zendeskTrimmed || row.zendesk_ticket || null}
+      zendeskProviderTicketId={c.providerTicketId}
+      zendeskTicketSubject={c.supportTicket?.subject ?? null}
+      previousLineNotes={c.prevLineNotes}
+      onInternalNotesChange={c.setNotes}
+      onInternalNotesBlur={() => {
         if (c.notes !== (row.notes || '')) void c.patch({ notes: c.notes });
+      }}
+      onLabelNotesChange={c.setLabelNotes}
+      onSaveLabelToInternal={() => {
+        c.setNotes(c.labelNotes);
+        if (c.labelNotes !== (row.notes || '')) void c.patch({ notes: c.labelNotes });
       }}
       onSaveOverallNote={async (text) => {
         if (row.receiving_id == null) return;

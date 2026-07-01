@@ -7,7 +7,8 @@ import { Clock, History, RefreshCw } from '@/components/Icons';
 import { Button, EmptyState, IconButton } from '@/design-system/primitives';
 import { SkeletonList } from '@/design-system/components/Skeletons';
 import { SearchBar } from '@/components/ui/SearchBar';
-import { SidebarNavOverlaySlider } from '@/components/sidebar/SidebarNavOverlaySlider';
+import { SIDEBAR_GUTTER } from '@/components/layout/header-shell';
+import { HorizontalButtonSlider } from '@/components/ui/HorizontalButtonSlider';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { TICKET_STATUS_ITEMS } from '@/components/sidebar/support/support-sidebar-shared';
 import {
@@ -102,6 +103,18 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
         />
       </div>
 
+      <div className={cn(SIDEBAR_GUTTER, 'shrink-0 overflow-visible pt-1')}>
+        <HorizontalButtonSlider
+          className="w-full"
+          items={TICKET_STATUS_ITEMS}
+          value={status}
+          onChange={(id) => setStatus(id as StatusFilter)}
+          variant="nav"
+          dense
+          aria-label="Ticket status"
+        />
+      </div>
+
       <div className="flex shrink-0 items-center justify-between px-2 py-2">
         <ZendeskSelect value={sort} options={SORT_OPTIONS} onChange={(v) => setSort(v as SortKey)} />
         <HoverTooltip label="Refresh tickets" asChild>
@@ -114,15 +127,9 @@ export function SupportTicketQueue({ modeToggle = null }: { modeToggle?: ReactNo
         </HoverTooltip>
       </div>
 
-      {/* Body — mode + status pills float over the scrolling ticket list. */}
+      {/* Body — mode toggle floats over the scrolling ticket list when master nav is off. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {modeToggle}
-        <SidebarNavOverlaySlider
-          items={TICKET_STATUS_ITEMS}
-          value={status}
-          onChange={(id) => setStatus(id as StatusFilter)}
-          aria-label="Ticket status"
-        />
         {showRecents ? (
           <div className="border-b border-gray-100 pb-1.5">
             <p className="flex items-center gap-1 px-3 pb-1 pt-2 text-micro font-black uppercase tracking-widest text-gray-400">

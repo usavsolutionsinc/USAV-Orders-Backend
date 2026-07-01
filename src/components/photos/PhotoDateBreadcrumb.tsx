@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 import { Calendar, ChevronRight } from '@/components/Icons';
 import { describePhotoDatePath } from '@/lib/photos/date-hierarchy';
 import type { PhotoLibraryFilterState } from '@/lib/photos/library-filter-state';
+import { claimsTicketLabel } from '@/lib/photos/display-names';
 import { cn } from '@/utils/_cn';
 
 interface PhotoDateBreadcrumbProps {
@@ -13,6 +14,14 @@ interface PhotoDateBreadcrumbProps {
   today?: string;
   /** Most recent capture day (PST `YYYY-MM-DD`) across the loaded photos. */
   mostRecentDay?: string;
+  /**
+   * Active folder leaf (e.g. `PO 14-14825-46707`) — appended after the day
+   * crumb. Prefer this over inferring from `filters.poRef` so scope-aware labels
+   * (`Order …`, `Pickup …`) match the folder header.
+   */
+  folderLeafLabel?: string;
+  /** @deprecated Leaf is shown in the path by default; pass `folderLeafLabel` instead. */
+  hideFolderLeaf?: boolean;
 }
 
 /** `Mon, Jun 23` from a `YYYY-MM-DD` PST date string. */
@@ -22,14 +31,15 @@ function dayChipLabel(ymd: string): string {
 }
 
 /**
- * The library's date breadcrumb, pinned at the bottom of the right panel. When a
+ * The library's date breadcrumb in the right-panel context bar. When a
  * date is active it renders the simplified Year → Month → Week → Day path; with
  * no date it surfaces two quick jumps — **Today** and the **most recent** capture
  * day (both keyed off `created_at`, never the most-recent PO or photo type). The
  * root "All dates" crumb clears the filter; each path crumb widens to its span.
  *
- * When a PO folder is open (`filters.poRef`) the PO# is appended as the active
- * leaf, and every date crumb above it stays clickable — widening a date also
+ * When a PO folder is open the folder name is appended as the active leaf after
+ * the day (`folderLeafLabel`, or derived from `filters.poRef` / `ticketId`).
+ * Every date crumb above a folder leaf stays clickable — widening a date also
  * clears the PO (the parent's `onNavigate` resets `poRef`).
  */
 export function PhotoDateBreadcrumb({
@@ -37,19 +47,23 @@ export function PhotoDateBreadcrumb({
   onNavigate,
   today,
   mostRecentDay,
+  folderLeafLabel,
+  hideFolderLeaf = false,
 }: PhotoDateBreadcrumbProps) {
   const dateCrumbs = describePhotoDatePath(filters);
   const poRef = filters.poRef?.trim() || null;
+  const ticketId = filters.ticketId?.trim() || null;
+  const resolvedFolderLeaf =
+    folderLeafLabel?.trim() ||
+    (ticketId ? claimsTicketLabel(ticketId) : poRef ? `PO ${poRef}` : null);
+  const showFolderLeaf = resolvedFolderLeaf !== null && !hideFolderLeaf;
   const hasDate = dateCrumbs.length > 0;
-  // "All dates" can reset whenever there's a date OR a PO drill to clear.
-  const canReset = hasDate || poRef !== null;
-  // With a PO folder open, the PO# is the active leaf — so the date crumbs above it
-  // are no longer the current depth and become clickable widen-targets again.
-  const dateCrumbsRendered = poRef
+  // "All dates" can reset whenever there's a date OR a folder drill to clear.
+  const canReset = hasDate || showFolderLeaf;
+  const dateCrumbsRendered = showFolderLeaf
     ? dateCrumbs.map((crumb) => ({ ...crumb, current: false }))
     : dateCrumbs;
-  // Today / most-recent quick jumps only when there's nothing to path through.
-  const showQuickChips = !hasDate && !poRef;
+  const showQuickChips = !hasDate && !showFolderLeaf;
   // The most-recent chip is redundant when it equals today.
   const showRecent = Boolean(mostRecentDay && mostRecentDay !== today);
 
@@ -64,7 +78,8 @@ export function PhotoDateBreadcrumb({
         onClick={() => onNavigate({ dateFrom: undefined, dateTo: undefined })}
         className={cn(
           // ds-raw-button: breadcrumb nav crumb (disabled = current depth) — not a DS Button
-          'ds-raw-button flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 font-bold transition',
+          // pl-0: align calendar icon with the folder icon in PhotoLibraryHeader (same px-4 gutter).
+          'ds-raw-button flex shrink-0 items-center gap-1 rounded-md py-1 pl-0 pr-1.5 font-bold transition',
           canReset ? 'text-gray-500 hover:bg-gray-50 hover:text-gray-900' : 'text-gray-900',
         )}
       >
@@ -92,12 +107,11 @@ export function PhotoDateBreadcrumb({
         </Fragment>
       ))}
 
-      {poRef ? (
-        <Fragment key="po">
+      {showFolderLeaf ? (
+        <Fragment key="folder-leaf">
           <ChevronRight className="h-3 w-3 shrink-0 text-gray-300" />
-          {/* The open PO is the active leaf — bold, non-interactive (you're here). */}
           <span className="shrink-0 truncate rounded-md px-1.5 py-1 font-bold text-gray-900">
-            PO {poRef}
+            {resolvedFolderLeaf}
           </span>
         </Fragment>
       ) : null}

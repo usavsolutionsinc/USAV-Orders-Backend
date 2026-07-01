@@ -67,8 +67,8 @@ export function useSupportReply() {
       await qc.cancelQueries({ queryKey: zendeskKeys.comments(ticketId) });
       const prev = qc.getQueryData<CommentsResult>(zendeskKeys.comments(ticketId));
       const tempId = -Date.now();
-      // `__ours` forces right-side placement regardless of agent-id mapping; the
-      // thread treats it as one of our messages until the server row replaces it.
+      // `__ours` marks our optimistic echo for bubble styling until the server
+      // row replaces it.
       const optimistic = {
         id: tempId,
         author_id: 0,

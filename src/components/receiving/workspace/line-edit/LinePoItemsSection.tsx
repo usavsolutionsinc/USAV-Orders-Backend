@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * PO-items section of the LineEditPanel. Unmatched cartons render the Ecwid
- * add-item / link-repair {@link UnmatchedItemsSection}; matched cartons render
- * the canonical {@link PoLinesAccordion} with the active row's integrated
- * condition + serial-scan slot. Same slot either way, so the rest of the
- * workspace is identical across the two flows. Extracted from LineEditPanel;
- * behaviour is unchanged.
+ * PO-items section of the LineEditPanel. Unmatched cartons, returns, and
+ * sales-order-linked cartons render the Ecwid add-item / serial-scan
+ * {@link UnmatchedItemsSection}; real Zoho PO cartons render
+ * {@link PoLinesAccordion}. Lineless real PO cartons fall back to the unmatched
+ * surface so the workspace never paints a blank card.
  */
 
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PoLinesAccordion } from '../PoLinesAccordion';
 import { UnmatchedItemsSection } from '../UnmatchedItemsSection';
 import { markConditionSet } from '../ReceivingProgressStepper';
@@ -17,6 +18,16 @@ import { ActiveLineConditionSerial } from './ActiveLineConditionSerial';
 import type { ReceivingLineRow } from '@/components/station/ReceivingLinesTable';
 import type { InlineActionFeedbackPayload } from '../InlineActionFeedbackCard';
 import type { UnboxLineController } from './unbox-line-controller';
+import {
+  dispatchLineUpdated,
+  dispatchSelectLine,
+} from '@/components/station/receiving-lines-table-helpers';
+import { invalidateReceivingFeeds, receivingSiblingsQueryKey } from '@/lib/queries/receiving-queries';
+import {
+  shouldUsePoAccordion,
+  shouldUseUnmatchedItemsSurface,
+} from '@/lib/receiving/intake-items-routing';
+import { isReturnIntake } from '@/lib/receiving/triage-intake-kind';
 
 interface LinePoItemsSectionProps {
   row: ReceivingLineRow;
@@ -30,14 +41,13 @@ interface LinePoItemsSectionProps {
   editLines: boolean;
   onItemDescFeedback?: (feedback: InlineActionFeedbackPayload | null) => void;
   onItemDescSaved?: (lineId: number, zohoNotes: string | null) => void;
-  /**
-   * Render bare (no own card chrome / pencil) — set when composed inside the
-   * unified {@link POUnboxingSection} wrapper. Forwarded to the matched
-   * accordion and the unmatched section. Defaults to the standalone card.
-   */
   embedded?: boolean;
-  /** Embedded-only: node rendered on the "PO items · N" header row (the wrapper's pencil). */
   headerRight?: React.ReactNode;
+}
+
+interface SiblingsResponse {
+  success: boolean;
+  receiving_lines: ReceivingLineRow[];
 }
 
 export function LinePoItemsSection({
@@ -53,34 +63,60 @@ export function LinePoItemsSection({
   headerRight,
 }: LinePoItemsSectionProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  if (row.receiving_id == null) return null;
+  const receivingId = row.receiving_id;
+  const wantsPoAccordion = shouldUsePoAccordion(row);
+  const queryKey = useMemo(
+    () => receivingSiblingsQueryKey(receivingId ?? 0),
+    [receivingId],
+  );
 
-  if (row.receiving_source === 'unmatched') {
+  const { data, isPending } = useQuery<SiblingsResponse>({
+    queryKey,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/receiving-lines?receiving_id=${receivingId}&include=serials`,
+      );
+      if (!res.ok) throw new Error('Failed to fetch siblings');
+      return res.json();
+    },
+    enabled: wantsPoAccordion && receivingId != null,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (receivingId == null) return null;
+
+  const siblingCount = data?.receiving_lines?.length;
+  const linelessRealPo =
+    wantsPoAccordion && !isPending && (siblingCount === undefined ? false : siblingCount === 0);
+  const useUnmatchedSurface =
+    shouldUseUnmatchedItemsSurface(row) || linelessRealPo;
+
+  const openInUnboxHandler = openInUnbox
+    ? () => {
+        const params = new URLSearchParams({ recvId: String(receivingId) });
+        if (row.id > 0) params.set('lineId', String(row.id));
+        router.push(`/receiving?${params.toString()}`);
+      }
+    : undefined;
+
+  const receivingTypeHint = isReturnIntake(row) ? 'RETURN' : c.receivingType;
+
+  if (useUnmatchedSurface) {
     return (
       <UnmatchedItemsSection
-        receivingId={row.receiving_id}
+        receivingId={receivingId}
         staffId={staffId}
         embedded={embedded}
         headerRight={headerRight}
         showSerialScan={serialScan}
-        // Triage identifies; unboxing (serials, photos, receive) happens in unbox
-        // mode — this jumps there with the carton pre-opened via the recvId deep link.
-        onOpenInUnbox={
-          openInUnbox
-            ? () => {
-                const params = new URLSearchParams({ recvId: String(row.receiving_id) });
-                if (row.id > 0) params.set('lineId', String(row.id));
-                router.push(`/receiving?${params.toString()}`);
-              }
-            : undefined
-        }
+        onOpenInUnbox={openInUnboxHandler}
         sourcePlatformHint={c.sourcePlatform || undefined}
-        receivingTypeHint={c.receivingType}
+        receivingTypeHint={receivingTypeHint}
         listingUrlHint={c.listingLink || undefined}
         onFileReturnClaim={c.handleFileReturnClaim}
-        // Mirror the picked grade into `cond` so the label preview/print tracks
-        // it. The matched-carton flow does this through ActiveLineConditionSerial.
         onActiveConditionChange={(next) => {
           c.setCond(next);
           c.setUnitLabelCondition(next);
@@ -92,17 +128,53 @@ export function LinePoItemsSection({
           c.setSerialAbsent(absent);
           c.setSerialAbsentReason(reason);
         }}
+        linkedOrderHint={{
+          source: row.receiving_source ?? null,
+          zoho_purchaseorder_id: row.zoho_purchaseorder_id ?? null,
+          zoho_purchaseorder_number: row.zoho_purchaseorder_number ?? null,
+        }}
+        activeLineId={row.id}
+        onUnlinked={() => {
+          invalidateReceivingFeeds(queryClient);
+        }}
+        onLinked={({ carton, line }) => {
+          const cartonPatch = {
+            zoho_purchaseorder_number: carton.zoho_purchaseorder_number,
+            receiving_source: carton.source ?? 'zoho_po',
+            source_platform: carton.source_platform ?? row.source_platform,
+            source_platform_pill: carton.source_platform ?? row.source_platform_pill,
+            carton_intake_type: carton.intake_type ?? row.carton_intake_type,
+            receiving_type: carton.intake_type ?? row.receiving_type,
+          };
+          if (line && line.id > 0 && row.id <= 0) {
+            const realRow: ReceivingLineRow = {
+              ...row,
+              ...cartonPatch,
+              id: line.id,
+              sku: line.sku ?? row.sku,
+              item_name: line.item_name ?? row.item_name,
+              quantity_expected: line.quantity_expected,
+              quantity_received: line.quantity_received,
+              condition_grade: line.condition_grade ?? row.condition_grade,
+              receiving_listing_url: line.listing_url ?? row.receiving_listing_url,
+              source_platform_pill: line.source_platform_pill ?? cartonPatch.source_platform_pill,
+            };
+            dispatchSelectLine(realRow);
+          } else if (row.id > 0) {
+            dispatchLineUpdated({ id: row.id, ...cartonPatch });
+          }
+          invalidateReceivingFeeds(queryClient);
+        }}
       />
     );
   }
 
   return (
     <PoLinesAccordion
-      receivingId={row.receiving_id}
+      receivingId={receivingId}
       activeLineId={row.id}
       embedded={embedded}
       headerRight={headerRight}
-      // Paint the clicked line instantly on a cold open while siblings fetch.
       placeholderActiveRow={row}
       readOnly={!editLines}
       onItemDescFeedback={onItemDescFeedback}
@@ -110,9 +182,6 @@ export function LinePoItemsSection({
       activeConditionOverride={c.isMultiQtyLine ? (c.unitLabelCondition ?? c.cond) : c.cond}
       activeSerialActions={{
         editingSerialId: c.headerSerialEdit?.id ?? null,
-        // Only called for the active row — the accordion routes a non-active
-        // row's Edit through the handoff store + line switch, which this panel
-        // consumes on (re)mount.
         onEdit: (s) => c.setHeaderSerialEdit(s),
         onDelete: (s, lineId) => {
           if (s.id == null) return;
@@ -125,7 +194,7 @@ export function LinePoItemsSection({
         <ActiveLineConditionSerial
           serials={serials}
           lineId={row.id}
-          receivingId={row.receiving_id ?? null}
+          receivingId={receivingId}
           quantityExpected={row.quantity_expected ?? null}
           cond={c.cond}
           receivingType={c.receivingType}

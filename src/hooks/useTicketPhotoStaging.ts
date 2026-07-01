@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { uploadPhotoClient } from '@/lib/photos/upload-client';
+import { uploadPhotoClient, linkPhotoClient } from '@/lib/photos/upload-client';
 import { toast } from '@/lib/toast';
 
 /**
@@ -60,6 +60,45 @@ export function useTicketPhotoStaging(ticketId: number) {
     [ticketId],
   );
 
+  /** Link existing library photos to this ticket and stage them for the next reply. */
+  const addLibraryPhotos = useCallback(
+    (photos: { id: number; url: string; thumbUrl: string; caption?: string | null }[]) => {
+      for (const photo of photos) {
+        const tempId = `lib-${photo.id}`;
+        setStaged((prev) => {
+          if (prev.some((s) => s.photoId === photo.id)) return prev;
+          return [
+            ...prev,
+            {
+              tempId,
+              name: photo.caption?.trim() || `Photo ${photo.id}`,
+              previewUrl: photo.thumbUrl,
+              status: 'uploading' as const,
+              photoId: photo.id,
+              url: photo.url,
+              thumbUrl: photo.thumbUrl,
+            },
+          ];
+        });
+        void linkPhotoClient({
+          photoId: photo.id,
+          entityType: 'ZENDESK_TICKET',
+          entityId: ticketId,
+          linkRole: 'claim_evidence',
+        })
+          .then(() => {
+            setStaged((prev) => prev.map((s) => (s.tempId === tempId ? { ...s, status: 'done' } : s)));
+          })
+          .catch((err) => {
+            // Already linked to this ticket — still stage for Zendesk attach.
+            console.warn('[ticket-photo-staging] linkPhoto failed (may already be linked)', err);
+            setStaged((prev) => prev.map((s) => (s.tempId === tempId ? { ...s, status: 'done' } : s)));
+          });
+      }
+    },
+    [ticketId],
+  );
+
   const remove = useCallback((tempId: string) => {
     setStaged((prev) => {
       const target = prev.find((s) => s.tempId === tempId);
@@ -77,7 +116,7 @@ export function useTicketPhotoStaging(ticketId: number) {
 
   const uploading = staged.some((s) => s.status === 'uploading');
 
-  return { staged, addFiles, remove, clear, uploading };
+  return { staged, addFiles, addLibraryPhotos, remove, clear, uploading };
 }
 
 export type TicketPhotoStaging = ReturnType<typeof useTicketPhotoStaging>;

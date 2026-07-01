@@ -1,5 +1,7 @@
 /** HTML fragments shared with `/api/repair-service/print/[id]`. */
 
+import type { OrgLetterhead } from '@/lib/branding/letterhead';
+
 /** Matches `MM/DD/YYYY` width for drop-off / pick-up alignment on blank forms. */
 export const REPAIR_PICKUP_DATE_PLACEHOLDER = 'Date: __/__/____';
 
@@ -29,13 +31,28 @@ export function repairSignatureRowHtml(options: {
           </div>`;
 }
 
-export function repairPaperLetterheadHtml(): string {
+function escapeLetterheadHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function repairPaperLetterheadHtml(letterhead: OrgLetterhead): string {
+  const lines = [letterhead.addressLine1, letterhead.addressLine2]
+    .filter(Boolean)
+    .map((line) => `<p class="text-sm">${escapeLetterheadHtml(line)}</p>`)
+    .join('');
+  const phone = letterhead.phone
+    ? `<p class="text-sm">Tel: ${escapeLetterheadHtml(letterhead.phone)}</p>`
+    : '';
   return `
         <div class="text-right mb-8">
-          <h2 class="font-bold text-lg">USAV Solutions</h2>
-          <p class="text-sm">16161 Gothard St. Suite A</p>
-          <p class="text-sm">Huntington Beach, CA 92647, United States</p>
-          <p class="text-sm">Tel: (714) 596-6888</p>
+          <h2 class="font-bold text-lg">${escapeLetterheadHtml(letterhead.name)}</h2>
+          ${lines}
+          ${phone}
         </div>`;
 }
 

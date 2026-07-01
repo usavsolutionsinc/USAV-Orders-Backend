@@ -63,8 +63,9 @@ export async function resolveViaLookupPo(
     Boolean(data.matched) && Array.isArray(data.lines) && data.lines.length > 0;
 
   // Order# lookups that resolve to nothing are a clean not-found (a mistyped
-  // PO/order number must NOT create a phantom box); the caller toasts instead.
-  if (!isMatched && (input.originalMode === 'order' || data.not_found)) {
+  // PO/order number must NOT create a phantom box); ticket# lookups behave the
+  // same — the caller toasts instead.
+  if (!isMatched && (input.originalMode === 'order' || input.originalMode === 'ticket' || data.not_found)) {
     return { kind: 'not_found', data };
   }
 

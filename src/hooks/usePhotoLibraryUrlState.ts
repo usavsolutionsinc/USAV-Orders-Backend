@@ -80,6 +80,18 @@ export function usePhotoLibraryUrlState() {
     [display, filters, replaceUrl],
   );
 
+  /**
+   * Apply a saved view: set the whole filter set AND the view mode in one URL
+   * write (page reset to 1). A separate replaceFilters + setView would clobber
+   * each other — each reads stale closure state — so this is a single replaceUrl.
+   */
+  const applyView = useCallback(
+    (nextFilters: PhotoLibraryFilterState, nextView: PhotoLibraryViewMode) => {
+      replaceUrl(nextFilters, { view: nextView, page: 1 });
+    },
+    [replaceUrl],
+  );
+
   const setPage = useCallback(
     (page: number) => {
       replaceUrl(filters, { ...display, page: Math.max(1, page) });
@@ -106,5 +118,6 @@ export function usePhotoLibraryUrlState() {
     clearStructured,
     clearAll,
     replaceFilters,
+    applyView,
   };
 }

@@ -7,8 +7,8 @@
  *   - triage  → Triage/Prioritize/Unfound body
  *   - unbox   → Unboxed (unboxRecent) / Queue (scanned) / Viewed (per-staff)
  *
- * Unbox rails paint scan results via a single cache upsert on resolve (no
- * tracking# importing stub). Triage keeps the importing-row reconcile path.
+ * Unbox rails paint scan results via a single cache upsert on resolve. Triage uses
+ * a pre-resolve leadingRow (tracking #) plus resolve-time prepend.
  */
 
 import { TriageSidebarBody } from '@/components/sidebar/receiving/TriageSidebarBody';
@@ -21,6 +21,8 @@ interface ReceivingRailBodyProps {
   mode: ReceivingMode;
   unboxView: UnboxView;
   selectedLine: ReceivingLineRow | null;
+  /** Pre-resolve triage scan stub (tracking #) for the combined Triage tab. */
+  triageLeadingRow?: ReceivingLineRow | null;
   /** Live filter text for the triage Found/Unfound lists. */
   triageFilterText: string;
 }
@@ -29,6 +31,7 @@ export function ReceivingRailBody({
   mode,
   unboxView,
   selectedLine,
+  triageLeadingRow = null,
   triageFilterText,
 }: ReceivingRailBodyProps) {
   const selectedLineId = selectedLine?.id ?? null;
@@ -47,6 +50,7 @@ export function ReceivingRailBody({
       <TriageSidebarBody
         selectedLineId={selectedLineId}
         selectedRow={selectedRow}
+        leadingRow={triageLeadingRow}
         filterText={triageFilterText}
       />
     );

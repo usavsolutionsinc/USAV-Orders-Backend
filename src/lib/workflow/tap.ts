@@ -57,7 +57,13 @@ export type WorkflowTapEvent =
   // its tap — no domain site fires this yet; wiring is one tapWorkflow call at
   // the pack-confirm gate once the packer adopts a scan→confirm step.
   | 'pack_verified'
-  | 'shipped';
+  | 'shipped'
+  // Fired twice per return, by design (see the done-unit re-entry branch
+  // below and the `returns` node, nodes/returns.node.ts): once with no
+  // `input.disposition` when a return is detected (the unit parks at the
+  // `returns` node), and again once a human disposition decision exists
+  // (routes the parked unit out via restock/rtv/scrap).
+  | 'return_received';
 
 export interface WorkflowTapArgs {
   serialUnitId: number;
@@ -111,7 +117,23 @@ export async function tapWorkflow(args: WorkflowTapArgs): Promise<void> {
         startNodeId: start.nodeId,
       });
     } else if (state.status === 'done') {
-      return; // finished runs stay finished (returns re-enter via rma_intake later)
+      // A completed run stays finished for every event EXCEPT a return: a
+      // unit that shipped-and-completed is exactly the normal case for a
+      // later return, so re-enroll it at the org's `returns`-type node
+      // (not the graph's normal entry) instead of dropping the tap. Re-
+      // running enrollItem's upsert (unique on serialUnitId) IS "re-enroll"
+      // — no new persistence mechanism needed, see store.ts.
+      if (args.event !== 'return_received') return;
+      const returnsNode = await findNodeOfType(state.organizationId, 'returns');
+      if (!returnsNode) return; // no returns node in this org's graph
+      await enrollItem({
+        orgId: state.organizationId,
+        serialUnitId: args.serialUnitId,
+        workflowDefinitionId: returnsNode.workflowDefinitionId,
+        startNodeId: returnsNode.nodeId,
+      });
+      // Fall through to advance() below so this same tap also runs the node
+      // once parked (mirrors the fresh-enrollment branch above).
     }
 
     if (!orgId) return;
@@ -280,4 +302,64 @@ async function loadEntryNode(
   if (!entry) return null;
 
   return { workflowDefinitionId: def.id, nodeId: entry.id };
+}
+
+/**
+ * The org's active workflow definition's node of a given registry TYPE (e.g.
+ * 'returns') — the re-entry point for an event that doesn't restart the
+ * normal graph entry. Sibling to findEntryNode, same active-definition
+ * lookup, but filters on node.type instead of "no inbound edges": the
+ * returns node is a second, deliberately-disconnected entry point, not the
+ * graph's leftmost node. If an org's graph somehow has more than one node of
+ * this type, the first one found wins — same "good enough, not over-
+ * engineered" tiebreak as findEntryNode's positionX ordering.
+ */
+const nodeTypeCache = new Map<
+  string,
+  { value: { workflowDefinitionId: number; nodeId: string } | null; at: number }
+>();
+
+async function findNodeOfType(
+  orgId: string,
+  nodeType: string,
+): Promise<{ workflowDefinitionId: number; nodeId: string } | null> {
+  const cacheKey = `${orgId}:${nodeType}`;
+  const cached = nodeTypeCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < ENTRY_CACHE_TTL_MS) return cached.value;
+
+  const value = await loadNodeOfType(orgId, nodeType);
+  nodeTypeCache.set(cacheKey, { value, at: Date.now() });
+  return value;
+}
+
+async function loadNodeOfType(
+  orgId: string,
+  nodeType: string,
+): Promise<{ workflowDefinitionId: number; nodeId: string } | null> {
+  const [def] = await db
+    .select({ id: workflowDefinitions.id })
+    .from(workflowDefinitions)
+    .where(
+      and(
+        eq(workflowDefinitions.organizationId, orgId),
+        eq(workflowDefinitions.isActive, true),
+      ),
+    )
+    .orderBy(desc(workflowDefinitions.version))
+    .limit(1);
+  if (!def) return null;
+
+  const [node] = await db
+    .select({ id: workflowNodes.id })
+    .from(workflowNodes)
+    .where(
+      and(
+        eq(workflowNodes.workflowDefinitionId, def.id),
+        eq(workflowNodes.type, nodeType),
+      ),
+    )
+    .limit(1);
+  if (!node) return null;
+
+  return { workflowDefinitionId: def.id, nodeId: node.id };
 }

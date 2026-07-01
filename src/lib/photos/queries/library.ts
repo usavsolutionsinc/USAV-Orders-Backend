@@ -52,12 +52,52 @@ export interface LibraryFilters {
   poFinderKind?: PoFinderKind | null;
 }
 
-export type PoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'any';
+export type PoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'ticket' | 'any';
 
-const PO_FINDER_KINDS: readonly PoFinderKind[] = ['order', 'tracking', 'serial', 'po', 'any'];
+const PO_FINDER_KINDS: readonly PoFinderKind[] = ['order', 'tracking', 'serial', 'po', 'ticket', 'any'];
 
 export function isPoFinderKind(value: unknown): value is PoFinderKind {
   return typeof value === 'string' && (PO_FINDER_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * Parse the shared library filter params (everything except org + pagination)
+ * from a URLSearchParams. Used by BOTH `/api/photos/library` (list) and
+ * `/api/photos/library/ids` (select-all-matching) so the two never diverge on
+ * which rows a filter set selects.
+ */
+export function libraryFiltersFromSearchParams(
+  params: URLSearchParams,
+): Omit<LibraryFilters, 'organizationId' | 'cursor' | 'limit'> {
+  const hasAnalysisRaw = params.get('hasAnalysis');
+  const damageRaw = params.get('damageDetected');
+  return {
+    dateFrom: params.get('dateFrom'),
+    dateTo: params.get('dateTo'),
+    sort: params.get('sort') === 'oldest' ? 'oldest' : 'recent',
+    entityType: params.get('entityType'),
+    entityId: params.get('entityId') ? Number(params.get('entityId')) : null,
+    linkRole: params.get('linkRole'),
+    poRef: params.get('poRef'),
+    receivingId: params.get('receivingId') ? Number(params.get('receivingId')) : null,
+    tracking: params.get('tracking'),
+    serial: params.get('serial'),
+    sku: params.get('sku'),
+    ticketId: params.get('ticketId') ? Number(params.get('ticketId')) : null,
+    pickupId: params.get('pickupId') ? Number(params.get('pickupId')) : null,
+    rma: params.get('rma'),
+    poFinder: params.get('poFinder'),
+    poFinderKind: isPoFinderKind(params.get('poFinderKind'))
+      ? (params.get('poFinderKind') as PoFinderKind)
+      : null,
+    receivingSource: params.get('receivingSource'),
+    receivingSourceExclude: params.get('receivingSourceExclude'),
+    staffId: params.get('staffId') ? Number(params.get('staffId')) : null,
+    photoType: params.get('photoType'),
+    labelKey: params.get('label'),
+    hasAnalysis: hasAnalysisRaw === 'true' ? true : hasAnalysisRaw === 'false' ? false : null,
+    damageDetected: damageRaw === 'true' ? true : damageRaw === 'false' ? false : null,
+  };
 }
 
 /**
@@ -178,7 +218,35 @@ function cartonExistsSql(resolver: string): string {
       )`;
 }
 
+function ticketFinderExists(params: unknown[], rawValue: string): string {
+  const digits = rawValue.replace(/^#/, '').trim();
+  if (/^\d+$/.test(digits)) {
+    params.push(Number(digits));
+    const id = `$${params.length}`;
+    return `EXISTS (
+        SELECT 1 FROM photo_entity_links l
+         WHERE l.photo_id = p.id
+           AND l.organization_id = p.organization_id
+           AND l.entity_type = 'ZENDESK_TICKET'
+           AND l.entity_id = ${id}
+      )`;
+  }
+  params.push(`%${digits}%`);
+  const v = `$${params.length}`;
+  return `EXISTS (
+      SELECT 1 FROM photo_entity_links l
+       WHERE l.photo_id = p.id
+         AND l.organization_id = p.organization_id
+         AND l.entity_type = 'ZENDESK_TICKET'
+         AND l.entity_id::text ILIKE ${v}
+    )`;
+}
+
 function poFinderExists(params: unknown[], kind: PoFinderKind, rawValue: string): string {
+  if (kind === 'ticket') {
+    return ticketFinderExists(params, rawValue);
+  }
+
   params.push(`%${rawValue}%`);
   const v = `$${params.length}`;
   // A direct PO lookup also catches denormalized po_ref-only photos (stamped at
@@ -188,30 +256,30 @@ function poFinderExists(params: unknown[], kind: PoFinderKind, rawValue: string)
     return `(${poRefMatch} OR ${cartonExistsSql(cartonResolverSql('po', v))})`;
   }
   if (kind === 'any') {
-    // The smart "All" scope: the operator types whatever they have and we resolve
-    // it as a serial OR tracking OR order OR PO → that PO's photos, and still fall
-    // back to free-text/OCR (po_ref + photo_analysis) so a caption/printed-label
-    // hit isn't lost. ILIKE substring throughout, so a last-N paste still resolves.
+    // The smart "All" scope: serial OR tracking OR order OR PO OR Zendesk ticket,
+    // plus free-text/OCR (po_ref + photo_analysis).
     const cartons = (['serial', 'tracking', 'order', 'po'] as const)
       .map((k) => cartonExistsSql(cartonResolverSql(k, v)))
       .join(' OR ');
     const ocrMatch = `EXISTS (
         SELECT 1 FROM photo_analysis a
          WHERE a.photo_id = p.id AND a.metadata::text ILIKE ${v})`;
-    return `(${poRefMatch} OR ${ocrMatch} OR ${cartons})`;
+    const ticketMatch = ticketFinderExists(params, rawValue);
+    return `(${poRefMatch} OR ${ocrMatch} OR ${ticketMatch} OR ${cartons})`;
   }
   return cartonExistsSql(cartonResolverSql(kind, v));
 }
 
-export async function listPhotoLibrary(filters: LibraryFilters) {
-  const limit = Math.min(Math.max(filters.limit ?? 48, 1), 100);
+/**
+ * Shared WHERE builder for the media library filter set. Both the paged row
+ * query (listPhotoLibrary) and the id-only count query (listPhotoLibraryIds)
+ * apply IDENTICAL predicates so they can never drift. Cursor/limit/ORDER BY and
+ * column selection are the caller's concern — not here.
+ */
+function buildLibraryWhere(filters: LibraryFilters): { clauses: string[]; params: unknown[] } {
   const params: unknown[] = [filters.organizationId];
   const clauses: string[] = ['p.organization_id = $1'];
 
-  if (filters.cursor && filters.cursor > 0) {
-    params.push(filters.cursor);
-    clauses.push(`p.id < $${params.length}`);
-  }
   // dateFrom/dateTo are PST `YYYY-MM-DD` calendar days (the same PST the folder
   // date-tree groups by). Compare against the photo's PST *calendar date* so the
   // range is inclusive of the whole end day — and so a single day (from===to)
@@ -226,7 +294,6 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
     params.push(filters.dateTo);
     clauses.push(`(p.created_at AT TIME ZONE 'America/Los_Angeles')::date <= $${params.length}::date`);
   }
-  const sortDir = filters.sort === 'oldest' ? 'ASC' : 'DESC';
   if (filters.poRef) {
     params.push(`%${filters.poRef}%`);
     clauses.push(`p.po_ref ILIKE $${params.length}`);
@@ -403,6 +470,19 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
     );
   }
 
+  return { clauses, params };
+}
+
+export async function listPhotoLibrary(filters: LibraryFilters) {
+  const limit = Math.min(Math.max(filters.limit ?? 48, 1), 100);
+  const { clauses, params } = buildLibraryWhere(filters);
+
+  if (filters.cursor && filters.cursor > 0) {
+    params.push(filters.cursor);
+    clauses.push(`p.id < $${params.length}`);
+  }
+
+  const sortDir = filters.sort === 'oldest' ? 'ASC' : 'DESC';
   params.push(limit + 1);
   const limitParam = `$${params.length}`;
 
@@ -490,4 +570,40 @@ export async function listPhotoLibrary(filters: LibraryFilters) {
   const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null;
 
   return { items, nextCursor, hasMore };
+}
+
+/**
+ * "Select all matching filters" — the total row count plus up to `cap` photo ids
+ * for the SAME filter set as listPhotoLibrary (shared WHERE builder → no drift).
+ * The count is a full scan over the filtered set; the id list is capped so we
+ * never ship 10k ids to the client. `capped` tells the UI the selection is
+ * partial (total > cap).
+ */
+export async function listPhotoLibraryIds(
+  filters: LibraryFilters,
+  opts: { cap?: number } = {},
+): Promise<{ ids: number[]; total: number; capped: boolean }> {
+  const cap = Math.min(Math.max(opts.cap ?? 500, 1), 2000);
+  const { clauses, params } = buildLibraryWhere(filters);
+  const where = clauses.join(' AND ');
+
+  const countRes = await pool.query<{ total: number }>(
+    `SELECT COUNT(*)::int AS total FROM photos p WHERE ${where}`,
+    params,
+  );
+  const total = countRes.rows[0]?.total ?? 0;
+
+  const sortDir = filters.sort === 'oldest' ? 'ASC' : 'DESC';
+  const idParams = [...params, cap];
+  const idsRes = await pool.query<{ id: number }>(
+    `SELECT p.id
+       FROM photos p
+      WHERE ${where}
+      ORDER BY p.created_at ${sortDir}, p.id ${sortDir}
+      LIMIT $${idParams.length}`,
+    idParams,
+  );
+  const ids = idsRes.rows.map((r) => Number(r.id)).filter((id) => Number.isFinite(id));
+
+  return { ids, total, capped: total > ids.length };
 }

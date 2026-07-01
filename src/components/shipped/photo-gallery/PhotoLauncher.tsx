@@ -83,14 +83,14 @@ export function PhotoLauncher({ g }: { g: PhotoGalleryController }) {
             />
           </HoverTooltip>
           {g.libraryHref ? (
-            <HoverTooltip label="Open in photo library" asChild>
+            <HoverTooltip label="Open in media library" asChild>
               <a
                 href={g.libraryHref}
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className={`${toolbarIconBtnInner} border-l border-blue-200/90`}
-                aria-label="Open in photo library"
+                aria-label="Open in media library"
               >
                 <ExternalLink className="h-4 w-4" />
               </a>

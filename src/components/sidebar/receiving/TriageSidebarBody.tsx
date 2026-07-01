@@ -18,25 +18,31 @@
 
 import { useSearchParams } from 'next/navigation';
 import type { ReceivingLineRow } from '@/components/station/receiving-line-row';
+import { isPendingTriageScanRow } from '@/components/sidebar/receiving/receiving-sidebar-shared';
 import { TriageCombinedList } from './TriageCombinedList';
 import { TriageRecentRail } from './TriageRecentRail';
 import { TriageUnfoundList } from './TriageUnfoundList';
+import { TriageDoneList } from './TriageDoneList';
 
-export type TriageView = 'triage' | 'found' | 'unfound';
+export type TriageView = 'triage' | 'found' | 'unfound' | 'done';
 
 export function resolveTriageView(raw: string | null | undefined): TriageView {
   if (raw === 'found') return 'found';
   if (raw === 'unfound') return 'unfound';
+  if (raw === 'done') return 'done';
   return 'triage';
 }
 
 export function TriageSidebarBody({
   selectedLineId,
   selectedRow,
+  leadingRow = null,
   filterText = '',
 }: {
   selectedLineId: number | null;
   selectedRow: ReceivingLineRow | null;
+  /** Pre-resolve scan stub (tracking # title) pinned at the top of the Triage tab. */
+  leadingRow?: ReceivingLineRow | null;
   /** Desktop search text from the sidebar SearchBar (filters both lists). */
   filterText?: string;
 }) {
@@ -48,10 +54,14 @@ export function TriageSidebarBody({
       key="rail-triage-combined"
       selectedLineId={selectedLineId}
       selectedRow={selectedRow}
+      leadingRow={leadingRow}
+      isRowDisabled={isPendingTriageScanRow}
       filterText={filterText}
     />
   ) : view === 'unfound' ? (
     <TriageUnfoundList key="rail-triage-unfound" selectedLineId={selectedLineId} filterText={filterText} />
+  ) : view === 'done' ? (
+    <TriageDoneList key="rail-triage-done" selectedLineId={selectedLineId} filterText={filterText} />
   ) : (
     <TriageRecentRail
       key="rail-triage-prioritize"

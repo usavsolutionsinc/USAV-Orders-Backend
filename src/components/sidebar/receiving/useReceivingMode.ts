@@ -38,6 +38,10 @@ const MODE_SCOPED_PARAMS = [
   'po_from',
   'po_to',
   'page',
+  // Triage's carton-list filter (D1, docs/receiving-triage-redesign-plan.md
+  // §0.6). A separate param from History's own `q` (kept independent so this
+  // change can't touch History's existing q/field/scope deep-link handling).
+  'triq',
 ] as const;
 
 export interface ReceivingModeState {
@@ -47,6 +51,8 @@ export interface ReceivingModeState {
   unboxView: UnboxView;
   /** Triage sub-view from `?triview=` (defaults to `triage`). */
   triageView: TriageView;
+  /** Triage carton-list filter text from `?triq=` (D1 — finds a carton already scanned in, not a Zoho search). */
+  triageQuery: string;
   /**
    * True for the two surfaces that show the scan bar + recent rail
    * (`receive` = Unbox workspace, `triage` = Receiving). Only the right pane
@@ -61,6 +67,8 @@ export interface ReceivingModeState {
   updateUnboxView: (next: UnboxView, opts?: { clearLine?: boolean }) => void;
   /** Swap the Triage `?triview=` sub-view (clears the current line first). */
   updateTriageView: (next: TriageView) => void;
+  /** Set (or clear, on empty string) the Triage `?triq=` carton-list filter. */
+  updateTriageQuery: (next: string) => void;
 }
 
 export function useReceivingMode(): ReceivingModeState {
@@ -91,6 +99,7 @@ export function useReceivingMode(): ReceivingModeState {
         : 'recent';
 
   const triageView = resolveTriageView(searchParams.get('triview'));
+  const triageQuery = searchParams.get('triq') ?? '';
 
   // Returning to a scan surface from History / Pickup / Incoming → focus the
   // tracking field. Entering Pickup → clear any open line. The scan-bar +
@@ -147,14 +156,25 @@ export function useReceivingMode(): ReceivingModeState {
     router.replace(`/receiving?${nextParams.toString()}`);
   };
 
+  const updateTriageQuery = (next: string) => {
+    const trimmed = next.trim();
+    if (trimmed === triageQuery) return;
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (!trimmed) nextParams.delete('triq');
+    else nextParams.set('triq', trimmed);
+    router.replace(`/receiving?${nextParams.toString()}`);
+  };
+
   return {
     mode,
     unboxView,
     triageView,
+    triageQuery,
     isScanSurface,
     updateMode,
     updateStaff,
     updateUnboxView,
     updateTriageView,
+    updateTriageQuery,
   };
 }

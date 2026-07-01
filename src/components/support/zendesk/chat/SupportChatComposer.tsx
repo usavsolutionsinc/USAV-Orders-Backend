@@ -1,15 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Globe, Lock, Mail, Paperclip, Send, X } from '@/components/Icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { Globe, Image as ImageIcon, Lock, Mail, Paperclip, Send, X } from '@/components/Icons';
 import { Button, IconButton } from '@/design-system/primitives';
 import { usePhotoDropzone } from '@/hooks/usePhotoDropzone';
 import { useSupportReply } from '@/hooks/useSupportReply';
-import { useZendeskAgents } from '@/hooks/useZendeskQueries';
+import { useZendeskAgents, zendeskKeys } from '@/hooks/useZendeskQueries';
 import type { TicketPhotoStaging } from '@/hooks/useTicketPhotoStaging';
 import { useAuth } from '@/contexts/AuthContext';
 import { markdownToHtml } from '@/lib/support/markdown';
 import { cn } from '@/utils/_cn';
+import { SupportPhotoLibraryPicker } from './SupportPhotoLibraryPicker';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -33,9 +35,12 @@ export function SupportChatComposer({
   const [isPublic, setIsPublic] = useState(false);
   const [ccs, setCcs] = useState<string[]>([]);
   const [ccInput, setCcInput] = useState('');
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const queryClient = useQueryClient();
   const reply = useSupportReply();
   const { data: agents = [] } = useZendeskAgents();
-  const { user } = useAuth();
+  const { user, has, isLoaded } = useAuth();
+  const canBrowseLibrary = isLoaded && has('photos.view');
   const staffName = user?.name?.trim() || '';
 
   // Reuse the dropzone hook purely for its file-picker plumbing (the ticket
@@ -69,6 +74,10 @@ export function SupportChatComposer({
   };
 
   const stagedDone = staging.staged.filter((s) => s.status === 'done' && typeof s.photoId === 'number');
+  const stagedPhotoIds = useMemo(
+    () => new Set(stagedDone.map((s) => s.photoId!)),
+    [stagedDone],
+  );
 
   const submit = () => {
     const text = body.trim();
@@ -137,17 +146,43 @@ export function SupportChatComposer({
             <Globe className="h-3.5 w-3.5" /> Public reply
           </button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={picker.openPicker}
-          icon={<Paperclip className="h-3.5 w-3.5" />}
-          className="gap-1.5 px-2 text-caption font-bold"
-        >
-          Attach
-        </Button>
+        <div className="flex items-center gap-1">
+          {canBrowseLibrary ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLibraryOpen(true)}
+              icon={<ImageIcon className="h-3.5 w-3.5" />}
+              className="gap-1.5 px-2 text-caption font-bold"
+            >
+              Library
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={picker.openPicker}
+            icon={<Paperclip className="h-3.5 w-3.5" />}
+            className="gap-1.5 px-2 text-caption font-bold"
+          >
+            Attach
+          </Button>
+        </div>
         <input ref={picker.inputRef} {...picker.inputProps} />
       </div>
+
+      {canBrowseLibrary ? (
+        <SupportPhotoLibraryPicker
+          ticketId={ticketId}
+          open={libraryOpen}
+          onClose={() => setLibraryOpen(false)}
+          excludePhotoIds={stagedPhotoIds}
+          onSelect={(photos) => {
+            staging.addLibraryPhotos(photos);
+            void queryClient.invalidateQueries({ queryKey: zendeskKeys.photos(ticketId) });
+          }}
+        />
+      ) : null}
 
       {/* CC collaborators — public replies only (CCs make no sense on a note). */}
       {isPublic ? (

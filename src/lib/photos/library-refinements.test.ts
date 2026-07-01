@@ -22,6 +22,6 @@ test('buildPhotoLibraryRefinements uses staff names when provided', () => {
 
   assert.deepEqual(
     refinements.map((refinement) => refinement.label),
-    ['PO 4421', 'Morgan Lee', 'Damage detected'],
+    ['Morgan Lee', 'Damage detected'],
   );
 });

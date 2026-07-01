@@ -87,6 +87,7 @@ export function inventoryEventsToTimeline(rows: InventoryTimelineRow[]): Timelin
       subtitle,
       ref,
       actor: r.actor_name ?? undefined,
+      sourceEventType: r.event_type,
     };
   });
 }

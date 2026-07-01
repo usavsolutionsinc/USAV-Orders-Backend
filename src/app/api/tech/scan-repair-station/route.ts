@@ -42,7 +42,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     // bypassed — ctx.staffId is already the verified staff row id.
     const staffId = ctx.staffId;
 
-    const repair = await getRepairById(repairId);
+    const repair = await getRepairById(repairId, ctx.organizationId);
     if (!repair) {
       return NextResponse.json({ success: false, error: 'Repair not found' }, { status: 404 });
     }
@@ -57,7 +57,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         screen: 'StationTesting',
         station: 'TECH',
       },
-    });
+    }, ctx.organizationId);
 
     await invalidateCacheTags(REPAIR_TAGS);
     await publishRepairChanged({ organizationId: ctx.organizationId, repairIds: [repairId], source: 'tech.scan-repair-station' });

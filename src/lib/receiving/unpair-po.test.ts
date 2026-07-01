@@ -14,6 +14,9 @@ function fakes(carton: Record<string, unknown> | null = {
   zoho_purchaseorder_number: '6001',
   source: 'zoho_po',
   source_platform: 'ecwid',
+  intake_type: 'RETURN',
+  is_return: true,
+  return_platform: 'AMZ',
 }) {
   const queries: Captured[] = [];
   const client: TxClient = {
@@ -44,6 +47,9 @@ test('unpair clears line linkage + carton header and returns the before-snapshot
     zoho_purchaseorder_number: '6001',
     source: 'zoho_po',
     source_platform: 'ecwid',
+    intake_type: 'RETURN',
+    is_return: true,
+    return_platform: 'AMZ',
   });
 
   // Lines: source order + PO stripped, scoped by receiving_id + org.
@@ -51,13 +57,20 @@ test('unpair clears line linkage + carton header and returns the before-snapshot
   assert.ok(lineUpd, 'expected a receiving_lines UPDATE');
   assert.ok(/source_order_id = NULL/.test(lineUpd!.text));
   assert.ok(/is_repair_service = FALSE/.test(lineUpd!.text));
+  assert.ok(/receiving_type = CASE/.test(lineUpd!.text));
   assert.deepEqual(lineUpd!.params, [7, 'org-1']);
 
-  // Carton: explicit downgrade back to unmatched (PO + platform cleared).
+  const returnFactsDel = queries.find((q) => /DELETE FROM receiving_line_return/.test(q.text));
+  assert.ok(returnFactsDel, 'expected receiving_line_return DELETE');
+
+  // Carton: explicit downgrade back to unmatched (PO + platform + return cleared).
   const cartonUpd = queries.find((q) => /UPDATE receiving\b/.test(q.text) && /source = 'unmatched'/.test(q.text));
   assert.ok(cartonUpd, 'expected a carton downgrade UPDATE');
   assert.ok(/zoho_purchaseorder_id = NULL/.test(cartonUpd!.text));
   assert.ok(/source_platform = NULL/.test(cartonUpd!.text));
+  assert.ok(/is_return = false/.test(cartonUpd!.text));
+  assert.ok(/intake_type = NULL/.test(cartonUpd!.text));
+  assert.ok(/return_platform = NULL/.test(cartonUpd!.text));
 });
 
 test('unpair 404s a carton that is not in the org', async () => {

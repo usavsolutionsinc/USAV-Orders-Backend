@@ -54,7 +54,7 @@ const REP_LINE_LATERAL = `
   ) rep ON true`;
 
 export const GET = withAuth(async (_req, ctx) => {
-  const isTech = await isPrimaryTechStaff(ctx.staffId);
+  const isTech = await isPrimaryTechStaff(ctx.staffId, ctx.organizationId);
   if (!isTech) {
     return NextResponse.json({
       items: [] as TechQueueItem[],

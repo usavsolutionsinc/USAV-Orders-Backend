@@ -433,9 +433,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
             reason: trimmedOutOfStock,
             changedBy: 'staff',
             forceFullQuantity: true,
-          });
+          }, ctx.organizationId);
         } else {
-          await clearReplenishmentForOrder(orderId, 'staff');
+          await clearReplenishmentForOrder(orderId, 'staff', ctx.organizationId);
         }
       }
     }

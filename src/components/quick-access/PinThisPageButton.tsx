@@ -4,6 +4,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { Button } from '@/design-system/primitives';
 import { getSidebarRouteKey } from '@/lib/sidebar-navigation';
 import { useQuickAccess } from '@/lib/quick-access/use-quick-access';
+import { useAuth } from '@/contexts/AuthContext';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 interface PinThisPageButtonProps {
   onPinned?: () => void;
@@ -15,10 +17,14 @@ function currentHref(pathname: string | null, searchParams: URLSearchParams | nu
   return search ? `${pathname}?${search}` : pathname;
 }
 
-function currentLabel(pathname: string | null): string {
+// Sentinel titles that are the root layout's fallback document.title (product
+// name signed-out, workspace name signed-in) rather than a real per-page
+// title — see src/app/layout.tsx. Falling back on those would pin every page
+// under the same generic label.
+function currentLabel(pathname: string | null, organizationName?: string | null): string {
   if (typeof document !== 'undefined') {
     const title = document.title?.trim();
-    if (title && title !== 'USAV Solutions') return title;
+    if (title && title !== PRODUCT_NAME && title !== organizationName) return title;
   }
   const routeKey = getSidebarRouteKey(pathname);
   if (routeKey && routeKey !== 'unknown') {
@@ -35,13 +41,14 @@ export function PinThisPageButton({ onPinned }: PinThisPageButtonProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { pin, isHrefPinned } = useQuickAccess();
+  const { user } = useAuth();
 
   const href = currentHref(pathname, searchParams as URLSearchParams | null);
   if (!href) return null;
   if (isHrefPinned(href)) return null;
 
   const handleClick = () => {
-    const label = currentLabel(pathname);
+    const label = currentLabel(pathname, user?.organizationName);
     const result = pin({ label, href, iconKey: getSidebarRouteKey(pathname) });
     if (result === 'added') onPinned?.();
   };

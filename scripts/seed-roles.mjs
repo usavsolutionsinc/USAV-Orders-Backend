@@ -48,6 +48,7 @@ const ROLE_PERMISSION_SETS = {
   shipper: [
     'shipping.view', 'shipping.mark_shipped', 'shipping.void_order',
     'orders.view', 'dashboard.view', 'print.label',
+    'rma.view', 'rma.manage',
   ],
   inventory_manager: [
     'sku_stock.view', 'sku_stock.adjust', 'sku_stock.manage',
@@ -62,12 +63,20 @@ const ROLE_PERMISSION_SETS = {
     'dashboard.view', 'orders.view', 'orders.create', 'orders.import',
     'walk_in.view', 'walk_in.intake',
     'sku_stock.view', 'repair.view', 'reports.view',
+    'rma.view', 'rma.manage',
   ],
   viewer: [
     'dashboard.view', 'operations.view', 'receiving.view', 'packing.view',
     'tech.view', 'shipping.view', 'fba.view', 'sku_stock.view',
     'cycle_count.view', 'work_orders.view',
     'walk_in.view', 'repair.view', 'orders.view', 'reports.view',
+    // Both, not just rma.view: orders.view previously gated every RMA route
+    // including the write ones (create/close/disposition/mark-received/
+    // update/cancel), so this preserves exactly what the role already had —
+    // it is not a fresh grant of write access. Narrowing "viewer" to
+    // RMA-read-only is a real, separate access-policy call for the org to
+    // make deliberately, not a side effect of this permission-split migration.
+    'rma.view', 'rma.manage',
   ],
 };
 

@@ -2,16 +2,21 @@ import { useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Camera, Loader2, Plus, ZoomIn } from '@/components/Icons';
+import { PhotoGridDisplayControls } from '@/components/photos/PhotoGridDisplayControls';
+import { PhotoThumb } from '@/components/photos/PhotoThumb';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAblyClient } from '@/contexts/AblyContext';
 import { useReceivingPhotosRealtimeRefresh } from '@/hooks/useReceivingPhotosRealtimeRefresh';
+import { usePhotoGridDensity } from '@/hooks/usePhotoGridDensity';
 import { publishReceivingPhotoRequest } from '@/lib/realtime/receiving-photo-request';
+import { photoGridLeafClass } from '@/lib/photos/photo-grid-density';
 import { usePhotoGallery } from '@/components/shipped/photo-gallery/usePhotoGallery';
 import { PhotoViewerModal } from '@/components/shipped/photo-gallery/PhotoViewerModal';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { Button, IconButton } from '@/design-system/primitives';
 import { toast } from '@/lib/toast';
-import { claimThumb } from '../claim-helpers';
+import { cn } from '@/utils/_cn';
+import { claimPhotoTileProps } from '../claim-helpers';
 import type { UseClaimPhotos } from '../hooks/useClaimPhotos';
 
 interface Props {
@@ -37,6 +42,8 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
   const staffId = user?.staffId ?? 0;
   const { getClient } = useAblyClient();
   const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const { density: gridDensity, setDensity: setGridDensity } = usePhotoGridDensity();
 
   // Live-refresh the grid when the phone's captures land (phone-bridge upload or
   // station NAS attach), matching this carton.
@@ -67,6 +74,15 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
       setSending(false);
     }
   }, [getClient, orgId, staffId, receivingId]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetch]);
 
   // ── Empty state — no photos yet: one big send-to-phone tile ────────────────
   if (list.length === 0) {
@@ -114,14 +130,23 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
             Attach {selectedPhotoIds.size === 1 ? 'photo' : 'photos'} to ticket ({selectedPhotoIds.size}/{list.length})
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={toggleSelectAll} className="shrink-0">
-          {selectedPhotoIds.size === list.length ? 'Clear all' : 'Select all'}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+            {selectedPhotoIds.size === list.length ? 'Clear all' : 'Select all'}
+          </Button>
+          <PhotoGridDisplayControls
+            density={gridDensity}
+            onDensityChange={setGridDensity}
+            onRefresh={() => void handleRefresh()}
+            isRefreshing={refreshing}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className={photoGridLeafClass(gridDensity)}>
         {list.map((p) => {
           const isSel = selectedPhotoIds.has(p.id);
+          const tile = claimPhotoTileProps(p, gridDensity);
           return (
             <HoverTooltip
               key={p.id}
@@ -133,20 +158,20 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
                 type="button"
                 onClick={() => togglePhoto(p.id)}
                 aria-label={isSel ? 'Selected — click to remove' : 'Click to attach'}
-                className={`relative aspect-square overflow-hidden rounded-lg ring-2 transition ${
-                  isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300'
-                }`}
+                className={cn(
+                  'relative overflow-hidden rounded-lg ring-2 transition',
+                  isSel ? 'ring-rose-500' : 'ring-transparent hover:ring-gray-300',
+                  tile.ratio === 'natural' ? '' : 'aspect-square',
+                )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={claimThumb(p.url, p.id)}
+                <PhotoThumb
+                  src={tile.imageUrl}
                   alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className={`h-full w-full bg-gray-100 object-cover ${isSel ? '' : 'opacity-70'}`}
+                  ratio={tile.ratio}
+                  className={cn(!isSel && tile.ratio === 'square' ? 'opacity-70' : '')}
                 />
                 {isSel ? (
-                  <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-caption font-black text-white shadow-sm">
+                  <span className="absolute right-1 top-1 z-10 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-caption font-black text-white shadow-sm">
                     ✓
                   </span>
                 ) : null}
@@ -163,7 +188,10 @@ export function ClaimPhotoPicker({ photos, receivingId }: Props) {
           onClick={() => void handleSendToPhone()}
           disabled={sending || !receivingId}
           aria-label="Send to phone to take more photos"
-          className="group flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          className={cn(
+            'group flex flex-col items-center justify-center gap-1 self-start rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-400 transition-colors hover:border-blue-300 hover:bg-blue-50/60 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60',
+            gridDensity === 'lg' ? 'aspect-square w-full' : 'aspect-square',
+          )}
         >
           {sending ? (
             <Loader2 className="h-5 w-5 animate-spin" />

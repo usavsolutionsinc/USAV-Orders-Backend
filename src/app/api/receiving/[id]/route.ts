@@ -11,6 +11,7 @@ import { requireRoutePerm } from '@/lib/auth/dynamic-route-guard';
 import { recordAudit, AUDIT_ACTION, AUDIT_ENTITY } from '@/lib/audit-logs';
 import { getOrgPlatforms, getOrgTypes } from '@/lib/catalog/org-catalog';
 import { getReceivingSchema } from '@/lib/receiving-schema-cache';
+import { isTriageLane } from '@/lib/receiving/triage-lane-policy';
 
 const SOURCE_PLATFORMS = new Set([
   'zoho',
@@ -571,6 +572,50 @@ export async function PATCH(
       }
     }
 
+    // Triage staging — physical shelf/lane assignment (A1,
+    // docs/receiving-triage-redesign-plan.md §4). Manual assignment always wins
+    // over the auto-routed lane default (resolveTriageLane in
+    // triage-lane-policy.ts); this route only persists whatever the operator
+    // (or the auto-suggest UI) chose.
+    if (Object.prototype.hasOwnProperty.call(body, 'staging_location_id')) {
+      const raw = body.staging_location_id;
+      const next = raw == null || raw === '' ? null : Number(raw);
+      if (next != null) {
+        if (!Number.isFinite(next) || next <= 0) {
+          return NextResponse.json(
+            { success: false, error: 'Invalid staging_location_id' },
+            { status: 400 },
+          );
+        }
+        const loc = await tenantQuery(
+          ctx.organizationId,
+          `SELECT 1 FROM locations WHERE id = $1 AND organization_id = $2 AND is_active = true LIMIT 1`,
+          [next, ctx.organizationId],
+        );
+        if (loc.rows.length === 0) {
+          return NextResponse.json(
+            { success: false, error: 'staging_location_id does not match an active location for this org' },
+            { status: 400 },
+          );
+        }
+      }
+      updates.push(`staging_location_id = $${idx++}`);
+      values.push(next);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'priority_lane')) {
+      const raw = body.priority_lane;
+      const next = raw == null || raw === '' ? null : String(raw).trim().toUpperCase();
+      if (next != null && !isTriageLane(next)) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid priority_lane' },
+          { status: 400 },
+        );
+      }
+      updates.push(`priority_lane = $${idx++}`);
+      values.push(next);
+    }
+
     if (updates.length === 0) {
       return NextResponse.json({ success: false, error: 'No valid fields to update' }, { status: 400 });
     }
@@ -587,7 +632,8 @@ export async function PATCH(
       const beforeRow = await client.query(
         `SELECT id, source_platform, intake_type, is_return, return_platform,
                 zoho_purchaseorder_id, zoho_purchaseorder_number,
-                shipment_id, support_notes, listing_url, source
+                shipment_id, support_notes, listing_url, source,
+                staging_location_id, priority_lane
          FROM receiving WHERE id = $1 AND organization_id = $2 LIMIT 1`,
         [id, ctx.organizationId],
       );
@@ -604,10 +650,12 @@ export async function PATCH(
         shipment_id: number | null;
         support_notes: string | null;
         listing_url: string | null;
+        staging_location_id: number | null;
+        priority_lane: string | null;
       }>(
         `UPDATE receiving SET ${updates.join(', ')}
          WHERE id = $${values.length - 1} AND organization_id = $${orgParamIdx}
-         RETURNING id, source_platform, intake_type, is_return, return_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url`,
+         RETURNING id, source_platform, intake_type, is_return, return_platform, zoho_purchaseorder_id, zoho_purchaseorder_number, shipment_id, support_notes, listing_url, staging_location_id, priority_lane`,
         values,
       );
       return { before, result };

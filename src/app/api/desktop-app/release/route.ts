@@ -4,7 +4,7 @@ import { list } from '@vercel/blob';
 /**
  * GET /api/desktop-app/release
  *
- * Returns installer URLs for the latest USAV Orders desktop app build.
+ * Returns installer URLs for the latest Cycle Forge desktop app build.
  *
  * Source of truth is Vercel Blob: installers uploaded via
  *   `npm run desktop:upload`  →  scripts/upload-desktop-installers.mjs

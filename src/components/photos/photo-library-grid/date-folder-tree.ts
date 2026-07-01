@@ -1,6 +1,11 @@
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
-import { describePhotoDatePath, isoWeekNumber, weekRange } from '@/lib/photos/date-hierarchy';
+import { describePhotoDatePath, isoWeekNumber, weekRange, weekRangeLabel } from '@/lib/photos/date-hierarchy';
+import {
+  photoGroupHeaderLabel,
+  photoGroupKey,
+  UNLINKED_PHOTO_GROUP_KEY,
+} from '@/lib/photos/display-names';
 import type { PhotoDateNav } from './types';
 
 // ── Folders view (date drill) ───────────────────────────────────────────────
@@ -11,7 +16,7 @@ import type { PhotoDateNav } from './types';
 // as a contact sheet with the shared lightbox. There are no saved/master
 // folders any more — the hierarchy is derived from capture time.
 
-export const UNLINKED_PO_KEY = '__unlinked__';
+export const UNLINKED_PO_KEY = UNLINKED_PHOTO_GROUP_KEY;
 
 const PST_YMD = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Los_Angeles',
@@ -89,23 +94,24 @@ export function buildDateFolderTree(photos: LibraryPhoto[]): Map<string, YearBuc
 export interface FolderTileData {
   key: string;
   label: string;
-  /** Newest photo in the subtree — drives the cover + meta timestamp. */
-  cover: LibraryPhoto | undefined;
   count: number;
   latestAt: string;
+  /** First photo in a PO/ticket group — shown as the folder cover preview. */
+  previewPhoto?: LibraryPhoto;
 }
 
-/** Reduce a list of photos to a folder tile's cover/count/latest meta. */
-export function tileMeta(key: string, label: string, photos: LibraryPhoto[]): FolderTileData {
-  let cover = photos[0];
+/** Reduce a list of photos to a folder tile's count/latest meta. */
+export function tileMeta(
+  key: string,
+  label: string,
+  photos: LibraryPhoto[],
+  opts?: { previewPhoto?: LibraryPhoto },
+): FolderTileData {
   let latestAt = photos[0]?.createdAt ?? '';
   for (const p of photos) {
-    if (p.createdAt > latestAt) {
-      latestAt = p.createdAt;
-      cover = p;
-    }
+    if (p.createdAt > latestAt) latestAt = p.createdAt;
   }
-  return { key, label, cover, count: photos.length, latestAt };
+  return { key, label, count: photos.length, latestAt, previewPhoto: opts?.previewPhoto };
 }
 
 /** Range a folder click applies, by level. */
@@ -122,10 +128,17 @@ export function weekRangeOf(ymd: string): PhotoDateNav {
   return { dateFrom: r.dateFrom, dateTo: r.dateTo };
 }
 
-/** `Jun 23` from a `YYYY-MM-DD` string. */
+/** Week folder label from the capture days present in that week bucket. */
+export function weekTileLabel(w: WeekBucket): string {
+  const days = [...w.days.keys()].sort();
+  if (!days.length) return `W${w.week}`;
+  return weekRangeLabel(days[0]!, days[days.length - 1]!);
+}
+
+/** `June 23` from a `YYYY-MM-DD` string. */
 export function dayTileLabel(ymd: string): string {
   const [, m, d] = ymd.split('-');
-  return `${MONTH_NAMES[Number(m) - 1]?.slice(0, 3) ?? m} ${Number(d)}`;
+  return `${MONTH_NAMES[Number(m) - 1] ?? m} ${Number(d)}`;
 }
 
 export type FolderBrowseLevel = 'root' | 'year' | 'month' | 'week' | 'day' | 'custom';
@@ -136,6 +149,8 @@ export interface FolderBrowseState {
   isLeaf: boolean;
   leafTitle?: string;
   level: FolderBrowseLevel;
+  /** Photos to render at a contact-sheet leaf (subset of the loaded page). */
+  leafPhotos: LibraryPhoto[];
 }
 
 export interface FolderBrowseHeaderContext {
@@ -152,14 +167,19 @@ interface ResolveFolderBrowseArgs {
   dateFrom?: string;
   dateTo?: string;
   poRef?: string;
+  ticketId?: string;
 }
 
-function groupDayByPo(dayPhotos: LibraryPhoto[]) {
+function groupDayByRef(dayPhotos: LibraryPhoto[], scope: PhotoLibrarySourceScope) {
   const order: string[] = [];
   const map = new Map<string, LibraryPhoto[]>();
   for (const p of dayPhotos) {
-    const ref = p.poRef?.trim();
-    const key = ref ? `po:${ref}` : UNLINKED_PO_KEY;
+    const key =
+      scope === 'claims'
+        ? photoGroupKey(p, scope)
+        : p.poRef?.trim()
+          ? `po:${p.poRef.trim()}`
+          : UNLINKED_PO_KEY;
     const list = map.get(key) ?? [];
     if (list.length === 0) order.push(key);
     list.push(p);
@@ -172,15 +192,22 @@ function groupDayByPo(dayPhotos: LibraryPhoto[]) {
 function leafTitleFor(
   scope: PhotoLibrarySourceScope,
   poRef: string | undefined,
+  ticketId: string | undefined,
   level: FolderBrowseLevel,
-  poGroups: ReturnType<typeof groupDayByPo>,
+  dayGroups: ReturnType<typeof groupDayByRef>,
   customLabel: string | undefined,
 ): string | undefined {
+  if (ticketId?.trim()) {
+    return photoGroupHeaderLabel(`ticket:${ticketId.trim()}`, scope);
+  }
   if (poRef?.trim()) return poLabel(poRef.trim(), scope);
   if (level === 'custom' && customLabel) return customLabel;
-  if (level === 'day' && poGroups.order.length === 1) {
-    const key = poGroups.order[0]!;
+  if (level === 'day' && dayGroups.order.length === 1) {
+    const key = dayGroups.order[0]!;
     if (key === UNLINKED_PO_KEY) return 'Unlinked';
+    if (key.startsWith('ticket:')) {
+      return photoGroupHeaderLabel(key, scope);
+    }
     return poLabel(key.replace(/^po:/, ''), scope);
   }
   return undefined;
@@ -197,6 +224,7 @@ export function resolveFolderBrowseState({
   dateFrom,
   dateTo,
   poRef,
+  ticketId,
 }: ResolveFolderBrowseArgs): FolderBrowseState {
   const tree = buildDateFolderTree(photos);
   const datePath = describePhotoDatePath({ dateFrom, dateTo });
@@ -212,28 +240,47 @@ export function resolveFolderBrowseState({
   const day = week && anchor ? week.days.get(anchor) : undefined;
 
   const dayPhotos = day?.photos ?? [];
-  const poGroups = groupDayByPo(dayPhotos);
+  const dayGroups = groupDayByRef(dayPhotos, scope);
   const customLabel =
     level === 'custom' ? datePath[datePath.length - 1]?.label : undefined;
 
   const isLeaf =
     Boolean(poRef?.trim()) ||
+    Boolean(ticketId?.trim()) ||
     level === 'custom' ||
-    (level === 'day' && poGroups.order.length <= 1);
+    (level === 'day' && scope !== 'claims' && dayGroups.order.length <= 1);
+
+  const leafPhotos = (() => {
+    if (!isLeaf) return [];
+    if (ticketId?.trim() || poRef?.trim()) return photos;
+    if (level === 'day' && day) return day.photos;
+    if (level === 'custom') return photos;
+    if (level === 'day' && dayGroups.order.length === 1) {
+      return dayGroups.map.get(dayGroups.order[0]!) ?? photos;
+    }
+    return photos;
+  })();
 
   const leafTitle = isLeaf
-    ? leafTitleFor(scope, poRef, level, poGroups, customLabel)
+    ? leafTitleFor(scope, poRef, ticketId, level, dayGroups, customLabel)
     : undefined;
 
   let eyebrow = 'Years';
   let tiles: FolderTileData[] = [];
 
   if (level === 'day' && day) {
-    eyebrow = 'POs';
-    tiles = poGroups.order.map((key) => {
-      const list = poGroups.map.get(key)!;
-      const ref = key === UNLINKED_PO_KEY ? null : key.replace(/^po:/, '');
-      return tileMeta(key, ref ? poLabel(ref, scope) : 'Unlinked', list);
+    eyebrow = scope === 'claims' ? 'Tickets' : 'POs';
+    tiles = dayGroups.order.map((key) => {
+      const list = dayGroups.map.get(key)!;
+      const previewPhoto = list[0];
+      if (key === UNLINKED_PO_KEY) {
+        return tileMeta(key, 'Unlinked', list, { previewPhoto });
+      }
+      if (key.startsWith('ticket:')) {
+        return tileMeta(key, photoGroupHeaderLabel(key, scope), list, { previewPhoto });
+      }
+      const ref = key.replace(/^po:/, '');
+      return tileMeta(key, poLabel(ref, scope), list, { previewPhoto });
     });
   } else if (level === 'week' && week) {
     eyebrow = 'Days';
@@ -244,7 +291,7 @@ export function resolveFolderBrowseState({
     eyebrow = 'Weeks';
     tiles = [...month.weeks.values()]
       .sort((a, b) => b.week - a.week)
-      .map((w) => tileMeta(w.key, `Week ${w.week}`, [...w.days.values()].flatMap((d) => d.photos)));
+      .map((w) => tileMeta(w.key, weekTileLabel(w), [...w.days.values()].flatMap((d) => d.photos)));
   } else if (level === 'year' && year) {
     eyebrow = 'Months';
     tiles = [...year.months.values()]
@@ -271,7 +318,7 @@ export function resolveFolderBrowseState({
       );
   }
 
-  return { eyebrow, tiles, isLeaf, leafTitle, level };
+  return { eyebrow, tiles, isLeaf, leafTitle, level, leafPhotos };
 }
 
 /** Header copy for the folders view — level eyebrow + count, or leaf title + photo count. */
@@ -282,7 +329,7 @@ export function describeFolderBrowseHeader(
   if (state.isLeaf) {
     return {
       title: state.leafTitle ?? 'Photos',
-      count: args.photos.length,
+      count: state.leafPhotos.length,
       isLeaf: true,
     };
   }
@@ -310,11 +357,21 @@ export function buildFolderTileOpenHandler(
   return (tile) => {
     switch (state.level) {
       case 'day':
-        onNavigate({
-          dateFrom,
-          dateTo,
-          poRef: tile.key === UNLINKED_PO_KEY ? undefined : tile.key.replace(/^po:/, ''),
-        });
+        if (args.scope === 'claims' && tile.key.startsWith('ticket:')) {
+          onNavigate({
+            dateFrom,
+            dateTo,
+            ticketId: tile.key.slice('ticket:'.length),
+            poRef: undefined,
+          });
+        } else {
+          onNavigate({
+            dateFrom,
+            dateTo,
+            poRef: tile.key === UNLINKED_PO_KEY ? undefined : tile.key.replace(/^po:/, ''),
+            ticketId: undefined,
+          });
+        }
         break;
       case 'week':
         onNavigate({ dateFrom: tile.key, dateTo: tile.key });

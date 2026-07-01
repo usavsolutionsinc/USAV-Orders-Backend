@@ -431,17 +431,12 @@ export async function getReceivingAuditPO(
       // Lifecycle spine via the shared reader (Phase 0). Keyed on this PO's
       // lines + cartons; receiving does its own staff/bin/serial enrichment
       // from batched maps below, so the reader's joined fields are ignored here.
-      // NOTE: readInventorySpine does not yet accept an orgId param (object
-      // opts has no orgId field), so we cannot thread orgId through here. The
-      // lineIds/cartonIds are already org-scoped (derived from the org-filtered
-      // lineRows), so results stay within this org's rows; once the sibling
-      // gains an orgId opt this should be passed through.
       readInventorySpine({
         lineIds,
         cartonIds,
         order: 'desc',
         limit: 1000,
-      }),
+      }, orgId),
 
       orgId
         ? tenantQuery(

@@ -47,6 +47,9 @@ export type { ReceivingLineRow } from './receiving-line-row';
 export {
   dispatchSelectLine,
   dispatchLineUpdated,
+  dispatchReceivingCartonUnlinkPatch,
+  mergeReceivingPackageMetaIntoRow,
+  RECEIVING_UNPAIR_ROW_PATCH,
   RECEIVING_SELECTION_SCOPE,
 } from '@/components/station/receiving-lines-table-helpers';
 export {

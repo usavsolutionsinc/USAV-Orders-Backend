@@ -2,6 +2,8 @@ import { Printer } from '@/components/Icons';
 import { LocationDataMatrix } from '../LocationDataMatrix';
 import { gs1LocationAi, rackCode, rackToLocation, type RackSegments } from '@/lib/barcode-routing';
 import { humanReadable, partialCode } from './rack-code-format';
+import { useAuth } from '@/contexts/AuthContext';
+import { orgWarehouseLabel } from '@/lib/branding/letterhead';
 
 interface GiantRackPreviewPanelProps {
   zoneLetter?: string;
@@ -16,6 +18,7 @@ interface GiantRackPreviewPanelProps {
  * QR. Mirrors the bin printer's GiantPreviewPanel but with no position segment.
  */
 export function GiantRackPreviewPanel({ zoneLetter, aisle, bay, level, gln }: GiantRackPreviewPanelProps) {
+  const { user } = useAuth();
   const segments: RackSegments | null = zoneLetter && aisle != null && bay != null && level != null
     ? { zone: zoneLetter, aisle, bay, level }
     : null;
@@ -37,7 +40,7 @@ export function GiantRackPreviewPanel({ zoneLetter, aisle, bay, level, gln }: Gi
           <div className="flex items-start gap-8 rounded-2xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-8 shadow-inner">
             <div className="min-w-0 flex-1">
               <p className="text-caption font-bold uppercase tracking-[0.18em] text-gray-500">
-                USAV Warehouse Rack
+                {orgWarehouseLabel(user?.organizationName || 'Workspace', 'Rack')}
               </p>
               <p className="mt-2 whitespace-nowrap font-mono text-4xl font-black leading-none tracking-tight text-gray-900">
                 {code}

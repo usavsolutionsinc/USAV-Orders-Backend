@@ -36,7 +36,7 @@ export const GET = withAuth(async (request, ctx) => {
     if (!claim.zendeskTicketId) {
       return NextResponse.json({ ok: true, ticket: null, ticketUrl: null });
     }
-    const ticket = await getTicket(claim.zendeskTicketId);
+    const ticket = await getTicket(claim.zendeskTicketId, ctx.organizationId);
     return NextResponse.json({
       ok: true,
       ticket: ticket
@@ -122,6 +122,7 @@ export const POST = withAuth(async (request, ctx) => {
             external_id: buildExternalId('WARRANTY_CLAIM', claim.id),
           },
           { idempotencyKey: parsed.data.idempotencyKey ?? undefined },
+          ctx.organizationId,
         );
       } catch (err) {
         if (err instanceof ZendeskNotConfiguredError) {

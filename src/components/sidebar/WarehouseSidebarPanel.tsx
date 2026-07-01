@@ -28,6 +28,7 @@ import { RoomsSidebarList } from '@/components/warehouse/RoomsSidebarList';
 import { WarehouseSkuSearchResults } from '@/components/warehouse/WarehouseSkuSearchResults';
 import { BinLabelPrinter } from '@/components/barcode/BinLabelPrinter';
 import { RackLabelPrinter } from '@/components/barcode/RackLabelPrinter';
+import { useAuth } from '@/contexts/AuthContext';
 import { RoomFinderProvider, useRoomFinder } from '@/components/warehouse/roomFinderContext';
 import { SidebarShell } from '@/components/layout/SidebarShell';
 
@@ -52,6 +53,7 @@ function WarehouseSidebarInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const masterNavEnabled = useMasterNavEnabled();
+  const { user } = useAuth();
   const tab = parseTab(searchParams.get('tab'));
   const { rooms, bins } = useLocations();
   const { query: roomQuery, setQuery: setRoomQuery } = useRoomFinder();
@@ -172,7 +174,9 @@ function WarehouseSidebarInner() {
       )}
 
       <footer className="p-4 border-t border-gray-100 opacity-30 mt-auto text-center">
-        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">USAV INV</p>
+        <p className="text-eyebrow font-mono uppercase tracking-[0.2em] text-gray-500">
+          {(user?.organizationName || 'Workspace').toUpperCase()} INV
+        </p>
       </footer>
     </SidebarShell>
   );

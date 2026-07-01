@@ -1,7 +1,8 @@
 import AiChatPanel from '@/components/ai/AiChatPanel';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 export const metadata = {
-  title: 'AI Chat — USAV',
+  title: `AI Chat — ${PRODUCT_NAME}`,
 };
 
 export default function AiPage() {

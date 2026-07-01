@@ -5,6 +5,7 @@ import { X, Share, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/design-system/primitives/Button';
 import { IconButton } from '@/design-system/primitives/IconButton';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
 type Platform = 'ios' | 'android' | null;
 
@@ -85,7 +86,7 @@ export function InstallPrompt() {
             <div className="flex items-start justify-between gap-3 mb-3">
               <div>
                 <p className="text-eyebrow font-bold tracking-[0.18em] uppercase text-navy-300 font-sans mb-0.5">
-                  USAV Solutions
+                  {PRODUCT_NAME}
                 </p>
                 <p className="text-sm font-bold text-white font-sans">
                   Add to Home Screen

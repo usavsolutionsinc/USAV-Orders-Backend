@@ -8,6 +8,8 @@ import {
   type LocationSegments,
 } from '@/lib/barcode-routing';
 import { humanReadable, partialCode } from './utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { orgWarehouseLabel } from '@/lib/branding/letterhead';
 
 interface GiantPreviewPanelProps {
   zoneLetter?: string;
@@ -30,6 +32,7 @@ export function GiantPreviewPanel({
   position,
   gln,
 }: GiantPreviewPanelProps) {
+  const { user } = useAuth();
   const segments: LocationSegments | null =
     zoneLetter && aisle != null && bay != null && level != null && position != null
       ? { zone: zoneLetter, aisle, bay, level, position }
@@ -52,7 +55,7 @@ export function GiantPreviewPanel({
           <div className="flex items-start gap-8 rounded-2xl border-2 border-dashed border-gray-200 bg-gradient-to-br from-white to-gray-50/50 p-8 shadow-inner">
             <div className="min-w-0 flex-1">
               <p className="text-caption font-bold uppercase tracking-[0.18em] text-gray-500">
-                USAV Warehouse Location
+                {orgWarehouseLabel(user?.organizationName || 'Workspace', 'Location')}
               </p>
               <p className="mt-2 whitespace-nowrap font-mono text-3xl font-black leading-none tracking-tight text-gray-900">
                 {code}

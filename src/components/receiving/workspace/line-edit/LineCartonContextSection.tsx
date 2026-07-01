@@ -48,12 +48,10 @@ export function LineCartonContextSection({ row, staffId, c }: LineCartonContextS
       zendeskTrimmed={c.zendeskTrimmed}
       zendeskHref={c.zendeskHref}
       zendeskChipDisplay={c.zendeskChipDisplay}
+      providerTicketId={c.providerTicketId}
+      ticketLookupPending={c.ticketLookupPending}
       onTicketUnlinked={() => {
-        // Clear the in-memory ticket so the chip flips back to "Claim →" (the
-        // DELETE already nulled receiving_lines.zendesk_ticket), and mirror to
-        // other surfaces holding this row.
-        c.setZendesk('');
-        dispatchLineUpdated({ id: row.id, zendesk_ticket: null, notes: row.notes });
+        void c.invalidateSupportTicket();
       }}
       primaryTrackingTrimmed={c.primaryTrackingTrimmed}
       filledExtraTrackingsCount={c.filledExtraTrackingsCount}

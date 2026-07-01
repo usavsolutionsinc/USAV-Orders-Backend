@@ -1,6 +1,7 @@
 import AiChatWorkspace from '@/components/ai/AiChatWorkspace';
+import { PRODUCT_NAME } from '@/lib/branding/constants';
 
-export const metadata = { title: 'AI Chat · USAV' };
+export const metadata = { title: `AI Chat · ${PRODUCT_NAME}` };
 
 /**
  * /ai-chat workspace. The live streaming assistant is docked in this main pane

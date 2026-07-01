@@ -99,3 +99,14 @@ test('auto miss reported not_found (no carton) → not_found', async () => {
   const res = await resolveViaLookupPo(input({ callMode: 'auto', originalMode: 'auto' }), h.deps);
   assert.equal(res.kind, 'not_found');
 });
+
+test('ticket miss → not_found, no Zoho escalation', async () => {
+  const h = harness([{ success: true, not_found: true }]);
+  const res = await resolveViaLookupPo(
+    input({ callValue: '4821', callMode: 'ticket', originalMode: 'ticket' }),
+    h.deps,
+  );
+  assert.equal(res.kind, 'not_found');
+  assert.equal(h.bodies.length, 1);
+  assert.equal(h.loader.count, 0);
+});

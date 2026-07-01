@@ -61,7 +61,10 @@ export const POST = withAuth(async (request, ctx) => {
         entityId: id,
         after: { rmaId: result.rma.id, rmaNumber: result.rma.rmaNumber, issued: !parsed.data.rmaNumber },
       });
-      return { status: 200, body: { ok: true, claim: result.claim, rma: result.rma } };
+      return {
+        status: 200,
+        body: { ok: true, claim: result.claim, rma: result.rma, alreadyReturned: result.alreadyReturned },
+      };
     },
   });
 }, { permission: 'warranty.manage' });

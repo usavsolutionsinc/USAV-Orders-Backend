@@ -4,7 +4,13 @@ import { Button } from '@/design-system/primitives';
 import type { EcwidProductSearchController } from './useEcwidProductSearch';
 
 /** The search-input area — one of four branches keyed on mode + manual flags. */
-export function EcwidSearchInputs({ c }: { c: EcwidProductSearchController }) {
+export function EcwidSearchInputs({
+  c,
+  autoFocusSearch = true,
+}: {
+  c: EcwidProductSearchController;
+  autoFocusSearch?: boolean;
+}) {
   const { popoverMode, manualTitleMode } = c;
 
   if (popoverMode === 'search' && !manualTitleMode) {
@@ -14,7 +20,7 @@ export function EcwidSearchInputs({ c }: { c: EcwidProductSearchController }) {
           value={c.query}
           onChange={c.setQuery}
           placeholder={c.placeholder}
-          autoFocus
+          autoFocus={autoFocusSearch}
           isSearching={c.isLoading}
           variant="blue"
           size="compact"
@@ -51,7 +57,7 @@ export function EcwidSearchInputs({ c }: { c: EcwidProductSearchController }) {
           value={c.manualTitle}
           onChange={c.setManualTitle}
           placeholder="Enter Product Title to add"
-          autoFocus
+          autoFocus={autoFocusSearch}
           variant="blue"
           size="compact"
           hideUnderline
@@ -81,7 +87,7 @@ export function EcwidSearchInputs({ c }: { c: EcwidProductSearchController }) {
           value={c.repairFilter}
           onChange={c.setRepairFilter}
           placeholder="Filter by order #, title, or SKU…"
-          autoFocus
+          autoFocus={autoFocusSearch}
           variant="blue"
           size="compact"
           hideUnderline

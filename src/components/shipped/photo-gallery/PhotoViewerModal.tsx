@@ -1,13 +1,16 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { framerTransition } from '@/design-system/foundations/motion-framer';
+import { useMotionTransition } from '@/design-system/foundations/motion-framer-hooks';
 import { zIndex as zLayer } from '@/design-system/tokens/z-index';
 import {
   X, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight,
-  AlertCircle, Trash2, Info, RotateCcw, RefreshCw,
+  AlertCircle, Trash2, Info, RotateCcw, RefreshCw, ExternalLink,
 } from '../../Icons';
 import { PhotoContextPanel } from './PhotoContextPanel';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
+import { photoHeroLayoutId } from './photo-gallery-utils';
 import type { PhotoGalleryController } from './usePhotoGallery';
 
 /** Fullscreen lightbox: zoomable image, nav arrows, thumbnail strip, toolbar. */
@@ -16,7 +19,22 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
   // Reset is always shown (fixed-width icon button) so the toolbar never reflows:
   // grayed + disabled at the default view, filled once zoom/rotation is applied.
   const canReset = zoomLevel > 1 || g.rotation !== 0;
-  const panelVisible = g.hasContext && g.panelOpen;
+  const panelVisible = g.panelOpen;
+  const reduceMotion = useReducedMotion();
+  const heroTransition = useMotionTransition(framerTransition.photoHeroMorph);
+
+  // The grid-tile → lightbox hero morph (shared `layoutId`) only ever plays for
+  // the photo the viewer opened on. Once the user navigates away it is "spent"
+  // even if they arrow back to this same photo — a matching in-viewer nav
+  // shouldn't re-trigger a travel-from-the-grid animation (motion-crossfade.md:
+  // don't animate keyboard-driven nav).
+  const heroIndexRef = useRef(currentIndex);
+  const heroSpentRef = useRef(false);
+  useEffect(() => {
+    if (currentIndex !== heroIndexRef.current) heroSpentRef.current = true;
+  }, [currentIndex]);
+  const isHeroFrame = !reduceMotion && !heroSpentRef.current && currentIndex === heroIndexRef.current;
+  const heroLayoutId = isHeroFrame ? photoHeroLayoutId(photoItems[currentIndex]?.id) : undefined;
 
   return (
     <motion.div
@@ -100,6 +118,35 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
             />
           </HoverTooltip>
 
+          {g.libraryHref ? (
+            <HoverTooltip label="Open in media library" asChild>
+              <a
+                href={g.libraryHref}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110"
+                aria-label="Open in media library"
+              >
+                <ExternalLink className="h-5 w-5 text-white" />
+              </a>
+            </HoverTooltip>
+          ) : null}
+
+          <HoverTooltip label="Toggle details (i)" asChild>
+            <IconButton
+              onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
+              aria-pressed={g.panelOpen}
+              className={
+                g.panelOpen
+                  ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
+                  : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110'
+              }
+              ariaLabel={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
+              icon={<Info className="h-5 w-5 text-white" />}
+            />
+          </HoverTooltip>
+
           {g.canDeleteCurrent && (
             <HoverTooltip label={g.deleteArmed ? 'Click again to confirm' : 'Delete photo'} asChild>
               {/* ds-raw-button: morphs icon-only ↔ icon+label ("Confirm"/"Deleting…") on arm; neither Button nor IconButton models that conditional label swap */}
@@ -120,22 +167,6 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
                   </span>
                 )}
               </button>
-            </HoverTooltip>
-          )}
-
-          {g.hasContext && (
-            <HoverTooltip label="Toggle details (i)" asChild>
-              <IconButton
-                onClick={(e) => { e.stopPropagation(); g.togglePanel(); }}
-                aria-pressed={g.panelOpen}
-                className={
-                  g.panelOpen
-                    ? 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-blue-500/30 border-blue-300/40 hover:bg-blue-500/40 hover:scale-110'
-                    : 'p-3 rounded-full transition-all text-white backdrop-blur-md border bg-white/10 hover:bg-white/20 border-white/20 hover:border-white/30 hover:scale-110'
-                }
-                ariaLabel={g.panelOpen ? 'Hide photo details' : 'Show photo details'}
-                icon={<Info className="h-5 w-5 text-white" />}
-              />
             </HoverTooltip>
           )}
         </div>
@@ -169,6 +200,8 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           <motion.img
             src={photoItems[currentIndex].url}
             alt={`Photo ${currentIndex + 1}`}
+            layoutId={heroLayoutId}
+            transition={heroLayoutId ? heroTransition : undefined}
             className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none sm:max-h-[65vh] sm:max-w-[48vw]"
             style={{ scale: zoomLevel, rotate: g.rotation, x: g.imagePosition.x, y: g.imagePosition.y }}
             draggable={false}
@@ -180,10 +213,14 @@ export function PhotoViewerModal({ g }: { g: PhotoGalleryController }) {
           </div>
         ) : photoItems[currentIndex]?.thumbUrl ? (
           // Instant low-res placeholder while the full image preloads — never a
-          // black/spinner-only stage on a slow (mobile) connection.
-          <img
+          // black/spinner-only stage on a slow (mobile) connection. Shares the
+          // hero layoutId so the grid→lightbox morph starts immediately off this
+          // (already-cached) thumbnail rather than waiting on the full-res fetch.
+          <motion.img
             src={photoItems[currentIndex].thumbUrl}
             alt={`Photo ${currentIndex + 1}`}
+            layoutId={heroLayoutId}
+            transition={heroLayoutId ? heroTransition : undefined}
             className="max-h-[78vh] max-w-[90vw] object-contain rounded-2xl shadow-2xl select-none blur-[1px] sm:max-h-[65vh] sm:max-w-[48vw]"
             draggable={false}
           />

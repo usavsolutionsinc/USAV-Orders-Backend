@@ -28,6 +28,13 @@ export interface PhotoSelection {
   selectTile: (id: number, mods?: PhotoSelectMods) => void;
   /** Select every currently-loaded photo (the header "select all"). */
   selectAll: () => void;
+  /**
+   * Replace the selection with an explicit id set — used by "select all matching
+   * filters", where the ids come from the server and may include photos not yet
+   * loaded into the grid. `selectedPhotos` only resolves the loaded subset, so
+   * id-based bulk actions (share/ZIP/delete) should read `selected` directly.
+   */
+  selectIds: (ids: number[]) => void;
   /** Clear the whole selection. */
   clear: () => void;
   /** Ensure `id` is part of the selection set used for a drag payload: returns
@@ -121,6 +128,14 @@ export function usePhotoSelection(photos: LibraryPhoto[]): PhotoSelection {
     setAnchorId(null);
   }, [photos]);
 
+  const selectIds = useCallback((ids: number[]) => {
+    const set = new Set(ids.filter((id) => Number.isFinite(id) && id > 0));
+    setSelected(set);
+    setBaseline(set);
+    setAnchorId(null);
+    setAnchorSelecting(true);
+  }, []);
+
   const clear = useCallback(() => {
     setSelected(new Set());
     setBaseline(new Set());
@@ -140,6 +155,7 @@ export function usePhotoSelection(photos: LibraryPhoto[]): PhotoSelection {
     isSelected,
     selectTile,
     selectAll,
+    selectIds,
     clear,
     resolveDragIds,
   };

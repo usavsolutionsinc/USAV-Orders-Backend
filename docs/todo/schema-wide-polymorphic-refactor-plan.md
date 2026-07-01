@@ -2,7 +2,7 @@
 
 > **Scope split (2026-06-29):** this document is the **whole-schema** view (~15 tables across 3 tiers). The **receiving / receiving_lines deep-dive** — the "streets" decomposition, the logic-vs-display separation, and the clean (non-live) destructive cutover — moved to its own doc: [`polymorphic-tables-database-refactor-plan.md`](./polymorphic-tables-database-refactor-plan.md). The receiving Tier-1 summary stays here for the cross-table picture; the detailed receiving plan lives there.
 >
-> Status: PLAN (2026-06-28; **deep code+migration scan folded in 2026-06-29**). This is a proposal for architectural cleanup and future-proofing. No implementation has started. Belongs with the multi-tenancy hardening, inventory v2, Studio/Operations, and receiving redesign initiatives.
+> Status: **Phase 0 EXECUTED (2026-07-01)**; Phases 1–4 still PLAN (2026-06-28; **deep code+migration scan folded in 2026-06-29**). Phase 0 (data-integrity fixes, reference-contract ratification, Drizzle modeling of `photo_entity_links`/`part_links`/`organization_integrations`) has landed — see the corrected Data-integrity findings section and the Phase 0 bullet list below for exactly what changed and what was already stale. Phases 1–4 (new provenance/allocation structures, dual-write, reader migration, cleanup) remain an unstarted proposal requiring separate scoping/buy-in per table. Belongs with the multi-tenancy hardening, inventory v2, Studio/Operations, and receiving redesign initiatives.
 >
 > The 2026-06-29 scan (5 parallel passes over `src/lib/drizzle/schema.ts` (3,129 lines), all 305 files in `src/lib/migrations/`, and `src/lib/workflow/` / `src/lib/integrations/`) produced the concrete appendices at the end of this doc: **Appendix A** (exact contract of every existing polymorphic surface + 10 cross-surface inconsistencies), **Appendix B** (Tier-1 monolith before-snapshots), **Appendix C** (all 48 jsonb columns + variant-config-vs-junk-drawer taxonomy), **Appendix D** (discriminator/status-column inventory: ~70 status columns, only ~10 real enums), and a **Data-integrity findings** section of bugs/drift to fix *regardless* of the refactor. Tiered findings and target shapes below were expanded with what the scan found.
 
@@ -98,24 +98,80 @@ Legacy retired-but-present tables (e.g. `sku`) are out of scope except for clean
 
 ## Data-integrity findings surfaced by the scan (fix regardless of the refactor)
 
-The scan turned up concrete defects and model drift that are independent of the larger refactor — small, mostly-safe fixes worth landing first because they otherwise *lie to readers* (Drizzle types) or *silently reject valid writes* (CHECK regression). These are Phase-0 work.
+> **Status update (2026-07-01, Phase 0 executed):** all five findings below were investigated against the live
+> DB and either fixed or found to be already-resolved / re-scoped. Two turned out to be **stale** — the live
+> database had already moved past what the 2026-06-29 scan saw — and investigating one of them (#5) surfaced a
+> **new, real, currently-live tenant-isolation bug** that is unrelated to this refactor. See the per-item notes.
 
-1. **`reason_codes` CHECK regression — latent write rejection.** `2026-06-28d_reason_codes_label_presentation.sql` added `'lifecycle_unshipped'`/`'lifecycle_outbound'` to `reason_codes_flow_context_chk`; the later-applied `2026-06-28e_reason_codes_sku_stock_adjust.sql` **redefined the constraint and dropped both**. The live CHECK is `('inventory_event','substitution','short_pick','receiving_exception','repair_failure','verdict_detail','warranty_denial','inventory_adjust')` — so any write with `flow_context='lifecycle_*'` violates it. Reconcile with the label-vocabulary layer (`label-vocabulary-layer`, migration `2026-06-28d` authored-not-applied) before that layer goes live. *Fix: a follow-up migration that re-adds the lifecycle contexts to the final CHECK (or confirm the label layer doesn't use them).*
+1. **~~`reason_codes` CHECK regression~~ — RESOLVED, was already stale when this doc was written.** A fifth
+   migration, `2026-06-29e_reason_codes_serial_absent.sql` (authored in the same commit as this doc,
+   `c49ef8ce`), sorts after both `28d` and `28e` and explicitly re-affirms the full union — it restores
+   `lifecycle_unshipped`/`lifecycle_outbound` and adds `serial_absent_reason` on top. Verified live: the actual
+   `reason_codes_flow_context_chk` definition today is
+   `CHECK (flow_context = ANY (ARRAY['inventory_event','substitution','short_pick','receiving_exception','repair_failure','verdict_detail','warranty_denial','inventory_adjust','lifecycle_unshipped','lifecycle_outbound','serial_absent_reason']))`
+   — both lifecycle values are present. The label-vocabulary migration (`2026-06-28d_reason_codes_label_presentation.sql`)
+   is also confirmed **applied** live (`tone`/`icon` columns exist) — the separate auto-memory note claiming
+   "authored, not applied" was stale and has been corrected. No migration needed; this finding is closed.
 
-2. **Drizzle models that contradict the live DB (type-level lies).** Several `pgTable` defs have drifted from the SQL-migration source of truth:
-   - `photos` (`schema.ts:~1001`) still declares the **dropped** columns `entityType`/`entityId`/`url` and omits `organizationId`.
-   - `reason_codes` (`~2225`) omits 5 live columns (`organization_id`, `flow_context`, `applies_to`, `tone`, `icon`) and still asserts a **global** `code` UNIQUE + non-null `category` that the DB no longer has.
-   - `serial_units` (`~2110`) omits `organization_id` (it lives only in SQL migrations, with the org-scoped unique indexes `ux_serial_units_org_normalized_serial` / `ux_serial_units_org_unit_uid`).
-   - `work_assignments` / `documents` omit `organizationId`.
-   - `receiving_lines` omits the GENERATED `zoho_purchaseorder_number_norm`.
-   - `photo_entity_links` and `part_links` are **not modeled in Drizzle at all** (managed via raw SQL + their lib modules).
-   *Fix: reconcile each model to the live schema (or annotate "SQL-migration is SoT; model intentionally partial" where that's the deliberate choice, as `serial_units` already comments).* This is a pre-req for any reader-migration phase that trusts Drizzle types.
+2. **Drizzle models that contradict the live DB (type-level lies) — RESOLVED.** Fixed directly in
+   `src/lib/drizzle/schema.ts`:
+   - `photos` — dropped `entityType`/`entityId`/`url`; added `organizationId`, `deletedFromBlobAt`, `poRef`.
+   - `reason_codes` — added `organizationId`, `flowContext`, `appliesTo`, `tone`, `icon`; removed the stale
+     global `code` UNIQUE (replaced with the real composite `uniqueIndex` on `(organizationId, flowContext,
+     code)`, matching live `reason_codes_org_flow_code_key`); `category` is now nullable (matches the live
+     CHECK, which explicitly allows `NULL`).
+   - `work_assignments` / `documents` — added `organizationId`.
+   - `serial_units` — added the previously-undocumented `handlingUnitId` (bigint, nullable) column found live
+     during the investigation. `organization_id` stays **intentionally** omitted per the table's existing
+     comment ("SQL-migration is SoT") — that's the deliberate-partial-model case this finding's own fix text
+     called out as acceptable, not a bug.
+   - `receiving_lines` — the omitted GENERATED `zoho_purchaseorder_number_norm` is **also already deliberately
+     annotated** (inline comment explains drizzle-kit could mishandle the generated expression) — no change
+     needed, same acceptable-partial-model case.
+   - `photo_entity_links`, `part_links`, `organization_integrations` — all three now modeled in Drizzle (see
+     finding-adjacent bullet below); full live DDL was captured first so every column/FK/index matches exactly.
+   New contract for future tables: `.claude/rules/polymorphic-tables.md` (point 8: model in Drizzle in the same PR).
 
-3. **Orphan-on-parent-delete (missing polymorphic integrity).** `documents`, `entity_notes`, and the **owner side of `shipment_links`** have no delete trigger and no FK on the polymorphic id — deleting the parent (`order`/`receiving`/etc.) orphans their rows. `shipment_links`' own header promised a Phase-4 cleanup trigger that was never created. `work_assignments`' cancel-trigger covers only `ORDER`+`RECEIVING`, not its other 3 enum entity types. *Fix: add the missing BEFORE-DELETE cascade/cancel triggers (or accept + document the orphan, e.g. for an append-only audit note).*
+3. **Orphan-on-parent-delete — RESOLVED for the confirmed, unambiguous gaps.**
+   `2026-07-01j_polymorphic_orphan_delete_triggers.sql` adds:
+   - `documents` — cascade-delete on `orders` (entity_type `ORDER` and the legacy `SHIPPING_LABEL` alias) and
+     `repair_service` (`REPAIR`), via a new `fn_delete_documents_on_parent_delete()`, mirroring
+     `fn_delete_photos_on_parent_delete()`.
+   - `entity_notes` — cascade-delete on `sales_orders` (its one real writer only ever uses
+     `entity_type='sales_order'`), via `fn_delete_entity_notes_on_parent_delete()`.
+   - `shipment_links` (owner side) — cascade-delete on `receiving` and `orders`, closing the Phase-4 trigger
+     the birth migration's own header flagged as planned-but-never-created, via
+     `fn_delete_shipment_links_on_owner_delete()`.
+   - `work_assignments` — extended the existing `fn_cancel_work_assignments_on_entity_delete()` family (already
+     generic via `TG_ARGV[0]`) to the 3 previously-uncovered `work_entity_type_enum` values: `REPAIR` →
+     `repair_service`, `FBA_SHIPMENT` → `fba_shipments`, `SKU_STOCK` → `sku_stock`.
+   - **Deliberately left uncovered, per the "accept + document" option this finding itself offered:**
+     `documents.entity_type = 'WALK_IN_ORDER'` — no confirmed writer exists (the only reader,
+     `src/app/api/walk-in/receipt/[id]/route.tsx`, queries a `data` column `documents` doesn't even have — that
+     read path is already dead) and no parent table could be confirmed. Revisit if/when a real writer lands.
 
-4. **No entity-existence validation anywhere.** The only surface that ever validated that a polymorphic `entity_id` referenced a live row was `photos` (`fn_validate_photo_entity_ref`), and it was **removed** in Phase E (`2026-06-21`, "validation moves to application + `photo_entity_links` inserts"). Decide whether the contract requires a validation trigger or explicitly delegates to the writing lib function.
+4. **No entity-existence validation anywhere — DECIDED, not left open.** Ratified in
+   `.claude/rules/polymorphic-tables.md` (point 6): the contract delegates entity-existence validation to the
+   **application layer** (the domain helper performing the write), matching the deliberate choice already made
+   for `photos` in Phase E. No DB-side validation trigger is planned for any surface, existing or new.
 
-5. **`organization_id` retrofit gaps.** `sku_platform_ids` has no `organization_id` (cross-tenant-leak risk on a SKU→external-id map). Confirm it's covered by a parent-scoped read path or add the column + enforce.
+5. **~~`sku_platform_ids` has no `organization_id`~~ — RESOLVED, was already stale when this doc was written.**
+   `2026-05-23_org_id_on_business_tables.sql` added the column and `2026-06-22d_enforce_tenant_isolation_sku_platform_ids.sql`
+   FORCE-enabled RLS on it, both **before** the 2026-06-29 scan ran. The scan's finding almost certainly came
+   from reading the (separately stale) Drizzle model, which still only declares 8 of the table's live 18
+   columns — that drift is real but low-risk (the model isn't queried anywhere; harmless as a documentation gap,
+   not fixed in this pass since it wasn't one of the 5 tables finding #2 named).
+   >
+   > **New finding surfaced while investigating this one — real, currently-live, unrelated to this refactor:**
+   > two reader modules join `sku_platform_ids` (+ `sku_catalog`/`sku_stock`) by SKU string with **zero**
+   > `organization_id` predicate: `src/lib/neon/packer-log-enrichment.ts` (the `ecwid_lookup` lateral) and
+   > `src/lib/neon/packer-logs-week.ts` — the latter's `fetchPackerLogRows()` has **no org parameter or filter
+   > at all**, and `src/app/api/packerlogs/route.ts` `GET` calls it without `ctx.organizationId`, meaning that
+   > route returns **every tenant's** packing-log rows to any authenticated caller. A third path,
+   > `src/lib/picking/sessions.ts`'s legacy `loadPickTasks(orderId)` branch (still exercised by
+   > `/api/orders/[id]/pick-tasks`, whose own comment acknowledges the gap), does the same unscoped SKU-string
+   > join. **This is a genuine tenant-isolation bug, not a polymorphic-modeling issue — flagged here because it
+   > surfaced during this investigation, tracked as a separate follow-up, not fixed in this pass.**
 
 ## Guiding principles & invariants (non-negotiable)
 
@@ -244,14 +300,14 @@ And **model it in Drizzle in the same PR** (Appendix A #8: `photo_entity_links`/
 
 Each phase must be shippable. Follow the pattern from `platform-account-type-catalog-plan.md` and the inventory v2 / receiving redesign migrations.
 
-**Phase 0 — Audit & Foundation (no schema change)**
-- Finalize this plan + get buy-in.
-- Inventory every reader/writer of the key denorm columns and jsonb payloads. *(Appendices A–D are the starting inventory: the discriminator/jsonb/status column catalog is done; the remaining work is mapping each to its readers/writers in `src/lib` + `src/app/api`.)*
-- **Land the Data-integrity fixes first** (the section above) — they're additive/safe and unblock trusting Drizzle types in later reader phases: reconcile the drifted models, fix the `reason_codes` CHECK regression, add the missing orphan-prevention triggers, decide the validation-trigger-vs-app policy, close the `sku_platform_ids` org_id gap.
-- **Ratify the reference contract** (naming convention, id width, named-CHECK-vs-enum policy, integrity-trigger requirement) so every Phase-1 table is born conformant.
-- Add or strengthen partial indexes + integrity triggers for any new polymorphic surfaces.
-- Create or expand the catalog resolvers (mirror `getOrgTypes` etc.).
-- Model the currently-unmodeled tables in Drizzle (`photo_entity_links`, `part_links`, `organization_integrations`).
+**Phase 0 — Audit & Foundation (no schema change) — EXECUTED 2026-07-01**
+- Finalize this plan + get buy-in. ✅
+- Inventory every reader/writer of the key denorm columns and jsonb payloads. *(Appendices A–D are the starting inventory: the discriminator/jsonb/status column catalog is done; the remaining work — mapping each to its readers/writers in `src/lib` + `src/app/api` — is still open for Phase 1+.)*
+- **Land the Data-integrity fixes first** ✅ — see the corrected findings above. Two of five (`reason_codes` CHECK, `sku_platform_ids` org_id) turned out to already be resolved before this pass ran; the Drizzle-drift and orphan-delete-trigger findings were fixed directly (`src/lib/drizzle/schema.ts` edits + `2026-07-01j_polymorphic_orphan_delete_triggers.sql`); the validation-trigger-vs-app question was decided (app-side, ratified in `.claude/rules/polymorphic-tables.md`). A real, unrelated tenant-isolation bug (`packer-log-enrichment.ts` / `packer-logs-week.ts` / `picking/sessions.ts`) surfaced during the `sku_platform_ids` investigation and is tracked separately, not fixed here.
+- **Ratify the reference contract** ✅ — `.claude/rules/polymorphic-tables.md` (naming = `entity_type`/`entity_id`, id width = BIGINT default, named-CHECK-over-enum, integrity via real FK or a shared dispatch-on-`TG_ARGV[0]` trigger family, tenant-from-birth, model-in-Drizzle-same-PR). Applies to **new** surfaces only — existing ones (`shipment_links`' `owner_type`/`owner_id`, `work_assignments`' pg enum + INTEGER id, etc.) are not retroactively renamed.
+- Add or strengthen partial indexes + integrity triggers for any new polymorphic surfaces. ✅ (the orphan-delete migration above)
+- Create or expand the catalog resolvers (mirror `getOrgTypes` etc.). Not done — no new catalog resolvers were needed for the Phase-0 scope; revisit in Phase 1.
+- Model the currently-unmodeled tables in Drizzle (`photo_entity_links`, `part_links`, `organization_integrations`). ✅ all three added to `src/lib/drizzle/schema.ts`, matched against live DDL column-for-column.
 
 **Phase 1 — New structures + catalog linkage (additive)**
 - New tables or columns for provenance, typed facts, refined listings (e.g. `serial_unit_provenance`, improvements to `platform_listings`).

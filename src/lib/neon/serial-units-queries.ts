@@ -427,6 +427,54 @@ export async function resolvePriorOutbound(
   return null;
 }
 
+/**
+ * The receiving_line each serial is CURRENTLY associated with — resolved from
+ * the unit's most recent `inventory_events` row carrying a `receiving_line_id`
+ * (falling back to `origin_receiving_line_id` for a unit with no such event,
+ * e.g. legacy rows pre-dating the event log).
+ *
+ * Deliberately NOT `serial_units.origin_receiving_line_id` alone: that column
+ * is a birth fact — `upsertSerialUnit`'s UPDATE path COALESCEs it, so it is
+ * set once on first attach and never advances. A unit that ships, returns,
+ * and is re-received under a different PO/carton gets a NEW receiving_lines
+ * row, but `origin_receiving_line_id` keeps pointing at the very first one
+ * forever — every "which PO is this serial on" display that joined on it
+ * directly showed stale, first-ever data instead of the latest. (Other call
+ * sites, e.g. "was this carton ever opened" and the detach safety-scope
+ * check, correctly WANT the immutable origin and must keep reading that
+ * column directly — this resolver is only for "current" lookups.)
+ */
+export async function resolveCurrentReceivingLineIds(
+  serialUnitIds: number[],
+  orgId: OrgId,
+): Promise<Map<number, number>> {
+  const map = new Map<number, number>();
+  if (serialUnitIds.length === 0) return map;
+  const result = await tenantQuery<{ serial_unit_id: number; receiving_line_id: number | null }>(
+    orgId,
+    `SELECT su.id AS serial_unit_id,
+            COALESCE(cur.receiving_line_id, su.origin_receiving_line_id) AS receiving_line_id
+       FROM serial_units su
+       LEFT JOIN LATERAL (
+         SELECT ie.receiving_line_id
+           FROM inventory_events ie
+          WHERE ie.serial_unit_id = su.id
+            AND ie.receiving_line_id IS NOT NULL
+            AND ie.organization_id = $2
+          ORDER BY ie.occurred_at DESC, ie.id DESC
+          LIMIT 1
+       ) cur ON true
+      WHERE su.id = ANY($1::int[]) AND su.organization_id = $2`,
+    [serialUnitIds, orgId],
+  );
+  for (const row of result.rows) {
+    if (row.receiving_line_id != null) {
+      map.set(Number(row.serial_unit_id), Number(row.receiving_line_id));
+    }
+  }
+  return map;
+}
+
 export async function listByReceivingLine(
   receivingLineId: number,
   orgId?: OrgId,

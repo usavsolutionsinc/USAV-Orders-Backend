@@ -26,6 +26,7 @@
 
 import { tenantQuery } from '@/lib/tenancy/db';
 import { getStorageAdapter } from '@/lib/photos/storage/registry';
+import { photoExportBaseName } from '@/lib/photos/display-names';
 
 /** GCS v4 signed URLs cap at 7 days; clamp any requested TTL to that ceiling. */
 const MAX_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -60,6 +61,7 @@ export interface GeneratePhotoShareLinksResult {
 interface PhotoStorageMetaRow {
   id: number;
   poRef: string | null;
+  ticketId: number | null;
   photoType: string | null;
   provider: string | null;
   bucket: string | null;
@@ -98,9 +100,15 @@ const defaultDeps: ShareLinksDeps = {
       provider: string | null;
       bucket: string | null;
       object_key: string | null;
+      ticket_id: string | null;
     }>(
       organizationId,
       `SELECT p.id, p.po_ref, p.photo_type,
+              (SELECT lz.entity_id FROM photo_entity_links lz
+                WHERE lz.photo_id = p.id
+                  AND lz.organization_id = p.organization_id
+                  AND lz.entity_type = 'ZENDESK_TICKET'
+                LIMIT 1) AS ticket_id,
               s.provider, s.bucket, s.object_key
          FROM photos p
          LEFT JOIN photo_storage s
@@ -114,6 +122,7 @@ const defaultDeps: ShareLinksDeps = {
     return res.rows.map((r) => ({
       id: Number(r.id),
       poRef: r.po_ref,
+      ticketId: r.ticket_id != null ? Number(r.ticket_id) : null,
       photoType: r.photo_type,
       provider: r.provider,
       bucket: r.bucket,
@@ -127,9 +136,12 @@ const defaultDeps: ShareLinksDeps = {
 
 /** Build a stable, filesystem-safe base name for a photo. */
 function baseFilename(row: PhotoStorageMetaRow): string {
-  if (row.poRef?.trim()) return `PO-${row.poRef.trim()}`;
-  const type = row.photoType?.toLowerCase().replace(/_/g, '-');
-  return type ? `${type}` : `photo-${row.id}`;
+  return photoExportBaseName({
+    id: row.id,
+    poRef: row.poRef,
+    ticketId: row.ticketId,
+    photoType: row.photoType,
+  });
 }
 
 /**

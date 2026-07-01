@@ -1,5 +1,7 @@
 # Receiving — Triage/Scan mode + layout improvements
 
+> **v2 redesign plan:** see [`receiving-triage-redesign-plan.md`](./receiving-triage-redesign-plan.md) for the current UX/data-model spec (polymorphic triage vs unbox split, Done tab, shelf+lane staging, unfound todo). This file retains the **v1 implementation history** below.
+
 **Status:** Phases 1–4 BUILT (2026-06-06); Phase 5 entry-point left at default (bare→Unbox) · **Date:** 2026-06-06
 
 > **Implemented:** mode registry reorder/relabel across all 4 sources + new `triage`

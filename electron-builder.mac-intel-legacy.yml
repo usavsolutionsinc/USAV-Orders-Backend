@@ -1,5 +1,5 @@
 appId: com.usav.orders.desktop
-productName: USAV Orders
+productName: Cycle Forge
 
 # Legacy Intel macOS build.
 #
@@ -45,11 +45,14 @@ mac:
         - x64
   # Pin filename so the install-page classifier still buckets this as macX64
   # (anything without "arm64" in the name goes there). The "-legacy" suffix
-  # makes it easy to tell apart from a future modern Intel build.
-  artifactName: ${productName}-${version}-x64-legacy.${ext}
+  # makes it easy to tell apart from a future modern Intel build. Space-free
+  # (not ${productName}) — GitHub Releases rewrites spaces to dots, which
+  # would desync this name from latest-mac.yml, same reasoning as
+  # electron-builder.yml's artifactName.
+  artifactName: Cycle-Forge-${version}-x64-legacy.${ext}
 
 dmg:
-  title: USAV Orders ${version} (Intel · legacy)
+  title: Cycle Forge ${version} (Intel · legacy)
   contents:
     - x: 410
       y: 150

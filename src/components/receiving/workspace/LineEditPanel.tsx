@@ -201,7 +201,11 @@ export function LineEditPanel({
             that updates in real time over Ably; needs a linked shipment for the
             photo query. */}
         {row.receiving_id != null ? (
-          <ReceivingPhotoPeek receivingId={row.receiving_id} staffId={Number(staffId) || 0} />
+          <ReceivingPhotoPeek
+            receivingId={row.receiving_id}
+            staffId={Number(staffId) || 0}
+            poRef={c.poNumber || null}
+          />
         ) : null}
       </div>
 

@@ -233,6 +233,11 @@ export async function buildReceivingClaimTemplate(
     ? (carton.zoho_purchaseorder_number || carton.zoho_purchaseorder_id) as string
     : 'Unfound PO';
   const trackingRef = carton.tracking_number || 'n/a';
+  // Not routed through effectiveIntakeKind (the line-vs-carton-default SoT,
+  // src/lib/receiving/kinds/registry.ts): this carton shape carries no
+  // carton-level default field, and receivingLabelTypeDisplay below must pass
+  // an org-custom type string through verbatim rather than have it silently
+  // coerced to 'PO' by that resolver's strict built-in-kind validation.
   const effectiveReceivingType = (carton.receiving_type || carton.intake_type || 'PO').trim().toUpperCase();
   const platformLabel = sourcePlatformLabel(carton.source_platform);
   const typeLabel = receivingLabelTypeDisplay(effectiveReceivingType);

@@ -2,9 +2,11 @@ const { app, BrowserWindow, Menu, shell, ipcMain, session, dialog } = require('e
 const path = require('path');
 
 // File logger — makes auto-update activity inspectable after the fact instead of
-// vanishing into a hidden console. Logs land at:
-//   Windows: %AppData%\USAV Orders\logs\main.log
-//   macOS:   ~/Library/Logs/USAV Orders/main.log
+// vanishing into a hidden console. Logs land at (path derives from productName,
+// see electron-builder.yml — existing installs pre-rebrand keep logging under
+// the old "USAV Orders" folder until reinstalled):
+//   Windows: %AppData%\Cycle Forge\logs\main.log
+//   macOS:   ~/Library/Logs/Cycle Forge/main.log
 // Wrapped defensively: a logging dependency must never be able to stop the app
 // from launching, so fall back to console if electron-log is unavailable.
 let log;
@@ -289,7 +291,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    title: 'USAV Orders',
+    title: 'Cycle Forge',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -333,7 +335,7 @@ function createWindow() {
       <html>
         <body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0f172a; color: #e2e8f0; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0;">
           <div style="max-width:520px; padding:32px; border:1px solid rgba(148,163,184,.25); border-radius:18px; background:rgba(15,23,42,.92); box-shadow:0 20px 60px rgba(0,0,0,.35);">
-            <h1 style="margin:0 0 12px; font-size:24px;">USAV Orders is unavailable</h1>
+            <h1 style="margin:0 0 12px; font-size:24px;">Cycle Forge is unavailable</h1>
             <p style="margin:0 0 20px; line-height:1.5; color:#cbd5e1;">
               The desktop shell could not load the configured app URL. Check network access or confirm the target site is online.
             </p>
@@ -418,7 +420,7 @@ if (!isDev && !isLegacyElectron) {
       dialog.showMessageBox({
         type: 'info',
         title: 'Update ready',
-        message: `USAV Orders ${info.version} has been downloaded.`,
+        message: `Cycle Forge ${info.version} has been downloaded.`,
         detail: 'Restart now to apply the update, or it will install automatically next time you quit.',
         buttons: ['Restart Now', 'Later'],
         defaultId: 0,

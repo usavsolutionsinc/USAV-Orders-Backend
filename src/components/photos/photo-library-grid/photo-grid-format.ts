@@ -1,15 +1,16 @@
 import type { LibraryPhoto } from '../photo-library-types';
 import type { PhotoLibrarySourceScope } from '@/lib/photos/library-filter-state';
 import type { PhotoGalleryInput, PhotoMeta } from '@/components/shipped/photo-gallery/photo-gallery-utils';
+import {
+  photoFileName,
+  photoGroupHeaderLabel,
+  photoGroupKey,
+  photoPrimaryLabel,
+  UNLINKED_PHOTO_GROUP_KEY,
+} from '@/lib/photos/display-names';
 
-/**
- * Ticket-number grouping key for a photo. `poRef` is the denormalized ticket
- * reference stamped on every row at upload time (PO ref for receiving, order/
- * scan ref for packing, unit/sku ref for serial units — see
- * `lib/photos/resolve-po-ref.ts`). Photos with no ref fall into an "Unlinked"
- * bucket so they stay visible rather than disappearing from the grouped view.
- */
-export const UNLINKED_TICKET_KEY = '__unlinked__';
+/** @deprecated Use {@link UNLINKED_PHOTO_GROUP_KEY} from display-names. */
+export const UNLINKED_TICKET_KEY = UNLINKED_PHOTO_GROUP_KEY;
 
 export interface TicketGroup {
   key: string;
@@ -20,18 +21,21 @@ export interface TicketGroup {
   latestAt: string;
 }
 
-/** Group photos by PO# (`poRef`); within a group order oldest→newest (left→right). */
-export function groupPhotosByTicket(photos: LibraryPhoto[]): TicketGroup[] {
+/** Group photos by ticket# (claims) or PO#/order ref; oldest→newest within each group. */
+export function groupPhotosByTicket(
+  photos: LibraryPhoto[],
+  scope: PhotoLibrarySourceScope,
+): TicketGroup[] {
   const order: string[] = [];
   const map = new Map<string, TicketGroup>();
   for (const photo of photos) {
-    const ref = photo.poRef?.trim();
-    const key = ref || UNLINKED_TICKET_KEY;
+    const key = photoGroupKey(photo, scope);
     let group = map.get(key);
     if (!group) {
+      const raw = key.startsWith('po:') ? key.slice('po:'.length) : undefined;
       group = {
         key,
-        label: ref || 'Unlinked',
+        label: photoGroupHeaderLabel(key, scope, raw),
         photos: [],
         latestAt: photo.createdAt,
       };
@@ -47,29 +51,17 @@ export function groupPhotosByTicket(photos: LibraryPhoto[]): TicketGroup[] {
   return order.map((key) => map.get(key)!);
 }
 
-/**
- * Whether a photo's name should read as a Zendesk ticket# rather than a PO#.
- * Claims photos carry the ticket id the claim was opened under (often the same
- * receiving the PO# came from) — in the claims scope we surface that ticket# so
- * the same physical photos are findable by their Zendesk reference.
- */
-function ticketIdForLabel(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): number | null {
-  return scope === 'claims' && photo.ticketId != null ? photo.ticketId : null;
-}
+export { photoFileName, photoPrimaryLabel };
 
-export function photoFileName(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): string {
-  const ticketId = ticketIdForLabel(photo, scope);
-  if (ticketId != null) return `ticket-${ticketId}-${photo.id}.jpg`;
-  if (photo.poRef) return `PO-${photo.poRef}-${photo.id}.jpg`;
-  const type = photo.photoType?.toLowerCase().replace(/_/g, '-') ?? 'photo';
-  return `${type}-${photo.id}.jpg`;
-}
-
-export function photoPrimaryLabel(photo: LibraryPhoto, scope: PhotoLibrarySourceScope): string {
-  const ticketId = ticketIdForLabel(photo, scope);
-  if (ticketId != null) return `Ticket ${ticketId}`;
-  if (photo.poRef) return `PO ${photo.poRef}`;
-  return photo.photoType?.replace(/_/g, ' ').toLowerCase() ?? `Photo ${photo.id}`;
+export function documentPrimaryLabel(photo: LibraryPhoto): string {
+  if (photo.filename?.trim()) return photo.filename.trim();
+  if (photo.documentType === 'shipping_label') {
+    return photo.tracking?.trim() ? `Label · ${photo.tracking}` : 'Shipping label';
+  }
+  if (photo.documentType === 'packing_slip') {
+    return photo.poRef?.trim() ? `Slip · ${photo.poRef}` : 'Packing slip';
+  }
+  return photo.poRef?.trim() ? `Order ${photo.poRef}` : `Document ${Math.abs(photo.id)}`;
 }
 
 /** Project a `LibraryPhoto` into the gallery's context-panel meta. */

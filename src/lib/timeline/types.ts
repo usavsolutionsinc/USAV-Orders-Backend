@@ -72,4 +72,18 @@ export interface TimelineItem {
   badges?: TimelineItemBadge[];
   /** Optional leading glyph rendered in place of the dot. */
   icon?: React.ReactNode;
+  /**
+   * The adapter's raw source event-type string (e.g. `inventory_events.event_type`
+   * — 'SHIPPED', 'RETURNED', …), when the source spine has one. Deliberately
+   * NOT domain vocabulary the renderer or a generic consumer should switch on
+   * — {@link EventTimeline} never reads this field. It exists so a specific,
+   * already-domain-aware merge/section component (e.g. `SerialJourneySection`
+   * counting a serial's ship/return round trips) can key off a stable enum
+   * value instead of pattern-matching the display `title` string, which is
+   * free to change without warning. Only adapters backed by a real event-type
+   * enum set it (`inventoryEventsToTimeline`, `opsEventsToTimeline`); the
+   * others (SAL activity types, audit actions, carrier status categories,
+   * warranty events) leave it undefined.
+   */
+  sourceEventType?: string;
 }

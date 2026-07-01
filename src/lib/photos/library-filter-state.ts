@@ -5,6 +5,7 @@
  * Phase 2: optional AI search mode via `searchMode=ask` (future).
  */
 
+import { BUILTIN_IMAGE_TYPES } from '@/lib/photos/image-types';
 import { getCurrentPSTDateKey } from '@/utils/date';
 
 export interface PhotoLibraryFilterState {
@@ -44,18 +45,26 @@ export interface PhotoLibraryFilterState {
    */
   poFinder?: string;
   poFinderKind?: PhotoFinderKind;
+  /** Outbound scope only — filter to shipping_label, packing_slip, or all (omit). */
+  documentType?: OutboundDocumentTypeFilter;
+  /** Outbound scope — `pack_photos` shows PACKER_LOG photos instead of documents. */
+  outboundMedia?: OutboundMediaFilter;
 }
+
+export type OutboundMediaFilter = 'documents' | 'pack_photos';
+
+export type OutboundDocumentTypeFilter = 'shipping_label' | 'packing_slip' | 'all';
 
 /**
  * Identifier kinds the unified PO-photo finder accepts. 'any' is the smart
- * scope: resolve the value as serial OR tracking OR order OR PO → that PO's
- * photos, with a text/OCR fallback. The four specific kinds force one path.
+ * scope: resolve the value as serial OR tracking OR order OR PO OR Zendesk ticket
+ * → matching photos, with a text/OCR fallback. The specific kinds force one path.
  */
-export type PhotoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'any';
+export type PhotoFinderKind = 'order' | 'tracking' | 'serial' | 'po' | 'ticket' | 'any';
 
 /** Sidebar search field-scope. 'all' maps to the 'any' finder kind (smart
  *  resolve across every identifier + text/OCR); the rest force one kind. */
-export type PhotoSearchField = 'all' | 'po' | 'order' | 'tracking' | 'serial';
+export type PhotoSearchField = 'all' | 'po' | 'order' | 'tracking' | 'serial' | 'ticket';
 
 /** The finder kind a sidebar field-scope resolves to. */
 export function finderKindForField(field: PhotoSearchField): PhotoFinderKind {
@@ -69,6 +78,7 @@ export function fieldForFinderKind(kind: PhotoFinderKind | undefined): PhotoSear
 
 export const PHOTO_SEARCH_FIELDS: readonly PhotoSearchField[] = [
   'all',
+  'ticket',
   'po',
   'order',
   'tracking',
@@ -77,11 +87,33 @@ export const PHOTO_SEARCH_FIELDS: readonly PhotoSearchField[] = [
 
 export const PHOTO_SEARCH_FIELD_LABELS: Record<PhotoSearchField, string> = {
   all: 'All',
+  ticket: 'Ticket #',
   po: 'PO #',
   order: 'Order #',
   tracking: 'Tracking #',
   serial: 'Serial #',
 };
+
+/** First built-in media type — default sidebar selection on bare page load. */
+export const DEFAULT_PHOTO_LIBRARY_MEDIA_SCOPE = BUILTIN_IMAGE_TYPES[0].key;
+
+/** True when no explicit media type is pinned in the URL (bare or `sourceScope=all`). */
+export function isPhotoLibraryMediaTypeUnset(filters: PhotoLibraryFilterState): boolean {
+  if (filters.imageType) return false;
+  const scope = filters.sourceScope;
+  return !scope || scope === 'all';
+}
+
+/** Patch applied when the library opens without a media-type selection. */
+export function defaultPhotoLibraryMediaTypePatch(): Partial<PhotoLibraryFilterState> {
+  return {
+    sourceScope: DEFAULT_PHOTO_LIBRARY_MEDIA_SCOPE,
+    imageType: undefined,
+    ...todayFoldersDateFilter(),
+    poRef: undefined,
+    label: undefined,
+  };
+}
 
 export function isPhotoFinderKind(value: string | null | undefined): value is PhotoFinderKind {
   return (
@@ -89,6 +121,7 @@ export function isPhotoFinderKind(value: string | null | undefined): value is Ph
     value === 'tracking' ||
     value === 'serial' ||
     value === 'po' ||
+    value === 'ticket' ||
     value === 'any'
   );
 }
@@ -100,7 +133,8 @@ export type PhotoLibrarySourceScope =
   | 'local_pickup'
   | 'packing'
   | 'repair'
-  | 'claims';
+  | 'claims'
+  | 'outbound';
 
 export type PhotoLibraryDatePreset = 'all' | 'today' | 'yesterday' | 'last7' | 'custom';
 
@@ -108,7 +142,21 @@ export type PhotoLibrarySortMode = 'recent' | 'oldest';
 
 export type PhotoLibraryViewMode = 'grid-sm' | 'grid-lg' | 'grid-ticket' | 'folders' | 'list';
 
-export const PHOTO_LIBRARY_PAGE_SIZE = 24;
+/**
+ * Canonical left→right view order. Single source for both the header toggle
+ * order (VIEW_OPTIONS in PhotoLibraryHeader) and the `1`–`5` keyboard shortcuts
+ * (useMediaLibraryShortcuts) so the digit always matches the on-screen position.
+ */
+export const PHOTO_LIBRARY_VIEW_ORDER: readonly PhotoLibraryViewMode[] = [
+  'grid-sm',
+  'grid-lg',
+  'folders',
+  'grid-ticket',
+  'list',
+];
+
+/** Server page size for the library query (usePhotoLibrary requests this many per page). */
+export const PHOTO_LIBRARY_PAGE_SIZE = 48;
 
 export const PHOTO_SOURCE_SCOPE_LABELS: Record<PhotoLibrarySourceScope, string> = {
   all: 'All photos',
@@ -117,6 +165,14 @@ export const PHOTO_SOURCE_SCOPE_LABELS: Record<PhotoLibrarySourceScope, string> 
   packing: 'Packing',
   repair: 'Repair services',
   claims: 'Zendesk Claims',
+  outbound: 'Outbound',
+};
+
+export const OUTBOUND_DOCUMENT_TYPE_LABELS: Record<OutboundDocumentTypeFilter | 'pack_photos', string> = {
+  all: 'All documents',
+  shipping_label: 'Shipping labels',
+  packing_slip: 'Packing slips',
+  pack_photos: 'Pack photos',
 };
 
 export const PHOTO_ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -145,9 +201,15 @@ export function entityTypeForSourceScope(scope: PhotoLibrarySourceScope): string
       return 'SERIAL_UNIT';
     case 'claims':
       return 'ZENDESK_TICKET';
+    case 'outbound':
+      return undefined;
     default:
       return undefined;
   }
+}
+
+export function isOutboundLibraryScope(scope: PhotoLibrarySourceScope | undefined): boolean {
+  return scope === 'outbound';
 }
 
 /** The `receiving.source` value to scope to (`local_pickup`), or undefined. */
@@ -182,10 +244,16 @@ function parseSourceScope(raw: string | null): PhotoLibrarySourceScope | undefin
     raw === 'local_pickup' ||
     raw === 'packing' ||
     raw === 'repair' ||
-    raw === 'claims'
+    raw === 'claims' ||
+    raw === 'outbound'
   ) {
     return raw as PhotoLibrarySourceScope;
   }
+  return undefined;
+}
+
+function parseDocumentTypeFilter(raw: string | null): OutboundDocumentTypeFilter | undefined {
+  if (raw === 'shipping_label' || raw === 'packing_slip' || raw === 'all') return raw;
   return undefined;
 }
 
@@ -298,6 +366,10 @@ export function parsePhotoLibraryFilters(params: URLSearchParams): PhotoLibraryF
   set('q', 'q');
   set('damageDetected', 'damageDetected');
   set('hasAnalysis', 'hasAnalysis');
+  const documentType = parseDocumentTypeFilter(params.get('documentType'));
+  if (documentType && documentType !== 'all') next.documentType = documentType;
+  const outboundMedia = params.get('outboundMedia');
+  if (outboundMedia === 'pack_photos') next.outboundMedia = 'pack_photos';
   return next;
 }
 
@@ -336,6 +408,8 @@ export function photoLibraryFiltersToParams(
     'hasAnalysis',
     'imageType',
     'label',
+    'documentType',
+    'outboundMedia',
   ];
   if (filters.sourceScope && filters.sourceScope !== 'all') {
     params.set('sourceScope', filters.sourceScope);
@@ -367,20 +441,11 @@ export function photoLibraryUrlParams(
 
 export function countActivePhotoLibraryFilters(filters: PhotoLibraryFilterState): number {
   let n = 0;
-  if (filters.poRef) n++;
-  if (filters.receivingId) n++;
   if (filters.staffId) n++;
-  if (filters.tracking) n++;
-  if (filters.serial) n++;
-  if (filters.sku) n++;
-  if (filters.ticketId) n++;
-  if (filters.pickupId) n++;
-  if (filters.rma) n++;
   if (filters.poFinder) n++;
   if (filters.label) n++;
   if (filters.damageDetected) n++;
   if (filters.hasAnalysis) n++;
-  if (filters.dateFrom || filters.dateTo) n++;
   return n;
 }
 

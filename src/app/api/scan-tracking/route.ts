@@ -109,7 +109,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         staffName,
         reason: exceptionReason,
         notes: notes || `Scan not found in orders (${sourceStation})`,
-      }, client);
+      }, client, ctx.organizationId);
 
       if (upsertResult.matchedOrderId) {
         const matched = await client.query(
@@ -119,9 +119,9 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
                     OR stn.is_out_for_delivery OR stn.is_delivered, false) AS is_shipped
            FROM orders o
            LEFT JOIN shipping_tracking_numbers stn ON stn.id = o.shipment_id
-           WHERE o.id = $1
+           WHERE o.id = $1 AND o.organization_id = $2
            LIMIT 1`,
-          [upsertResult.matchedOrderId]
+          [upsertResult.matchedOrderId, ctx.organizationId]
         );
         if (matched.rows.length > 0) {
           const row = matched.rows[0];

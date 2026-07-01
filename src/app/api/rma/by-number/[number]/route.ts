@@ -24,4 +24,4 @@ export const GET = withAuth(async (request, ctx) => {
     console.error('[GET /api/rma/by-number] error:', err);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}, { permission: 'orders.view' });
+}, { permission: 'rma.view' });

@@ -53,7 +53,7 @@ export default function NasPhotosPreviewPage() {
       <div className="border-b border-amber-500/30 bg-amber-950/40 px-4 py-2 text-center text-sm text-amber-100">
         NAS preview only — photos here are not attached to POs. For searchable attached photos, use{' '}
         <Link href="/ops/photos" className="font-semibold underline underline-offset-2">
-          Photo library
+          Media library
         </Link>
         .
       </div>

@@ -70,7 +70,7 @@ async function applyVariance(line: LineRow, countedQty: number, staffId: number 
     delta,
     staffId,
     reason: 'CYCLE_COUNT_ADJ',
-  });
+  }, orgId);
   // Tie the variance to the lifecycle timeline.
   try {
     await recordInventoryEvent({
