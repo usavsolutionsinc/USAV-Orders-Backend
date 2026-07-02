@@ -7,6 +7,7 @@ import { FileText, Trash2, Loader2, ExternalLink, RefreshCw } from '@/components
 import { buildNasLabelUrl, putNasPhoto, deleteNasPhoto } from '@/lib/nas-photos';
 import { HoverTooltip } from '@/components/ui/HoverTooltip';
 import { IconButton } from '@/design-system/primitives';
+import { BuyLabelSection } from '@/components/outbound/labels/BuyLabelSection';
 import type {
   FetchOutboundDocumentsResponse,
   OutboundDocument,
@@ -288,6 +289,11 @@ export function OrderDocumentsSection({ orderId, orderRef, readOnly = false }: O
           Open in media library
         </Link>
       </div>
+      {!readOnly ? (
+        <div className="border-b border-gray-100 pb-4">
+          <BuyLabelSection orderId={orderId} orderRef={orderRef} onChange={onChange} />
+        </div>
+      ) : null}
       <DocumentTypeGroup
         title="Shipping Label"
         documentType="shipping_label"

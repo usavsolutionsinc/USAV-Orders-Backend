@@ -77,6 +77,14 @@ const CONNECTORS: Record<IntegrationProvider, IntegrationConnector> = {
     capabilities: ['payments'],
   },
   // Shipping carriers — hand-built forever (Nango doesn't cover carriers).
+  // ShipStation is the label ENGINE (rate-shop + buy/void via v2) AND an order
+  // source (pull via legacy v1). Lazy sync import so the reader never bundles it.
+  shipstation: {
+    provider: 'shipstation',
+    authKind: 'vault',
+    capabilities: ['orders', 'tracking'],
+    sync: (orgId) => import('./shipstation').then((m) => m.shipstationSync(orgId)),
+  },
   ups: { provider: 'ups', authKind: 'vault', capabilities: ['tracking'] },
   fedex: { provider: 'fedex', authKind: 'vault', capabilities: ['tracking'] },
   usps: { provider: 'usps', authKind: 'vault', capabilities: ['tracking'] },

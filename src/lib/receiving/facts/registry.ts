@@ -26,6 +26,7 @@ export const FACT_KINDS = [
   'sourcing_import',
   'trade_in_valuation',
   'repair_service',
+  'ebay_purchase',
 ] as const;
 export type FactKind = (typeof FACT_KINDS)[number];
 
@@ -62,6 +63,23 @@ export const repairServiceSchema = z.object({
 });
 export type RepairServiceFact = z.infer<typeof repairServiceSchema>;
 
+/**
+ * eBay buyer-purchase marketplace payload for an Incoming line sourced from an
+ * eBay buyer account. The queryable operational facts (source_order_id, tracking,
+ * platform_account_id) live on the spine / link row; this holds the eBay-specific
+ * provenance. Universal Incoming plan §3.7.
+ */
+export const ebayPurchaseSchema = z.object({
+  legacyOrderId: z.string().optional(),
+  sellerUsername: z.string().optional(),
+  purchaseOrderStatus: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  listingUrl: z.string().optional(),
+  /** Untranslated upstream status string, for debugging / display. */
+  rawStatus: z.string().optional(),
+});
+export type EbayPurchaseFact = z.infer<typeof ebayPurchaseSchema>;
+
 export interface FactKindDef {
   /** Human label for pickers / audit. */
   label: string;
@@ -74,6 +92,7 @@ const REGISTRY: Record<string, FactKindDef> = {
   sourcing_import: { label: 'Sourcing import', schema: sourcingImportSchema },
   trade_in_valuation: { label: 'Trade-in valuation', schema: tradeInValuationSchema },
   repair_service: { label: 'Repair service', schema: repairServiceSchema },
+  ebay_purchase: { label: 'eBay purchase', schema: ebayPurchaseSchema },
 };
 
 /** Org-custom / not-yet-promoted kinds: store any JSON object, validated loosely. */

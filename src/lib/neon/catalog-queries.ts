@@ -180,19 +180,7 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
         [organizationId, r.code, r.label, saSort],
       );
     }
-    // platform_accounts (mirrors migration 2026-06-14f): eBay storefronts from
-    // ebay_accounts, plus one default '<platform>-main' account per non-eBay
-    // platform so every channel is reachable through an account.
-    await client.query(
-      `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope, is_active)
-       SELECT ea.organization_id, p.id, ea.account_name, ea.account_name, ea.account_name, COALESCE(ea.is_active, true)
-         FROM ebay_accounts ea
-         JOIN platforms p ON p.organization_id = ea.organization_id AND p.slug = 'ebay'
-        WHERE ea.organization_id = $1
-          AND ea.account_name IS NOT NULL AND BTRIM(ea.account_name) <> ''
-       ON CONFLICT (organization_id, platform_id, slug) DO NOTHING`,
-      [organizationId],
-    );
+    await syncEbayAccountsToPlatformAccounts(organizationId, client);
     await client.query(
       `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, is_active)
        SELECT p.organization_id, p.id, p.slug || '-main', p.label, true
@@ -202,6 +190,34 @@ export async function seedOrgCatalog(organizationId: OrgId): Promise<void> {
       [organizationId],
     );
   });
+}
+
+/**
+ * Mirror eBay seller rows in `ebay_accounts` into `platform_accounts` so the
+ * catalog + Incoming account chip stay in sync after OAuth connect (the one-shot
+ * migration 2026-06-14f backfill does not re-run on its own). Skips ZOHO token
+ * rows (platform='ZOHO') — only real eBay seller connections.
+ */
+export async function syncEbayAccountsToPlatformAccounts(
+  organizationId: OrgId,
+  client?: { query: (text: string, params?: unknown[]) => Promise<unknown> },
+): Promise<void> {
+  const sql = `INSERT INTO platform_accounts (organization_id, platform_id, slug, label, integration_scope, is_active)
+       SELECT ea.organization_id, p.id, ea.account_name, ea.account_name, ea.account_name, COALESCE(ea.is_active, true)
+         FROM ebay_accounts ea
+         JOIN platforms p ON p.organization_id = ea.organization_id AND p.slug = 'ebay'
+        WHERE ea.organization_id = $1
+          AND (ea.platform = 'EBAY' OR ea.platform IS NULL)
+          AND ea.account_name IS NOT NULL AND BTRIM(ea.account_name) <> ''
+       ON CONFLICT (organization_id, platform_id, slug) DO UPDATE SET
+         integration_scope = EXCLUDED.integration_scope,
+         is_active         = EXCLUDED.is_active,
+         updated_at        = NOW()`;
+  if (client) {
+    await client.query(sql, [organizationId]);
+    return;
+  }
+  await tenantQuery(organizationId, sql, [organizationId]);
 }
 
 /** lowercase-kebab/underscore slug from a free-text label. */

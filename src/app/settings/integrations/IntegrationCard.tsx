@@ -188,16 +188,22 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
     }
   }, [def]);
 
-  const ebayConnect = useCallback(() => {
-    const suggested = state.accounts.length === 0 ? 'ebay-main' : `ebay-${state.accounts.length + 1}`;
-    const acct = window.prompt('eBay account label (e.g. ebay-main):', suggested);
+  // role='seller' is the existing outbound path; role='buyer' connects a
+  // PURCHASING account whose orders flow into Universal Incoming.
+  const ebayConnect = useCallback((role: 'seller' | 'buyer' = 'seller') => {
+    const peers = state.accounts.filter((a) => (a.role ?? 'seller') === role);
+    const prefix = role === 'buyer' ? 'ebay-buyer' : 'ebay';
+    const suggested = peers.length === 0 ? `${prefix}-main` : `${prefix}-${peers.length + 1}`;
+    const kind = role === 'buyer' ? 'purchasing' : 'selling';
+    const acct = window.prompt(`eBay ${kind} account label (e.g. ${suggested}):`, suggested);
     const label = acct?.trim();
     if (!label) return;
     if (state.accounts.some((a) => a.label.toLowerCase() === label.toLowerCase())) {
       toast.error(`An eBay account labeled "${label}" already exists — pick a different label, or reconnect it from its row.`);
       return;
     }
-    window.location.href = `${def.oauthStartPath}?accountName=${encodeURIComponent(label)}`;
+    const roleParam = role === 'buyer' ? '&role=buyer' : '';
+    window.location.href = `${def.oauthStartPath}?accountName=${encodeURIComponent(label)}${roleParam}`;
   }, [def, state.accounts]);
 
   const ebayDisconnect = useCallback(async (id: number, label: string) => {
@@ -287,6 +293,9 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
             <div key={acct.id ?? `${acct.label}-${i}`} className="flex items-center gap-2">
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${ACCOUNT_DOT[acct.status]}`} />
               <span className="min-w-0 flex-1 truncate text-label font-medium text-gray-800">{acct.label}</span>
+              {def.connect === 'ebay' && acct.role === 'buyer' && (
+                <span className="shrink-0 rounded bg-indigo-50 px-1.5 py-0.5 text-[8.5px] font-black uppercase tracking-widest text-indigo-700 ring-1 ring-inset ring-indigo-200">Purchasing</span>
+              )}
               {acct.detail && <span className="shrink-0 text-caption text-gray-400">{acct.detail}</span>}
               {canManage && def.connect === 'amazon' && acct.id != null && (
                 <HoverTooltip label="Disconnect account" asChild>
@@ -344,7 +353,10 @@ export function IntegrationCard({ def, state, nangoReady, canSync }: { def: Prov
               <Button variant="primary" size="sm" icon={<Link2 />} onClick={() => setAmazonOpen(true)}>{connectLabel}</Button>
             )}
             {def.connect === 'ebay' && (
-              <Button variant="primary" size="sm" icon={<Link2 />} onClick={ebayConnect}>{connected ? 'Add account' : 'Connect'}</Button>
+              <>
+                <Button variant="primary" size="sm" icon={<Link2 />} onClick={() => ebayConnect('seller')}>{connected ? 'Add selling account' : 'Connect'}</Button>
+                <Button variant="secondary" size="sm" icon={<Link2 />} onClick={() => ebayConnect('buyer')}>Add purchasing account</Button>
+              </>
             )}
             {def.connect === 'oauth' && (
               <Button variant="primary" size="sm" icon={<Link2 />} onClick={oauthConnect}>{connectLabel}</Button>

@@ -18,6 +18,8 @@
 import { withTenantTransaction } from '@/lib/tenancy/db';
 import type { OrgId } from '@/lib/tenancy/constants';
 import { withZohoCredential } from '@/lib/zoho/with-zoho-credential';
+import { mergeEbayLinesIntoZohoPo } from '@/lib/inbound/merge-purchase-lines';
+import { isIncomingUniversal } from '@/lib/feature-flags';
 import { getPurchaseOrderById, getPurchaseReceiveById, listPurchaseOrders } from '@/lib/zoho';
 import { formatApiOffsetTimestamp, formatPSTTimestamp } from '@/utils/date';
 import type { PoolClient } from 'pg';
@@ -527,9 +529,27 @@ export async function importZohoPurchaseOrderToReceiving(
   // withTenantTransaction opens the transaction, sets the `app.current_org`
   // GUC via SET LOCAL, and uses the tenant pool — so every write inside (incl.
   // the advisory locks that need a transaction) is org-scoped and RLS-subject.
-  return withTenantTransaction(orgId, (client) =>
+  const result = await withTenantTransaction(orgId, (client) =>
     syncPurchaseOrderLines(client, orgId, purchaseOrderId, options),
   );
+
+  // Universal Incoming (Phase 3, plan §5.4): collapse any eBay-buyer Incoming line
+  // that is the same real purchase as this Zoho PO into ONE spine row (equivalence
+  // + secondary zoho link + conservative loser-row merge). Flag-gated per org and
+  // fire-and-forget — a merge fault (or the inbound tables not yet migrated) never
+  // fails the Zoho import.
+  try {
+    if (await isIncomingUniversal(orgId)) {
+      await mergeEbayLinesIntoZohoPo(orgId, {
+        zohoPurchaseOrderId: result.purchaseorder_id,
+        poNumber: result.purchaseorder_number,
+      });
+    }
+  } catch (err) {
+    console.warn('[zoho-sync] mergeEbayLinesIntoZohoPo skipped:', err instanceof Error ? err.message : err);
+  }
+
+  return result;
 }
 
 export type BulkSyncOptions = {

@@ -97,6 +97,8 @@ export const PERMISSIONS = [
   { id: 'shipping.view',            category: 'shipping', label: 'View shipping' },
   { id: 'shipping.mark_shipped',    category: 'shipping', label: 'Mark shipped' },
   { id: 'shipping.void_order',      category: 'shipping', label: 'Void shipment', destructive: true, stepUp: true },
+  { id: 'shipping.buy_label',       category: 'shipping', label: 'Buy shipping label (rate-shop + purchase)' },
+  { id: 'shipping.void_label',      category: 'shipping', label: 'Void shipping label', destructive: true, stepUp: true },
   { id: 'orders.view',              category: 'shipping', label: 'View orders' },
   { id: 'orders.create',            category: 'shipping', label: 'Create orders' },
   { id: 'orders.import',            category: 'shipping', label: 'Import orders (Google Sheets + Ecwid)' },

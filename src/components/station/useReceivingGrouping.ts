@@ -83,7 +83,14 @@ export function useReceivingGrouping({
         row.zoho_purchaseorder_id ||
         ''
       ).trim();
-      return po ? `po:${po}` : `line:${row.id}`;
+      if (po) return `po:${po}`;
+      // eBay (and other marketplace) buyer purchases have no Zoho PO — group by
+      // their external order id so a multi-line purchase collapses into ONE
+      // Incoming row (operators think in orders/boxes), same as a Zoho PO.
+      const src = (row.inbound_source_type || '').trim().toLowerCase();
+      const orderId = (row.source_order_id || '').trim();
+      if (src && orderId) return `src:${src}:${orderId}`;
+      return `line:${row.id}`;
     });
     return grouped.map(({ key, rows }) => {
       let anchorTs: string | null = null;

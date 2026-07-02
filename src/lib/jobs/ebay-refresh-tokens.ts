@@ -1,6 +1,7 @@
 import pool from '@/lib/db';
 import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from '@/lib/ebay/token-refresh';
 import { getEbayAppCreds, markEbayAccountNeedsReconsent } from '@/lib/ebay/credentials';
+import { ebayScopeStringForRole, normalizeEbayRole } from '@/lib/ebay/oauth-config';
 import { tenantQuery } from '@/lib/tenancy/db';
 
 export interface EbayRefreshTokensJobResult {
@@ -26,8 +27,9 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
     refresh_token: string;
     refresh_token_expires_at: string | null;
     organization_id: string;
+    account_role: string | null;
   }>(
-    `SELECT account_name, refresh_token, refresh_token_expires_at, organization_id
+    `SELECT account_name, refresh_token, refresh_token_expires_at, organization_id, account_role
      FROM ebay_accounts
      WHERE (platform = 'EBAY' OR platform IS NULL)
        AND is_active = true
@@ -48,7 +50,7 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
   let needsReconsent = 0;
   const errors: string[] = [];
 
-  for (const { account_name, refresh_token, refresh_token_expires_at, organization_id } of accounts) {
+  for (const { account_name, refresh_token, refresh_token_expires_at, organization_id, account_role } of accounts) {
     try {
       // The refresh token itself (≈18 months) is dead — no point calling eBay.
       if (refresh_token_expires_at && new Date(refresh_token_expires_at).getTime() <= Date.now()) {
@@ -66,11 +68,14 @@ export async function runEbayRefreshTokensJob(): Promise<EbayRefreshTokensJobRes
       }
 
       const decryptedRefreshToken = readEbayToken(refresh_token);
+      // Refresh with the account's OWN role scopes so a buyer token isn't
+      // downgraded to the seller set (and vice-versa).
       const { accessToken, expiresIn } = await refreshEbayAccessToken(
         creds.appId,
         creds.certId,
         decryptedRefreshToken,
-        creds.environment
+        creds.environment,
+        ebayScopeStringForRole(normalizeEbayRole(account_role))
       );
       const newExpiresAt = new Date(Date.now() + expiresIn * 1000);
       const encryptedAccessToken = writeEbayToken(accessToken);

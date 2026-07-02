@@ -43,7 +43,22 @@ test('safeParseFactPayload reports success/failure without throwing', () => {
 
 test('listKnownFactKinds enumerates the built-ins with labels', () => {
   const kinds = listKnownFactKinds();
-  assert.equal(kinds.length, 4);
+  assert.equal(kinds.length, 5);
   assert.ok(kinds.every((k) => typeof k.label === 'string' && k.label.length > 0));
   assert.ok(kinds.some((k) => k.kind === 'marketplace_listing'));
+  assert.ok(kinds.some((k) => k.kind === 'ebay_purchase'));
+});
+
+test('ebay_purchase validates and strips unknown keys', () => {
+  const out = parseFactPayload('ebay_purchase', {
+    legacyOrderId: '12-34567-89012',
+    sellerUsername: 'acme_deals',
+    purchaseOrderStatus: 'PAID',
+    bogus: 'dropped',
+  });
+  assert.deepEqual(out, {
+    legacyOrderId: '12-34567-89012',
+    sellerUsername: 'acme_deals',
+    purchaseOrderStatus: 'PAID',
+  });
 });

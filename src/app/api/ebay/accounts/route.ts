@@ -11,17 +11,18 @@ export const GET = withAuth(async (req, ctx) => {
   try {
     const result = await tenantQuery(
       ctx.organizationId,
-      `SELECT 
-        id, 
-        account_name, 
-        ebay_user_id, 
-        token_expires_at, 
-        last_sync_date, 
-        is_active, 
+      `SELECT
+        id,
+        account_name,
+        ebay_user_id,
+        token_expires_at,
+        last_sync_date,
+        is_active,
         created_at,
         marketplace_id,
-        platform
-      FROM ebay_accounts 
+        platform,
+        account_role
+      FROM ebay_accounts
       WHERE organization_id = $1
       ORDER BY account_name`,
       [ctx.organizationId]

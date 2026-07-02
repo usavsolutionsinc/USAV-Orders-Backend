@@ -56,7 +56,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
   {
     key: 'ebay',
     label: 'eBay',
-    description: 'Storefront orders + tracking reconciliation.',
+    description: 'Selling: storefront orders + tracking. Purchasing: buyer-account orders flow into Incoming.',
     category: 'Marketplaces',
     connect: 'ebay',
     oauthStartPath: '/api/ebay/connect',
@@ -140,6 +140,7 @@ export const PROVIDER_CATALOG: ProviderDef[] = [
   { key: 'ups',  label: 'UPS',   description: 'Tracking + webhook callbacks.', category: 'Shipping carriers', connect: 'vault', badge: 'bg-amber-100 text-amber-800' },
   { key: 'fedex', label: 'FedEx', description: 'Shipment tracking.',           category: 'Shipping carriers', connect: 'vault', badge: 'bg-purple-100 text-purple-700' },
   { key: 'usps', label: 'USPS',  description: 'OAuth + label tracking.',       category: 'Shipping carriers', connect: 'vault', badge: 'bg-blue-100 text-blue-800' },
+  { key: 'shipstation', label: 'ShipStation', description: 'Rate-shop + buy/void labels (v2) and pull orders (v1).', category: 'Shipping carriers', connect: 'vault', docsUrl: 'https://docs.shipstation.com/', badge: 'bg-violet-100 text-violet-700' },
 
   // ── Realtime & AI ──
   { key: 'ollama', label: 'Ollama (AI)', description: 'Local LLM via Cloudflare tunnel.',    category: 'Realtime & AI', connect: 'vault', badge: 'bg-gray-200 text-gray-700' },
@@ -154,6 +155,8 @@ export interface AccountSummary {
   label: string;
   status: 'active' | 'error' | 'expiring' | 'revoked' | 'unknown';
   detail?: string;
+  /** eBay only: 'seller' (outbound) vs 'buyer' (purchasing → Universal Incoming). */
+  role?: 'seller' | 'buyer';
 }
 
 export interface ProviderState {

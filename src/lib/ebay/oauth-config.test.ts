@@ -7,6 +7,9 @@ import { strictEqual, deepStrictEqual, ok } from 'node:assert';
 import {
   ebayScopes,
   ebayScopeString,
+  ebayBuyerScopes,
+  ebayScopeStringForRole,
+  normalizeEbayRole,
   normalizeEbayEnvironment,
   isEbaySandbox,
   ebayAuthDomain,
@@ -16,6 +19,7 @@ import {
 
 afterEach(() => {
   delete process.env.EBAY_SCOPES;
+  delete process.env.EBAY_BUYER_SCOPES;
 });
 
 test('default scopes are the minimal seller-copilot set (no sell.finances)', () => {
@@ -45,6 +49,34 @@ test('blank EBAY_SCOPES falls back to defaults', () => {
 test('ebayScopeString joins with a single space', () => {
   process.env.EBAY_SCOPES = 'a b';
   strictEqual(ebayScopeString(), 'a b');
+});
+
+test('buyer scopes default to the buy.order.readonly set and are overridable', () => {
+  delete process.env.EBAY_BUYER_SCOPES;
+  const buyer = ebayBuyerScopes();
+  ok(buyer.includes('https://api.ebay.com/oauth/api_scope'));
+  ok(buyer.includes('https://api.ebay.com/oauth/api_scope/buy.order.readonly'));
+  // buyer set must NOT carry seller scopes
+  ok(!buyer.some((s) => s.includes('/sell.')), 'buyer scopes must not include seller scopes');
+
+  process.env.EBAY_BUYER_SCOPES = 'https://api.ebay.com/oauth/api_scope';
+  deepStrictEqual(ebayBuyerScopes(), ['https://api.ebay.com/oauth/api_scope']);
+});
+
+test('normalizeEbayRole maps only "buyer" to buyer, everything else to seller', () => {
+  strictEqual(normalizeEbayRole('buyer'), 'buyer');
+  strictEqual(normalizeEbayRole('BUYER'), 'buyer');
+  strictEqual(normalizeEbayRole(' Buyer '), 'buyer');
+  strictEqual(normalizeEbayRole('seller'), 'seller');
+  strictEqual(normalizeEbayRole(undefined), 'seller');
+  strictEqual(normalizeEbayRole('garbage'), 'seller');
+});
+
+test('ebayScopeStringForRole picks the role-matched set (no cross-contamination)', () => {
+  process.env.EBAY_SCOPES = 'https://api.ebay.com/oauth/api_scope/sell.inventory';
+  process.env.EBAY_BUYER_SCOPES = 'https://api.ebay.com/oauth/api_scope/buy.order.readonly';
+  strictEqual(ebayScopeStringForRole('seller'), 'https://api.ebay.com/oauth/api_scope/sell.inventory');
+  strictEqual(ebayScopeStringForRole('buyer'), 'https://api.ebay.com/oauth/api_scope/buy.order.readonly');
 });
 
 test('normalizeEbayEnvironment defaults to PRODUCTION and is case-insensitive', () => {

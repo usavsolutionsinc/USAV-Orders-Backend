@@ -35,15 +35,27 @@ export function AddStaffDialog({ open, onClose, onCreated }: AddStaffDialogProps
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ name: trimmed, role, employeeCode: code.trim() || null }),
       });
+      // Parse the body once, tolerantly — a 403 from the admin.manage_staff
+      // gate (or any non-JSON error page) must surface in the banner, not throw
+      // an unhandled rejection that leaves the button silently doing nothing.
+      const data = await r.json().catch(() => ({} as Record<string, unknown>));
       if (!r.ok) {
-        const data = await r.json().catch(() => ({}));
-        setErr(String((data as { error?: string }).error || 'Could not add staff.'));
+        const fallback = r.status === 401 || r.status === 403
+          ? "You don't have permission to add staff."
+          : 'Could not add staff.';
+        setErr(String((data as { error?: string }).error || fallback));
         return;
       }
-      const data = await r.json() as { staff: { id: number } };
-      onCreated(data.staff.id);
+      const newId = (data as { staff?: { id?: number } }).staff?.id;
+      if (typeof newId !== 'number') {
+        setErr('Staff created but the response was malformed — refresh to see them.');
+        return;
+      }
+      onCreated(newId);
       setName(''); setCode(''); setRole('packer');
       onClose();
+    } catch {
+      setErr('Network error — could not add staff. Check your connection and try again.');
     } finally {
       setBusy(false);
     }

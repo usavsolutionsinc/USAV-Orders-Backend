@@ -273,3 +273,27 @@ test('regression: the image-type registry route is permission-gated', () => {
   assert.equal(route.gate, 'withAuth');
   assert.equal(route.permission, 'photos.view');
 });
+
+test('regression: shipping.buy_label gates the outbound rate-shop + label-purchase routes (ShipStation)', () => {
+  const paths = routesGatedBy('shipping.buy_label').map((r) => r.path);
+  assert.ok(paths.includes('/api/outbound/rates/route.ts'), 'shipping.buy_label should gate rate-shop');
+  assert.ok(
+    paths.includes('/api/outbound/labels/purchase/route.ts'),
+    'shipping.buy_label should gate label purchase',
+  );
+});
+
+test('regression: shipping.void_label gates the label-void route', () => {
+  const paths = routesGatedBy('shipping.void_label').map((r) => r.path);
+  assert.ok(
+    paths.includes('/api/outbound/labels/void/route.ts'),
+    'shipping.void_label should gate label void',
+  );
+});
+
+test('regression: the ShipStation webhook is a signature-verified public route', () => {
+  const route = routeByPath('/api/webhooks/shipstation/[token]/route.ts');
+  assert.ok(route, 'the ShipStation webhook should be in the manifest');
+  assert.equal(route.permission, null);
+  assert.ok(route.exemptReason, 'the ShipStation webhook should be exempt (signature-gated)');
+});

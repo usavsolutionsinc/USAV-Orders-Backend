@@ -356,3 +356,18 @@ export function isShipmentLinksDualWrite(): boolean {
   return readBoolEnv('RECEIVING_SHIPMENT_LINKS_DUAL_WRITE', true);
 }
 
+/**
+ * Universal Incoming (docs/incoming-universal-purchase-orders-plan.md §6, §8.3).
+ * Per-org, async, env-fallback. When ON, `view=incoming` also surfaces
+ * eBay-buyer-originated Incoming lines (inbound_source_type='ebay') alongside
+ * Zoho POs, the `?inbound=` facet filters by source, and the Zoho receiving sync
+ * runs the eBay↔Zoho merge. Default OFF — when off, Incoming is the byte-identical
+ * Zoho-only path and the merge hook is a no-op, so a tenant not using buyer
+ * accounts is unaffected. Enable per org (organization_feature_flags(flag=
+ * 'incoming_universal')) once they connect a buyer account, or globally via
+ * INCOMING_UNIVERSAL=true.
+ */
+export async function isIncomingUniversal(orgId: OrgId): Promise<boolean> {
+  return resolveForOrg(orgId, 'incoming_universal', 'INCOMING_UNIVERSAL');
+}
+

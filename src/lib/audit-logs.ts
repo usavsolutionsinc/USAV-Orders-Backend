@@ -152,6 +152,9 @@ export const AUDIT_ACTION = {
    * (adopt expected lines) and the upgrade-only header update.
    */
   RECEIVING_RELINK:          'receiving.relink',
+  /** A marketplace purchase (eBay buyer account, …) was imported onto the Incoming
+   *  spine via the bridge/sync (Universal Incoming Phase 2). */
+  RECEIVING_INBOUND_IMPORT:  'receiving.inbound.import',
   /** Manual n8n-style lifecycle advance through transitionReceivingLine(). */
   RECEIVING_LINE_ADVANCE:    'receiving_line.advance',
   /** Real "Save for unbox" transition — stamps receiving.triage_complete. */
@@ -293,6 +296,11 @@ export const AUDIT_ACTION = {
   // timeline (EventTimeline) on the dashboard details panel.
   TRACKING_ADDED: 'orders.tracking.added',
   LABEL_PRINTED: 'orders.label.printed',
+  // Carrier-API label lifecycle (ShipStation outbound station): buying a
+  // rate-shopped label and voiding/refunding it. LABEL_PRINTED still fires on
+  // the first stored label for the order timeline.
+  LABEL_PURCHASED: 'orders.label.purchased',
+  LABEL_VOIDED: 'orders.label.voided',
   // Outbound documents (docs/outbound-documents-plan.md) — packing slips +
   // shipping labels stored on `documents` + linked via `document_entity_links`.
   // LABEL_PRINTED (above) is preserved for the timeline on an order's FIRST
@@ -375,6 +383,8 @@ export const AUDIT_REASON_REQUIRED: ReadonlySet<string> = new Set([
   AUDIT_ACTION.SOURCING_CANDIDATE_IMPORT,
   // A substitution deviates from the order — it must justify itself.
   AUDIT_ACTION.ORDER_SUBSTITUTE_UNIT,
+  // Voiding a purchased label reverses a paid carrier action — require a reason.
+  AUDIT_ACTION.LABEL_VOIDED,
 ]);
 
 // ── Server-trusted wrapper ─────────────────────────────────────────────────

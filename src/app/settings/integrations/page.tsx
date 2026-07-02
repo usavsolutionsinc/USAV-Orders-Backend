@@ -42,7 +42,7 @@ interface AmazonRow {
   status: string | null; last_error: string | null; last_sync_at: Date | null;
 }
 interface EbayRow {
-  id: number; account_name: string; token_expires_at: Date | null; is_active: boolean | null; last_sync_date: Date | null;
+  id: number; account_name: string; token_expires_at: Date | null; is_active: boolean | null; last_sync_date: Date | null; account_role: string | null;
 }
 
 function relTime(d: Date | null): string | null {
@@ -82,10 +82,10 @@ export default async function IntegrationsPage({
       [orgId],
     ),
     pool.query<EbayRow>(
-      `SELECT id, account_name, token_expires_at, is_active, last_sync_date
+      `SELECT id, account_name, token_expires_at, is_active, last_sync_date, account_role
          FROM ebay_accounts
         WHERE organization_id = $1 AND (platform = 'EBAY' OR platform IS NULL)
-        ORDER BY account_name`,
+        ORDER BY account_role DESC, account_name`,
       [orgId],
     ),
   ]);
@@ -125,7 +125,8 @@ export default async function IntegrationsPage({
         const minutesLeft = e.token_expires_at ? Math.round((new Date(e.token_expires_at).getTime() - Date.now()) / 60000) : null;
         const status: AccountSummary['status'] = e.is_active === false ? 'revoked' : minutesLeft != null && minutesLeft < 60 ? 'expiring' : 'active';
         const detail = e.is_active === false ? 'inactive' : minutesLeft == null ? undefined : minutesLeft <= 0 ? 'token expired' : `token ${minutesLeft}m left`;
-        return { id: e.id, label: e.account_name, status, detail };
+        const role: AccountSummary['role'] = e.account_role === 'buyer' ? 'buyer' : 'seller';
+        return { id: e.id, label: e.account_name, status, detail, role };
       });
       const status: ProviderState['status'] = accounts.length === 0
         ? 'not_connected'

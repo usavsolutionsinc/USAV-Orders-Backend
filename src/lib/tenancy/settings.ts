@@ -27,6 +27,21 @@ const LetterheadSchema = z.object({
   email: z.string().email().or(z.literal('')).default(''),
 });
 
+// Structured warehouse origin for outbound shipping labels (ship_from). Lives
+// in the settings jsonb bag (no DDL); env SHIPSTATION_SHIP_FROM_* is the
+// fallback. A rate/label needs a complete origin (line1 + city + state + zip).
+const ShipFromSchema = z.object({
+  name: z.string().max(80).default(''),
+  company: z.string().max(80).default(''),
+  phone: z.string().max(40).default(''),
+  addressLine1: z.string().max(120).default(''),
+  addressLine2: z.string().max(120).default(''),
+  city: z.string().max(80).default(''),
+  state: z.string().max(40).default(''),
+  postalCode: z.string().max(20).default(''),
+  country: z.string().max(2).default('US'),
+});
+
 const NasStorageTargetSchema = z.object({
   root: z.string().default(''),
   folder: z.string().default(''),
@@ -53,6 +68,9 @@ export const OrgSettingsSchema = z.object({
   locale: z.string().default('en-US'),
   brand: BrandSchema.default({}),
   letterhead: LetterheadSchema.default({ addressLine1: '', addressLine2: '', phone: '', email: '' }),
+  // Warehouse origin for outbound shipping labels (ShipStation ship_from).
+  // Optional — falls back to SHIPSTATION_SHIP_FROM_* env when unset.
+  shipFrom: ShipFromSchema.optional(),
   // Toggle to require email-then-PIN signin instead of tap-your-name. Off
   // by default to preserve the existing USAV station UX.
   emailFirstSignin: z.boolean().default(false),

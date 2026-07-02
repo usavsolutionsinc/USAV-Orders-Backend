@@ -99,6 +99,17 @@ export interface ReceivingLineRow {
   /** Vendor name from zoho_po_mirror (Incoming view only). */
   vendor_name?: string | null;
   /**
+   * Universal Incoming purchase identity (receiving_lines spine cache; Incoming
+   * view only). `inbound_source_type` badges the row's source ('zoho' | 'ebay' | …);
+   * `source_order_id` is the external order id (the eBay order#) shown when the
+   * line has no Zoho PO; `platform_account_*` name the buyer/storefront account
+   * the purchase was made on. Null on plain Zoho lines / other views.
+   */
+  inbound_source_type?: string | null;
+  source_order_id?: string | null;
+  platform_account_id?: number | null;
+  platform_account_label?: string | null;
+  /**
    * Zoho PO mirror status (`zoho_po_mirror.status`) — incoming + scanned views.
    * Phase 2: when terminal (received/closed/billed/cancelled) the row is badged
    * "Zoho: received" instead of being hidden, so a physically-present box stays

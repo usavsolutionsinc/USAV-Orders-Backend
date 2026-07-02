@@ -21,6 +21,20 @@ import { normalizeEnvValue } from '@/lib/env-utils';
 
 export type EbayEnvironment = 'PRODUCTION' | 'SANDBOX';
 
+/**
+ * The role an eBay OAuth connection plays. This is THE difference between a
+ * selling account and a purchasing account: same eBay OAuth app, different scope
+ * set + a discriminator persisted on ebay_accounts.account_role. Buyer tokens
+ * feed Universal Incoming (purchases → receiving_lines); seller tokens feed the
+ * existing outbound fulfillment/reconcile path.
+ */
+export type EbayAccountRole = 'seller' | 'buyer';
+
+/** Coerce an arbitrary value to a valid role; anything but 'buyer' is 'seller'. */
+export function normalizeEbayRole(value?: string | null): EbayAccountRole {
+  return String(value ?? '').trim().toLowerCase() === 'buyer' ? 'buyer' : 'seller';
+}
+
 /** httpOnly cookie that carries the single-use CSRF nonce across the OAuth redirect. */
 export const EBAY_OAUTH_STATE_COOKIE = 'ebay_oauth_state';
 
@@ -37,7 +51,20 @@ const DEFAULT_SCOPES: readonly string[] = [
   'https://api.ebay.com/oauth/api_scope/sell.account',
 ];
 
-/** The exact scope list requested at consent AND on refresh — keep them equal. */
+/**
+ * Minimal buyer (purchasing) scope set — the eBay Buy Order API's
+ * getPurchaseOrder needs `buy.order.readonly`, which is a RESTRICTED scope that
+ * requires separate eBay business approval. Requesting an unapproved scope fails
+ * consent, so this stays overridable via EBAY_BUYER_SCOPES (space-separated) —
+ * connect a buyer account with only `api_scope` today (bridge/manual import),
+ * add `buy.order.readonly` here once the app is approved (Track A API sync).
+ */
+const DEFAULT_BUYER_SCOPES: readonly string[] = [
+  'https://api.ebay.com/oauth/api_scope',
+  'https://api.ebay.com/oauth/api_scope/buy.order.readonly',
+];
+
+/** The exact SELLER scope list requested at consent AND on refresh — keep them equal. */
 export function ebayScopes(): string[] {
   const raw = normalizeEnvValue(process.env.EBAY_SCOPES);
   if (raw) {
@@ -47,9 +74,39 @@ export function ebayScopes(): string[] {
   return [...DEFAULT_SCOPES];
 }
 
-/** Space-separated scope string (URL-encode at the call site). */
+/** The exact BUYER (purchasing) scope list — overridable via EBAY_BUYER_SCOPES. */
+export function ebayBuyerScopes(): string[] {
+  const raw = normalizeEnvValue(process.env.EBAY_BUYER_SCOPES);
+  if (raw) {
+    const parsed = raw.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+    if (parsed.length) return parsed;
+  }
+  return [...DEFAULT_BUYER_SCOPES];
+}
+
+/** Role-aware scope list — buyer vs seller consent/refresh must use its OWN set. */
+export function ebayScopesForRole(role: EbayAccountRole): string[] {
+  return role === 'buyer' ? ebayBuyerScopes() : ebayScopes();
+}
+
+/** Space-separated SELLER scope string (URL-encode at the call site). */
 export function ebayScopeString(): string {
   return ebayScopes().join(' ');
+}
+
+/** Space-separated BUYER scope string (URL-encode at the call site). */
+export function ebayBuyerScopeString(): string {
+  return ebayBuyerScopes().join(' ');
+}
+
+/**
+ * Space-separated scope string for a role. The consent request AND every later
+ * refresh for an account MUST use the SAME role's set — refreshing a buyer token
+ * with the seller set silently downgrades its scopes (the plan's scope-downgrade
+ * risk). Callers resolve the account's role and pass it here on both paths.
+ */
+export function ebayScopeStringForRole(role: EbayAccountRole): string {
+  return ebayScopesForRole(role).join(' ');
 }
 
 /**

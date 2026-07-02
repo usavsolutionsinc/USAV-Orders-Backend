@@ -41,7 +41,8 @@ export type IntegrationProvider =
   | 'ably'
   | 'ollama'
   | 'stripe'
-  | 'nextiva';
+  | 'nextiva'
+  | 'shipstation';
 
 export interface EbayCredentials {
   appId: string;
@@ -142,6 +143,27 @@ export interface NextivaCredentials {
   defaultExtension?: string;
   webhookToken?: string;
   webhookSigningSecret?: string;
+}
+
+/**
+ * ShipStation credentials.
+ *   - apiKey        — the v2 (api.shipstation.com) API key: rate-shop, buy/void
+ *                     labels, tracking, webhooks. REQUIRED for the label engine.
+ *   - v1ApiKey / v1ApiSecret — the legacy v1 (ssapi.shipstation.com) Basic-auth
+ *                     pair. OPTIONAL, but the ONLY way to pull orders (SKUs +
+ *                     stored weight) since v2 has no order-list endpoint.
+ *   - webhookToken / webhookSecret — per-tenant identity for the tokenized
+ *                     webhook URL (mirrors the Zoho/Nextiva model): the token is
+ *                     the unguessable path segment (also mirrored to
+ *                     organization_integrations.webhook_token) and the secret is
+ *                     this org's shared secret checked before the RSA signature.
+ */
+export interface ShipStationCredentials {
+  apiKey: string;
+  v1ApiKey?: string;
+  v1ApiSecret?: string;
+  webhookToken?: string;
+  webhookSecret?: string;
 }
 
 // ─── Cache ─────────────────────────────────────────────────────────────────
@@ -274,6 +296,21 @@ function envFallback(provider: IntegrationProvider): unknown | null {
         accountId: process.env.NEXTIVA_ACCOUNT_ID || undefined,
         webhookToken: process.env.NEXTIVA_WEBHOOK_TOKEN || undefined,
         webhookSigningSecret: webhookSigningSecret || undefined,
+      };
+      return cred;
+    }
+    case 'shipstation': {
+      // USAV single-tenant env bootstrap (mirrors nextiva) so the label engine
+      // can light up before the settings Connect flow. apiKey = v2 key; the v1
+      // pair + webhook secret are optional.
+      const apiKey = process.env.SHIPSTATION_API_KEY;
+      if (!apiKey) return null;
+      const cred: ShipStationCredentials = {
+        apiKey,
+        v1ApiKey: process.env.SHIPSTATION_V1_API_KEY || undefined,
+        v1ApiSecret: process.env.SHIPSTATION_V1_API_SECRET || undefined,
+        webhookToken: process.env.SHIPSTATION_WEBHOOK_TOKEN || undefined,
+        webhookSecret: process.env.SHIPSTATION_WEBHOOK_SECRET || undefined,
       };
       return cred;
     }

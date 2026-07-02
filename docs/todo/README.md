@@ -10,9 +10,11 @@ Audited 2026-06-28. Verify against the live codebase before starting — a doc m
 - `beta-intake-funnel-plan.md` — zero code shipped
 
 ## Features
+- `tech-substitution-wiring-plan.md` — wire fulfillment substitution (`SubstituteUnitCard` / customer reason picker) into `/tech` `ActiveOrderWorkspace`; policy API, permissions, phases 0–7
 - `testing-priority-needs-test-plan.md`
 - `packing-checklist-plan.md`
 - `incoming-tracking-todo-plan.md`
+- `../incoming-universal-purchase-orders-plan.md` — polymorphic incoming spine (`inbound_purchase_order_links` / mirror / equivalence), eBay purchasing, dedup merge, Studio integration
 - `reversibility-fixes-plan.md` — reversible label case still live
 - `ai-chat-ux-plan.md`
 - `nextiva-voice-support-mode-plan.md`
@@ -22,9 +24,12 @@ Audited 2026-06-28. Verify against the live codebase before starting — a doc m
 - `warehouse-map-react-flow-plan.md` — prototype in /design-demo only
 
 ## Integrations / infra
+- `production-integrations-system-plan.md` — **2026 production master plan** (deep-scan): maturity matrix, P0–P7 build order, QoL/diagnostics/webhooks, Studio wiring, cron consolidation, exit criteria; execution index over the docs below
+- `studio-integrations-master-plan.md` — Studio wiring checklist, diagnostics rules, P0–P5 phasing (detail layer for production plan §5)
 - `integrations-oauth-connection-plan.md`
 - `nango-additive-integration-plan.md`
 
 ## Database & modeling
 - `polymorphic-tables-database-refactor-plan.md` — **receiving-only deep-dive** (2026-06-29). The `receiving`/`receiving_line` spine split into a thin relational spine + polymorphic typed-facts + per-street code lanes; "share display, not logic"; clean destructive cutover (codebase not live). Builds on shipment_links, reason_codes flow-context, the workflow registry, and the `types` catalog.
 - `schema-wide-polymorphic-refactor-plan.md` — **whole-schema** scan of monolithic tables best upgraded to polymorphic designs (serial_units, orders, inventory_events, platform_listings, workflow/station configs, warranty/repair cluster, FBA family, Zoho mirrors, etc.) + the reference contract and Appendices A–D. The receiving Tier-1 deep-dive lives in the sibling above.
+- `ops-events-station-workflow-unification-plan.md` — unifies `ops_events`/`station_activity_logs`/`workflow_nodes` identity: adds a CHECK to `ops_events.entity_type` (currently unconstrained) and a nullable `workflow_node_id` FK so tenant-customized Studio stations aren't hardcoded into a TS union; freezes `station_activity_logs` migration as a separate future project.

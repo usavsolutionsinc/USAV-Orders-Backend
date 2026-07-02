@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-01T15:33:24Z",
-  "totalRoutes": 730,
+  "generatedAt": "2026-07-01T18:55:42Z",
+  "totalRoutes": 737,
   "summary": {
-    "permissionGated": 627,
+    "permissionGated": 632,
     "authenticatedNoPermission": 36,
-    "anonymousIntentional": 65,
+    "anonymousIntentional": 67,
     "serviceToService": 2,
     "ungatedRead": 0,
     "ungatedWrite": 0
@@ -1247,6 +1247,15 @@
     },
     {
       "path": "/api/cron/cleanup/route.ts",
+      "methods": [
+        "GET"
+      ],
+      "gate": "NONE",
+      "permission": null,
+      "exemptReason": "cron endpoint"
+    },
+    {
+      "path": "/api/cron/ebay/purchase-sync/route.ts",
       "methods": [
         "GET"
       ],
@@ -3055,12 +3064,39 @@
       "exemptReason": null
     },
     {
+      "path": "/api/outbound/labels/purchase/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.buy_label",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/outbound/labels/void/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.void_label",
+      "exemptReason": null
+    },
+    {
       "path": "/api/outbound/mark-staged/route.ts",
       "methods": [
         "POST"
       ],
       "gate": "withAuth",
       "permission": "shipping.mark_shipped",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/outbound/rates/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "shipping.buy_label",
       "exemptReason": null
     },
     {
@@ -3978,6 +4014,15 @@
       ],
       "gate": "withAuth",
       "permission": "receiving.scan_po",
+      "exemptReason": null
+    },
+    {
+      "path": "/api/receiving/inbound/import-ebay/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "withAuth",
+      "permission": "integrations.ebay",
       "exemptReason": null
     },
     {
@@ -6484,6 +6529,15 @@
         "POST"
       ],
       "gate": "NONE",
+      "permission": null,
+      "exemptReason": "webhook (gated by signature)"
+    },
+    {
+      "path": "/api/webhooks/shipstation/[token]/route.ts",
+      "methods": [
+        "POST"
+      ],
+      "gate": "signature",
       "permission": null,
       "exemptReason": "webhook (gated by signature)"
     },

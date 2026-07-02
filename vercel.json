@@ -105,6 +105,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/cron/ebay/purchase-sync",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/integrations/sync?providers=ebay,square",
       "schedule": "*/15 * * * *"
     },

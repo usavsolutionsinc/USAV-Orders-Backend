@@ -23,6 +23,9 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   marketplaceId: varchar('marketplace_id', { length: 20 }).default('EBAY_US'),
   // Added by 2026-03-09_ebay_accounts_add_platform_zoho.sql (EBAY | ZOHO).
   platform: varchar('platform', { length: 20 }),
+  /** seller (sell.fulfillment) | buyer (buy.order purchasing). CHECK ('seller','buyer').
+   *  2026-07-01l — Universal Incoming Phase 1. One eBay OAuth app, discriminated tokens. */
+  accountRole: text('account_role').notNull().default('seller'),
   lastSyncDate: timestamp('last_sync_date', { withTimezone: true }),
   isActive: boolean('is_active').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -31,6 +34,7 @@ export const ebayAccounts = pgTable('ebay_accounts', {
   orgEbayUserIdx: uniqueIndex('ux_ebay_accounts_org_ebay_user').on(table.organizationId, table.ebayUserId),
   orgAccountIdx: uniqueIndex('ux_ebay_accounts_org_account').on(table.organizationId, table.accountName),
   orgIdx: index('idx_ebay_accounts_organization').on(table.organizationId),
+  orgRoleIdx: index('idx_ebay_accounts_org_role').on(table.organizationId, table.accountRole),
 }));
 
 // ─── Platform / Account / Type catalog ──────────────────────────────────────
@@ -1212,8 +1216,10 @@ export const receivingLines = pgTable('receiving_lines', {
   /** NULL until a physical scan is matched (Zoho PO pre-staging rows start NULL) */
   receivingId: integer('receiving_id').references(() => receiving.id, { onDelete: 'cascade' }),
 
-  // Zoho identifiers — at least one is required for Zoho-originated rows
-  zohoItemId: text('zoho_item_id').notNull(),
+  // Zoho identifiers — required for Zoho-originated rows (guarded by
+  // receiving_lines_zoho_item_required_chk), NULLABLE since 2026-07-01l so
+  // marketplace-only lines (eBay/Amazon, no Zoho item) can live on the spine.
+  zohoItemId: text('zoho_item_id'),
   zohoLineItemId: text('zoho_line_item_id'),
   zohoPurchaseReceiveId: text('zoho_purchase_receive_id'),
   zohoPurchaseOrderId: text('zoho_purchaseorder_id'),
@@ -1279,6 +1285,16 @@ export const receivingLines = pgTable('receiving_lines', {
   receivedDoneAt: timestamp('received_done_at', { withTimezone: true }),
   sourceSystem: text('source_system'),
   sourceOrderId: text('source_order_id'),
+  // ── Universal Incoming Phase 1 (2026-07-01l): transition cache of the primary
+  //    inbound_purchase_order_links row. Links table is the identity SoT; these
+  //    denormalized columns keep existing Incoming readers green until cutover,
+  //    then get dropped. ───────────────────────────────────────────────────────
+  /** Primary source badge/filter. CHECK (NULL | 'zoho' | 'ebay' | 'amazon' | 'manual'). */
+  inboundSourceType: text('inbound_source_type'),
+  /** Primary external line id (source_order_id already exists above). */
+  sourceLineItemId: text('source_line_item_id'),
+  /** Buyer/storefront account for the Incoming account chip. */
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
   isRepairService: boolean('is_repair_service').notNull().default(false),
   // ── Receiving redesign Phase 0 (2026-06-24): line-level lifecycle facts ────
   /** Read-only mirror of Zoho PO line.rate (unit cost); Zoho stays SoR. */
@@ -1424,6 +1440,125 @@ export const receivingLineFacts = pgTable('receiving_line_facts', {
   lineKindIdx: uniqueIndex('ux_receiving_line_facts_line_kind').on(table.organizationId, table.receivingLineId, table.factKind),
   orgKindIdx: index('idx_receiving_line_facts_org_kind').on(table.organizationId, table.factKind),
   lineIdx: index('idx_receiving_line_facts_line').on(table.receivingLineId),
+}));
+
+// ─── Universal Incoming — polymorphic purchase identity ─────────────────────
+// receiving_lines is the ONE Incoming spine; external purchase identity lives in
+// these polymorphic side-tables so Zoho, eBay buyer purchases, and future
+// channels share one queue and one dedup model. See
+// docs/incoming-universal-purchase-orders-plan.md §3 and migrations
+// 2026-07-01k (tables) / 2026-07-01l (spine cache) / 2026-07-01m (backfill).
+// source_type discriminator CHECK: ('zoho' | 'ebay' | 'amazon' | 'manual').
+
+/**
+ * Polymorphic purchase-identity SoT: (receiving_line, source_type,
+ * source_order_id, source_line_item_id). A merged eBay+Zoho purchase is multiple
+ * link rows on ONE receiving_line (ebay is_primary + zoho secondary), never two
+ * spine rows. FORCE-RLS tenant-from-birth (2026-07-01k).
+ */
+export const inboundPurchaseOrderLinks = pgTable('inbound_purchase_order_links', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  receivingLineId: integer('receiving_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  /** 'zoho' | 'ebay' | 'amazon' | 'manual' (named CHECK inbound_purchase_order_links_source_type_chk). */
+  sourceType: text('source_type').notNull(),
+  sourceOrderId: text('source_order_id').notNull(),
+  sourceLineItemId: text('source_line_item_id'),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  // Real DDL keys COALESCE(source_line_item_id,'') so a NULL line id participates uniquely.
+  naturalUx: uniqueIndex('ux_inbound_po_links_natural').on(
+    table.organizationId, table.receivingLineId, table.sourceType, table.sourceOrderId,
+    sql`COALESCE(${table.sourceLineItemId}, '')`,
+  ),
+  onePrimaryUx: uniqueIndex('ux_inbound_po_links_one_primary')
+    .on(table.organizationId, table.receivingLineId)
+    .where(sql`is_primary`),
+  sourceLookupIdx: index('idx_inbound_po_links_source_lookup').on(table.organizationId, table.sourceType, table.sourceOrderId),
+  lineIdx: index('idx_inbound_po_links_line').on(table.organizationId, table.receivingLineId),
+}));
+
+/**
+ * ONE read-only reconcile mirror for all inbound sources (replaces per-channel
+ * mirror tables). Legacy zoho_po_mirror keeps running; Zoho sync dual-writes both
+ * until readers cut over. Queryable facts are real columns; vendor tail in raw_payload.
+ */
+export const inboundPurchaseOrderMirror = pgTable('inbound_purchase_order_mirror', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  sourceType: text('source_type').notNull(),
+  sourceOrderId: text('source_order_id').notNull(),
+  platformAccountId: bigint('platform_account_id', { mode: 'number' }).references(() => platformAccounts.id, { onDelete: 'set null' }),
+  orderNumber: text('order_number'),
+  vendorOrSellerName: text('vendor_or_seller_name'),
+  status: text('status'),
+  paymentStatus: text('payment_status'),
+  poDate: date('po_date'),
+  expectedDeliveryDate: date('expected_delivery_date'),
+  trackingNumber: text('tracking_number'),
+  carrierCode: text('carrier_code'),
+  lineItems: jsonb('line_items').notNull().default([]),
+  rawPayload: jsonb('raw_payload'),
+  lastModifiedAt: timestamp('last_modified_at', { withTimezone: true }),
+  syncedAt: timestamp('synced_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  naturalUx: uniqueIndex('ux_inbound_po_mirror_natural').on(table.organizationId, table.sourceType, table.sourceOrderId),
+  accountIdx: index('idx_inbound_po_mirror_account').on(table.organizationId, table.platformAccountId).where(sql`platform_account_id IS NOT NULL`),
+}));
+
+/**
+ * Cross-source dedup graph: "eBay order ≡ Zoho PO" edges. The writer canonicalizes
+ * the pair (LEAST/GREATEST) so (a,b) and (b,a) collapse to one row. Consulted by
+ * the merge algorithm before touching spine rows.
+ */
+export const inboundPurchaseOrderEquivalence = pgTable('inbound_purchase_order_equivalence', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  sourceTypeA: text('source_type_a').notNull(),
+  sourceOrderIdA: text('source_order_id_a').notNull(),
+  sourceTypeB: text('source_type_b').notNull(),
+  sourceOrderIdB: text('source_order_id_b').notNull(),
+  /** 'tracking' | 'order_number' | 'manual' | 'fuzzy_sku'. */
+  linkReason: text('link_reason').notNull(),
+  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+  linkedByStaffId: integer('linked_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  // Order-independent pair uniqueness (canonical least/greatest).
+  pairUx: uniqueIndex('ux_inbound_po_equivalence_pair').on(
+    table.organizationId,
+    sql`LEAST(${table.sourceTypeA}, ${table.sourceTypeB})`,
+    sql`LEAST(${table.sourceOrderIdA}, ${table.sourceOrderIdB})`,
+    sql`GREATEST(${table.sourceTypeA}, ${table.sourceTypeB})`,
+    sql`GREATEST(${table.sourceOrderIdA}, ${table.sourceOrderIdB})`,
+  ),
+  aIdx: index('idx_inbound_po_equivalence_a').on(table.organizationId, table.sourceTypeA, table.sourceOrderIdA),
+  bIdx: index('idx_inbound_po_equivalence_b').on(table.organizationId, table.sourceTypeB, table.sourceOrderIdB),
+}));
+
+/** Append-only audit of eBay↔Zoho spine-row merges. */
+export const inboundPurchaseMergeLog = pgTable('inbound_purchase_merge_log', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  organizationId: orgIdCol(),
+  winnerLineId: integer('winner_line_id').notNull().references(() => receivingLines.id, { onDelete: 'cascade' }),
+  loserLineId: integer('loser_line_id').references(() => receivingLines.id, { onDelete: 'set null' }),
+  mergeReason: text('merge_reason').notNull(),
+  primarySourceType: text('primary_source_type').notNull(),
+  primarySourceOrderId: text('primary_source_order_id').notNull(),
+  secondarySourceType: text('secondary_source_type'),
+  secondarySourceOrderId: text('secondary_source_order_id'),
+  mergedAt: timestamp('merged_at', { withTimezone: true }).notNull().defaultNow(),
+  mergedByStaffId: integer('merged_by_staff_id').references(() => staff.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  orgWinnerIdx: index('idx_inbound_purchase_merge_log_org_winner').on(table.organizationId, table.winnerLineId),
 }));
 
 /**

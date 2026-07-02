@@ -17,6 +17,8 @@ import {
 import { parseReceivingView } from '@/lib/receiving/receiving-views';
 import { recomputeCartonSourceLink } from '@/lib/receiving/carton-source-link';
 import { NOT_ZOHO_RECEIVED_PREDICATE, CARRIER_MISMATCH_PREDICATE, SHIPMENT_SCANNED_PREDICATE } from '@/lib/receiving/delivered-unscanned';
+import { isIncomingUniversal } from '@/lib/feature-flags';
+import { notInboundMirrorTerminalPredicate } from '@/lib/inbound/mirror';
 import { isReceivingPhysicalStateFirst } from '@/lib/feature-flags';
 import { sqlReceivingPhotoCount } from '@/lib/photos/queries/receiving-list';
 import { UNBOX_OPENED_PREDICATE_SQL } from '@/lib/receiving/unbox-scan-opened';
@@ -255,6 +257,13 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const includeSerials = include.split(',').map((s) => s.trim()).includes('serials');
 
     const orgId = ctx.organizationId as OrgId;
+
+    // Universal Incoming (flag-gated, plan §6): when ON, view=incoming also shows
+    // eBay-buyer lines and the ?inbound facet filters by primary source. OFF (the
+    // default) = byte-identical Zoho-only path — no eBay rows, no new-column refs.
+    const inboundSourceParam = String(searchParams.get('inbound') || '').trim().toLowerCase();
+    const incomingLinkParam = String(searchParams.get('link') || '').trim().toLowerCase();
+    const universalIncoming = view === 'incoming' ? await isIncomingUniversal(orgId) : false;
 
     // Single row
     if (Number.isFinite(id) && id > 0) {
@@ -781,22 +790,52 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
       // or marks-received against it (workflow advances past EXPECTED OR
       // quantity_received goes positive). Unmatched cartons stay in their
       // own pill — this view is strictly Zoho-sourced expected work.
-      conditions.push(
-        `rl.workflow_status = 'EXPECTED'
-         AND COALESCE(rl.quantity_received, 0) = 0
-         AND rl.zoho_purchaseorder_id IS NOT NULL
-         -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
-         -- so a received order drops off Incoming after a Refresh-Zoho sync.
-         AND ${NOT_ZOHO_RECEIVED_PREDICATE}
-         -- Honor this view's contract: a row drops off "the instant the operator
-         -- scans". A door scan writes receiving_scans against the carton's
-         -- receiving row but never advances this Zoho-PO line's workflow_status /
-         -- quantity_received (the line's receiving_id is often NULL), so without
-         -- this guard a scanned/unboxed box stays stuck in Incoming and renders
-         -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
-         -- delivered-unscanned tile count (count === rows).
-         AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
-      );
+      if (!universalIncoming) {
+        // Legacy Zoho-only Incoming (unchanged): on a Zoho PO, EXPECTED, untouched.
+        conditions.push(
+          `rl.workflow_status = 'EXPECTED'
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND rl.zoho_purchaseorder_id IS NOT NULL
+           -- Hide POs Zoho now reports received/closed/cancelled (mirror status),
+           -- so a received order drops off Incoming after a Refresh-Zoho sync.
+           AND ${NOT_ZOHO_RECEIVED_PREDICATE}
+           -- Honor this view's contract: a row drops off "the instant the operator
+           -- scans". A door scan writes receiving_scans against the carton's
+           -- receiving row but never advances this Zoho-PO line's workflow_status /
+           -- quantity_received (the line's receiving_id is often NULL), so without
+           -- this guard a scanned/unboxed box stays stuck in Incoming and renders
+           -- as delivery_state='UNKNOWN'. Shipment-anchored so it agrees with the
+           -- delivered-unscanned tile count (count === rows).
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
+        );
+      } else {
+        // Universal Incoming (plan §6.1): a line qualifies if it's a Zoho PO not
+        // yet received (this INCLUDES eBay→Zoho merged lines, which carry the zoho
+        // PO id and are governed by the Zoho mirror), OR an eBay-only buyer line
+        // (no zoho PO, governed by the eBay mirror). Same SHIPMENT_SCANNED drop-off.
+        conditions.push(
+          `rl.workflow_status = 'EXPECTED'
+           AND COALESCE(rl.quantity_received, 0) = 0
+           AND (
+             (rl.zoho_purchaseorder_id IS NOT NULL AND ${NOT_ZOHO_RECEIVED_PREDICATE})
+             OR
+             (rl.zoho_purchaseorder_id IS NULL
+              AND rl.inbound_source_type = 'ebay'
+              AND ${notInboundMirrorTerminalPredicate('ebay')})
+           )
+           AND NOT ${SHIPMENT_SCANNED_PREDICATE}`,
+        );
+        // ?inbound facet — filter by PRIMARY source (merged lines read as 'ebay').
+        if (inboundSourceParam === 'ebay') {
+          conditions.push(`rl.inbound_source_type = 'ebay'`);
+        } else if (inboundSourceParam === 'zoho') {
+          conditions.push(`rl.inbound_source_type IS DISTINCT FROM 'ebay'`);
+        }
+        // ?link=zoho_pending — eBay lines still awaiting their Zoho PO.
+        if (incomingLinkParam === 'zoho_pending') {
+          conditions.push(`rl.zoho_purchaseorder_id IS NULL`);
+        }
+      }
 
       // Optional delivery_state facet filter. Each bucket is the exact same
       // predicate the CASE expression in the SELECT below uses so the chip
@@ -1097,6 +1136,20 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
     const incomingExtrasJoin = needsZohoMirror
       ? `LEFT JOIN zoho_po_mirror mirror ON mirror.zoho_purchaseorder_id = rl.zoho_purchaseorder_id`
       : '';
+    // Universal Incoming: resolve the buyer/storefront account's human label for
+    // the source chip (plan §6.3). rl.platform_account_id is stamped by
+    // ingestPurchase on an eBay purchase line; join the org catalog 1:1 to turn
+    // it into a display label. Incoming-only; NULL for plain Zoho lines.
+    const platformAccountJoin =
+      view === 'incoming'
+        ? `LEFT JOIN platform_accounts pa_inbound
+             ON pa_inbound.id = rl.platform_account_id
+            AND pa_inbound.organization_id = rl.organization_id`
+        : '';
+    const platformAccountSelect =
+      view === 'incoming'
+        ? `, COALESCE(pa_inbound.label, pa_inbound.integration_scope) AS platform_account_label`
+        : '';
 
     const [rowsRes, countRes] = await withTenantConnection(orgId, (client) => Promise.all([
       client.query(
@@ -1143,6 +1196,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
                 ${needsTestSelect}
                 ${incomingExtrasSelect}
                 ${zohoStatusSelect}
+                ${platformAccountSelect}
                 ${viewedAtSelect}
                 ${unboxOpenedSelect}
          FROM receiving_lines rl
@@ -1199,6 +1253,7 @@ export const GET = withAuth(async (request: NextRequest, ctx) => {
          ${unboxOpenedJoin}
          ${testedAggJoin}
          ${incomingExtrasJoin}
+         ${platformAccountJoin}
          ${where}
          ${orderBy}
          LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -2331,6 +2386,14 @@ function normalizeRow(row: Record<string, unknown>) {
     po_date:                  (row.po_date as string | null) ?? null,
     expected_delivery_date:   (row.expected_delivery_date as string | null) ?? null,
     vendor_name:              (row.vendor_name as string | null) ?? null,
+    // Universal Incoming purchase identity (spine cache cols via rl.*, plan §6.3).
+    // inbound_source_type badges the row's source ('zoho' | 'ebay' | …);
+    // source_order_id is the external order id (the eBay order#) when there's no
+    // Zoho PO; platform_account_* name the buyer account it was purchased on.
+    inbound_source_type:      (row.inbound_source_type as string | null) ?? null,
+    source_order_id:          (row.source_order_id as string | null) ?? null,
+    platform_account_id:      row.platform_account_id != null ? Number(row.platform_account_id) : null,
+    platform_account_label:   (row.platform_account_label as string | null) ?? null,
     shipment_has_exception:   row.shipment_has_exception == null ? null : !!row.shipment_has_exception,
     shipment_latest_event_at: (row.shipment_latest_event_at as string | null) ?? null,
     shipment_is_terminal:     row.shipment_is_terminal == null ? null : !!row.shipment_is_terminal,

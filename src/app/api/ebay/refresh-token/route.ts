@@ -3,6 +3,7 @@ import { withAuth } from '@/lib/auth/withAuth';
 import { tenantQuery } from '@/lib/tenancy/db';
 import { refreshEbayAccessToken, readEbayToken, writeEbayToken } from '@/lib/ebay/token-refresh';
 import { getEbayAppCreds, markEbayAccountNeedsReconsent } from '@/lib/ebay/credentials';
+import { ebayScopeStringForRole, normalizeEbayRole } from '@/lib/ebay/oauth-config';
 import { formatPSTTimestamp } from '@/utils/date';
 
 /** A 4xx from eBay's token endpoint means the refresh token is dead — re-consent needed. */
@@ -22,9 +23,13 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
       return NextResponse.json({ success: false, error: 'Account name is required' }, { status: 400 });
     }
 
-    const result = await tenantQuery(
+    const result = await tenantQuery<{
+      refresh_token: string;
+      refresh_token_expires_at: string | null;
+      account_role: string | null;
+    }>(
       ctx.organizationId,
-      `SELECT refresh_token, refresh_token_expires_at
+      `SELECT refresh_token, refresh_token_expires_at, account_role
          FROM ebay_accounts
         WHERE account_name = $1 AND organization_id = $2`,
       [accountName, ctx.organizationId],
@@ -32,7 +37,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
     if (result.rows.length === 0) {
       return NextResponse.json({ success: false, error: `Account ${accountName} not found` }, { status: 404 });
     }
-    const { refresh_token, refresh_token_expires_at } = result.rows[0];
+    const { refresh_token, refresh_token_expires_at, account_role } = result.rows[0];
 
     // Dead refresh token → re-consent, don't bother calling eBay.
     if (refresh_token_expires_at && new Date(refresh_token_expires_at).getTime() <= Date.now()) {
@@ -58,6 +63,7 @@ export const POST = withAuth(async (req: NextRequest, ctx) => {
         creds.certId,
         decryptedRefreshToken,
         creds.environment,
+        ebayScopeStringForRole(normalizeEbayRole(account_role)),
       ));
     } catch (err: any) {
       const message = err?.message || 'refresh failed';

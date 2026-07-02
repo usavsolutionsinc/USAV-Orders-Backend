@@ -70,7 +70,14 @@ export async function refreshEbayAccessToken(
   clientId: string,
   clientSecret: string,
   refreshToken: string,
-  environment: EbayEnvironment | string = 'PRODUCTION'
+  environment: EbayEnvironment | string = 'PRODUCTION',
+  /**
+   * Scope string to request on refresh. MUST match the set granted at consent —
+   * a buyer account must pass its buyer scopes (ebayScopeStringForRole('buyer')),
+   * or the refresh silently downgrades it to the seller set. Defaults to the
+   * seller scopes for backward compatibility.
+   */
+  scopes: string = ebayScopeString(),
 ): Promise<{ accessToken: string; expiresIn: number }> {
   const normalizedClientId = normalizeEnvValue(clientId);
   const normalizedClientSecret = normalizeEnvValue(clientSecret);
@@ -94,12 +101,13 @@ export async function refreshEbayAccessToken(
     'Authorization': `Basic ${base64Auth}`,
   };
 
-  // 4. Configure payload — scopes come from the single source of truth so a
-  //    refresh never requests fewer scopes than consent granted.
+  // 4. Configure payload — the caller passes the account's role-matched scope
+  //    set so a refresh never requests fewer scopes than consent granted (a
+  //    buyer account refreshed with seller scopes would silently downgrade).
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: normalizedRefreshToken,
-    scope: ebayScopeString(),
+    scope: scopes,
   });
 
   // 5. Make the request
